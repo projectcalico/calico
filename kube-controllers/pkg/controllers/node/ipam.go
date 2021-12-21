@@ -38,7 +38,6 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -569,13 +568,16 @@ func (c *ipamController) checkEmptyBlocks() error {
 			continue
 		}
 
+		// Find the actual block object.
+		block, ok := c.allBlocks[blockCIDR]
+		if !ok {
+			logc.Warn("Couldn't find empty block in cache, skipping affinity release")
+			continue
+		}
+
 		// We can release the empty one.
 		logc.Infof("Releasing affinity for empty block (node has %d total blocks)", len(nodeBlocks))
-		_, cidr, err := cnet.ParseCIDR(blockCIDR)
-		if err != nil {
-			return err
-		}
-		err = c.client.IPAM().ReleaseAffinity(context.TODO(), *cidr, node, true)
+		err := c.client.IPAM().ReleaseBlockAffinity(context.TODO(), block.Value.(*model.AllocationBlock), true)
 		if err != nil {
 			logc.WithError(err).Warn("unable or unwilling to release affinity for block")
 			continue
