@@ -24,22 +24,21 @@ from tests.st.utils.data import *
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
 
-filebase = "test-data/v1/"
-
 convert_files = [
-        ("bgppeer-global.yaml",),
-        ("bgppeer-node.yaml",),
-        ("bgppeer-node2.yaml",),
-        ("multi-resource.yaml",),
-        ("node.yaml",),
-        ("test3.yaml",),
-        ("migration/bgppeer.yaml",),
-        ("migration/hostendpoint.yaml",),
-        ("migration/ippool.yaml",),
-        ("migration/node.yaml",),
-        ("migration/policy.yaml",),
-        ("migration/profile.yaml",),
-        ("migration/workloadendpoint.yaml",),
+        ("test-data/v1/bgppeer-global.yaml",),
+        ("test-data/v1/bgppeer-node.yaml",),
+        ("test-data/v1/bgppeer-node2.yaml",),
+        ("test-data/v1/multi-resource.yaml",),
+        ("test-data/v1/node.yaml",),
+        ("test-data/v1/test3.yaml",),
+        ("test-data/v1/migration/bgppeer.yaml",),
+        ("test-data/v1/migration/hostendpoint.yaml",),
+        ("test-data/v1/migration/ippool.yaml",),
+        ("test-data/v1/migration/node.yaml",),
+        ("test-data/v1/migration/policy.yaml",),
+        ("test-data/v1/migration/profile.yaml",),
+        ("test-data/v1/migration/workloadendpoint.yaml",),
+        ("test-data/k8s/k8s-networkpolicy.yaml",),
     ]
 
 class TestCalicoctlConvert(TestBase):
@@ -52,7 +51,7 @@ class TestCalicoctlConvert(TestBase):
         Test convert successfully
         """
         # Convert the file
-        rc = calicoctl("convert -o %s -f %s" % (format, filebase+filename))
+        rc = calicoctl("convert -o %s -f %s" % (format, filename))
         rc.assert_no_error()
 
         # With the converted data to a temp file
