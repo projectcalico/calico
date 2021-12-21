@@ -15,12 +15,15 @@
 package daemon
 
 import (
-
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func bootstrapWireguard(ifaceName string, felixHostName string, v3Client clientv3.Interface) error {
+	log.Debug("bootstrapping wireguard host connectivity")
 	return wireguard.BootstrapHostConnectivity(
-		ifaceName, felixHostName, v3Client)
+		ifaceName, felixHostName, netlinkshim.NewRealWireguard, v3Client)
 }
