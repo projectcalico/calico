@@ -19,9 +19,10 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
 RUN mkdir /licenses
 COPY LICENSE /licenses
 
-# Make sure the status file is owned by our user.
-RUN mkdir /status
+# Make sure the status and pprof files are owned by our user.
+RUN mkdir /status /profiles
 RUN touch /status/status.json && chown 999 /status/status.json
+RUN touch /profiles/mem.pprof && chown 999 /profiles/mem.pprof
 
 FROM scratch
 ARG GIT_VERSION
@@ -34,11 +35,13 @@ LABEL name="Calico Kubernetes controllers" \
       maintainer="Casey Davenport <casey@tigera.io>"
 
 COPY --from=base /licenses /licenses
+COPY --from=base /profiles /profiles
 COPY --from=base /status /status
 
 COPY --from=base /usr/include /usr/include
 COPY --from=base /lib64 /lib64
 COPY --from=base /lib /lib
+
 
 ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
 ADD bin/check-status-linux-amd64 /usr/bin/check-status
