@@ -195,12 +195,12 @@ func main() {
 		}()
 	}
 
-	if runCfg.DebugMemoryProfilePort != 0 {
+	if runCfg.DebugProfilePort != 0 {
 		// Run a webserver to expose memory profiling.
 		setPathOption := profile.ProfilePath("/profiles")
-		defer profile.Start(profile.MemProfile, setPathOption).Stop()
+		defer profile.Start(profile.CPUProfile, profile.MemProfile, setPathOption).Stop()
 		go func() {
-			http.ListenAndServe(fmt.Sprintf(":%d", runCfg.DebugMemoryProfilePort), nil)
+			http.ListenAndServe(fmt.Sprintf(":%d", runCfg.DebugProfilePort), nil)
 		}()
 	}
 
