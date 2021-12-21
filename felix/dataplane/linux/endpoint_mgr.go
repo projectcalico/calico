@@ -1168,11 +1168,14 @@ func (m *endpointManager) configureInterface(name string) error {
 	acceptRAPath := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name)
 	err := m.writeProcSys(acceptRAPath, "0")
 	if err != nil {
-		if exists, err := m.interfaceExistsInProcSys(name); err == nil && !exists {
+		if exists, err2 := m.interfaceExistsInProcSys(name); err2 == nil && !exists {
 			log.WithField("file", acceptRAPath).Debug(
 				"Failed to set accept_ra flag. Interface is missing in /proc/sys.")
 		} else {
-			log.WithField("ifaceName", name).Warnf("Could not set accept_ra: %v", err)
+			if err2 != nil {
+				log.WithError(err2).Error("Error checking if interface exists")
+			}
+			log.WithError(err).WithField("ifaceName", name).Warnf("Could not set accept_ra")
 		}
 	}
 
