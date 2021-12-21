@@ -77,6 +77,7 @@ type RunConfig struct {
 	EtcdV3CompactionPeriod time.Duration
 	HealthEnabled          bool
 	PrometheusPort         int
+	DebugMemoryProfilePort int32
 }
 
 type ControllersConfig struct {
@@ -314,6 +315,9 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	// Merge prometheus information.
 	if apiCfg.PrometheusMetricsPort != nil {
 		rCfg.PrometheusPort = *apiCfg.PrometheusMetricsPort
+	}
+	if apiCfg.DebugMemoryProfilePort != nil {
+		rCfg.DebugMemoryProfilePort = *apiCfg.DebugMemoryProfilePort
 	}
 
 	// Don't bother looking at this unless the node controller is enabled.

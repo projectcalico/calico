@@ -101,6 +101,11 @@ spec:
                         type: string
                     type: object
                 type: object
+              debugMemoryProfilePort:
+                description: DebugMemoryProfilePort configures the port to serve memory
+                  profiles on. If not specified, memory profiling is disabled.
+                format: int32
+                type: integer
               etcdV3CompactionPeriod:
                 description: 'EtcdV3CompactionPeriod is the period between etcdv3
                   compaction requests. Set to 0 to disable. [Default: 10m]'
@@ -211,6 +216,11 @@ spec:
                             type: string
                         type: object
                     type: object
+                  debugMemoryProfilePort:
+                    description: DebugMemoryProfilePort configures the port to serve
+                      memory profiles on. If not specified, memory profiling is disabled.
+                    format: int32
+                    type: integer
                   etcdV3CompactionPeriod:
                     description: 'EtcdV3CompactionPeriod is the period between etcdv3
                       compaction requests. Set to 0 to disable. [Default: 10m]'
