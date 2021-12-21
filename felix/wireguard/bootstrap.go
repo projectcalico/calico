@@ -31,24 +31,35 @@ import (
 // BootstrapHostConnectivity forces WireGuard peers with hostencryption enabled to communicate with this node unencrypted.
 // This ensures connectivity in scenarios where we have lost our WireGuard config, but will be sent WireGuard traffic
 // e.g. after a node restart, during felix startup, when we need to fetch config from Typha (calico/issues/5125)
-func BootstrapHostConnectivity(wgDeviceName string, nodeName string, calicoClient clientv3.Interface) error {
+func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguardHandle func() (netlinkshim.Wireguard, error), calicoClient clientv3.Interface) error {
+	var storedPublicKey string
+	var kernelPublicKey string
+
+	wg, err := getWireguardHandle()
+	if err != nil {
+		log.Debug("Couldn't acquire WireGuard handle, treating pulic key as unset")
+	} else {
+		kernelPublicKey = getPublicKey(wgDeviceName, wg).String()
+		defer wg.Close()
+	}
+
+	// make a few attempts to read our publickey from the datastore, compare, and update if required
 	maxRetries := 3
 	for r := 0; r < maxRetries; r++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		thisNode, err := calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
 		cancel()
 		if err != nil {
-			log.WithError(err).Info("Could not fetch node config from datastore")
-			return err
+			log.WithError(err).Debug("Couldn't fetch node config from datastore, retrying")
+			continue
 		}
 
-		storedPublicKey := thisNode.Status.WireguardPublicKey
-		kernelPublicKey := getPublicKey(wgDeviceName, netlinkshim.NewRealWireguard)
+		storedPublicKey = thisNode.Status.WireguardPublicKey
 
 		// if there is any config mismatch, wipe the datastore's publickey (forces peers to send unencrypted traffic)
-		if storedPublicKey != kernelPublicKey.String() {
+		if storedPublicKey != kernelPublicKey {
+			log.Debug("Found mismatch between kernel and datastore WireGuard keys. Clearing stale key from datastore")
 			thisNode.Status.WireguardPublicKey = ""
-
 			ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 			_, err := calicoClient.Nodes().Update(ctx, thisNode, options.SetOptions{})
 			cancel()
@@ -58,10 +69,10 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, calicoClien
 					log.Debug("Conflict while clearing WireGuard config, retrying update")
 					continue
 				}
-				log.WithError(err).Info("Failed to clear WireGuard config")
-				return err
+
+				return fmt.Errorf("failed to clear WireGuard config: %w", err)
 			}
-			log.Debugf("Cleared WireGuard public key from datastore")
+			log.Debug("Cleared WireGuard public key from datastore")
 		}
 		return nil
 	}
@@ -71,17 +82,10 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, calicoClien
 
 // getPublicKey attempts to fetch a wireguard key from the kernel statelessly
 // this is intended for use during startup; an error may simply mean wireguard is not configured
-func getPublicKey(wgIfaceName string, getWireguardHandle func() (netlinkshim.Wireguard, error)) wgtypes.Key {
-	wg, err := getWireguardHandle()
-	if err != nil {
-		log.WithError(err).Debug("Couldn't acquire WireGuard handle, reporting 'zerokey' public key")
-		return zeroKey
-	}
-	defer wg.Close()
-
+func getPublicKey(wgIfaceName string, wg netlinkshim.Wireguard) wgtypes.Key {
 	dev, err := wg.DeviceByName(wgIfaceName)
 	if err != nil {
-		log.WithError(err).Debugf("Couldn't find WireGuard device '%s', reporting 'zerokey' public key", wgIfaceName)
+		log.WithError(err).Debugf("Couldn't find WireGuard device '%s', reporting unset key", wgIfaceName)
 		return zeroKey
 	}
 
