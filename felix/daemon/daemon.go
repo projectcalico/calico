@@ -369,6 +369,14 @@ configRetry:
 		simulateDataRace()
 	}
 
+	// We may need to temporarily disable encrypted traffic to this node in order to connect to Typha
+	if configParams.WireguardEnabled && configParams.WireguardHostEncryptionEnabled {
+		err := bootstrapWireguard(configParams.WireguardInterfaceName, configParams.FelixHostname, v3Client)
+		if err != nil {
+			log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
+		}
+	}
+
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
 	var dpDriver dp.DataplaneDriver
