@@ -100,7 +100,9 @@ func (c *networkPolicyClient) List(ctx context.Context, list model.ListInterface
 	convertFunc := func(r Resource) ([]*model.KVPair, error) {
 		p := r.(*networkingv1.NetworkPolicy)
 		kvp, err := c.K8sNetworkPolicyToCalico(p)
-		if err != nil {
+		// Silently ignore rule conversion errors
+		var e *cerrors.ErrorPolicyConversion
+		if err != nil && !errors.As(err, &e) {
 			return nil, err
 		}
 		return []*model.KVPair{kvp}, nil
