@@ -51,6 +51,7 @@ require (
 	github.com/osrg/gobgp v0.0.0-20170802061517-bbd1d99396fe
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
+	github.com/pkg/profile v1.6.0
 	github.com/projectcalico/api v0.0.0-20211102181812-edfaf495a5c8
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
