@@ -61,7 +61,7 @@ test: ut
 .PHONY: clean
 ## Clean enough that a new release build will be clean
 clean:
-	rm -rf .go-pkg-cache report vendor bin
+	rm -rf .go-pkg-cache report vendor bin proto/*.pb.go
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
 	-docker rmi $(DIKASTES_IMAGE):latest-$(ARCH)
 	-docker rmi $(DIKASTES_IMAGE):$(VERSION)-$(ARCH)
@@ -85,7 +85,7 @@ bin/dikastes-amd64: ARCH=amd64
 bin/dikastes-arm64: ARCH=arm64
 bin/dikastes-ppc64le: ARCH=ppc64le
 bin/dikastes-s390x: ARCH=s390x
-bin/dikastes-%: proto $(SRC_FILES)
+bin/dikastes-%: protobuf $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN_RO) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
@@ -96,7 +96,7 @@ bin/healthz-amd64: ARCH=amd64
 bin/healthz-arm64: ARCH=arm64
 bin/healthz-ppc64le: ARCH=ppc64le
 bin/healthz-s390x: ARCH=s390x
-bin/healthz-%: proto $(SRC_FILES)
+bin/healthz-%: protobuf $(SRC_FILES)
 	mkdir -p bin || true
 	-mkdir -p .go-pkg-cache $(GOMOD_CACHE) || true
 	$(DOCKER_RUN_RO) \
@@ -114,7 +114,8 @@ bin/healthz-%: proto $(SRC_FILES)
 PROTOC_IMPORTS =  -I proto\
 		  -I ./
 
-proto: proto/felixbackend.pb.go proto/healthz.pb.go
+protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
+	$(MAKE) fix
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN) -v $(CURDIR):/src:rw \
@@ -153,7 +154,7 @@ endif
 ###############################################################################
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev
-ut: proto
+ut: protobuf
 	mkdir -p report
 	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "go test -v $(GINKGO_ARGS) ./... | go-junit-report > ./report/tests.xml"
 
@@ -171,7 +172,7 @@ check-boring-ssl: bin/dikastes-amd64
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files
-check-generated-files: proto
+check-generated-files: protobuf
 	if (git describe --tags --dirty | grep -c dirty >/dev/null); then \
 	  echo "Generated files are out of date."; \
 	  false; \
