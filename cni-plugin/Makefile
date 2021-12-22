@@ -296,35 +296,8 @@ $(BIN_WIN)/win-fv.exe: $(WINFV_SRCFILES)
 ###############################################################################
 # Release
 ###############################################################################
-PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
-
-## Tags and builds a release from start to finish.
-release: release-prereqs
-	$(MAKE) VERSION=$(VERSION) release-tag
-	$(MAKE) VERSION=$(VERSION) release-build
-	$(MAKE) VERSION=$(VERSION) release-verify
-
-	@echo ""
-	@echo "Release build complete. Next, push the produced images."
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-publish"
-	@echo ""
-
-## Produces a git tag for the release.
-release-tag: release-prereqs release-notes
-	git tag $(VERSION) -F release-notes-$(VERSION)
-	@echo ""
-	@echo "Now you can build the release:"
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-build"
-	@echo ""
-
 ## Produces a clean build of release artifacts at the specified version.
 release-build: release-prereqs clean
-# Check that the correct code is checked out.
-ifneq ($(VERSION), $(GIT_VERSION))
-	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
-endif
 	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
@@ -343,37 +316,6 @@ release-verify: release-prereqs
 	docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
 
 	# TODO: Some sort of quick validation of the produced binaries.
-
-## Generates release notes based on commits in this version.
-release-notes: release-prereqs
-	mkdir -p dist
-	echo "# Changelog" > release-notes-$(VERSION)
-	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
-
-## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
-	# Push the git tag.
-	git push origin $(VERSION)
-
-	# Push images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
-
-	# Push binaries to GitHub release.
-	# Requires ghr: https://github.com/tcnksm/ghr
-	# Requires GITHUB_TOKEN environment variable set.
-	ghr -u projectcalico -r cni-plugin \
-		-b "Release notes can be found at https://docs.projectcalico.org" \
-		-n $(VERSION) \
-		$(VERSION) ./bin/github/
-
-	@echo "Confirm that the release was published at the following URL."
-	@echo ""
-	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
-	@echo ""
-	@echo "If this is the latest stable release, then run the following to push 'latest' images."
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-publish-latest"
-	@echo ""
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
