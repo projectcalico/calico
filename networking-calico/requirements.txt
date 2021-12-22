@@ -2,7 +2,7 @@
 # of appearance. Changing the order has an impact on the overall integration
 # process, which may cause wedges in the gate later.
 
-Babel!=2.4.0,>=2.3.4 # BSD
+Babel>=2.9.1 # BSD
 eventlet>=0.31.0  # MIT
 six>=1.10.0 # MIT
 etcd3gw>=0.2.2 # Apache-2.0
