@@ -41,7 +41,6 @@ import (
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -150,16 +149,10 @@ func getKubernetesClient() *kubernetes.Clientset {
 var _ = Describe("Kubernetes CNI tests", func() {
 	// Create a random seed
 	rand.Seed(time.Now().UTC().UnixNano())
-	log.SetFormatter(&logutils.Formatter{})
-	log.AddHook(&logutils.ContextHook{})
-	log.SetOutput(GinkgoWriter)
-	log.SetLevel(log.InfoLevel)
 	hostname, _ := names.Hostname()
 	ctx := context.Background()
 	calicoClient, err := client.NewFromEnv()
-	if err != nil {
-		panic(err)
-	}
+	Expect(err).NotTo(HaveOccurred())
 	k8sClient := getKubernetesClient()
 
 	BeforeEach(func() {
@@ -203,7 +196,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			  },
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
-			  "log_level":"info"
+			  "log_level":"debug"
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 		It("successfully networks the namespace", func() {
