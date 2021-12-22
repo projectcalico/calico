@@ -23,8 +23,25 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 MAKE_DIRS=$(shell ls -d */)
 
 generate:
-	make -C api gen-files 
-	make -C libcalico-go gen-files
+	$(MAKE) -C api gen-files
+	$(MAKE) -C libcalico-go gen-files
+	$(MAKE) -C felix protobuf
+	rm app-policy/proto/*.pb.go
+	$(MAKE) -C app-policy proto
+
+fix:
+	$(MAKE) -C api fix
+	$(MAKE) -C apiserver fix
+	$(MAKE) -C app-policy fix
+	$(MAKE) -C calicoctl fix
+	$(MAKE) -C cni-plugin fix
+	$(MAKE) -C confd fix
+	$(MAKE) -C felix fix
+	$(MAKE) -C kube-controllers fix
+	$(MAKE) -C libcalico-go fix
+	$(MAKE) -C node fix
+	$(MAKE) -C pod2daemon fix
+	$(MAKE) -C typha fix
 
 # Build all Calico images for the current architecture.
 image:
