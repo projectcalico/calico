@@ -49,6 +49,7 @@ const volatile struct cali_tc_globals __globals;
  */
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 {
+	__u64 cookie;
 #ifdef CALI_SET_SKB_MARK
 	/* UT-only workaround to allow us to run the program with BPF_TEST_PROG_RUN
 	 * and simulate a specific mark
@@ -370,11 +371,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->nat_dest.port = 0;
 	}
 
+syn_force_policy:
+
 	// For the case where the packet was sent from a socket on this host, get the
 	// sending socket's cookie, so we can reverse a DNAT that the CTLB may have done.
 	// This allows us to give the policy program the pre-DNAT destination as well as
 	// the post-DNAT destination in all cases.
-	__u64 cookie = bpf_get_socket_cookie(ctx.skb);
+	cookie = bpf_get_socket_cookie(ctx.skb);
 	if (cookie) {
 		CALI_DEBUG("Socket cookie: %x\n", cookie);
 		struct ct_nats_key ct_nkey = {
@@ -393,8 +396,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			ctx.state->pre_nat_dport = ctx_port_to_host(revnat->port);
 		}
 	}
-
-syn_force_policy:
 
 	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
