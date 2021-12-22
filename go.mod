@@ -85,7 +85,7 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20201125193152-8a03d2e9614b
 	go.uber.org/zap v1.13.0 // indirect
-	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
+	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210816074244-15123e1e1f71
 	golang.org/x/tools v0.1.2 // indirect
@@ -121,8 +121,10 @@ replace (
 	// supply the go code.
 	github.com/envoyproxy/data-plane-api => github.com/projectcalico/data-plane-api v0.0.0-20210121211707-a620ff3c8f7e
 	github.com/projectcalico/api => ./api
-
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
+
+	golang.org/x/net => golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
+
 	google.golang.org/grpc => google.golang.org/grpc v1.29.1
 	k8s.io/api => k8s.io/api v0.21.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.21.0
