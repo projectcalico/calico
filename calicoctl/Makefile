@@ -4,7 +4,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/calicoctl
 
 KUBE_APISERVER_PORT?=6443
 KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
-KUBE_CLUSTERINFO_CRD_MANIFEST?=crd.projectcalico.org_clusterinformations.yaml
 
 CALICOCTL_IMAGE       ?=calico/ctl
 BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
@@ -84,17 +83,10 @@ bin/calicoctl: bin/calicoctl-linux-amd64
 bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 	mv $< $@
 
-gen-crds: remote-deps
+gen-crds:
 	$(DOCKER_RUN) \
-	  -v $(CURDIR)/calicoctl/commands/crds:/go/src/$(PACKAGE_NAME)/calicoctl/commands/crds \
 	  $(CALICO_BUILD) \
 	  sh -c 'cd /go/src/$(PACKAGE_NAME)/calicoctl/commands/crds && go generate'
-
-remote-deps: mod-download	
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-		$(GIT_CONFIG_SSH) \
-		cp -r ../libcalico-go/config .; \
-		chmod -R +w config/'
 
 ###############################################################################
 # Building the image
@@ -218,7 +210,8 @@ run-kubernetes-master: stop-kubernetes-master
 	docker run --net=host --detach \
 		--name st-apiserver-${KUBE_APISERVER_PORT} \
 		-v $(CURDIR):/code \
-		-v `pwd`/tests/certs:/home/user/certs \
+		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
+		-v $(CURDIR)/tests/certs:/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		${CALICO_BUILD} kube-apiserver \
 			--secure-port=${KUBE_APISERVER_PORT} \
@@ -261,10 +254,10 @@ run-kubernetes-master: stop-kubernetes-master
 		apply -f /code/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
 
-	# Apply ClusterInformation CRD because the tests require it
+	# Apply CRDs because the tests require them.
 	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
-		apply -f /code/tests/st/manifests/${KUBE_CLUSTERINFO_CRD_MANIFEST}; \
+		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; \
 		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.

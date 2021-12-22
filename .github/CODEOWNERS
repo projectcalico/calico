@@ -1,0 +1,8 @@
+# Lines starting with '#' are comments.
+# Each line is a file pattern followed by one or more owners.
+
+# By default, changes require review from the core maintainers.
+*             @projectcalico/core-maintainers
+
+# The docs team will be the default owners for the docs directory.
+calico/*       @docs

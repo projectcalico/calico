@@ -1,2 +1,5 @@
 .go-pkg-cache/
 report/
+bin/
+*.created*
+.idea
