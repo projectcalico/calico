@@ -13,7 +13,6 @@
 // limitations under the License.
 
 //go:build fvtests
-// +build fvtests
 
 package fv_test
 

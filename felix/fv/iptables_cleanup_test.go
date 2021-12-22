@@ -1,5 +1,4 @@
 //go:build fvtests
-// +build fvtests
 
 // Copyright (c) 2019 Tigera, Inc. All rights reserved.
 //
