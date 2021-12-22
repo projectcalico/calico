@@ -36,7 +36,7 @@ require (
 	github.com/gofrs/flock v0.8.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
-	github.com/golang/protobuf v1.4.3
+	github.com/golang/protobuf v1.5.0
 	github.com/google/gopacket v1.1.19
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
 	github.com/google/uuid v1.2.0
@@ -85,7 +85,7 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20201125193152-8a03d2e9614b
 	go.uber.org/zap v1.13.0 // indirect
-	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
+	golang.org/x/net v0.0.0-20211209124913-491a49abca63
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210816074244-15123e1e1f71
 	golang.org/x/tools v0.1.2 // indirect
@@ -107,7 +107,7 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/kube-openapi v0.0.0-20210421082810-95288971da7e
 	k8s.io/kubernetes v1.21.0
-	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
+	k8s.io/utils v0.0.0-20210521133846-da695404a2bc
 	modernc.org/memory v1.0.5
 	sigs.k8s.io/kind v0.11.1
 )
@@ -127,7 +127,7 @@ replace (
 	k8s.io/apimachinery => k8s.io/apimachinery v0.21.0
 	k8s.io/apiserver => k8s.io/apiserver v0.21.0
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.21.0
-	k8s.io/client-go => k8s.io/client-go v0.21.0
+	k8s.io/client-go => github.com/fasaxc/client-go v0.21.8-fix-match-rev
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.21.0
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.21.0
 	k8s.io/code-generator => k8s.io/code-generator v0.21.0

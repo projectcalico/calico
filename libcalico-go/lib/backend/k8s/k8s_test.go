@@ -2449,6 +2449,15 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 			watch.Stop()
 		})
+		It("should handle a list for many network policies with a revision", func() {
+			for i := 3; i < 1000; i++ {
+				createTestNetworkPolicy(fmt.Sprintf("test-net-policy-%d", i))
+			}
+			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, kvs.Revision)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Describe("watching NetworkPolicies (calico)", func() {
