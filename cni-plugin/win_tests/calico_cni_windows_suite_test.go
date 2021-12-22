@@ -17,12 +17,17 @@ package main_windows_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
 	"os"
 	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
 )
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
 
 func TestCalicoCni(t *testing.T) {
 	RegisterFailHandler(Fail)

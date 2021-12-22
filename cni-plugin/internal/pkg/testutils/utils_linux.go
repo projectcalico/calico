@@ -167,12 +167,16 @@ func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err e
 }
 
 func CreateContainer(netconf, podName, podNamespace, ip string) (containerID string, result *current.Result, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
-	targetNs, containerID, err = CreateContainerNamespace()
+	ginkgo.By("creating a container netns to run the CNI plugin against", func() {
+		targetNs, containerID, err = CreateContainerNamespace()
+	})
 	if err != nil {
 		return "", nil, nil, nil, nil, nil, err
 	}
 
-	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
+	ginkgo.By("running the CNI plugin against the namespace", func() {
+		result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
+	})
 	return
 }
 
@@ -234,11 +238,17 @@ func RunCNIPluginWithId(
 	}
 	args := &cniArgs{env}
 
+	// Create a new exec implementation that captures stderr (CNI plugin logs) so we can
+	// properly emit them with ginkgo.
+	var customExec = &invoke.DefaultExec{
+		RawExec: &invoke.RawExec{Stderr: ginkgo.GinkgoWriter},
+	}
+
 	// Invoke the CNI plugin, returning any errors to the calling code to handle.
 	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
-	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, nil)
+	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, customExec)
 	if err != nil {
 		return
 	}

@@ -67,7 +67,7 @@ func WipeDatastore() {
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("Set ClusterInformation: %v %v\n", ci, *ci.Spec.DatastoreReady)
+	log.Debugf("Set ClusterInformation: %v %v", ci, *ci.Spec.DatastoreReady)
 }
 
 // MustCreateNewIPPool creates a new Calico IPAM IP Pool.
@@ -77,10 +77,6 @@ func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipa
 
 // MustCreateNewIPPoolBlockSize creates a new Calico IPAM IP Pool with support for setting the block size.
 func MustCreateNewIPPoolBlockSize(c client.Interface, cidr string, ipip, natOutgoing, ipam bool, blockSize int) string {
-	log.SetLevel(log.DebugLevel)
-
-	log.SetOutput(os.Stderr)
-
 	name := strings.Replace(cidr, ".", "-", -1)
 	name = strings.Replace(name, ":", "-", -1)
 	name = strings.Replace(name, "/", "-", -1)
@@ -107,9 +103,6 @@ func MustCreateNewIPPoolBlockSize(c client.Interface, cidr string, ipip, natOutg
 }
 
 func MustDeleteIPPool(c client.Interface, cidr string) {
-	log.SetLevel(log.DebugLevel)
-	log.SetOutput(os.Stderr)
-
 	name := strings.Replace(cidr, ".", "-", -1)
 	name = strings.Replace(name, ":", "-", -1)
 	name = strings.Replace(name, "/", "-", -1)
@@ -142,18 +135,22 @@ func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 		n.Name = host
 
 		// Create/Update the node
-		newNode, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
+		_, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
 		if err != nil {
 			if kerrors.IsAlreadyExists(err) {
+				log.WithField("node", host).Info("Node already exists")
 				return nil
 			}
 		}
-		log.WithField("node", newNode).WithError(err).Info("node applied")
+		log.WithField("node", host).WithError(err).Info("Node created")
 	} else {
 		// Otherwise, create it in Calico.
 		n := libapi.NewNode()
 		n.Name = host
 		_, err = c.Nodes().Create(context.Background(), n, options.SetOptions{})
+		if err != nil {
+			log.WithField("node", host).WithError(err).Warn("Error creating node")
+		}
 	}
 	return err
 }
@@ -163,13 +160,13 @@ func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error
 	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
 		// delete the node in Kubernetes.
 		err = kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
-		log.WithError(err).Info("node deleted")
+		log.WithError(err).WithField("node", host).Debug("Kubernetes node deleted")
 	} else {
 		// Otherwise, delete it in Calico.
 		n := libapi.NewNode()
 		n.Name = host
 		_, err = c.Nodes().Delete(context.Background(), host, options.DeleteOptions{})
-		log.WithError(err).Info("node deleted")
+		log.WithError(err).WithField("node", host).Debug("Calico node deleted")
 	}
 	if _, ok := err.(errors.ErrorResourceDoesNotExist); ok || kerrors.IsNotFound(err) {
 		// Ignore does not exist.

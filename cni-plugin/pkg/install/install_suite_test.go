@@ -5,11 +5,16 @@ package install_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
 	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
 )
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
 
 func TestInstall(t *testing.T) {
 	RegisterFailHandler(Fail)
