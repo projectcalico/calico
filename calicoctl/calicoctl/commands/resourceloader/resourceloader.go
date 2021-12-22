@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1resourceloader
+package resourceloader
 
 import (
 	"fmt"
@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/go-yaml-wrapper"
 
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
+	k8sconvert "github.com/projectcalico/calico/libcalico-go/lib/apis/k8sconvert"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	v1validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
@@ -48,6 +49,7 @@ func populateResourceTypes() {
 		apiv1.NewPolicy(),
 		apiv1.NewProfile(),
 		apiv1.NewWorkloadEndpoint(),
+		k8sconvert.NewK8sNetworkPolicy(),
 	}
 
 	for _, rt := range resTypes {
