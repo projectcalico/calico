@@ -1093,6 +1093,11 @@ create-release-branch: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_TAG
 	$(MAKE) dev-tag-next-release push-next-release-dev-tag\
  		BRANCH=$(call current-branch) NEXT_RELEASE_VERSION=$(NEXT_RELEASE_VERSION) DEV_TAG_SUFFIX=$(DEV_TAG_SUFFIX)
 
+# ensure that the current commit is a release tag.
+ensure-tagged:
+	if ! git describe --exact-match --tags HEAD; then \
+		echo "Not on a git tag"; fi
+
 ###############################################################################
 # Helpers
 ###############################################################################
