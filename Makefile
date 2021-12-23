@@ -53,11 +53,20 @@ image:
 	$(MAKE) -C typha image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 
-# Parameters for release.
+###############################################################################
+# Release logic below
+###############################################################################
+
+# Directory in which to put artifacts to be uploaded to the github release.
 UPLOAD_DIR=_output/upload/$(GIT_VERSION)
-HELM_CHART_RELEASE=0
+
+# Set HELM_CHART_RELEASE if this is a helm-only release, to create a chart
+# that has an appendix for diferentiation from earlier charts. This need not be set
+# on most releases.
+HELM_CHART_RELEASE=
+
+BUILD_CMD=release-build
 DRY_RUN=echo
-BUILD_CMD=image
 
 # Define a multi-line string for the GitHub release body.
 # We need to export it as an env var to properly format it.
@@ -69,11 +78,10 @@ Attached to this release are the following artifacts:
 
 - `release-v$(CALICO_VER).tgz`: docker images and kubernetes manifests.
 - `calico-windows-v$(CALICO_VER).zip`: Calico for Windows.
-- `tigera-operator-v$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico Helm v3 chart.
+- `tigera-operator-v$(CALICO_VER).tgz`: Calico Helm v3 chart.
 
 endef
 export RELEASE_BODY
-
 
 # Build and publish a release. Has the following dependencies:
 # - Current commit must be a release tag.
