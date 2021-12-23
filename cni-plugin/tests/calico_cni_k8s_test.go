@@ -172,12 +172,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	logConf := types.NetConf{
-		LogLevel: "info",
-	}
-	utils.ConfigureLogging(logConf)
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
-
 	Context("using host-local IPAM", func() {
 		netconf := fmt.Sprintf(`
 			{
