@@ -447,7 +447,9 @@ var _ = Describe("CalicoCni", func() {
 
 			grpcBackend.GracefulStop()
 			err = syscall.Unlink(socket)
-			Expect(err).NotTo(HaveOccurred())
+			if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
+				Expect(err).NotTo(HaveOccurred())
+			}
 			close(done)
 		}, 30.0)
 	})
