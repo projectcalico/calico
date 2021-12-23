@@ -276,3 +276,5 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("delete networkset %s -n %s" % (name(networkset_name2_rev1), namespace(networkset_name2_rev1)), kdd=True)
         rc.assert_no_error()
+        output = log_and_run("rm ./test-migration") # remove test-migration file created earlier
+        self.assertEqual(output, "")
