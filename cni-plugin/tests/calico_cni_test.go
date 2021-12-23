@@ -17,7 +17,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -801,7 +800,7 @@ var _ = Describe("CalicoCni", func() {
 			BeforeEach(func() {
 				// To prevent the networking atempt from succeeding, rename the old veth.
 				// This leaves a route and an eth0 in place that the plugin will struggle with.
-				log.Info("Breaking networking for the created interface")
+				By("Breaking networking for the created interface")
 				hostVeth := endpointSpec.InterfaceName
 				newName := strings.Replace(hostVeth, "cali", "sali", 1)
 				output, err := exec.Command("ip", "link", "set", hostVeth, "down").CombinedOutput()
@@ -814,7 +813,7 @@ var _ = Describe("CalicoCni", func() {
 
 			It("a second ADD for the same container should leave the datastore alone", func() {
 				// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-				log.Info("Rerunning CNI plugin")
+				By("Running the CNI plugin a second time on the same container")
 				_, _, _, _, err := testutils.RunCNIPluginWithId(netconf, "", "", "", containerID, "", contNs)
 				Expect(err).ShouldNot(HaveOccurred())
 

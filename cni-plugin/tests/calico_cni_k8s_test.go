@@ -22,7 +22,6 @@ import (
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -880,7 +879,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					podIP := contAddresses[0].IP
-					log.Infof("All container IPs: %v", contAddresses)
 					Expect(podIP).Should(Equal(expectedIP))
 
 					By("Deleting the pod we created earlier")
@@ -905,7 +903,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					pod2IP := contAddresses[0].IP
-					log.Infof("All container IPs: %v", contAddresses)
 					Expect(pod2IP).Should(Equal(expectedIP))
 
 					err = contNs.Do(func(_ ns.NetNS) error {
@@ -1034,8 +1031,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			podIP := contAddresses[0].IP
-			log.Infof("All container IPs: %v", contAddresses)
-			log.Infof("Container got IP address: %s", podIP)
 			Expect(pool1CIDR.Contains(podIP)).To(BeTrue())
 
 			// Delete the container.
@@ -1058,7 +1053,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testNS, &v1.Pod{
+			ensurePodCreated(clientset, testNS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        name,
 					Annotations: map[string]string{},
@@ -1071,7 +1066,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			log.Infof("Created POD object: %v", pod)
 
 			// Expect an error when invoking the CNI plugin.
 			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testNS, "")
@@ -1097,7 +1091,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testNS, &v1.Pod{
+			ensurePodCreated(clientset, testNS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        name,
 					Annotations: map[string]string{},
@@ -1110,7 +1104,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			log.Infof("Created POD object: %v", pod)
 
 			// Allocate all the addresses in the IP pool.
 			handle := "test-handle"
@@ -1119,7 +1112,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				ipam.AutoAssignArgs{
 					Num4:        256,
 					HandleID:    &handle,
-					IPv4Pools:   []cnet.IPNet{cnet.IPNet{IPNet: *pool1CIDR}},
+					IPv4Pools:   []cnet.IPNet{{IPNet: *pool1CIDR}},
 					IntendedUse: api.IPPoolAllowedUseWorkload,
 				},
 			)
@@ -1155,7 +1148,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testNS, &v1.Pod{
+			ensurePodCreated(clientset, testNS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        name,
 					Annotations: map[string]string{},
@@ -1168,7 +1161,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			log.Infof("Created POD object: %v", pod)
 
 			// Allocate all the addresses in the first IP pool.
 			handle := "test-handle"
@@ -1177,7 +1169,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				ipam.AutoAssignArgs{
 					Num4:        256,
 					HandleID:    &handle,
-					IPv4Pools:   []cnet.IPNet{cnet.IPNet{IPNet: *pool1CIDR}},
+					IPv4Pools:   []cnet.IPNet{{IPNet: *pool1CIDR}},
 					IntendedUse: api.IPPoolAllowedUseWorkload,
 				},
 			)
@@ -1262,7 +1254,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod passing in an IP pool.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testNS, &v1.Pod{
+			ensurePodCreated(clientset, testNS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1277,15 +1269,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			log.Infof("Created POD object: %v", pod)
 
 			// Run the CNI plugin.
 			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, name, testNS, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			podIP := contAddresses[0].IP
-			log.Infof("All container IPs: %v", contAddresses)
-			log.Infof("Container got IP address: %s", podIP)
 			Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
 
 			// Delete the container.
@@ -1348,7 +1337,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		It("successfully assigns an IP address from the annotated IP Pool (by cidr)", func() {
 			// Create a K8s pod passing in an IP pool.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1363,14 +1352,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			log.Infof("Created POD object: %v", pod)
 
 			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			podIP := contAddresses[0].IP
-			log.Infof("All container IPs: %v", contAddresses)
-			log.Infof("Container got IP address: %s", podIP)
 			Expect(pool1CIDR.Contains(podIP)).To(BeTrue())
 
 			// Delete the container.
@@ -1381,7 +1367,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		It("successfully assigns an IP address from the annotated IP Pool (by name)", func() {
 			// Create a K8s pod passing in an IP pool.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1396,14 +1382,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			log.Infof("Created POD object: %v", pod)
 
 			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			podIP := contAddresses[0].IP
-			log.Infof("All container IPs: %v", contAddresses)
-			log.Infof("Container got IP address: %s", podIP)
 			Expect(pool2CIDR.Contains(podIP)).To(BeTrue())
 
 			// Delete the container.
@@ -1445,7 +1428,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Now create a K8s pod passing in a floating IP.
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1460,7 +1443,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			log.Infof("Created POD object: %v", pod)
 		})
 
 		AfterEach(func() {
@@ -1490,7 +1472,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Assert that the endpoint contains the appropriate DNAT
 			podIP := contAddresses[0].IP
 			Expect(endpoints.Items[0].Spec.IPNATs).Should(HaveLen(1))
-			Expect(endpoints.Items[0].Spec.IPNATs).Should(Equal([]libapi.IPNAT{libapi.IPNAT{InternalIP: podIP.String(), ExternalIP: "1.1.1.1"}}))
+			Expect(endpoints.Items[0].Spec.IPNATs).Should(Equal([]libapi.IPNAT{{InternalIP: podIP.String(), ExternalIP: "1.1.1.1"}}))
 
 			// Delete the container.
 			_, err = testutils.DeleteContainer(string(confBytes), contNs.Path(), name, testutils.K8S_TEST_NS)
@@ -1559,7 +1541,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod passing in an IP address.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1575,15 +1557,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				},
 			})
 
-			log.Infof("Created POD object: %v", pod)
-
 			containerID, _, contVeth, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).NotTo(HaveOccurred())
 			mac := contVeth.Attrs().HardwareAddr
 
 			podIP := contAddresses[0].IP
-			log.Infof("All container IPs: %v", contAddresses)
-			log.Infof("Container got IP address: %s", podIP)
 			Expect(podIP).Should(Equal(assignIP))
 
 			ids := names.WorkloadEndpointIdentifiers{
@@ -1652,7 +1630,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod passing in an IP address.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1668,8 +1646,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				},
 			})
 
-			log.Infof("Created POD object: %v", pod)
-
 			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).To(HaveOccurred())
 
@@ -1680,7 +1656,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		It("should return an error if multiple addresses are requested using ipAddrsNoIpam", func() {
 			// Now create a K8s pod passing in more than one IPv4 address.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1695,8 +1671,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-
-			log.Infof("Created POD object: %v", pod)
 
 			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).To(HaveOccurred())
@@ -1753,7 +1727,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod passing in an IP address.
 			name := fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1770,15 +1744,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			})
 			defer ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
 
-			log.Infof("Created POD object: %v", pod)
-
 			containerID, _, contVeth, contAddresses, _, netNS, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
 			Expect(err).NotTo(HaveOccurred())
 			mac := contVeth.Attrs().HardwareAddr
 
 			podIP := contAddresses[0].IP
-			log.Infof("All container IPs: %v", contAddresses)
-			log.Infof("Container got IP address: %s", podIP)
 			Expect(podIP).Should(Equal(assignIP))
 
 			ids := names.WorkloadEndpointIdentifiers{
@@ -1883,7 +1853,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod (without any pod IP annotations).
 			name := fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Annotations: map[string]string{
@@ -1900,13 +1870,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			})
 			defer ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
 
-			log.Infof("Created POD object: %v", pod)
-
 			containerID, _, contVeth, contAddresses, _, netNS, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
 			Expect(err).NotTo(HaveOccurred())
 			mac := contVeth.Attrs().HardwareAddr
 
-			log.Infof("All container IPs: %v", contAddresses)
 			Expect(contAddresses).To(HaveLen(2))
 			podIPv4 := contAddresses[0].IP
 			Expect(podIPv4.To4()).NotTo(BeNil())
@@ -2046,9 +2013,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		// - CNI DEL for containerIDX (Spurious delete for old container ID)
 		It("Use different container IDs to ADD and DEL the container", func() {
 			// ADD the container with passing a container ID "X".
-			_, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
+			_, _, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshaled result: %v\n", result)
 
 			// Assert that the endpoint is created in the backend datastore with ContainerID "X".
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -2088,9 +2054,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// ADD a new container with passing a container ID "Y".
-			_, result, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
+			_, _, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshaled result: %v\n", result)
 
 			// Assert that the endpoint is created in the backend datastore with ContainerID "Y".
 			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -2150,9 +2115,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		// - CNI DEL using containerIDY (should actually delete the container)
 		It("should handle deletes for stale container IDs", func() {
 			// ADD the container with passing a CNI_CONTAINERID of "X".
-			_, result, _, _, _, _, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
+			_, _, _, _, _, _, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshaled result: %v\n", result)
 
 			// Assert that the endpoint is created in the backend datastore with ContainerID "X".
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -2179,9 +2143,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// ADD the container with passing a CNI_CONTAINERID of "Y"
-			_, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
+			_, _, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshaled result: %v\n", result)
 
 			// Assert that the endpoint is created in the backend datastore with ContainerID "Y".
 			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -2285,7 +2248,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Now create a K8s pod.
 			clientset = getKubernetesClient()
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS,
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: name,
@@ -2298,12 +2261,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						NodeName: hostname,
 					},
 				})
-			log.Infof("Created POD object: %v", pod)
 
 			// Run the CNI plugin.
 			containerID, result, _, _, _, contNs, err = testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshalled result from first ADD: %v\n", result)
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -2344,7 +2305,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Try to create the same pod with a different container (so CNI receives the ADD for the same endpoint again)
 			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
 			Expect(err).NotTo(HaveOccurred())
-			log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
 
 			// The IP addresses shouldn't be the same, since we'll reassign one.
 			Expect(resultSecondAdd.IPs).ShouldNot(Equal(result.IPs))
@@ -2423,7 +2383,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Now create a K8s pod.
 			name := "mypod-1"
 
-			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS,
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: name,
@@ -2437,10 +2397,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					},
 				})
 
-			log.Infof("Created POD object: %v", pod)
-
 			// Create the container, which will call CNI and by default it will create the container with interface name 'eth0'.
-			containerID, result, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+			containerID, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).ShouldNot(HaveOccurred())
 			// Make sure the pod gets cleaned up, whether we fail or not.
 			expectedIfaceName := "eth0"
@@ -2450,7 +2408,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
 			}()
-			log.Printf("First container, unmarshalled result: %v\n", result)
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -2513,7 +2470,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Now we create another pod with a very similar name.
 			name2 := "mypod"
 
-			pod2 := ensurePodCreated(clientset, testutils.K8S_TEST_NS,
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: name2,
@@ -2526,8 +2483,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						NodeName: hostname,
 					},
 				})
-
-			log.Infof("Created POD object: %v", pod2)
 
 			// Now since we can't use the same container namespace for the second container, we need to create a new one.
 			contNs2, err := cnitestutils.NewNS()
@@ -2550,9 +2505,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create the container, which will call CNI and by default it will create the container with interface name 'eth0'.
-			result, _, _, _, err = testutils.RunCNIPluginWithId(netconf, name2, testutils.K8S_TEST_NS, "", containerID2, "eth0", contNs2)
+			_, _, _, _, err = testutils.RunCNIPluginWithId(netconf, name2, testutils.K8S_TEST_NS, "", containerID2, "eth0", contNs2)
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Second container: unmarshalled result: %v\n", result)
 
 			// Make sure BOTH of the endpoints are there in etcd
 			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})

@@ -264,10 +264,9 @@ func RunCNIPluginWithId(
 		// Special case for older CNI versions.
 		var out []byte
 		out, err = json.Marshal(r)
-		log.Infof("CNI output: %s", out)
 		r020 := types020.Result{}
 		if err = json.Unmarshal(out, &r020); err != nil {
-			log.Errorf("Error unmarshaling output to Result: %v\n", err)
+			log.WithField("out", out).Errorf("Error unmarshaling output to Result: %v\n", err)
 			return
 		}
 
