@@ -1,4 +1,4 @@
-// +build tools
+//go:build tools
 
 // Copyright (c) 2021 Tigera, Inc. All rights reserved.
 //

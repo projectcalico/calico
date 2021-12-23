@@ -6,7 +6,7 @@ nocopyright=""
 for f in $files
 do
         # For each file, check if it contains "Copyright" in the first three lines.
-	exists=$(head -n 3 $f | grep "Copyright (c).*Tigera")
+	exists=$(head -n 4 $f | grep "Copyright (c).*Tigera")
         if [ -z "$exists" ]; then 
                 nocopyright="$nocopyright\n$f"
         fi  
