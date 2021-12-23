@@ -139,14 +139,27 @@ update_canonical_urls:
 # Release targets
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: clean chart
+release-build: clean chart _output/manifests
 
 chart: _includes/charts/tigera-operator/values.yaml bin/helm3
-	mkdir -p bin
 	bin/helm3 package ./_includes/charts/tigera-operator \
 	--destination ./bin/ \
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
+ifdef CHART_RELEASE
+	mv ./bin/tigera-operator-$(GIT_VERSION).tgz ./bin/tigera-operator-$(GIT_VERSION)-$(CHART_RELEASE).tgz
+endif
+
+_output/manifests:
+	rm -rf ../_site
+	$(MAKE) _site
+	mkdir -p _output/manifests
+
+	# Find all the hosted manifests and copy them into the release dir. Use xargs to mkdir the destination directory structure before copying them.
+	# -printf "%P\n" prints the file name and directory structure with the search dir stripped off
+	find _site/manifests -name  '*.yaml' -printf "%P\n" | xargs -I FILE sh -c \
+	    'mkdir -p _output/manifests/`dirname FILE`;\
+	    cp _site/manifests/FILE _output/manifests/`dirname FILE`;'
 
 # Build values.yaml for the tigera-operator chart
 .PHONY: values.yaml
@@ -180,20 +193,6 @@ endif
 	@echo "" >> AUTHORS.md
 	@docker run -ti --rm -v $(CURDIR):/code -e GITHUB_TOKEN=$(GITHUB_TOKEN) python:3 \
 		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
-
-RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
-MANIFEST_SRC?=./_site/manifests
-$(RELEASE_DIR_K8S_MANIFESTS):
-	# Ensure that the docs site is generated
-	rm -rf ../_site
-	$(MAKE) _site
-
-	# Find all the hosted manifests and copy them into the release dir. Use xargs to mkdir the destination directory structure before copying them.
-	# -printf "%P\n" prints the file name and directory structure with the search dir stripped off
-	find $(MANIFEST_SRC) -name  '*.yaml' -printf "%P\n" | \
-	  xargs -I FILE sh -c \
-	    'mkdir -p $(RELEASE_DIR_K8S_MANIFESTS)/`dirname FILE`;\
-	    cp $(MANIFEST_SRC)/FILE $(RELEASE_DIR_K8S_MANIFESTS)/`dirname FILE`;'
 
 ###############################################################################
 # Utilities
