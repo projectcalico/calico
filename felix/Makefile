@@ -486,11 +486,6 @@ release-tag: release-prereqs release-notes
 
 ## Produces a clean build of release artifacts at the specified version.
 release-build: release-prereqs clean
-# Check that the correct code is checked out.
-ifneq ($(VERSION), $(GIT_VERSION))
-	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
-endif
-
 	$(MAKE) image-all
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
@@ -517,13 +512,6 @@ release-notes: release-prereqs
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
-	# Push the git tag.
-	git push origin $(VERSION)
-
-	# Push images.
-	# Disabling for now since no-one is consuming the images.
-	# $(MAKE) push-images-to-registries IMAGETAG=$(VERSION)
-
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
@@ -565,9 +553,6 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
-ifndef GITHUB_TOKEN
-	$(error GITHUB_TOKEN must be set for a release)
 endif
 ifeq (, $(shell which ghr))
 	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)

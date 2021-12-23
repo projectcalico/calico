@@ -179,10 +179,6 @@ release-tag: release-prereqs release-notes
 
 ## Produces a clean build of release artifacts at the specified version.
 release-build: release-prereqs clean
-# Check that the correct code is checked out.
-ifneq ($(VERSION), $(GIT_VERSION))
-	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
-endif
 	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
@@ -204,9 +200,6 @@ release-notes: release-prereqs
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
-	# Push the git tag.
-	git push origin $(VERSION)
-
 	# Push images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
 
