@@ -22,14 +22,18 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/projectcalico/go-yaml-wrapper"
 
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
-	k8sconvert "github.com/projectcalico/calico/libcalico-go/lib/apis/k8sconvert"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	v1validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 )
+
+var VersionK8sNetworkingV1 = "networking.k8s.io/v1"
 
 // Store a resourceHelper for each resource unversioned.TypeMetadata.
 var resourceToType map[unversioned.TypeMetadata]reflect.Type
@@ -49,7 +53,7 @@ func populateResourceTypes() {
 		apiv1.NewPolicy(),
 		apiv1.NewProfile(),
 		apiv1.NewWorkloadEndpoint(),
-		k8sconvert.NewK8sNetworkPolicy(),
+		NewK8sNetworkPolicy(),
 	}
 
 	for _, rt := range resTypes {
@@ -201,4 +205,26 @@ func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
 	}
 
 	return resources, nil
+}
+
+// Kubernetes NetworkPolicy helper struct used for conversion from
+// Kubernetes API to Calico v3 API
+type K8sNetworkPolicy struct {
+	unversioned.TypeMetadata
+	Metadata K8sNetworkPolicyMetadata       `json:"metadata,omitempty"`
+	Spec     networkingv1.NetworkPolicySpec `json:"spec,omitempty"`
+}
+
+func NewK8sNetworkPolicy() *K8sNetworkPolicy {
+	return &K8sNetworkPolicy{
+		TypeMetadata: unversioned.TypeMetadata{
+			Kind:       "NetworkPolicy",
+			APIVersion: VersionK8sNetworkingV1,
+		},
+	}
+}
+
+type K8sNetworkPolicyMetadata struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
 }
