@@ -1,4 +1,4 @@
-// +build nobuild
+//go:build nobuild
 
 package test
 
