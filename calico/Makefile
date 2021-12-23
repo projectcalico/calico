@@ -138,8 +138,9 @@ update_canonical_urls:
 ###############################################################################
 # Release targets
 ###############################################################################
-## Produces a clean build of release artifacts at the specified version.
-release-build: clean chart _output/manifests
+release-build: .release-$(VERSION).created 
+.release-$(VERSION).created:
+	$(MAKE) clean chart _output/manifests
 
 chart: _includes/charts/tigera-operator/values.yaml bin/helm3
 	bin/helm3 package ./_includes/charts/tigera-operator \
@@ -169,7 +170,7 @@ _includes/charts/tigera-operator/values.yaml: _plugins/values.rb _plugins/helm.r
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
-	$(MAKE) helm-index
+	#$(MAKE) helm-index
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
 .PHONY: helm-index
