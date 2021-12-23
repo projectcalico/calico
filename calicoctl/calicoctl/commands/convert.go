@@ -33,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 
-	k8sconvert "github.com/projectcalico/calico/libcalico-go/lib/apis/k8sconvert"
 	cconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
@@ -144,7 +143,7 @@ Description:
 func convertResource(convResource unversioned.Resource) (converters.Resource, error) {
 	var res converters.Resource
 
-	if strings.EqualFold(convResource.GetTypeMetadata().APIVersion, k8sconvert.VersionK8sNetworkingV1) {
+	if strings.EqualFold(convResource.GetTypeMetadata().APIVersion, resourceloader.VersionK8sNetworkingV1) {
 		// Convert K8s resource to v3 (currently only NetworkPolicy is supported)
 		var err error
 
@@ -183,7 +182,7 @@ func convertK8sResource(convResource unversioned.Resource) (converters.Resource,
 
 	switch strings.ToLower(k8sResKind) {
 	case "networkpolicy":
-		k8sNetworkPolicy, ok := convResource.(*k8sconvert.K8sNetworkPolicy)
+		k8sNetworkPolicy, ok := convResource.(*resourceloader.K8sNetworkPolicy)
 		if !ok {
 			return nil, fmt.Errorf("failed to convert resource to K8sNetworkPolicy")
 		}
@@ -204,8 +203,6 @@ func convertK8sResource(convResource unversioned.Resource) (converters.Resource,
 		if !ok {
 			return nil, fmt.Errorf("failed to convert kvp to apiv3.NetworkPolicy")
 		}
-
-		log.Infof("k8snp: %+v", k8snp) //TODO
 
 		// Trim K8sNetworkPolicyNamePrefix from the policy name (the K8sNetworkPolicyToCalico
 		// function adds it for when it is used for coexisting calico/k8s policies).
