@@ -157,6 +157,7 @@ BINDIR?=bin
 ## Clean enough that a new release build will be clean
 clean: clean-windows-upgrade
 	find . -name '*.created' -exec rm -f {} +
+	find . -name '.*.created' -exec rm -f {} +
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
@@ -553,32 +554,10 @@ check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
 ###############################################################################
 # Release
 ###############################################################################
-PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
-
-## Tags and builds a release from start to finish.
-release: release-prereqs
-	$(MAKE) VERSION=$(VERSION) release-tag
-	$(MAKE) VERSION=$(VERSION) release-build
-	$(MAKE) VERSION=$(VERSION) release-verify
-
-	@echo ""
-	@echo "Release build complete. Next, push the produced images."
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-publish"
-	@echo ""
-
-## Produces a git tag for the release.
-release-tag: release-prereqs release-notes
-	git tag $(VERSION) -F release-notes-$(VERSION)
-	@echo ""
-	@echo "Now you can build the release:"
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-build"
-	@echo ""
-
 ## Produces a clean build of release artifacts at the specified version.
-release-build: release-prereqs clean
-	$(MAKE) image-all RELEASE=true
+release-build: .release-$(VERSION).created 
+.release-$(VERSION).created:
+	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
@@ -588,6 +567,7 @@ release-build: release-prereqs clean
 	# Generate the Windows upgrade image tarballs (this must come after the
 	# upgrade archive)
 	$(MAKE) image-tar-windows-all
+	touch $@
 
 ## Produces the Windows installation ZIP archive for the release.
 release-windows-archive $(WINDOWS_ARCHIVE): release-prereqs
@@ -598,61 +578,19 @@ release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
 	if ! docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-## Generates release notes based on commits in this version.
-release-notes: release-prereqs
-	mkdir -p dist
-	echo "# Changelog" > release-notes-$(VERSION)
-	echo "" > release-notes-$(VERSION)
-	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
-
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
-ifeq (, $(shell which ghr))
-	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
-endif
 	# Push node images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 	# Push Windows upgrade images.
-	$(MAKE) cd-windows-upgrade RELEASE=true CONFIRM=true
-
-	# Push Windows artifacts to GitHub release.
-	# Requires ghr: https://github.com/tcnksm/ghr
-	# Requires GITHUB_TOKEN environment variable set.
-	ghr -u projectcalico -r node \
-		-n $(VERSION) \
-		$(VERSION) $(WINDOWS_ARCHIVE)
-
-	@echo "Finalize the GitHub release based on the pushed tag."
-	@echo ""
-	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
-	@echo ""
-	@echo "If this is the latest stable release, then run the following to push 'latest' images."
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-publish-latest"
-	@echo ""
+	$(MAKE) cd-windows-upgrade RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-verify
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=true CONFIRM=true
-
-.PHONY: node-test-at
-# Run docker-image acceptance tests
-node-test-at: release-prereqs
-	docker run -v $(CURDIR)/tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
-	  $(NODE_IMAGE):$(VERSION) /bin/sh -c ' \
-	   apk --no-cache add wget ca-certificates && \
-	   wget -q -O /tmp/goss https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
-	   chmod +rx /tmp/goss && \
-	   /tmp/goss --gossfile /tmp/goss.yaml validate'
-
-# release-prereqs checks that the environment is configured properly to create a release.
-release-prereqs:
-ifndef VERSION
-	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 ###############################################################################
 # Windows packaging
