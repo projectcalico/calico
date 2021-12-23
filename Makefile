@@ -3,8 +3,7 @@ PACKAGE_NAME = github.com/projectcalico/calico
 include metadata.mk 
 include lib.Makefile
 
-
-DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -83,14 +82,18 @@ Attached to this release are the following artifacts:
 endef
 export RELEASE_BODY
 
+# Build the release tool.
+hack/release/release: $(shell find ./hack/release -type f -name '*.go')
+	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/release.go
+
+rel: hack/release/release
+	@hack/release/release
+
 # Build and publish a release. Has the following dependencies:
 # - Current commit must be a release tag.
 # - Requires ghr: https://github.com/tcnksm/ghr
 # - Requires GITHUB_TOKEN environment variable set.
-release: #ensure-tagged
-ifeq (, $(shell which ghr))
-	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
-endif
+release: hack/release/release #ensure-tagged
 	# Build all the images for the release, tagging them with the current 
 	# git version. By this point, we have asserted that GIT_VERSION is a tag.
 	$(MAKE) -C pod2daemon $(BUILD_CMD) VERSION=$(GIT_VERSION)
