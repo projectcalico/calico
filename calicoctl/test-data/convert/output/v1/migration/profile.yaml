@@ -1,0 +1,63 @@
+apiVersion: projectcalico.org/v3
+kind: Profile
+metadata:
+  creationTimestamp: null
+  name: profile1
+spec:
+  egress:
+  - action: Allow
+    destination:
+      notSelector: profile == 'system'
+    source: {}
+  - action: Allow
+    destination: {}
+    source:
+      selector: something in {'a', 'b'}
+  - action: Allow
+    destination:
+      selector: something not in {'a', 'b'}
+    source: {}
+  ingress:
+  - action: Deny
+    destination:
+      notPorts:
+      - 22
+      - 443
+      - 21
+      - 8080
+      selector: atag == ''
+    protocol: UDP
+    source:
+      nets:
+      - 172.20.0.0/16
+      notNets:
+      - 172.20.5.0/24
+      notSelector: dtag == ''
+      selector: ctag == ''
+  - action: Deny
+    destination:
+      notPorts:
+      - 22
+      - 443
+      - 21
+      - 8080
+      selector: atag == ''
+    protocol: TCP
+    source:
+      nets:
+      - 10.0.20.0/24
+      notNets:
+      - 10.0.20.0/25
+  - action: Allow
+    destination: {}
+    protocol: TCP
+    source:
+      ports:
+      - 1234
+      - 4567
+      - "8:9"
+      selector: profile != 'profile1' && has(role)
+  labelsToApply:
+    atag: ""
+    btag: ""
+    profile: profile1
