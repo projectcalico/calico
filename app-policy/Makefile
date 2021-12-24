@@ -118,14 +118,14 @@ protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
 	$(MAKE) fix
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
 		      --gogofast_out=plugins=grpc:proto
 
 proto/healthz.pb.go: proto/healthz.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
@@ -172,7 +172,7 @@ check-boring-ssl: bin/dikastes-amd64
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files
-check-generated-files: protobuf
+check-generated-files: clean protobuf
 	if (git describe --tags --dirty | grep -c dirty >/dev/null); then \
 	  echo "Generated files are out of date."; \
 	  false; \
