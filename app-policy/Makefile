@@ -114,6 +114,7 @@ bin/healthz-%: protobuf $(SRC_FILES)
 PROTOC_IMPORTS =  -I proto\
 		  -I ./
 
+.PHONY: protobuf
 protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
 	$(MAKE) fix
 
