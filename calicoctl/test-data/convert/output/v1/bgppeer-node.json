@@ -1,0 +1,13 @@
+{
+  "kind": "BGPPeer",
+  "apiVersion": "projectcalico.org/v3",
+  "metadata": {
+    "name": "node1.00aa-00bb-0000-0000-0000-0000-0000-00ff",
+    "creationTimestamp": null
+  },
+  "spec": {
+    "node": "node1",
+    "peerIP": "aa:bb::ff",
+    "asNumber": 64514
+  }
+}

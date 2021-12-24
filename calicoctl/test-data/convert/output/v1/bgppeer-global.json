@@ -1,0 +1,12 @@
+{
+  "kind": "BGPPeer",
+  "apiVersion": "projectcalico.org/v3",
+  "metadata": {
+    "name": "192-20-30-40",
+    "creationTimestamp": null
+  },
+  "spec": {
+    "peerIP": "192.20.30.40",
+    "asNumber": 64567
+  }
+}
