@@ -1093,6 +1093,15 @@ create-release-branch: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_TAG
 	$(MAKE) dev-tag-next-release push-next-release-dev-tag\
  		BRANCH=$(call current-branch) NEXT_RELEASE_VERSION=$(NEXT_RELEASE_VERSION) DEV_TAG_SUFFIX=$(DEV_TAG_SUFFIX)
 
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+ifeq (, $(shell which ghr))
+	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
+endif
+
 ###############################################################################
 # Helpers
 ###############################################################################

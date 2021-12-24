@@ -3,8 +3,7 @@ PACKAGE_NAME = github.com/projectcalico/calico
 include metadata.mk 
 include lib.Makefile
 
-
-DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -52,3 +51,22 @@ image:
 	$(MAKE) -C app-policy image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C typha image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
+
+###############################################################################
+# Release logic below
+###############################################################################
+# Build the release tool.
+hack/release/release: $(shell find ./hack/release -type f -name '*.go')
+	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/release.go
+
+# Install ghr for publishing to github.
+hack/release/ghr: 
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr
+
+# Build a release.
+release: hack/release/release 
+	@hack/release/release -create
+
+# Publish an already built release.
+release-publish: hack/release/release hack/release/ghr
+	@hack/release/release -publish
