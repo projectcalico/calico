@@ -104,10 +104,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		}
 		// Create a random seed
 		rand.Seed(time.Now().UTC().UnixNano())
-		log.SetFormatter(&logutils.Formatter{})
-		log.AddHook(&logutils.ContextHook{})
-		log.SetOutput(GinkgoWriter)
-		log.SetLevel(log.InfoLevel)
 		hostname, _ = names.Hostname()
 		ctx = context.Background()
 		for i := 1; i <= 3; i++ {
@@ -139,10 +135,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		updateIPAMStrictAffinity(calicoClient, true)
 	})
 
-	logConf := types.NetConf{
-		LogLevel: "info",
-	}
-	utils.ConfigureLogging(logConf)
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
 
 	Context("l2bridge network::using host-local IPAM", func() {
