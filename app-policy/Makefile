@@ -175,7 +175,9 @@ check-boring-ssl: bin/dikastes-amd64
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files
-check-generated-files: clean protobuf
+check-generated-files:
+	$(MAKE) clean
+	$(MAKE) protobuf
 	if (git describe --tags --dirty | grep -c dirty >/dev/null); then \
 	  echo "Generated files are out of date."; \
 	  false; \
