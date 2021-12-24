@@ -1,0 +1,13 @@
+{
+  "kind": "BGPPeer",
+  "apiVersion": "projectcalico.org/v3",
+  "metadata": {
+    "name": "rack1-host1.192-168-1-1",
+    "creationTimestamp": null
+  },
+  "spec": {
+    "node": "rack1-host1",
+    "peerIP": "192.168.1.1",
+    "asNumber": 63400
+  }
+}
