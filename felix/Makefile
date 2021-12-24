@@ -112,6 +112,7 @@ clean:
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
+	find . -name '.*.created' -delete
 	$(DOCKER_GO_BUILD) make -C bpf-apache clean
 	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
 	$(DOCKER_GO_BUILD) make -C $(LIBBPF_CONTAINER_PATH) clean
@@ -466,6 +467,7 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean image-all
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
+	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
