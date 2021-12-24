@@ -1,0 +1,15 @@
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  creationTimestamp: null
+  name: policy1
+spec:
+  ingress:
+  - action: Deny
+    destination: {}
+    source:
+      selector: type=='application'
+  order: 100
+  selector: type=='database'
+  types:
+  - Ingress
