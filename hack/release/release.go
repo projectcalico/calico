@@ -23,7 +23,26 @@ func init() {
 
 // Global configuration for releases.
 var (
-	registries = []string{"docker.io", "quay.io"}
+	// Registries to which all release images are pushed.
+	// TODO: Do we need all of these?
+	// TODO: Remove DEV_REGISTRIES and RELEASE_REGISTRIES from Makefiles. Right now, we're just overriding them.
+	// TODO: BUILD_IMAGE shouldn't vary based on whether a release is being performed!
+	registries = []string{
+		"docker.io/calico",
+		"quay.io/calico",
+		"gcr.io/projectcalico-org",
+		"eu.gcr.io/projectcalico-org",
+		"asia.gcr.io/projectcalico-org",
+		"us.gcr.io/projectcalico-org",
+	}
+
+	// Architectures to build as part of a release.
+	architectures = []string{"amd64", "arm64", "armv7", "ppc64le", "s390x"}
+
+	// Git configuration for publishing to GitHub.
+	organization = "caseydavenport"
+	repo         = "calico"
+	origin       = "fake"
 )
 
 func main() {
@@ -100,7 +119,17 @@ func PublishRelease() error {
 
 	// Publish container images.
 	if err = publishContainerImages(ver); err != nil {
-		return err
+		return fmt.Errorf("failed to publish container images: %s", err)
+	}
+
+	// Publish the release to github.
+	if err = publishGithubRelease(ver); err != nil {
+		return fmt.Errorf("failed to publish github release: %s", err)
+	}
+
+	// If all else is successful, push the git tag. After this, there's no going back!
+	if _, err = git("push", origin, ver); err != nil {
+		return fmt.Errorf("failed to push git tag: %s", err)
 	}
 
 	return nil
@@ -138,7 +167,7 @@ func publishPrereqs(ver string) error {
 // - calico-windows-vX.Y.Z.zip: Calico for Windows.
 func collectGithubArtifacts(ver string) error {
 	// Final artifacts will be moved here.
-	uploadDir := fmt.Sprintf("_output/upload/%s", ver)
+	uploadDir := uploadDir(ver)
 	// TODO: Delete if already exists.
 	err := os.MkdirAll(uploadDir, os.ModePerm)
 	if err != nil {
@@ -159,6 +188,10 @@ func collectGithubArtifacts(ver string) error {
 	}
 
 	return nil
+}
+
+func uploadDir(ver string) string {
+	return fmt.Sprintf("_output/upload/%s", ver)
 }
 
 // Builds the complete release tar for upload to github.
@@ -243,6 +276,8 @@ func buildContainerImages(ver string) error {
 	// TODO: Pass CHART_RELEASE to calico repo if needed.
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
+		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
+		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
 
 	for _, dir := range releaseDirs {
@@ -252,6 +287,44 @@ func buildContainerImages(ver string) error {
 		}
 	}
 	return nil
+}
+
+func publishGithubRelease(ver string) error {
+	releaseNoteTemplate := `
+Release notes can be found at https://projectcalico.docs.tigera.io/archive/{release_stream}/release-notes/
+
+Attached to this release are the following artifacts:
+
+- {release_tar}: container images, binaries, and kubernetes manifests.
+- {calico_windows_zip}: Calico for Windows.
+- {helm_chart}: Calico Helm v3 chart.
+`
+	sv, err := semver.NewVersion(strings.TrimPrefix(ver, "v"))
+	if err != nil {
+		return err
+	}
+	formatters := []string{
+		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
+		// so we replace anything that needs to be backticked into it here.
+		"{version}", ver,
+		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major, sv.Minor),
+		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", ver),
+		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", ver),
+		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", ver),
+	}
+	r := strings.NewReplacer(formatters...)
+	releaseNote := r.Replace(releaseNoteTemplate)
+
+	args := []string{
+		"-username", organization,
+		"-repository", repo,
+		"-name", ver,
+		"-body", releaseNote,
+		ver,
+		uploadDir(ver),
+	}
+	_, err = runCommand("ghr", args, nil)
+	return err
 }
 
 func publishContainerImages(ver string) error {
@@ -270,8 +343,10 @@ func publishContainerImages(ver string) error {
 		fmt.Sprintf("IMAGETAG=%s", ver),
 		fmt.Sprintf("VERSION=%s", ver),
 		"RELEASE=true",
-		"CONFIRM=false", // Undo this when done prototyping.
-		"DRYRUN=true",   // Undo this when done prototyping.
+		"CONFIRM=",    // Undo this when done prototyping.
+		"DRYRUN=true", // Undo this when done prototyping.
+		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
+		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
 
 	for _, dir := range releaseDirs {
@@ -360,9 +435,9 @@ func runCommand(name string, args []string, env []string) (string, error) {
 	cmd.Stderr = &errb
 	logrus.WithField("cmd", cmd.String()).Infof("Running %s command", name)
 	err := cmd.Run()
-	fields := logrus.Fields{"stdout": outb.String(), "stderr": errb.String()}
-	logrus.WithError(err).WithFields(fields).Debug("command output")
+	logrus.Debug(outb.String())
 	if err != nil {
+		logrus.Error(errb.String())
 		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
 	}
 	return strings.TrimSpace(outb.String()), err

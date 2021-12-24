@@ -55,30 +55,18 @@ image:
 ###############################################################################
 # Release logic below
 ###############################################################################
-
-# Define a multi-line string for the GitHub release body.
-# We need to export it as an env var to properly format it.
-# See here: https://stackoverflow.com/questions/649246/is-it-possible-to-create-a-multi-line-string-variable-in-a-makefile/5887751
-define RELEASE_BODY
-Release notes can be found at https://projectcalico.docs.tigera.io/archive/$(RELEASE_STREAM)/release-notes/
-
-Attached to this release are the following artifacts:
-
-- `release-v$(CALICO_VER).tgz`: docker images and kubernetes manifests.
-- `calico-windows-v$(CALICO_VER).zip`: Calico for Windows.
-- `tigera-operator-v$(CALICO_VER).tgz`: Calico Helm v3 chart.
-
-endef
-export RELEASE_BODY
-
 # Build the release tool.
 hack/release/release: $(shell find ./hack/release -type f -name '*.go')
 	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/release.go
+
+# Install ghr for publishing to github.
+hack/release/ghr: 
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr
 
 # Build a release.
 release: hack/release/release 
 	@hack/release/release -create
 
 # Publish an already built release.
-release-publish: hack/release/release 
+release-publish: hack/release/release hack/release/ghr
 	@hack/release/release -publish
