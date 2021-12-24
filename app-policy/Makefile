@@ -18,7 +18,8 @@ GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
 LOCAL_USER_ID:=$(shell id -u)
 MY_GID:=$(shell id -g)
 
-SRC_FILES=$(shell find . -name '*.go' |grep -v vendor)
+GENERATED_FILES=proto/felixbackend.pb.go proto/healthz.pb.go
+SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 
 RELEASE_REGISTRIES ?=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
 
@@ -73,6 +74,7 @@ endif
 ###############################################################################
 # Building the binary
 ###############################################################################
+
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
 build-all: $(addprefix bin/dikastes-,$(VALIDARCHES))
@@ -114,9 +116,7 @@ bin/healthz-%: protobuf $(SRC_FILES)
 PROTOC_IMPORTS =  -I proto\
 		  -I ./
 
-.PHONY: protobuf
 protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
-	$(MAKE) fix
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
@@ -124,6 +124,7 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
 		      --gogofast_out=plugins=grpc:proto
+	$(MAKE) fix
 
 proto/healthz.pb.go: proto/healthz.proto
 	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
@@ -131,6 +132,7 @@ proto/healthz.pb.go: proto/healthz.proto
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
 		      --gogofast_out=plugins=grpc:proto
+	$(MAKE) fix
 
 
 # Building the image
