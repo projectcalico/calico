@@ -69,12 +69,12 @@ _site build: bin/helm
 
 ## Clean enough that a new release build will be clean
 clean:
+	find . -name '.*.created' -exec rm -f {} +
 	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
 
 ###############################################################################
 # CI / test targets
 ###############################################################################
-
 ci: htmlproofer kubeval helm-tests
 
 htmlproofer: _site
@@ -140,7 +140,8 @@ update_canonical_urls:
 ###############################################################################
 release-build: .release-$(VERSION).created 
 .release-$(VERSION).created:
-	$(MAKE) clean chart _output/manifests
+	$(MAKE) clean chart _site
+	touch $@
 
 chart: _includes/charts/tigera-operator/values.yaml bin/helm3
 	bin/helm3 package ./_includes/charts/tigera-operator \
@@ -151,17 +152,6 @@ ifdef CHART_RELEASE
 	mv ./bin/tigera-operator-$(GIT_VERSION).tgz ./bin/tigera-operator-$(GIT_VERSION)-$(CHART_RELEASE).tgz
 endif
 
-_output/manifests:
-	rm -rf ../_site
-	$(MAKE) _site
-	mkdir -p _output/manifests
-
-	# Find all the hosted manifests and copy them into the release dir. Use xargs to mkdir the destination directory structure before copying them.
-	# -printf "%P\n" prints the file name and directory structure with the search dir stripped off
-	find _site/manifests -name  '*.yaml' -printf "%P\n" | xargs -I FILE sh -c \
-	    'mkdir -p _output/manifests/`dirname FILE`;\
-	    cp _site/manifests/FILE _output/manifests/`dirname FILE`;'
-
 # Build values.yaml for the tigera-operator chart
 .PHONY: values.yaml
 CONTAINERIZED_VALUES?=docker run --rm -v $(CURDIR):/calico -w /calico ruby:2.5
@@ -170,7 +160,7 @@ _includes/charts/tigera-operator/values.yaml: _plugins/values.rb _plugins/helm.r
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
-	#$(MAKE) helm-index
+	$(MAKE) helm-index
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
 .PHONY: helm-index
