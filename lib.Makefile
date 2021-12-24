@@ -1098,9 +1098,6 @@ release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
-ifeq (, $(shell which ghr))
-	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
-endif
 
 ###############################################################################
 # Helpers
