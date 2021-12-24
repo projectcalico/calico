@@ -1,0 +1,24 @@
+{
+  "kind": "GlobalNetworkPolicy",
+  "apiVersion": "projectcalico.org/v3",
+  "metadata": {
+    "name": "policy1",
+    "creationTimestamp": null
+  },
+  "spec": {
+    "order": 100,
+    "ingress": [
+      {
+        "action": "Deny",
+        "source": {
+          "selector": "type=='application'"
+        },
+        "destination": {}
+      }
+    ],
+    "selector": "type=='database'",
+    "types": [
+      "Ingress"
+    ]
+  }
+}

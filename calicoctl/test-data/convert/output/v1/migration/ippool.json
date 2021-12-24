@@ -1,0 +1,20 @@
+{
+  "kind": "IPPool",
+  "apiVersion": "projectcalico.org/v3",
+  "metadata": {
+    "name": "10-1-0-0-16",
+    "creationTimestamp": null
+  },
+  "spec": {
+    "cidr": "10.1.0.0/16",
+    "vxlanMode": "Never",
+    "ipipMode": "CrossSubnet",
+    "natOutgoing": true,
+    "blockSize": 26,
+    "nodeSelector": "all()",
+    "allowedUses": [
+      "Workload",
+      "Tunnel"
+    ]
+  }
+}

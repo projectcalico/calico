@@ -1,0 +1,97 @@
+{
+  "kind": "Profile",
+  "apiVersion": "projectcalico.org/v3",
+  "metadata": {
+    "name": "profile1",
+    "creationTimestamp": null
+  },
+  "spec": {
+    "ingress": [
+      {
+        "action": "Deny",
+        "protocol": "UDP",
+        "source": {
+          "nets": [
+            "172.20.0.0/16"
+          ],
+          "selector": "ctag == ''",
+          "notNets": [
+            "172.20.5.0/24"
+          ],
+          "notSelector": "dtag == ''"
+        },
+        "destination": {
+          "selector": "atag == ''",
+          "notPorts": [
+            22,
+            443,
+            21,
+            8080
+          ]
+        }
+      },
+      {
+        "action": "Deny",
+        "protocol": "TCP",
+        "source": {
+          "nets": [
+            "10.0.20.0/24"
+          ],
+          "notNets": [
+            "10.0.20.0/25"
+          ]
+        },
+        "destination": {
+          "selector": "atag == ''",
+          "notPorts": [
+            22,
+            443,
+            21,
+            8080
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "source": {
+          "selector": "profile != 'profile1' \u0026\u0026 has(role)",
+          "ports": [
+            1234,
+            4567,
+            "8:9"
+          ]
+        },
+        "destination": {}
+      }
+    ],
+    "egress": [
+      {
+        "action": "Allow",
+        "source": {},
+        "destination": {
+          "notSelector": "profile == 'system'"
+        }
+      },
+      {
+        "action": "Allow",
+        "source": {
+          "selector": "something in {'a', 'b'}"
+        },
+        "destination": {}
+      },
+      {
+        "action": "Allow",
+        "source": {},
+        "destination": {
+          "selector": "something not in {'a', 'b'}"
+        }
+      }
+    ],
+    "labelsToApply": {
+      "atag": "",
+      "btag": "",
+      "profile": "profile1"
+    }
+  }
+}

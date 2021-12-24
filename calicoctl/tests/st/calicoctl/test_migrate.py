@@ -154,7 +154,7 @@ class TestCalicoctlMigrate(TestBase):
         # since they cannot be created via calicoctl.
 
         # Export the data before locking the datastore
-        rc = calicoctl("datastore migrate export > test-migration")
+        rc = calicoctl("datastore migrate export > /tmp/test-migration")
         rc.assert_error(text=NOT_LOCKED)
 
         # Lock the data
@@ -162,7 +162,7 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
 
         # Export the data after locking the datastore
-        rc = calicoctl("datastore migrate export > test-migration")
+        rc = calicoctl("datastore migrate export > /tmp/test-migration")
         rc.assert_no_error()
 
         # Delete the data
@@ -198,11 +198,11 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
 
         # Attempt and fail to import the data into an etcd datastore
-        rc = calicoctl("datastore migrate import -f test-migration")
+        rc = calicoctl("datastore migrate import -f /tmp/test-migration")
         rc.assert_error(text=NOT_KUBERNETES)
 
         # Import the data
-        rc = calicoctl("datastore migrate import -f test-migration", kdd=True)
+        rc = calicoctl("datastore migrate import -f /tmp/test-migration", kdd=True)
         rc.assert_error(text=NO_IPAM)
 
         # Check that all the resources were imported properly

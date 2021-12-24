@@ -1,0 +1,23 @@
+{
+  "kind": "HostEndpoint",
+  "apiVersion": "projectcalico.org/v3",
+  "metadata": {
+    "name": "myhost.eth0",
+    "creationTimestamp": null,
+    "labels": {
+      "type": "production"
+    }
+  },
+  "spec": {
+    "node": "myhost",
+    "interfaceName": "eth0",
+    "expectedIPs": [
+      "192.168.0.1",
+      "192.168.0.2"
+    ],
+    "profiles": [
+      "profile1",
+      "profile2"
+    ]
+  }
+}
