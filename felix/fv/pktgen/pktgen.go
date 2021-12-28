@@ -29,7 +29,7 @@ import (
 const usage = `pktgen: generates packets for Felix FV testing.
 
 Usage:
-  pktgen <ip_src> <ip_dst> <proto> [--port-src=<port_src>] [--port-dst=<port_dst>]`
+  pktgen <ip_src> <ip_dst> <proto> [--ip-id=<ip_id>] [--port-src=<port_src>] [--port-dst=<port_dst>]`
 
 func main() {
 	log.SetLevel(log.InfoLevel)
@@ -52,6 +52,15 @@ func main() {
 
 	if ipsrc.To4() == nil || ipdst.To4() == nil {
 		log.Fatal("cannot handle IPv6")
+	}
+
+	ipID := uint16(0)
+	if args["--ip-id"] != nil {
+		id, err := strconv.Atoi(args["--ip-id"].(string))
+		if err != nil {
+			log.WithError(err).Fatal("IP id not a number")
+		}
+		ipID = uint16(id)
 	}
 
 	sport := uint16(0)
@@ -85,6 +94,7 @@ func main() {
 
 	ipv4 := &layers.IPv4{
 		Version:  4,
+		Id:       ipID,
 		IHL:      5,
 		TTL:      64,
 		Flags:    layers.IPv4DontFragment,
