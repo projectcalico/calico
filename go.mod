@@ -51,6 +51,7 @@ require (
 	github.com/osrg/gobgp v0.0.0-20170802061517-bbd1d99396fe
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
+	github.com/projectcalico/api v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
 	github.com/prometheus/client_golang v1.11.0
@@ -79,8 +80,16 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.27.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
+	k8s.io/api v0.23.1
+	k8s.io/apiextensions-apiserver v0.0.0
+	k8s.io/apimachinery v0.23.1
+	k8s.io/apiserver v0.23.1
+	k8s.io/client-go v0.23.1
+	k8s.io/code-generator v0.23.1
+	k8s.io/component-base v0.23.1
 	k8s.io/klog v1.0.0
 	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65
+	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b
 	modernc.org/memory v1.0.5
 	sigs.k8s.io/kind v0.11.1
@@ -120,6 +129,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
+	github.com/cyphar/filepath-securejoin v0.2.2 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/eapache/channels v1.1.0 // indirect
 	github.com/eapache/queue v0.0.0-20180227141424-093482f3f8ce // indirect
@@ -127,6 +137,7 @@ require (
 	github.com/envoyproxy/protoc-gen-validate v0.1.0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.2.0 // indirect
+	github.com/felixge/httpsnoop v1.0.1 // indirect
 	github.com/form3tech-oss/jwt-go v3.2.3+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-logr/logr v1.2.0 // indirect
@@ -169,6 +180,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nxadm/tail v1.4.4 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/opencontainers/runc v1.0.2 // indirect
 	github.com/pelletier/go-toml v1.9.3 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
@@ -181,6 +193,17 @@ require (
 	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae // indirect
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200910180754-dd1b699fc489 // indirect
 	go.opencensus.io v0.23.0 // indirect
+	go.opentelemetry.io/contrib v0.20.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.20.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.20.0 // indirect
+	go.opentelemetry.io/otel v0.20.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp v0.20.0 // indirect
+	go.opentelemetry.io/otel/metric v0.20.0 // indirect
+	go.opentelemetry.io/otel/sdk v0.20.0 // indirect
+	go.opentelemetry.io/otel/sdk/export/metric v0.20.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v0.20.0 // indirect
+	go.opentelemetry.io/otel/trace v0.20.0 // indirect
+	go.opentelemetry.io/proto/otlp v0.7.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/tools v0.0.0-20190618225709-2cfd321de3ee // indirect
@@ -205,9 +228,11 @@ require (
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	honnef.co/go/tools v0.0.1-2020.1.4 // indirect
+	k8s.io/component-helpers v0.23.1 // indirect
 	k8s.io/gengo v0.0.0-20210813121822-485abfe95c7c // indirect
 	k8s.io/klog/v2 v2.30.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.25 // indirect
+	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
@@ -220,6 +245,7 @@ replace (
 	// supply the go code.
 	github.com/envoyproxy/data-plane-api => github.com/projectcalico/data-plane-api v0.0.0-20210121211707-a620ff3c8f7e
 	github.com/projectcalico/api => ./api
+	github.com/prometheus/common => github.com/prometheus/common v0.26.0
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 	google.golang.org/grpc => google.golang.org/grpc v1.29.1
