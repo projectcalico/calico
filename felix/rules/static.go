@@ -998,38 +998,82 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*Chain {
-	rawPreroutingChain := &Chain{
-		Name: ChainRawPrerouting,
-		Rules: []Rule{
-			Rule{
-				// Return, i.e. no-op, if bypass mark is not set.
-				Match:  Match().NotMarkMatchesWithMask(tcBypassMark, 0xffffffff),
-				Action: ReturnAction{},
-			},
-			// At this point we know bypass mark is set, which means that the packet has
-			// been explicitly allowed by untracked ingress policy (XDP).  We should
-			// clear the mark so as not to affect any FROM_HOST processing.  (There
-			// shouldn't be any FROM_HOST processing, because untracked policy is only
-			// intended for traffic to/from the host.  But if the traffic is in fact
-			// forwarded and goes to or through another endpoint, it's better to enforce
-			// that endpoint's policy than to accidentally skip it because of the BYPASS
-			// mark.  Note that we can clear the mark without stomping on anyone else's
-			// logic because no one else's iptables should have had a chance to execute
-			// yet.
-			Rule{
-				Action: SetMarkAction{Mark: 0},
-			},
-			// Now ensure that the packet is not tracked.
-			Rule{
-				Action: NoTrackAction{},
-			},
-		},
+func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, wgEncryptHost bool) []*Chain {
+
+	var rawRules []Rule
+
+	rpfChainName := ChainNamePrefix + "RPF"
+
+	rawRules = append(rawRules, Rule{
+		Action: JumpAction{Target: rpfChainName},
+	})
+
+	// Do not RPF check what is marked as to be skipped by RPF check.
+	rpfRules := []Rule{{
+		Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
+		Action: ReturnAction{},
+	}}
+
+	// For anything we approved for forward, permit accept_local as it is
+	// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
+	rpfRules = append(rpfRules, Rule{
+		Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
+		Action: ReturnAction{},
+	})
+
+	// Do the full RPF check and dis-allow accept_local for anything else.
+	rpfRules = append(rpfRules, RPFilter(ipVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
+		r.OpenStackSpecialCasesEnabled, false)...)
+
+	if r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && wgEncryptHost {
+		// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
+		// check allows it.
+		log.Debug("Adding Wireguard iptables rule chain")
+		rawRules = append(rawRules, Rule{
+			Match:  nil,
+			Action: JumpAction{Target: ChainSetWireguardIncomingMark},
+		})
 	}
+
+	rawRules = append(rawRules,
+		Rule{
+			// Return, i.e. no-op, if bypass mark is not set.
+			Match:  Match().NotMarkMatchesWithMask(tcdefs.MarkSeenBypass, 0xffffffff),
+			Action: ReturnAction{},
+		},
+		// At this point we know bypass mark is set, which means that the packet has
+		// been explicitly allowed by untracked ingress policy (XDP).  We should
+		// clear the mark so as not to affect any FROM_HOST processing.  (There
+		// shouldn't be any FROM_HOST processing, because untracked policy is only
+		// intended for traffic to/from the host.  But if the traffic is in fact
+		// forwarded and goes to or through another endpoint, it's better to enforce
+		// that endpoint's policy than to accidentally skip it because of the BYPASS
+		// mark.  Note that we can clear the mark without stomping on anyone else's
+		// logic because no one else's iptables should have had a chance to execute
+		// yet.
+		Rule{
+			Action: SetMarkAction{Mark: 0},
+		},
+		// Now ensure that the packet is not tracked.
+		Rule{
+			Action: NoTrackAction{},
+		},
+	)
+
+	rawPreroutingChain := &Chain{
+		Name:  ChainRawPrerouting,
+		Rules: rawRules,
+	}
+
 	return []*Chain{
 		rawPreroutingChain,
 		r.failsafeOutChain("raw", ipVersion),
-		r.StaticRawOutputChain(tcBypassMark),
+		r.StaticRawOutputChain(tcdefs.MarkSeenBypass),
+		r.WireguardIncomingMarkChain(),
+		&Chain{
+			Name:  rpfChainName,
+			Rules: rpfRules,
+		},
 	}
 }
 
