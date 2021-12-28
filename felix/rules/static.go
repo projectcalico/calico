@@ -998,21 +998,58 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32, bypassHostConntrack bool) []*Chain {
-	rawPreroutingChain := &Chain{
-		Name: ChainRawPrerouting,
-		Rules: []Rule{
-			Rule{
-				Match:  Match().NotDestAddrType(AddrTypeLocal),
-				Action: GotoAction{Target: ChainRawUntrackedFlows},
-			},
-			Rule{
-				// Return, i.e. no-op, if bypass mark is not set.
-				Match:   Match().MarkMatchesWithMask(tcBypassMark, 0xffffffff),
-				Action:  GotoAction{Target: ChainRawBPFUntrackedPolicy},
-				Comment: []string{"Jump to target for packets with Bypass mark"},
-			},
+func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, wgEncryptHost, bypassHostConntrack bool) []*Chain {
+
+	var rawRules []Rule
+
+	rpfChainName := ChainNamePrefix + "RPF"
+
+	rawRules = append(rawRules,
+		Rule{
+			Action: JumpAction{Target: rpfChainName},
 		},
+		Rule{
+			Match:  Match().NotDestAddrType(AddrTypeLocal),
+			Action: GotoAction{Target: ChainRawUntrackedFlows},
+		},
+		Rule{
+			// Return, i.e. no-op, if bypass mark is not set.
+			Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenBypass, 0xffffffff),
+			Action:  GotoAction{Target: ChainRawBPFUntrackedPolicy},
+			Comment: []string{"Jump to target for packets with Bypass mark"},
+		},
+	)
+
+	// Do not RPF check what is marked as to be skipped by RPF check.
+	rpfRules := []Rule{{
+		Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
+		Action: ReturnAction{},
+	}}
+
+	// For anything we approved for forward, permit accept_local as it is
+	// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
+	rpfRules = append(rpfRules, Rule{
+		Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
+		Action: ReturnAction{},
+	})
+
+	// Do the full RPF check and dis-allow accept_local for anything else.
+	rpfRules = append(rpfRules, RPFilter(ipVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
+		r.OpenStackSpecialCasesEnabled, false)...)
+
+	if r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && wgEncryptHost {
+		// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
+		// check allows it.
+		log.Debug("Adding Wireguard iptables rule chain")
+		rawRules = append(rawRules, Rule{
+			Match:  nil,
+			Action: JumpAction{Target: ChainSetWireguardIncomingMark},
+		})
+	}
+
+	rawPreroutingChain := &Chain{
+		Name:  ChainRawPrerouting,
+		Rules: rawRules,
 	}
 
 	bpfUntrackedFlowChain := &Chain{
@@ -1073,12 +1110,18 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 			},
 		},
 	}
+
 	return []*Chain{
 		rawPreroutingChain,
 		xdpUntrakedPoliciesChain,
 		bpfUntrackedFlowChain,
 		r.failsafeOutChain("raw", ipVersion),
-		r.StaticRawOutputChain(tcBypassMark),
+		r.StaticRawOutputChain(tcdefs.MarkSeenBypass),
+		r.WireguardIncomingMarkChain(),
+		&Chain{
+			Name:  rpfChainName,
+			Rules: rpfRules,
+		},
 	}
 }
 
