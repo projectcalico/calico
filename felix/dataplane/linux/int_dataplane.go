@@ -1131,6 +1131,7 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 }
 
 func (d *InternalDataplane) setUpIptablesBPF() {
+	log.Debug("Adding BPF iptables rules")
 	rulesConfig := d.config.RulesConfig
 	for _, t := range d.iptablesFilterTables {
 		fwdRules := []iptables.Rule{
@@ -1265,6 +1266,11 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	}
 
 	for _, t := range d.iptablesRawTables {
+		if t.IPVersion != 4 {
+			continue
+		}
+
+		log.Debugf("Adding BPF iptables RPF rule chain IPv%d", t.IPVersion)
 		// Do not RPF check what is marked as to be skipped by RPF check.
 		rpfRules := []iptables.Rule{{
 			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
@@ -1289,7 +1295,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		t.UpdateChains(rpfChain)
 
 		var rawRules []iptables.Rule
-		if t.IPVersion == 4 && rulesConfig.WireguardEnabled && len(rulesConfig.WireguardInterfaceName) > 0 &&
+		if rulesConfig.WireguardEnabled && len(rulesConfig.WireguardInterfaceName) > 0 &&
 			d.config.Wireguard.EncryptHostTraffic {
 			// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
 			// check allows it.
@@ -1301,9 +1307,33 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			t.UpdateChain(d.ruleRenderer.WireguardIncomingMarkChain())
 		}
 
-		rawRules = append(rawRules, iptables.Rule{
-			Action: iptables.JumpAction{Target: rpfChain[0].Name},
-		})
+		rawRules = append(rawRules,
+			iptables.Rule{
+				Action: iptables.JumpAction{Target: rpfChain[0].Name},
+			},
+			iptables.Rule{
+				// Return, i.e. no-op, if bypass mark is not set.
+				Match:  iptables.Match().NotMarkMatchesWithMask(tcdefs.MarkSeenBypass, 0xffffffff),
+				Action: iptables.ReturnAction{},
+			},
+			// At this point we know bypass mark is set, which means that the packet has
+			// been explicitly allowed by untracked ingress policy (XDP).  We should
+			// clear the mark so as not to affect any FROM_HOST processing.  (There
+			// shouldn't be any FROM_HOST processing, because untracked policy is only
+			// intended for traffic to/from the host.  But if the traffic is in fact
+			// forwarded and goes to or through another endpoint, it's better to enforce
+			// that endpoint's policy than to accidentally skip it because of the BYPASS
+			// mark.  Note that we can clear the mark without stomping on anyone else's
+			// logic because no one else's iptables should have had a chance to execute
+			// yet.
+			iptables.Rule{
+				Action: iptables.SetMarkAction{Mark: 0},
+			},
+			// Now ensure that the packet is not tracked.
+			iptables.Rule{
+				Action: iptables.NoTrackAction{},
+			},
+		)
 
 		rawChains := []*iptables.Chain{{
 			Name:  rules.ChainRawPrerouting,
@@ -1311,20 +1341,14 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		}}
 		t.UpdateChains(rawChains)
 
+		// Iptables for untracked policy.
+		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawOutputChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass)))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
-
-		if t.IPVersion == 4 {
-			// Iptables for untracked policy.
-			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass)))
-			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
-				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
-			}})
-			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
-				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
-			}})
-		}
+		t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
+			Action: iptables.JumpAction{Target: rules.ChainRawOutput},
+		}})
 	}
 
 	if d.config.BPFExtToServiceConnmark != 0 {
