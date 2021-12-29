@@ -11,7 +11,7 @@ Authority (CA), Certificates and Keys that can be used to authenticate a
 specific user with etcd. There are many different tools that can be used to
 generate these files. This tutorial tries to layout the unique or specific
 details that are needed for each of the different certificates but uses the
-[hack/tls-setup tool from the etcd repo](https://github.com/coreos/etcd/tree/master/hack/tls-setup){:target="_blank"},
+[hack/tls-setup tool from the etcd repo](https://github.com/coreos/etcd/tree/master/calico/hack/tls-setup){:target="_blank"},
 to make certificate generation easy.
 
 The etcd server links a certificate to a specific user by using the Common
