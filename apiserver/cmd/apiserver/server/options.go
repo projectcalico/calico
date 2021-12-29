@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-openapi/spec"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -36,6 +35,7 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 
