@@ -373,6 +373,7 @@ configRetry:
 	if configParams.WireguardEnabled && configParams.WireguardHostEncryptionEnabled {
 		err := bootstrapWireguard(configParams.WireguardInterfaceName, configParams.FelixHostname, v3Client)
 		if err != nil {
+			time.Sleep(2 * time.Second) // avoid a tight restart loop
 			log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
 		}
 	}
