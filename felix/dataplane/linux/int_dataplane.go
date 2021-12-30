@@ -56,6 +56,7 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
@@ -258,6 +259,7 @@ type InternalDataplane struct {
 
 	allManagers             []Manager
 	managersWithRouteTables []ManagerWithRouteTables
+	managersWithRouteRules  []ManagerWithRouteRules
 	ruleRenderer            rules.RuleRenderer
 
 	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
@@ -1010,6 +1012,26 @@ type ManagerWithRouteTables interface {
 	GetRouteTableSyncers() []routeTableSyncer
 }
 
+type ManagerWithRouteRules interface {
+	Manager
+	GetRouteRules() []routeRules
+}
+
+// routeTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
+// interface state changes, hooks to queue a full resync and apply routing updates.
+type routeTableSyncer interface {
+	OnIfaceStateChanged(string, ifacemonitor.State)
+	QueueResync()
+	Apply() error
+}
+
+type routeRules interface {
+	SetRule(rule *routerule.Rule)
+	RemoveRule(rule *routerule.Rule)
+	QueueResync()
+	Apply() error
+}
+
 func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 	var rts []routeTableSyncer
 	for _, mrts := range d.managersWithRouteTables {
@@ -1019,13 +1041,28 @@ func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 	return rts
 }
 
+func (d *InternalDataplane) routeRules() []routeRules {
+	var rrs []routeRules
+	for _, mrrs := range d.managersWithRouteRules {
+		rrs = append(rrs, mrrs.GetRouteRules()...)
+	}
+
+	return rrs
+}
+
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
-	switch mgr := mgr.(type) {
-	case ManagerWithRouteTables:
+	tableMgr, ok := mgr.(ManagerWithRouteTables)
+	if ok {
 		// Used to log the whole manager out here but if we do that then we cause races if the manager has
 		// other threads or locks.
 		log.WithField("manager", reflect.TypeOf(mgr).Name()).Debug("registering ManagerWithRouteTables")
-		d.managersWithRouteTables = append(d.managersWithRouteTables, mgr)
+		d.managersWithRouteTables = append(d.managersWithRouteTables, tableMgr)
+	}
+
+	rulesMgr, ok := mgr.(ManagerWithRouteRules)
+	if ok {
+		log.WithField("manager", mgr).Debug("registering ManagerWithRouteRules")
+		d.managersWithRouteRules = append(d.managersWithRouteRules, rulesMgr)
 	}
 	d.allManagers = append(d.allManagers, mgr)
 }
@@ -1801,6 +1838,10 @@ func (d *InternalDataplane) apply() {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
+		for _, r := range d.routeRules() {
+			// Queue a resync on the next Apply().
+			r.QueueResync()
+		}
 		d.forceRouteRefresh = false
 	}
 
@@ -1841,6 +1882,22 @@ func (d *InternalDataplane) apply() {
 		}(r)
 	}
 
+	// Update the routing rules in parallel with the other updates.  We'll wait for it to finish
+	// before we return.
+	var rulesWG sync.WaitGroup
+	for _, r := range d.routeRules() {
+		rulesWG.Add(1)
+		go func(r routeRules) {
+			err := r.Apply()
+			if err != nil {
+				log.Warn("Failed to synchronize routing rules, will retry...")
+				d.dataplaneNeedsSync = true
+			}
+			d.reportHealth()
+			rulesWG.Done()
+		}(r)
+	}
+
 	// Wait for the IP sets update to finish.  We can't update iptables until it has.
 	ipSetsWG.Wait()
 
@@ -1877,6 +1934,9 @@ func (d *InternalDataplane) apply() {
 
 	// Wait for the route updates to finish.
 	routesWG.Wait()
+
+	// Wait for the rule updates to finish.
+	rulesWG.Wait()
 
 	// And publish and status updates.
 	d.endpointStatusCombiner.Apply()
