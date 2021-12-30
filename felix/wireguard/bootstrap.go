@@ -37,7 +37,7 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguar
 
 	wg, err := getWireguardHandle()
 	if err != nil {
-		log.Debug("Couldn't acquire WireGuard handle, treating pulic key as unset")
+		log.Debug("Couldn't acquire WireGuard handle, treating public key as unset")
 	} else {
 		kernelPublicKey = getPublicKey(wgDeviceName, wg).String()
 		defer wg.Close()
