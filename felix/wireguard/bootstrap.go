@@ -21,6 +21,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -34,6 +36,16 @@ import (
 func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguardHandle func() (netlinkshim.Wireguard, error), calicoClient clientv3.Interface) error {
 	var storedPublicKey string
 	var kernelPublicKey string
+	const (
+		backoffDuration  = 2 * time.Second
+		backoffExpFactor = 2
+		backoffMax       = 32 * time.Second
+		jitter           = 0.2
+	)
+	maxRetries := 3
+	expBackoffMgr := wait.NewExponentialBackoffManager(
+		backoffDuration, backoffMax, time.Minute, backoffExpFactor, jitter, clock.RealClock{})
+	defer expBackoffMgr.Backoff().Stop()
 
 	wg, err := getWireguardHandle()
 	if err != nil {
@@ -44,19 +56,19 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguar
 	}
 
 	// make a few attempts to read our publickey from the datastore, compare, and update if required
-	maxRetries := 3
 	for r := 0; r < maxRetries; r++ {
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		thisNode, err := calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
 		cancel()
 		if err != nil {
 			log.WithError(err).Debug("Couldn't fetch node config from datastore, retrying")
+			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
 			continue
 		}
 
-		storedPublicKey = thisNode.Status.WireguardPublicKey
-
 		// if there is any config mismatch, wipe the datastore's publickey (forces peers to send unencrypted traffic)
+		storedPublicKey = thisNode.Status.WireguardPublicKey
 		if storedPublicKey != kernelPublicKey {
 			log.Debug("Found mismatch between kernel and datastore WireGuard keys. Clearing stale key from datastore")
 			thisNode.Status.WireguardPublicKey = ""
