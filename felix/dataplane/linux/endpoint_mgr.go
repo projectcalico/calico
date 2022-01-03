@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"syscall"
 
 	log "github.com/sirupsen/logrus"
 
@@ -707,16 +708,32 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 
 	m.wlIfaceNamesToReconfigure.Iter(func(item interface{}) error {
 		ifaceName := item.(string)
-		err := m.configureInterface(ifaceName)
+
+		exists, err := m.interfaceExistsInProcSys(ifaceName)
 		if err != nil {
-			if exists, err := m.interfaceExistsInProcSys(ifaceName); err == nil && !exists {
-				// Suppress log spam if interface has been removed.
-				log.WithError(err).Debug("Failed to configure interface and it seems to be gone")
-			} else {
-				log.WithError(err).Warn("Failed to configure interface, will retry")
-			}
+			log.WithError(err).WithField("ifaceName", ifaceName).Warn("Failed to check if interface exists, will retry")
 			return nil
 		}
+		if !exists {
+			// Suppress log spam if interface has been removed.
+			log.WithField("ifaceName", ifaceName).Debug("Interface seems to be gone, will retry")
+			return nil
+		}
+
+		writable, err := m.interfaceWritableInProcSys(ifaceName)
+		if err != nil {
+			log.WithError(err).WithField("ifaceName", ifaceName).Warn("Failed to check if interface is writeable, will retry")
+			return nil
+		}
+		if writable {
+			if err := m.configureInterface(ifaceName); err != nil {
+				log.WithError(err).WithField("ifaceName", ifaceName).Warn("Failed to configure interface, will retry")
+				return nil
+			}
+		} else {
+			log.WithField("ifaceName", ifaceName).Info("Skipping configure for non-writeable interface.")
+		}
+
 		return set.RemoveItem
 	})
 }
@@ -1157,6 +1174,20 @@ func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
 	return true, nil
 }
 
+func (m *endpointManager) interfaceWritableInProcSys(name string) (bool, error) {
+	var filepath string
+	// check "representive" paths for write access.
+	if m.ipVersion == 4 {
+		filepath = fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name)
+	} else {
+		filepath = fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name)
+	}
+	if err := syscall.Access(filepath, syscall.O_RDWR); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (m *endpointManager) configureInterface(name string) error {
 	if !m.activeUpIfaces.Contains(name) {
 		log.WithField("ifaceName", name).Info(
@@ -1168,15 +1199,7 @@ func (m *endpointManager) configureInterface(name string) error {
 	acceptRAPath := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name)
 	err := m.writeProcSys(acceptRAPath, "0")
 	if err != nil {
-		if exists, err2 := m.interfaceExistsInProcSys(name); err2 == nil && !exists {
-			log.WithField("file", acceptRAPath).Debug(
-				"Failed to set accept_ra flag. Interface is missing in /proc/sys.")
-		} else {
-			if err2 != nil {
-				log.WithError(err2).Error("Error checking if interface exists")
-			}
-			log.WithError(err).WithField("ifaceName", name).Warnf("Could not set accept_ra")
-		}
+		log.WithError(err).WithField("ifaceName", name).Warnf("Could not set accept_ra")
 	}
 
 	log.WithField("ifaceName", name).Info(
