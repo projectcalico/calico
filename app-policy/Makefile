@@ -18,7 +18,8 @@ GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
 LOCAL_USER_ID:=$(shell id -u)
 MY_GID:=$(shell id -g)
 
-SRC_FILES=$(shell find . -name '*.go' |grep -v vendor)
+GENERATED_FILES=proto/felixbackend.pb.go proto/healthz.pb.go
+SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 
 RELEASE_REGISTRIES ?=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
 
@@ -74,6 +75,7 @@ endif
 ###############################################################################
 # Building the binary
 ###############################################################################
+
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
 build-all: $(addprefix bin/dikastes-,$(VALIDARCHES))
@@ -116,21 +118,22 @@ PROTOC_IMPORTS =  -I proto\
 		  -I ./
 
 protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
-	$(MAKE) fix
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
 		      --gogofast_out=plugins=grpc:proto
+	$(MAKE) fix
 
 proto/healthz.pb.go: proto/healthz.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
 		      --gogofast_out=plugins=grpc:proto
+	$(MAKE) fix
 
 
 # Building the image
@@ -173,7 +176,9 @@ check-boring-ssl: bin/dikastes-amd64
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files
-check-generated-files: protobuf
+check-generated-files:
+	$(MAKE) clean
+	$(MAKE) protobuf
 	if (git describe --tags --dirty | grep -c dirty >/dev/null); then \
 	  echo "Generated files are out of date."; \
 	  false; \
