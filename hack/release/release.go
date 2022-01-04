@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
@@ -40,14 +38,24 @@ var (
 	architectures = []string{"amd64", "arm64", "armv7", "ppc64le", "s390x"}
 
 	// Git configuration for publishing to GitHub.
-	organization = "caseydavenport"
+	organization = "projectcalico"
 	repo         = "calico"
-	origin       = "fake"
+	origin       = "origin"
 )
 
+type releaseBuilder struct {
+	// Allow specification of runCommand so it can be overridden in the tests.
+	command commandRunner
+}
+
 func main() {
+	// Create a releaseBuilder to use.
+	r := releaseBuilder{
+		command: &realCommandRunner{},
+	}
+
 	if create {
-		err := BuildRelease()
+		err := r.BuildRelease()
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create Calico release")
 		}
@@ -55,7 +63,7 @@ func main() {
 	}
 
 	if publish {
-		err := PublishRelease()
+		err := r.PublishRelease()
 		if err != nil {
 			logrus.WithError(err).Error("Failed to publish Calico release")
 		}
@@ -66,17 +74,17 @@ func main() {
 }
 
 // BuildRelease creates a Calico release.
-func BuildRelease() error {
+func (r *releaseBuilder) BuildRelease() error {
 	// Check that the environment has the necessary prereqs.
-	if err := releasePrereqs(); err != nil {
+	if err := r.releasePrereqs(); err != nil {
 		return err
 	}
 
 	// Determine the release version to use, and tag the branch.
-	ver := determineReleaseVersion()
-	branch := determineBranch()
+	ver := r.determineReleaseVersion()
+	branch := r.determineBranch()
 	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
-	_, err := git("tag", ver)
+	_, err := r.git("tag", ver)
 	if err != nil {
 		return fmt.Errorf("Failed to tag release: %s", err)
 	}
@@ -85,12 +93,12 @@ func BuildRelease() error {
 	defer func() {
 		if err != nil {
 			logrus.Warn("Failed to release, cleaning up tag")
-			git("tag", "-d", ver)
+			r.git("tag", "-d", ver)
 		}
 	}()
 
 	// Build container images for the release.
-	if err = buildContainerImages(ver); err != nil {
+	if err = r.buildContainerImages(ver); err != nil {
 		return err
 	}
 
@@ -98,37 +106,37 @@ func BuildRelease() error {
 	// commit and version information compiled in.
 
 	// Build artifacts to upload to github.
-	if err = collectGithubArtifacts(ver); err != nil {
+	if err = r.collectGithubArtifacts(ver); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func PublishRelease() error {
+func (r *releaseBuilder) PublishRelease() error {
 	// Determine the currently checked-out tag.
-	ver, err := git("describe", "--exact-match", "--tags", "HEAD")
+	ver, err := r.git("describe", "--exact-match", "--tags", "HEAD")
 	if err != nil {
 		return fmt.Errorf("failed to get tag for checked-out commit, is there one? %s", err)
 	}
 
 	// Check that the environment has the necessary prereqs.
-	if err = publishPrereqs(ver); err != nil {
+	if err = r.publishPrereqs(ver); err != nil {
 		return err
 	}
 
 	// Publish container images.
-	if err = publishContainerImages(ver); err != nil {
+	if err = r.publishContainerImages(ver); err != nil {
 		return fmt.Errorf("failed to publish container images: %s", err)
 	}
 
 	// Publish the release to github.
-	if err = publishGithubRelease(ver); err != nil {
+	if err = r.publishGithubRelease(ver); err != nil {
 		return fmt.Errorf("failed to publish github release: %s", err)
 	}
 
 	// If all else is successful, push the git tag. After this, there's no going back!
-	if _, err = git("push", origin, ver); err != nil {
+	if _, err = r.git("push", origin, ver); err != nil {
 		return fmt.Errorf("failed to push git tag: %s", err)
 	}
 
@@ -136,9 +144,9 @@ func PublishRelease() error {
 }
 
 // Check general prerequisites for cutting and publishing a release.
-func releasePrereqs() error {
+func (r *releaseBuilder) releasePrereqs() error {
 	// Check that we're not on the master branch. We never cut releases from master.
-	branch := determineBranch()
+	branch := r.determineBranch()
 	if branch == "master" {
 		return fmt.Errorf("Cannot cut release from branch: %s", branch)
 	}
@@ -155,9 +163,9 @@ func releasePrereqs() error {
 }
 
 // Prerequisites specific to publishing a release.
-func publishPrereqs(ver string) error {
+func (r *releaseBuilder) publishPrereqs(ver string) error {
 	// TODO: Verify all required artifacts are present.
-	return releasePrereqs()
+	return r.releasePrereqs()
 }
 
 // We include the following GitHub artifacts on each release. This function assumes
@@ -165,9 +173,9 @@ func publishPrereqs(ver string) error {
 // - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // - tigera-operator-vX.Y.Z.tgz: contains the helm v3 chart.
 // - calico-windows-vX.Y.Z.zip: Calico for Windows.
-func collectGithubArtifacts(ver string) error {
+func (r *releaseBuilder) collectGithubArtifacts(ver string) error {
 	// Final artifacts will be moved here.
-	uploadDir := uploadDir(ver)
+	uploadDir := r.uploadDir(ver)
 	// TODO: Delete if already exists.
 	err := os.MkdirAll(uploadDir, os.ModePerm)
 	if err != nil {
@@ -175,29 +183,29 @@ func collectGithubArtifacts(ver string) error {
 	}
 
 	// Build and add in the complete release tarball.
-	if err = buildReleaseTar(ver, uploadDir); err != nil {
+	if err = r.buildReleaseTar(ver, uploadDir); err != nil {
 		return err
 	}
 
 	// Add in the already-buily windows zip archive and helm chart.
-	if _, err := runCommand("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
+	if _, err := r.command.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := runCommand("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
+	if _, err := r.command.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func uploadDir(ver string) string {
+func (r *releaseBuilder) uploadDir(ver string) string {
 	return fmt.Sprintf("_output/upload/%s", ver)
 }
 
 // Builds the complete release tar for upload to github.
 // - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // TODO: We should produce a tar per architecture that we ship.
-func buildReleaseTar(ver string, targetDir string) error {
+func (r *releaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	// Create tar files for container image that are shipped.
 	releaseBase := fmt.Sprintf("_output/release-%s", ver)
 	err := os.MkdirAll(releaseBase+"/images", os.ModePerm)
@@ -215,7 +223,7 @@ func buildReleaseTar(ver string, targetDir string) error {
 		fmt.Sprintf("calico/flannel-migration-controller:%s", ver): fmt.Sprintf(outFmt, ver, "calico-flannel-migration-controller.tar"),
 	}
 	for img, out := range images {
-		err = archiveContainerImage(out, img)
+		err = r.archiveContainerImage(out, img)
 		if err != nil {
 			return err
 		}
@@ -240,25 +248,25 @@ func buildReleaseTar(ver string, targetDir string) error {
 		"felix/bin/calico-bpf": binDir,
 	}
 	for src, dst := range binaries {
-		if _, err := runCommand("cp", []string{"-r", src, dst}, nil); err != nil {
+		if _, err := r.command.Run("cp", []string{"-r", src, dst}, nil); err != nil {
 			return err
 		}
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := runCommand("cp", []string{"-r", "calico/_site/manifests", releaseBase}, nil); err != nil {
+	if _, err := r.command.Run("cp", []string{"-r", "calico/_site/manifests", releaseBase}, nil); err != nil {
 		return err
 	}
 
 	// tar up the whole thing.
-	if _, err := runCommand("tar", []string{"-czvf", fmt.Sprintf("%s/release-%s.tgz", targetDir, ver), releaseBase}, nil); err != nil {
+	if _, err := r.command.Run("tar", []string{"-czvf", fmt.Sprintf("%s/release-%s.tgz", targetDir, ver), releaseBase}, nil); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func buildContainerImages(ver string) error {
+func (r *releaseBuilder) buildContainerImages(ver string) error {
 	releaseDirs := []string{
 		"pod2daemon",
 		"cni-plugin",
@@ -281,7 +289,7 @@ func buildContainerImages(ver string) error {
 	)
 
 	for _, dir := range releaseDirs {
-		err := makeInDirectory(dir, "release-build", env...)
+		err := r.makeInDirectory(dir, "release-build", env...)
 		if err != nil {
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
 		}
@@ -289,7 +297,7 @@ func buildContainerImages(ver string) error {
 	return nil
 }
 
-func publishGithubRelease(ver string) error {
+func (r *releaseBuilder) publishGithubRelease(ver string) error {
 	releaseNoteTemplate := `
 Release notes can be found at https://projectcalico.docs.tigera.io/archive/{release_stream}/release-notes/
 
@@ -312,8 +320,8 @@ Attached to this release are the following artifacts:
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", ver),
 		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", ver),
 	}
-	r := strings.NewReplacer(formatters...)
-	releaseNote := r.Replace(releaseNoteTemplate)
+	replacer := strings.NewReplacer(formatters...)
+	releaseNote := replacer.Replace(releaseNoteTemplate)
 
 	args := []string{
 		"-username", organization,
@@ -321,13 +329,13 @@ Attached to this release are the following artifacts:
 		"-name", ver,
 		"-body", releaseNote,
 		ver,
-		uploadDir(ver),
+		r.uploadDir(ver),
 	}
-	_, err = runCommand("ghr", args, nil)
+	_, err = r.command.Run("ghr", args, nil)
 	return err
 }
 
-func publishContainerImages(ver string) error {
+func (r *releaseBuilder) publishContainerImages(ver string) error {
 	releaseDirs := []string{
 		"pod2daemon",
 		"cni-plugin",
@@ -350,7 +358,7 @@ func publishContainerImages(ver string) error {
 	)
 
 	for _, dir := range releaseDirs {
-		out, err := makeInDirectoryWithOutput(dir, "release-publish", env...)
+		out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
 		if err != nil {
 			return fmt.Errorf("Failed to publish %s: %s", dir, err)
 		}
@@ -361,17 +369,17 @@ func publishContainerImages(ver string) error {
 
 // determineReleaseVersion uses historical clues to figure out the next semver
 // release number to use for this release.
-func determineReleaseVersion() string {
+func (r *releaseBuilder) determineReleaseVersion() string {
 	// Check that we're not already on a git tag.
-	_, err := git("describe", "--exact-match", "--tags", "HEAD")
+	_, err := r.git("describe", "--exact-match", "--tags", "HEAD")
 	if err == nil {
 		// On a current tag.
-		out, _ := git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
+		out, _ := r.git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
 		logrus.Fatalf("Already on a tag (%s), refusing to create release", out)
 	}
 
 	// Determine the last tag on this branch.
-	out, err := git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
+	out, err := r.git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to git describe")
 	}
@@ -398,8 +406,8 @@ func determineReleaseVersion() string {
 }
 
 // determineBranch returns the current checked out branch.
-func determineBranch() string {
-	out, err := git("rev-parse", "--abbrev-ref", "HEAD")
+func (r *releaseBuilder) determineBranch() string {
+	out, err := r.git("rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		logrus.WithError(err).Fatal("Error determining branch")
 	}
@@ -407,38 +415,20 @@ func determineBranch() string {
 }
 
 // Uses docker to build a tgz archive of the specified container image.
-func archiveContainerImage(out, image string) error {
-	_, err := runCommand("docker", []string{"save", "--output", out, image}, nil)
+func (r *releaseBuilder) archiveContainerImage(out, image string) error {
+	_, err := r.command.Run("docker", []string{"save", "--output", out, image}, nil)
 	return err
 }
 
-func git(args ...string) (string, error) {
-	return runCommand("git", args, nil)
+func (r *releaseBuilder) git(args ...string) (string, error) {
+	return r.command.Run("git", args, nil)
 }
 
-func makeInDirectory(dir, target string, env ...string) error {
-	_, err := runCommand("make", []string{"-C", dir, target}, env)
+func (r *releaseBuilder) makeInDirectory(dir, target string, env ...string) error {
+	_, err := r.command.Run("make", []string{"-C", dir, target}, env)
 	return err
 }
 
-func makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	return runCommand("make", []string{"-C", dir, target}, env)
-}
-
-func runCommand(name string, args []string, env []string) (string, error) {
-	cmd := exec.Command(name, args...)
-	if len(env) != 0 {
-		cmd.Env = env
-	}
-	var outb, errb bytes.Buffer
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
-	logrus.WithField("cmd", cmd.String()).Infof("Running %s command", name)
-	err := cmd.Run()
-	logrus.Debug(outb.String())
-	if err != nil {
-		logrus.Error(errb.String())
-		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
-	}
-	return strings.TrimSpace(outb.String()), err
+func (r *releaseBuilder) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
+	return r.command.Run("make", []string{"-C", dir, target}, env)
 }
