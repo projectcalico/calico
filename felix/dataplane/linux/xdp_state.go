@@ -458,7 +458,7 @@ func (s *xdpIPState) getBpfIPFamily() bpf.IPFamily {
 }
 
 // newXDPResyncState creates the xdpResyncState object, returning an error on failure.
-func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsetsSource, programTag string, xpdModes []bpf.XDPMode) (*xdpResyncState, error) {
+func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsetsSource, programTag string, xdpModes []bpf.XDPMode) (*xdpResyncState, error) {
 	xdpIfaces, err := bpfLib.GetXDPIfaces()
 	if err != nil {
 		return nil, err
@@ -473,11 +473,12 @@ func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsets
 		if tagErr != nil {
 			bogosityReasons = append(bogosityReasons, fmt.Sprintf("error getting tag: %s", tagErr.Error()))
 		} else if tag != programTag {
-			bogosityReasons = append(bogosityReasons, "loaded program doesn't match expected tag")
+			bogosityReasons = append(bogosityReasons, fmt.Sprintf("loaded program's tag (%s) doesn't match expected tag (%s)",
+				tag, programTag))
 		}
 		if modeErr != nil {
 			bogosityReasons = append(bogosityReasons, fmt.Sprintf("error getting mode: %s", modeErr.Error()))
-		} else if !isValidMode(mode, xpdModes) {
+		} else if !isValidMode(mode, xdpModes) {
 			bogosityReasons = append(bogosityReasons, fmt.Sprintf("installed program uses disallowed mode: %v", mode))
 		}
 		if len(bogosityReasons) > 0 {
