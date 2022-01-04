@@ -17,7 +17,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -134,7 +133,6 @@ var _ = Describe("CalicoCni", func() {
 			}))
 
 			// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
-			//fmt.Println(Cmd("ip link show")) // Useful for debugging
 			hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
 
 			hostVeth, err := netlink.LinkByName(hostVethName)
@@ -442,8 +440,8 @@ var _ = Describe("CalicoCni", func() {
 
 			grpcBackend.GracefulStop()
 			err = syscall.Unlink(socket)
-			if err != nil {
-				log.Printf("Failed to cleanup test socket %s: %v", socket, err)
+			if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
+				Expect(err).NotTo(HaveOccurred())
 			}
 			close(done)
 		}, 30.0)
@@ -466,9 +464,8 @@ var _ = Describe("CalicoCni", func() {
 		}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 		It("has hostname even though deprecated", func() {
-			containerID, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "abcd1234")
+			containerID, _, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "abcd1234")
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshalled result: %v\n", result)
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -511,9 +508,8 @@ var _ = Describe("CalicoCni", func() {
 		}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 		It("nodename takes precedence over hostname", func() {
-			containerID, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf2, "", testutils.TEST_DEFAULT_NS, "", "abcd")
+			containerID, _, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf2, "", testutils.TEST_DEFAULT_NS, "", "abcd")
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshalled result: %v\n", result)
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -570,10 +566,8 @@ var _ = Describe("CalicoCni", func() {
 				}
 			  }
 			}`, cniVersion, os.Getenv("ETCD_IP"))
-			containerID, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "abcd1234")
+			containerID, _, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "abcd1234")
 			Expect(err).ShouldNot(HaveOccurred())
-
-			log.Printf("Unmarshalled result: %v\n", result)
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -613,9 +607,8 @@ var _ = Describe("CalicoCni", func() {
 				}
 			  }
 			}`, cniVersion, os.Getenv("ETCD_IP"))
-			containerID, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "abcd1234")
+			containerID, _, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "abcd1234")
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshalled result: %v\n", result)
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -726,10 +719,8 @@ var _ = Describe("CalicoCni", func() {
 			testutils.MustCreateNewIPPool(calicoClient, "10.0.0.0/24", false, false, true)
 
 			var err error
-			log.WithField("netconf", netconf).Info("netconf")
 			containerID, result, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "badbeef")
 			Expect(err).ShouldNot(HaveOccurred())
-			log.Printf("Unmarshalled result from first ADD: %v\n", result)
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: "default"})
@@ -771,8 +762,6 @@ var _ = Describe("CalicoCni", func() {
 			// Try to create the same container (so CNI receives the ADD for the same endpoint again)
 			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", containerID, "eth0", contNs)
 			Expect(err).ShouldNot(HaveOccurred())
-
-			log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
 			Expect(resultSecondAdd).Should(Equal(result))
 
 			// The endpoint is created in etcd
@@ -790,8 +779,6 @@ var _ = Describe("CalicoCni", func() {
 			tweaked := strings.Replace(netconf, "net1", "net2", 1)
 			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(tweaked, "", "", "", containerID, "", contNs)
 			Expect(err).ShouldNot(HaveOccurred())
-
-			log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
 			Expect(resultSecondAdd).Should(Equal(result))
 
 			// The endpoint is created in etcd
@@ -808,7 +795,7 @@ var _ = Describe("CalicoCni", func() {
 			BeforeEach(func() {
 				// To prevent the networking atempt from succeeding, rename the old veth.
 				// This leaves a route and an eth0 in place that the plugin will struggle with.
-				log.Info("Breaking networking for the created interface")
+				By("Breaking networking for the created interface")
 				hostVeth := endpointSpec.InterfaceName
 				newName := strings.Replace(hostVeth, "cali", "sali", 1)
 				output, err := exec.Command("ip", "link", "set", hostVeth, "down").CombinedOutput()
@@ -821,7 +808,7 @@ var _ = Describe("CalicoCni", func() {
 
 			It("a second ADD for the same container should leave the datastore alone", func() {
 				// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-				log.Info("Rerunning CNI plugin")
+				By("Running the CNI plugin a second time on the same container")
 				_, _, _, _, err := testutils.RunCNIPluginWithId(netconf, "", "", "", containerID, "", contNs)
 				Expect(err).ShouldNot(HaveOccurred())
 
@@ -852,7 +839,6 @@ var _ = Describe("CalicoCni", func() {
 				By("creating a CNI networked container, which should also install the container route in the host namespace")
 				containerID, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "meep1337")
 				Expect(err).ShouldNot(HaveOccurred())
-				log.Printf("Unmarshalled result: %v\n", result)
 
 				// CNI plugin generates host side vEth name from containerID if used for "cni" orchestrator.
 				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
