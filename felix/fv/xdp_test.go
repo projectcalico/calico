@@ -17,13 +17,14 @@ package fv
 import (
 	"fmt"
 	"os"
-	"strings"
+	"regexp"
+	"strconv"
 	"time"
-
-	"github.com/projectcalico/calico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -192,14 +193,29 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		expectNoConnectivity(ccTCP)
 	})
 
-	xdpProgramAttached := func(felix *infrastructure.Felix, iface string) bool {
+	xdpProgramID := func(felix *infrastructure.Felix, iface string) int {
 		out, err := felix.ExecCombinedOutput("ip", "link", "show", "dev", iface)
 		Expect(err).NotTo(HaveOccurred())
-		return strings.Contains(out, "prog/xdp id")
+		r := regexp.MustCompile(`prog/xdp id (\d+)`)
+		matches := r.FindStringSubmatch(out)
+		if len(matches) == 0 {
+			return 0
+		}
+		id, err := strconv.Atoi(matches[1])
+		Expect(err).NotTo(HaveOccurred())
+		return id
+	}
+
+	xdpProgramAttached := func(felix *infrastructure.Felix, iface string) bool {
+		return xdpProgramID(felix, iface) != 0
 	}
 
 	xdpProgramAttached_felix1_eth0 := func() bool {
 		return xdpProgramAttached(felixes[1], "eth0")
+	}
+
+	xdpProgramID_felix1_eth0 := func() int {
+		return xdpProgramID(felixes[1], "eth0")
 	}
 
 	Context("with no untracked policy", func() {
@@ -277,7 +293,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 
 		It("should have XDP program attached", func() {
 			Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeTrue())
-			Consistently(xdpProgramAttached_felix1_eth0, "2s", "1s").Should(BeTrue())
+			id := xdpProgramID(felixes[1], "eth0")
+			Consistently(xdpProgramID_felix1_eth0(), "2s", "100ms").Should(Equal(id))
 		})
 
 		Context("with untracked policies deleted again", func() {
