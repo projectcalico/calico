@@ -57,11 +57,11 @@ image:
 ###############################################################################
 # Build the release tool.
 hack/release/release: $(shell find ./hack/release -type f -name '*.go')
-	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/release.go
+	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/
 
 # Install ghr for publishing to github.
 hack/release/ghr: 
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@v0.14.0
 
 # Build a release.
 release: hack/release/release 
