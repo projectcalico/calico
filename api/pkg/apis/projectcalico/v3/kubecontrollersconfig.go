@@ -62,6 +62,10 @@ type KubeControllersConfigurationSpec struct {
 
 	// Controllers enables and configures individual Kubernetes controllers
 	Controllers ControllersConfig `json:"controllers"`
+
+	// DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
+	// is disabled.
+	DebugProfilePort *int32 `json:"debugProfilePort,omitempty"`
 }
 
 // ControllersConfig enables and configures individual Kubernetes controllers
