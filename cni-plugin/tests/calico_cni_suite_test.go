@@ -20,5 +20,5 @@ func init() {
 func TestCalicoCni(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../report/cni_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "CalicoCni Suite", []Reporter{junitReporter})
+	RunSpecsWithDefaultAndCustomReporters(t, "CNI suite", []Reporter{junitReporter})
 }

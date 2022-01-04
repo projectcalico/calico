@@ -948,8 +948,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var nc types.NetConf
 		var netconf string
 		var pool1CIDR, pool2CIDR *net.IPNet
-		var pool1 = "50.60.0.0/24"
-		var pool2 = "50.60.1.0/24"
+		var pool1 = "50.60.0.0/28"
+		var pool2 = "60.70.0.0/28"
+		var numAddrsInPool = 16
 		var clientset *kubernetes.Clientset
 		var name string
 		var testNS string
@@ -972,11 +973,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			netconf = string(ncb)
 
 			// Create IP Pools.
-			testutils.MustCreateNewIPPool(calicoClient, pool1, false, false, true)
+			testutils.MustCreateNewIPPoolBlockSize(calicoClient, pool1, false, false, true, 29)
 			_, pool1CIDR, err = net.ParseCIDR(pool1)
 			Expect(err).NotTo(HaveOccurred())
 
-			testutils.MustCreateNewIPPool(calicoClient, pool2, false, false, true)
+			testutils.MustCreateNewIPPoolBlockSize(calicoClient, pool2, false, false, true, 29)
 			_, pool2CIDR, err = net.ParseCIDR(pool2)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1000,7 +1001,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNS,
 					Annotations: map[string]string{
-						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/24\"]",
+						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/28\"]",
 					},
 				},
 			}, metav1.CreateOptions{})
@@ -1078,7 +1079,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNS,
 					Annotations: map[string]string{
-						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/24\"]",
+						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/28\"]",
 					},
 				},
 			}, metav1.CreateOptions{})
@@ -1105,7 +1106,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			v4ia, _, err := calicoClient.IPAM().AutoAssign(
 				context.Background(),
 				ipam.AutoAssignArgs{
-					Num4:        256,
+					Num4:        numAddrsInPool,
 					HandleID:    &handle,
 					IPv4Pools:   []cnet.IPNet{{IPNet: *pool1CIDR}},
 					IntendedUse: api.IPPoolAllowedUseWorkload,
@@ -1113,7 +1114,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(v4ia).ToNot(BeNil())
-			Expect(len(v4ia.IPs)).To(Equal(256))
+			Expect(len(v4ia.IPs)).To(Equal(numAddrsInPool))
 
 			// Expect an error when invoking the CNI plugin.
 			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testNS, "")
@@ -1135,7 +1136,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNS,
 					Annotations: map[string]string{
-						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/24\", \"50.60.1.0/24\"]",
+						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/28\", \"60.70.0.0/28\"]",
 					},
 				},
 			}, metav1.CreateOptions{})
@@ -1162,7 +1163,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			v4ia, _, err := calicoClient.IPAM().AutoAssign(
 				context.Background(),
 				ipam.AutoAssignArgs{
-					Num4:        256,
+					Num4:        numAddrsInPool,
 					HandleID:    &handle,
 					IPv4Pools:   []cnet.IPNet{{IPNet: *pool1CIDR}},
 					IntendedUse: api.IPPoolAllowedUseWorkload,
@@ -1170,7 +1171,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(v4ia).ToNot(BeNil())
-			Expect(len(v4ia.IPs)).To(Equal(256))
+			Expect(len(v4ia.IPs)).To(Equal(numAddrsInPool))
 
 			// Invoke the CNI plugin.
 			_, r, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testNS, "")
