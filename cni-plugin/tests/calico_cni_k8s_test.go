@@ -22,6 +22,7 @@ import (
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -1037,7 +1038,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					podIP := contAddresses[0].IP
-					log.Infof("All container IPs: %v", contAddresses)
+					logrus.Infof("All container IPs: %v", contAddresses)
 					Expect(podIP).Should(Equal(expectedIP))
 
 					By("Deleting the pod we created earlier")
@@ -1062,7 +1063,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					pod2IP := contAddresses[0].IP
-					log.Infof("All container IPs: %v", contAddresses)
+					logrus.Infof("All container IPs: %v", contAddresses)
 					Expect(pod2IP).Should(Equal(expectedIP))
 
 					err = contNs.Do(func(_ ns.NetNS) error {
