@@ -188,7 +188,7 @@ func (r ipPools) Delete(ctx context.Context, name string, opts options.DeleteOpt
 
 	// If the pool is active, set the disabled flag to ensure we stop allocating from this pool.
 	if !pool.Spec.Disabled {
-		logCxt.Info("Disabling pool to release affinities")
+		logCxt.Debug("Disabling pool to release affinities")
 		pool.Spec.Disabled = true
 
 		// If the Delete has been called with a ResourceVersion then use that to perform the
@@ -211,7 +211,7 @@ func (r ipPools) Delete(ctx context.Context, name string, opts options.DeleteOpt
 	// (since it may have been enabled at one time, and if there are no affine blocks created
 	// then this will be a no-op).  We've already validated the CIDR so we know it will parse.
 	if _, cidrNet, err := cnet.ParseCIDR(pool.Spec.CIDR); err == nil {
-		logCxt.Info("Releasing pool affinities")
+		logCxt.Debug("Releasing pool affinities")
 
 		// Pause for a short period before releasing the affinities - this gives any in-progress
 		// allocations an opportunity to finish.
@@ -226,7 +226,6 @@ func (r ipPools) Delete(ctx context.Context, name string, opts options.DeleteOpt
 	}
 
 	// And finally, delete the pool.
-	logCxt.Info("Deleting pool")
 	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindIPPool, noNamespace, name)
 	if out != nil {
 		return out.(*apiv3.IPPool), err
