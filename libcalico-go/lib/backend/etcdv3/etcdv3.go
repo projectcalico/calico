@@ -478,7 +478,7 @@ func (c *etcdV3Client) EnsureInitialized() error {
 
 // Clean removes all of the Calico data from the datastore.
 func (c *etcdV3Client) Clean() error {
-	log.Warning("Cleaning etcdv3 datastore of all Calico data")
+	log.Debug("Cleaning etcdv3 datastore of all Calico data")
 	_, err := c.etcdClient.Txn(context.Background()).If().Then(
 		clientv3.OpDelete("/calico/", clientv3.WithPrefix()),
 	).Commit()
