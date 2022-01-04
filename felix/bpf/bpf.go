@@ -1228,14 +1228,19 @@ func (b *BPFLib) GetXDPMode(ifName string) (XDPMode, error) {
 	}
 
 	s := strings.Fields(string(output))
-	allModes := map[string]XDPMode{
-		XDPDriver.String():  XDPDriver,
-		XDPOffload.String(): XDPOffload,
-		XDPGeneric.String(): XDPGeneric,
-	}
-	for i := range s {
-		if mode, ok := allModes[s[i]]; ok {
-			return mode, nil
+	// Note: using a slice (rather than a map[string]XDPMode) here to ensure deterministic ordering.
+	for _, modeMapping := range []struct {
+		String string
+		Mode   XDPMode
+	}{
+		{"xdpgeneric", XDPGeneric},
+		{"xdpoffload", XDPOffload},
+		{"xdp", XDPDriver}, // We write "xdpdrv" but read back "xdp"
+	} {
+		for _, f := range s {
+			if f == modeMapping.String {
+				return modeMapping.Mode, nil
+			}
 		}
 	}
 
