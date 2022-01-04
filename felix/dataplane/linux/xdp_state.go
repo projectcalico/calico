@@ -458,7 +458,7 @@ func (s *xdpIPState) getBpfIPFamily() bpf.IPFamily {
 }
 
 // newXDPResyncState creates the xdpResyncState object, returning an error on failure.
-func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsetsSource, programTag string, xpdModes []bpf.XDPMode) (*xdpResyncState, error) {
+func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsetsSource, programTag string, xdpModes []bpf.XDPMode) (*xdpResyncState, error) {
 	xdpIfaces, err := bpfLib.GetXDPIfaces()
 	if err != nil {
 		return nil, err
@@ -468,10 +468,28 @@ func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsets
 	for _, iface := range xdpIfaces {
 		tag, tagErr := bpfLib.GetXDPTag(iface)
 		mode, modeErr := bpfLib.GetXDPMode(iface)
-		// error can happen when the program was not pinned in the bpf filesystem, so we say it's bogus anyway
-		bogus := tagErr != nil || tag != programTag || modeErr != nil || !isValidMode(mode, xpdModes)
+
+		var bogosityReasons []string
+		if tagErr != nil {
+			bogosityReasons = append(bogosityReasons, fmt.Sprintf("error getting tag: %s", tagErr.Error()))
+		} else if tag != programTag {
+			bogosityReasons = append(bogosityReasons, fmt.Sprintf("loaded program's tag (%s) doesn't match expected tag (%s)",
+				tag, programTag))
+		}
+		if modeErr != nil {
+			bogosityReasons = append(bogosityReasons, fmt.Sprintf("error getting mode: %s", modeErr.Error()))
+		} else if !isValidMode(mode, xdpModes) {
+			bogosityReasons = append(bogosityReasons, fmt.Sprintf("installed program uses disallowed mode: %v", mode))
+		}
+		if len(bogosityReasons) > 0 {
+			log.WithFields(log.Fields{
+				"reasons": bogosityReasons,
+				"iface":   iface,
+			}).Info("Program on interface is bogus in some way.  Will need to reapply it.")
+		}
+
 		ifacesWithProgs[iface] = progInfo{
-			bogus: bogus,
+			bogus: len(bogosityReasons) > 0,
 		}
 	}
 	ifacesWithPinnedMaps, err := bpfLib.ListCIDRMaps(s.getBpfIPFamily())
@@ -1720,11 +1738,11 @@ func (s *xdpSystemState) Copy() *xdpSystemState {
 
 type xdpPendingDiffState struct {
 	NewIfaceNameToHostEpID map[string]proto.HostEndpointID
-	IfaceNamesToDrop       set.Set //<string>
+	IfaceNamesToDrop       set.Set // <string>
 	IfaceEpIDChange        map[string]proto.HostEndpointID
-	UpdatedHostEndpoints   set.Set //<proto.HostEndpointID>
-	RemovedHostEndpoints   set.Set //<proto.HostEndpointID>
-	PoliciesToRemove       set.Set //<PolicyID>
+	UpdatedHostEndpoints   set.Set // <proto.HostEndpointID>
+	RemovedHostEndpoints   set.Set // <proto.HostEndpointID>
+	PoliciesToRemove       set.Set // <PolicyID>
 	PoliciesToUpdate       map[proto.PolicyID]*xdpRules
 }
 
@@ -1743,10 +1761,10 @@ func newXDPPendingDiffState() *xdpPendingDiffState {
 type xdpBPFActions struct {
 	// sets of interface names, for which a bpf map should be
 	// created
-	CreateMap set.Set //<string>
+	CreateMap set.Set // <string>
 	// sets of interface names, for which a bpf map should be
 	// dropped (or emptied in some cases)
-	RemoveMap set.Set //<string>
+	RemoveMap set.Set // <string>
 
 	// The fields below are normalized, so for a given interface a
 	// set ID will appear either in AddToMap or RemoveFromMap,
@@ -1760,10 +1778,10 @@ type xdpBPFActions struct {
 
 	// sets of interface names, where XDP program should be
 	// loaded/attached
-	InstallXDP set.Set //<string>
+	InstallXDP set.Set // <string>
 	// sets of interface names, where XDP program should be
 	// unloaded/detached
-	UninstallXDP set.Set //<string>
+	UninstallXDP set.Set // <string>
 
 	// Resync fallout
 	// keys are interface names, values are maps, where keys are
@@ -2120,7 +2138,7 @@ func processMemberDeletions(memberCache *xdpMemberCache, iface string, mi member
 
 type xdpIfaceData struct {
 	EpID             proto.HostEndpointID
-	PoliciesToSetIDs map[proto.PolicyID]set.Set //<string>
+	PoliciesToSetIDs map[proto.PolicyID]set.Set // <string>
 }
 
 func (data xdpIfaceData) Copy() xdpIfaceData {
