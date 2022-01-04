@@ -44,14 +44,26 @@ var (
 )
 
 type releaseBuilder struct {
-	// Allow specification of runCommand so it can be overridden in the tests.
-	command commandRunner
+	// Allow specification of command runner so it can be overridden in tests.
+	runner commandRunner
 }
 
 func main() {
 	// Create a releaseBuilder to use.
 	r := releaseBuilder{
-		command: &realCommandRunner{},
+		runner: &realCommandRunner{},
+
+		// Uncomment this to echo out commands that would be run, rather than running them!
+		//
+		// runner: &echoRunner{
+		// 	responses: map[string]string{
+		// 		"git rev-parse --abbrev-ref HEAD":                  "release-v4.15",
+		// 		"git describe --tags --dirty --always --abbrev=12": "v4.16.0-0.dev-24850-ga7254d42ad39",
+		// 	},
+		// 	errors: map[string]error{
+		// 		"git describe --exact-match --tags HEAD": fmt.Errorf("Not on a tag"),
+		// 	},
+		// },
 	}
 
 	if create {
@@ -188,10 +200,10 @@ func (r *releaseBuilder) collectGithubArtifacts(ver string) error {
 	}
 
 	// Add in the already-buily windows zip archive and helm chart.
-	if _, err := r.command.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.command.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
 		return err
 	}
 
@@ -248,18 +260,18 @@ func (r *releaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 		"felix/bin/calico-bpf": binDir,
 	}
 	for src, dst := range binaries {
-		if _, err := r.command.Run("cp", []string{"-r", src, dst}, nil); err != nil {
+		if _, err := r.runner.Run("cp", []string{"-r", src, dst}, nil); err != nil {
 			return err
 		}
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.command.Run("cp", []string{"-r", "calico/_site/manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"-r", "calico/_site/manifests", releaseBase}, nil); err != nil {
 		return err
 	}
 
 	// tar up the whole thing.
-	if _, err := r.command.Run("tar", []string{"-czvf", fmt.Sprintf("%s/release-%s.tgz", targetDir, ver), releaseBase}, nil); err != nil {
+	if _, err := r.runner.Run("tar", []string{"-czvf", fmt.Sprintf("%s/release-%s.tgz", targetDir, ver), releaseBase}, nil); err != nil {
 		return err
 	}
 
@@ -331,7 +343,7 @@ Attached to this release are the following artifacts:
 		ver,
 		r.uploadDir(ver),
 	}
-	_, err = r.command.Run("ghr", args, nil)
+	_, err = r.runner.Run("ghr", args, nil)
 	return err
 }
 
@@ -410,25 +422,27 @@ func (r *releaseBuilder) determineBranch() string {
 	out, err := r.git("rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		logrus.WithError(err).Fatal("Error determining branch")
+	} else if strings.TrimSpace(out) == "HEAD" {
+		logrus.Fatal("Not on a branch, refusing to cut release")
 	}
-	return out
+	return strings.TrimSpace(out)
 }
 
 // Uses docker to build a tgz archive of the specified container image.
 func (r *releaseBuilder) archiveContainerImage(out, image string) error {
-	_, err := r.command.Run("docker", []string{"save", "--output", out, image}, nil)
+	_, err := r.runner.Run("docker", []string{"save", "--output", out, image}, nil)
 	return err
 }
 
 func (r *releaseBuilder) git(args ...string) (string, error) {
-	return r.command.Run("git", args, nil)
+	return r.runner.Run("git", args, nil)
 }
 
 func (r *releaseBuilder) makeInDirectory(dir, target string, env ...string) error {
-	_, err := r.command.Run("make", []string{"-C", dir, target}, env)
+	_, err := r.runner.Run("make", []string{"-C", dir, target}, env)
 	return err
 }
 
 func (r *releaseBuilder) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	return r.command.Run("make", []string{"-C", dir, target}, env)
+	return r.runner.Run("make", []string{"-C", dir, target}, env)
 }
