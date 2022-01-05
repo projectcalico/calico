@@ -18,12 +18,11 @@ GIT_USE_SSH = true
 # The version of BIRD to use for calico/node builds and confd tests.
 BIRD_VERSION=v0.3.3-184-g202a2186
 
-# TODO: Update Makefiles to pull registry configuration from here.
-# DEV_REGISTRIES configures the container image registries which are published to as part of 
-# this branches CI/CD pipeline.
-#DEV_REGISTRIES = quay.io docker.io
+# DEV_REGISTRIES configures the container image registries which are built from this
+# repository. By default, just build images with calico/. CI/CD will override this
+# variable to quay.io/calico and docker.io/calico
+DEV_REGISTRIES = calico
 
-# TODO: Update Makefiles to pull registry configuration from here.
 # RELEASE_REGISTIRES configures the container images registries which are published to 
 # as part of an official release.
-#RELEASE_REGISTRIES = $(DEV_REGISTRIES)
+RELEASE_REGISTRIES = quay.io/calico docker.io/calico gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
