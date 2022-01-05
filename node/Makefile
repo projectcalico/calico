@@ -2,20 +2,13 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/node
 
-RELEASE_REGISTRIES    ?=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
 RELEASE_BRANCH_PREFIX ?=release
 DEV_TAG_SUFFIX        ?=0.dev
 
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
 WINDOWS_UPGRADE_IMAGE ?=windows-upgrade
-DEV_REGISTRIES        ?=quay.io/calico calico $(RELEASE_REGISTRIES)
-else
-NODE_IMAGE            ?=calico/node
-WINDOWS_UPGRADE_IMAGE ?=calico/windows-upgrade
-DEV_REGISTRIES        ?=quay.io docker.io
-endif
 
 WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
 BUILD_IMAGES ?=$(NODE_IMAGE)
@@ -282,14 +275,8 @@ clean-sub-image-%:
 
 $(NODE_IMAGE): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
-	# Check versions of the binaries that we're going to use to build the image.
-	# Since the binaries are built for Linux, run them in a container to allow the
-	# make target to be run on different platforms (e.g. MacOS).
-	docker run --rm -v $(CURDIR)/dist/bin:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
-	  echo; echo calico-node-$(ARCH) -v;	 /go/bin/calico-node-$(ARCH) -v; \
-	"
-## TARGET_PLATFORM fixes an issue where `FROM SCRATCH` in the Dockerfile share the same architecture as the host.
 	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # download BIRD source to include in image.

@@ -2,19 +2,9 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/typha
 
-RELEASE_REGISTRIES    ?= gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
-RELEASE_BRANCH_PREFIX ?= release
-DEV_TAG_SUFFIX        ?= 0.dev
-
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
 TYPHA_IMAGE    ?=typha
-DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
-else
-TYPHA_IMAGE    ?=calico/typha
-DEV_REGISTRIES ?=quay.io docker.io
-endif
-
 BUILD_IMAGES   ?=$(TYPHA_IMAGE)
 
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
@@ -111,9 +101,7 @@ $(TYPHA_IMAGE): bin/calico-typha-$(ARCH) register
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
 	docker buildx build --platform linux/$(ARCH) -t $(TYPHA_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
-ifeq ($(ARCH),amd64)
-	docker tag $(TYPHA_IMAGE):latest-$(ARCH) $(TYPHA_IMAGE):latest
-endif
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ###############################################################################
 # Unit Tests

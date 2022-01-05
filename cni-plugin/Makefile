@@ -5,19 +5,9 @@ PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
 
-RELEASE_REGISTRIES    ?= gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
-RELEASE_BRANCH_PREFIX ?= release
-DEV_TAG_SUFFIX        ?= 0.dev
-
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
 CNI_PLUGIN_IMAGE ?=cni
-DEV_REGISTRIES   ?=quay.io/calico calico $(RELEASE_REGISTRIES)
-else
-CNI_PLUGIN_IMAGE ?=calico/cni
-DEV_REGISTRIES   ?=quay.io docker.io
-endif
-
 BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 
 ###############################################################################
@@ -118,11 +108,8 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
-	GO111MODULE=on docker build -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
-ifeq ($(ARCH),amd64)
-	# Need amd64 builds tagged as :latest because Semaphore depends on that
-	docker tag $(CNI_PLUGIN_IMAGE):latest-$(ARCH) $(CNI_PLUGIN_IMAGE):latest
-endif
+	docker build -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 .PHONY: fetch-cni-bins
@@ -278,7 +265,7 @@ pkg/install/install.test: pkg/install/*.go
 .PHONY: test-install-cni
 ## Test the install
 test-install-cni: image pkg/install/install.test
-	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE) ./install.test
+	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE)-$(ARCH) ./install.test
 
 ###############################################################################
 # CI/CD

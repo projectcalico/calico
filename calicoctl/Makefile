@@ -5,13 +5,12 @@ PACKAGE_NAME = github.com/projectcalico/calico/calicoctl
 KUBE_APISERVER_PORT?=6443
 KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
 
-CALICOCTL_IMAGE       ?=calico/ctl
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
+CALICOCTL_IMAGE       ?=ctl
 BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
-DEV_REGISTRIES        ?=quay.io docker.io
-RELEASE_REGISTRIES    ?= $(DEV_REGISTRIES)
 RELEASE_BRANCH_PREFIX ?= release
 DEV_TAG_SUFFIX        ?= 0.dev
-
 
 # Remove any excluded architectures since for calicoctl we want to build everything.
 EXCLUDEARCH?=
@@ -96,9 +95,7 @@ image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
 $(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH) register
 	docker buildx build --pull -t $(CALICOCTL_IMAGE):latest-$(ARCH) --platform=linux/$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) . --load
-ifeq ($(ARCH),amd64)
-	docker tag $(CALICOCTL_IMAGE):latest-$(ARCH) $(CALICOCTL_IMAGE):latest
-endif
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # by default, build the image for the target architecture

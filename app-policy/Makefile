@@ -7,11 +7,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/app-policy
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
-DIKASTES_GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
-
-# Get version from git - used for releases.
-GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
-
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.
@@ -21,20 +16,10 @@ MY_GID:=$(shell id -g)
 GENERATED_FILES=proto/felixbackend.pb.go proto/healthz.pb.go
 SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 
-RELEASE_REGISTRIES ?=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
-
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
 DIKASTES_IMAGE ?=dikastes
-DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
-else
-DIKASTES_IMAGE ?=calico/dikastes
-DEV_REGISTRIES ?=quay.io docker.io
-endif
-
 BUILD_IMAGES ?= $(DIKASTES_IMAGE)
-
-GIT_USE_SSH?=true
 
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -147,9 +132,7 @@ sub-image-%:
 $(DIKASTES_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/dikastes-$(ARCH) bin/healthz-$(ARCH)
 	docker build -t $(DIKASTES_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
-ifeq ($(ARCH),amd64)
-	docker tag $(DIKASTES_IMAGE):latest-$(ARCH) $(DIKASTES_IMAGE):latest
-endif
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 ###############################################################################

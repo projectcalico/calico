@@ -31,9 +31,11 @@ include ../metadata.mk
 ###############################################################################
 PACKAGE_NAME = github.com/projectcalico/calico/felix
 
-FELIX_IMAGE    ?=calico/felix
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
+FELIX_IMAGE    ?=felix
 BUILD_IMAGES   ?=$(FELIX_IMAGE)
-DEV_REGISTRIES ?=$(DOCKERHUB_REGISTRY) quay.io
+
 LIBBPF_PATH=bpf-gpl/include/libbpf/src
 LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/$(LIBBPF_PATH)
 BPFGPL_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
@@ -58,14 +60,14 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 include ../lib.Makefile
 
 FV_ETCDIMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
-FV_TYPHAIMAGE?=calico/typha:latest-$(BUILDARCH)
+FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
 FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
 FV_FELIXIMAGE?=$(FELIX_IMAGE)-test:latest-$(BUILDARCH)
 
 # If building on amd64 omit the arch in the container name.  Fixme!
 ifeq ($(BUILDARCH),amd64)
 	FV_ETCDIMAGE=quay.io/coreos/etcd:$(ETCD_VERSION)
-	FV_TYPHAIMAGE=calico/typha:latest
+	FV_TYPHAIMAGE=felix-test/typha:latest
 endif
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,
@@ -230,9 +232,7 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
 	docker build --pull -t $(FELIX_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
-ifeq ($(ARCH),amd64)
-	docker tag $(FELIX_IMAGE):latest-$(ARCH) $(FELIX_IMAGE):latest
-endif
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
 FV_BINARY=calico-felix-race-amd64
@@ -242,15 +242,11 @@ endif
 
 image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/$(FV_BINARY) image-wgtool
 	docker build -t $(FELIX_IMAGE)-test:latest-$(ARCH) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin;
-ifeq ($(ARCH),amd64)
-	docker tag $(FELIX_IMAGE)-test:latest-$(ARCH) $(FELIX_IMAGE)-test:latest
-endif
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-test
 
 image-wgtool: fv/Dockerfile.wgtool.amd64
 	docker build -t $(FELIX_IMAGE)-wgtool:latest-$(ARCH) --file ./fv/Dockerfile.wgtool.$(ARCH) fv;
-ifeq ($(ARCH),amd64)
-	docker tag $(FELIX_IMAGE)-wgtool:latest-$(ARCH) $(FELIX_IMAGE)-wgtool:latest
-endif
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-wgtool
 
 ###############################################################################
 # Unit Tests
@@ -277,7 +273,7 @@ fv/infrastructure/crds:
 	cp -r ../libcalico-go/config/crd fv/infrastructure/crds; chmod +w fv/infrastructure/crds/
 
 build-typha:
-	make -C ../typha image
+	make -C ../typha image DEV_REGISTRIES=felix-test
 
 .PHONY: fv
 # runs all of the fv tests
@@ -353,7 +349,7 @@ K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -
 # e.g.
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-k8sfv-test: image-test  k8sfv-test-existing-felix
+k8sfv-test: image-test k8sfv-test-existing-felix
 # Run k8sfv test with whatever is the existing 'calico/felix:latest'
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.
