@@ -284,8 +284,8 @@ func (r *releaseBuilder) buildContainerImages(ver string) error {
 		"calicoctl",
 		"app-policy",
 		"typha",
-		"felix",
 		"node",
+		"felix",
 		"calico", // Technically not a container image, but a helm chart.
 	}
 
