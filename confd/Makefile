@@ -110,21 +110,12 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 ut:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r .'
 
-## Etcd is used by the kubernetes
-# NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
-# amd64: 3.2.5
-# arm64: 3.2.5-arm64
-# ppc64le: 3.2.5-ppc64le
-# s390x is not available
-COREOS_ETCD ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
-ifeq ($(ARCH),amd64)
-COREOS_ETCD = quay.io/coreos/etcd:$(ETCD_VERSION)
-endif
+
 run-etcd: stop-etcd
 	docker run --detach \
 	-e GO111MODULE=on \
 	--net=host \
-	--name calico-etcd $(COREOS_ETCD) \
+	--name calico-etcd $(ETCD_IMAGE) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"

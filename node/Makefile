@@ -48,11 +48,6 @@ CNI_VER?=master
 TEST_CONTAINER_NAME_VER?=latest
 CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
 TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
-# If building on amd64 omit the arch in the container name.  Fixme!
-ETCD_IMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)
-ifneq ($(BUILDARCH),amd64)
-	ETCD_IMAGE=$(ETCD_IMAGE)-$(ARCH)
-endif
 
 # TODO: Update this to use newer version of Kubernetes.
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.17.0

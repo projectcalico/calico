@@ -4,9 +4,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/app-policy
 
 ###############################################################################
 
-PROTOC_VER?=v0.1
-PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
-
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.

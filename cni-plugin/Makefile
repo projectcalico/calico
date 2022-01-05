@@ -34,13 +34,6 @@ CNI_SPEC_VERSION?=0.3.1
 
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
-
-ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
-# If building on amd64 omit the arch in the container name.
-ifeq ($(BUILDARCH),amd64)
-	ETCD_CONTAINER=quay.io/coreos/etcd:$(ETCD_VERSION)
-endif
-
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 CGO_ENABLED=1
@@ -243,7 +236,7 @@ stop-k8s-controller:
 run-etcd: stop-etcd
 	docker run --detach \
 	  -p 2379:2379 \
-	  --name calico-etcd $(ETCD_CONTAINER) \
+	  --name calico-etcd $(ETCD_IMAGE) \
 	  etcd \
 	  --advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	  --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
