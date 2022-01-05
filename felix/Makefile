@@ -31,9 +31,11 @@ include ../metadata.mk
 ###############################################################################
 PACKAGE_NAME = github.com/projectcalico/calico/felix
 
-FELIX_IMAGE    ?=calico/felix
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
+FELIX_IMAGE    ?=felix
 BUILD_IMAGES   ?=$(FELIX_IMAGE)
-DEV_REGISTRIES ?=$(DOCKERHUB_REGISTRY) quay.io
+
 LIBBPF_PATH=bpf-gpl/include/libbpf/src
 LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/$(LIBBPF_PATH)
 BPFGPL_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
@@ -230,8 +232,9 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
 	docker build --pull -t $(FELIX_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 ifeq ($(ARCH),amd64)
-	docker tag $(FELIX_IMAGE):latest-$(ARCH) $(FELIX_IMAGE):latest
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 endif
 
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
@@ -242,14 +245,16 @@ endif
 
 image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/$(FV_BINARY) image-wgtool
 	docker build -t $(FELIX_IMAGE)-test:latest-$(ARCH) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin;
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-test
 ifeq ($(ARCH),amd64)
-	docker tag $(FELIX_IMAGE)-test:latest-$(ARCH) $(FELIX_IMAGE)-test:latest
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-test
 endif
 
 image-wgtool: fv/Dockerfile.wgtool.amd64
 	docker build -t $(FELIX_IMAGE)-wgtool:latest-$(ARCH) --file ./fv/Dockerfile.wgtool.$(ARCH) fv;
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-wgtool
 ifeq ($(ARCH),amd64)
-	docker tag $(FELIX_IMAGE)-wgtool:latest-$(ARCH) $(FELIX_IMAGE)-wgtool:latest
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-wgtool
 endif
 
 ###############################################################################

@@ -2,19 +2,9 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 
-RELEASE_REGISTRIES    ?= gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
-RELEASE_BRANCH_PREFIX ?= release
-DEV_TAG_SUFFIX        ?= 0.dev
-
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
 FLEXVOL_IMAGE  ?=pod2daemon-flexvol
-DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
-else
-FLEXVOL_IMAGE  ?=calico/pod2daemon-flexvol
-DEV_REGISTRIES ?=quay.io docker.io
-endif
-
 BUILD_IMAGES ?=$(FLEXVOL_IMAGE)
 
 ###############################################################################
@@ -80,8 +70,9 @@ sub-image-%:
 $(FLEXVOL_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
 	docker build -t $(FLEXVOL_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 ifeq ($(ARCH),amd64)
-	docker tag $(FLEXVOL_IMAGE):latest-$(ARCH) $(FLEXVOL_IMAGE):latest
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 endif
 	touch $@
 
