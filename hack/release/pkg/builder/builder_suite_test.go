@@ -12,11 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package test
+package builder
 
-// this is for packages that need to be included in go.mod but aren't actually imported in the code (i.e. used for
-// testing). If this isn't done, mod tidy will remove the dependency from go.mod.
 import (
-	_ "github.com/tcnksm/ghr"
-	_ "sigs.k8s.io/kind/pkg/apis/config/defaults"
+	"testing"
+
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
+
+func TestIpam(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
+	RegisterFailHandler(Fail)
+	junitReporter := reporters.NewJUnitReporter("./report/release_builder_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Release builder suite", []Reporter{junitReporter})
+}
