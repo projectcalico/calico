@@ -2,11 +2,12 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/kube-controllers
 
-# Makefile configuration options
-KUBE_CONTROLLERS_IMAGE  ?=calico/kube-controllers
-FLANNEL_MIGRATION_IMAGE ?=calico/flannel-migration-controller
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
+KUBE_CONTROLLERS_IMAGE  ?=kube-controllers
+FLANNEL_MIGRATION_IMAGE ?=flannel-migration-controller
+
 BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
-DEV_REGISTRIES          ?=docker.io quay.io
 
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
@@ -85,15 +86,9 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH)
-	# Build the docker image for the policy controller.
 	docker build -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
-	# Build the docker image for the flannel migration controller.
 	docker build -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-images/flannel-migration/Dockerfile.$(ARCH) .
-ifeq ($(ARCH),amd64)
-	# Need amd64 builds tagged as :latest because Semaphore depends on that
-	docker tag $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) $(KUBE_CONTROLLERS_IMAGE):latest
-	docker tag $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) $(FLANNEL_MIGRATION_IMAGE):latest
-endif
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 .PHONY: remote-deps
