@@ -178,6 +178,13 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 	backendIP := net.IPv4(2, 2, 2, 2)
 	backendPort := uint16(2222)
 
+	snatPort := uint16(456)
+
+	withSNATPort := func(snatport uint16, v conntrack.Value) conntrack.Value {
+		binary.LittleEndian.PutUint16(v[40:42], snatport)
+		return v
+	}
+
 	DescribeTable("forward entries",
 		func(k conntrack.Key, v conntrack.Value, verdict conntrack.ScanVerdict) {
 			staleNATScanner := conntrack.NewStaleNATScanner(dummyNATChecker{
@@ -233,6 +240,30 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
 			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, net.IPv4(3, 2, 2, 3), clientPort)),
 			conntrack.ScanVerdictOK,
+		),
+		Entry("snatport keyA - revA",
+			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
+			withSNATPort(snatPort,
+				conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, clientIP, snatPort, backendIP, backendPort))),
+			conntrack.ScanVerdictDelete,
+		),
+		Entry("snatport keyA - revB",
+			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
+			withSNATPort(snatPort,
+				conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, snatPort))),
+			conntrack.ScanVerdictDelete,
+		),
+		Entry("snatport keyB - revA",
+			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
+			withSNATPort(snatPort,
+				conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, clientIP, snatPort, backendIP, backendPort))),
+			conntrack.ScanVerdictDelete,
+		),
+		Entry("snatport keyB - revB",
+			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
+			withSNATPort(snatPort,
+				conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, snatPort))),
+			conntrack.ScanVerdictDelete,
 		),
 	)
 })
