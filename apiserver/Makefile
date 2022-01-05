@@ -6,12 +6,10 @@ LOCAL_CHECKS     = lint-cache-dir goimports check-copyright check-boring-ssl
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
 
-API_SERVER_IMAGE      ?=calico/apiserver
+# Name of the images.
+# e.g., <registry>/<name>:<tag>
+API_SERVER_IMAGE      ?=apiserver
 BUILD_IMAGES          ?=$(API_SERVER_IMAGE)
-DEV_REGISTRIES        ?=quay.io docker.io
-RELEASE_REGISTRIES    ?=$(DEV_REGISTRIES)
-RELEASE_BRANCH_PREFIX ?=release
-DEV_TAG_SUFFIX        ?=0.dev
 
 EXTRA_DOCKER_ARGS += -e GOLANGCI_LINT_CACHE=/lint-cache -v $(CURDIR)/.lint-cache:/lint-cache:rw \
 				 -v $(CURDIR)/hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
@@ -80,7 +78,7 @@ LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused,inef
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks calico/apiserver fv ut
+ci: clean static-checks image fv ut
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -125,19 +123,8 @@ sub-image-%:
 $(API_SERVER_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver
 	docker build -t $(API_SERVER_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-image/Dockerfile.$(ARCH) .
-ifeq ($(ARCH),amd64)
-	docker tag $(API_SERVER_IMAGE):latest-$(ARCH) $(API_SERVER_IMAGE):latest
-endif
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
-
-# Build the calico/apiserver docker image.
-.PHONY: calico/apiserver
-calico/apiserver: $(BINDIR)/apiserver $(BINDIR)/filecheck
-	rm -rf docker-image/bin
-	mkdir -p docker-image/bin
-	cp $(BINDIR)/apiserver docker-image/bin/
-	cp $(BINDIR)/filecheck docker-image/bin/
-	docker build --pull -t calico/apiserver --file ./docker-image/Dockerfile.$(ARCH) docker-image
 
 .PHONY: lint-cache-dir
 lint-cache-dir:
@@ -296,11 +283,8 @@ fv-kdd: run-kubernetes-server hack-lib
 		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'
 
 .PHONY: clean
-clean: clean-bin clean-build-image clean-hack-lib
+clean: clean-bin clean-hack-lib
 	rm -rf .lint-cache
-
-clean-build-image:
-	docker rmi -f calico/apiserver > /dev/null 2>&1 || true
 
 clean-bin:
 	rm -rf $(BINDIR) \
