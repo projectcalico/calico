@@ -65,13 +65,22 @@ func (r *ReleaseBuilder) BuildRelease() error {
 		return fmt.Errorf("Already on a tag (%s), refusing to create release", out)
 	}
 
+	// Check that the repository is not a shallow clone. We need correct history.
+	out, err := r.git("rev-parse", "--is-shallow-repository")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(out) == "true" {
+		return fmt.Errorf("Attempt to release from a shallow clone is not possible")
+	}
+
 	// Check that the environment has the necessary prereqs.
 	if err := r.releasePrereqs(); err != nil {
 		return err
 	}
 
 	// Determine the last tag on this branch.
-	out, err := r.git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
+	out, err = r.git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to git describe")
 	}
