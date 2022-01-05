@@ -284,8 +284,6 @@ github.com/evanphx/json-patch v4.9.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLi
 github.com/evanphx/json-patch/v5 v5.2.0 h1:8ozOH5xxoMYDt5/u+yMTsVXydVCbTORFnOOoq2lumco=
 github.com/evanphx/json-patch/v5 v5.2.0/go.mod h1:G79N1coSVB93tBe7j6PhzjmR3/2VvlbKOFpnXhI9Bw4=
 github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d/go.mod h1:ZZMPRZwes7CROmyNKgQzC3XPs6L/G2EJLHddWejkmf4=
-github.com/fasaxc/client-go v0.21.8-fix-match-rev h1:QL3vW7+rL1MZhMMfmvLOHIUer0xSTqvDtj/Ds2WCjWQ=
-github.com/fasaxc/client-go v0.21.8-fix-match-rev/go.mod h1:FcrKJITUrWtQSX3SCmqswlETK8AcVDTTA5PxDPxNtcg=
 github.com/fatih/camelcase v1.0.0/go.mod h1:yN2Sb0lFhZJUdVvtELVWefmrXpuZESvPmqwoZc+/fpc=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/structs v1.1.0/go.mod h1:9NiDSp5zOcgEDl+j00MP/WkGVPOlPRLejGD8Ga6PJ7M=
@@ -831,6 +829,8 @@ github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:J
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
 github.com/projectcalico/hcsshim v0.8.9-calico h1:aRrOWouDTzKwaIoRGMV/I1QikR+ikwj1G9T9h3wD090=
 github.com/projectcalico/hcsshim v0.8.9-calico/go.mod h1:5692vkUqntj1idxauYlpoINNKeqCiG6Sg38RRsjT5y8=
+github.com/projectcalico/k8s-client-go v0.21.9-0.20220104180519-6bd7ec39553f h1:uaF0FyAe9Gvv7Zy93ex+lWdu6Tw6fokqjwer+Uj880A=
+github.com/projectcalico/k8s-client-go v0.21.9-0.20220104180519-6bd7ec39553f/go.mod h1:FcrKJITUrWtQSX3SCmqswlETK8AcVDTTA5PxDPxNtcg=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/prometheus/client_golang v0.0.0-20171201122222-661e31bf844d/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
