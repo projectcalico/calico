@@ -17,5 +17,6 @@ package test
 // this is for packages that need to be included in go.mod but aren't actually imported in the code (i.e. used for
 // testing). If this isn't done, mod tidy will remove the dependency from go.mod.
 import (
+	_ "github.com/tcnksm/ghr"
 	_ "sigs.k8s.io/kind/pkg/apis/config/defaults"
 )
