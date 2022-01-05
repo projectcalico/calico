@@ -71,9 +71,6 @@ $(FLEXVOL_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
 	docker build -t $(FLEXVOL_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-ifeq ($(ARCH),amd64)
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-endif
 	touch $@
 
 ###############################################################################
