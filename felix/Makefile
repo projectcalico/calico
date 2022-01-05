@@ -60,14 +60,14 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 include ../lib.Makefile
 
 FV_ETCDIMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
-FV_TYPHAIMAGE?=calico/typha:latest-$(BUILDARCH)
+FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
 FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
 FV_FELIXIMAGE?=$(FELIX_IMAGE)-test:latest-$(BUILDARCH)
 
 # If building on amd64 omit the arch in the container name.  Fixme!
 ifeq ($(BUILDARCH),amd64)
 	FV_ETCDIMAGE=quay.io/coreos/etcd:$(ETCD_VERSION)
-	FV_TYPHAIMAGE=calico/typha:latest
+	FV_TYPHAIMAGE=felix-test/typha:latest
 endif
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,
@@ -273,7 +273,7 @@ fv/infrastructure/crds:
 	cp -r ../libcalico-go/config/crd fv/infrastructure/crds; chmod +w fv/infrastructure/crds/
 
 build-typha:
-	make -C ../typha image
+	make -C ../typha image DEV_REGISTRIES=felix-test
 
 .PHONY: fv
 # runs all of the fv tests
@@ -349,7 +349,7 @@ K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -
 # e.g.
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-k8sfv-test: image-test  k8sfv-test-existing-felix
+k8sfv-test: image-test k8sfv-test-existing-felix
 # Run k8sfv test with whatever is the existing 'calico/felix:latest'
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.

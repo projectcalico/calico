@@ -119,12 +119,10 @@ blocks:
       commands:
       - cd typha
       - make ci EXCEPT=k8sfv-test
-    - name: "Typha: felix k8s-st tests with updated typha image"
+    - name: "Typha: felix k8s-st tests"
       commands:
-      - cd typha
-      - make image
-      - cd ../felix
-      - JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=calico/typha:latest TYPHA_VERSION=latest make k8sfv-test
+      - cd felix
+      - JUST_A_MINUTE=true USE_TYPHA=true make k8sfv-test
     epilogue:
       always:
         commands:
