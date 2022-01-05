@@ -19,14 +19,19 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = DescribeTable("Release version determination tests", func(prev, expected string) {
+var _ = DescribeTable("Release version determination tests", func(prev, expected string, expectErr bool) {
 	r := &ReleaseBuilder{}
-	out := r.determineReleaseVersion(prev)
+	out, err := r.determineReleaseVersion(prev)
+	if expectErr {
+		Expect(err).To(HaveOccurred())
+	} else {
+		Expect(err).NotTo(HaveOccurred())
+	}
 	Expect(out).To(Equal(expected))
 },
 
-	Entry("from a -0.dev tag", "v3.22.0-0.dev", "v3.22.0"),
-	Entry("from a .0 patch release", "v3.22.0", "v3.22.1"),
-	Entry("from a .10 patch release", "v3.22.10", "v3.22.11"),
-	Entry("from a random string", "ahg5da29a", ""),
+	Entry("from a -0.dev tag", "v3.22.0-0.dev", "v3.22.0", false),
+	Entry("from a .0 patch release", "v3.22.0", "v3.22.1", false),
+	Entry("from a .10 patch release", "v3.22.10", "v3.22.11", false),
+	Entry("from a random string", "ahg5da29a", "", true),
 )
