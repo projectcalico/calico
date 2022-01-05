@@ -175,24 +175,13 @@ st: bin/calicoctl-linux-amd64 version-helper
 	$(MAKE) stop-etcd
 	$(MAKE) stop-kubernetes-master
 
-## Etcd is used by the STs
-# NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
-# amd64: 3.3.7
-# arm64: 3.3.7-arm64
-# ppc64le: 3.3.7-ppc64le
-# s390x is not available
-# armv7 is not available
-COREOS_ETCD?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
-ifeq ($(ARCH),amd64)
-COREOS_ETCD=quay.io/coreos/etcd:$(ETCD_VERSION)
-endif
 .PHONY: run-etcd-host
 run-etcd-host:
 	@-docker rm -f calico-etcd
 	docker run --detach \
 	--net=host \
 	--name calico-etcd \
-	$(COREOS_ETCD) \
+	$(ETCD_IMAGE) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
 	--listen-client-urls "http://0.0.0.0:2379"

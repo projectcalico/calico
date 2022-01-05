@@ -22,12 +22,6 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 
 include ../lib.Makefile
 
-ETCD_IMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
-# If building on amd64 omit the arch in the container name.
-ifeq ($(BUILDARCH),amd64)
-	ETCD_IMAGE=quay.io/coreos/etcd:$(ETCD_VERSION)
-endif
-
 SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
 
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.

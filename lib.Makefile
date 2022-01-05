@@ -149,11 +149,12 @@ endif
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
 GO_BUILD_IMAGE ?= calico/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
-
-COREDNS_VERSION=1.5.2
-ETCD_VERSION=v3.3.7
-PROTOC_VER=v0.1
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
+
+# NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
+# amd64, arm64, ppc64le
+# s390x is not available
+ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
