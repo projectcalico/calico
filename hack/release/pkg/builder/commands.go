@@ -1,4 +1,4 @@
-package main
+package builder
 
 import (
 	"bytes"
@@ -9,18 +9,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// commandRunner runs the given command. Useful for mocking commands in unit tests.
-type commandRunner interface {
+// CommandRunner runs the given command. Useful for mocking commands in unit tests.
+type CommandRunner interface {
 	// Run takes the command to run, a list of args, and list of environment variables
 	// in the form A=B, and returns stdout / error.
 	Run(string, []string, []string) (string, error)
 }
 
-// realCommandRunner runs a command for real on the host.
-type realCommandRunner struct {
+// RealCommandRunner runs a command for real on the host.
+type RealCommandRunner struct {
 }
 
-func (r *realCommandRunner) Run(name string, args []string, env []string) (string, error) {
+func (r *RealCommandRunner) Run(name string, args []string, env []string) (string, error) {
 	cmd := exec.Command(name, args...)
 	if len(env) != 0 {
 		cmd.Env = env
@@ -38,15 +38,15 @@ func (r *realCommandRunner) Run(name string, args []string, env []string) (strin
 	return strings.TrimSpace(outb.String()), err
 }
 
-// echoRunner simply echos back the command that is given, and returns a pre-canned
+// EchoRunner simply echos back the command that is given, and returns a pre-canned
 // response / error if specified.
-type echoRunner struct {
+type EchoRunner struct {
 	responses map[string]string
 	errors    map[string]error
 	history   []string
 }
 
-func (r *echoRunner) Run(name string, args []string, env []string) (string, error) {
+func (r *EchoRunner) Run(name string, args []string, env []string) (string, error) {
 	if r.history == nil {
 		r.history = []string{}
 	}

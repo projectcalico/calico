@@ -57,7 +57,7 @@ image:
 ###############################################################################
 # Build the release tool.
 hack/release/release: $(shell find ./hack/release -type f -name '*.go')
-	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/
+	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/cmd
 
 # Install ghr for publishing to github.
 hack/release/ghr: 
@@ -66,6 +66,10 @@ hack/release/ghr:
 # Build a release.
 release: hack/release/release 
 	@hack/release/release -create
+
+# test the release code
+release-test:
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
 
 # Publish an already built release.
 release-publish: hack/release/release hack/release/ghr
