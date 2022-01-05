@@ -22,9 +22,6 @@ func init() {
 // Global configuration for releases.
 var (
 	// Registries to which all release images are pushed.
-	// TODO: Do we need all of these?
-	// TODO: Remove DEV_REGISTRIES and RELEASE_REGISTRIES from Makefiles. Right now, we're just overriding them.
-	// TODO: BUILD_IMAGE shouldn't vary based on whether a release is being performed!
 	registries = []string{
 		"docker.io/calico",
 		"quay.io/calico",
