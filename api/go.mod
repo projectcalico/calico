@@ -24,7 +24,7 @@ replace (
 	k8s.io/apimachinery => k8s.io/apimachinery v0.21.8
 	k8s.io/apiserver => k8s.io/apiserver v0.21.8
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.21.8
-	k8s.io/client-go => k8s.io/client-go v0.21.8
+	k8s.io/client-go => github.com/projectcalico/k8s-client-go v0.21.9-0.20220104180519-6bd7ec39553f
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.21.8
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.21.8
 	k8s.io/code-generator => k8s.io/code-generator v0.21.8
