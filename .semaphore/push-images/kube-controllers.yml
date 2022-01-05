@@ -30,5 +30,8 @@ blocks:
       - name: docker
       jobs:
       - name: "kube-controllers"
+        env_vars:
+        - name: DEV_REGISTRIES
+          value: quay.io/calico docker.io/calico
         commands:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C kube-controllers image-all cd CONFIRM=true; fi
