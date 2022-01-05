@@ -177,12 +177,15 @@ st: bin/calicoctl-linux-amd64 version-helper
 
 .PHONY: run-etcd-host
 run-etcd-host:
+	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
+	# still relies on it. 
 	@-docker rm -f calico-etcd
 	docker run --detach \
 	--net=host \
 	--name calico-etcd \
 	$(ETCD_IMAGE) \
 	etcd \
+	--enable-v2 \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
 	--listen-client-urls "http://0.0.0.0:2379"
 
