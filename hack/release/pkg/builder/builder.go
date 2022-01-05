@@ -78,7 +78,10 @@ func (r *ReleaseBuilder) BuildRelease() error {
 	logrus.WithField("out", out).Info("Current git describe")
 
 	// Determine the release version to use based on the last tag, and then tag the branch.
-	ver := r.determineReleaseVersion(out)
+	ver, err := r.determineReleaseVersion(out)
+	if err != nil {
+		return err
+	}
 	branch := r.determineBranch()
 	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
 	_, err = r.git("tag", ver)
@@ -366,13 +369,13 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 
 // determineReleaseVersion uses historical clues to figure out the next semver
 // release number to use for this release.
-func (r *ReleaseBuilder) determineReleaseVersion(previousTag string) string {
+func (r *ReleaseBuilder) determineReleaseVersion(previousTag string) (string, error) {
 	// There are two types of tag that this might be - either it was a previous patch release,
 	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the relaese branch.
 	if strings.Contains(previousTag, "-0.dev") {
 		// This is the first release from this branch - we can simply extract the version from
 		// the dev tag.
-		return strings.Split(previousTag, "-0.dev")[0]
+		return strings.Split(previousTag, "-0.dev")[0], nil
 	} else {
 		// This is a patch release - we need to parse the previous, and
 		// bump the patch version.
@@ -380,10 +383,11 @@ func (r *ReleaseBuilder) determineReleaseVersion(previousTag string) string {
 		logrus.WithField("previousVersion", previousVersion).Info("Previous version")
 		v, err := semver.NewVersion(strings.TrimPrefix(previousVersion, "v"))
 		if err != nil {
-			logrus.WithField("previousVersion", previousVersion).WithError(err).Fatal("Failed to parse git version as semver")
+			logrus.WithField("previousVersion", previousVersion).WithError(err).Error("Failed to parse git version as semver")
+			return "", fmt.Errorf("failed to parse git version as semver: %s", err)
 		}
 		v.BumpPatch()
-		return fmt.Sprintf("v%s", v.String())
+		return fmt.Sprintf("v%s", v.String()), nil
 	}
 }
 
