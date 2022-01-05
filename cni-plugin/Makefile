@@ -258,7 +258,7 @@ pkg/install/install.test: pkg/install/*.go
 .PHONY: test-install-cni
 ## Test the install
 test-install-cni: image pkg/install/install.test
-	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE)-$(ARCH) ./install.test
+	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE):latest-$(ARCH) ./install.test
 
 ###############################################################################
 # CI/CD
