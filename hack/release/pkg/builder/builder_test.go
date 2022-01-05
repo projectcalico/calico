@@ -12,11 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package test
+package builder
 
-// this is for packages that need to be included in go.mod but aren't actually imported in the code (i.e. used for
-// testing). If this isn't done, mod tidy will remove the dependency from go.mod.
 import (
-	_ "github.com/tcnksm/ghr"
-	_ "sigs.k8s.io/kind/pkg/apis/config/defaults"
+	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/gomega"
+)
+
+var _ = DescribeTable("Release version determination tests", func(prev, expected string) {
+	r := &ReleaseBuilder{}
+	out := r.determineReleaseVersion(prev)
+	Expect(out).To(Equal(expected))
+},
+
+	Entry("from a -0.dev tag", "v3.22.0-0.dev", "v3.22.0"),
+	Entry("from a .0 patch release", "v3.22.0", "v3.22.1"),
+	Entry("from a .10 patch release", "v3.22.10", "v3.22.11"),
+	Entry("from a random string", "ahg5da29a", ""),
 )
