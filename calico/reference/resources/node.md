@@ -14,10 +14,6 @@ match the name configured in the Node resource.
 By default, starting a `{{site.nodecontainer}}` instance will automatically create a node resource
 using the `hostname` of the compute host.
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that
-specify a resource type on the CLI, the following
-aliases are supported (all case insensitive): `node`, `nodes`, `no`, `nos`.
-
 ### Sample YAML
 
 ```yaml

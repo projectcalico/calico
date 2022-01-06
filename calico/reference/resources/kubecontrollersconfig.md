@@ -6,9 +6,6 @@ canonical_url: '/reference/resources/kubecontrollersconfig'
 
 A {{site.prodname}} [Kubernetes controllers]({{ site.baseurl }}/reference/kube-controllers/configuration) configuration resource (`KubeControllersConfiguration`) represents configuration options for the {{site.prodname}} Kubernetes controllers.
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
-aliases are supported (all case insensitive): `kubecontrollersconfiguration`, `kubecontrollersconfig`.
-
 ### Sample YAML
 
 ```yaml
