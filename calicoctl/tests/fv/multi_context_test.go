@@ -36,8 +36,8 @@ func TestMultiCluster(t *testing.T) {
 	RegisterTestingT(t)
 
 	os.Setenv("KUBECONFIG", strings.Join([]string{
-		"/go/src/github.com/projectcalico/calico/calicoctl/test-data/kubectl-config.yaml",
-		"/go/src/github.com/projectcalico/calico/calicoctl/test-data/kubectl-config-second.yaml",
+		"/go/src/github.com/projectcalico/calico/calicoctl/test-data/multi-context/kubectl-config.yaml",
+		"/go/src/github.com/projectcalico/calico/calicoctl/test-data/multi-context/kubectl-config-second.yaml",
 	}, ":"))
 
 	// Set Calico version in ClusterInformation for both contexts
@@ -65,16 +65,16 @@ func TestMultiCluster(t *testing.T) {
 	out = Calicoctl(true, "--context", "main", "get", "node")
 	Expect(out).To(ContainSubstring("node4"))
 
-	out = Calicoctl(true, "create", "-f", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/v3/bgppeer-global.yaml", "--context", "main")
+	out = Calicoctl(true, "create", "-f", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/multi-context/v3/bgppeer-global.yaml", "--context", "main")
 	Expect(out).To(ContainSubstring("Successfully"))
 
 	out = Calicoctl(true, "patch", "bgppeer", "globalpeer.name5", "-p", "{\"spec\":{\"asNumber\": \"63445\"}}", "--context", "main")
 	Expect(out).To(ContainSubstring("Successfully"))
 
-	out = Calicoctl(true, "apply", "-f", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/v3/bgppeer-global.yaml", "--context", "main")
+	out = Calicoctl(true, "apply", "-f", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/multi-context/v3/bgppeer-global.yaml", "--context", "main")
 	Expect(out).To(ContainSubstring("Successfully"))
 
-	out = Calicoctl(true, "replace", "-f", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/v3/bgppeer-global.yaml", "--context", "main")
+	out = Calicoctl(true, "replace", "-f", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/multi-context/v3/bgppeer-global.yaml", "--context", "main")
 	Expect(out).To(ContainSubstring("Successfully"))
 
 	out = Calicoctl(true, "label", "nodes", "node4", "cluster=backend", "--context", "main")
@@ -87,7 +87,7 @@ func TestMultiCluster(t *testing.T) {
 	out = Calicoctl(true, "--context", "main", "ipam", "show")
 	Expect(out).To(ContainSubstring("CIDR"))
 
-	out = Calicoctl(true, "delete", "-f", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/v3/bgppeer-global.yaml", "--context", "main")
+	out = Calicoctl(true, "delete", "-f", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/multi-context/v3/bgppeer-global.yaml", "--context", "main")
 	Expect(out).To(ContainSubstring("Successfully"))
 
 }
