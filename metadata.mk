@@ -30,4 +30,5 @@ DEV_REGISTRIES = calico
 
 # RELEASE_REGISTIRES configures the container images registries which are published to 
 # as part of an official release.
-RELEASE_REGISTRIES = quay.io/calico docker.io/calico gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
+# This variable is unused. Registries for releases are defined in hack/release/pkg/builder/builder.go
+# RELEASE_REGISTRIES = quay.io/calico docker.io/calico gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
