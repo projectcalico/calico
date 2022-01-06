@@ -23,7 +23,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/go-yaml-wrapper"
 
@@ -211,8 +210,7 @@ func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
 // Kubernetes API to Calico v3 API
 type K8sNetworkPolicy struct {
 	unversioned.TypeMetadata
-	Metadata K8sNetworkPolicyMetadata       `json:"metadata,omitempty"`
-	Spec     networkingv1.NetworkPolicySpec `json:"spec,omitempty"`
+	networkingv1.NetworkPolicy
 }
 
 func NewK8sNetworkPolicy() *K8sNetworkPolicy {
@@ -222,9 +220,4 @@ func NewK8sNetworkPolicy() *K8sNetworkPolicy {
 			APIVersion: VersionK8sNetworkingV1,
 		},
 	}
-}
-
-type K8sNetworkPolicyMetadata struct {
-	metav1.TypeMeta
-	metav1.ObjectMeta
 }

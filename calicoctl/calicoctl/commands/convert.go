@@ -139,7 +139,7 @@ Description:
 	return nil
 }
 
-// convertResource converts v1 resource into a v3 resource.
+// convertResource converts a k8s or a calico v1 resource into a calico v3 resource.
 func convertResource(convResource unversioned.Resource) (converters.Resource, error) {
 	var res converters.Resource
 
@@ -188,8 +188,8 @@ func convertK8sResource(convResource unversioned.Resource) (converters.Resource,
 		}
 
 		np := networkingv1.NetworkPolicy{
-			TypeMeta:   k8sNetworkPolicy.Metadata.TypeMeta,
-			ObjectMeta: k8sNetworkPolicy.Metadata.ObjectMeta,
+			TypeMeta:   k8sNetworkPolicy.TypeMeta,
+			ObjectMeta: k8sNetworkPolicy.ObjectMeta,
 			Spec:       k8sNetworkPolicy.Spec,
 		}
 		c := cconversion.NewConverter()
