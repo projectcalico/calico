@@ -5,9 +5,6 @@ import (
 
 	"github.com/projectcalico/calico/hack/release/pkg/builder"
 	"github.com/sirupsen/logrus"
-
-	// We import ghr so that go.mod is happy, even though we don't use it here.
-	_ "github.com/tcnksm/ghr"
 )
 
 var create, publish bool
