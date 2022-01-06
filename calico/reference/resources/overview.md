@@ -52,33 +52,11 @@ The following resources are supported:
 - [GlobalNetworkSet]({{ site.baseurl }}/reference/resources/globalnetworkset)
 - [HostEndpoint]({{ site.baseurl }}/reference/resources/hostendpoint)
 - [IPPool]({{ site.baseurl }}/reference/resources/ippool)
-- [IPReservation]({{ site.baseurl }}/reference/resources/ipreservation)
 - [NetworkPolicy]({{ site.baseurl }}/reference/resources/networkpolicy)
 - [NetworkSet]({{ site.baseurl }}/reference/resources/networkset)
 - [Node]({{ site.baseurl }}/reference/resources/node)
 - [Profile]({{ site.baseurl }}/reference/resources/profile)
 - [WorkloadEndpoint]({{ site.baseurl }}/reference/resources/workloadendpoint)
-
-### Supported resource definition aliases
-
-The following tables lists supported aliases for {{site.prodname}} resources when using calicoctl. Note that all aliases
-are **case insensitive**.
-
-| Resource definition                  | Supported calicoctl aliases                                  |
-| :----------------------------------- | :----------------------------------------------------------- |
-| BGP configuration                    | `bgpconfig`, `bgpconfigurations`, `bgpconfigs`               |
-| BGP peer                             | `bgppeer`, `bgppeers`, `bgpp`, `bgpps`, `bp`, `bps`          |
-| Felix configuration                  | `felixconfiguration`, `felixconfig`, `felixconfigurations`, `felixconfigs` |
-| Global network policy                | `globalnetworkpolicy`, `globalnetworkpolicies`, `gnp`, `gnps` |
-| Global network set                   | `globalnetworkset`, `globalnetworksets`                      |
-| Host endpoint                        | `hostendpoint`, `hostendpoints`, `hep`, `heps`               |
-| IP pool                              | `ippool`, `ippools`, `ipp`, `ipps`, `pool`, `pools`          |
-| IP reservation                       | `ipreservation`, `ipreservations`, `reservation`, `reservations` |
-| Kubernetes controllers configuration | `kubecontrollersconfiguration`, `kubecontrollersconfig`      |
-| Network policy                       | `networkpolicy`, `networkpolicies`, `policy`, `np`, `policies`, `pol`, `pols` |
-| Node                                 | `node`, `nodes`, `no`, `nos`                                 |
-| Profiles                             | `profile`, `profiles`, `pro`, `pros`                         |
-| Workload endpoint                    | `workloadendpoint`, `workloadendpoints`, `wep`, `weps`       |
 
 ### Resource name requirements
 
