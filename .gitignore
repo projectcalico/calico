@@ -3,3 +3,11 @@ report/
 bin/
 *.created*
 .idea
+
+/* Produced as part of release */
+hack/release/release
+node/windows-packaging/CalicoWindows/confd/config-bgp.ps1
+node/windows-packaging/CalicoWindows/confd/config-bgp.psm1
+_output
+hack/release/ghr
+builder.coverprofile
