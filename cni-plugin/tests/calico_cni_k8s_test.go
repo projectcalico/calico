@@ -884,7 +884,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			if strings.Contains(c.config, "usePodCidrIPv6") {
 				continue
 			}
-			Context("Using host-local IPAM ("+c.description+"): request an IP then release it, and then request it again", func() {
+			Context("Using host-local IPAM with one PodCIDR ("+c.description+"): request an IP then release it, and then request it again", func() {
 				It("should successfully assign IP both times and successfully release it in the middle", func() {
 					netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
@@ -996,7 +996,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		// Run tests with PodCIDRs defining a dual-stack deployment
 		for _, c := range hostLocalIPAMConfigs {
 			c := c // Make sure we get a fresh variable on each loop.
-			Context("Using host-local IPAM ("+c.description+"): request an IP then release it, and then request it again", func() {
+			Context("Using host-local IPAM with two PodCIDRs ("+c.description+"): request an IP then release it, and then request it again", func() {
 				It("should successfully assign IP both times and successfully release it in the middle", func() {
 					netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
