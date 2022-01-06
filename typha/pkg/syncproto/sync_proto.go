@@ -236,14 +236,14 @@ type MsgKVs struct {
 }
 
 func init() {
-	// We need to use RegisterName here to force the name to be equal, even if this package gets vendored since the
-	// default name would include the vendor directory.
-	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgClientHello", MsgClientHello{})
-	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgServerHello", MsgServerHello{})
-	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgSyncStatus", MsgSyncStatus{})
-	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgPing", MsgPing{})
-	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgPong", MsgPong{})
-	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
+	// For forwards/backwards compatibility, we need to use RegisterName here to force consistent names even as
+	// code gets refactored/moved/vendored/etc. In particular, this uses the pre-monorepo paths for this package.
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgClientHello", MsgClientHello{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgServerHello", MsgServerHello{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgSyncStatus", MsgSyncStatus{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPing", MsgPing{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPong", MsgPong{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
 }
 
 func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
