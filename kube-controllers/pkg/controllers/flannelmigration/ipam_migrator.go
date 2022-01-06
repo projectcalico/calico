@@ -41,7 +41,6 @@ const (
 	flannelNodeAnnotationKeyPublicIP    = "public-ip"
 	defaultIpv4PoolName                 = "default-ipv4-ippool"
 	defaultFelixConfigurationName       = "default"
-	defaultIppoolSize                   = 26
 )
 
 // IPAMMigrator responsible for migrating host-local IPAM to Calico IPAM.
@@ -80,8 +79,8 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	}
 
 	// Based on FlannelSubnetLen, work out the size of ippool.
-	blockSize := defaultIppoolSize
-	if m.config.FlannelSubnetLen > defaultIppoolSize {
+	blockSize := m.config.DefaultIppoolSize
+	if m.config.FlannelSubnetLen > m.config.DefaultIppoolSize {
 		// Flannel subnet is smaller than one Calico IPAM block with default size of /26.
 		blockSize = m.config.FlannelSubnetLen
 	}
