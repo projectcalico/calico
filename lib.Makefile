@@ -150,10 +150,9 @@ endif
 GO_BUILD_IMAGE ?= calico/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
-COREDNS_VERSION=1.5.2
-ETCD_VERSION=v3.3.7
-PROTOC_VER=v0.1
+# Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
+ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";

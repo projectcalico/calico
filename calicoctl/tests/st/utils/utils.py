@@ -464,6 +464,7 @@ def curl_etcd(path, options=None, recursive=True, ip=None):
             % (ip, path, str(recursive).lower(), " ".join(options)),
             shell=True)
 
+    logger.info("etcd RC: %s" % rc.strip())
     return json.loads(rc.strip())
 
 def wipe_etcd(ip):
