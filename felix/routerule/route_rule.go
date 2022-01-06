@@ -41,13 +41,12 @@ var (
 	TableIndexFailed = errors.New("no table index specified")
 )
 
-// RouteRules represents set of routing rules with same ip family and priority.
+// RouteRules represents set of routing rules with same ip family.
 // The target of those rules are set of routing tables.
 type RouteRules struct {
 	logCxt *log.Entry
 
 	IPVersion int
-	Priority  int
 
 	// Routing table indexes which is exclusively managed by us.
 	tableIndexSet set.Set
@@ -83,7 +82,6 @@ type RouteRules struct {
 
 func New(
 	ipVersion int,
-	priority int,
 	tableIndexSet set.Set,
 	updateFunc RulesMatchFunc,
 	removeFunc RulesMatchFunc,
@@ -114,7 +112,6 @@ func New(
 			"ipVersion": ipVersion,
 		}),
 		IPVersion:        ipVersion,
-		Priority:         priority,
 		matchForUpdate:   updateFunc,
 		matchForRemove:   removeFunc,
 		tableIndexSet:    tableIndexSet,
