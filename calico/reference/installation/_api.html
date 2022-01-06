@@ -8,6 +8,8 @@
 <p>API Schema definitions for configuring the installation of Calico and Calico Enterprise</p>
 Resource Types:
 <ul><li>
+<a href="#operator.tigera.io/v1.ApplicationLayer">ApplicationLayer</a>
+</li><li>
 <a href="#operator.tigera.io/v1.ImageSet">ImageSet</a>
 </li><li>
 <a href="#operator.tigera.io/v1.Installation">Installation</a>
@@ -16,6 +18,91 @@ Resource Types:
 </li><li>
 <a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>
 </li></ul>
+<h3 id="operator.tigera.io/v1.ApplicationLayer">ApplicationLayer
+</h3>
+<p>ApplicationLayer is the Schema for the applicationlayers API</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code><br>
+string</td>
+<td>
+<code>
+operator.tigera.io/v1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code><br>
+string
+</td>
+<td><code>ApplicationLayer</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code><br>
+<em>
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ApplicationLayerSpec">
+ApplicationLayerSpec
+</a>
+</em>
+</td>
+<td>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>logCollection</code><br>
+<em>
+<a href="#operator.tigera.io/v1.LogCollectionSpec">
+LogCollectionSpec
+</a>
+</em>
+</td>
+<td>
+<p>Specification for application layer (L7) log collection.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ApplicationLayerStatus">
+ApplicationLayerStatus
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.ImageSet">ImageSet
 </h3>
 <p>ImageSet is used to specify image digests for the images that the operator deploys.
@@ -53,7 +140,7 @@ string
 <td>
 <code>metadata</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta
 </a>
 </em>
@@ -129,7 +216,7 @@ string
 <td>
 <code>metadata</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta
 </a>
 </em>
@@ -177,12 +264,12 @@ string
 </td>
 <td>
 <em>(Optional)</em>
-<p>Registry is the default Docker registry used for component Docker images. If specified,
-all images will be pulled from this registry. If not specified then the default registries
-will be used. A special case value, UseDefault, is supported to explicitly specify
-the default registries will be used.</p>
+<p>Registry is the default Docker registry used for component Docker images.
+If specified then the given value must end with a slash character (<code>/</code>) and all images will be pulled from this registry.
+If not specified then the default registries will be used. A special case value, UseDefault, is
+supported to explicitly specify the default registries will be used.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -201,7 +288,7 @@ or empty, the default for each image will be used.
 A special case value, UseDefault, is supported to explicitly specify the default
 image path will be used for each image.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -220,7 +307,7 @@ or empty, no prefix will be used.
 A special case value, UseDefault, is supported to explicitly specify the default
 image prefix will be used for each image.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePrefix&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -228,7 +315,7 @@ image prefix will be used for each image.</p>
 <td>
 <code>imagePullSecrets</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#localobjectreference-v1-core">
 []Kubernetes core/v1.LocalObjectReference
 </a>
 </em>
@@ -315,7 +402,7 @@ components. This is globally applied to all resources created by the operator ex
 <td>
 <code>controlPlaneTolerations</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#toleration-v1-core">
 []Kubernetes core/v1.Toleration
 </a>
 </em>
@@ -383,7 +470,7 @@ kubernetesProvider.</p>
 <td>
 <code>nodeUpdateStrategy</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#daemonsetupdatestrategy-v1-apps">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#daemonsetupdatestrategy-v1-apps">
 Kubernetes apps/v1.DaemonSetUpdateStrategy
 </a>
 </em>
@@ -490,7 +577,7 @@ string
 <td>
 <code>metadata</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta
 </a>
 </em>
@@ -562,7 +649,7 @@ string
 <td>
 <code>metadata</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta
 </a>
 </em>
@@ -598,6 +685,64 @@ TigeraStatusStatus
 </em>
 </td>
 <td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ApplicationLayerSpec">ApplicationLayerSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.ApplicationLayer">ApplicationLayer</a>)
+</p>
+<p>ApplicationLayerSpec defines the desired state of ApplicationLayer</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>logCollection</code><br>
+<em>
+<a href="#operator.tigera.io/v1.LogCollectionSpec">
+LogCollectionSpec
+</a>
+</em>
+</td>
+<td>
+<p>Specification for application layer (L7) log collection.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ApplicationLayerStatus">ApplicationLayerStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.ApplicationLayer">ApplicationLayer</a>)
+</p>
+<p>ApplicationLayerStatus defines the observed state of ApplicationLayer</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>state</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>State provides user-readable status.</p>
 </td>
 </tr>
 </tbody>
@@ -935,7 +1080,7 @@ ComponentName
 <td>
 <code>resourceRequirements</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements
 </a>
 </em>
@@ -1218,12 +1363,12 @@ string
 </td>
 <td>
 <em>(Optional)</em>
-<p>Registry is the default Docker registry used for component Docker images. If specified,
-all images will be pulled from this registry. If not specified then the default registries
-will be used. A special case value, UseDefault, is supported to explicitly specify
-the default registries will be used.</p>
+<p>Registry is the default Docker registry used for component Docker images.
+If specified then the given value must end with a slash character (<code>/</code>) and all images will be pulled from this registry.
+If not specified then the default registries will be used. A special case value, UseDefault, is
+supported to explicitly specify the default registries will be used.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -1242,7 +1387,7 @@ or empty, the default for each image will be used.
 A special case value, UseDefault, is supported to explicitly specify the default
 image path will be used for each image.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -1261,7 +1406,7 @@ or empty, no prefix will be used.
 A special case value, UseDefault, is supported to explicitly specify the default
 image prefix will be used for each image.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePrefix&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -1269,7 +1414,7 @@ image prefix will be used for each image.</p>
 <td>
 <code>imagePullSecrets</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#localobjectreference-v1-core">
 []Kubernetes core/v1.LocalObjectReference
 </a>
 </em>
@@ -1356,7 +1501,7 @@ components. This is globally applied to all resources created by the operator ex
 <td>
 <code>controlPlaneTolerations</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#toleration-v1-core">
 []Kubernetes core/v1.Toleration
 </a>
 </em>
@@ -1424,7 +1569,7 @@ kubernetesProvider.</p>
 <td>
 <code>nodeUpdateStrategy</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#daemonsetupdatestrategy-v1-apps">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#daemonsetupdatestrategy-v1-apps">
 Kubernetes apps/v1.DaemonSetUpdateStrategy
 </a>
 </em>
@@ -1551,6 +1696,14 @@ InstallationSpec
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.KubernetesAutodetectionMethod">KubernetesAutodetectionMethod
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.NodeAddressAutodetection">NodeAddressAutodetection</a>)
+</p>
+<p>KubernetesAutodetectionMethod is a method of detecting an IP address based on the Kubernetes API.</p>
+<p>One of: NodeInternalIP</p>
 <h3 id="operator.tigera.io/v1.LinuxDataplaneOption">LinuxDataplaneOption
 (<code>string</code> alias)</h3>
 <p>
@@ -1559,6 +1712,71 @@ InstallationSpec
 </p>
 <p>LinuxDataplaneOption controls which dataplane is to be used on Linux nodes.</p>
 <p>One of: Iptables, BPF</p>
+<h3 id="operator.tigera.io/v1.LogCollectionSpec">LogCollectionSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.ApplicationLayerSpec">ApplicationLayerSpec</a>)
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>collectLogs</code><br>
+<em>
+<a href="#operator.tigera.io/v1.LogCollectionStatusType">
+LogCollectionStatusType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>This setting enables or disable log collection.
+Allowed values are Enabled or Disabled.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>logIntervalSeconds</code><br>
+<em>
+int64
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Interval in seconds for sending L7 log information for processing.
+Default: 5 sec</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>logRequestsPerInterval</code><br>
+<em>
+int64
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Maximum number of unique L7 logs that are sent LogIntervalSeconds.
+Adjust this to limit the number of L7 logs sent per LogIntervalSeconds
+to felix for further processing, use negative number to ignore limits.
+Default: -1</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.LogCollectionStatusType">LogCollectionStatusType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.LogCollectionSpec">LogCollectionSpec</a>)
+</p>
 <h3 id="operator.tigera.io/v1.MonitorSpec">MonitorSpec
 </h3>
 <p>
@@ -1642,6 +1860,20 @@ filtering based on well-known interface names.</p>
 </tr>
 <tr>
 <td>
+<code>kubernetes</code><br>
+<em>
+<a href="#operator.tigera.io/v1.KubernetesAutodetectionMethod">
+KubernetesAutodetectionMethod
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Kubernetes configures Calico to detect node addresses based on the Kubernetes API.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>interface</code><br>
 <em>
 string
@@ -1711,7 +1943,7 @@ one of the provided CIDRs.</p>
 <td>
 <code>preferredDuringSchedulingIgnoredDuringExecution</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#preferredschedulingterm-v1-core">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#preferredschedulingterm-v1-core">
 []Kubernetes core/v1.PreferredSchedulingTerm
 </a>
 </em>
@@ -1727,7 +1959,7 @@ a node that violates one or more of the expressions.</p>
 <td>
 <code>requiredDuringSchedulingIgnoredDuringExecution</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#nodeselector-v1-core">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#nodeselector-v1-core">
 Kubernetes core/v1.NodeSelector
 </a>
 </em>
@@ -1837,7 +2069,7 @@ ConditionStatus
 <td>
 <code>lastTransitionTime</code><br>
 <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#time-v1-meta">
 Kubernetes meta/v1.Time
 </a>
 </em>
@@ -1914,7 +2146,7 @@ Available, Progressing, or Degraded.</p>
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
 </p>
-<p>TyphaAffinity allows configuration of node affinity characteristics for Typha pods.</p>
+<p>TyphaAffinity allows configuration of node affinitiy characteristics for Typha pods.</p>
 <table>
 <thead>
 <tr>
