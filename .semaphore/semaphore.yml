@@ -112,7 +112,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-8
+        type: e1-standard-4
         os_image: ubuntu1804
     jobs:
     - name: "Typha: UT and FV tests"
