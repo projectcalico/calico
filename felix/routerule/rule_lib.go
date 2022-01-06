@@ -21,6 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 // Rule is a wrapper structure around netlink rule.
@@ -86,6 +87,14 @@ func (r *Rule) MatchFWMarkWithMask(fwmark, mask uint32) *Rule {
 }
 
 func (r *Rule) MatchSrcAddress(ip net.IPNet) *Rule {
+	if r.nlRule.Family == unix.AF_INET {
+		ones, _ := ip.Mask.Size()
+		if ip.IP.To4() == nil || ones > 32 {
+			r.LogCxt().WithField("ip", ip).Warn("Source IP is not IPv4, ignoring")
+			return r
+		}
+	}
+
 	r.nlRule.Src = &ip
 	return r
 }
