@@ -94,7 +94,7 @@ In order to update low-level Felix or BGP settings (`FelixConfiguration` and `BG
 
 See [Configuring Felix]({{ site.baseurl }}/reference/felix/configuration) for more details.
 
-### Supported resource definition aliases
+## Supported resource definition aliases
 
 The following table lists supported aliases for {{site.prodname}} resources when using `calicoctl`. Note that all aliases
 are **case insensitive**.
