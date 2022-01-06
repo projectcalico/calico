@@ -24,13 +24,13 @@ Create a policy-override resource by running the following command:
 For Calico `v2.5.x` or higher:
 
 ```
-kubectl create -f=https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/global-network-policy-override.yaml
+kubectl create -f=https://raw.githubusercontent.com/projectcalico/calico/master/calico/hack/remove-calico-policy/global-network-policy-override.yaml
 ```
 
 For Calico `v2.3.x` and `v2.4.x`:
 
 ```
-kubectl create -f=https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/system-network-policy-override.yaml
+kubectl create -f=https://raw.githubusercontent.com/projectcalico/calico/master/calico/hack/remove-calico-policy/system-network-policy-override.yaml
 ```
 
 #### Revert override to enable Calico policy
@@ -41,11 +41,11 @@ responsible for the override by running the following command:
 For Calico `v2.5.x` or higher:
 
 ```
-kubectl delete -f=https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/global-network-policy-override.yaml
+kubectl delete -f=https://raw.githubusercontent.com/projectcalico/calico/master/calico/hack/remove-calico-policy/global-network-policy-override.yaml
 ```
 
 For Calico `v2.3.x` and `v2.4.x`:
 
 ```
-kubectl delete -f=https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/system-network-policy-override.yaml
+kubectl delete -f=https://raw.githubusercontent.com/projectcalico/calico/master/calico/hack/remove-calico-policy/system-network-policy-override.yaml
 ```

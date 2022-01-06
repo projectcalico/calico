@@ -19,7 +19,7 @@ Calico policy can be disabled and removed for troubleshooting purposes or in eme
 To build the `calico/iptables-remover` Docker image used by the DaemonSet:
 
 ```
-curl https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/Dockerfile -o Dockerfile
+curl https://raw.githubusercontent.com/projectcalico/calico/master/calico/hack/remove-calico-policy/Dockerfile -o Dockerfile
 docker build -t calico/iptables-remover .
 ```
 
@@ -57,14 +57,14 @@ The DaemonSet relies on a ConfigMap containing [the script to execute](remove-ca
 directory. First, create the ConfigMap:
 
 ```
-curl https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/remove-calico-policy.sh -o remove-calico-policy.sh
+curl https://raw.githubusercontent.com/projectcalico/calico/master/calico/hack/remove-calico-policy/remove-calico-policy.sh -o remove-calico-policy.sh
 kubectl create configmap remove-calico-policy-config -n=kube-system --from-file=./remove-calico-policy.sh
 ```
 
 Then, deploy the DaemonSet:
 
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/iptables-remover-ds.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/master/calico/hack/remove-calico-policy/iptables-remover-ds.yaml
 ```
 
 #### Revert: Re-enabling Calico Policy
@@ -76,7 +76,7 @@ To revert the disabling and removal of Calico policy, follow the steps below.
 Remove the policy-removal Daemonset and the ConfigMap:
 
 ```
-kubectl delete -f https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/iptables-remover-ds.yaml
+kubectl delete -f https://raw.githubusercontent.com/projectcalico/calico/master/calico/hack/remove-calico-policy/iptables-remover-ds.yaml
 kubectl delete configmap remove-calico-policy-config -n=kube-system
 ```
 
