@@ -21,9 +21,6 @@ will use to apply
 [policy]({{ site.baseurl }}/reference/resources/networkpolicy)
 to the interface.
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
-aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
-
 **Default behavior of external traffic to/from host**
 
 If a host endpoint is created and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules).
