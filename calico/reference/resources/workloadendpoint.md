@@ -16,10 +16,6 @@ in a specific namespace only applies to the WorkloadEndpoint in that namespace.
 Two resources are in the same namespace if the namespace value is set the same
 on both.
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview)
-that specify a resource type on the CLI, the following aliases are supported (all case
-insensitive): `workloadendpoint`, `workloadendpoints`, `wep`, `weps`.
-
 > **Note**: While `calicoctl` allows the user to fully manage Workload Endpoint resources,
 > the lifecycle of these resources is generally handled by an orchestrator-specific
 > plugin such as the {{site.prodname}} CNI plugin, the {{site.prodname}} Docker network plugin,

@@ -6,9 +6,6 @@ canonical_url: '/reference/resources/felixconfig'
 
 A [Felix]({{ site.baseurl }}/reference/architecture/overview#felix) configuration resource (`FelixConfiguration`) represents Felix configuration options for the cluster.
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
-aliases are supported (all case insensitive): `felixconfiguration`, `felixconfig`, `felixconfigurations`, `felixconfigs`.
-
 See [Configuring Felix]({{ site.baseurl }}/reference/felix/configuration) for more details.
 
 ### Sample YAML
