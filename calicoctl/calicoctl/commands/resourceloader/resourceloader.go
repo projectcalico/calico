@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1resourceloader
+package resourceloader
 
 import (
 	"fmt"
@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	networkingv1 "k8s.io/api/networking/v1"
+
 	"github.com/projectcalico/go-yaml-wrapper"
 
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
@@ -29,6 +31,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	v1validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 )
+
+var VersionK8sNetworkingV1 = "networking.k8s.io/v1"
 
 // Store a resourceHelper for each resource unversioned.TypeMetadata.
 var resourceToType map[unversioned.TypeMetadata]reflect.Type
@@ -48,6 +52,7 @@ func populateResourceTypes() {
 		apiv1.NewPolicy(),
 		apiv1.NewProfile(),
 		apiv1.NewWorkloadEndpoint(),
+		NewK8sNetworkPolicy(),
 	}
 
 	for _, rt := range resTypes {
@@ -199,4 +204,20 @@ func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
 	}
 
 	return resources, nil
+}
+
+// Kubernetes NetworkPolicy helper struct used for conversion from
+// Kubernetes API to Calico v3 API
+type K8sNetworkPolicy struct {
+	unversioned.TypeMetadata
+	networkingv1.NetworkPolicy
+}
+
+func NewK8sNetworkPolicy() *K8sNetworkPolicy {
+	return &K8sNetworkPolicy{
+		TypeMetadata: unversioned.TypeMetadata{
+			Kind:       "NetworkPolicy",
+			APIVersion: VersionK8sNetworkingV1,
+		},
+	}
 }
