@@ -731,7 +731,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				return nil
 			}
 		} else {
-			log.WithField("ifaceName", ifaceName).Info("Skipping configure for non-writeable interface.")
+			log.WithField("ifaceName", ifaceName).Debug("Skipping configure for non-writeable interface.")
 		}
 
 		return set.RemoveItem
