@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/fsnotify/fsnotify.v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -92,7 +91,7 @@ contexts:
 current-context: calico-context`
 
 	// Replace the placeholders.
-	data := fmt.Sprintf(template, cfg.Host, string(base64.StdEncoding.EncodeToString(cfg.CAData)), cfg.BearerToken)
+	data := fmt.Sprintf(template, cfg.Host, base64.StdEncoding.EncodeToString(cfg.CAData), cfg.BearerToken)
 
 	// Write the filled out config to disk.
 	if err := ioutil.WriteFile(kubeconfigPath, []byte(data), 0600); err != nil {
