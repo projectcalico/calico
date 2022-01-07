@@ -125,7 +125,23 @@ func runDiags(logDir string) error {
 	diagsTmpDir := filepath.Join(tmpDir, "diagnostics")
 
 	for _, v := range cmds {
-		writeDiags(v, diagsTmpDir)
+		err = writeDiags(v, diagsTmpDir)
+		// sometimes socket information is not collected as netstat tool
+		// is obsolete and removed in Ubuntu and other distros. so when
+		// "netstat -a -n " fails, we should use "ss -a -n" instead of it
+		if err != nil && v.cmd == "netstat -a -n" {
+			parts := []string{"ss", "-a", "-n"}
+			content, err := exec.Command(parts[0], parts[1], parts[2]).CombinedOutput()
+			if err != nil {
+				fmt.Printf("Failed to run command: %s\nError: %s\n", strings.Join(parts, " "), string(content))
+			}
+
+			fp := filepath.Join(diagsTmpDir, parts[0])
+			if err := ioutil.WriteFile(fp, content, 0666); err != nil {
+				log.Errorf("Error writing diags to file: %s\n", err)
+			}
+		}
+
 	}
 
 	tmpLogDir := filepath.Join(diagsTmpDir, "logs")
@@ -219,7 +235,7 @@ func getNodeContainerLogs(logDir string) {
 
 // writeDiags executes the diagnostic commands and outputs the result in the file
 // with the filename and directory passed as arguments
-func writeDiags(cmds diagCmd, dir string) {
+func writeDiags(cmds diagCmd, dir string) error {
 
 	if cmds.info != "" {
 		fmt.Println(cmds.info)
@@ -230,16 +246,18 @@ func writeDiags(cmds diagCmd, dir string) {
 	content, err := exec.Command(parts[0], parts[1:]...).CombinedOutput()
 	if err != nil {
 		fmt.Printf("Failed to run command: %s\nError: %s\n", cmds.cmd, string(content))
+		return err
 	}
 
 	// This is for the commands we want to run but don't want to save the output
 	// or for commands that don't produce any output to stdout
 	if cmds.filename == "" {
-		return
+		return nil
 	}
 
 	fp := filepath.Join(dir, cmds.filename)
 	if err := ioutil.WriteFile(fp, content, 0666); err != nil {
 		log.Errorf("Error writing diags to file: %s\n", err)
 	}
+	return nil
 }
