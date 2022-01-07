@@ -6,7 +6,7 @@ canonical_url: '/maintenance/troubleshoot/vpp'
 
 ### Big picture
 
-This page describes the troubleshooting steps for the VPP dataplane. If you did not configure the VPP dataplane, this page is not for you!
+This page describes the troubleshooting steps for the [VPP dataplane]({{ site.baseurl }}/getting-started/kubernetes/vpp/getting-started). If you did not configure the VPP dataplane, this page is not for you!
 
 If you're encountering issues with the VPP dataplane, feel free to reach out to us either on the [#vpp channel](https://calicousers.slack.com/archives/C017220EXU1) on the {{ site.prodname }} slack, or by opening a new issue in [Github](https://github.com/projectcalico/vpp-dataplane/issues)).
 
