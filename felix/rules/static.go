@@ -1065,16 +1065,22 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, wgEncryptH
 		Rules: rawRules,
 	}
 
-	return []*Chain{
+	chains := []*Chain{
 		rawPreroutingChain,
 		r.failsafeOutChain("raw", ipVersion),
-		r.StaticRawOutputChain(tcdefs.MarkSeenBypass),
 		r.WireguardIncomingMarkChain(),
 		&Chain{
 			Name:  rpfChainName,
 			Rules: rpfRules,
 		},
 	}
+
+	if ipVersion == 4 {
+		chains = append(chains,
+			r.StaticRawOutputChain(tcdefs.MarkSeenBypass))
+	}
+
+	return chains
 }
 
 func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
