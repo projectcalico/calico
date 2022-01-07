@@ -7,10 +7,13 @@ canonical_url: '/reference/resources/ipreservation'
 An IP reservation resource (`IPReservation`) represents a collection of IP addresses that {{site.prodname}} should 
 not use when automatically assigning new IP addresses.  It only applies when {{site.prodname}} IPAM is in use.
 
+<<<<<<< HEAD
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, 
 the following aliases are supported (all case insensitive): `ipreservation`, `ipreservations`, `reservation`, 
 `reservations`.
 
+=======
+>>>>>>> 5a25580fb... Add table
 ### Sample YAML
 
 ```yaml
