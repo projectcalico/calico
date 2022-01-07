@@ -41,7 +41,6 @@ class TestBase(TestCase):
         Clean up before every test.
         """
         self.cluster = self.k8s_client()
-        self.check_calico_version()
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
@@ -185,18 +184,6 @@ class TestBase(TestCase):
             namespace=ns,
         )
         logger.debug("Additional Service created. status='%s'" % str(api_response.status))
-
-    def check_calico_version(self):
-        config.load_kube_config(os.environ.get('KUBECONFIG'))
-        api = client.AppsV1Api(client.ApiClient())
-        node_ds = api.read_namespaced_daemon_set("calico-node", "kube-system", exact=True, export=False)
-        for container in node_ds.spec.template.spec.containers:
-            if container.name == "calico-node":
-                if container.image != "calico/node:latest-amd64":
-                    container.image = "calico/node:latest-amd64"
-                    api.replace_namespaced_daemon_set("calico-node", "kube-system", node_ds)
-                    time.sleep(3)
-                    retry_until_success(self.check_pod_status, retries=20, wait_time=3, function_args=["kube-system"])
 
     def wait_until_exists(self, name, resource_type, ns="default"):
         retry_until_success(kubectl, function_args=["get %s %s -n%s" %
