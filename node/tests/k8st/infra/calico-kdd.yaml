@@ -4082,6 +4082,7 @@ spec:
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
           image: docker.io/calico/cni:latest-amd64
+          imagePullPolicy: Never
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
           - configMapRef:
@@ -4109,6 +4110,7 @@ spec:
         # and CNI network config file on each node.
         - name: install-cni
           image: docker.io/calico/cni:latest-amd64
+          imagePullPolicy: Never
           command: ["/opt/cni/bin/install"]
           envFrom:
           - configMapRef:
@@ -4150,6 +4152,7 @@ spec:
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
           image: docker.io/calico/pod2daemon-flexvol:latest-amd64
+          imagePullPolicy: Never
           volumeMounts:
           - name: flexvol-driver-host
             mountPath: /host/driver
@@ -4160,7 +4163,8 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: calico/node:latest-amd64
+          image: docker.io/library/node:latest-amd64
+          imagePullPolicy: Never
           envFrom:
           - configMapRef:
               # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -4380,6 +4384,7 @@ spec:
       containers:
         - name: calico-kube-controllers
           image: docker.io/calico/kube-controllers:latest-amd64
+          imagePullPolicy: Never
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
