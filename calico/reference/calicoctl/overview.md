@@ -93,3 +93,24 @@ In order to update low-level Felix or BGP settings (`FelixConfiguration` and `BG
 1. Update the resource using `apply` or `replace` command: `calicoctl replace -f config.yaml`.
 
 See [Configuring Felix]({{ site.baseurl }}/reference/felix/configuration) for more details.
+
+## Supported resource definition aliases
+
+The following table lists supported aliases for {{site.prodname}} resources when using `calicoctl`. Note that all aliases
+are **case insensitive**.
+
+| Resource definition                  | Supported calicoctl aliases                                  |
+| :----------------------------------- | :----------------------------------------------------------- |
+| BGP configuration                    | `bgpconfig`, `bgpconfigurations`, `bgpconfigs`               |
+| BGP peer                             | `bgppeer`, `bgppeers`, `bgpp`, `bgpps`, `bp`, `bps`          |
+| Felix configuration                  | `felixconfiguration`, `felixconfig`, `felixconfigurations`, `felixconfigs` |
+| Global network policy                | `globalnetworkpolicy`, `globalnetworkpolicies`, `gnp`, `gnps` |
+| Global network set                   | `globalnetworkset`, `globalnetworksets`                      |
+| Host endpoint                        | `hostendpoint`, `hostendpoints`, `hep`, `heps`               |
+| IP pool                              | `ippool`, `ippools`, `ipp`, `ipps`, `pool`, `pools`          |
+| IP reservation                       | `ipreservation`, `ipreservations`, `reservation`, `reservations` |
+| Kubernetes controllers configuration | `kubecontrollersconfiguration`, `kubecontrollersconfig`      |
+| Network policy                       | `networkpolicy`, `networkpolicies`, `policy`, `np`, `policies`, `pol`, `pols` |
+| Node                                 | `node`, `nodes`, `no`, `nos`                                 |
+| Profiles                             | `profile`, `profiles`, `pro`, `pros`                         |
+| Workload endpoint                    | `workloadendpoint`, `workloadendpoints`, `wep`, `weps`       |

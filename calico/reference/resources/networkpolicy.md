@@ -16,9 +16,6 @@ See [global network policy resource]({{ site.baseurl }}/reference/resources/glob
 `NetworkPolicy` resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
 take precedence over [profile resources]({{ site.baseurl }}/reference/resources/profile) if any are defined.
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
-aliases are supported (all case insensitive): `networkpolicy`, `networkpolicies`, `policy`, `np`, `policies`, `pol`, `pols`.
-
 ### Sample YAML
 
 This sample policy allows TCP traffic from `frontend` endpoints to port 6379 on
