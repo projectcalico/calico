@@ -49,6 +49,9 @@ var _ = Describe("RouteRule Rule build cases", func() {
 		Expect(NewRule(4, 100).Not().NetLinkRule().Invert).To(Equal(true))
 		Expect(NewRule(4, 100).GoToTable(10).NetLinkRule().Table).To(Equal(10))
 		Expect(NewRule(4, 100).MatchSrcAddress(*ip).NetLinkRule().Src.String()).To(Equal("10.0.1.0/26"))
+		ipv6 := mustParseCIDR("2002::1234:abcd:ffff:c0a8:101/64")
+		Expect(NewRule(6, 100).MatchSrcAddress(*ipv6).NetLinkRule().Src.String()).
+			To(Equal("2002::1234:abcd:ffff:c0a8:101/64"))
 		Expect(NewRule(4, 100).Not().
 			MatchFWMark(0x400).
 			MatchSrcAddress(*ip).
@@ -66,6 +69,10 @@ var _ = Describe("RouteRule Rule build cases", func() {
 				SuppressIfgroup:   -1,
 				SuppressPrefixlen: -1,
 			}))
+	})
+	It("should ignore wrong values", func() {
+		ipv6 := mustParseCIDR("2002::1234:abcd:ffff:c0a8:101/64")
+		Expect(NewRule(4, 100).MatchSrcAddress(*ipv6).NetLinkRule().Src).To(BeNil())
 	})
 })
 
