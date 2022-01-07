@@ -162,6 +162,9 @@ DPDK provides better performance compared to the standard install but it require
    SSH_ALLOW_CIDR="0.0.0.0/0"              # source IP from which ssh access is allowed when KEYNAME is specified
    INSTANCE_TYPE=m5.large                  # EC2 instance type
    INSTANCE_NUM=2                          # Number of instances in cluster
+   ## Calico installation spec for the operator; could be url or local file
+   CALICO_INSTALLATION_YAML=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
+   #CALICO_INSTALLATION_YAML=./calico_installation.yaml
    ## Calico/VPP deployment yaml; could be url or local file
    CALICO_VPP_YAML=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks-dpdk.yaml
    #CALICO_VPP_YAML=<full path>/calico-vpp-eks-dpdk.yaml
@@ -175,7 +178,7 @@ DPDK provides better performance compared to the standard install but it require
 
 
    ```bash
-   bash create_eks_cluster.sh <cluster name> -r <region-name> [-k <keyname>] [-t <instance type>] [-n <number of instances>] [-f <calico/vpp config yaml file>]
+   bash create_eks_cluster.sh <cluster name> -r <region-name> [-k <keyname>] [-t <instance type>] [-n <number of instances>] [-f <calico/vpp config yaml file>] [-i <installation yaml>]
    ```
 
    `CLUSTER_NAME` and `REGION` are MANDATORY.  Note that command-line options override the `CONFIG PARAMS` options. In case you want to enable ssh access to the EKS worker instances specify the name of an existing SSH key in EC2 in the `KEYNAME` option. For details on ssh access refer to {% include open-new-window.html text='Amazon EC2 key pairs and  Linux  instances' url='https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html' %}
