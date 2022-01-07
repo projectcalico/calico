@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,12 +71,9 @@ var _ = infrastructure.DatastoreDescribe(
 			pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 			pol.Spec.Selector = "all()"
 
-			pol = func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
-				log.WithField("policy", dumpResource(policy)).Info("Creating policy")
-				policy, err := calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
-				Expect(err).NotTo(HaveOccurred())
-				return policy
-			}(pol)
+			log.WithField("policy", dumpResource(pol)).Info("Creating policy")
+			pol, err := calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, pol, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
 
 			cc = &Checker{
 				CheckSNAT: true,
@@ -103,7 +100,7 @@ var _ = infrastructure.DatastoreDescribe(
 				felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=0")
 			})
 
-			var eth20 *workload.Workload
+			var external *workload.Workload
 
 			By("setting up node's fake external ifaces", func() {
 				// We name the ifaces ethXY since such ifaces are
@@ -112,7 +109,7 @@ var _ = infrastructure.DatastoreDescribe(
 				// Using a test-workload creates the namespaces and the
 				// interfaces to emulate the host NICs
 
-				eth20 = &workload.Workload{
+				external = &workload.Workload{
 					Name:          "eth20",
 					C:             felixes[0].Container,
 					IP:            "192.168.20.1",
@@ -120,42 +117,53 @@ var _ = infrastructure.DatastoreDescribe(
 					Protocol:      "udp",
 					InterfaceName: "eth20",
 				}
-				err := eth20.Start()
+				err := external.Start()
 				Expect(err).NotTo(HaveOccurred())
 
 				// assign address to eth20 and add route to the .20 network
 				felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
 				felixes[0].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
-				_, err = eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
+				_, err = external.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
 				Expect(err).NotTo(HaveOccurred())
 				// Add a route to the test workload to the fake external
 				// client emulated by the test-workload
-				_, err = eth20.RunCmd("ip", "route", "add", w.IP+"/32", "via", "10.0.0.20")
+				_, err = external.RunCmd("ip", "route", "add", w.IP+"/32", "via", "10.0.0.20")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Make sure that networking with the .20 network works
 				cc.ResetExpectations()
-				cc.Expect(Some, eth20, w)
+				cc.Expect(Some, external, w)
 				cc.CheckConnectivity()
 			})
 
 			By("testing with bad source", func() {
 				fakeWorkloadIP := "10.65.15.15"
 
-				tcpdump := w.AttachTCPDump()
-				tcpdump.SetLogEnabled(true)
-				matcher := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
-				tcpdump.AddMatcher("UDP-30446", regexp.MustCompile(matcher))
-				tcpdump.Start()
-				defer tcpdump.Stop()
+				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
+				tcpdumpHEP.SetLogEnabled(true)
+				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
+				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
+				tcpdumpHEP.Start()
+				defer tcpdumpHEP.Stop()
 
-				_, err := eth20.RunCmd("/pktgen", fakeWorkloadIP, w.IP, "udp",
+				tcpdumpWl := w.AttachTCPDump()
+				tcpdumpWl.SetLogEnabled(true)
+				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
+				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
+				tcpdumpWl.Start()
+				defer tcpdumpWl.Stop()
+
+				_, err := external.RunCmd("/pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
 				Expect(err).NotTo(HaveOccurred())
 
-				// Expect to receive the packet from the .20 as the routing is correct
-				Consistently(func() int { return tcpdump.MatchCount("UDP-30446") }, "1s", "100ms").
-					Should(BeNumerically("==", 0), matcher)
+				// Expect to see the packet from the .20 network at eth20 before RPF
+				Eventually(func() int { return tcpdumpHEP.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 1), matcherHEP)
+
+				// Expect not to receive the packet from the .20 as it is dropped by RPF.
+				Consistently(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 0), matcherWl)
 			})
 		})
 	})
