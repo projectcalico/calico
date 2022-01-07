@@ -214,7 +214,6 @@ func NewWithShims(
 	// Create routerule.
 	rr, err := routerule.New(
 		ipVersion,
-		config.RoutingRulePriority,
 		set.From(config.RoutingTableIndex),
 		routerule.RulesMatchSrcFWMarkTable,
 		routerule.RulesMatchSrcFWMarkTable,
