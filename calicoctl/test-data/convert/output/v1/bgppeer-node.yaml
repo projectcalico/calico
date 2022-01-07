@@ -1,0 +1,9 @@
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  creationTimestamp: null
+  name: node1.00aa-00bb-0000-0000-0000-0000-0000-00ff
+spec:
+  asNumber: 64514
+  node: node1
+  peerIP: aa:bb::ff

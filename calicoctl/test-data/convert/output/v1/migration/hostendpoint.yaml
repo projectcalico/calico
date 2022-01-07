@@ -1,0 +1,16 @@
+apiVersion: projectcalico.org/v3
+kind: HostEndpoint
+metadata:
+  creationTimestamp: null
+  labels:
+    type: production
+  name: myhost.eth0
+spec:
+  expectedIPs:
+  - 192.168.0.1
+  - 192.168.0.2
+  interfaceName: eth0
+  node: myhost
+  profiles:
+  - profile1
+  - profile2
