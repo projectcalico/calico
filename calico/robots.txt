@@ -1,9 +1,9 @@
 # Exclude from indexing
 User-agent: *
+Allow: .js
+Allow: .css
 Disallow: /master/
 Disallow: /images/
-Disallow: /js/
 Disallow: /fonts/
-Disallow: /css/
 Disallow: /assets/
 Disallow: /archive/
