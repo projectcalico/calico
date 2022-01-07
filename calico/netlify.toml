@@ -20,7 +20,7 @@
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
 
     # move 404 page to root of the site so that netlify shows it automatically
-    mv _site/archive/$RELEASE_VERSION/404.html _site/404.html
+    mv calico/_site/archive/$RELEASE_VERSION/404.html calico/_site/404.html
 
   else
 
@@ -32,10 +32,10 @@
     # generate the website which is served at /archive/<version>/
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
 
-    mv _site/sitemap.xml _site/release-legacy-sitemap.xml
-    mv _site/sitemap.xml _site/latest-sitemap.xml
-    mv netlify/sitemap-index.xml _site/sitemap.xml
-    mv netlify/_redirects _site/_redirects
+    mv calico/_site/sitemap.xml calico/_site/release-legacy-sitemap.xml
+    mv calico/_site/sitemap.xml calico/_site/latest-sitemap.xml
+    mv calico/netlify/sitemap-index.xml calico/_site/sitemap.xml
+    mv calico/netlify/_redirects calico/_site/_redirects
   fi
   '''
 
