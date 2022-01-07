@@ -35,11 +35,10 @@
     # keep the production build if it's not docs.projectcalico.org (off of v3.21 branch) site
     # REDIRECT_TO_LATEST is set in Netlify UI for environment-variables ONLY for docs.projectcalico.org site.
     if [ -z "$REDIRECT_TO_LATEST" ]; then
-      mv _site/sitemap.xml _site/release-legacy-sitemap.xml
-      mv _site/sitemap.xml _site/latest-sitemap.xml
-      mv netlify/sitemap-index.xml _site/sitemap.xml
-      mv netlify/_redirects _site/_redirects
-
+      mv calico/_site/sitemap.xml calico/_site/release-legacy-sitemap.xml
+      mv calico/_site/sitemap.xml calico/_site/latest-sitemap.xml
+      mv calico/netlify/sitemap-index.xml calico/_site/sitemap.xml
+      mv calico/netlify/_redirects calico/_site/_redirects
     else
       mv netlify/_redirects_v3.21 _site/_redirects
     fi
