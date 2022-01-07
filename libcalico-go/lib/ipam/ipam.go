@@ -950,7 +950,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 // ReleaseIPs releases any of the given IP addresses that are currently assigned,
 // so that they are available to be used in another assignment.
 func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, error) {
-	log.Infof("Releasing IP addresses: %v", ips)
+	log.Debugf("Releasing IP addresses: %v", ips)
 	unallocated := []net.IP{}
 
 	// Get IP pools up front so we don't need to query for each IP address.
@@ -1076,7 +1076,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[string]*model.KVPair, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
 	logCtx := log.WithField("cidr", blockCIDR)
 	for i := 0; i < datastoreRetries; i++ {
-		logCtx.Info("Getting block so we can release IPs")
+		logCtx.Debug("Getting block so we can release IPs")
 
 		// Get allocation block for cidr.
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
@@ -1099,7 +1099,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[strin
 		if len(ips) == len(unallocated) {
 			// All the given IP addresses are already unallocated.
 			// Just return.
-			logCtx.Info("No IPs need to be released")
+			logCtx.Debug("No IPs need to be released")
 			return unallocated, nil
 		}
 
@@ -1422,18 +1422,18 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 		return err
 	}
 	logCtx := log.WithField("host", hostname)
-	logCtx.Info("Removing IPAM data for host")
+	logCtx.Debug("Removing IPAM data for host")
 
 	for i := 0; i < datastoreRetries; i++ {
 		// Release affinities for this host.
-		logCtx.Info("Releasing IPAM affinities for host")
+		logCtx.Debug("Releasing IPAM affinities for host")
 		if err := c.ReleaseHostAffinities(ctx, hostname, false); err != nil {
 			logCtx.WithError(err).Errorf("Failed to release IPAM affinities for host")
 			return err
 		}
 
 		// Get the IPAM host.
-		logCtx.Info("Querying IPAM host tree in data store")
+		logCtx.Debug("Querying IPAM host tree in data store")
 		k := model.IPAMHostKey{Host: hostname}
 		kvp, err := c.client.Get(ctx, k, "")
 		if err != nil {
@@ -1448,12 +1448,12 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 			}
 
 			// Resource does not exist, no need to remove it.
-			logCtx.Info("IPAM host data does not exist")
+			logCtx.Debug("IPAM host data does not exist")
 			return nil
 		}
 
 		// Remove the host tree from the datastore.
-		logCtx.Info("Deleting IPAM host tree from data store")
+		logCtx.Debug("Deleting IPAM host tree from data store")
 		_, err = c.client.Delete(ctx, k, kvp.Revision)
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
@@ -1467,7 +1467,7 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 				return err
 			}
 		}
-		logCtx.Info("Successfully deleted IPAM host data")
+		logCtx.Debug("Successfully deleted IPAM host data")
 		return nil
 	}
 

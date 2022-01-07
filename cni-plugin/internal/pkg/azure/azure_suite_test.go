@@ -25,8 +25,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-func TestIpam(t *testing.T) {
+func init() {
 	testutils.HookLogrusForGinkgo()
+}
+
+func TestIpam(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../../report/azure_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Azure Suite", []Reporter{junitReporter})

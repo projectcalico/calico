@@ -43,7 +43,6 @@ import (
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
@@ -103,10 +102,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		}
 		// Create a random seed
 		rand.Seed(time.Now().UTC().UnixNano())
-		log.SetFormatter(&logutils.Formatter{})
-		log.AddHook(&logutils.ContextHook{})
-		log.SetOutput(GinkgoWriter)
-		log.SetLevel(log.InfoLevel)
 		hostname, _ = names.Hostname()
 		ctx = context.Background()
 		for i := 1; i <= 3; i++ {
@@ -138,10 +133,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		updateIPAMStrictAffinity(calicoClient, true)
 	})
 
-	logConf := types.NetConf{
-		LogLevel: "info",
-	}
-	utils.ConfigureLogging(logConf)
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
 
 	Context("l2bridge network::using host-local IPAM", func() {
