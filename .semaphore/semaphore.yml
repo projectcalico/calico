@@ -97,6 +97,21 @@ blocks:
       commands:
       - make static-checks
 
+- name: "apiserver"
+  run:
+    when: "change_in(['/*', '/api/', '/apiserver/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies: ["API"]
+  task:
+    prologue:
+      commands:
+      - cd apiserver
+    jobs:
+    - name: "make ci"
+      commands:
+      - make ci
+
 - name: "libcalico-go"
   run:
     when: "change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"

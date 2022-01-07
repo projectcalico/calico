@@ -1,7 +1,7 @@
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/apiserver
-LOCAL_CHECKS     = lint-cache-dir goimports check-copyright check-boring-ssl
+LOCAL_CHECKS     = lint-cache-dir goimports check-boring-ssl
 
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
@@ -78,7 +78,7 @@ LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused,inef
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks image fv ut
+ci: clean static-checks image-all fv ut
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -128,9 +128,9 @@ $(CONTAINER_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH
 lint-cache-dir:
 	mkdir -p $(CURDIR)/.lint-cache
 
-check-boring-ssl: $(BINDIR)/apiserver
+check-boring-ssl: $(BINDIR)/apiserver-$(ARCH)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm $(BINDIR)/apiserver > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
+		go tool nm $(BINDIR)/apiserver-$(ARCH) > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
 	-rm -f $(BINDIR)/tags.txt
 
 .PHONY: ut 
