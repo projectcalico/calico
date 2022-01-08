@@ -41,7 +41,7 @@ addresses or IP address ranges.
 ### Why is network policy important?
 
 In an age where attackers are becoming more and more sophisticated, network security as a line of defense is more important
-than ever. 
+than ever.
 
 While you can (and should) use firewalls to restrict traffic at the perimeters of your network (commonly referred to as
 north-south traffic), their ability to police Kubernetes traffic is often limited to a granularity of the cluster as a
@@ -67,7 +67,7 @@ workflows and CI/CD processes.
 ### Kubernetes network policy
 
 Kubernetes network policies are defined using the Kubernetes {% include open-new-window.html text='NetworkPolicy'
-url='https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#networkpolicy-v1-networking-k8s-io' %} resource. 
+url='https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#networkpolicy-v1-networking-k8s-io' %} resource.
 
 The main features of Kubernetes network policies are:
 - Policies are namespace scoped (i.e. you create them within the context of a specific namespace just like, for example, pods)
@@ -97,7 +97,7 @@ features beyond those supported by Kubernetes network policy. This includes supp
   [NetworkSets]({{site.baseurl}}/reference/resources/networkset) in policy rules
 
 While Kubernetes network policy applies only to pods, Calico network policy can be applied to multiple types of
-endpoints including pods, VMs, and host interfaces. 
+endpoints including pods, VMs, and host interfaces.
 
 To learn more about Calico network policies, read the [Get started with Calico network
 policy]({{site.baseurl}}/security/calico-network-policy) guide.
@@ -216,7 +216,7 @@ spec:
 
 #### Hierarchical policy
 
-[Calico Enterprise](https://docs.tigera.io/master/security/tiered-policy) supports hierarchical network policy using policy tiers. RBAC
+[Calico Enterprise](https://docs.tigera.io/v3.11/security/tiered-policy) supports hierarchical network policy using policy tiers. RBAC
 for each tier can be defined to restrict who can interact with each tier. This can be used to delegate trust across
 multiple teams.
 
