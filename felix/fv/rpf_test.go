@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 
 	. "github.com/onsi/ginkgo"
@@ -38,6 +39,13 @@ var _ = infrastructure.DatastoreDescribe(
 	"RPF tests",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
 	func(getInfra infrastructure.InfraFactory) {
+
+		// XXX disable for non-bpf as it may not be enforced
+		if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+			// Non-BPF run.
+			return
+		}
+
 		var (
 			infra        infrastructure.DatastoreInfra
 			felixes      []*infrastructure.Felix
