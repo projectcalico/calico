@@ -159,11 +159,11 @@ var _ = infrastructure.DatastoreDescribe(
 
 				// Expect to see the packet from the .20 network at eth20 before RPF
 				Eventually(func() int { return tcpdumpHEP.MatchCount("UDP-30446") }, "1s", "100ms").
-					Should(BeNumerically("==", 1), matcherHEP)
+					Should(BeNumerically("==", 1), "HEP - "+matcherHEP)
 
 				// Expect not to receive the packet from the .20 as it is dropped by RPF.
 				Consistently(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
-					Should(BeNumerically("==", 0), matcherWl)
+					Should(BeNumerically("==", 0), "Wl - "+matcherWl)
 			})
 		})
 	})
