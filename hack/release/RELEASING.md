@@ -5,12 +5,12 @@
 
 ## Table of contents
 
-1. [Prerequisites](#prerequisites)
-1. [Verify the code is ready for release](#verify-the-code-is-ready-for-release)
-1. [Create a release branch](#create-a-release-branch)
-1. [Performing a release](#performing-a-release)
-1. [Promoting to be the latest release in the docs](#promoting-to-be-the-latest-release-in-the-docs)
-1. [Post-release checks](#post-release-checks)
+1. [Prerequisites](#1-prerequisites)
+1. [Verify the code is ready for release](#2-verify-the-code-is-ready-for-release)
+1. [Create a release branch](#3-create-a-release-branch)
+1. [Performing a release](#4-performing-a-release)
+1. [Promoting to be the latest release in the docs](#5-promoting-to-be-the-latest-release-in-the-docs)
+1. [Post-release checks](#6-post-release-checks)
 
 ## 1. Prerequisites
 
