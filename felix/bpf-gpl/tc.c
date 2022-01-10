@@ -267,18 +267,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 		if (ctx.state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx.state->ct_result.rc)) {
 			CALI_DEBUG("Forcing policy on SYN\n");
+			if (ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_ESTABLISHED_DNAT) {
+				/* Set DNAT info for policy */
+				ctx.state->post_nat_ip_dst = ctx.state->ct_result.nat_ip;
+				ctx.state->post_nat_dport = ctx.state->ct_result.nat_port;
+			}
 			goto syn_force_policy;
 		}
 		goto skip_policy;
-	}
-
-	/* Unlike from WEP where we can do RPF by comparing to calico routing
-	 * info, we must rely in Linux to do it for us when receiving packets
-	 * from outside of the host. We enforce RPF failed on every new flow.
-	 * This will make it to skip fib in calico_tc_skb_accepted()
-	 */
-	if (CALI_F_FROM_HEP) {
-		ct_result_set_flag(ctx.state->ct_result.rc, CALI_CT_RPF_FAILED);
 	}
 
 	/* No conntrack entry, check if we should do NAT */
@@ -304,6 +300,18 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	} else {
 		ctx.state->post_nat_ip_dst = ctx.state->ip_dst;
 		ctx.state->post_nat_dport = ctx.state->dport;
+	}
+
+syn_force_policy:
+	/* DNAT in state is set correctly now */
+
+	/* Unlike from WEP where we can do RPF by comparing to calico routing
+	 * info, we must rely in Linux to do it for us when receiving packets
+	 * from outside of the host. We enforce RPF failed on every new flow.
+	 * This will make it to skip fib in calico_tc_skb_accepted()
+	 */
+	if (CALI_F_FROM_HEP) {
+		ct_result_set_flag(ctx.state->ct_result.rc, CALI_CT_RPF_FAILED);
 	}
 
 	if (CALI_F_TO_WEP && !skb_seen(skb) &&
@@ -370,8 +378,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->nat_dest.addr = 0;
 		ctx.state->nat_dest.port = 0;
 	}
-
-syn_force_policy:
 
 	// For the case where the packet was sent from a socket on this host, get the
 	// sending socket's cookie, so we can reverse a DNAT that the CTLB may have done.
