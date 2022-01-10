@@ -223,15 +223,16 @@ The VPP dataplane has the following requirements:
 **Optional**
 For some hardware, the following hugepages configuration may enable VPP to use more efficient drivers:
 
-- At least 128 x 2MB-hugepages are available (`cat /proc/meminfo | grep HugePages_Free`)
+- At least 256 x 2MB-hugepages are available (`grep HugePages_Free /proc/meminfo`)
 - The `vfio-pci` (`vfio_pci` on centos) or `uio_pci_generic` kernel module is loaded. For example:
 
    ````bash
    echo "vfio-pci" > /etc/modules-load.d/95-vpp.conf
    modprobe vfio-pci
-   echo "vm.nr_hugepages = 128" >> /etc/sysctl.conf
+   echo "vm.nr_hugepages = 256" >> /etc/sysctl.conf
    sysctl -p
-   # restart kubelet to take the changes into account, you may need to use a different command depending on how kubelet was installed
+   # restart kubelet to take the changes into account
+   # you may need to use a different command depending on how kubelet was installed
    systemctl restart kubelet
    ````
 
