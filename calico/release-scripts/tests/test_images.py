@@ -40,27 +40,6 @@ VERSIONS_WITHOUT_IMAGE_LIST = [
 VPP_IMAGES = ["calicovpp/agent", "calicovpp/vpp", "calicovpp/init-eks"]
 VPP_RELEASE = "v0.14.0"  # TODO This needs to be got from somewhere, not hard-coded
 VPP_EXPECTED_ARCHS = ["amd64"]
-VERSIONS_WITHOUT_VPP = [
-    "v3.18",
-    "v3.17",
-    "v3.16",
-    "v3.15",
-    "v3.14",
-    "v3.13",
-    "v3.12",
-    "v3.11",
-    "v3.10",
-    "v3.9",
-    "v3.8",
-    "v3.7",
-    "v3.6",
-    "v3.5",
-    "v3.4",
-    "v3.3",
-    "v3.2",
-    "v3.1",
-    "v3.0",
-]
 
 VERSIONS_WITHOUT_FLANNEL_MIGRATION = [
     "v3.8",
@@ -175,15 +154,14 @@ def test_docker_release_tag_present():
 
                 assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
-        if RELEASE_STREAM not in VERSIONS_WITHOUT_VPP:
-            for image in VPP_IMAGES:
-                print("[INFO] checking %s:%s" % (image_name, RELEASE_VERSION))
-                image_name = "%s:%s-calico%s" % (image, VPP_RELEASE, RELEASE_VERSION,)
-                cmd = 'docker manifest inspect %s | jq -r "."' % image_name
-                req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-                assert not req.stdout.read().startswith("no such manifest"), (
-                    "Got 'no such manifest' looking for VPP image %s" % image_name
-                )
+        for image in VPP_IMAGES:
+            print("[INFO] checking %s:%s" % (image_name, RELEASE_VERSION))
+            image_name = "%s:%s-calico%s" % (image, VPP_RELEASE, RELEASE_VERSION,)
+            cmd = 'docker manifest inspect %s | jq -r "."' % image_name
+            req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+            assert not req.stdout.read().startswith("no such manifest"), (
+                "Got 'no such manifest' looking for VPP image %s" % image_name
+            )
 
 def test_operator_images():
     with open("%s/_data/versions.yml" % DOCS_PATH) as versionsFile:
