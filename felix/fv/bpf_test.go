@@ -1796,6 +1796,37 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
+						By("allowing to self via SNAT", func() {
+
+							nets := []string{felixes[0].IP + "/32"}
+							switch testOpts.tunnel {
+							case "ipip":
+								nets = []string{felixes[0].ExpectedIPIPTunnelAddr + "/32"}
+							}
+
+							pol = api.NewGlobalNetworkPolicy()
+							pol.Namespace = "fv"
+							pol.Name = "self-snat"
+							pol.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Nets: nets,
+									},
+								},
+							}
+							pol.Spec.Selector = "name=='" + w[0][0].Name + "'"
+
+							pol = createPolicy(pol)
+						})
+
+						hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+						}
+
+						cc.Expect(Some, w[0][0], TargetIP(ip), ExpectWithPorts(port), hostW0SrcIP)
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.ExpectSome(w[1][0], TargetIP(ip), port)
 						cc.ExpectSome(w[1][1], TargetIP(ip), port)

@@ -1073,6 +1073,12 @@ nat_encap:
 	}
 
 allow:
+	if (CALI_F_FROM_WEP && state->ip_src == state->ip_dst) {
+		CALI_DEBUG("Loopback SNAT\n");
+		seen_mark |=  CALI_SKB_MARK_MASQ;
+		fib = false; /* Disable FIB because we want to drop to iptables */
+	}
+
 	{
 		struct fwd fwd = {
 			.res = rc,
