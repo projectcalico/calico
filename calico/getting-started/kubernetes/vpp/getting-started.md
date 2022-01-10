@@ -24,7 +24,7 @@ The VPP dataplane mode has several advantages over standard Linux networking pip
 
 The VPP dataplane is entirely compatible with the other {{site.prodname}} dataplanes, meaning you can have a cluster with VPP-enabled nodes along with regular nodes. This makes it possible to migrate a cluster from Linux or eBPF networking to VPP networking.
 
-In the addition, the VPP dataplane offers some specific features for network-intensive applications, such as providing `memif` userspace packet interfaces to the pods (instead of regular Linux network devices), or exposing the VPP Host Stack to run optimized L4+ applications in the pods.
+In addition, the VPP dataplane offers some specific features for network-intensive applications, such as providing `memif` userspace packet interfaces to the pods (instead of regular Linux network devices), or exposing the VPP Host Stack to run optimized L4+ applications in the pods.
 
 Trying out the tech preview will give you a taste of these benefits and an opportunity to give feedback to the VPP dataplane team.
 
