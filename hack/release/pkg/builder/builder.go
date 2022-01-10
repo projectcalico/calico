@@ -248,7 +248,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 
 	binaries := map[string]string{
 		// CNI plugin binaries are all placed in github dir.
-		"cni-plugin/bin/github/": binDir + "/cni",
+		"cni-plugin/bin/": binDir + "/cni",
 
 		// Calicoctl binaries.
 		"calicoctl/bin/": binDir + "/calicoctl",
