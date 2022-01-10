@@ -27,7 +27,8 @@ SRC_FILES=$(shell find -name '*.go')
 .PHONY: clean
 ## Clean enough that a new release build will be clean
 clean:
-	find . -name '*.created-$(ARCH)' -exec rm -f {} +
+	find . -name '*.created-.*' -exec rm -f {} +
+	find . -name '.*.created' -exec rm -f {} +
 	rm -rf report/
 	rm -rf bin/flexvol-$(ARCH)
 
@@ -101,77 +102,19 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
-
-## Tags and builds a release from start to finish.
-release: release-prereqs
-	$(MAKE) VERSION=$(VERSION) release-tag
-	$(MAKE) VERSION=$(VERSION) release-build
-	$(MAKE) VERSION=$(VERSION) release-verify
-
-	@echo ""
-	@echo "Release build complete. Next, push the produced images."
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-publish"
-	@echo ""
-
-## Produces a git tag for the release.
-release-tag: release-prereqs release-notes
-	git tag $(VERSION) -F release-notes-$(VERSION)
-	@echo ""
-	@echo "Now you can build the release:"
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-build"
-	@echo ""
-
-## Produces a clean build of release artifacts at the specified version.
-release-build: release-prereqs clean
-	$(MAKE) image-all RELEASE=true
+release-build: .release-$(VERSION).created 
+.release-$(VERSION).created:
+	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
-	# Generate the `latest` images.
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
-
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# TODO: Check the reported version is correct for each release artifact. Uncomment when binary supports version command.
-	# if ! docker run $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
-	#  echo "Reported version:" `docker run --rm $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) version` "\nExpected version: $(VERSION)"; \
-	#  false; \
-	# else \
-	#   echo "Version check passed\n"; \
-	# fi
-
-## Generates release notes based on commits in this version.
-release-notes: release-prereqs
-	mkdir -p dist
-	echo "# Changelog" > release-notes-$(VERSION)
-	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
+	touch $@
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
-	# Push the git tag.
-	git push origin $(VERSION)
-
-	# Push images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
-
-	@echo "Finalize the GitHub release based on the pushed tag."
-	@echo ""
-	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
-	@echo ""
-	@echo "If this is the latest stable release, then run the following to push 'latest' images."
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-publish-latest"
-	@echo ""
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=true CONFIRM=true
-
-# release-prereqs checks that the environment is configured properly to create a release.
-release-prereqs:
-ifndef VERSION
-	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
