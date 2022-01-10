@@ -20,7 +20,7 @@
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
 
     # move 404 page to root of the site so that netlify shows it automatically
-    mv _site/archive/$RELEASE_VERSION/404.html _site/404.html
+    mv $(pwd)/_site/archive/$RELEASE_VERSION/404.html $(pwd)/_site/404.html
 
   else
 
@@ -35,10 +35,10 @@
     # keep the production build if it's not docs.projectcalico.org (off of v3.21 branch) site
     # REDIRECT_TO_LATEST is set in Netlify UI for environment-variables ONLY for docs.projectcalico.org site.
     if [ -z "$REDIRECT_TO_LATEST" ]; then
-      mv calico/_site/sitemap.xml calico/_site/release-legacy-sitemap.xml
-      mv calico/_site/sitemap.xml calico/_site/latest-sitemap.xml
-      mv calico/netlify/sitemap-index.xml calico/_site/sitemap.xml
-      mv calico/netlify/_redirects calico/_site/_redirects
+      mv $(pwd)/_site/sitemap.xml $(pwd)/_site/release-legacy-sitemap.xml
+      mv $(pwd)/_site/sitemap.xml $(pwd)/_site/latest-sitemap.xml
+      mv $(pwd)/netlify/sitemap-index.xml $(pwd)/_site/sitemap.xml
+      mv $(pwd)/netlify/_redirects $(pwd)/_site/_redirects
     else
       mv netlify/_redirects_v3.21 _site/_redirects
     fi
