@@ -1,4 +1,9 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.5 as ubi
+ARG QEMU_IMAGE
+FROM ${QEMU_IMAGE} as qemu
+
+FROM --platform=linux/arm64 registry.access.redhat.com/ubi8/ubi-minimal:8.5 as ubi
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
+
 RUN microdnf update
 
 # At runtime, apiserver generate certificates in /code directory
@@ -13,8 +18,8 @@ COPY  --from=ubi /tmp /tmp
 COPY  --from=ubi /lib /lib
 COPY  --from=ubi /lib64 /lib64
 
-ADD  bin/apiserver-amd64 /code
-ADD  bin/filecheck-amd64 /code
+ADD  bin/apiserver-arm64 /code/apiserver
+ADD  bin/filecheck-arm64 /code/filecheck
 
 WORKDIR /code
 
