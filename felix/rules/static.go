@@ -19,6 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -771,6 +772,17 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Cha
 		{
 			Action: JumpAction{Target: ChainNATOutgoing},
 		},
+	}
+
+	if r.BPFEnabled {
+		// Prepend a BPF SNAT rule.
+		rules = append([]Rule{
+			{
+				Comment: []string{"BPF loopback SNAT"},
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
+				Action:  MasqAction{},
+			},
+		}, rules...)
 	}
 
 	var tunnelIfaces []string

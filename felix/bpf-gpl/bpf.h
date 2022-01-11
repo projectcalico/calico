@@ -183,6 +183,9 @@ enum calico_skb_mark {
 	 * do SNAT for this flow.  Subsequent packets will also be allowed to fall through to the host
 	 * netns. */
 	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_BYPASS  | 0x00800000,
+	/* CALI_SKB_MARK_MASQ enforces MASQ on the connection.
+	 */
+	CALI_SKB_MARK_MASQ                   = CALI_SKB_MARK_BYPASS  | 0x00600000,
 
 	/* CT_ESTABLISHED is used by iptables to tell the BPF programs that the packet is part of an
 	 * established Linux conntrack flow. This allows the BPF program to let through pre-existing
