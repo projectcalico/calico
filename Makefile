@@ -3,8 +3,7 @@ PACKAGE_NAME = github.com/projectcalico/calico
 include metadata.mk 
 include lib.Makefile
 
-
-DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -35,6 +34,7 @@ clean:
 	$(MAKE) -C node clean
 	$(MAKE) -C pod2daemon clean
 	$(MAKE) -C typha clean
+	$(MAKE) -C calico clean
 
 generate:
 	$(MAKE) -C api gen-files
@@ -52,3 +52,26 @@ image:
 	$(MAKE) -C app-policy image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C typha image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
+
+###############################################################################
+# Release logic below
+###############################################################################
+# Build the release tool.
+hack/release/release: $(shell find ./hack/release -type f -name '*.go')
+	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/cmd
+
+# Install ghr for publishing to github.
+hack/release/ghr: 
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@v0.14.0
+
+# Build a release.
+release: hack/release/release 
+	@hack/release/release -create
+
+# test the release code
+release-test:
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
+
+# Publish an already built release.
+release-publish: hack/release/release hack/release/ghr
+	@hack/release/release -publish
