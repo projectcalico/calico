@@ -36,7 +36,7 @@ var (
 	}
 
 	// Architectures to build as part of a release.
-	architectures = []string{"amd64", "arm64", "armv7", "ppc64le", "s390x"}
+	architectures = []string{"amd64", "arm64", "armv7", "ppc64le"}
 
 	// Git configuration for publishing to GitHub.
 	organization = "projectcalico"
