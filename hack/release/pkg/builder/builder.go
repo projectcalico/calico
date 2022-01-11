@@ -58,15 +58,14 @@ type ReleaseBuilder struct {
 // BuildRelease creates a Calico release.
 func (r *ReleaseBuilder) BuildRelease() error {
 	// Check that we're not already on a git tag.
-	_, err := r.git("describe", "--exact-match", "--tags", "HEAD")
+	out, err := r.git("describe", "--exact-match", "--tags", "HEAD")
 	if err == nil {
 		// On a current tag.
-		out, _ := r.git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
 		return fmt.Errorf("Already on a tag (%s), refusing to create release", out)
 	}
 
 	// Check that the repository is not a shallow clone. We need correct history.
-	out, err := r.git("rev-parse", "--is-shallow-repository")
+	out, err = r.git("rev-parse", "--is-shallow-repository")
 	if err != nil {
 		return err
 	}
