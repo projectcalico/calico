@@ -102,7 +102,7 @@ blocks:
     when: "change_in(['/*', '/api/', '/apiserver/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 30
-  dependencies: ["API"]
+  dependencies: []
   task:
     prologue:
       commands:
