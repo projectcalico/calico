@@ -179,6 +179,22 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
+		// Add an internal IP and an external IP to the Addresses in the node spec
+		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
+			cn.Spec.Addresses = []libapi.NodeAddress{
+				{Address: "192.168.200.1",
+					Type: libapi.InternalIP},
+				{Address: "192.168.200.2",
+					Type: libapi.ExternalIP},
+			}
+		})).NotTo(HaveOccurred())
+
+		// Expect the HEP to include the internal IP from Addresses.
+		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "192.168.100.1", "192.168.200.1"}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
 		// Delete the Kubernetes node.
 		err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())

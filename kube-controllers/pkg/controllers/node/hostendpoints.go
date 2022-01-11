@@ -323,6 +323,12 @@ func (c *autoHostEndpointController) getAutoHostendpointExpectedIPs(node *libapi
 	if node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv4Address != "" {
 		expectedIPs = append(expectedIPs, node.Spec.Wireguard.InterfaceIPv4Address)
 	}
+	for _, addr := range node.Spec.Addresses {
+		// Add internal IPs only
+		if addr.Type == libapi.InternalIP {
+			expectedIPs = append(expectedIPs, addr.Address)
+		}
+	}
 	return expectedIPs
 }
 
