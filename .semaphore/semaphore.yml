@@ -76,8 +76,12 @@ global_job_config:
 
 # Temporary hack to test release building on Semaphore
 blocks:
-  - name: "TEST: Publish release"
+  - name: "TEST: Build release"
     task:
+    agent:
+      machine:
+        type: e1-standard-8
+        os_image: ubuntu1804
       prologue:
         commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
