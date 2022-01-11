@@ -20,6 +20,8 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"time"
@@ -31,6 +33,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -102,6 +105,41 @@ func testConnection() error {
 		}
 	}
 	return nil
+}
+
+func isEndpointReady(readyEndpoint string, timeout time.Duration) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	c := &http.Client{}
+	req, err := http.NewRequest(http.MethodGet, readyEndpoint, nil)
+	if err != nil {
+		return false, err
+	}
+	req = req.WithContext(ctx)
+	resp, err := c.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return false, fmt.Errorf("Endpoint is not ready, response code returned:%d", resp.StatusCode)
+	}
+	return true, nil
+}
+
+func pollEndpointReadiness(endpoint string, interval, timeout time.Duration) error {
+	return wait.Poll(interval, timeout,
+		func() (bool, error) {
+			if isReady, err := isEndpointReady(endpoint, interval); !isReady {
+				if err != nil {
+					logrus.Errorf("Endpoint may not be ready:%v", err)
+					return false, nil
+				}
+				logrus.Error("Endpoint not ready")
+				return false, nil
+			}
+			return true, nil
+		})
 }
 
 func cmdAdd(args *skel.CmdArgs) (err error) {
@@ -183,6 +221,17 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		logrus.Info("Upgrade may be in progress, ready flag is not set")
 		err = fmt.Errorf("Calico is currently not ready to process requests")
 		return
+	}
+
+	for _, endpoint := range conf.ReadinessGates {
+		if _, err := url.ParseRequestURI(endpoint); err != nil {
+			return fmt.Errorf("Invalid URL set for ReadinessGates:%s Error:%v",
+				endpoint, err)
+		}
+		err := pollEndpointReadiness(endpoint, 5*time.Second, 30*time.Second)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Remove the endpoint field (IfName) from the wepIDs so we can get a WEP name prefix.
