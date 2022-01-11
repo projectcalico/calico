@@ -163,9 +163,9 @@ func (r *ReleaseBuilder) releasePrereqs() error {
 	// Make sure we have a github token - needed for publishing to GH.
 	// Strictly only needed for publishing, but we check during release anyway so
 	// that we don't get all the way through the build to find out we're missing it!
-	if token := os.Getenv("GITHUB_TOKEN"); token == "" {
-		return fmt.Errorf("No GITHUB_TOKEN present in environment")
-	}
+	// if token := os.Getenv("GITHUB_TOKEN"); token == "" {
+	// 	return fmt.Errorf("No GITHUB_TOKEN present in environment")
+	// }
 
 	// TODO: Make sure the environment isn't dirty.
 	return nil
