@@ -4,4 +4,6 @@ layout: null
 {% helm tigera-operator %}
 installation:
   enabled: false
+apiServer:
+  enabled: false
 {% endhelm %}
