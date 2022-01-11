@@ -73,7 +73,7 @@ To verify that the code and GitHub are in the right state for releasing the chos
 1. [Make sure that there are no pending cherry-pick PRs](https://github.com/projectcalico/calico/pulls?q=is%3Aopen+is%3Apr+label%3Acherry-pick-candidate+) relevant to the release.
 1. [Make sure there are no pending PRs which need docs](https://github.com/projectcalico/calico/pulls?q=is%3Apr+label%3Adocs-pr-required+is%3Aclosed+milestone%3A%22Calico+v3.21.3%22) for this release.
 1. [Make sure each PR with a release note is within a Milestone](https://github.com/projectcalico/calico/pulls?q=is%3Apr+label%3Arelease-note-required+is%3Aclosed+milestone%3A%22Calico+v3.21.3%22+).
-1. [Make sure CI is passing](https://semaphoreci.com/calico) for the target release branch.
+1. [Make sure CI is passing](https://tigera.semaphoreci.com/projects/calico) for the target release branch.
 
 ## 3. Create a release branch
 
