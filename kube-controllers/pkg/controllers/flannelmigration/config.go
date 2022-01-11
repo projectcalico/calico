@@ -87,6 +87,9 @@ type Config struct {
 	// Total seconds to wait before migration controller main thread starts.
 	// This is used for debug/test purpose.
 	DebugWaitBeforeStart int `default:"0" split_words:"true"`
+
+	// Calico ippool blockSize default value.
+	DefaultIppoolSize int `default:"26" split_words:"true"`
 }
 
 // Parse parses envconfig and stores in Config struct.
