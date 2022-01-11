@@ -35,8 +35,10 @@ var (
 		"us.gcr.io/projectcalico-org",
 	}
 
+	// TODO: Not all components yet support all architectures, so for now just use the automatically
+	// detected architectures for each image. Uncomment this when all images support all archs.
 	// Architectures to build as part of a release.
-	architectures = []string{"amd64", "arm64", "armv7", "ppc64le"}
+	// architectures = []string{"amd64", "arm64", "armv7", "ppc64le"}
 
 	// Git configuration for publishing to GitHub.
 	organization = "projectcalico"
