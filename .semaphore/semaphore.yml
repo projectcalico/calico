@@ -381,6 +381,19 @@ blocks:
     - name: "kube-controllers: tests"
       commands:
       - make ci
+       
+- name: "apiserver"
+  run:
+    when: "change_in(['/*', '/apiserver/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+        - cd apiserver
+    jobs:
+      - name: "apiserver tests"
+        commands:
+          - make ci
 
 - name: "pod2daemon"
   run:
