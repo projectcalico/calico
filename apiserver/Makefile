@@ -127,7 +127,7 @@ sub-image-%:
 
 $(API_SERVER_IMAGE): register $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
-	docker build --pull -t $(API_SERVER_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-image/Dockerfile.$(ARCH) .
+	docker build --no-cache --pull -t $(API_SERVER_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-image/Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
