@@ -381,7 +381,7 @@ blocks:
     - name: "kube-controllers: tests"
       commands:
       - make ci
-      -
+       
 - name: "apiserver"
   run:
     when: "change_in(['/*', '/apiserver/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
