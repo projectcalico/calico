@@ -32,11 +32,11 @@ if [ "${SEMAPHORE_GIT_PR_NUMBER}${SEMAPHORE_GIT_BRANCH}" = master -o -z "${SEMAP
     # Normally - if not Semaphore, or if this is Semaphore running on
     # the master branch and not for a PR - do all the steps including
     # publication.
-    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
+    : ${STEPS:=clone_repo bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
 else
     # For Semaphore building a PR or a branch other than master, build
     # packages but do not publish them.
-    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle}
+    : ${STEPS:=clone_repo bld_images net_cal felix etcd3gw dnsmasq nettle}
 fi
 
 function require_version {
@@ -51,20 +51,17 @@ function require_version {
     # Determine REPO_NAME.
     if [ $VERSION = master ]; then
 	: ${REPO_NAME:=master}
-	: ${NETWORKING_CALICO_CHECKOUT:=master}
-	: ${FELIX_CHECKOUT:=master}
+	: ${CALICO_CHECKOUT:=master}
     elif [[ $VERSION =~ ^release-v ]]; then
 	: ${REPO_NAME:=testing}
-	: ${NETWORKING_CALICO_CHECKOUT:=${VERSION}}
-	: ${FELIX_CHECKOUT:=${VERSION}}
+	: ${CALICO_CHECKOUT:=${VERSION}}
     elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-python2)?$ ]]; then
 	MAJOR=${BASH_REMATCH[1]}
 	MINOR=${BASH_REMATCH[2]}
 	PATCH=${BASH_REMATCH[3]}
 	PY2SUFFIX=${BASH_REMATCH[4]}
 	: ${REPO_NAME:=calico-${MAJOR}.${MINOR}${PY2SUFFIX}}
-	: ${NETWORKING_CALICO_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}${PY2SUFFIX}}
-	: ${FELIX_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}}
+	: ${CALICO_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}${PY2SUFFIX}}
     else
 	echo "ERROR: Unhandled VERSION \"${VERSION}\""
 	exit 1
@@ -106,12 +103,16 @@ function precheck_bld_images {
     :
 }
 
+function precheck_clone_repo {
+    :
+}
+
 function precheck_net_cal {
-    test -n "${NETWORKING_CALICO_CHECKOUT}" || require_version
+    test -n "${CALICO_CHECKOUT}" || require_version
 }
 
 function precheck_felix {
-    test -n "${FELIX_CHECKOUT}" || require_version
+    test -n "${CALICO_CHECKOUT}" || require_version
 }
 
 function precheck_etcd3gw {
@@ -180,27 +181,27 @@ function do_bld_images {
     fi
 }
 
+function do_clone_repo {
+    rm -rf calico
+    CALICO_REPO=${CALICO_REPO:-https://github.com/projectcalico/calico.git}
+    git clone $CALICO_REPO -b $CALICO_CHECKOUT calico
+}
+
 function do_net_cal {
     # Build networking-calico packages.
     pushd ${rootdir}
-    rm -rf networking-calico
-    NETWORKING_CALICO_REPO=${NETWORKING_CALICO_REPO:-https://github.com/projectcalico/networking-calico.git}
-    git clone $NETWORKING_CALICO_REPO -b $NETWORKING_CALICO_CHECKOUT
-    cd networking-calico
+    cd calico/networking-calico
     PKG_NAME=networking-calico \
 	    NAME=networking-calico \
 	    DEB_EPOCH=1: \
-	    ../utils/make-packages.sh deb rpm
+	    ../../utils/make-packages.sh deb rpm
     popd
 }
 
 function do_felix {
     # Build Felix packages.
     pushd ${rootdir}
-    rm -rf felix
-    FELIX_REPO=${FELIX_REPO:-https://github.com/projectcalico/felix.git}
-    git clone $FELIX_REPO -b $FELIX_CHECKOUT felix
-    cd felix
+    cd calico/felix
     # We build the Felix binary and include it in our source package
     # content, because it's infeasible to work out a set of Debian and
     # RPM golang build dependencies that is exactly equivalent to our
@@ -219,7 +220,7 @@ function do_felix {
 	    NAME=Felix \
 	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
-	    ../utils/make-packages.sh deb rpm
+	    ../../utils/make-packages.sh deb rpm
     popd
 }
 
