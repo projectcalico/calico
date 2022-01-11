@@ -24,10 +24,11 @@ GIT_USE_SSH = true
 BIRD_VERSION=v0.3.3-184-g202a2186
 
 # DEV_REGISTRIES configures the container image registries which are built from this
-# repository. By default, just build images with calico/. CI/CD will override this
-# variable to quay.io/calico and docker.io/calico
+# repository. By default, just build images with calico/. Allow this variable to be overridden,
+# as both CI/CD and the release tooling will override this to build publishable images.
 DEV_REGISTRIES ?= calico
 
 # RELEASE_REGISTIRES configures the container images registries which are published to 
 # as part of an official release.
-RELEASE_REGISTRIES = quay.io/calico docker.io/calico gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
+# This variable is unused. Registries for releases are defined in hack/release/pkg/builder/builder.go
+# RELEASE_REGISTRIES = quay.io/calico docker.io/calico gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
