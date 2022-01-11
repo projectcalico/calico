@@ -1,3 +1,4 @@
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 // Copyright 2017 The Kubernetes Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +21,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/duration"
 )
+
+// This file contains helper functions for projectcalico printer package.
 
 // The followings are helper functions copied from k8s.io/kubernetes
 
