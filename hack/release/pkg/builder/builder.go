@@ -39,9 +39,9 @@ var (
 	architectures = []string{"amd64", "arm64", "armv7", "ppc64le", "s390x"}
 
 	// Git configuration for publishing to GitHub.
-	organization = "projectcalico"
-	repo         = "calico"
-	origin       = "origin"
+	organization = "test-projectcalico"
+	repo         = "test-calico"
+	origin       = "test-origin"
 )
 
 func NewReleaseBuilder(runner CommandRunner) *ReleaseBuilder {
@@ -277,6 +277,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 
 func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	releaseDirs := []string{
+		"node",
 		"pod2daemon",
 		"cni-plugin",
 		"apiserver",
@@ -284,7 +285,6 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 		"calicoctl",
 		"app-policy",
 		"typha",
-		"node",
 		"felix",
 		"calico", // Technically not a container image, but a helm chart.
 	}
@@ -406,7 +406,8 @@ func (r *ReleaseBuilder) determineBranch() string {
 	if err != nil {
 		logrus.WithError(err).Fatal("Error determining branch")
 	} else if strings.TrimSpace(out) == "HEAD" {
-		logrus.Fatal("Not on a branch, refusing to cut release")
+		logrus.Warn("Not on a branch, refusing to cut release")
+		return ""
 	}
 	return strings.TrimSpace(out)
 }
