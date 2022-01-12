@@ -22,16 +22,18 @@ function checkModule(){
 function load_image() {
     local node=$1
     docker cp ./calico-node.tar ${node}:/calico-node.tar
+    docker cp ./calico-apiserver.tar ${node}:/calico-apiserver.tar
     docker cp ./calicoctl.tar ${node}:/calicoctl.tar
     docker cp ./calico-cni.tar ${node}:/calico-cni.tar
     docker cp ./pod2daemon.tar ${node}:/pod2daemon.tar
     docker cp ./kube-controllers.tar ${node}:/kube-controllers.tar
     docker exec -t ${node} ctr -n=k8s.io images import /calico-node.tar
+    docker exec -t ${node} ctr -n=k8s.io images import /calico-apiserver.tar
     docker exec -t ${node} ctr -n=k8s.io images import /calicoctl.tar
     docker exec -t ${node} ctr -n=k8s.io images import /calico-cni.tar
     docker exec -t ${node} ctr -n=k8s.io images import /pod2daemon.tar
     docker exec -t ${node} ctr -n=k8s.io images import /kube-controllers.tar
-    docker exec -t ${node} rm /calico-node.tar /calicoctl.tar /calico-cni.tar /pod2daemon.tar /kube-controllers.tar
+    docker exec -t ${node} rm /calico-node.tar /calicoctl.tar /calico-cni.tar /pod2daemon.tar /kube-controllers.tar /calico-apiserver.tar
 }
 
 function enable_dual_stack() {
@@ -113,14 +115,11 @@ echo "client and webserver pods are running."
 echo
 
 echo "Deploy Calico apiserver"
-${kubectl} create -f https://docs.projectcalico.org/master/manifests/apiserver.yaml
+${kubectl} create -f ${TEST_DIR}/infra/apiserver.yaml
 openssl req -x509 -nodes -newkey rsa:4096 -keyout apiserver.key -out apiserver.crt -days 365 -subj "/" -addext "subjectAltName = DNS:calico-api.calico-apiserver.svc"
 ${kubectl} create secret -n calico-apiserver generic calico-apiserver-certs --from-file=apiserver.key --from-file=apiserver.crt
 ${kubectl} patch apiservice v3.projectcalico.org -p \
     "{\"spec\": {\"caBundle\": \"$(${kubectl} get secret -n calico-apiserver calico-apiserver-certs -o go-template='{{ index .data "apiserver.crt" }}')\"}}"
-
-echo "Patch Calico apiserver to run on master, this would make sure communications to Calico apiserver won't be affected by test cases"
-${kubectl} patch deployment calico-apiserver -n calico-apiserver -p '{"spec":{"template":{"spec":{"nodeSelector":{ "kubernetes.io/hostname": "kind-control-plane" }}}}}'
 time ${kubectl} wait pod -l k8s-app=calico-apiserver --for=condition=Ready -n calico-apiserver --timeout=30s
 echo "Calico apiserver is running."
 
