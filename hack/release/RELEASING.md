@@ -185,6 +185,8 @@ When starting development on a new minor release, the first step is to create a 
 To build and publish the release artifacts, find the desired commit [in Semaphore](https://tigera.semaphoreci.com/projects/calico), verify that all tests for that 
 commit have passed, and press the `Publish official release` manual promotion button.
 
+Wait for this job to complete before moving on to the next step.
+
 ### 4.b Build and publish tigera/operator
 
 Follow [the tigera/operator release instructions](https://github.com/tigera/operator/blob/master/RELEASING.md).
@@ -205,7 +207,7 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 ### 4.d Update the docs with the new version
 
-1. On a new branch, add the new version to the correct release section in `_data/versions.yml`
+1. On a new branch based off of `release-vX.Y`, add the new version to the correct release section in `calico/_data/versions.yml`
 
 1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
 
@@ -225,10 +227,7 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 ## 5. Promoting to be the latest release in the docs
 
-For major or minor (vX.Y.0) releases, the candidate release branch created above must be promoted to the live documentation after publishing the release.
-
-This section describes how to create a new major or minor release. It assumes that the release branch has already been created
-as described in section 1.
+For all releases, perform the following steps:
 
 1. Checkout the previously created release branch.
 
@@ -236,15 +235,7 @@ as described in section 1.
    git checkout release-vX.Y
    ```
 
-1. Add the previous release to `calico/_data/archives.yaml`. Make this change in master as well.
-
-1. Add the new version to the correct release section in `_data/versions.yml`.
-
-1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
-
-   ```
-   make -C calico update-authors
-   ```
+1. Add the new version to the correct release section in `calico/_data/versions.yml`.
 
 1. Follow the steps in [writing release notes](#release-notes) to generate or update candidate release notes.
 
@@ -254,6 +245,19 @@ as described in section 1.
    git add _data/release-notes/<VERSION>-release-notes.md
    ```
 
+For major or minor (vX.Y.0) releases, the candidate release branch created above must also be promoted to the live documentation after publishing the release. For patch
+releases, the following two steps can be skipped.
+
+1. Add the previous release to `calico/_data/archives.yaml`. Make this change in master as well.
+
+1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
+
+   ```
+   make -C calico update-authors
+   ```
+
+Perform the next steps for all releases:
+
 1. Commit your changes. For example:
 
    ```
@@ -261,6 +265,8 @@ as described in section 1.
    ```
 
 1. Push your branch and open a pull request to the upstream release-vX.Y branch. Get it reviewed and wait for it to pass CI before merging.
+
+For major or minor (vX.Y.0) releases ONLY:
 
 1. On netlify locate the `projectcalico.docs.tigera.io` site and the update `Production branch` in `Settings -> Build & deploy -> Deploy contexts` to `release-vX.Y` in site settings and trigger the deployment.
 
