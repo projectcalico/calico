@@ -139,14 +139,14 @@ func (r *ReleaseBuilder) PublishRelease() error {
 		return fmt.Errorf("failed to publish container images: %s", err)
 	}
 
+	// If all else is successful, push the git tag.
+	if _, err = r.git("push", origin, ver); err != nil {
+		return fmt.Errorf("failed to push git tag: %s", err)
+	}
+
 	// Publish the release to github.
 	if err = r.publishGithubRelease(ver); err != nil {
 		return fmt.Errorf("failed to publish github release: %s", err)
-	}
-
-	// If all else is successful, push the git tag. After this, there's no going back!
-	if _, err = r.git("push", origin, ver); err != nil {
-		return fmt.Errorf("failed to push git tag: %s", err)
 	}
 
 	return nil
@@ -360,8 +360,7 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		fmt.Sprintf("IMAGETAG=%s", ver),
 		fmt.Sprintf("VERSION=%s", ver),
 		"RELEASE=true",
-		"CONFIRM=",    // Undo this when done prototyping.
-		"DRYRUN=true", // Undo this when done prototyping.
+		"CONFIRM=true",
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
 		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
