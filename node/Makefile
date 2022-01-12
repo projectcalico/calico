@@ -301,7 +301,7 @@ $(FELIX_GPL_SOURCE): ../go.mod
 ###############################################################################
 # FV Tests
 ###############################################################################
-K8ST_IMAGE_TARS=calico-node.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
+K8ST_IMAGE_TARS=calico-node.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
 
 ## Run the ginkgo FVs
 fv: run-k8s-apiserver
@@ -443,6 +443,10 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
+
+calico-apiserver.tar:
+	make -C ../apiserver image
+	docker save --output $@ calico/apiserver:latest-$(ARCH)
 
 calico-cni.tar:
 	make -C ../cni-plugin image
