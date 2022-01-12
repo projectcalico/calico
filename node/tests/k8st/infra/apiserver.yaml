@@ -70,6 +70,11 @@ spec:
       name: calico-apiserver
       namespace: calico-apiserver
     spec:
+      # TODO: This is a code bug!
+      # Run apiserver on control-plane node so connectivity with k8s apiserver is not
+      # impacted by tests.
+      nodeSelector:
+        kubernetes.io/hostname: kind-control-plane
       containers:
       - args:
         - --secure-port=5443
