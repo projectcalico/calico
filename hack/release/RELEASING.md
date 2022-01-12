@@ -207,7 +207,7 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 ### 4.d Update the docs with the new version
 
-1. On a new branch, add the new version to the correct release section in `_data/versions.yml`
+1. On a new branch based off of `release-vX.Y`, add the new version to the correct release section in `calico/_data/versions.yml`
 
 1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
 
