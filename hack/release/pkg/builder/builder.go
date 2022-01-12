@@ -277,6 +277,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 
 func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	releaseDirs := []string{
+		"node",
 		"pod2daemon",
 		"cni-plugin",
 		"apiserver",
@@ -284,7 +285,6 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 		"calicoctl",
 		"app-policy",
 		"typha",
-		"node",
 		"felix",
 		"calico", // Technically not a container image, but a helm chart.
 	}
