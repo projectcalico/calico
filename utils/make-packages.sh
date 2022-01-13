@@ -8,6 +8,9 @@
 # same location.
 scriptdir=$(dirname $(realpath $0))
 
+# Get the location of the rpm builder script.
+rpmDir=$(dirname $(realpath $scriptdir))/rpm
+
 # Include function library.
 . ${scriptdir}/lib.sh
 
@@ -18,7 +21,7 @@ sha=`git_commit_id`
 
 MY_UID=`id -u`
 MY_GID=`id -g`
-DOCKER_RUN_RM="docker run --rm --user ${MY_UID}:${MY_GID} -v $(dirname `pwd`):/code -w /code/$(basename `pwd`)"
+DOCKER_RUN_RM="docker run --rm --user ${MY_UID}:${MY_GID} -v $rpmDir:/rpm -v $(dirname `pwd`):/code -w /code/$(basename `pwd`)"
 
 # Determine if this is a release (i.e. corresponds exactly to a Git tag) or a
 # snapshot.
@@ -131,7 +134,7 @@ EOF
 		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
 		    -e FORCE_VERSION=${FORCE_VERSION} \
 		    -e RPM_TAR_ARGS="${RPM_TAR_ARGS}" \
-		    $imageid ../rpm/build-rpms
+		    $imageid /rpm/build-rpms
 	    done
 
 	    cat <<EOF
