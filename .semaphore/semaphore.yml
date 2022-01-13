@@ -42,10 +42,12 @@ blocks:
         - name: 'Current release branch'
           commands:
             - export REPO_NAME=calico-current
-            - export VERSION=release-v3.16
+            - export VERSION=release-v3.21
             - make release-publish
-        - name: 'Previous release branch'
-          commands:
-            - export REPO_NAME=calico-previous
-            - export VERSION=release-v3.15
-            - make release-publish
+        # TODO: Uncomment this once v3.22 is released. v3.20 is not monorepo compatible,
+        # so needs to use an older version of the packagining repository.
+        # - name: 'Previous release branch'
+        #   commands:
+        #     - export REPO_NAME=calico-previous
+        #     - export VERSION=release-v3.20
+        #     - make release-publish
