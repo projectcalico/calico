@@ -204,6 +204,11 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 
+	// We attach calicoctl binaries directly to the release as well.
+	if _, err := r.runner.Run("cp", []string{"calicoctl/bin/*", uploadDir}, nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -268,7 +273,10 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// tar up the whole thing.
-	if _, err := r.runner.Run("tar", []string{"-czvf", fmt.Sprintf("%s/release-%s.tgz", targetDir, ver), releaseBase}, nil); err != nil {
+	if _, err := r.runner.Run("tar", []string{"-czvf", fmt.Sprintf("_output/release-%s.tgz", ver), "-C", "_output", fmt.Sprintf("release-%s", ver)}, nil); err != nil {
+		return err
+	}
+	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("_output/release-%s.tgz", ver), targetDir}, nil); err != nil {
 		return err
 	}
 

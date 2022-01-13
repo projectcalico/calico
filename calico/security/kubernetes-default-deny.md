@@ -36,7 +36,7 @@ For other endpoint types (VMs, host interfaces), the default behavior is to deny
 We recommend creating an implicit default deny policy for your Kubernetes pods, regardless if you use {{site.prodname}} or Kubernetes network policy. This ensures that unwanted traffic is denied by default. Note that implicit default deny policy always occurs last; if any other policy allows the traffic, then the deny does not come into effect. The deny is executed only after all other policies are evaluated.
 
 ### Before we begin
-If you haven't already, you will need to [install calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install) to apply the example {{site.prodname}} network policies from this page.
+If you haven't already, you will need to [install calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install) to apply the example {{site.prodname}} network policies from this page.
 
 ### How to
 

@@ -91,4 +91,4 @@ Below is an example of how to create a file of Nodes and delete them.
    ```
 
 [Node resource reference]: {{ site.baseurl }}/reference/resources/node
-[calicoctl setup]: ../getting-started/clis/calicoctl/install
+[calicoctl setup]: ../maintenance/clis/calicoctl/install

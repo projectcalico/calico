@@ -141,7 +141,7 @@ The geeky details of what you get:
 
 **Required**
 
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended - Networking**
 
