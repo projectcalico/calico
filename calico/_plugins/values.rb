@@ -27,7 +27,7 @@ def gen_values(versions, imageNames, imageRegistry, chart)
       version: #{versions.fetch("tigera-operator").version}
       registry: #{versions.fetch("tigera-operator").registry}
     calicoctl:
-      image: #{imageRegistry}#{imageNames.fetch("calicoctl")}
+      image: #{imageNames.fetch("calicoctl")}
       tag: #{versions.fetch("calicoctl")}
     EOF
   else
