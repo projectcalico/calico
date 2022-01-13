@@ -326,7 +326,7 @@ After installing {{ site.prodname }} with the VPP dataplane, you can benefit fro
 
 **Tools**
 
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install) to configure and monitor your cluster.
+- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install) to configure and monitor your cluster.
 
 **Security**
 

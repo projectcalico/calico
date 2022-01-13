@@ -12,7 +12,7 @@ to limit access to {{ site.prodname }}'s metrics endpoints.
 ## Prerequisites
 
 - {{site.prodname}} is installed with Prometheus metrics reporting enabled.
-- `calicoctl` is [installed in your PATH and configured to access the data store](../../getting-started/clis/calicoctl/install).
+- `calicoctl` is [installed in your PATH and configured to access the data store](../../maintenance/clis/calicoctl/install).
 
 ## Choosing an approach
 

@@ -55,7 +55,7 @@ For a deeper look at common on-premises deployment models, see [Calico over IP F
 
 ### Before you begin...
 
-[calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install) must be installed and configured.
+[calicoctl]({{ site.baseurl }}/maintenance/clis/calicoctl/install) must be installed and configured.
 
 ### How to
 >**Note**: Significantly changing {{site.prodname}}'s BGP topology, such as changing from full-mesh to peering with ToRs, may result in temporary loss of pod network connectivity during the reconfiguration process. It is recommended to only make such changes during a maintenance window.
