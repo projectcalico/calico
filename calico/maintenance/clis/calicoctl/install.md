@@ -52,10 +52,10 @@ For step-by-step instructions, refer to the section that corresponds to your des
 <!--- For master, we hard-code a version since we don't host master releases of calicoctl.  --->
 {%- if page.version == "master" -%}
 {% assign version = "v3.21.3" %}
-{% assign url = "https://github.com/projectcalico/calico/releases/v3.21.3/release-v3.21.3.tgz" %}
+{% assign url = "https://github.com/projectcalico/calico/releases/download/v3.21.3/release-v3.21.3.tgz" %}
 {% else %}
 {% assign version = site.data.versions.first.components.calicoctl.version %}
-{% assign url = "https://github.com/projectcalico/calico/releases/{{ version }}/release-{{ version }}.tgz" %}
+{% assign url = "https://github.com/projectcalico/calico/releases/download/{{ version }}/release-{{ version }}.tgz" %}
 {% endif %}
 
 
