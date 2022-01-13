@@ -82,7 +82,7 @@ Congratulations! You have now installed {{site.prodname}} using the Helm 3 chart
 ### Next steps
 
 **Required**
-- [Install and configure calicoctl](../clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended tutorials**
 - [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic)
