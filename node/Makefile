@@ -537,11 +537,10 @@ st: image remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar ru
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: mod-download static-checks fv image-all build-windows-archive st
+ci: mod-download static-checks fv image build-windows-archive st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-upgrade
-
 
 check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
