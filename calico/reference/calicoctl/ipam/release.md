@@ -57,4 +57,4 @@ calicoctl ipam release --from-report=./report.json
 
 ## See also
 
--  [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+-  [Installing calicoctl]({{ site.baseurl }}/maintenance/clis/calicoctl/install)

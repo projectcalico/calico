@@ -63,4 +63,4 @@ calicoctl datastore migrate unlock
 
 ## See also
 
--  [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+-  [Installing calicoctl]({{ site.baseurl }}/maintenance/clis/calicoctl/install)

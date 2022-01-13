@@ -77,7 +77,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 ### Next steps
 
 **Required**
-- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+- [Install calicoctl command line tool]({{ site.baseurl }}/maintenance/clis/calicoctl/install)
 
 **Recommended**
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on AWS' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}

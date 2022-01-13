@@ -59,7 +59,7 @@ The geeky details of what you get:
 ### Next steps
 
 **Required**
-- [Install and configure calicoctl]({{site.basurl}}/getting-started/clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.basurl}}/maintenance/clis/calicoctl/install)
 
 **Optional**
 - {% include open-new-window.html text='Add another node to form a multi-node cluster' url='https://microk8s.io/docs/clustering' %}
