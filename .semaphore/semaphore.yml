@@ -382,7 +382,7 @@ blocks:
     - name: "Build image"
       matrix:
       - env_var: ARCH
-        values: [ "arm64", "armv7", "ppcle64", "s390x" ]
+        values: [ "arm64", "armv7", "ppc64le", "s390x" ]
       commands:
       - make image ARCH=$ARCH
 
