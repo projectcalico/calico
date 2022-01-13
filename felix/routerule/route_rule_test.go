@@ -53,7 +53,6 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet := set.New()
 		_, err := New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
@@ -70,7 +69,6 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet.Add(10)
 		_, err := New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
@@ -84,7 +82,6 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet.Add(252)
 		_, err = New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
@@ -102,7 +99,6 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet.Add(250)
 		_, err := New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
@@ -133,7 +129,6 @@ var _ = Describe("RouteRules", func() {
 		var err error
 		rrs, err = New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
