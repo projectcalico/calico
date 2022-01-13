@@ -58,6 +58,7 @@ struct bpf_map_def_extended {
 // CALI_XDP_PROG is set for programs attached to the XDP hook
 #define CALI_XDP_PROG 	(1<<6)
 #define CALI_TC_NAT_IF	(1<<7)
+#define CALI_TC_LO	(1<<8)
 
 #ifndef CALI_DROP_WORKLOAD_TO_HOST
 #define CALI_DROP_WORKLOAD_TO_HOST false
@@ -75,6 +76,9 @@ struct bpf_map_def_extended {
 #define CALI_F_TUNNEL  	 ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
 #define CALI_F_L3_DEV    ((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV)
 #define CALI_F_NAT_IF    (((CALI_COMPILE_FLAGS) & CALI_TC_NAT_IF) != 0)
+#define CALI_F_LO        (((CALI_COMPILE_FLAGS) & CALI_TC_LO) != 0)
+
+#define CALI_F_MAIN	(CALI_F_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !CALI_F_LO)
 
 #define CALI_F_XDP ((CALI_COMPILE_FLAGS) & CALI_XDP_PROG)
 
@@ -105,7 +109,7 @@ struct bpf_map_def_extended {
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
-#define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
+#define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && (CALI_F_TO_HOST || CALI_F_TO_HEP))
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
@@ -272,6 +276,7 @@ CALI_CONFIGURABLE_DEFINE(psnat_len, 0x4c545250) /* be 0x4c545250 = ACSII(PRTL) *
 CALI_CONFIGURABLE_DEFINE(flags, 0x00000001)
 CALI_CONFIGURABLE_DEFINE(host_tunnel_ip, 0x4c4e5554) /* be 0x4c4e5554 = ACSII(TUNL) */
 CALI_CONFIGURABLE_DEFINE(wg_port, 0x54504757) /* be 0x54504757 = ASCII(WGPT) */
+CALI_CONFIGURABLE_DEFINE(natin_idx, 0xdeadbeef)
 
 #define HOST_IP		CALI_CONFIGURABLE(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
@@ -283,6 +288,7 @@ CALI_CONFIGURABLE_DEFINE(wg_port, 0x54504757) /* be 0x54504757 = ASCII(WGPT) */
 #define GLOBAL_FLAGS 	CALI_CONFIGURABLE(flags)
 #define HOST_TUNNEL_IP	CALI_CONFIGURABLE(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
+#define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 
 #ifdef UNITTEST
 CALI_CONFIGURABLE_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
