@@ -69,9 +69,9 @@ recommended for [multiple region deployments](multiple-regions)) the namespace w
 ## Configuring operator policy
 
 Configuring operator policy requires the `calicoctl` executable, so you should
-[install]({{ site.baseurl }}/getting-started/clis/calicoctl/install) and
+[install]({{ site.baseurl }}/maintenance/clis/calicoctl/install) and
 [configure
-calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/configure/overview) if you
+calicoctl]({{ site.baseurl }}/maintenance/clis/calicoctl/configure/overview) if you
 haven't done so already.
 
 -  Calico for OpenStack deployments use an etcd datastore, so you should follow the

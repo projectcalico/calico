@@ -59,6 +59,6 @@ calicoctl datastore migrate import -f etcd-migration
 
 ## See also
 
--  [Install calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+-  [Install calicoctl]({{ site.baseurl }}/maintenance/clis/calicoctl/install)
 -  [Resources]({{ site.baseurl }}/reference/resources/overview) for details on all valid resources, including file format
    and schema

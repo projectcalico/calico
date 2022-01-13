@@ -96,7 +96,7 @@ The following steps will outline the installation of {{site.prodname}} networkin
    kubectl create -f custom-resources.yaml
    ```
 
-1. [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+1. [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 1. Configure strict affinity:
    ```bash
