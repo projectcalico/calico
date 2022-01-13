@@ -20,9 +20,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mdlayher/arp"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -35,6 +37,7 @@ type bpfRouteManager struct {
 	myNodename      string
 	resyncScheduled bool
 	routeMap        bpf.Map
+	hostIP          net.IP
 
 	// These fields contain our cache of the input data, indexed for efficient updates
 	// and lookups:
@@ -83,10 +86,13 @@ type bpfRouteManager struct {
 	opReporter logutils.OpRecorder
 
 	wgEnabled bool
+
+	arpMap bpf.Map
 }
 
 func newBPFRouteManager(config *Config, mc *bpf.MapContext,
 	opReporter logutils.OpRecorder) *bpfRouteManager {
+
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New[ip.V4CIDR]()
@@ -126,6 +132,7 @@ func newBPFRouteManager(config *Config, mc *bpf.MapContext,
 		opReporter: opReporter,
 
 		wgEnabled: config.Wireguard.Enabled,
+		arpMap:    mc.ArpMap, // XXX we should create a map for local pods only
 	}
 }
 
@@ -149,6 +156,14 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 		m.onWorkloadEndpointUpdate(msg)
 	case *proto.WorkloadEndpointRemove:
 		m.onWorkloadEndpointRemove(msg)
+	case *proto.HostMetadataUpdate:
+		if msg.Hostname == m.myNodename {
+			log.WithField("HostMetadataUpdate", msg).Info("Host IP changed")
+			ip := net.ParseIP(msg.Ipv4Addr)
+			if ip != nil {
+				m.hostIP = ip
+			}
+		}
 	}
 }
 
@@ -205,6 +220,36 @@ func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {
 		m.dirtyRoutes.Add(dataplaneKey)
 		return set.RemoveItem
 	})
+}
+
+func (m *bpfRouteManager) resolveARP(ifname string, ifidx int, ip net.IP) {
+	if m.hostIP == nil {
+		log.WithField("iface", ifname).Warn("No host IP")
+		return
+	}
+
+	iface, err := net.InterfaceByIndex(ifidx)
+	if err != nil {
+		log.WithError(err).WithField("iface", ifname).Warn("Failed to get iface.")
+		return
+	}
+
+	a, err := arp.Dial(iface)
+	if err != nil {
+		log.WithError(err).WithField("iface", ifname).Warn("Failed to create arp client.")
+		return
+	}
+	defer a.Close()
+
+	hw, err := a.Resolve(ip)
+	if err != nil {
+		log.WithError(err).WithField("iface", ifname).Warnf("Failed to resolve arp for ip %s.", ip)
+		return
+	}
+
+	log.WithField("iface", ifname).Infof("%s -> %s", ip, hw)
+
+	_ = m.arpMap.Update(bpfarp.NewKey(ip, uint32(ifidx)).AsBytes(), bpfarp.NewValue(iface.HardwareAddr, hw).AsBytes())
 }
 
 func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
@@ -273,6 +318,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
 					route = &routeVal
 					bestWepID = wepID
 					bestWepScore = wepScore
+					go m.resolveARP(ifaceName, ifaceIdx, cidr.Addr().AsNetIP())
 				}
 				return nil
 			})
