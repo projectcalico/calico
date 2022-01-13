@@ -112,8 +112,7 @@ filter-registry ?= $(if $(filter-out $(1),$(DOCKERHUB_REGISTRY)),$(1)/)
 DEV_REGISTRY ?= $(firstword $(DEV_REGISTRIES))
 
 # remove from the list to push to manifest any registries that do not support multi-arch
-NONMANIFEST_REGISTRIES      ?=
-MANIFEST_REGISTRIES         ?= $(DEV_REGISTRIES:$(NONMANIFEST_REGISTRIES)%=)
+MANIFEST_REGISTRIES         ?= $(DEV_REGISTRIES)
 
 PUSH_MANIFEST_IMAGES := $(foreach registry,$(MANIFEST_REGISTRIES),$(foreach image,$(BUILD_IMAGES),$(call filter-registry,$(registry))$(image)))
 
