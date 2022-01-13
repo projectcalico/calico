@@ -73,7 +73,7 @@ Terraform is a tool for automating infrastructure provisioning using declarative
 ### Next steps
 
 **Required**
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommmended**
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Azure' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-azure/' %}

@@ -37,7 +37,7 @@ See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tuto
 **Required**
 
 - [{{site.prodname}} is installed]({{site.baseurl}}/getting-started/kubernetes/)
-- [calicoctl is installed and configured]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+- [calicoctl is installed and configured]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Istio support**
 

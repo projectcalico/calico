@@ -188,7 +188,7 @@ You may have noticed that the bulk of the above instructions are about provision
 ### Next steps
 
 **Required**
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended**
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %} 

@@ -109,7 +109,7 @@ oc get tigerastatus
 
 > **Note**: To get more information, add `-o yaml` to the above command.
 
-Next, [install calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install) and ensure strict affinity is true:
+Next, [install calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install) and ensure strict affinity is true:
 
 ```bash
 calicoctl ipam configure --strictaffinity=true
