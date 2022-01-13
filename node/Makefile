@@ -43,10 +43,7 @@ FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 
 # Versions and locations of dependencies used in tests.
-CALICOCTL_VER?=master
-CNI_VER?=master
 TEST_CONTAINER_NAME_VER?=latest
-CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
 TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
 
 # TODO: Update this to use newer version of Kubernetes.
@@ -785,15 +782,3 @@ cd-windows-upgrade:
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 	done ;
-
-###############################################################################
-# Utilities
-###############################################################################
-$(info "Build dependency versions")
-$(info $(shell printf "%-21s = %-10s\n" "BIRD_VERSION" $(BIRD_VERSION)))
-
-$(info "Test dependency versions")
-$(info $(shell printf "%-21s = %-10s\n" "CNI_VER" $(CNI_VER)))
-
-$(info "Calico git version")
-$(info $(shell printf "%-21s = %-10s\n" "GIT_VERSION" $(GIT_VERSION)))
