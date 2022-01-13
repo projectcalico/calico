@@ -130,7 +130,7 @@ minikube delete
 ### Next steps
 
 **Required**
-- [Install and configure calicoctl]({{site.basurl}}/getting-started/clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.basurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended tutorials**
 - [Secure a simple application using the Kubernetes NetworkPolicy API]({{site.basurl}}/security/tutorials/kubernetes-policy-basic)

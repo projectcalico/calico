@@ -38,9 +38,9 @@ Use `calicoctl version` to obtain the following data.
 {% include content/calicoctl-version.md %}
 
 \* To obtain these values, you must configure `calicoctl`
-   [to connect to your datastore](/getting-started/clis/calicoctl/configure/overview).
+   [to connect to your datastore](/maintenance/clis/calicoctl/configure/overview).
 
 
 ## See also
 
--  [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install).
+-  [Installing calicoctl]({{ site.baseurl }}/maintenance/clis/calicoctl/install).

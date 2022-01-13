@@ -282,14 +282,9 @@ cd: image-all cd-common
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created 
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) clean build-all image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
-
-	# Copy the amd64 variant to calicoctl - for now various downstream projects
-	# expect this naming convention. Until they can be swapped over, we still need to
-	# publish a binary called calicoctl.
-	$(MAKE) bin/calicoctl
 	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.

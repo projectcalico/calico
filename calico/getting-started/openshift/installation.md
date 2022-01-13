@@ -156,7 +156,7 @@ The OpenShift console provides an interface for editing the operator installatio
 
 **Required**
 
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended - Networking**
 

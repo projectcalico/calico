@@ -22,7 +22,7 @@ The geeky details of what you get:
 ### Next steps
 
 **Required**
-- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+- [Install calicoctl command line tool]({{ site.baseurl }}/maintenance/clis/calicoctl/install)
 
 **Recommmended**
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %}

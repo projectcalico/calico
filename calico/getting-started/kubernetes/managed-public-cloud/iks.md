@@ -21,7 +21,7 @@ The geeky details of what you get:
 ### Next steps
 
 **Required**
-- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+- [Install calicoctl command line tool]({{ site.baseurl }}/maintenance/clis/calicoctl/install)
 
 **Recommmended**
 - {% include open-new-window.html text='Controlling traffic with network policies for IKS' url='https://cloud.ibm.com/docs/containers?topic=containers-network_policies' %}

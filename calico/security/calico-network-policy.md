@@ -103,7 +103,7 @@ For compatibility with Kubernetes, **Calico network policy** follows the same be
 
 `calicoctl` must be **installed** and **configured** before use. `calicoctl` will use etcd as the datastore by default, but many {{site.prodname}} installation manifests configure Kubernetes as the datastore. You can find more information on how to configure `calicoctl` in the following link:
 
-- [Configure `calicoctl`]({{ site.baseurl }}/getting-started/clis/calicoctl/configure/overview)
+- [Configure `calicoctl`]({{ site.baseurl }}/maintenance/clis/calicoctl/configure/overview)
 
 ### How to
 
