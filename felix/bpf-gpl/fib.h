@@ -85,8 +85,9 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("Redirect to the same interface (%d) failed.\n", ctx->skb->ifindex);
 		goto deny;
 	} else if (rc == CALI_RES_REDIR_IFINDEX) {
-		struct arp_value *arpv;
 		__u32 iface = state->ct_result.ifindex_fwd;
+
+		struct arp_value *arpv;
 
 		struct arp_key arpk = {
 			.ip = state->ip_dst,

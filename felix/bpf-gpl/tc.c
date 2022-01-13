@@ -256,6 +256,9 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
+	if (CALI_F_TO_HEP && ctx.state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
+		ctx.state->flags |= CALI_ST_CT_NP_LOOP;
+	}
 
 	if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
 			(ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED ||
@@ -483,6 +486,25 @@ syn_force_policy:
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_SRC_IS_HOST;
+	}
+	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
+		CALI_DEBUG("Post-NAT dest IP is local host.\n");
+		if (CALI_F_FROM_HEP && is_failsafe_in(ctx.state->ip_proto, ctx.state->post_nat_dport, ctx.state->ip_src)) {
+			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+			ctx.state->pol_rc = CALI_POL_ALLOW;
+			goto skip_policy;
+		}
+		ctx.state->flags |= CALI_ST_DEST_IS_HOST;
+	} else 	if (CALI_F_TO_HEP && !skb_seen(skb)) {
+		/* XXX avoid rt lookup 2x */
+		struct cali_rt *r = cali_rt_lookup(ctx.state->post_nat_ip_dst);
+
+		if (r && cali_rt_flags_local_workload(r->flags)) {
+			CALI_DEBUG("NP local WL on HEP - skip policy\n");
+			ctx.state->flags |= CALI_ST_CT_NP_LOOP;
+			ctx.state->pol_rc = CALI_POL_ALLOW;
+			goto skip_policy;
+		}
 	}
 
 	CALI_DEBUG("About to jump to policy program.\n");
@@ -771,7 +793,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
 		}
-		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
+		if ((CALI_F_TO_HOST && CALI_F_NAT_IF) || (CALI_F_TO_HEP && state->flags & CALI_ST_CT_NP_LOOP)) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
 		}
 		if (state->flags & CALI_ST_HOST_PSNAT) {
@@ -1216,6 +1238,8 @@ nat_encap:
 		rc = CALI_RES_REDIR_IFINDEX;
 	}
 
+	goto encap_allow;
+
 allow:
 	if (state->ct_result.flags & CALI_CT_FLAG_SVC_SELF) {
 		CALI_DEBUG("Loopback SNAT\n");
@@ -1224,6 +1248,18 @@ allow:
 		fib = false; /* Disable FIB because we want to drop to iptables */
 	}
 
+	if (CALI_F_TO_HEP && !skb_seen(skb)) {
+		struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
+
+		if (r && cali_rt_flags_local_workload(r->flags)) {
+			state->ct_result.ifindex_fwd = r->if_index;
+			CALI_DEBUG("NP local WL on HEP\n");
+			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
+			rc = CALI_RES_REDIR_IFINDEX;
+		}
+	}
+
+encap_allow:
 	{
 		struct fwd fwd = {
 			.res = rc,
