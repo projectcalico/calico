@@ -32,7 +32,6 @@ func (r *RealCommandRunner) Run(name string, args []string, env []string) (strin
 	err := cmd.Run()
 	logrus.Debug(outb.String())
 	if err != nil {
-		logrus.Error(errb.String())
 		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
 	}
 	return strings.TrimSpace(outb.String()), err
