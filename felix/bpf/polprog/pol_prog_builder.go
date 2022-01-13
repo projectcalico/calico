@@ -102,12 +102,13 @@ var (
 	_                      = stateOffPreNATDstPort
 	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 30, Field: "state->post_nat_dport"}
 	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->ip_proto"}
-	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 33, Field: "state->flags"}
 	stateOffIPSize         = FieldOffset{Offset: stateEventHdrSize + 34, Field: "state->ip_size"}
 	_                      = stateOffIPSize
 
 	stateOffRulesHit = FieldOffset{Offset: stateEventHdrSize + 36, Field: "state->rules_hit"}
 	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 40, Field: "state->rule_ids"}
+
+	stateOffFlags = FieldOffset{Offset: stateEventHdrSize + 340, Field: "state->flags"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -123,8 +124,8 @@ var (
 	ipsKeyPad    int16 = 19
 
 	// Bits in the state flags field.
-	FlagDestIsHost uint8 = 1 << 2
-	FlagSrcIsHost  uint8 = 1 << 3
+	FlagDestIsHost uint64 = 1 << 2
+	FlagSrcIsHost  uint64 = 1 << 3
 )
 
 type Rule struct {
@@ -296,10 +297,10 @@ const (
 
 func (p *Builder) writeJumpIfToOrFromHost(label string) {
 	// Load state flags.
-	p.b.Load8(R1, R9, stateOffFlags)
+	p.b.Load64(R1, R9, stateOffFlags)
 
 	// Mask against host bits.
-	p.b.AndImm32(R1, int32(FlagDestIsHost|FlagSrcIsHost))
+	p.b.AndImm64(R1, int32(FlagDestIsHost|FlagSrcIsHost))
 
 	// If non-zero, jump to specified label.
 	p.b.JumpNEImm64(R1, 0, label)
