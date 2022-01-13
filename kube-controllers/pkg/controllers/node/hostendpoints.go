@@ -303,30 +303,38 @@ func (c *autoHostEndpointController) generateAutoHostendpointName(nodeName strin
 // that should set on the auto hostendpoint.
 func (c *autoHostEndpointController) getAutoHostendpointExpectedIPs(node *libapi.Node) []string {
 	expectedIPs := []string{}
+	IPMap := make(map[string]struct{}) // used to avoid adding duplicates to expectedIPs
 	if node.Spec.BGP != nil {
 		// BGP IPv4 and IPv6 addresses are CIDRs.
 		if node.Spec.BGP.IPv4Address != "" {
 			ip, _, _ := net.ParseCIDROrIP(node.Spec.BGP.IPv4Address)
 			expectedIPs = append(expectedIPs, ip.String())
+			IPMap[ip.String()] = struct{}{}
 		}
 		if node.Spec.BGP.IPv6Address != "" {
 			ip, _, _ := net.ParseCIDROrIP(node.Spec.BGP.IPv6Address)
 			expectedIPs = append(expectedIPs, ip.String())
+			IPMap[ip.String()] = struct{}{}
 		}
 		if node.Spec.BGP.IPv4IPIPTunnelAddr != "" {
 			expectedIPs = append(expectedIPs, node.Spec.BGP.IPv4IPIPTunnelAddr)
+			IPMap[node.Spec.BGP.IPv4IPIPTunnelAddr] = struct{}{}
 		}
 	}
 	if node.Spec.IPv4VXLANTunnelAddr != "" {
 		expectedIPs = append(expectedIPs, node.Spec.IPv4VXLANTunnelAddr)
+		IPMap[node.Spec.IPv4VXLANTunnelAddr] = struct{}{}
 	}
 	if node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv4Address != "" {
 		expectedIPs = append(expectedIPs, node.Spec.Wireguard.InterfaceIPv4Address)
+		IPMap[node.Spec.Wireguard.InterfaceIPv4Address] = struct{}{}
 	}
 	for _, addr := range node.Spec.Addresses {
 		// Add internal IPs only
 		if addr.Type == libapi.InternalIP {
-			expectedIPs = append(expectedIPs, addr.Address)
+			if _, ok := IPMap[addr.Address]; !ok {
+				expectedIPs = append(expectedIPs, addr.Address)
+			}
 		}
 	}
 	return expectedIPs

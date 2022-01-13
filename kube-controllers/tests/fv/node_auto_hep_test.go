@@ -179,13 +179,16 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
-		// Add an internal IP and an external IP to the Addresses in the node spec
+		// Add an internal IP and an external IP to the Addresses in the node spec.
+		// Also add a duplicate IP and make sure it is not added.
 		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
 			cn.Spec.Addresses = []libapi.NodeAddress{
 				{Address: "192.168.200.1",
 					Type: libapi.InternalIP},
 				{Address: "192.168.200.2",
 					Type: libapi.ExternalIP},
+				{Address: "172.100.2.3",
+					Type: libapi.InternalIP},
 			}
 		})).NotTo(HaveOccurred())
 
