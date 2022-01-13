@@ -79,7 +79,7 @@ varies by Linux distribution.
    calico-upgrade complete
    ```
 
-1. Remove any existing `calicoctl` instances and [install the new `calicoctl`](../getting-started/clis/calicoctl/install).
+1. Remove any existing `calicoctl` instances and [install the new `calicoctl`](../maintenance/clis/calicoctl/install).
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
@@ -134,6 +134,6 @@ varies by Linux distribution.
    calico-upgrade complete
    ```
 
-1. Remove any existing `calicoctl` instances and [install the new `calicoctl`](../getting-started/clis/calicoctl/install).
+1. Remove any existing `calicoctl` instances and [install the new `calicoctl`](../maintenance/clis/calicoctl/install).
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.

@@ -69,7 +69,7 @@ Congratulations! You now have an RKE cluster running {{site.prodname}}
 ### Next steps
 
 **Required**
-- [Install and configure calicoctl](../clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended tutorials**
 - [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic)

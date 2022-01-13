@@ -93,8 +93,8 @@ If you have installed {{site.prodname}} using the `calico.yaml` manifest, we rec
    ```
    {: .no-select-button}
 
-1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/clis/calicoctl/install)
-   and [configure it to connect to your datastore](../getting-started/clis/calicoctl/configure/overview).
+1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../maintenance/clis/calicoctl/install)
+   and [configure it to connect to your datastore](../maintenance/clis/calicoctl/configure/overview).
 
 1. Use the following command to check the {{site.prodname}} version number.
 
@@ -159,8 +159,8 @@ If you have installed {{site.prodname}} using the `calico.yaml` manifest, we rec
    {: .alert .alert-success}
 
 
-1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/clis/calicoctl/install)
-   and [configure it to connect to your datastore](../getting-started/clis/calicoctl/configure/overview).
+1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../maintenance/clis/calicoctl/install)
+   and [configure it to connect to your datastore](../maintenance/clis/calicoctl/configure/overview).
 
 1. Use the following command to check the {{site.prodname}} version number.
 
