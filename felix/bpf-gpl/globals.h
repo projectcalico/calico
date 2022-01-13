@@ -16,6 +16,8 @@ struct cali_tc_globals {
 	__be32 host_tunnel_ip;
 	__be32 flags;
 	__be16 wg_port;
+	__u32 natin_idx;
+	__u32 natout_idx;
 };
 
 enum cali_globals_flags {
