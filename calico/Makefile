@@ -144,7 +144,7 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean chart _site
 	touch $@
 
-chart: _includes/charts/tigera-operator/values.yaml bin/helm3
+chart: clean _includes/charts/tigera-operator/values.yaml bin/helm3
 	bin/helm3 package ./_includes/charts/tigera-operator \
 	--destination ./bin/ \
 	--version $(GIT_VERSION) \
@@ -152,12 +152,6 @@ chart: _includes/charts/tigera-operator/values.yaml bin/helm3
 ifdef CHART_RELEASE
 	mv ./bin/tigera-operator-$(GIT_VERSION).tgz ./bin/tigera-operator-$(GIT_VERSION)-$(CHART_RELEASE).tgz
 endif
-
-# Build values.yaml for the tigera-operator chart
-.PHONY: values.yaml
-CONTAINERIZED_VALUES?=docker run --rm -v $(CURDIR):/calico -w /calico ruby:2.5
-_includes/charts/tigera-operator/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
-	$(CONTAINERIZED_VALUES) ruby ./hack/gen_values_yml.rb --registry $(REGISTRY) --chart tigera-operator > $@
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
