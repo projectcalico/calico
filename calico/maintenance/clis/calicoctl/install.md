@@ -85,8 +85,8 @@ you want to install the binary.
 
    ```bash
    curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz
-   cp /tmp/calico-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./calicoctl
+   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
+   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./calicoctl
    ```
 
 1. Set the file to be executable.
@@ -114,8 +114,8 @@ you want to install the binary.
 
    ```bash
    curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz
-   cp /tmp/calico-{{ version }}/bin/calicoctl/calicoctl-darwin-amd64 ./calicoctl
+   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
+   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-darwin-amd64 ./calicoctl
    ```
 
 1. Set the file to be executable.
@@ -161,8 +161,8 @@ you want to install the binary.
 
    ```bash
    curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz
-   cp /tmp/calico-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./calicoctl
+   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
+   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./calicoctl
    ```
 
 1. Set the file to be executable.
@@ -189,8 +189,8 @@ you want to install the binary.
 
    ```bash
    curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz
-   cp /tmp/calico-{{ version }}/bin/calicoctl/calicoctl-linux-arm64 ./calicoctl
+   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
+   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-arm64 ./calicoctl
    ```
 
 1. Set the file to be executable.
@@ -222,8 +222,8 @@ you want to install the binary.
 
    ```bash
    curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz
-   cp /tmp/calico-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./kubectl-calicoctl
+   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
+   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./kubectl-calicoctl
    ```
 
 1. Set the file to be executable.
@@ -251,8 +251,8 @@ you want to install the binary.
 
    ```bash
    curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz
-   cp /tmp/calico-{{ version }}/bin/calicoctl/calicoctl-darwin-amd64 ./kubectl-calicoctl
+   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
+   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-darwin-amd64 ./kubectl-calicoctl
    ```
 
 1. Set the file to be executable.
@@ -299,8 +299,8 @@ you want to install the binary.
 
    ```bash
    curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz
-   cp /tmp/calico-{{ version }}/bin/calicoctl/calicoctl-linux-ppc64le ./kubectl-calicoctl
+   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
+   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-ppc64le ./kubectl-calicoctl
    ```
 
 1. Set the file to be executable.
@@ -328,8 +328,8 @@ you want to install the binary.
 
    ```bash
    curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz
-   cp /tmp/calico-{{ version }}/bin/calicoctl/calicoctl-linux-arm64 ./kubectl-calicoctl
+   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
+   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-arm64 ./kubectl-calicoctl
    ```
 
 1. Set the file to be executable.
