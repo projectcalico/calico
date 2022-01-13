@@ -180,18 +180,48 @@ When starting development on a new minor release, the first step is to create a 
 
 ## 4. Performing a release
 
-### 4.a Build and publish the repository in Semaphore 
+### 4.a Create a temporary branch for this release against origin
+
+1. Create a new branch based off of `release-vX.Y`.
+
+   ```
+   git checkout release-vX.Y && git pull origin release-vX.Y
+   ```
+
+   ```
+   git checkout -b build-vX.Y.Z
+   ```
+
+1. Add the new version to the top of `calico/_data/versions.yml`
+
+1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
+
+   Then, add the newly created release note file to git.
+
+   ```
+   git add calico/_includes/release-notes/<VERSION>-release-notes.md
+   ```
+
+1. Commit your changes. For example:
+
+   ```
+   git commit -m "Updates for vX.Y.Z"
+   ```
+
+1. Push the branch to `github.com/projectcalico/calico` and create a pull request. Get it reviewed and ensure it passes CI before moving to the next step.
+
+### 4.b Build and publish the repository in Semaphore 
 
 To build and publish the release artifacts, find the desired commit [in Semaphore](https://tigera.semaphoreci.com/projects/calico), verify that all tests for that 
 commit have passed, and press the `Publish official release` manual promotion button.
 
 Wait for this job to complete before moving on to the next step.
 
-### 4.b Build and publish tigera/operator
+### 4.c Build and publish tigera/operator
 
 Follow [the tigera/operator release instructions](https://github.com/tigera/operator/blob/master/RELEASING.md).
 
-### 4.c Build and publish OpenStack packages
+### 4.d Build and publish OpenStack packages
 
 1. Check out the [packaging repository](https://github.com/projectcalico/packaging).
 
@@ -205,48 +235,20 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 1. Run `make release-publish VERSION=<version>`, where `<version>` is the Calico version being released.
 
-### 4.d Update the docs with the new version
+### 4.e Update the docs with the new version
 
-1. On a new branch based off of `release-vX.Y`, add the new version to the correct release section in `calico/_data/versions.yml`
-
-1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
-
-   Then, add the newly created release note file to git.
-
-   ```
-   git add calico/_includes/release-notes/<VERSION>-release-notes.md
-   ```
-
-1. Commit your changes. For example:
-
-   ```
-   git commit -m "Documentation updates for release vX.Y.Z"
-   ```
-
-1. Push your branch and open a pull request. Get it reviewed and wait for it to pass CI before merging.
+1. Merge the PR branch created in step 4.a - `build-vX.Y.Z` and delete the branch from the repository.
 
 ## 5. Promoting to be the latest release in the docs
 
-For all releases, perform the following steps:
+For major or minor (vX.Y.0) releases, the candidate release branch created above must also be promoted to the live documentation after publishing the release. For patch
+releases, the following steps can be skipped.
 
 1. Checkout the previously created release branch.
 
    ```
-   git checkout release-vX.Y
+   git checkout release-vX.Y && git pull origin release-vX.Y
    ```
-
-1. Add the new version to the correct release section in `calico/_data/versions.yml`.
-
-1. Follow the steps in [writing release notes](#release-notes) to generate or update candidate release notes.
-
-   Then, add the newly created release note file to git.
-
-   ```
-   git add _data/release-notes/<VERSION>-release-notes.md
-   ```
-
-For major or minor (vX.Y.0) releases, the candidate release branch created above must also be promoted to the live documentation after publishing the release. For patch
-releases, the following two steps can be skipped.
 
 1. Add the previous release to `calico/_data/archives.yaml`. Make this change in master as well.
 
@@ -256,17 +258,13 @@ releases, the following two steps can be skipped.
    make -C calico update-authors
    ```
 
-Perform the next steps for all releases:
-
 1. Commit your changes. For example:
 
    ```
-   git commit -m "Updates for release vX.Y.Z"
+   git commit -m "Promote vX.Y.Z to latest"
    ```
 
 1. Push your branch and open a pull request to the upstream release-vX.Y branch. Get it reviewed and wait for it to pass CI before merging.
-
-For major or minor (vX.Y.0) releases ONLY:
 
 1. On netlify locate the `projectcalico.docs.tigera.io` site and the update `Production branch` in `Settings -> Build & deploy -> Deploy contexts` to `release-vX.Y` in site settings and trigger the deployment.
 
