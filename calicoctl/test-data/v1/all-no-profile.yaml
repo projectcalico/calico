@@ -1,0 +1,49 @@
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: policy1
+  spec:
+    order: 9999.9999
+    ingress:
+      - action: deny
+        protocol: udp
+        icmp:
+          type: 10
+          code: 100
+        source:
+          tag: web
+          net: 1.2.3.4/10
+          selector: has(THING_THING8)
+          ports: [1,2,3,4]
+        destination:
+          tag: database
+          net: 10.20.30.40/32
+          selector:
+          ports:
+    egress:
+      - action: deny
+        protocol: tcp
+        source:
+          notTag: abcd
+          notNet: aa:bb:cc::ff/100
+          notSelector: 
+          notPorts: [100,"3:4",65535,"20:20","20:40"]
+    selector:
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: policy2
+  spec:
+    order: 0
+- apiVersion: v1
+  kind: hostEndpoint
+  metadata:
+    name: endpoint1
+    node: host1
+    labels:
+      type: database
+  spec:
+    interface: eth0
+    profiles: [prof1, prof2]
+    expectedIPs: [1.2.3.4, "00:bb::aa"]
+

@@ -1,0 +1,26 @@
+_drafts/
+*.pyc
+_site
+.sass-cache
+.DS_Store
+*.swp
+.idea
+.vagrant
+.jekyll-metadata
+.releasedata
+nosetests.xml
+Gemfile.lock
+_output/
+bin
+vendor
+pinned_versions.yml
+pinned_images.yml
+Makefile.common*
+# Ignore the charts directory created by the Makefile where temporary files are placed
+/charts
+
+# This prevents us from checking in a supplementary values.yaml file
+_includes/charts/*/values.yaml
+
+# ignore changes during local website development
+.jekyll-cache

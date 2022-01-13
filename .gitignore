@@ -1,26 +1,13 @@
-_drafts/
-*.pyc
-_site
-.sass-cache
-.DS_Store
-*.swp
+.go-pkg-cache/
+report/
+bin/
+*.created*
 .idea
-.vagrant
-.jekyll-metadata
-.releasedata
-nosetests.xml
-Gemfile.lock
-_output/
-bin
-vendor
-pinned_versions.yml
-pinned_images.yml
-Makefile.common*
-# Ignore the charts directory created by the Makefile where temporary files are placed
-/charts
 
-# This prevents us from checking in a supplementary values.yaml file
-_includes/charts/*/values.yaml
-
-# ignore changes during local website development
-.jekyll-cache
+/* Produced as part of release */
+hack/release/release
+node/windows-packaging/CalicoWindows/confd/config-bgp.ps1
+node/windows-packaging/CalicoWindows/confd/config-bgp.psm1
+_output
+hack/release/ghr
+builder.coverprofile

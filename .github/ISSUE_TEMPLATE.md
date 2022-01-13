@@ -30,4 +30,3 @@
 * Orchestrator version (e.g. kubernetes, mesos, rkt):
 * Operating System and version:
 * Link to your project (optional):
-

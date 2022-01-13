@@ -1,0 +1,19 @@
+ARG QEMU_IMAGE
+FROM --platform=linux/arm/v7 ${QEMU_IMAGE} as qemu
+
+FROM arm32v7/alpine:3.12
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+COPY --from=qemu /usr/bin/qemu-arm-static /usr/bin/
+
+MAINTAINER Marc Crébassa <aalaesar@gmail.com>
+
+ADD bin/calicoctl-linux-armv7 /calicoctl
+
+ENV CALICO_CTL_CONTAINER=TRUE
+ENV PATH=$PATH:/
+# Delete qemu binaries
+RUN rm /usr/bin/qemu-*
+
+WORKDIR /root
+ENTRYPOINT ["/calicoctl"]

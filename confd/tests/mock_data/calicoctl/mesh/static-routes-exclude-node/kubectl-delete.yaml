@@ -1,0 +1,27 @@
+# For deletion, we only need to delete the Services - k8s will handle deleting
+# the corresponding Endpoints.
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-1
+
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-2
+
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-v6-1
+
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-v6-2

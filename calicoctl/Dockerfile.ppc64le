@@ -1,0 +1,19 @@
+ARG QEMU_IMAGE
+FROM ${QEMU_IMAGE} as qemu
+
+FROM ppc64le/alpine:3.10
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+MAINTAINER Tom Denham <tom@projectcalico.org>
+COPY --from=qemu /usr/bin/qemu-ppc64le-static /usr/bin/
+
+ADD bin/calicoctl-linux-ppc64le /calicoctl
+
+ENV CALICO_CTL_CONTAINER=TRUE
+ENV PATH=$PATH:/
+
+# Delete qemu binaries
+RUN rm /usr/bin/qemu-*
+
+WORKDIR /root
+ENTRYPOINT ["/calicoctl"]

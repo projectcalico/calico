@@ -1,0 +1,20 @@
+ARG QEMU_IMAGE
+# Copying qemu binary files from amd64 container.
+# latest `go-build` containers got no candidate for `s390x` architecture.
+FROM --platform=linux/amd64 ${QEMU_IMAGE} as qemu
+
+FROM s390x/alpine:3.10
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/
+MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
+
+ADD bin/calicoctl-linux-s390x /calicoctl
+
+ENV CALICO_CTL_CONTAINER=TRUE
+ENV PATH=$PATH:/
+
+RUN rm /usr/bin/qemu-*
+
+WORKDIR /root
+ENTRYPOINT ["/calicoctl"]

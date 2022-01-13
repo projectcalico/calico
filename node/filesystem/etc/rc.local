@@ -1,0 +1,90 @@
+# Handle old CALICO_NETWORKING environment by converting to the new config.
+if [ -n "$CALICO_NETWORKING" ]; then
+	echo "WARNING: $CALICO_NETWORKING will be deprecated: use $CALICO_NETWORKING_BACKEND instead"
+	if [ "$CALICO_NETWORKING" = "false" ]; then
+		export CALICO_NETWORKING_BACKEND=none
+	else
+		export CALICO_NETWORKING_BACKEND=bird
+	fi
+fi
+
+# Run the startup initialisation script.
+# These ensure the node is correctly configured to run.
+calico-node -startup || exit 1
+
+# Set the nodename based on the value picked by the startup procedure.
+if [ ! -f "/var/lib/calico/nodename" ]; then
+	echo "/var/lib/calico/nodename does not exist, exiting"
+	exit 1
+fi
+NODENAME=$(cat /var/lib/calico/nodename)
+export NODENAME
+
+# If possible pre-allocate any tunnel addresses.
+calico-node -allocate-tunnel-addrs -allocate-tunnel-addrs-run-once || exit 1
+
+# Create a directly to put enabled service files
+mkdir /etc/service/enabled
+
+# XXX: Here and below we do all manipulations on /etc/service avoiding rm'ing
+# dirs contained in Docker image. This is due to bug in Docker with graphdriver
+# overlay on CentOS 7.X kernels (https://github.com/docker/docker/issues/15314)
+
+# Allow felix to be disabled, for example, if the user is running Felix
+# outside the container.
+if [ -z "$CALICO_DISABLE_FELIX" ]; then
+  cp -a /etc/service/available/felix /etc/service/enabled/
+fi
+
+# Monitor change in node IP addresses and subnets.
+cp -a /etc/service/available/monitor-addresses  /etc/service/enabled/
+
+# Enable the allocate tunnel IP service
+cp -a /etc/service/available/allocate-tunnel-addrs  /etc/service/enabled/
+
+# Enable the node status reporter service
+cp -a /etc/service/available/node-status-reporter  /etc/service/enabled/
+
+case "$CALICO_NETWORKING_BACKEND" in
+	"none" )
+	# If running in policy only mode, we don't need to run BIRD / Confd.
+	echo "CALICO_NETWORKING_BACKEND is none - no BGP daemon running"
+	;;
+	"vxlan" )
+	# If running in VXLAN-only mode, we don't need to run BIRD / Confd.
+	echo "CALICO_NETWORKING_BACKEND is vxlan - no need to run a BGP daemon"
+	;;
+	"gobgp" )
+	# Run calico-bgp-daemon instead of BIRD / Confd.
+	echo "CALICO_NETWORKING_BACKEND is gobgp - run calico-bgp-daemon"
+	cp -a /etc/service/available/calico-bgp-daemon /etc/service/enabled/
+	sh -c 'for file in `find /etc/calico/confd/conf.d/ -not -name 'tunl-ip.toml' -type f`; do rm $file; done'
+	cp -a /etc/service/available/confd /etc/service/enabled/
+	;;
+	* )
+
+	# Enable the confd and bird services
+	cp -a /etc/service/available/bird  /etc/service/enabled/
+	cp -a /etc/service/available/bird6 /etc/service/enabled/
+	cp -a /etc/service/available/confd /etc/service/enabled/
+	;;
+esac
+
+if [ "$CALICO_MANAGE_CNI" != "false" ]; then
+	# Enable management of the CNI configuration unless otherwise instructed.
+	cp -a /etc/service/available/cni  /etc/service/enabled/
+fi
+
+if [ "$CALICO_DISABLE_FILE_LOGGING" = "true" ]; then
+	rm -rf /etc/service/enabled/allocate-tunnel-addrs/log
+	rm -rf /etc/service/enabled/bird/log
+	rm -rf /etc/service/enabled/bird6/log
+	rm -rf /etc/service/enabled/confd/log
+	rm -rf /etc/service/enabled/felix/log
+	rm -rf /etc/service/enabled/calico-bgp-daemon/log
+	rm -rf /etc/service/enabled/cni/log
+	rm -rf /etc/service/enabled/monitor-addresses/log
+	rm -rf /etc/service/enabled/node-status-reporter/log
+fi
+
+echo "Calico node started successfully"

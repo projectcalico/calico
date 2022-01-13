@@ -1,0 +1,161 @@
+# This ConfigMap is used to configure a self-hosted {{include "variant_name" .}} installation.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{include "variant_name" . | lower}}-config
+  namespace: kube-system
+data:
+{{- if .Values.bpf }}
+  # Set these to the IP and port of your API server; In BPF mode, we need to connect directly to the
+  # API server because we take over kube-proxy's role.
+  kubernetes_service_host: ""
+  kubernetes_service_port: ""
+{{ end -}}
+
+{{- if eq .Values.datastore "etcd" }}
+  # Configure this with the location of your etcd cluster.
+  etcd_endpoints: "{{ required "must set etcd.endpoints if using etcd mode" .Values.etcd.endpoints }}"
+
+{{- if include "calico.etcd.tls" . }}
+  etcd_ca: "/calico-secrets/etcd-ca"
+  etcd_cert: "/calico-secrets/etcd-cert"
+  etcd_key: "/calico-secrets/etcd-key"
+{{- else }}
+  # If you're using TLS enabled etcd uncomment the following.
+  # You must also populate the Secret below with these files.
+  etcd_ca: ""   # "/calico-secrets/etcd-ca"
+  etcd_cert: "" # "/calico-secrets/etcd-cert"
+  etcd_key: ""  # "/calico-secrets/etcd-key"
+{{- end }}
+
+{{- end }}
+{{- if .Values.typha.enabled }}
+  # You must set a non-zero value for Typha replicas below.
+  typha_service_name: "calico-typha"
+{{- else }}
+  # Typha is disabled.
+  typha_service_name: "none"
+
+{{- end }}
+{{- if eq .Values.network "calico" }}
+  # Configure the backend to use.
+{{- if or (.Values.flannel_migration) (.Values.vxlan) }}
+  calico_backend: "vxlan"
+{{- else }}
+  calico_backend: "bird"
+{{- end }}
+
+{{- else if eq .Values.network "flannel" }}
+
+  # The interface used by canal for host <-> host communication.
+  # If left blank, then the interface is chosen using the node's
+  # default route.
+  canal_iface: ""
+
+  # Whether or not to masquerade traffic to destinations not within
+  # the pod network.
+  masquerade: "true"
+
+{{- end }}
+
+  # Configure the MTU to use for workload interfaces and tunnels.
+  # By default, MTU is auto-detected, and explicitly setting this field should not be required.
+  # You can override auto-detection by providing a non-zero value.
+  veth_mtu: "0"
+
+  # The CNI network configuration to install on each node. The special
+  # values in this config will be automatically populated.
+{{- if and (eq .Values.datastore "etcd") (eq .Values.network "flannel") }}
+  cni_network_config: |-
+    {
+        "name": "canal",
+        "cniVersion": "0.3.1",
+        "plugins": [
+            {
+                "type": "flannel",
+                "delegate": {
+                    "type": "calico",
+                    "include_default_routes": true,
+                    "etcd_endpoints": "__ETCD_ENDPOINTS__",
+                    "etcd_key_file": "__ETCD_KEY_FILE__",
+                    "etcd_cert_file": "__ETCD_CERT_FILE__",
+                    "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
+                    "log_level": "info",
+                    "log_file_path": "/var/log/calico/cni/cni.log",
+                    "policy": {
+                        "type": "k8s",
+                        "k8s_api_root": "https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__",
+                        "k8s_auth_token": "__SERVICEACCOUNT_TOKEN__"
+                    },
+                    "kubernetes": {
+                        "kubeconfig": "__KUBECONFIG_FILEPATH__"
+                    }
+                }
+            },
+            {
+                "type": "portmap",
+                "capabilities": {"portMappings": true},
+                "snat": true
+            }
+        ]
+    }
+{{- else }}
+  cni_network_config: |-
+    {
+      "name": "k8s-pod-network",
+      "cniVersion": "0.3.1",
+      "plugins": [
+        {
+          "type": "calico",
+          "log_level": "info",
+          "log_file_path": "/var/log/calico/cni/cni.log",
+  {{- if eq .Values.datastore "etcd" }}
+          "etcd_endpoints": "__ETCD_ENDPOINTS__",
+          "etcd_key_file": "__ETCD_KEY_FILE__",
+          "etcd_cert_file": "__ETCD_CERT_FILE__",
+          "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
+  {{- else if eq .Values.datastore "kubernetes" }}
+          "datastore_type": "kubernetes",
+          "nodename": "__KUBERNETES_NODE_NAME__",
+  {{- end }}
+  {{- if or (eq .Values.network "calico") (eq .Values.network "flannel") }}
+          "mtu": __CNI_MTU__,
+  {{- else if eq .Values.network "none" }}
+          "mtu": 1500,
+  {{- end }}
+          "ipam": {
+              "type": "{{ .Values.ipam }}"
+              {{- if eq .Values.ipam "host-local" }},
+              "subnet": "usePodCidr"
+              {{- end }}
+          },
+          "policy": {
+              "type": "k8s"
+          },
+          "kubernetes": {
+              "kubeconfig": "__KUBECONFIG_FILEPATH__"
+          }
+        },
+        {
+          "type": "portmap",
+          "snat": true,
+          "capabilities": {"portMappings": true}
+        },
+        {
+          "type": "bandwidth",
+          "capabilities": {"bandwidth": true}
+        }
+      ]
+    }
+{{- end }}
+{{- if and (eq .Values.network "flannel") (eq .Values.datastore "kubernetes") }}
+
+  # Flannel network configuration. Mounted into the flannel container.
+  net-conf.json: |
+    {
+      "Network": "10.244.0.0/16",
+      "Backend": {
+        "Type": "vxlan"
+      }
+    }
+{{- end }}
