@@ -16,6 +16,7 @@ package idalloc
 
 import (
 	"errors"
+	"sort"
 
 	"github.com/golang-collections/collections/stack"
 
@@ -26,17 +27,56 @@ type IndexRange struct {
 	Min, Max int
 }
 
+// ByIndex sorts collections of IndexRange structs in order of their starting/lower index
+type ByLowerIndex []IndexRange
+
+// Len is the number of indexranges in the collection
+func (i ByLowerIndex) Len() int { return len(i) }
+
+// Less reports whether the element with index a
+// must sort before the element with index b.
+func (i ByLowerIndex) Less(a, b int) bool { return i[a].Min < i[b].Min }
+
+// Swap swaps the elements with indexes a and b.
+func (i ByLowerIndex) Swap(a, b int) { i[a], i[b] = i[b], i[a] }
+
+// hasOverlap checks whether any adjacent indexRanges have overlapping indexes
+func (a IndexRange) Overlaps(b IndexRange) bool {
+	if a.Max > b.Max {
+		return a.Min <= b.Max
+	} else {
+		return b.Min <= a.Max
+	}
+}
+
 type IndexAllocator struct {
 	indexStack *stack.Stack
 }
 
-func NewIndexAllocator(indexRange IndexRange) *IndexAllocator {
+func NewIndexAllocator(indexRanges ...IndexRange) *IndexAllocator {
+	// sort index ranges in descending order of their Min bound
+	if len(indexRanges) > 1 {
+		sort.Sort(sort.Reverse(ByLowerIndex(indexRanges)))
+	}
+
 	r := &IndexAllocator{
 		indexStack: stack.New(),
 	}
-	// Push in reverse order so that the lowest index will come out first.
-	for i := indexRange.Max; i >= indexRange.Min; i-- {
-		r.indexStack.Push(i)
+
+	for j, indexRange := range indexRanges {
+		// ensure no adjacent ranges overlap
+		if j > 0 {
+			lastIndexRange := indexRanges[j-1]
+			if lastIndexRange.Overlaps(indexRange) {
+				// truncate the current range if it overlaps with the preceding (higher) range
+				indexRange.Max = lastIndexRange.Min - 1 //TODO - are range bounds inclusive or exclusive?
+			}
+		}
+
+		// Push in reverse order so that the lowest index will come out first.
+		for i := indexRange.Max; i >= indexRange.Min; i-- {
+			r.indexStack.Push(i)
+		}
 	}
 	return r
 }
