@@ -204,6 +204,11 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 
+	// We attach calicoctl binaries directly to the release as well.
+	if _, err := r.runner.Run("cp", []string{"calicoctl/bin/*", uploadDir}, nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
