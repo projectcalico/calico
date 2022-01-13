@@ -200,7 +200,7 @@ create:
 
 	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
-	if (err == -17 /* EEXIST */) {
+	if (CALI_F_FROM_HEP && err == -17 /* EEXIST */) {
 		int i;
 
 		CALI_DEBUG("Source collision for 0x%x:%d\n", bpf_htonl(ip_src), sport);
