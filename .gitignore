@@ -3,7 +3,7 @@ report/
 bin/
 *.created*
 .idea
-
+.vscode
 /* Produced as part of release */
 hack/release/release
 node/windows-packaging/CalicoWindows/confd/config-bgp.ps1
