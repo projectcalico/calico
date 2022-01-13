@@ -51,11 +51,11 @@ For step-by-step instructions, refer to the section that corresponds to your des
 <!--- Change download URL to latest release if user browsing master branch.  --->
 <!--- For master, we hard-code a version since we don't host master releases of calicoctl.  --->
 {%- if page.version == "master" -%}
-{% assign version = "v3.21.3" %}
-{% assign url = "https://github.com/projectcalico/calico/releases/download/v3.21.3/release-v3.21.3.tgz" %}
+{% assign version = "master" %}
+{% assign url = "https://github.com/projectcalico/calico/releases/latest/download" %}
 {% else %}
 {% assign version = site.data.versions.first.components.calicoctl.version %}
-{% assign url = "https://github.com/projectcalico/calico/releases/download/{{ version }}/release-{{ version }}.tgz" %}
+{% assign url = "https://github.com/projectcalico/calico/releases/download/{{ version }}" %}
 {% endif %}
 
 
@@ -84,9 +84,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
-   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./calicoctl
+   curl -L {{ url }}/calicoctl-linux-amd64 -o calicoctl
    ```
 
 1. Set the file to be executable.
@@ -113,9 +111,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
-   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-darwin-amd64 ./calicoctl
+   curl -L {{ url }}/calicoctl-darwin-amd64 -o calicoctl
    ```
 
 1. Set the file to be executable.
@@ -142,9 +138,7 @@ you want to install the binary.
    {: .alert .alert-success}
 
 ```
-Invoke-WebRequest -Uri "{{ url }} -OutFile "calico-{{ version }}.tgz" 
-tar xzvf calico-{{ version }}.tgz
-copy calico-{{ version }}/bin/calicoctl/calicoctl-windows-amd64.exe ./calicoctl.exe
+Invoke-WebRequest -Uri "{{ url }}/calicoctl-windows-amd64.exe -OutFile "calicoctl.exe" 
 ```
 
 %>
@@ -160,9 +154,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
-   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./calicoctl
+   curl -L {{ url }}/calicoctl-linux-ppc64le -o calicoctl
    ```
 
 1. Set the file to be executable.
@@ -188,9 +180,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
-   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-arm64 ./calicoctl
+   curl -L {{ url }}/calicoctl-linux-arm64 -o calicoctl
    ```
 
 1. Set the file to be executable.
@@ -221,9 +211,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
-   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-amd64 ./kubectl-calicoctl
+   curl -L {{ url }}/calicoctl-linux-arm64 -o kubectl-calico
    ```
 
 1. Set the file to be executable.
@@ -250,9 +238,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
-   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-darwin-amd64 ./kubectl-calicoctl
+   curl -L {{ url }}/calicoctl-darwin-amd64 -o kubectl-calico
    ```
 
 1. Set the file to be executable.
@@ -280,9 +266,7 @@ you want to install the binary.
    {: .alert .alert-success}
 
 ```
-Invoke-WebRequest -Uri "{{ url }} -OutFile "calico-{{ version }}.tgz" 
-tar xzvf calico-{{ version }}.tgz
-copy calico-{{ version }}/bin/calicoctl/calicoctl-windows-amd64.exe ./kubectl-calicoctl.exe
+Invoke-WebRequest -Uri "{{ url }}/calicoctl-windows-amd64.exe -OutFile "kubectl-calico.exe" 
 ```
 
 %>
@@ -298,9 +282,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
-   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-ppc64le ./kubectl-calicoctl
+   curl -L {{ url }}/calicoctl-linux-ppc64le -o kubectl-calico
    ```
 
 1. Set the file to be executable.
@@ -327,9 +309,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }} -o /tmp/calico-{{ version }}.tgz
-   tar xzvf /tmp/calico-{{ version }}.tgz -C /tmp
-   cp /tmp/release-{{ version }}/bin/calicoctl/calicoctl-linux-arm64 ./kubectl-calicoctl
+   curl -L {{ url }}/calicoctl-linux-arm64 -o kubectl-calico
    ```
 
 1. Set the file to be executable.
