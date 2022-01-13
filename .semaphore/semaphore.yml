@@ -381,8 +381,9 @@ blocks:
     jobs:
     - name: "Build image"
       matrix:
+      # TODO: s390x builds of calico/node are not working.
       - env_var: ARCH
-        values: [ "arm64", "armv7", "ppc64le", "s390x" ]
+        values: [ "arm64", "armv7", "ppc64le" ]
       commands:
       - make image ARCH=$ARCH
 
