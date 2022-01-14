@@ -28,54 +28,48 @@ type IndexRange struct {
 }
 
 // ByIndex sorts collections of IndexRange structs in order of their starting/lower index
-type ByLowerIndex []IndexRange
+type ByMaxIndex []IndexRange
 
 // Len is the number of indexranges in the collection
-func (i ByLowerIndex) Len() int { return len(i) }
+func (i ByMaxIndex) Len() int { return len(i) }
 
 // Less reports whether the element with index a
 // must sort before the element with index b.
-func (i ByLowerIndex) Less(a, b int) bool { return i[a].Min < i[b].Min }
+func (i ByMaxIndex) Less(a, b int) bool { return i[a].Max < i[b].Max }
 
 // Swap swaps the elements with indexes a and b.
-func (i ByLowerIndex) Swap(a, b int) { i[a], i[b] = i[b], i[a] }
-
-// hasOverlap checks whether any adjacent indexRanges have overlapping indexes
-func (a IndexRange) Overlaps(b IndexRange) bool {
-	if a.Max > b.Max {
-		return a.Min <= b.Max
-	} else {
-		return b.Min <= a.Max
-	}
-}
+func (i ByMaxIndex) Swap(a, b int) { i[a], i[b] = i[b], i[a] }
 
 type IndexAllocator struct {
 	indexStack *stack.Stack
 }
 
 func NewIndexAllocator(indexRanges ...IndexRange) *IndexAllocator {
-	// sort index ranges in descending order of their Min bound
+	// sort index ranges in descending order of their Max bound
 	if len(indexRanges) > 1 {
-		sort.Sort(sort.Reverse(ByLowerIndex(indexRanges)))
+		sort.Sort(sort.Reverse(ByMaxIndex(indexRanges)))
 	}
 
 	r := &IndexAllocator{
 		indexStack: stack.New(),
 	}
 
+	var lowestIndex int
 	for j, indexRange := range indexRanges {
-		// ensure no adjacent ranges overlap
-		if j > 0 {
-			lastIndexRange := indexRanges[j-1]
-			if lastIndexRange.Overlaps(indexRange) {
-				// truncate the current range if it overlaps with the preceding (higher) range
-				indexRange.Max = lastIndexRange.Min - 1 //TODO - are range bounds inclusive or exclusive?
-			}
+		if j == 0 {
+			// keep track of the most recent Min to prevent an overlapping range
+			// from creating duplicate indices in the final index stack
+			lowestIndex = indexRange.Max + 1
 		}
 
 		// Push in reverse order so that the lowest index will come out first.
 		for i := indexRange.Max; i >= indexRange.Min; i-- {
+			// skip overlapping range indices
+			if i >= lowestIndex {
+				continue
+			}
 			r.indexStack.Push(i)
+			lowestIndex = i
 		}
 	}
 	return r
