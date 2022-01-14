@@ -102,5 +102,4 @@ var _ = Describe("IndexAllocator", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
-
 })

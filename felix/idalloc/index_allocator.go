@@ -77,7 +77,7 @@ func NewIndexAllocator(indexRanges ...IndexRange) *IndexAllocator {
 
 func (r *IndexAllocator) GrabIndex() (int, error) {
 	if r.indexStack.Len() == 0 {
-		return 0, errors.New("No more indices available")
+		return 0, errors.New("no more indices available")
 	}
 	return r.indexStack.Pop().(int), nil
 }
