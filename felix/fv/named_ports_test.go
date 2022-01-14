@@ -222,7 +222,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	}
 
 	cleanConntrack := func() {
-		if bpfEnabled {
+		if bpfEnabled && protocol == "udp" {
 			felix.Exec("calico-bpf", "conntrack", "clean")
 		}
 	}
