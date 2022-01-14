@@ -152,6 +152,10 @@ CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 # Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
+ifeq ($(BUILDARCH),amd64)
+	# *-amd64 tagged images for etcd are not available until v3.5.0
+	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
+endif
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";

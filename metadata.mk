@@ -11,7 +11,7 @@ KUBECTL_VERSION = v1.22.1
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-ETCD_VERSION=v3.5.0
+ETCD_VERSION=v3.3.7
 PROTOC_VER=v0.1
 
 # Configuration for Semaphore integration.
