@@ -29,9 +29,6 @@ TAR_URL_TEMPL = (
     "https://github.com/projectcalico/{component}/archive/{component_version}.tar.gz"
 )
 
-CNI_URL_TEMPL = "https://github.com/projectcalico/{component}/releases/download/{component_version}/{binary}-{arch}"
-CTL_URL_TEMPL = "https://github.com/projectcalico/{component}/releases/download/{component_version}/{binary}"
-
 FLANNEL_TAG_URL_TEMPL = (
     "https://github.com/coreos/{component}/releases/tag/{component_version}"
 )
@@ -47,17 +44,19 @@ DOCS_TAR_URL_TEMPL = (
     "{component_version}/release-{component_version}.tgz"
 )
 
+CTL_URL_TEMPL = "https://github.com/projectcalico/calico/releases/download/{component_version}/{binary}"
+
 components = [
-    {"name": "typha", "lookup": "typha", "urls": []},
-    {"name": "calicoctl", "lookup": "calicoctl", "urls": []},
-    {"name": "node", "lookup": "calico/node", "urls": []},
-    {"name": "cni-plugin", "lookup": "calico/cni", "urls": []},
-    {"name": "kube-controllers", "lookup": "calico/kube-controllers", "urls": []},
-    {"name": "networking-calico", "lookup": "networking-calico", "urls": []},
     {"name": "flannel", "lookup": "flannel", "urls": []},
-    {"name": "app-policy", "lookup": "calico/dikastes", "urls": []},
-    {"name": "pod2daemon", "lookup": "flexvol", "urls": []},
     {"name": "calico", "lookup": "calico/node", "urls": []},
+]
+
+calicoctl_binaries = [
+    "calicoctl-darwin-amd64",
+    "calicoctl-linux-amd64",
+    "calicoctl-linux-arm64",
+    "calicoctl-linux-ppc64le",
+    "calicoctl-windows-amd64.exe",
 ]
 
 for component in components:
@@ -79,43 +78,17 @@ for component in components:
         component["urls"].append(
             DOCS_TAR_URL_TEMPL.format(
                 component=component["name"],
-                component_version=versions[0]["components"][component["lookup"]][
-                    "version"
-                ],
+                component_version=RELEASE_VERSION,
             )
         )
-    if component["name"] == "cni-plugin":
-        for binary in ["calico", "calico-ipam"]:
-            for arch in ["amd64", "arm64", "ppc64le"]:
-                component["urls"].append(
-                    CNI_URL_TEMPL.format(
-                        component=component["name"],
-                        component_version=versions[0]["components"][
-                            component["lookup"]
-                        ]["version"],
-                        binary=binary,
-                        arch=arch,
-                    )
-                )
-    elif component["name"] == "calicoctl":
-        for binary in [
-            "calicoctl",
-            "calicoctl-darwin-amd64",
-            "calicoctl-linux-amd64",
-            "calicoctl-linux-arm64",
-            "calicoctl-linux-ppc64le",
-            "calicoctl-windows-amd64.exe",
-        ]:
+        for binary in calicoctl_binaries:
             component["urls"].append(
                 CTL_URL_TEMPL.format(
-                    component=component["name"],
-                    component_version=versions[0]["components"][component["lookup"]][
-                        "version"
-                    ],
+                    component_version=RELEASE_VERSION,
                     binary=binary,
                 )
             )
-    elif component["name"] == "flannel":
+    if component["name"] == "flannel":
         component["urls"] = [
             FLANNEL_TAG_URL_TEMPL.format(
                 component=component["name"],
@@ -140,40 +113,7 @@ for component in components:
     # We then pass that list of URLs into the simple test below (which gets the URL
     # and asserts that the response code is 200)
     #
-    # For ease of understanding, these are the release artifacts that are tested (for release 3.6.2):
-    #
-    # typha:
-    #     https://github.com/projectcalico/typha/releases/tag/v3.6.2
-    #     https://github.com/projectcalico/typha/archive/v3.6.2.zip
-    #     https://github.com/projectcalico/typha/archive/v3.6.2.tar.gz
-    # node: (as typha)
-    # kube-controllers: (as typha)
-    # dikastes: (as typha)
-    #
-    # networking-calico:
-    #     https://github.com/projectcalico/networking-calico/archive/v3.6.2.zip
-    #     https://github.com/projectcalico/networking-calico/archive/v3.6.2.tar.gz
-    #
-    # cni:
-    #     https://github.com/projectcalico/cni-plugin/releases/download/v3.6.2/calico-amd64
-    #     https://github.com/projectcalico/cni-plugin/releases/download/v3.6.2/calico-arm64
-    #     https://github.com/projectcalico/cni-plugin/releases/download/v3.6.2/calico-ppc64le
-    #     https://github.com/projectcalico/cni-plugin/releases/download/v3.6.2/calico-ipam-amd64
-    #     https://github.com/projectcalico/cni-plugin/releases/download/v3.6.2/calico-ipam-arm64
-    #     https://github.com/projectcalico/cni-plugin/releases/download/v3.6.2/calico-ipam-ppc64le
-    #     https://github.com/projectcalico/cni-plugin/archive/v3.6.2.zip
-    #     https://github.com/projectcalico/cni-plugin/archive/v3.6.2.tar.gz
-    #
-    # calicoctl:
-    #     https://github.com/projectcalico/calicoctl/releases/tag/v3.6.2
-    #     https://github.com/projectcalico/calicoctl/releases/download/v3.6.2/calicoctl
-    #     https://github.com/projectcalico/calicoctl/releases/download/v3.6.2/calicoctl-darwin-amd64
-    #     https://github.com/projectcalico/calicoctl/releases/download/v3.6.2/calicoctl-linux-amd64
-    #     https://github.com/projectcalico/calicoctl/releases/download/v3.6.2/calicoctl-linux-arm64
-    #     https://github.com/projectcalico/calicoctl/releases/download/v3.6.2/calicoctl-linux-ppc64le
-    #     https://github.com/projectcalico/calicoctl/releases/download/v3.6.2/calicoctl-windows-amd64.exe
-    #     https://github.com/projectcalico/calicoctl/archive/v3.6.2.zip
-    #     https://github.com/projectcalico/calicoctl/archive/v3.6.2.tar.gz
+    # For ease of understanding, these are the release artifacts that are tested (for release 3.21.3):
     #
     # flannel:
     #     https://github.com/coreos/flannel/releases/download/v0.9.1/flannel-v0.9.1-linux-amd64.tar.gz
