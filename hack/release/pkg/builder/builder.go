@@ -36,10 +36,6 @@ var (
 		"us.gcr.io/projectcalico-org",
 	}
 
-	// Architectures to build as part of a release.
-	// Left blank defaults to auto-detect each image's supported architectures.
-	architectures = []string{}
-
 	// Git configuration for publishing to GitHub.
 	organization = "projectcalico"
 	repo         = "calico"
@@ -311,7 +307,6 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
-		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
 
 	for _, dir := range releaseDirs {
@@ -381,7 +376,6 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		"RELEASE=true",
 		"CONFIRM=true",
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
-		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
 
 	for _, dir := range releaseDirs {
