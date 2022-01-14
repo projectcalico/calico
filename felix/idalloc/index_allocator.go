@@ -27,7 +27,7 @@ type IndexRange struct {
 	Min, Max int
 }
 
-// ByIndex sorts collections of IndexRange structs in order of their starting/lower index
+// ByMaxIndex sorts collections of IndexRange structs in order of their starting/lower index
 type ByMaxIndex []IndexRange
 
 // Len is the number of indexranges in the collection
