@@ -1445,7 +1445,8 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 		Expect(seenOtherIP).To(BeTrue(), "SYNs from varying source ports all went to same backend")
 	})
 
-	// Change back to the
+	// Change back to the original SYN packet so that we can test the new policy
+	// with an existing CT entry.
 	tcpSyn.SrcPort = origTCPSrcPort
 	_, _, _, _, synPkt, err = testPacket(nil, nil, tcpSyn, nil)
 	Expect(err).NotTo(HaveOccurred())
