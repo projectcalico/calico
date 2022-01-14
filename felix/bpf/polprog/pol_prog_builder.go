@@ -540,20 +540,32 @@ func (p *Builder) writeRule(r Rule, actionLabel string, destLeg matchLeg) {
 	}
 
 	if len(rule.SrcPorts) > 0 || len(rule.SrcNamedPortIpSetIds) > 0 {
-		log.WithField("ports", rule.SrcPorts).Debugf("SrcPorts match")
+		log.WithFields(log.Fields{
+			"ports":   rule.SrcPorts,
+			"set ids": rule.SrcNamedPortIpSetIds,
+		}).Debugf("SrcPorts match")
 		p.writePortsMatch(false, legSource, rule.SrcPorts, rule.SrcNamedPortIpSetIds)
 	}
 	if len(rule.NotSrcPorts) > 0 || len(rule.NotSrcNamedPortIpSetIds) > 0 {
-		log.WithField("ports", rule.NotSrcPorts).Debugf("NotSrcPorts match")
+		log.WithFields(log.Fields{
+			"ports":   rule.NotSrcPorts,
+			"set ids": rule.NotSrcNamedPortIpSetIds,
+		}).Debugf("NotSrcPorts match")
 		p.writePortsMatch(true, legSource, rule.NotSrcPorts, rule.NotSrcNamedPortIpSetIds)
 	}
 
 	if len(rule.DstPorts) > 0 || len(rule.DstNamedPortIpSetIds) > 0 {
-		log.WithField("ports", rule.DstPorts).Debugf("DstPorts match")
+		log.WithFields(log.Fields{
+			"ports":   rule.DstPorts,
+			"set ids": rule.DstNamedPortIpSetIds,
+		}).Debugf("DstPorts match")
 		p.writePortsMatch(false, destLeg, rule.DstPorts, rule.DstNamedPortIpSetIds)
 	}
 	if len(rule.NotDstPorts) > 0 || len(rule.NotDstNamedPortIpSetIds) > 0 {
-		log.WithField("ports", rule.NotDstPorts).Debugf("NotDstPorts match")
+		log.WithFields(log.Fields{
+			"ports":   rule.NotDstPorts,
+			"set ids": rule.NotDstNamedPortIpSetIds,
+		}).Debugf("NotDstPorts match")
 		p.writePortsMatch(true, destLeg, rule.NotDstPorts, rule.NotDstNamedPortIpSetIds)
 	}
 
