@@ -44,9 +44,19 @@ DOCS_TAR_URL_TEMPL = (
     "{component_version}/release-{component_version}.tgz"
 )
 
+CTL_URL_TEMPL = "https://github.com/projectcalico/calico/releases/download/{component_version}/{binary}"
+
 components = [
     {"name": "flannel", "lookup": "flannel", "urls": []},
     {"name": "calico", "lookup": "calico/node", "urls": []},
+]
+
+calicoctl_binaries = [
+    "calicoctl-darwin-amd64",
+    "calicoctl-linux-amd64",
+    "calicoctl-linux-arm64",
+    "calicoctl-linux-ppc64le",
+    "calicoctl-windows-amd64.exe",
 ]
 
 for component in components:
@@ -68,11 +78,16 @@ for component in components:
         component["urls"].append(
             DOCS_TAR_URL_TEMPL.format(
                 component=component["name"],
-                component_version=versions[0]["components"][component["lookup"]][
-                    "version"
-                ],
+                component_version=RELEASE_VERSION,
             )
         )
+        for binary in calicoctl_binaries:
+            component["urls"].append(
+                CTL_URL_TEMPL.format(
+                    component_version=RELEASE_VERSION,
+                    binary=binary,
+                )
+            )
     if component["name"] == "flannel":
         component["urls"] = [
             FLANNEL_TAG_URL_TEMPL.format(
