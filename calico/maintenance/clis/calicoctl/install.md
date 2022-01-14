@@ -54,8 +54,7 @@ For step-by-step instructions, refer to the section that corresponds to your des
 {% assign version = "master" %}
 {% assign url = "https://github.com/projectcalico/calico/releases/latest/download" %}
 {% else %}
-{% assign version = site.data.versions.first.components.calicoctl.version %}
-{% assign url = "https://github.com/projectcalico/calico/releases/download/{{ version }}" %}
+{% assign url = "https://github.com/projectcalico/calico/releases/download/{{site.data.versions.first.components.calicoctl.version}}" %}
 {% endif %}
 
 
