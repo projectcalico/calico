@@ -147,6 +147,8 @@ fv-fast:
 
 ## Run etcd, with tls enabled, as a container (calico-etcd-tls)
 run-etcd-tls: stop-etcd-tls
+	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
+	# still relies on it. 
 	docker run --detach \
 		-v `pwd`/$(TEST_CERT_PATH):/root/etcd-certificates/ \
 		--net=host \
@@ -161,6 +163,7 @@ run-etcd-tls: stop-etcd-tls
 		--cert-file=/root/etcd-certificates/server.crt \
 		--key-file=/root/etcd-certificates/server.key \
 		--client-cert-auth=true \
+		--enable-v2 \
 		--data-dir=/var/lib/etcd
 
 ## Stop etcd with name calico-etcd-tls
@@ -169,10 +172,13 @@ stop-etcd-tls:
 
 ## Run etcd as a container (calico-etcd)
 run-etcd: stop-etcd
+	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
+	# still relies on it. 
 	docker run --detach \
 	--net=host \
 	--entrypoint=/usr/local/bin/etcd \
 	--name calico-etcd $(ETCD_IMAGE) \
+	--enable-v2 \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
