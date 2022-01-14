@@ -16,6 +16,7 @@ package builder
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 
@@ -36,7 +37,8 @@ var (
 	}
 
 	// Architectures to build as part of a release.
-	architectures = []string{"amd64", "arm64", "armv7", "ppc64le", "s390x"}
+	// Left blank defaults to auto-detect each image's supported architectures.
+	architectures = []string{}
 
 	// Git configuration for publishing to GitHub.
 	organization = "projectcalico"
@@ -191,6 +193,17 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return fmt.Errorf("Failed to create dir: %s", err)
 	}
 
+	// We attach calicoctl binaries directly to the release as well.
+	files, err := ioutil.ReadDir("calicoctl/bin/")
+	if err != nil {
+		return err
+	}
+	for _, b := range files {
+		if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calicoctl/bin/%s", b.Name()), uploadDir}, nil); err != nil {
+			return err
+		}
+	}
+
 	// Build and add in the complete release tarball.
 	if err = r.buildReleaseTar(ver, uploadDir); err != nil {
 		return err
@@ -201,11 +214,6 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
-		return err
-	}
-
-	// We attach calicoctl binaries directly to the release as well.
-	if _, err := r.runner.Run("cp", []string{"calicoctl/bin/*", uploadDir}, nil); err != nil {
 		return err
 	}
 
@@ -227,14 +235,15 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 		return fmt.Errorf("Failed to create images dir: %s", err)
 	}
 	outFmt := "_output/release-%s/images/%s"
+	registry := registries[0]
 	images := map[string]string{
-		fmt.Sprintf("calico/node:%s", ver):                         fmt.Sprintf(outFmt, ver, "calico-node.tar"),
-		fmt.Sprintf("calico/typha:%s", ver):                        fmt.Sprintf(outFmt, ver, "calico-typha.tar"),
-		fmt.Sprintf("calico/cni:%s", ver):                          fmt.Sprintf(outFmt, ver, "calico-cni.tar"),
-		fmt.Sprintf("calico/kube-controllers:%s", ver):             fmt.Sprintf(outFmt, ver, "calico-kube-controllers.tar"),
-		fmt.Sprintf("calico/pod2daemon-flexvol:%s", ver):           fmt.Sprintf(outFmt, ver, "calico-pod2daemon.tar"),
-		fmt.Sprintf("calico/dikastes:%s", ver):                     fmt.Sprintf(outFmt, ver, "calico-dikastes.tar"),
-		fmt.Sprintf("calico/flannel-migration-controller:%s", ver): fmt.Sprintf(outFmt, ver, "calico-flannel-migration-controller.tar"),
+		fmt.Sprintf("%s/node:%s", registry, ver):                         fmt.Sprintf(outFmt, ver, "calico-node.tar"),
+		fmt.Sprintf("%s/typha:%s", registry, ver):                        fmt.Sprintf(outFmt, ver, "calico-typha.tar"),
+		fmt.Sprintf("%s/cni:%s", registry, ver):                          fmt.Sprintf(outFmt, ver, "calico-cni.tar"),
+		fmt.Sprintf("%s/kube-controllers:%s", registry, ver):             fmt.Sprintf(outFmt, ver, "calico-kube-controllers.tar"),
+		fmt.Sprintf("%s/pod2daemon-flexvol:%s", registry, ver):           fmt.Sprintf(outFmt, ver, "calico-pod2daemon.tar"),
+		fmt.Sprintf("%s/dikastes:%s", registry, ver):                     fmt.Sprintf(outFmt, ver, "calico-dikastes.tar"),
+		fmt.Sprintf("%s/flannel-migration-controller:%s", registry, ver): fmt.Sprintf(outFmt, ver, "calico-flannel-migration-controller.tar"),
 	}
 	for img, out := range images {
 		err = r.archiveContainerImage(out, img)
