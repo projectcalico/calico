@@ -1183,6 +1183,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	// Determine endpoint type.
 	if m.isWorkloadIface(ifaceName) {
 		endpointType = tc.EpTypeWorkload
+	} else if ifaceName == "lo" {
+		endpointType = tc.EpTypeLO
 	} else if ifaceName == "tunl0" {
 		if m.Features.IPIPDeviceIsL3 {
 			endpointType = tc.EpTypeL3Device
@@ -1344,7 +1346,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
-	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev
+	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev || iface == "lo"
 }
 
 func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
@@ -1638,6 +1640,11 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	err = m.ensureQdisc(bpfInDev)
 	if err != nil {
 		return fmt.Errorf("failed to set qdisc on %s: %w", bpfOutDev, err)
+	}
+
+	err = m.ensureQdisc("lo")
+	if err != nil {
+		log.WithError(err).Fatalf("Failed to set qdisc on lo.")
 	}
 
 	// Setup a link local route to a non-existent link local address that would

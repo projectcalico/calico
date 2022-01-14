@@ -178,7 +178,7 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 	}
 
 	isHost := false
-	if ap.Type == "host" || ap.Type == "nat" {
+	if ap.Type == "host" || ap.Type == "nat" || ap.Type == "lo" {
 		isHost = true
 	}
 
