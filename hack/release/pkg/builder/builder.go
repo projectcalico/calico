@@ -377,13 +377,27 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
 	)
 
+	// We allow for a certain number of retries when publishing each directory, since
+	// network flakes can occasionally result in images failing to push.
+	maxRetries := 1
 	for _, dir := range releaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
-		if err != nil {
-			logrus.Error(out)
-			return fmt.Errorf("Failed to publish %s: %s", dir, err)
+		attempt := 0
+		for {
+			out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
+			if err != nil {
+				if attempt < maxRetries {
+					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
+					attempt++
+					continue
+				}
+				logrus.Error(out)
+				return fmt.Errorf("Failed to publish %s: %s", dir, err)
+			}
+
+			// Success - move on to the next directory.
+			logrus.Info(out)
+			break
 		}
-		logrus.Info(out)
 	}
 	return nil
 }
