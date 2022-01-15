@@ -156,6 +156,7 @@ BINDIR?=bin
 clean: clean-windows-upgrade
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
+	find . -name '.*.published*' -type f -delete
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
@@ -582,7 +583,8 @@ release-verify: release-prereqs
 	if ! docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
 	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
@@ -594,6 +596,7 @@ release-publish: release-prereqs
 	# ghr -u projectcalico -r node \
 	# 	-n $(VERSION) \
 	# 	$(VERSION) $(WINDOWS_INSTALL_SCRIPT)
+	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.

@@ -71,6 +71,7 @@ _site build: bin/helm
 clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
+	find . -name '.*.published*' -type f -delete
 	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
 
 ###############################################################################
@@ -154,8 +155,10 @@ ifdef CHART_RELEASE
 endif
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
 	$(MAKE) helm-index
+	touch $@
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
 .PHONY: helm-index
