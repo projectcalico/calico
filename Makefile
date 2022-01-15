@@ -54,6 +54,15 @@ image:
 	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 
 ###############################################################################
+# Run local e2e smoke-test against the checked-out code 
+# using a local kind cluster.
+###############################################################################
+run-smoke:
+	$(MAKE) -C e2e build
+	$(MAKE) -C node kind-k8st-setup
+	KUBECONFIG=./node/kubeconfig.yaml ./e2e/bin/e2e.test -ginkgo.focus
+
+###############################################################################
 # Release logic below
 ###############################################################################
 # Build the release tool.
