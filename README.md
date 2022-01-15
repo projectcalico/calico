@@ -34,11 +34,9 @@ There are many avenues to get started with Calico depending on your situation.
 Calico is an open source project, and welcomes your contribution, be it through code, a bug report, a feature request, or user
 feedback.
 
-- [The Contribution Guidelines](calico/CONTRIBUTING_CODE.md) document will get you started on submitting changes to the project.
-- [The Developer Guide](calico/DEVELOPER_GUIDE.md) will walk you through how to set up a development environment, build the code,
-  and run tests.
-- [The Calico Documentation Guide](calico/CONTRIBUTING_DOCS.md) will get you started on making changes to
-  [https://projectcalico.docs.tigera.io](https://projectcalico.docs.tigera.io).
+- [The Contribution Guidelines](CONTRIBUTING_CODE.md) document will get you started on submitting changes to the project.
+- [The Developer Guide](DEVELOPER_GUIDE.md) will walk you through how to set up a development environment, build the code, and run tests.
+- [The Calico Documentation Guide](CONTRIBUTING_DOCS.md) will get you started on making changes to [https://projectcalico.docs.tigera.io](https://projectcalico.docs.tigera.io).
 
 ## Join the Calico Community!
 
