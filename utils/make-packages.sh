@@ -9,10 +9,14 @@
 scriptdir=$(dirname $(realpath $0))
 
 # Get the location of the rpm builder script.
-rpmDir=$(dirname $(realpath $scriptdir))/rpm
+rpmDir=$(dirname $scriptdir)/rpm
 
 # Include function library.
 . ${scriptdir}/lib.sh
+
+echo "[CASEY] Running make-packages.sh in directory $(pwd)"
+echo "[CASEY] Running make-packages.sh with scriptDir $scriptdir"
+echo "[CASEY] Running make-packages.sh with rpmdir $rpmdir"
 
 # Get the version based on Git state, and the Git commit ID.
 version=${FORCE_VERSION:-`git_auto_version`}
@@ -22,6 +26,7 @@ sha=`git_commit_id`
 MY_UID=`id -u`
 MY_GID=`id -g`
 DOCKER_RUN_RM="docker run --rm --user ${MY_UID}:${MY_GID} -v $rpmDir:/rpm -v $(dirname `pwd`):/code -w /code/$(basename `pwd`)"
+echo "[CASEY] DOCKER_RUN_RM = $DOCKER_RUN_RM"
 
 # Determine if this is a release (i.e. corresponds exactly to a Git tag) or a
 # snapshot.

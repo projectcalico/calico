@@ -45,7 +45,7 @@ blocks:
             - export VERSION=release-v3.21
             - make release-publish
         # TODO: Uncomment this once v3.22 is released. v3.20 is not monorepo compatible,
-        # so needs to use an older version of the packagining repository.
+        # so needs to use an older version of the packaging repository.
         # - name: 'Previous release branch'
         #   commands:
         #     - export REPO_NAME=calico-previous

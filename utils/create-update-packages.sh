@@ -195,6 +195,9 @@ function do_net_cal {
 	    NAME=networking-calico \
 	    DEB_EPOCH=1: \
 	    ../../utils/make-packages.sh deb rpm
+    # Packages are produced in rootDir/calico/, but we need
+    # them one level higher, so move them there.
+    find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' $rootdir \;
     popd
 }
 
@@ -221,6 +224,10 @@ function do_felix {
 	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
 	    ../../utils/make-packages.sh deb rpm
+
+    # Packages are produced in rootDir/calico/, but we need
+    # them one level higher, so move them there.
+    find ../ -type f -name 'felix_*-*' -exec mv '{}' $rootdir \;
     popd
 }
 
