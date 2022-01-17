@@ -62,7 +62,7 @@ var _ = Describe("IndexAllocator", func() {
 			Expect(idx).To(Equal(45))
 		})
 
-		It("GrabAllRemainingIndices works", func() {
+		It("GrabBlock works", func() {
 
 			By("allocating the first index")
 			idx, err := r.GrabIndex()
@@ -70,7 +70,8 @@ var _ = Describe("IndexAllocator", func() {
 			Expect(idx).To(Equal(2))
 
 			By("grabbing all remaining indices")
-			remaining := r.GrabAllRemainingIndices()
+			remaining, err := r.GrabBlock(7)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(remaining.Len()).To(BeNumerically("==", 7))
 
 			By("allocating when no more indices are available")
