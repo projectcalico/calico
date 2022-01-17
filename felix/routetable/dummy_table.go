@@ -5,7 +5,6 @@ import "github.com/projectcalico/felix/ifacemonitor"
 type DummyTable struct {
 }
 
-
 func (_ *DummyTable) OnIfaceStateChanged(_ string, _ ifacemonitor.State) {
 	return
 }
