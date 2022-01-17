@@ -63,8 +63,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
-	if (!CALI_F_TO_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
+	if ((!CALI_F_TO_HOST || CALI_F_NAT_IF) && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_INFO("Final result=ALLOW (%d). Bypass mark bit set.\n", CALI_REASON_BYPASS);
+		if (CALI_F_NAT_IF) {
+			/* We use redirect to bpfnat iface to turn the packet around and
+			 * we use the BYPASS mark to avoid any processing at the bpfnat
+			 * iface. Just clean up the bypass mark and leave the other marks
+			 * intact. We need to preserve the SEEN part.
+			 */
+			skb->mark &= ~(CALI_SKB_MARK_BYPASS & ~CALI_SKB_MARK_SEEN);
+		}
 		return TC_ACT_UNSPEC;
 	}
 
@@ -1255,7 +1263,7 @@ allow:
 			state->ct_result.ifindex_fwd = r->if_index;
 			CALI_DEBUG("NP local WL on HEP\n");
 			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
-			rc = CALI_RES_REDIR_IFINDEX;
+			fib = true; /* Enforce FIB since we want to redirect */
 		}
 	}
 
