@@ -130,6 +130,7 @@ type Config struct {
 
 	MaxIPSetSize int
 
+	RouteSyncEnabled               bool
 	IptablesBackend                string
 	IPSetsRefreshInterval          time.Duration
 	RouteRefreshInterval           time.Duration
@@ -709,9 +710,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-		dp.loopSummarizer)
+	var routeTableV4 routeTable
+	routeTableV4 = &routetable.DummyTable{}
+
+	if config.RouteSyncEnabled {
+		log.Warn("RouteSyncEnabled is true.")
+		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
+			dp.loopSummarizer)
+	} else {
+		log.Warn("RouteSyncEnabled is false.")
+	}
 
 	epManager := newEndpointManager(
 		rawTableV4,
