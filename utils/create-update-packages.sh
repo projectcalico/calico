@@ -217,6 +217,7 @@ function do_felix {
       make build-bpf
       rm -f bpf-gpl/bin/test_*
     fi
+    rm -f Makefile
     # Override dpkg's default file exclusions, otherwise our binaries won't get included (and some
     # generated files will).
     PKG_NAME=felix \
