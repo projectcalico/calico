@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -219,6 +220,11 @@ type bpfEndpointManager struct {
 	routeTable    routetable.RouteTableInterface
 	services      map[serviceKey][]ip.V4CIDR
 	dirtyServices set.Set[serviceKey]
+
+	natInIdx  int
+	natOutIdx int
+
+	arpMap bpf.Map
 }
 
 type serviceKey struct {
@@ -290,6 +296,7 @@ func newBPFEndpointManager(
 		ipv6Enabled:           config.BPFIpv6Enabled,
 		rpfStrictModeEnabled:  config.BPFEnforceRPF,
 		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
+		arpMap:                bpfMapContext.ArpMap,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -1106,6 +1113,8 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	} else {
 		ap.IntfIP = *ip
 	}
+	ap.NATin = uint32(m.natInIdx)
+	ap.NATout = uint32(m.natOutIdx)
 
 	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
 	if err != nil {
@@ -1599,24 +1608,32 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		if err != nil {
 			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
 		}
+	}
+	if state := bpfin.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(bpfInDev)
 		if err := netlink.LinkSetUp(bpfin); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfInDev, err)
 		}
-		bpfout, err = netlink.LinkByName(bpfOutDev)
-		if err != nil {
-			return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
-		}
+	}
+	bpfout, err = netlink.LinkByName(bpfOutDev)
+	if err != nil {
+		return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
+	}
+	if state := bpfout.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(bpfOutDev)
 		if err := netlink.LinkSetUp(bpfout); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
 		}
 	}
 
-	if bpfout == nil {
-		bpfout, err = netlink.LinkByName(bpfOutDev)
-		if err != nil {
-			return fmt.Errorf("miss %s after add: %w", bpfOutDev, err)
-		}
-	}
+	m.natInIdx = bpfin.Attrs().Index
+	m.natOutIdx = bpfout.Attrs().Index
+
+	anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
+	_ = m.arpMap.Update(
+		bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
+		bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
+	)
 
 	// Add a permanent ARP entry to point to the other side of the veth to avoid
 	// ARP requests that would not be proxied if .all.rp_filter == 1
