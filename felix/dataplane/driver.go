@@ -27,8 +27,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/clock"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
