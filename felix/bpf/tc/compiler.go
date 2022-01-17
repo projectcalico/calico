@@ -66,7 +66,7 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
 		epToHostDrop = false
 	}
-	if fib && (toOrFrom != FromEp) {
+	if fib && toOrFrom != FromEp && epType != EpTypeHost {
 		// FIB lookup only makes sense for traffic towards the host.
 		logrus.Debug("Ignoring fib enabled, doesn't apply to this target")
 		fib = false
@@ -109,5 +109,6 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 	}
 	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v%s.o",
 		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel, corePart)
+	logrus.Debugf("ProgFilename %s", oFileName)
 	return oFileName
 }
