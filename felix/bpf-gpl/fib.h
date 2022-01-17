@@ -90,7 +90,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		struct arp_value *arpv;
 
 		struct arp_key arpk = {
-			.ip = state->ip_dst,
+			.ip = iface != NATIN_IFACE ? state->ip_dst : 0 /* 0.0.0.0 */,
 			.ifindex = iface,
 		};
 
