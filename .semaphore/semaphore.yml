@@ -397,7 +397,7 @@ blocks:
     - name: "sig-network conformance"
       env_vars:
       - name: E2E_FOCUS
-        value: "\\[sig-network\\].*Conformance"
+        value: "sig-network.*Conformance"
       commands:
       - make e2e-test
 
