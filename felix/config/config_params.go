@@ -160,12 +160,13 @@ type Config struct {
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
 	// Wireguard configuration
-	WireguardEnabled               bool   `config:"bool;false"`
-	WireguardListeningPort         int    `config:"int;51820"`
-	WireguardRoutingRulePriority   int    `config:"int;99"`
-	WireguardInterfaceName         string `config:"iface-param;wireguard.cali;non-zero"`
-	WireguardMTU                   int    `config:"int;0"`
-	WireguardHostEncryptionEnabled bool   `config:"bool;false"`
+	WireguardEnabled               bool          `config:"bool;false"`
+	WireguardListeningPort         int           `config:"int;51820"`
+	WireguardRoutingRulePriority   int           `config:"int;99"`
+	WireguardInterfaceName         string        `config:"iface-param;wireguard.cali;non-zero"`
+	WireguardMTU                   int           `config:"int;0"`
+	WireguardHostEncryptionEnabled bool          `config:"bool;false"`
+	WireguardPersistentKeepAlive   time.Duration `config:"seconds;25"`
 
 	BPFEnabled                         bool             `config:"bool;false"`
 	BPFDisableUnprivileged             bool             `config:"bool;true"`

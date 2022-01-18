@@ -219,6 +219,8 @@ For more information on how to use and set these variables, refer to
 | wireguardMTU                       | MTU set on the WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
 | wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
 | wireguardHostEncryptionEnabled     | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | boolean | false |
+| wireguardKeepAlive                 | WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 25] | int | int | 25 |
+
 
 For more information on encrypting in-cluster traffic with WireGuard, refer to
 [Encrypt cluster pod traffic](../../security/encrypt-cluster-pod-traffic)
