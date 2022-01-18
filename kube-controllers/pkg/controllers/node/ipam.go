@@ -17,6 +17,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 	"net"
 	"strings"
 	"time"
@@ -539,10 +540,12 @@ func (c *ipamController) updateMetrics() {
 // - The block is empty.
 // - The block's node has at least one other affine block.
 // - The other blocks on the node are not at capacity.
+// - The node is not currently undergoing a migration from Flannel
 func (c *ipamController) checkEmptyBlocks() error {
-	for blockCIDR, node := range c.emptyBlocks {
-		logc := log.WithFields(log.Fields{"blockCIDR": blockCIDR, "node": node})
-		nodeBlocks := c.blocksByNode[node]
+blocks:
+	for blockCIDR, nodeName := range c.emptyBlocks {
+		logc := log.WithFields(log.Fields{"blockCIDR": blockCIDR, "node": nodeName})
+		nodeBlocks := c.blocksByNode[nodeName]
 		if len(nodeBlocks) <= 1 {
 			continue
 		}
@@ -568,6 +571,26 @@ func (c *ipamController) checkEmptyBlocks() error {
 			continue
 		}
 
+		// Get node to inspect labels
+		node, err := c.client.Nodes().Get(context.TODO(), nodeName, options.GetOptions{})
+		if err != nil {
+			logc.WithError(err).Warn("failed to get node, skipping affinity release")
+			continue
+		}
+
+		// We cannot release blocks affined to nodes undergoing migration from Flannel
+		// Its Pod's IPs are not managed by Calico
+		for labelName, labelVal := range node.ObjectMeta.Labels {
+			// Check against labels used by the migration controller
+			for migrationLabelName, migrationLabelValue := range flannelmigration.NodeNetworkCalico {
+				// Only the label value "calico" specifies a migrated node where we can release the affinity
+				if labelName == migrationLabelName && labelVal != migrationLabelValue {
+					logc.Info("node affined to block is currently undergoing a migration from Flannel, skipping affinity release")
+					continue blocks
+				}
+			}
+		}
+
 		// Find the actual block object.
 		block, ok := c.allBlocks[blockCIDR]
 		if !ok {
@@ -577,7 +600,7 @@ func (c *ipamController) checkEmptyBlocks() error {
 
 		// We can release the empty one.
 		logc.Infof("Releasing affinity for empty block (node has %d total blocks)", len(nodeBlocks))
-		err := c.client.IPAM().ReleaseBlockAffinity(context.TODO(), block.Value.(*model.AllocationBlock), true)
+		err = c.client.IPAM().ReleaseBlockAffinity(context.TODO(), block.Value.(*model.AllocationBlock), true)
 		if err != nil {
 			logc.WithError(err).Warn("unable or unwilling to release affinity for block")
 			continue
@@ -588,7 +611,7 @@ func (c *ipamController) checkEmptyBlocks() error {
 		// in case there are other empty blocks allocated to the node so that we don't
 		// accidentally release all of the node's blocks.
 		delete(c.emptyBlocks, blockCIDR)
-		delete(c.blocksByNode[node], blockCIDR)
+		delete(c.blocksByNode[nodeName], blockCIDR)
 		delete(c.nodesByBlock, blockCIDR)
 		delete(c.allBlocks, blockCIDR)
 	}
