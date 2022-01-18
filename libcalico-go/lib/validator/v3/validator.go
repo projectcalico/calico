@@ -43,7 +43,8 @@ var validate *validator.Validate
 
 const (
 	// Maximum size of annotations.
-	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
+	totalAnnotationSizeLimitB int64  = 256 * (1 << 10) // 256 kB
+	routeTableMaxLinux        uint32 = 0xFFFFFFFF
 
 	globalSelector = "global()"
 )
@@ -116,7 +117,6 @@ var (
 
 	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
 	routeTablesReservedLinux = []int{253, 254, 255}
-	routeTableMax            = 0xFFFFFFFF
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -1565,24 +1565,35 @@ func validateRuleMetadata(structLevel validator.StructLevel) {
 func validateRouteTableRange(structLevel validator.StructLevel) {
 	r := structLevel.Current().Interface().(api.RouteTableRange)
 
-	if r.Min <= 0 {
-		log.Warningf("RouteTableRange is invalid: %v", r)
-		structLevel.ReportError(
-			reflect.ValueOf(r),
-			"RouteTableRange",
-			"",
-			reason("cannot target 0 or negative indices"),
-			"",
-		)
-	}
-
 	if r.Min > r.Max {
 		log.Warningf("RouteTableRange is invalid: %v", r)
 		structLevel.ReportError(
 			reflect.ValueOf(r),
 			"RouteTableRange",
 			"",
-			reason("Min cannot be greater than Max"),
+			reason("min value cannot be greater than max value"),
+			"",
+		)
+	}
+
+	if r.Min <= 0 {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("cannot target indices < 1"),
+			"",
+		)
+	}
+
+	if r.Max > routeTableMaxLinux {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("max index too high"),
 			"",
 		)
 	}
