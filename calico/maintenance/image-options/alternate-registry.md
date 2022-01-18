@@ -96,13 +96,19 @@ Before applying `tigera-operator.yaml`, modify registry references to use your c
 Download all manifests first, then modify the following:
 
 ```bash
-sed -ie "s?{{ page.registry }}/?$REGISTRY/?" manifests/02-tigera-operator.yaml
+{% if page.registry != "quay.io/" -%}
+sed -ie "s?{{ page.registry }}?$REGISTRY?g" manifests/02-tigera-operator.yaml
+{% endif -%}
+sed -ie "s?quay.io?$REGISTRY?g" manifests/02-tigera-operator.yaml
 ```
 
 **For all other platforms**
 
 ```bash
+{% if page.registry != "quay.io/" -%}
 sed -ie "s?{{ page.registry }}?$REGISTRY?g" tigera-operator.yaml
+{% endif -%}
+sed -ie "s?quay.io?$REGISTRY?g" tigera-operator.yaml
 ```
 
 Next, if you are implementing user authentication to access a private registry, add the image pull secret for your `registry` to the secret `tigera-pull-secret`.
