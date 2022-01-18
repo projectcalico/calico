@@ -61,17 +61,35 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
-	if ((!CALI_F_TO_HOST || CALI_F_NAT_IF) && skb->mark == CALI_SKB_MARK_BYPASS) {
-		CALI_INFO("Final result=ALLOW (%d). Bypass mark bit set.\n", CALI_REASON_BYPASS);
-		if (CALI_F_NAT_IF) {
-			/* We use redirect to bpfnat iface to turn the packet around and
-			 * we use the BYPASS mark to avoid any processing at the bpfnat
-			 * iface. Just clean up the bypass mark and leave the other marks
-			 * intact. We need to preserve the SEEN part.
-			 */
-			skb->mark &= ~(CALI_SKB_MARK_BYPASS & ~CALI_SKB_MARK_SEEN);
-		}
+	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
+		CALI_INFO("Final result=ALLOW (%d). Bypass mark set.\n", CALI_REASON_BYPASS);
 		return TC_ACT_UNSPEC;
+	}
+	
+	if (CALI_F_NAT_IF) {
+		switch (skb->mark) {
+		case CALI_SKB_MARK_BYPASS:
+			/* We are turning a packet around to a local WEP using bpfnat
+			 * iface, the WEP should fo normal processing.
+			 */
+			{
+				__u32 mark = 0;
+				skb->mark = mark;
+			}
+			CALI_INFO("Final result=ALLOW (%d). Bypass mark set at bpfnat local WL\n", CALI_REASON_BYPASS);
+			return TC_ACT_UNSPEC;
+		case CALI_SKB_MARK_BYPASS_FWD:
+			/* We are turning a packet around from lo to a remote WEP using
+			 * bpfnat iface. Next hop is a HEP and it should just forward the
+			 * packet.
+			 */
+			{
+				__u32 mark = CALI_SKB_MARK_BYPASS;
+				skb->mark = mark;
+			}
+			CALI_INFO("Final result=ALLOW (%d). Bypass mark set at bpfnat remote WL\n", CALI_REASON_BYPASS);
+			return TC_ACT_UNSPEC;
+		}
 	}
 
 	/* Optimisation: if XDP program has already accepted the packet,
@@ -510,11 +528,18 @@ syn_force_policy:
 		/* XXX avoid rt lookup 2x */
 		struct cali_rt *r = cali_rt_lookup(ctx.state->post_nat_ip_dst);
 
-		if (r && cali_rt_flags_local_workload(r->flags)) {
-			CALI_DEBUG("NP local WL on HEP - skip policy\n");
-			ctx.state->flags |= CALI_ST_CT_NP_LOOP;
-			ctx.state->pol_rc = CALI_POL_ALLOW;
-			goto skip_policy;
+		if (r) {
+			if (cali_rt_flags_local_workload(r->flags)) {
+				CALI_DEBUG("NP redir on HEP - skip policy\n");
+				ctx.state->flags |= CALI_ST_CT_NP_LOOP;
+				ctx.state->pol_rc = CALI_POL_ALLOW;
+				goto skip_policy;
+			} else if (CALI_F_LO && cali_rt_flags_remote_workload(r->flags)) {
+				CALI_DEBUG("NP redir remote on LO\n");
+				ctx.state->flags |= CALI_ST_CT_NP_LOOP | CALI_ST_CT_NP_LOOP_REMOTE;
+				ctx.state->pol_rc = CALI_POL_ALLOW;
+				/* We need to do HEP policy here, where we do NAT. */
+			}
 		}
 	}
 
@@ -1263,11 +1288,18 @@ allow:
 	if (CALI_F_TO_HEP && !skb_seen(skb)) {
 		struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
 
-		if (r && cali_rt_flags_local_workload(r->flags)) {
-			state->ct_result.ifindex_fwd = r->if_index;
-			CALI_DEBUG("NP local WL on HEP\n");
-			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
-			fib = true; /* Enforce FIB since we want to redirect */
+		if (r) {
+			if (cali_rt_flags_local_workload(r->flags)) {
+				state->ct_result.ifindex_fwd = r->if_index;
+				CALI_DEBUG("NP local WL on HEP\n");
+				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
+				fib = true; /* Enforce FIB since we want to redirect */
+			} else if (CALI_F_LO && cali_rt_flags_remote_workload(r->flags)) {
+				state->ct_result.ifindex_fwd = NATIN_IFACE  ;
+				CALI_DEBUG("NP remote WL on LO\n");
+				ctx->state->flags |= CALI_ST_CT_NP_LOOP | CALI_ST_CT_NP_LOOP_REMOTE;
+				fib = true; /* Enforce FIB since we want to redirect */
+			}
 		}
 	}
 

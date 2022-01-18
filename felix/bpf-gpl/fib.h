@@ -272,6 +272,11 @@ cancel_fib:
 		CALI_DEBUG("Redirect directly to interface bpfnatin succeeded.\n");
 
 		__u32 mark = CALI_SKB_MARK_BYPASS;
+		
+		if (ctx->state->flags & CALI_ST_CT_NP_LOOP_REMOTE) {
+			mark = CALI_SKB_MARK_BYPASS_FWD;
+		}
+
 		CALI_DEBUG("Setting mark to 0x%x\n", mark);
 		ctx->skb->mark = mark;
 	}
