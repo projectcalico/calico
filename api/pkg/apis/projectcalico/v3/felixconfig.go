@@ -368,7 +368,7 @@ type FelixConfigurationSpec struct {
 
 	// Calico programs additional Linux route tables for various purposes.  RouteTableRange
 	// specifies the indices of the route tables that Calico should use.
-	RouteTableRange *RouteTableRange `json:"routeTableRange,omitempty" validate:"omitempty"`
+	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty,dive"`
 
 	// WireguardEnabled controls whether Wireguard is enabled. [Default: false]
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`
@@ -406,6 +406,7 @@ type RouteTableRange struct {
 	Min int `json:"min"`
 	Max int `json:"max"`
 }
+type RouteTableRanges []RouteTableRange
 
 // ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.
 type ProtoPort struct {
