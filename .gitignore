@@ -3,6 +3,7 @@ report/
 bin/
 *.created*
 .idea
+vendor/
 
 /* Produced as part of release */
 hack/release/release
