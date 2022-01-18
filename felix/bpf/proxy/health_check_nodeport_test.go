@@ -59,8 +59,8 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 
 		By("adding a LoadBalancer", func() {
 			err := k8s.Tracker().Add(&v1.Service{
-				TypeMeta:   typeMetaDiscoveryV1("Service"),
-				ObjectMeta: objectMeataV1("LB"),
+				TypeMeta:   typeMetaV1("Service"),
+				ObjectMeta: objectMeataV1("lb"),
 				Spec: v1.ServiceSpec{
 					ClusterIP: "10.1.0.1",
 					Type:      v1.ServiceTypeLoadBalancer,
@@ -81,10 +81,10 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("adding its endpoints", func() {
+		By("adding its endpointSlice", func() {
 			err := k8s.Tracker().Add(epsToSlice(&v1.Endpoints{
 				TypeMeta:   typeMetaV1("Endpoints"),
-				ObjectMeta: objectMeataV1("LB"),
+				ObjectMeta: objectMeataV1("lb"),
 				Subsets: []v1.EndpointSubset{
 					{
 						Addresses: []v1.EndpointAddress{
@@ -135,7 +135,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
 				epsToSlice(&v1.Endpoints{
 					TypeMeta:   typeMetaV1("Endpoints"),
-					ObjectMeta: objectMeataV1("LB"),
+					ObjectMeta: objectMeataV1("lb"),
 					Subsets: []v1.EndpointSubset{
 						{
 							Addresses: []v1.EndpointAddress{
@@ -186,13 +186,13 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 				}
 
 				return nil
-			}, "10s", "200ms").Should(Succeed())
+			}, "5s", "200ms").Should(Succeed())
 
 			By("making non-local a local endpoint", func() {
 				err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
 					epsToSlice(&v1.Endpoints{
 						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMeataV1("LB"),
+						ObjectMeta: objectMeataV1("lb"),
 						Subsets: []v1.EndpointSubset{
 							{
 								Addresses: []v1.EndpointAddress{
