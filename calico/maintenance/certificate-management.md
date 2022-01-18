@@ -109,9 +109,9 @@ Verify that the user and/or group match with the requested certificate subject (
 
 **Implement your signer and approver using golang**
 - Use [client-go](https://github.com/kubernetes/client-go) to create a clientset
-- To watch CSRs, use `clientset.CertificatesV1beta1().CertificateSigningRequests().Watch(..)`
-- To issue the certificate use `clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(...)`
-- To approve the CSR use `clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(...)`
+- To watch CSRs, use `clientset.CertificatesV1().CertificateSigningRequests().Watch(..)`
+- To issue the certificate use `clientset.CertificatesV1().CertificateSigningRequests().UpdateStatus(...)`
+- To approve the CSR use `clientset.CertificatesV1().CertificateSigningRequests().UpdateApproval(...)`
 
 #### Above and beyond
 - Read [kubernetes certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/) for more information on CSRs

@@ -25,14 +25,14 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1beta1"
+	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 	"k8s.io/kubernetes/pkg/proxy/apis"
 	"k8s.io/kubernetes/pkg/proxy/config"
@@ -92,7 +92,7 @@ type proxy struct {
 	syncPeriod time.Duration
 
 	// event recorder to update node events
-	recorder        record.EventRecorder
+	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
 	healthzServer   healthcheck.ProxierHealthUpdater
 
@@ -142,13 +142,12 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
 	dp.SetTriggerFn(p.runner.Run)
 
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder)
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, []string{})
 
 	p.epsChanges = k8sp.NewEndpointChangeTracker(p.hostname,
 		nil, // change if you want to provide more ctx
 		v1.IPv4Protocol,
 		p.recorder,
-		p.endpointSlicesEnabled,
 		nil,
 	)
 	p.svcChanges = k8sp.NewServiceChangeTracker(nil, v1.IPv4Protocol, p.recorder, nil)
@@ -180,7 +179,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	var epsRunner stoppableRunner
 
 	if p.endpointSlicesEnabled {
-		epsConfig := config.NewEndpointSliceConfig(informerFactory.Discovery().V1beta1().EndpointSlices(), p.syncPeriod)
+		epsConfig := config.NewEndpointSliceConfig(informerFactory.Discovery().V1().EndpointSlices(), p.syncPeriod)
 		epsConfig.RegisterEventHandler(p)
 		epsRunner = epsConfig
 	} else {
@@ -344,17 +343,5 @@ func (is *initState) setEpsSynced() {
 
 type loggerRecorder struct{}
 
-func (r *loggerRecorder) Event(object runtime.Object, eventtype, reason, message string) {
-}
-
-func (r *loggerRecorder) Eventf(object runtime.Object, eventtype, reason,
-	messageFmt string, args ...interface{}) {
-}
-
-func (r *loggerRecorder) PastEventf(object runtime.Object, timestamp metav1.Time, eventtype,
-	reason, messageFmt string, args ...interface{}) {
-}
-
-func (r *loggerRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string,
-	eventtype, reason, messageFmt string, args ...interface{}) {
+func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
 }

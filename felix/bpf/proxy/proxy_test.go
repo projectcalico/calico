@@ -24,13 +24,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1beta1"
+	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
-	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/felix/bpf/proxy"
 )
 
 func log(format string, a ...interface{}) {
@@ -685,7 +685,7 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 	slice := &discovery.EndpointSlice{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "EndpointSlice",
-			APIVersion: "discovery.k8s.io/v1beta1",
+			APIVersion: "discovery.k8s.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      eps.ObjectMeta.Name,
