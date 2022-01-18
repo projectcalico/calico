@@ -36,10 +36,6 @@ var (
 		"us.gcr.io/projectcalico-org",
 	}
 
-	// TODO: Not all components yet support all architectures, so for now just use the automatically
-	// detected architectures for each image.
-	architectures = []string{}
-
 	// Git configuration for publishing to GitHub.
 	organization = "projectcalico"
 	repo         = "calico"
@@ -310,14 +306,15 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
-		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
 
 	for _, dir := range releaseDirs {
-		err := r.makeInDirectory(dir, "release-build", env...)
+		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
 		if err != nil {
+			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
 		}
+		logrus.Info(out)
 	}
 	return nil
 }
@@ -378,15 +375,29 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		"RELEASE=true",
 		"CONFIRM=true",
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
-		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
 
+	// We allow for a certain number of retries when publishing each directory, since
+	// network flakes can occasionally result in images failing to push.
+	maxRetries := 1
 	for _, dir := range releaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
-		if err != nil {
-			return fmt.Errorf("Failed to publish %s: %s", dir, err)
+		attempt := 0
+		for {
+			out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
+			if err != nil {
+				if attempt < maxRetries {
+					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
+					attempt++
+					continue
+				}
+				logrus.Error(out)
+				return fmt.Errorf("Failed to publish %s: %s", dir, err)
+			}
+
+			// Success - move on to the next directory.
+			logrus.Info(out)
+			break
 		}
-		logrus.Info(out)
 	}
 	return nil
 }
