@@ -595,10 +595,10 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 				}
 			}
 		}
-
 		ranges = append(ranges, idalloc.IndexRange{Min: min, Max: max})
 	}
 
+	result = ranges
 	return
 }
 
