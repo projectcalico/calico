@@ -25,6 +25,9 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
@@ -87,6 +90,11 @@ Description:
 	cf := parsedArgs["--config"].(string)
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
+		if derr, ok := err.(errors.ErrorDatastoreError); ok {
+			log.Debugf("Client config error: %s", derr.Error())
+			fmt.Println("Unable to detect installed Calico version")
+			return nil
+		}
 		return err
 	}
 	ctx := context.Background()
