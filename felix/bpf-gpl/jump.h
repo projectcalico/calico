@@ -8,7 +8,7 @@
 #include "conntrack.h"
 #include "policy.h"
 
-CALI_MAP(cali_v4_state, 3,
+CALI_MAP(cali_v4_state, 4,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
 		__u32, struct cali_tc_state,
 		1, 0, MAP_PIN_GLOBAL)

@@ -64,7 +64,7 @@ struct cali_tc_state {
 	/* Packet IP proto; updated to UDP when we encap. */
 	__u8 ip_proto;
 	/* Flags from enum cali_state_flags. */
-	__u8 flags;
+	__u8 __pad;
 	/* Packet size filled from iphdr->tot_len in tc_state_fill_from_iphdr(). */
 	__be16 ip_size;
 
@@ -74,6 +74,7 @@ struct cali_tc_state {
 	/* Result of the NAT calculation.  Zeroed if there is no DNAT. */
 	struct calico_nat_dest nat_dest;
 	__u64 prog_start_time;
+	__u64 flags;
 };
 
 enum cali_state_flags {
@@ -98,6 +99,9 @@ enum cali_state_flags {
 	/* CALI_ST_CT_NP_LOOP tells CT when creating an entry that we are
 	 * turnign this packet around from a nodeport to a local pod. */
 	CALI_ST_CT_NP_LOOP	  = 0x80,
+	/* CALI_ST_CT_NP_LOOP_REMOTE is set in addition to CALI_ST_CT_NP_LOOP to signal
+	 * that the destination is on a remote node. */
+	CALI_ST_CT_NP_LOOP_REMOTE = 0x40,
 };
 
 struct fwd {

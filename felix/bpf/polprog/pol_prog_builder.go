@@ -118,8 +118,8 @@ var (
 	ipsKeyPad    int16 = 19
 
 	// Bits in the state flags field.
-	FlagDestIsHost uint8 = 1 << 2
-	FlagSrcIsHost  uint8 = 1 << 3
+	FlagDestIsHost uint64 = 1 << 2
+	FlagSrcIsHost  uint64 = 1 << 3
 )
 
 type Rule struct {
