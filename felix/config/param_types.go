@@ -557,6 +557,8 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 // reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
 var routeTablesReservedLinux = []int{253, 254, 255}
 
+const routeTableMaxLinux = 0xFFFFFFFF
+
 type RouteTableRangesParam struct {
 	Metadata
 }
@@ -581,6 +583,9 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 		}
 		// max val must be greater than min val
 		if min > max {
+			return
+		}
+		if max > routeTableMaxLinux {
 			return
 		}
 
