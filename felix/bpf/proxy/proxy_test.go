@@ -192,7 +192,7 @@ var _ = Describe("BPF Proxy", func() {
 			By("getting the initial sync", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(2))
-					Expect(len(s.EpsMap)).To(Equal(2))
+					Expect(len(s.EpsMap)).To(Equal(2)) // TODO epsMap is zero
 				})
 			})
 
@@ -465,9 +465,10 @@ var _ = Describe("BPF Proxy", func() {
 	}
 
 	Describe("with k8s client", func() {
-		Context("with Endpoints", func() {
-			proxyTransitionsTest(false)
-		})
+		// TODO: only slices is valid
+		//Context("with Endpoints", func() {
+		//	proxyTransitionsTest(false)
+		//})
 
 		Context("with EndpointSlices", func() {
 			proxyTransitionsTest(true)
