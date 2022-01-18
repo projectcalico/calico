@@ -38,7 +38,13 @@ VERSIONS_WITHOUT_IMAGE_LIST = [
 ]
 
 VPP_IMAGES = ["calicovpp/agent", "calicovpp/vpp", "calicovpp/init-eks"]
-VPP_RELEASE = "v0.14.0"  # TODO This needs to be got from somewhere, not hard-coded
+with open("%s/_config.yml" % DOCS_PATH) as configFile:
+    config = yaml.safe_load(configFile)
+    VPP_RELEASE = config["defaults"]["values"]["vppbranch"]
+
+def test_vpp_branch():
+    assert VPP_RELEASE != "master", "vppbranch cannot be 'master' for a release"
+
 VPP_EXPECTED_ARCHS = ["amd64"]
 
 VERSIONS_WITHOUT_FLANNEL_MIGRATION = [
