@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -316,6 +317,9 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 	if err != nil {
 		return nil, nil, resources.K8sErrorToCalico(err, nil)
 	}
+
+	config.AcceptContentTypes = strings.Join([]string{runtime.ContentTypeProtobuf, runtime.ContentTypeJSON}, ",")
+	config.ContentType = runtime.ContentTypeProtobuf
 
 	// Overwrite the QPS if provided. Default QPS is 5.
 	if ca.K8sClientQPS != float32(0) {
