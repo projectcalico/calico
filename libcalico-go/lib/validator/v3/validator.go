@@ -113,6 +113,10 @@ var (
 		IP:   net.ParseIP("fe80::"),
 		Mask: net.CIDRMask(10, 128),
 	}
+
+	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
+	routeTablesReservedLinux = []int{253, 254, 255}
+	routeTableMax            = 0xFFFFFFFF
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -1560,17 +1564,41 @@ func validateRuleMetadata(structLevel validator.StructLevel) {
 
 func validateRouteTableRange(structLevel validator.StructLevel) {
 	r := structLevel.Current().Interface().(api.RouteTableRange)
-	if r.Min >= 1 && r.Max >= r.Min && r.Max <= 250 {
-		log.Debugf("RouteTableRange is valid: %v", r)
-	} else {
+
+	if r.Min <= 0 {
 		log.Warningf("RouteTableRange is invalid: %v", r)
 		structLevel.ReportError(
 			reflect.ValueOf(r),
 			"RouteTableRange",
 			"",
-			reason("must be a range of route table indices within 1..250"),
+			reason("cannot target 0 or negative indices"),
 			"",
 		)
+	}
+
+	if r.Min > r.Max {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("Min cannot be greater than Max"),
+			"",
+		)
+	}
+
+	// check if ranges collide with reserved linux tables
+	for _, rsrv := range routeTablesReservedLinux {
+		if r.Min == rsrv || (r.Min < rsrv && r.Max >= rsrv) {
+			log.Warningf("RouteTableRange is invalid: %v", r)
+			structLevel.ReportError(
+				reflect.ValueOf(r),
+				"RouteTableRange",
+				"",
+				reason("must be a range of route table indices that does not target reserved Linux tables (253, 254, and 255)"),
+				"",
+			)
+		}
 	}
 }
 
