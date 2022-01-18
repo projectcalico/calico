@@ -1,6 +1,7 @@
 ---
-title: Deploy images by digest
-description: Specify the digests the operator will use to deploy images.
+title: Install images by registry digest
+description: Specify the digests for operator to use to deploy images.
+canonical_url: '/maintenance/image-options/imageset'
 ---
 
 {% assign operator = site.data.versions.first.tigera-operator %}
@@ -38,9 +39,9 @@ Container images, when added to a container registry, have a unique hash created
 ### Before you begin
 
 **Required**
-- {{site.prodname}} managed by the operator.
-- Docker client is configured to pull images from the container registries where images are stored. 
-- Kubernetes permissions to apply an ImageSet manifest to your cluster.
+- {{site.prodname}} managed by the operator
+- Docker client is configured to pull images from the container registries where images are stored
+- Kubernetes permissions to apply an ImageSet manifest to your cluster
 
 ### How to
 
@@ -104,7 +105,7 @@ spec:
 You can create an ImageSet manifest manually or by script.
 
 {% tabs tab-group:grp1 %}
-<label:Manually,active:true>
+<label:Manual,active:true>
 <%
 
 1. Copy the above example into a file called `imageset.yaml` and edit that file in the steps below.
