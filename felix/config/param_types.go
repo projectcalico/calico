@@ -554,28 +554,51 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 	return raw, nil
 }
 
-type RouteTableRangeParam struct {
+// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
+var routeTablesReservedLinux = []int{253, 254, 255}
+
+type RouteTableRangesParam struct {
 	Metadata
 }
 
-func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error) {
-	err = p.parseFailed(raw, "must be a range of route table indices within 1-250")
-	m := regexp.MustCompile(`^(\d+)-(\d+)$`).FindStringSubmatch(raw)
+func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error) {
+	err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
+	m := regexp.MustCompile(`([0-9]+)-([0-9]+)`).FindAllStringSubmatch(raw, -1)
 	if m == nil {
 		return
 	}
-	min, serr := strconv.Atoi(m[1])
-	if serr != nil {
-		return
+
+	ranges := make([]idalloc.IndexRange, 0)
+	for _, r := range m {
+		// first match is the whole matching string - we only care about submatches
+		min, serr := strconv.Atoi(r[1])
+		if serr != nil {
+			return
+		}
+		max, serr := strconv.Atoi(r[2])
+		if serr != nil {
+			return
+		}
+		// max val must be greater than min val
+		if min > max {
+			return
+		}
+
+		// check if ranges collide with reserved linux tables
+		for _, rsrv := range routeTablesReservedLinux {
+			if min == rsrv {
+				return
+			}
+			if min < rsrv {
+				if max >= rsrv {
+					return
+				}
+			}
+		}
+
+		ranges = append(ranges, idalloc.IndexRange{Min: min, Max: max})
 	}
-	max, serr := strconv.Atoi(m[2])
-	if serr != nil {
-		return
-	}
-	if min >= 1 && max >= min && max <= 250 {
-		result = idalloc.IndexRange{Min: min, Max: max}
-		err = nil
-	}
+
 	return
 }
 
