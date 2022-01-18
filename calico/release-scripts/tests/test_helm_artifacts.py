@@ -18,12 +18,10 @@ with open("%s/_data/versions.yml" % DOCS_PATH) as f:
 
 # Helm version is the calico/node version.
 version = versions[0]["components"]["calico/node"]["version"]
-chart_version = versions[0]["chart"]["version"]
 print("[INFO] using calico/node version for Helm artifacts: %s" % version)
-print("[INFO] using chart version for Helm artifact: %s" % chart_version)
 chart_url = (
-    "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s-%s.tgz"
-    % (version, version, chart_version)
+    "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
+    % (version, version)
 )
 
 
