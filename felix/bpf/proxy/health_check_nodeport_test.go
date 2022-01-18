@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 
-	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/felix/bpf/proxy"
 )
 
 var _ = Describe("BPF Proxy healthCheckNodeport", func() {
@@ -53,7 +53,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		})
 	})
 
-	It("should expose health check enpoint", func() {
+	It("should expose health check endpoint", func() {
 		healthCheckNodePort := 1212
 
 		By("adding a LoadBalancer", func() {
@@ -66,7 +66,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 					Selector: map[string]string{
 						"app": "test",
 					},
-					ExternalTrafficPolicy: "Local",
+					ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 					HealthCheckNodePort:   int32(healthCheckNodePort),
 					Ports: []v1.ServicePort{
 						{
@@ -75,6 +75,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 							TargetPort: intstr.FromInt(32678),
 						},
 					},
+					PublishNotReadyAddresses: true,
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -166,7 +167,10 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 					return err
 				}
 				if result.StatusCode != 200 {
-					return fmt.Errorf("Unexpected status code %d; expected 200", result.StatusCode)
+					var status map[string]interface{}
+					decoder := json.NewDecoder(result.Body)
+					err = decoder.Decode(&status)
+					return fmt.Errorf("Unexpected status code %d; expected 200\nk8s error is:\n%+v", result.StatusCode, status)
 				}
 
 				var status map[string]interface{}
@@ -182,7 +186,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 				}
 
 				return nil
-			}, "5s", "200ms").Should(Succeed())
+			}, "10s", "200ms").Should(Succeed())
 
 			By("making non-local a local endpoint", func() {
 				err := k8s.Tracker().Update(v1.SchemeGroupVersion.WithResource("endpoints"),
