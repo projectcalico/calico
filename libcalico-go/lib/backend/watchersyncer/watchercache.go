@@ -94,7 +94,7 @@ mainLoop:
 		case event, ok := <-wc.watch.ResultChan():
 			if !ok {
 				// If the channel is closed then resync/recreate the watch.
-				wc.logger.Info("Watch channel closed by remote - recreate watcher")
+				wc.logger.Debug("Watch channel closed by remote - recreate watcher")
 				wc.resyncAndCreateWatcher(ctx)
 				continue
 			}
