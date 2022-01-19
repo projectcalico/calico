@@ -82,7 +82,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		})
 
 		By("adding its endpointSlice", func() {
-			err := k8s.Tracker().Add(epsToSlice(&v1.Endpoints{
+			nodeEps := &v1.Endpoints{
 				TypeMeta:   typeMetaV1("Endpoints"),
 				ObjectMeta: objectMeataV1("test-ep"),
 				Subsets: []v1.EndpointSubset{
@@ -99,7 +99,9 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 						},
 					},
 				},
-			}))
+			}
+
+			err := k8s.Tracker().Add(epsToSlice(nodeEps))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
