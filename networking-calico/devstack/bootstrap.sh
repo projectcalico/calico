@@ -79,8 +79,7 @@ sudo apt-get -y install git
 
 # Prepare networking-calico tree - the following lines will check out
 # the master branch of networking-calico (if not already present).
-test -e networking-calico || \
-    git clone https://github.com/projectcalico/networking-calico
+test -e networking-calico
 pushd networking-calico
 
 # Remember the current directory.
