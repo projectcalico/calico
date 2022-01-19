@@ -166,7 +166,7 @@ type Config struct {
 	WireguardInterfaceName         string        `config:"iface-param;wireguard.cali;non-zero"`
 	WireguardMTU                   int           `config:"int;0"`
 	WireguardHostEncryptionEnabled bool          `config:"bool;false"`
-	WireguardPersistentKeepAlive   time.Duration `config:"seconds;25"`
+	WireguardPersistentKeepAlive   time.Duration `config:"seconds;0"`
 
 	BPFEnabled                         bool             `config:"bool;false"`
 	BPFDisableUnprivileged             bool             `config:"bool;true"`
