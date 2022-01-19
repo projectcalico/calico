@@ -180,7 +180,6 @@ type Config struct {
 	BPFNodePortDSREnabled              bool
 	BPFPSNATPorts                      numorstring.Port
 	KubeProxyMinSyncPeriod             time.Duration
-	KubeProxyEndpointSlicesEnabled     bool
 
 	SidecarAccelerationEnabled bool
 
@@ -673,10 +672,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		bpfproxyOpts := []bpfproxy.Option{
 			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
-		}
-
-		if config.KubeProxyEndpointSlicesEnabled {
-			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithEndpointsSlices())
 		}
 
 		if config.BPFNodePortDSREnabled {

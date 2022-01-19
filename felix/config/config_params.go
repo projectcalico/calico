@@ -176,7 +176,7 @@ type Config struct {
 	BPFExternalServiceMode             string           `config:"oneof(tunnel,dsr);tunnel;non-zero"`
 	BPFKubeProxyIptablesCleanupEnabled bool             `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration    `config:"seconds;1"`
-	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;false"`
+	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;true"`
 	BPFExtToServiceConnmark            int              `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port `config:"portrange;20000:29999"`
 
