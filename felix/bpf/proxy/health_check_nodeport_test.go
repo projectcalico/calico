@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -317,11 +316,4 @@ func (*mockDummySyncer) Stop() {}
 func (*mockDummySyncer) Apply(state proxy.DPSyncerState) error {
 	log("state = %+v\n", state)
 	return nil
-}
-
-func typeMetaDiscoveryV1(kind string) metav1.TypeMeta {
-	return metav1.TypeMeta{
-		Kind:       kind,
-		APIVersion: "discovery.k8s.io/v1",
-	}
 }
