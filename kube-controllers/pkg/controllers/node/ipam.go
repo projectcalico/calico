@@ -988,11 +988,12 @@ func (c *ipamController) nodeExists(knode string) bool {
 func (c *ipamController) nodeIsBeingMigrated(name string) (bool, error) {
 	// Get node to inspect labels
 	obj, ok, err := c.nodeIndexer.GetByKey(name)
+	if !ok {
+		// Node doesn't exist, so isn't being migrated.
+		return false, nil
+	}
 	if err != nil {
 		return false, fmt.Errorf("failed to check node for migration status: %w", err)
-	}
-	if !ok {
-		return false, fmt.Errorf("failed to check node for migration status: node not found")
 	}
 	node, ok := obj.(v1.Node)
 	if !ok {
