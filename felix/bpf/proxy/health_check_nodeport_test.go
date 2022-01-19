@@ -23,6 +23,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -58,7 +60,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		By("adding a LoadBalancer", func() {
 			err := k8s.Tracker().Add(&v1.Service{
 				TypeMeta:   typeMetaV1("Service"),
-				ObjectMeta: objectMeataV1("lb"),
+				ObjectMeta: objectMeataV1("LB"),
 				Spec: v1.ServiceSpec{
 					ClusterIP: "10.1.0.1",
 					Type:      v1.ServiceTypeLoadBalancer,
@@ -80,9 +82,9 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		})
 
 		By("adding its endpointSlice", func() {
-			err := k8s.Tracker().Add(&v1.Endpoints{
+			err := k8s.Tracker().Add(epsToSlice(&v1.Endpoints{
 				TypeMeta:   typeMetaV1("Endpoints"),
-				ObjectMeta: objectMeataV1("lb"),
+				ObjectMeta: objectMeataV1("LB"),
 				Subsets: []v1.EndpointSubset{
 					{
 						Addresses: []v1.EndpointAddress{
@@ -97,7 +99,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 						},
 					},
 				},
-			})
+			}))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -130,10 +132,10 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		})
 
 		By("adding a local and a non-local endpoint", func() {
-			err := k8s.Tracker().Update(v1.SchemeGroupVersion.WithResource("endpoints"),
-				&v1.Endpoints{
+			err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
+				epsToSlice(&v1.Endpoints{
 					TypeMeta:   typeMetaV1("Endpoints"),
-					ObjectMeta: objectMeataV1("lb"),
+					ObjectMeta: objectMeataV1("LB"),
 					Subsets: []v1.EndpointSubset{
 						{
 							Addresses: []v1.EndpointAddress{
@@ -153,82 +155,19 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 							},
 						},
 					},
-				},
-				"default")
+				}),
+				metav1.NamespaceDefault)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("checking that there is a local endpoint", func() {
 			Eventually(func() error {
-				// TODO: should test endpoint slice, its already presented
-				/*
-					{
-					        "kind": "EndpointSlice",
-					        "apiVersion": "discovery.k8s.io/v1",
-					        "metadata": {
-					          "name": "lb",
-					          "namespace": "default",
-					          "creationTimestamp": null,
-					          "labels": {
-					            "kubernetes.io/service-name": "lb"
-					          }
-					        },
-					        "addressType": "IPv4",
-					        "endpoints": [
-					          {
-					            "addresses": [
-					              "10.1.2.1"
-					            ],
-					            "conditions": {},
-					            "hostname": "testnode"
-					          },
-					          {
-					            "addresses": [
-					              "10.1.2.2"
-					            ],
-					            "conditions": {},
-					            "hostname": "anothertestnode"
-					          }
-					        ],
-					        "ports": [
-					          {
-					            "name": "port-0-0-1234",
-					            "protocol": "TCP",
-					            "port": 1234
-					          }
-					        ]
-					      }
-				*/
 				result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
 				if err != nil {
 					return err
 				}
 				if result.StatusCode != 200 {
-					//a, err := k8s.Tracker().Get(discovery.SchemeGroupVersion.WithResource("endpointslices"), "default", "lb")
-					//if err != nil {
-					//	return err
-					//}
-					//
-					//ajson, err := json.MarshalIndent(a, "", "  ")
-					//if err != nil {
-					//	return err
-					//}
-
-					b, err := k8s.Tracker().Get(v1.SchemeGroupVersion.WithResource("endpoints"), "default", "lb")
-					if err != nil {
-						return err
-					}
-
-					bjson, err := json.MarshalIndent(b, "", "  ")
-					if err != nil {
-						return err
-					}
-
-					//map[localEndpoints:0 service:map[name:lb namespace:default]]
-					var status map[string]interface{}
-					decoder := json.NewDecoder(result.Body)
-					err = decoder.Decode(&status)
-					return fmt.Errorf("Unexpected status code %d; expected 200\nk8s error is:\n%+v\nGet obj:\n%+v", result.StatusCode, status, string(bjson))
+					return fmt.Errorf("Unexpected status code %d; expected 200", result.StatusCode)
 				}
 
 				var status map[string]interface{}
@@ -247,10 +186,10 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			}, "5s", "200ms").Should(Succeed())
 
 			By("making non-local a local endpoint", func() {
-				err := k8s.Tracker().Update(v1.SchemeGroupVersion.WithResource("endpoints"),
-					&v1.Endpoints{
+				err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
+					epsToSlice(&v1.Endpoints{
 						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMeataV1("lb"),
+						ObjectMeta: objectMeataV1("LB"),
 						Subsets: []v1.EndpointSubset{
 							{
 								Addresses: []v1.EndpointAddress{
@@ -270,8 +209,8 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 								},
 							},
 						},
-					},
-					"default")
+					}),
+					metav1.NamespaceDefault)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
