@@ -564,9 +564,9 @@ type RouteTableRangesParam struct {
 }
 
 func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error) {
-	err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
 	m := regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)
 	if m == nil {
+		err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
 		return
 	}
 
@@ -575,27 +575,33 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 		// first match is the whole matching string - we only care about submatches
 		min, serr := strconv.Atoi(r[1])
 		if serr != nil {
+			err = p.parseFailed(raw, "min value is not a valid number")
 			return
 		}
 		max, serr := strconv.Atoi(r[2])
 		if serr != nil {
+			err = p.parseFailed(raw, "max value is not a valid number")
 			return
 		}
 		// max val must be greater than min val
 		if min > max {
+			err = p.parseFailed(raw, "min value is greater than max value")
 			return
 		}
 		if max > routeTableMaxLinux {
+			err = p.parseFailed(raw, "max value is too high")
 			return
 		}
 
 		// check if ranges collide with reserved linux tables
 		for _, rsrv := range routeTablesReservedLinux {
 			if min == rsrv {
+				err = p.parseFailed(raw, "must not target a reserved table")
 				return
 			}
 			if min < rsrv {
 				if max >= rsrv {
+					err = p.parseFailed(raw, "must not target a reserved table")
 					return
 				}
 			}
