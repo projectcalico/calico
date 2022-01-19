@@ -427,7 +427,7 @@ func validateStartRange(startRange net.IP, expStartRange net.IP) (net.IP, error)
 	if startRange == nil || expStartRange == nil {
 		return nil, fmt.Errorf("Invalid ip address")
 	}
-	if bytes.Compare([]byte(startRange), []byte(expStartRange)) < 0 {
+	if bytes.Compare(startRange, expStartRange) < 0 {
 		//if ip is not in given range,return default
 		return expStartRange, nil
 	}
@@ -442,7 +442,7 @@ func validateEndRange(endRange net.IP, expEndRange net.IP) (net.IP, error) {
 	if endRange == nil || expEndRange == nil {
 		return nil, fmt.Errorf("Invalid ip address")
 	}
-	if bytes.Compare([]byte(endRange), []byte(expEndRange)) > 0 {
+	if bytes.Compare(endRange, expEndRange) > 0 {
 		//if ip is not in given range,return default
 		return expEndRange, nil
 	}
