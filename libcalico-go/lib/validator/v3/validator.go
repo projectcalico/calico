@@ -43,8 +43,8 @@ var validate *validator.Validate
 
 const (
 	// Maximum size of annotations.
-	totalAnnotationSizeLimitB int64  = 256 * (1 << 10) // 256 kB
-	routeTableMaxLinux        uint32 = 0xFFFFFFFF
+	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
+	routeTableMaxLinux        int   = 0xFFFFFFFF
 
 	globalSelector = "global()"
 )
