@@ -14,7 +14,9 @@
 
 ARG GIT_VERSION=unknown
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as build
+ARG UBI_IMAGE
+FROM ${UBI_IMAGE} as ubi
+
 RUN mkdir -p /tmp/dikastes
 RUN chmod 0777 /tmp/dikastes
 
@@ -32,13 +34,13 @@ LABEL name="Calico Dikastes" \
       description="Calico Dikastes enables Application Layer Policy" \
       maintainer="Laurence Man<laurence@tigera.io>"
 
-COPY --from=build /licenses /licenses
+COPY --from=ubi /licenses /licenses
 ADD bin/dikastes-amd64 /dikastes
 ADD bin/healthz-amd64 /healthz
 
 # Include libraries from UBI for dynamic linking.
-COPY --from=build /lib64 /lib64
-COPY --from=build /lib /lib
+COPY --from=ubi /lib64 /lib64
+COPY --from=ubi /lib /lib
 
 # Typical Linux systems start numbering human users at 1000, reserving 1-999
 # for services, so we pick 999 to be least likely to overlap.  It's not a big
@@ -47,7 +49,7 @@ COPY --from=build /lib /lib
 #
 # Precreate the /var/run/dikastes directory so that we don't need any elevated
 # permission to create the directory at runtime.
-COPY --chown=999 --from=build /tmp/dikastes /var/run/dikastes
+COPY --chown=999 --from=ubi /tmp/dikastes /var/run/dikastes
 USER 999
 ENTRYPOINT ["/dikastes"]
 CMD ["server"]
