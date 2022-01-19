@@ -169,8 +169,6 @@ var _ = Describe("BPF Proxy", func() {
 
 					opts := []proxy.Option{proxy.WithImmediateSync()}
 
-					opts = append(opts, proxy.WithEndpointsSlices())
-
 					p, err = proxy.New(k8s, dp, "testnode", opts...)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -509,8 +507,6 @@ var _ = Describe("BPF Proxy", func() {
 					dp = newMockSyncer(syncStop)
 
 					opts := []proxy.Option{proxy.WithImmediateSync()}
-
-					opts = append(opts, proxy.WithEndpointsSlices())
 
 					p, err = proxy.New(k8s, dp, testNodeName, opts...)
 					Expect(err).NotTo(HaveOccurred())

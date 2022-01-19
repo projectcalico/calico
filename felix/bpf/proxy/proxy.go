@@ -77,8 +77,6 @@ type proxy struct {
 	svcMap k8sp.ServiceMap
 	epsMap k8sp.EndpointsMap
 
-	endpointSlicesEnabled bool
-
 	dpSyncer DPSyncer
 	// executes periodic the dataplane updates
 	runner *async.BoundedFrequencyRunner
@@ -178,15 +176,9 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 	var epsRunner stoppableRunner
 
-	if p.endpointSlicesEnabled {
-		epsConfig := config.NewEndpointSliceConfig(informerFactory.Discovery().V1().EndpointSlices(), p.syncPeriod)
-		epsConfig.RegisterEventHandler(p)
-		epsRunner = epsConfig
-	} else {
-		epsConfig := config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), p.syncPeriod)
-		epsConfig.RegisterEventHandler(p)
-		epsRunner = epsConfig
-	}
+	epsConfig := config.NewEndpointSliceConfig(informerFactory.Discovery().V1().EndpointSlices(), p.syncPeriod)
+	epsConfig.RegisterEventHandler(p)
+	epsRunner = epsConfig
 
 	p.startRoutine(func() { p.runner.Loop(p.stopCh) })
 	p.startRoutine(func() { epsRunner.Run(p.stopCh) })
