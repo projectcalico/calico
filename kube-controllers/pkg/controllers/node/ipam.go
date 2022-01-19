@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
+	"k8s.io/client-go/tools/cache"
 	"net"
 	"strings"
 	"time"
@@ -77,7 +78,7 @@ func init() {
 	prometheus.MustRegister(blocksGauge)
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface) *ipamController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, ni cache.Indexer) *ipamController {
 	return &ipamController{
 		client:    c,
 		clientset: cs,
@@ -85,6 +86,8 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		rl:        workqueue.DefaultControllerRateLimiter(),
 
 		syncChan: make(chan interface{}, 1),
+
+		nodeIndexer: ni,
 
 		// Channel for updates
 
@@ -110,10 +113,11 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 }
 
 type ipamController struct {
-	rl        workqueue.RateLimiter
-	client    client.Interface
-	clientset kubernetes.Interface
-	config    config.NodeControllerConfig
+	rl          workqueue.RateLimiter
+	client      client.Interface
+	clientset   kubernetes.Interface
+	nodeIndexer cache.Indexer
+	config      config.NodeControllerConfig
 
 	syncStatus bapi.SyncStatus
 
@@ -542,10 +546,9 @@ func (c *ipamController) updateMetrics() {
 // - The other blocks on the node are not at capacity.
 // - The node is not currently undergoing a migration from Flannel
 func (c *ipamController) checkEmptyBlocks() error {
-blocks:
-	for blockCIDR, nodeName := range c.emptyBlocks {
-		logc := log.WithFields(log.Fields{"blockCIDR": blockCIDR, "node": nodeName})
-		nodeBlocks := c.blocksByNode[nodeName]
+	for blockCIDR, node := range c.emptyBlocks {
+		logc := log.WithFields(log.Fields{"blockCIDR": blockCIDR, "node": node})
+		nodeBlocks := c.blocksByNode[node]
 		if len(nodeBlocks) <= 1 {
 			continue
 		}
@@ -571,24 +574,15 @@ blocks:
 			continue
 		}
 
-		// Get node to inspect labels
-		node, err := c.client.Nodes().Get(context.TODO(), nodeName, options.GetOptions{})
+		// During a Flannel migration, we can only migrate blocks affined to nodes that have already undergone the migration
+		migrating, err := c.nodeIsBeingMigrated(node)
 		if err != nil {
-			logc.WithError(err).Warn("failed to get node, skipping affinity release")
+			logc.Warn("Couldn't find node affined to empty block, skipping affinity release")
 			continue
 		}
-
-		// We cannot release blocks affined to nodes undergoing migration from Flannel
-		// Its Pod's IPs are not managed by Calico
-		for labelName, labelVal := range node.ObjectMeta.Labels {
-			// Check against labels used by the migration controller
-			for migrationLabelName, migrationLabelValue := range flannelmigration.NodeNetworkCalico {
-				// Only the label value "calico" specifies a migrated node where we can release the affinity
-				if labelName == migrationLabelName && labelVal != migrationLabelValue {
-					logc.Info("node affined to block is currently undergoing a migration from Flannel, skipping affinity release")
-					continue blocks
-				}
-			}
+		if migrating {
+			logc.Info("Node affined to block is currently undergoing a migration from Flannel, skipping affinity release")
+			continue
 		}
 
 		// Find the actual block object.
@@ -611,7 +605,7 @@ blocks:
 		// in case there are other empty blocks allocated to the node so that we don't
 		// accidentally release all of the node's blocks.
 		delete(c.emptyBlocks, blockCIDR)
-		delete(c.blocksByNode[nodeName], blockCIDR)
+		delete(c.blocksByNode[node], blockCIDR)
 		delete(c.nodesByBlock, blockCIDR)
 		delete(c.allBlocks, blockCIDR)
 	}
@@ -988,6 +982,34 @@ func (c *ipamController) nodeExists(knode string) bool {
 		log.WithError(err).Warn("Failed to query node, assume it exists")
 	}
 	return true
+}
+
+// nodeIsBeingMigrated looks up a node and checks, if it is marked by the flannel-migration controller to undergo migration.
+func (c *ipamController) nodeIsBeingMigrated(name string) (bool, error) {
+	// Get node to inspect labels
+	obj, ok, err := c.nodeIndexer.GetByKey(name)
+	if err != nil {
+		return false, fmt.Errorf("failed to check node for migration status: %w", err)
+	}
+	if !ok {
+		return false, fmt.Errorf("failed to check node for migration status: node not found")
+	}
+	node, ok := obj.(v1.Node)
+	if !ok {
+		return false, fmt.Errorf("failed to check node for migration status: unexpected error: object is not a node")
+	}
+
+	for labelName, labelVal := range node.ObjectMeta.Labels {
+		// Check against labels used by the migration controller
+		for migrationLabelName, migrationLabelValue := range flannelmigration.NodeNetworkCalico {
+			// Only the label value "calico" specifies a migrated node where we can release the affinity
+			if labelName == migrationLabelName && labelVal != migrationLabelValue {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
 
 // kubernetesNodeForCalico returns the name of the Kubernetes node that corresponds to this Calico node.
