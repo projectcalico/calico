@@ -624,7 +624,7 @@ func typeMetaV1(kind string) metav1.TypeMeta {
 func objectMeataV1(name string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
 		Name:      name,
-		Namespace: "default",
+		Namespace: metav1.NamespaceDefault,
 	}
 }
 
@@ -652,7 +652,8 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 		for _, addr := range subset.Addresses {
 			slice.Endpoints = append(slice.Endpoints, discovery.Endpoint{
 				Addresses: []string{addr.IP},
-				Hostname:  addr.NodeName,
+				Hostname:  &addr.Hostname,
+				NodeName:  addr.NodeName,
 			})
 		}
 
