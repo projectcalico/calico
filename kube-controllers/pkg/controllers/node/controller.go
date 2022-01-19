@@ -82,7 +82,7 @@ func NewNodeController(ctx context.Context,
 	nodeDeletionFuncs := []func(){}
 
 	// Create the IPAM controller.
-	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset)
+	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, nodeInformer)
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 
