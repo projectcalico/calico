@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.2-301 AS base
+ARG UBI_IMAGE
+FROM ${UBI_IMAGE} as ubi
 
 ADD flexvol/docker/clean.sh /usr/local/bin/clean.sh
 ADD flexvol/docker/flexvol.sh /usr/local/bin/flexvol.sh
@@ -39,12 +40,12 @@ LABEL name="Calico FlexVolume driver installer" \
       description="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons" \
       maintainer="Laurence Man <laurence@tigera.io>"
 
-COPY --from=base /licenses /licenses
-COPY --from=base /bin /bin
-COPY --from=base /lib64 /lib64
-COPY --from=base /usr/lib64 /usr/lib64
-COPY --from=base /usr/bin /usr/bin
-COPY --from=base /usr/local/bin/flexvol.sh /usr/local/bin/flexvol.sh
+COPY --from=ubi /licenses /licenses
+COPY --from=ubi /bin /bin
+COPY --from=ubi /lib64 /lib64
+COPY --from=ubi /usr/lib64 /usr/lib64
+COPY --from=ubi /usr/bin /usr/bin
+COPY --from=ubi /usr/local/bin/flexvol.sh /usr/local/bin/flexvol.sh
 
 ADD bin/flexvol-amd64 /usr/local/bin/flexvol
 
