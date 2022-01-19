@@ -1,7 +1,10 @@
 ARG QEMU_IMAGE
+ARG UBI_IMAGE
+
 FROM ${QEMU_IMAGE} as qemu
 
-FROM --platform=linux/arm64 registry.access.redhat.com/ubi8/ubi-minimal:8.5 as ubi
+FROM --platform=linux/arm64 ${UBI_IMAGE} as ubi
+
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 RUN microdnf update
