@@ -95,7 +95,9 @@ RUN wget -P /tmp https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_V
     cd /tmp/admin/runit-${RUNIT_VER}/ && \
     package/install
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.4 as ubi
+ARG UBI_IMAGE
+FROM ${UBI_IMAGE} as ubi
+
 ARG ARCH
 ARG GIT_VERSION
 ARG IPTABLES_VER
