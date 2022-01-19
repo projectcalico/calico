@@ -330,7 +330,7 @@ type Config struct {
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
-	RouteTableRange idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
+	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;1-250,256-10000;die-on-fail"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
@@ -783,8 +783,8 @@ func loadParams() {
 				Msg: "invalid string"}
 		case "cidr-list":
 			param = &CIDRListParam{}
-		case "route-table-range":
-			param = &RouteTableRangeParam{}
+		case "route-table-ranges":
+			param = &RouteTableRangesParam{}
 		case "keyvaluelist":
 			param = &KeyValueListParam{}
 		default:
