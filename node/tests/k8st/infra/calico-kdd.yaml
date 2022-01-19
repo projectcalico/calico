@@ -990,7 +990,7 @@ spec:
                 type: integer
               wireguardPersistentKeepAlive:
                 description: 'WireguardPersistentKeepAlive controls Wireguard 
-                  PersistentKeepalive option. Set 0 to disable. [Default: 25s]'
+                  PersistentKeepalive option. Set 0 to disable. [Default: 0]'
                 type: string
               xdpEnabled:
                 description: 'XDPEnabled enables XDP acceleration for suitable untracked
