@@ -43,8 +43,8 @@ var validate *validator.Validate
 
 const (
 	// Maximum size of annotations.
-	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
-	routeTableMaxLinux        int   = 0xFFFFFFFF
+	totalAnnotationSizeLimitB int64  = 256 * (1 << 10) // 256 kB
+	routeTableMaxLinux        uint32 = 0xFFFFFFFF
 
 	globalSelector = "global()"
 )
@@ -1587,7 +1587,8 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 		)
 	}
 
-	if r.Max > routeTableMaxLinux {
+	// cast both ints to 64bit as casting the max 32-bit integer to int() would overflow on 32bit systems
+	if int64(r.Max) > int64(routeTableMaxLinux) {
 		log.Warningf("RouteTableRange is invalid: %v", r)
 		structLevel.ReportError(
 			reflect.ValueOf(r),
