@@ -10,8 +10,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
-	apitesting "k8s.io/apimachinery/pkg/api/apitesting"
+	"k8s.io/apimachinery/pkg/api/apitesting"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -29,8 +30,6 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
-
-	"time"
 
 	"golang.org/x/net/context"
 )
@@ -632,8 +631,10 @@ func testSetup(t *testing.T) (context.Context, *resourceStore, *resourceStore) {
 	klog.Infof("Client: %v", c)
 	opts := Options{
 		RESTOptions: generic.RESTOptions{
-			StorageConfig: &storagebackend.Config{
-				Codec: codec,
+			StorageConfig: &storagebackend.ConfigForResource{
+				Config: storagebackend.Config{
+					Codec: codec,
+				},
 			},
 		},
 	}

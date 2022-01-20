@@ -27,8 +27,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/clock"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
@@ -349,7 +349,6 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			BPFMapRepin:                        configParams.DebugBPFMapRepinEnabled,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
-			KubeProxyEndpointSlicesEnabled:     configParams.BPFKubeProxyEndpointSlicesEnabled,
 			BPFPSNATPorts:                      configParams.BPFPSNATPorts,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
