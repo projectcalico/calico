@@ -48,7 +48,6 @@ require (
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/osrg/gobgp v0.0.0-20170802061517-bbd1d99396fe
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.6.0
@@ -110,7 +109,6 @@ require (
 	github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4 // indirect
 	github.com/alessio/shellescape v1.4.1 // indirect
 	github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae // indirect
-	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.6.0 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.0 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.0.0 // indirect
@@ -127,8 +125,6 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
-	github.com/eapache/channels v1.1.0 // indirect
-	github.com/eapache/queue v0.0.0-20180227141424-093482f3f8ce // indirect
 	github.com/emicklei/go-restful v2.11.2-0.20200112161605-a7c079c43d51+incompatible // indirect
 	github.com/envoyproxy/protoc-gen-validate v0.1.0 // indirect
 	github.com/evanphx/json-patch v4.9.0+incompatible // indirect
@@ -154,8 +150,6 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/influxdata/influxdb v0.0.0-20190102202943-dd481f35df2c // indirect
-	github.com/influxdata/platform v0.0.0-20190117200541-d500d3cf5589 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.10 // indirect
@@ -207,7 +201,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.51.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	honnef.co/go/tools v0.0.1-2020.1.4 // indirect
 	k8s.io/component-helpers v0.21.8 // indirect

@@ -16,7 +16,6 @@ docker
 **/*.sw[pon]
 birdcl
 .vagrant
-gobgp
 calicoctl/calicoctl
 bin
 release
