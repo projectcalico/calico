@@ -50,7 +50,7 @@ const (
 
 var (
 	checkLogTimeout = 10 * time.Second
-	backendMatch    = regexp.MustCompile("^(none|bird|gobgp)$")
+	backendMatch    = regexp.MustCompile("^(none|bird)$")
 )
 
 // Run function collects diagnostic information and logs
@@ -63,7 +63,7 @@ func Run(args []string) error {
                      [--ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>]
                      [--log-dir=<LOG_DIR>]
                      [--node-image=<DOCKER_IMAGE_NAME>]
-                     [--backend=(bird|gobgp|none)]
+                     [--backend=(bird|none)]
                      [--config=<CONFIG>]
                      [--felix-config=<CONFIG>]
                      [--no-default-ippools]
@@ -128,11 +128,9 @@ Options:
      --node-image=<DOCKER_IMAGE_NAME>
                            Docker image to use for Calico's per-node container.
                            [default: quay.io/calico/node:latest]
-     --backend=(bird|gobgp|none)
+     --backend=(bird|none)
                            Specify which networking backend to use.  When set
                            to "none", Calico node runs in policy only mode.
-                           The option to run with gobgp is currently
-                           experimental.
                            [default: bird]
      --dryrun              Output the appropriate command, without starting the
                            container.
