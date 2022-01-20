@@ -68,11 +68,11 @@ defaults:
     scope:
       path: ""
     values:
+      version: master
       layout: docwithnav
       show_title: true
       show_read_time: true
       show_toc: true
-      version: master
       vppbranch: master  # The branch in vpp repo that these docs should point to for manifests, etc
       sitemap: true
       registry:
