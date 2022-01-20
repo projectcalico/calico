@@ -1,5 +1,7 @@
 package wireguard
 
+import "time"
+
 type Config struct {
 	// Wireguard configuration
 	Enabled             bool
@@ -11,4 +13,5 @@ type Config struct {
 	MTU                 int
 	RouteSource         string
 	EncryptHostTraffic  bool
+	PersistentKeepAlive time.Duration
 }

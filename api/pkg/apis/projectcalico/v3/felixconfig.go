@@ -382,6 +382,8 @@ type FelixConfigurationSpec struct {
 	WireguardMTU *int `json:"wireguardMTU,omitempty"`
 	// WireguardHostEncryptionEnabled controls whether Wireguard host-to-host encryption is enabled. [Default: false]
 	WireguardHostEncryptionEnabled *bool `json:"wireguardHostEncryptionEnabled,omitempty"`
+	// WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]
+	WireguardPersistentKeepAlive *metav1.Duration `json:"wireguardKeepAlive,omitempty"`
 
 	// Set source-destination-check on AWS EC2 instances. Accepted value must be one of "DoNothing", "Enable" or "Disable".
 	// [Default: DoNothing]
