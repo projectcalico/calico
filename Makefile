@@ -75,3 +75,7 @@ release-test:
 # Publish an already built release.
 release-publish: hack/release/release hack/release/ghr
 	@hack/release/release -publish
+
+# Create a release branch.
+create-release-branch: hack/release/release
+	@hack/release/release -new-branch
