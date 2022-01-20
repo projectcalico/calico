@@ -8,8 +8,8 @@ RUN mkdir -p /opt/cni/bin
 
 FROM scratch
 
-COPY --from=base /licenses /licenses
-COPY --from=base /opt/cni/bin /opt/cni/bin
+COPY --from=ubi /licenses /licenses
+COPY --from=ubi /opt/cni/bin /opt/cni/bin
 
 ADD bin/s390x/ /opt/cni/bin/
 
