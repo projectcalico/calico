@@ -474,19 +474,25 @@ spec:
                   information. - WorkloadIPs: use workload endpoints to construct
                   routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
                 type: string
-              routeTableRange:
+              routeTableRanges:
                 description: Calico programs additional Linux route tables for various
-                  purposes.  RouteTableRange specifies the indices of the route tables
-                  that Calico should use.
-                properties:
-                  max:
-                    type: integer
-                  min:
-                    type: integer
-                required:
-                - max
-                - min
-                type: object
+                  purposes. RouteTableRanges designates a set of table ranges that Calico
+                  is permitted to use.
+                type: array
+                items:
+                  routeTableRange:
+                    description: RouteTableRange targets Linux route tables available
+                    to Calico by their indices.
+                      that Calico should use.
+                    properties:
+                      max:
+                        type: integer
+                      min:
+                        type: integer
+                    required:
+                    - max
+                    - min
+                    type: object
               serviceLoopPrevention:
                 description: 'When service IP advertisement is enabled, prevent routing
                   loops to service IPs that are not in use, by dropping or rejecting
