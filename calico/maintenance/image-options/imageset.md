@@ -86,6 +86,8 @@ metadata:
   name: calico-{{site.data.versions.first.title}}
 spec:
   images:
+  - image: "calico/apiserver"
+    digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   - image: "calico/cni"
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   - image: "calico/kube-controllers"
@@ -96,6 +98,8 @@ spec:
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   - image: "calico/pod2daemon-flexvol"
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  - image: "calico/windows-upgrade"
+    digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   - image: "tigera/operator"
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   - image: "tigera/key-cert-provisioner"
@@ -105,7 +109,7 @@ spec:
 You can create an ImageSet manifest manually or by script.
 
 {% tabs tab-group:grp1 %}
-<label:Manual,active:true>
+-<label:Manual,active:true>
 <%
 
 1. Copy the above example into a file called `imageset.yaml` and edit that file in the steps below.
@@ -145,7 +149,7 @@ Copy the following script into a file, make it executable, and run the script. T
 ```
 #!/bin/bash -e
 
-images=(calico/cni calico/kube-controllers calico/node calico/typha calico/pod2daemon-flexvol tigera/key-cert-provisioner tigera/operator)
+images=(calico/apiserver calico/cni calico/kube-controllers calico/node calico/typha calico/pod2daemon-flexvol calico/windows-upgrade tigera/key-cert-provisioner tigera/operator)
 
 OPERATOR_IMAGE={{ operator.registry }}/{{ operator.image }}:{{ operator.version }}
 echo "Pulling $OPERATOR_IMAGE"
@@ -168,12 +172,7 @@ EOF
 for x in "${imagelist[@]}"; do
   for y in ${images[*]}; do
     if [[ $x =~ $y: ]]; then
-      echo "Pulling $x"
-      docker pull $x -q > /dev/null
-      {% raw %}digests=$(docker inspect $x -f '{{range .RepoDigests}}{{printf "%s\n" .}}{{end}}'){% endraw %}
-      name=$(echo $x | sed -e 's|docker.io/||' -e 's|:.*$||')
-      imgdigest=$(echo -e $digests | grep $name)
-      digest=$(echo -e $imgdigest | sed -e 's|^.*@||')
+      digest=$(docker run --rm gcr.io/go-containerregistry/crane:v0.7.0 digest ${x})
       echo "Adding digest for $x"
       echo 
       echo "  - image: \"$(echo $x | sed -e 's|^.*/\([^/]*/[^/]*\):.*$|\1|')\"" >> ./imageset.yaml
