@@ -41,8 +41,6 @@ class TestIPIP(TestBase):
 
     @parameterized.expand([
         ('bird',),
-        # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
-        # ('gobgp',),
     ])
     def test_ipip(self, backend):
         """
@@ -164,8 +162,6 @@ class TestIPIP(TestBase):
 
     @parameterized.expand([
         ('bird',),
-        # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
-        # ('gobgp',),
     ])
     def test_issue_1584(self, backend):
         """
@@ -383,9 +379,6 @@ class TestIPIP(TestBase):
     @parameterized.expand([
         (False,),
         (True,),
-        # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
-        #(False, 'gobgp',),
-        #(True, 'gobgp',),
     ])
     def test_gce(self, with_ipip, backend='bird'):
         """Test with and without IP-in-IP routing on simulated GCE instances.
