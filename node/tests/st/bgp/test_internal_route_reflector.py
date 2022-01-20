@@ -108,10 +108,4 @@ class TestInternalRouteReflector(TestBase):
     def test_bird_internal_route_reflector_default_as(self):
         self._test_internal_route_reflector(backend='bird', bgpconfig_as_num=None, peer_as_num=64512)
 
-    # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
-    @attr('slow')
-    @skip("Disabled until gobgp is updated with libcalico-go v3")
-    def test_gobgp_internal_route_reflector(self):
-        self._test_internal_route_reflector(backend='gobgp')
-
 TestInternalRouteReflector.batchnumber = 1  # Adds a batch number for parallel testing
