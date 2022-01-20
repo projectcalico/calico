@@ -170,6 +170,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
+		err = fmt.Errorf("error creating calico client: %v", err)
 		return
 	}
 
