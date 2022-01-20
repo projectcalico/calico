@@ -456,6 +456,7 @@ blocks:
 - name: 'networking-calico'
   run:
     when: "change_in(['/networking-calico/'])"
+  dependencies: []
   task:
     prologue:
       commands:
