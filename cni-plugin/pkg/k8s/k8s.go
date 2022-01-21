@@ -752,10 +752,6 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*cniv1.Resu
 			},
 		}
 		result.IPs = append(result.IPs, ipConf)
-		version = "6"
-		if ipConf.Address.IP.To4() != nil {
-			version = "4"
-		}
 		logger.Debugf("Adding IPv%s: %s to result", version, ip.String())
 	}
 
