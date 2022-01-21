@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/sirupsen/logrus"
@@ -55,7 +55,7 @@ func (d *linuxDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
 	args *skel.CmdArgs,
-	result *current.Result,
+	result *cniv1.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
 	endpoint *api.WorkloadEndpoint,
@@ -109,10 +109,10 @@ func (d *linuxDataplane) DoNetworking(
 
 		// Figure out whether we have IPv4 and/or IPv6 addresses.
 		for _, addr := range result.IPs {
-			if addr.Version == "4" {
+			if addr.Address.IP.To4() != nil {
 				hasIPv4 = true
 				addr.Address.Mask = net.CIDRMask(32, 32)
-			} else if addr.Version == "6" {
+			} else if addr.Address.IP.To16() != nil {
 				hasIPv6 = true
 				addr.Address.Mask = net.CIDRMask(128, 128)
 			}
@@ -307,7 +307,7 @@ func disableDAD(contVethName string) error {
 }
 
 // SetupRoutes sets up the routes for the host side of the veth pair.
-func SetupRoutes(hostVeth netlink.Link, result *current.Result) error {
+func SetupRoutes(hostVeth netlink.Link, result *cniv1.Result) error {
 
 	// Go through all the IPs and add routes for each IP in the result.
 	for _, ipAddr := range result.IPs {
