@@ -412,12 +412,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		syncer.Stop()
 	})
 
-	It("should handle a Namespace with DefaultDeny (v1beta annotation for namespace isolation)", func() {
+	It("should handle a Namespace with DefaultDeny (v1 annotation for namespace isolation)", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-syncer-namespace-default-deny",
 				Annotations: map[string]string{
-					"net.beta.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"DefaultDeny\"}}",
+					"net.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"DefaultDeny\"}}",
 				},
 				Labels: map[string]string{"label": "value"},
 			},
