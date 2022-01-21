@@ -27,7 +27,7 @@ import (
 	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/buger/jsonparser"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/juju/clock"
 	"github.com/juju/errors"
@@ -136,7 +136,7 @@ func (d *windowsDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
 	args *skel.CmdArgs,
-	result *current.Result,
+	result *cniv1.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
 	endpoint *api.WorkloadEndpoint,
@@ -682,7 +682,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	affineBlockSubnet *net.IPNet,
 	allIPAMPools []*net.IPNet,
 	natOutgoing bool,
-	result *current.Result,
+	result *cniv1.Result,
 	n *hns.NetConf) (*hcsshim.HNSEndpoint, *hcn.HostComputeEndpoint, error) {
 
 	var gatewayAddress string
@@ -1002,7 +1002,7 @@ func CreateNetworkName(netName string, subnet *net.IPNet) string {
 }
 
 // SetupRoutes sets up the routes for the host side of the veth pair.
-func SetupRoutes(hostVeth interface{}, result *current.Result) error {
+func SetupRoutes(hostVeth interface{}, result *cniv1.Result) error {
 
 	// Go through all the IPs and add routes for each IP in the result.
 	for _, ipAddr := range result.IPs {
