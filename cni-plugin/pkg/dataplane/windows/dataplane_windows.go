@@ -768,7 +768,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		// For remote runtimes, we use the V2 API.
 		if isDockerV1 {
 			d.logger.Infof("Attempting to create HNS endpoint name: %s for container", endpointName)
-			_, err = hns.ProvisionEndpoint(endpointName, hnsNetwork.Id, args.ContainerID, args.Netns, func() (*hcsshim.HNSEndpoint, error) {
+			_, err = hns.AddHnsEndpoint(endpointName, hnsNetwork.Id, args.ContainerID, args.Netns, func() (*hcsshim.HNSEndpoint, error) {
 				hnsEP := &hcsshim.HNSEndpoint{
 					Name:           endpointName,
 					VirtualNetwork: hnsNetwork.Id,
@@ -1005,7 +1005,7 @@ func (d *windowsDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	d.logger.Infof("Attempting to delete HNS endpoint name : %s for container", epName)
 
 	if cri.IsDockershimV1(args.Netns) {
-		err = hns.DeprovisionEndpoint(epName, args.Netns, args.ContainerID)
+		err = hns.RemoveHnsEndpoint(epName, args.Netns, args.ContainerID)
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			d.logger.WithError(err).Warn("Endpoint not found during delete, assuming it's already been cleaned up")
 			return nil
