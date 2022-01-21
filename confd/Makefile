@@ -10,7 +10,7 @@ PACKAGE_NAME=github.com/projectcalico/calico/confd
 include ../lib.Makefile
 
 # Override K8S_VERSION
-K8S_VERSION=v1.17.0
+K8S_VERSION=v1.23.1
 
 ###############################################################################
 
