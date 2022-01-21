@@ -54,6 +54,16 @@ image:
 	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 
 ###############################################################################
+# Run local e2e smoke test against the checked-out code 
+# using a local kind cluster.
+###############################################################################
+E2E_FOCUS ?= "sig-network.*Conformance"
+e2e-test:
+	$(MAKE) -C e2e build
+	$(MAKE) -C node kind-k8st-setup
+	KUBECONFIG=./node/kubeconfig.yaml ./e2e/bin/e2e.test -ginkgo.focus=$(E2E_FOCUS)
+
+###############################################################################
 # Release logic below
 ###############################################################################
 # Build the release tool.
