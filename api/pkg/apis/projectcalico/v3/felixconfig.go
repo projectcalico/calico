@@ -62,8 +62,9 @@ const (
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
-	UseInternalDataplaneDriver *bool  `json:"useInternalDataplaneDriver,omitempty"`
-	DataplaneDriver            string `json:"dataplaneDriver,omitempty"`
+	UseInternalDataplaneDriver *bool            `json:"useInternalDataplaneDriver,omitempty"`
+	DataplaneDriver            string           `json:"dataplaneDriver,omitempty"`
+	DataplaneWatchdogTimeout   *metav1.Duration `json:"dataplaneWatchdogTimeout,omitempty" configv1timescale:"seconds"`
 
 	IPv6Support *bool `json:"ipv6Support,omitempty" confignamev1:"Ipv6Support"`
 

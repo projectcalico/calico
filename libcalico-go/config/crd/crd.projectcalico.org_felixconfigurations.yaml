@@ -172,6 +172,8 @@ spec:
                 type: string
               dataplaneDriver:
                 type: string
+              dataplaneWatchdogTimeout:
+                type: string
               debugDisableLogDropping:
                 type: boolean
               debugMemoryProfilePath:
