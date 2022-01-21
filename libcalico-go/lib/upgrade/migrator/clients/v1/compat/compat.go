@@ -316,29 +316,6 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 	return nil
 }
 
-// ToTagsLabelsRules converts a Profile KVPair to separate KVPair types for Keys,
-// Labels and Rules. These separate KVPairs are used to write three separate objects
-// that make up a single profile.
-func ToTagsLabelsRules(d *model.KVPair) (t, l, r *model.KVPair) {
-	p := d.Value.(*model.Profile)
-	pk := d.Key.(model.ProfileKey)
-
-	t = &model.KVPair{
-		Key:   model.ProfileTagsKey{ProfileKey: pk},
-		Value: p.Tags,
-	}
-	l = &model.KVPair{
-		Key:   model.ProfileLabelsKey{ProfileKey: pk},
-		Value: p.Labels,
-	}
-	r = &model.KVPair{
-		Key:   model.ProfileRulesKey{ProfileKey: pk},
-		Value: &p.Rules,
-	}
-
-	return t, l, r
-}
-
 // toDatastoreGlobalBGPConfigKey modifies the Global BGP Config key to the one required by
 // the datastore (for back-compatibility).
 func toDatastoreGlobalBGPConfigKey(key model.GlobalBGPConfigKey) model.GlobalBGPConfigKey {
