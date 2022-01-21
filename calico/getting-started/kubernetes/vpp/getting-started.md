@@ -251,7 +251,7 @@ For some hardware, the following hugepages configuration may enable VPP to use m
    {: .alert .alert-info}
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation.yaml
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-default.yaml
    ```
 
 #### Install the VPP dataplane components
