@@ -217,9 +217,47 @@ When using `type: k8s`, the {{site.prodname}} CNI plugin requires read-only Kube
 
 ### Using host-local IPAM
 
-When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field. {{site.prodname}} does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
+Calico can be configured to use [host-local IPAM](https://www.cni.dev/plugins/current/ipam/host-local/) instead of the default `calico-ipam`. Host
+local IPAM uses a pre-determined CIDR per-host, and stores allocations locally on each node. This is in contrast to Calico IPAM, which dynamically
+allocates blocks of addresses and single addresses alike in response to cluster needs. 
 
-> **Note**: `usePodCidr` can only be used as the value of the `subnet` field, it cannot be used in
+Host local IPAM is generally only used on clusters where integration with the Kubernetes [route controller](https://kubernetes.io/docs/concepts/architecture/cloud-controller/#route-controller) is necessary. 
+Note that some Calico features - such as the ability to request a specific address or pool for a pod - require Calico IPAM in order to function, and will not work with host-local IPAM enabled.
+
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+The `host-local` IPAM plugin can be configured by setting the `Spec.CNI.IPAM.Plugin` field to `HostLocal` on the [operator.tigera.io/Installation]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation) API.
+
+Calico will use the `host-local` IPAM plugin to allocate IPv4 addresses from the node's IPv4 pod CIDR if there is an IPv4 pool configured in `Spec.IPPools`, and an IPv6 address from the node's IPv6 pod CIDR if
+there is an IPv6 pool configured in `Spec.IPPools`.
+
+The following example configures Calico to assign dual-stack IPs to pods using the host-local IPAM plugin.
+
+```yaml
+kind: Installation
+apiVersion: operator.tigera.io/v1
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+    - cidr: 192.168.0.0/16
+    - cidr: 2001:db8::/64
+  cni:
+    type: Calico
+    ipam:
+      type: HostLocal
+```
+
+%>
+  <label:Manifest>
+<%
+
+When using the CNI `host-local` IPAM plugin, two special values - `usePodCidr` and `usePodCidrIPv6` - are allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field. {{site.prodname}} does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
+
+> **Note**: `usePodCidr` and `usePodCidrIPv6` can only be used as the value of the `subnet` field, it cannot be used in
 > `rangeStart` or `rangeEnd` so those values are not useful if `subnet` is set to `usePodCidr`.
 {: .alert .alert-info}
 
@@ -231,7 +269,7 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 {{site.prodname}} CNI plugin configuration:
 
 * `node_name`
-    * The node name to use when looking up the `usePodCidr` value (defaults to current hostname)
+    * The node name to use when looking up the CIDR value (defaults to current hostname)
 
 ```json
 {
@@ -249,7 +287,7 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
                 { "subnet": "usePodCidr" }
             ],
             [
-                { "subnet": "2001:db8::/96" }
+                { "subnet": "usePodCidrIPv6" }
             ]
         ],
         "routes": [
@@ -260,11 +298,14 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 }
 ```
 
-When making use of the `usePodCidr` option, the {{site.prodname}} CNI plugin requires read-only Kubernetes API access to the `Nodes` resource.
+When making use of the `usePodCidr` or `usePodCidrIPv6` options, the {{site.prodname}} CNI plugin requires read-only Kubernetes API access to the `Nodes` resource.
 
 #### Configuring node and typha
 
 When using `host-local` IPAM with the Kubernetes API datastore, you must configure both {{site.nodecontainer}} and the Typha deployemt to use the `Node.podCIDR` field by setting the environment variable `USE_POD_CIDR=true` in each.
+
+%>
+{% endtabs %}
 
 ### Using Kubernetes annotations
 
