@@ -11,7 +11,7 @@ KUBECTL_VERSION = v1.23.1
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-ETCD_VERSION=v3.3.7
+ETCD_VERSION=v3.5.1
 PROTOC_VER=v0.1
 UBI_VERSION=8.5
 
