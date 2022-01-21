@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
 
 	"github.com/Microsoft/hcsshim"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -1051,7 +1051,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var netconf string
 		var workloadName, containerID, name string
 		var endpointSpec libapi.WorkloadEndpointSpec
-		var result *current.Result
+		var result *cniv1.Result
 
 		checkIPAMReservation := func() {
 			// IPAM reservation should still be in place.

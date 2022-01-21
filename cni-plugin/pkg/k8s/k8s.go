@@ -26,7 +26,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ipam"
 
 	"github.com/sirupsen/logrus"
@@ -50,9 +50,9 @@ import (
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
 // Having kubernetes code in its own file avoids polluting the mainline code. It's expected that the kubernetes case will
 // more special casing than the mainline code.
-func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epIDs utils.WEPIdentifiers, calicoClient calicoclient.Interface, endpoint *libapi.WorkloadEndpoint) (*current.Result, error) {
+func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epIDs utils.WEPIdentifiers, calicoClient calicoclient.Interface, endpoint *libapi.WorkloadEndpoint) (*cniv1.Result, error) {
 	var err error
-	var result *current.Result
+	var result *cniv1.Result
 
 	utils.ConfigureLogging(conf)
 
@@ -308,7 +308,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 		// Convert overridden IPAM result into current Result.
 		// This method fill in all the empty fields necessory for CNI output according to spec.
-		result, err = current.NewResultFromResult(overriddenResult)
+		result, err = cniv1.NewResultFromResult(overriddenResult)
 		if err != nil {
 			return nil, err
 		}
@@ -482,7 +482,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	logger.Info("Wrote updated endpoint to datastore")
 
 	// Add the interface created above to the CNI result.
-	result.Interfaces = append(result.Interfaces, &current.Interface{
+	result.Interfaces = append(result.Interfaces, &cniv1.Interface{
 		Name: endpoint.Spec.InterfaceName},
 	)
 
@@ -611,7 +611,7 @@ func releaseIPAddrs(ipAddrs []string, calico calicoclient.Interface, logger *log
 // ipAddrsResult parses the ipAddrs annotation and calls the configured IPAM plugin for
 // each IP passed to it by setting the IP field in CNI_ARGS, and returns the result of calling the IPAM plugin.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*current.Result, error) {
+func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrs\":%s", ipAddrs)
 
 	// We need to make sure there is only one IPv4 and/or one IPv6
@@ -621,7 +621,7 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 		return nil, err
 	}
 
-	result := current.Result{}
+	result := cniv1.Result{}
 
 	// Go through all the IPs passed in as annotation value and call IPAM plugin
 	// for each, and populate the result variable with IP4 and/or IP6 IPs returned
@@ -634,7 +634,11 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 		}
 
 		result.IPs = append(result.IPs, r.IPs[0])
-		logger.Debugf("Adding IPv%s: %s to result", r.IPs[0].Version, ip.String())
+		version := "6"
+		if r.IPs[0].Address.IP.To4() != nil {
+			version = "4"
+		}
+		logger.Debugf("Adding IPv%s: %s to result", version, ip.String())
 	}
 
 	return &result, nil
@@ -643,7 +647,7 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 // callIPAMWithIP sets CNI_ARGS with the IP and calls the IPAM plugin with it
 // to get current.Result and then it unsets the IP field from CNI_ARGS ENV var,
 // so it doesn't pollute the subsequent requests.
-func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*current.Result, error) {
+func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 
 	// Save the original value of the CNI_ARGS ENV var for backup.
 	originalArgs := os.Getenv("CNI_ARGS")
@@ -699,7 +703,7 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 	// IPAM result has a bunch of fields that are optional for an IPAM plugin
 	// but required for a CNI plugin, so this is to populate those fields.
 	// See CNI Spec doc for more details.
-	ipamResult, err := current.NewResultFromResult(r)
+	ipamResult, err := cniv1.NewResultFromResult(r)
 	if err != nil {
 		return nil, err
 	}
@@ -714,7 +718,7 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 // overrideIPAMResult generates current.Result like the one produced by IPAM plugin,
 // but sets IP field manually since IPAM is bypassed with this annotation.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*current.Result, error) {
+func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*cniv1.Result, error) {
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrsNoIpam\":%s", ipAddrsNoIpam)
 
 	// We need to make sure there is only one IPv4 and/or one IPv6
@@ -724,7 +728,7 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*current.Re
 		return nil, err
 	}
 
-	result := current.Result{}
+	result := cniv1.Result{}
 
 	// Go through all the IPs passed in as annotation value and populate
 	// the result variable with IP4 and/or IP6 IPs.
@@ -741,15 +745,14 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*current.Re
 			mask = net.CIDRMask(128, 128)
 		}
 
-		ipConf := &current.IPConfig{
-			Version: version,
+		ipConf := &cniv1.IPConfig{
 			Address: net.IPNet{
 				IP:   ip,
 				Mask: mask,
 			},
 		}
 		result.IPs = append(result.IPs, ipConf)
-		logger.Debugf("Adding IPv%s: %s to result", ipConf.Version, ip.String())
+		logger.Debugf("Adding IPv%s: %s to result", version, ip.String())
 	}
 
 	return &result, nil

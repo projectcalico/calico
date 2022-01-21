@@ -27,12 +27,13 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/clock"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -350,7 +351,6 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			BPFMapRepin:                        configParams.DebugBPFMapRepinEnabled,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
-			KubeProxyEndpointSlicesEnabled:     configParams.BPFKubeProxyEndpointSlicesEnabled,
 			BPFPSNATPorts:                      configParams.BPFPSNATPorts,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
@@ -404,11 +404,11 @@ func ServePrometheusMetrics(configParams *config.Config) {
 	} else {
 		if !configParams.PrometheusGoMetricsEnabled {
 			log.Info("Discarding Golang metrics")
-			prometheus.Unregister(prometheus.NewGoCollector())
+			prometheus.Unregister(collectors.NewGoCollector())
 		}
 		if !configParams.PrometheusProcessMetricsEnabled {
 			log.Info("Discarding process metrics")
-			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+			prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		}
 		if !configParams.PrometheusWireGuardMetricsEnabled || !configParams.WireguardEnabled {
 			log.Info("Discarding WireGuard metrics")

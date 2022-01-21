@@ -18,12 +18,11 @@ import (
 	goerrors "errors"
 	"strconv"
 	"strings"
-
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	etcd "go.etcd.io/etcd/client"
-	"go.etcd.io/etcd/pkg/transport"
+	"go.etcd.io/etcd/client/pkg/v3/transport"
+	etcd "go.etcd.io/etcd/client/v2"
 	"golang.org/x/net/context"
 
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
