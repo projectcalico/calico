@@ -1744,6 +1744,11 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format: "",
 						},
 					},
+					"dataplaneWatchdogTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 					"ipv6Support": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"boolean"},
