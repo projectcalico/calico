@@ -577,7 +577,7 @@ func (c *ipamController) checkEmptyBlocks() error {
 		// During a Flannel migration, we can only migrate blocks affined to nodes that have already undergone the migration
 		migrating, err := c.nodeIsBeingMigrated(node)
 		if err != nil {
-			logc.Warn("Couldn't find node affined to empty block, skipping affinity release")
+			logc.WithError(err).Warn("Failed to check if node is being migrated from Flannel, skipping affinity release")
 			continue
 		}
 		if migrating {
