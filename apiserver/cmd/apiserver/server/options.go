@@ -34,7 +34,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
