@@ -559,6 +559,10 @@ spec:
                 description: 'WireguardInterfaceName specifies the name to use for
                   the Wireguard interface. [Default: wg.calico]'
                 type: string
+              wireguardKeepAlive:
+                description: 'WireguardKeepAlive controls Wireguard PersistentKeepalive
+                  option. Set 0 to disable. [Default: 0]'
+                type: string
               wireguardListeningPort:
                 description: 'WireguardListeningPort controls the listening port used
                   by Wireguard. [Default: 51820]'

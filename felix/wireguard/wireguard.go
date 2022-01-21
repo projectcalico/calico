@@ -1105,8 +1105,9 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 				// -  The wgpeer has not been programmed.
 				logCxt.Debug("Constructing update for peer")
 				wgpeer := wgtypes.PeerConfig{
-					UpdateOnly: peer.programmedInWireguard,
-					PublicKey:  peer.publicKey,
+					UpdateOnly:                  peer.programmedInWireguard,
+					PublicKey:                   peer.publicKey,
+					PersistentKeepaliveInterval: &w.config.PersistentKeepAlive,
 				}
 				updatePeer := false
 				if !peer.programmedInWireguard || update.cidrsDeleted.Len() > 0 {
@@ -1173,9 +1174,10 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 					// The peer is not programmed and should be.  Add a delta create.
 					nodeLogCxt.Debug("Not programmed in wireguard, needs to be added now")
 					wireguardUpdate.Peers = append(wireguardUpdate.Peers, wgtypes.PeerConfig{
-						PublicKey:  peer.publicKey,
-						Endpoint:   w.endpointUDPAddr(peer.ipv4EndpointAddr.AsNetIP()),
-						AllowedIPs: peer.allowedCidrsForWireguard(),
+						PublicKey:                   peer.publicKey,
+						Endpoint:                    w.endpointUDPAddr(peer.ipv4EndpointAddr.AsNetIP()),
+						AllowedIPs:                  peer.allowedCidrsForWireguard(),
+						PersistentKeepaliveInterval: &w.config.PersistentKeepAlive,
 					})
 				}
 				return nil
@@ -1295,10 +1297,11 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 			(configuredAddr == nil || configuredAddr.Port != w.config.ListeningPort || !configuredAddr.IP.Equal(expectedEndpointIP))
 		if replaceEndpointAddr || allowedCidrsForUpdateMsg != nil {
 			peer := wgtypes.PeerConfig{
-				PublicKey:         key,
-				UpdateOnly:        true,
-				ReplaceAllowedIPs: replaceCidrs,
-				AllowedIPs:        allowedCidrsForUpdateMsg,
+				PublicKey:                   key,
+				UpdateOnly:                  true,
+				ReplaceAllowedIPs:           replaceCidrs,
+				AllowedIPs:                  allowedCidrsForUpdateMsg,
+				PersistentKeepaliveInterval: &w.config.PersistentKeepAlive,
 			}
 
 			if replaceEndpointAddr {
@@ -1325,9 +1328,10 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 
 		logCxt.WithField("ipv4EndpointAddr", node.ipv4EndpointAddr).Info("Add peer to wireguard")
 		wireguardUpdate.Peers = append(wireguardUpdate.Peers, wgtypes.PeerConfig{
-			PublicKey:  node.publicKey,
-			Endpoint:   w.endpointUDPAddr(node.ipv4EndpointAddr.AsNetIP()),
-			AllowedIPs: node.allowedCidrsForWireguard(),
+			PublicKey:                   node.publicKey,
+			Endpoint:                    w.endpointUDPAddr(node.ipv4EndpointAddr.AsNetIP()),
+			AllowedIPs:                  node.allowedCidrsForWireguard(),
+			PersistentKeepaliveInterval: &w.config.PersistentKeepAlive,
 		})
 		wireguardUpdateRequired = true
 	}
