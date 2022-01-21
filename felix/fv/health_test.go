@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -49,8 +50,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"time"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -223,6 +222,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 				"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
 				"-e", "FELIX_USAGEREPORTINGENABLED=false",
 				"-e", "FELIX_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
+				"-e", "FELIX_DataplaneWatchdogTimeout=20",
 				"-e", "FELIX_DebugSimulateCalcGraphHangAfter="+calcGraphHangTime,
 				"-e", "FELIX_DebugSimulateDataplaneHangAfter="+dataplaneHangTime,
 				"-e", "FELIX_TYPHAADDR="+typhaAddr,
