@@ -33,6 +33,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -402,11 +403,11 @@ func ServePrometheusMetrics(configParams *config.Config) {
 	} else {
 		if !configParams.PrometheusGoMetricsEnabled {
 			log.Info("Discarding Golang metrics")
-			prometheus.Unregister(prometheus.NewGoCollector())
+			prometheus.Unregister(collectors.NewGoCollector())
 		}
 		if !configParams.PrometheusProcessMetricsEnabled {
 			log.Info("Discarding process metrics")
-			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+			prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		}
 		if !configParams.PrometheusWireGuardMetricsEnabled || !configParams.WireguardEnabled {
 			log.Info("Discarding WireGuard metrics")
