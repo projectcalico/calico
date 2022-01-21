@@ -154,9 +154,11 @@ var _ = Describe("BPF Proxy", func() {
 
 	Describe("with k8s client", func() {
 		Context("with EndpointSlices", func() {
-			var p proxy.Proxy
-			var dp *mockSyncer
-			var k8s *fake.Clientset
+			var (
+				p   proxy.Proxy
+				dp  *mockSyncer
+				k8s *fake.Clientset
+			)
 
 			k8s = fake.NewSimpleClientset(testSvc, testSvcEpsSlice, secondSvc, secondSvcEpsSlice)
 
@@ -441,8 +443,11 @@ var _ = Describe("BPF Proxy", func() {
 
 	Describe("ExternalPolicy=Local with k8s client", func() {
 		Context("ExternalPolicy=Local with EndpointSlices", func() {
-			var p proxy.Proxy
-			var dp *mockSyncer
+			var (
+				p   proxy.Proxy
+				dp  *mockSyncer
+				k8s *fake.Clientset
+			)
 
 			testNodeName := "testnode"
 			testNodeNameOther := "someothernode"
@@ -494,8 +499,6 @@ var _ = Describe("BPF Proxy", func() {
 					},
 				},
 			}
-
-			var k8s *fake.Clientset
 
 			k8s = fake.NewSimpleClientset(nodeport, epsToSlice(nodeportEps))
 
