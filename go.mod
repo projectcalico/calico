@@ -87,7 +87,7 @@ require (
 	k8s.io/code-generator v0.23.1
 	k8s.io/component-base v0.23.1
 	k8s.io/klog v1.0.0
-	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65
+	k8s.io/kube-openapi v0.0.0-20220114203427-a0453230fd26
 	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b
 	modernc.org/memory v1.0.5
@@ -260,7 +260,7 @@ replace (
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.23.1
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.23.1
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.23.1
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20220114203427-a0453230fd26
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.23.1
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.23.1
 	k8s.io/kubectl => k8s.io/kubectl v0.23.1
