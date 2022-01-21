@@ -62,9 +62,9 @@ var _ = Describe("Calico IPAM Tests", func() {
 				var ip4Mask, ip6Mask string
 
 				for _, ip := range result.IPs {
-					if ip.Version == "4" {
+					if ip.Address.IP.To4() != nil {
 						ip4Mask = ip.Address.Mask.String()
-					} else if ip.Version == "6" {
+					} else if ip.Address.IP.To16() != nil {
 						ip6Mask = ip.Address.Mask.String()
 					}
 				}
