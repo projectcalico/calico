@@ -45,7 +45,6 @@ spec:
 |-------------|-----------------------------|-------------------|--------|------------|
 | name   | The name of the profile. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 | labels | A set of labels for this profile. |  | map of string key to string values |
-| tags (deprecated) | A list of tag names to apply to endpoints using this profile.        | | list of strings |
 
 #### Spec
 

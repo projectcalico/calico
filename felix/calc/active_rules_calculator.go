@@ -114,7 +114,6 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileRulesKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileLabelsKey{}, arc.OnUpdate)
-	allUpdDispatcher.Register(model.ProfileTagsKey{}, arc.OnUpdate)
 	allUpdDispatcher.RegisterStatusHandler(arc.OnStatusUpdate)
 }
 
@@ -144,8 +143,6 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		}
 		arc.labelIndex.OnUpdate(update)
 	case model.ProfileLabelsKey:
-		arc.labelIndex.OnUpdate(update)
-	case model.ProfileTagsKey:
 		arc.labelIndex.OnUpdate(update)
 	case model.ProfileRulesKey:
 		if update.Value != nil {

@@ -35,14 +35,9 @@ var (
 		Name: "felix_active_local_selectors",
 		Help: "Number of active selectors on this host.",
 	})
-	gaugeNumActiveTags = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_active_local_tags",
-		Help: "Number of active tags on this host.",
-	})
 )
 
 func init() {
-	prometheus.MustRegister(gaugeNumActiveTags)
 	prometheus.MustRegister(gaugeNumActiveSelectors)
 }
 
@@ -175,8 +170,8 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 
 	// The active rules calculator only figures out which rules are active, it doesn't extract
 	// any information from the rules.  The rule scanner takes the output from the active rules
-	// calculator and scans the individual rules for selectors, tags, and named ports.  It
-	// generates events when a new selector/tag/named port starts/stops being used.
+	// calculator and scans the individual rules for selectors and named ports.  It
+	// generates events when a new selector/named port starts/stops being used.
 	//
 	//             ...
 	//     Active Rules Calculator
@@ -185,7 +180,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//              |
 	//         Rule scanner
 	//          |    \
-	//          |     \ Locally active tags/selectors/named ports
+	//          |     \ Locally active selectors/named ports
 	//          |      \
 	//          |      ...
 	//          |
@@ -222,10 +217,10 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 		callbacks.OnIPSetMemberRemoved(ipSetID, member)
 	}
 
-	// The rule scanner only goes as far as figuring out which tags/selectors/named ports are
+	// The rule scanner only goes as far as figuring out which selectors/named ports are
 	// active. Next we need to figure out which endpoints (and hence which IP addresses/ports) are
 	// in each tag/selector/named port. The IP set member index calculates the set of IPs and named
-	// ports that should be in each IP set.  To do that, it matches the active selectors/tags/named
+	// ports that should be in each IP set.  To do that, it matches the active selectors/named
 	// ports extracted by the rule scanner against all the endpoints. The service index does the same
 	// for service based rules, building IP set contributions from endpoint slices.
 	//
@@ -237,7 +232,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//      |       ...
 	//      |    Rule scanner
 	//      |     |       \
-	//      |    ...       \ Locally active tags/selectors/named ports
+	//      |    ...       \ Locally active selectors/named ports
 	//       \              |
 	//        \_____        |
 	//              \       |
