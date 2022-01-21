@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
@@ -2371,7 +2371,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var workloadName, containerID, name string
 		var endpointSpec libapi.WorkloadEndpointSpec
 		var contNs ns.NetNS
-		var result *current.Result
+		var result *cniv1.Result
 
 		checkIPAMReservation := func() {
 			// IPAM reservation should still be in place.

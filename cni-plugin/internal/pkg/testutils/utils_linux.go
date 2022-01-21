@@ -29,7 +29,7 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
 	types020 "github.com/containernetworking/cni/pkg/types/020"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/mcuadros/go-version"
@@ -51,8 +51,8 @@ func min(a, b int) int {
 	return b
 }
 
-// GetResultForCurrent takes the output with cniVersion and returns the Result in current.Result format.
-func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Result, error) {
+// GetResultForCurrent takes the output with cniVersion and returns the Result in cniv1.Result format.
+func GetResultForCurrent(session *gexec.Session, cniVersion string) (*cniv1.Result, error) {
 
 	// Check if the version is older than 0.3.0.
 	// Convert it to Current standard spec version if that is the case.
@@ -64,7 +64,7 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 			return nil, err
 		}
 
-		rCurrent, err := current.NewResultFromResult(&r020)
+		rCurrent, err := cniv1.NewResultFromResult(&r020)
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +72,7 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 		return rCurrent, nil
 	}
 
-	r := current.Result{}
+	r := cniv1.Result{}
 
 	if err := json.Unmarshal(session.Out.Contents(), &r); err != nil {
 		log.Errorf("Error unmarshaling output to Result: %v\n", err)
@@ -83,7 +83,7 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 
 // RunIPAMPlugin sets ENV vars required then calls the IPAM plugin
 // specified in the config and returns the result and exitCode.
-func RunIPAMPlugin(netconf, command, args, cid, cniVersion string) (*current.Result, types.Error, int) {
+func RunIPAMPlugin(netconf, command, args, cid, cniVersion string) (*cniv1.Result, types.Error, int) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 		panic(fmt.Errorf("failed to load netconf: %v", err))
@@ -127,7 +127,7 @@ func RunIPAMPlugin(netconf, command, args, cid, cniVersion string) (*current.Res
 	session.Wait(5)
 	exitCode := session.ExitCode()
 
-	result := &current.Result{}
+	result := &cniv1.Result{}
 	e := types.Error{}
 	stdout := session.Out.Contents()
 	if exitCode == 0 {
@@ -166,7 +166,7 @@ func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err e
 	return
 }
 
-func CreateContainer(netconf, podName, podNamespace, ip string) (containerID string, result *current.Result, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+func CreateContainer(netconf, podName, podNamespace, ip string) (containerID string, result *cniv1.Result, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
 	ginkgo.By("creating a container netns to run the CNI plugin against", func() {
 		targetNs, containerID, err = CreateContainerNamespace()
 	})
@@ -181,7 +181,7 @@ func CreateContainer(netconf, podName, podNamespace, ip string) (containerID str
 }
 
 // Create container with the giving containerId when containerId is not empty
-func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID string) (containerID string, result *current.Result, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID string) (containerID string, result *cniv1.Result, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
 	targetNs, containerID, err = CreateContainerNamespace()
 	if err != nil {
 		return "", nil, nil, nil, nil, nil, err
@@ -206,7 +206,7 @@ func RunCNIPluginWithId(
 	ifName string,
 	targetNs ns.NetNS,
 ) (
-	result *current.Result,
+	result *cniv1.Result,
 	contVeth netlink.Link,
 	contAddr []netlink.Addr,
 	contRoutes []netlink.Route,
@@ -270,13 +270,13 @@ func RunCNIPluginWithId(
 			return
 		}
 
-		result, err = current.NewResultFromResult(&r020)
+		result, err = cniv1.NewResultFromResult(&r020)
 		if err != nil {
 			return
 		}
 
 	} else {
-		result, err = current.GetResult(r)
+		result, err = cniv1.GetResult(r)
 		if err != nil {
 			return
 		}
