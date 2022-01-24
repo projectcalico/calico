@@ -139,8 +139,10 @@ struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd
 		goto out;
 	}
 
-	if (!(link = bpf_program__attach_cgroup(prog, cgroup_fd))) {
-		err = libbpf_get_error(link);
+	link = bpf_program__attach_cgroup(prog, cgroup_fd);
+	err = libbpf_get_error(link);
+	if (err) {
+		link = NULL;
 		goto out;
 	}
 
