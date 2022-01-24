@@ -995,7 +995,7 @@ func (c *ipamController) nodeIsBeingMigrated(name string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to check node for migration status: %w", err)
 	}
-	node, ok := obj.(v1.Node)
+	node, ok := obj.(*v1.Node)
 	if !ok {
 		return false, fmt.Errorf("failed to check node for migration status: unexpected error: object is not a node")
 	}
