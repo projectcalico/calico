@@ -25,50 +25,82 @@ var _ = Describe("IndexAllocator", func() {
 
 	var r *IndexAllocator
 
-	BeforeEach(func() {
-		By("constructing IndexAllocator")
-		r = NewIndexAllocator(IndexRange{Min: 43, Max: 47})
-		Expect(r).NotTo(BeNil())
-	})
+	Context("happy path", func() {
+		BeforeEach(func() {
+			By("constructing IndexAllocator")
+			r = NewIndexAllocator(IndexRange{Min: 43, Max: 47}, IndexRange{Min: 2, Max: 4})
+			Expect(r).NotTo(BeNil())
+		})
 
-	It("provides mainline function as expected", func() {
+		It("provides mainline function as expected", func() {
 
-		By("allocating the first index")
-		idx, err := r.GrabIndex()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(idx).To(Equal(43))
+			By("allocating the first index")
+			idx, err := r.GrabIndex()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(idx).To(Equal(2))
 
-		By("allocating the next 4 available indices")
-		for i := 44; i <= 47; i++ {
+			By("allocating the next 7 available indices")
+			for i := 3; i <= 4; i++ {
+				idx, err = r.GrabIndex()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(idx).To(Equal(i))
+			}
+			for i := 43; i <= 47; i++ {
+				idx, err = r.GrabIndex()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(idx).To(Equal(i))
+			}
+
+			By("allocating when no more indices are available")
+			_, err = r.GrabIndex()
+			Expect(err).To(HaveOccurred())
+
+			By("releasing and reallocating an index")
+			r.ReleaseIndex(45)
 			idx, err = r.GrabIndex()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(idx).To(Equal(i))
-		}
+			Expect(idx).To(Equal(45))
+		})
 
-		By("allocating when no more indices are available")
-		_, err = r.GrabIndex()
-		Expect(err).To(HaveOccurred())
+		It("GrabBlock works", func() {
 
-		By("releasing and reallocating an index")
-		r.ReleaseIndex(45)
-		idx, err = r.GrabIndex()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(idx).To(Equal(45))
+			By("allocating the first index")
+			idx, err := r.GrabIndex()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(idx).To(Equal(2))
+
+			By("grabbing all remaining indices")
+			remaining, err := r.GrabBlock(7)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(remaining.Len()).To(BeNumerically("==", 7))
+
+			By("allocating when no more indices are available")
+			_, err = r.GrabIndex()
+			Expect(err).To(HaveOccurred())
+		})
 	})
 
-	It("GrabAllRemainingIndices works", func() {
+	Context("allocator init with non-ideal ranges", func() {
+		It("should remove duplicates caused by overlapping ranges", func() {
+			By("constructing IndexAllocator with overlapping ranges")
+			r = NewIndexAllocator(IndexRange{Min: 3, Max: 5}, IndexRange{Min: 2, Max: 2}, IndexRange{Min: 2, Max: 6}) // expected to be sorted and truncated to [2,3,4,5,6]
+			Expect(r).NotTo(BeNil())
 
-		By("allocating the first index")
-		idx, err := r.GrabIndex()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(idx).To(Equal(43))
+			By("allocating the first index")
+			idx, err := r.GrabIndex()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(idx).To(Equal(2))
 
-		By("grabbing all remaining indices")
-		remaining := r.GrabAllRemainingIndices()
-		Expect(remaining.Len()).To(BeNumerically("==", 4))
+			By("allocating the next 4 indices")
+			for i := 3; i <= 6; i++ {
+				idx, err := r.GrabIndex()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(idx).To(Equal(i))
+			}
 
-		By("allocating when no more indices are available")
-		_, err = r.GrabIndex()
-		Expect(err).To(HaveOccurred())
+			By("allocating when no indices are available")
+			_, err = r.GrabIndex()
+			Expect(err).To(HaveOccurred())
+		})
 	})
 })
