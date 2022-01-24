@@ -139,7 +139,7 @@ policy is always accelerated, using the best available BPF technology.
 | min      | Minimum index to use | int    |
 | max      | Maximum index to use | int    |
 
-Each `RouteTableRange` designates a set of routing tables available to Calico. Modern Linux kernels can theorectically support more than the documented 252 additional tables. However, allocating more than the default number of tables is not as simple as increasing the max table index, since the increased range would encpomass the reserved tables, and could lead to Calico clashing with the kernel.
+Each `RouteTableRange` designates a set of routing tables available to Calico. Modern Linux kernels can theorectically support more than the documented 252 additional tables. However, allocating more than the default number of tables is not as simple as increasing the max table index, since the increased range would encompass the reserved tables, and could lead to Calico clashing with the kernel.
 
 Instead, multiple ranges can be defined to designate tables below and above the reserved ranges:
 `calicoctl patch felixconfig default --type=merge -p '{"spec":{"routeTableRanges: [{Min: 1, Max: 250}, {Min: 256, Max: 1000}] }}`
