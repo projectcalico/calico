@@ -101,7 +101,7 @@ OnUpdates(updates []KVPair)<BR ALIGN="LEFT"/>
 
         RuleScanner [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
           <tr><td><font point-size="14">Rule scanner</font></td></tr>
-          <tr><td><font point-size="10">Scans rules, extracts selectors/tags/named ports.<br/>Calculates IP set IDs. Converts tags to selectors.</font></td></tr>
+          <tr><td><font point-size="10">Scans rules, extracts selectors/named ports.<br/>Calculates IP set IDs.</font></td></tr>
         </table>>, shape=none, margin=0];
 
         PolicyResolver [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
