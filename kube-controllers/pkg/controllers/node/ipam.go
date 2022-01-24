@@ -984,10 +984,16 @@ func (c *ipamController) nodeExists(knode string) bool {
 	return true
 }
 
-// nodeIsBeingMigrated looks up a node and checks, if it is marked by the flannel-migration controller to undergo migration.
+// nodeIsBeingMigrated looks up a Kubernetes node for a Calico node and checks,
+// if it is marked by the flannel-migration controller to undergo migration.
 func (c *ipamController) nodeIsBeingMigrated(name string) (bool, error) {
+	// Find the Kubernetes node referenced by the Calico node
+	kname, err := c.kubernetesNodeForCalico(name)
+	if err != nil {
+		return false, err
+	}
 	// Get node to inspect labels
-	obj, ok, err := c.nodeIndexer.GetByKey(name)
+	obj, ok, err := c.nodeIndexer.GetByKey(kname)
 	if !ok {
 		// Node doesn't exist, so isn't being migrated.
 		return false, nil
