@@ -164,7 +164,7 @@ Where autodetection methods are based on:
 
 - **Including matching interfaces**
 
-  A regular expression in golang syntax that includes interfaces that match. For example:
+  A regular expression in Golang syntax that includes interfaces that match. For example:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=interface=eth.*
@@ -172,7 +172,7 @@ Where autodetection methods are based on:
 
 - **Excluding matching interfaces**
 
-  A regular expression in golang syntax that excludes interfaces that match. For example:
+  A regular expression in Golang syntax that excludes interfaces that match. For example:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=skip-interface=eth.*
