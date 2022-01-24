@@ -50,31 +50,13 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - Address used by the node to reach a particular IP or domain (**can-reach**)
 - Regex to include matching interfaces (**interface**)
 - Regex to exclude matching interfaces (**skip-interface**)
+- A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from (**cidrs**)
 - Address assigned to kubernetes node (**kubernetes-internal-ip**)
 
+> **Note**: `kubernetes-internal-ip` is not available via the [Installation API]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation).
+> Use the `cidrs` autodetection method and set its value to the node CIDR ranges used in your cluster.
+{: .alert .alert-info}
 For details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
-
-#### Manually configure IP address and subnet
-
-There are two ways to manually configure an IP address and subnet:
-
-- {{site.prodname}} node container (start/restart)
-  Use environment variables to set values for nodes.
-
-- {{site.prodname}} node resource
-  Update the node resource.
-
-##### Using environment variables and node resource
-
-Because you can configure IP address and subnet using either environment variables or node resource, the following table describes how values are synchronized.
-
-| **If this environment variable...** | **Is...**                                             | **Then...**                                                  |
-| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
-| IP/IP6                              | Explicitly set                                        | The specified values are used, and the Node resource is updated. |
-|                                     | Set to autodetect                                     | The requested method is used (first-found, can-reach, interface, skip-interface, kubernetes-internal-ip), and the Node resource is updated. |
-|                                     | Not set, but Node resource has IP/IP6 values          | Node resource value is used.                                 |
-| IP                                  | Not set, and there is no IP value in Node resource    | Autodetects an IPv4 address and subnet, and updates Node resource. |
-| IP6                                 | Not set, and there is a no IP6 value in Node resource | No IP6 routing is performed on the node.                     |
 
 ### How to
 
@@ -83,6 +65,77 @@ Because you can configure IP address and subnet using either environment variabl
 
 #### Change the autodetection method
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+As noted previously, the default autodetection method is **first valid interface found** (first-found). To use a different autodetection method, edit the default [Installation]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation) custom resource, specifying the method. Below are examples of the supported autodetection methods:
+
+> **Note**: To configure the default autodetection method for IPv6 for any of the below methods, use the field `nodeAddressAutodetectionV6`.
+{: .alert .alert-info}
+
+- **IP or domain name**
+
+  A reachable destination (IP address or domain). For example:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        canReach: 8.8.8.8
+  ```
+
+- **Including matching interfaces**
+
+  A regular expression in Golang syntax that includes interfaces that match. For example:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        interface: eth.*
+  ```
+
+- **Excluding matching interfaces**
+
+  A regular expression in Golang syntax that excludes interfaces that match. For example:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+		skipInterface: eth.*
+  ```
+
+- **Including CIDRs**
+
+  A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from. For example:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        cidrs:
+          - "192.168.200.0/24"
+  ```
+%>
+  <label:Manifest>
+<%
 As noted previously, the default autodetection method is **first valid interface found** (first-found). To use a different autodetection method, use the following `kubectl set env` command, specifying the method:
 
 - **IPv4**
@@ -109,7 +162,7 @@ Where autodetection methods are based on:
 
 - **Including matching interfaces**
 
-  A regular expression in golang syntax that includes interfaces that match. For example:
+  A regular expression in Golang syntax that includes interfaces that match. For example:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=interface=eth.*
@@ -117,7 +170,7 @@ Where autodetection methods are based on:
 
 - **Excluding matching interfaces**
 
-  A regular expression in golang syntax that excludes interfaces that match. For example:
+  A regular expression in Golang syntax that excludes interfaces that match. For example:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=skip-interface=eth.*
@@ -131,6 +184,16 @@ Where autodetection methods are based on:
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=kubernetes-internal-ip
   ```
 
+- **Including CIDRs**
+
+  A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from. For example:
+
+  ```
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=cidr=192.168.200.0/24,172.15.0.0/24
+  ```
+%>
+{% endtabs %}
+
 #### Manually configure IP address and subnet for a node
 
 In the following scenarios, you may want to configure a specific IP and subnet:
@@ -140,7 +203,40 @@ In the following scenarios, you may want to configure a specific IP and subnet:
 - Changes to cross subnet packet encapsulation
 - Changes to host IP address
 
-You can configure specific IP address and subnet for a node using environment variables or by updating the [Node resource]({{ site.baseurl }}/reference/resources/node).
+{% tabs %}
+  <label:Operator,active:true>
+<%
+##### Configure IP and subnet using default Installation resource
+
+To configure the IP addresses used by the node, edit the default [Installation]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation)
+custom resource and specify the desired IP ranges:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        cidrs:
+          - "10.0.2.10/24"
+      nodeAddressAutodetectionV6:
+        cidrs:
+          - "fd80:24e2:f998:72d6::/120"
+  ```
+%>
+  <label:Manifest>
+<%
+You can configure specific IP address and subnet for a node using environment variables or by updating the [Node resource]({{ site.baseurl }}/reference/resources/node). Because you can configure IP address and subnet using either environment variables or node resource, the following table describes how values are synchronized.
+
+| **If this environment variable...** | **Is...**                                             | **Then...**                                                  |
+| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| IP/IP6                              | Explicitly set                                        | The specified values are used, and the Node resource is updated. |
+|                                     | Set to autodetect                                     | The requested method is used (first-found, can-reach, interface, skip-interface, kubernetes-internal-ip), and the Node resource is updated. |
+|                                     | Not set, but Node resource has IP/IP6 values          | Node resource value is used.                                 |
+| IP                                  | Not set, and there is no IP value in Node resource    | Autodetects an IPv4 address and subnet, and updates Node resource. |
+| IP6                                 | Not set, and there is a no IP6 value in Node resource | No IP6 routing is performed on the node.                     |
 
 ##### Configure IP and subnet using environment variables
 
@@ -152,7 +248,6 @@ kubectl set env daemonset/calico-node -n kube-system IP=10.0.2.10/24 IP6=fd80:24
 
 >**Note**: If the subnet is omitted, the defaults are: /32 (IPv4) and /128 (IPv6). We recommend that you include the subnet information for clarity when specifying IP addresses.
 {: .alert .alert-info}
-
 
 ##### Configure IP and subnet using node resource
 
@@ -167,6 +262,8 @@ Use `calicoctl patch` to update the current node configuration. For example:
 calicoctl patch node kind-control-plane \
   --patch='{"spec":{"bgp": {"ipv4Address": "10.0.2.10/24", "ipv6Address": "fd80:24e2:f998:72d6::/120"}}}'
 ```
+%>
+{% endtabs %}
 
 ### Above and beyond
 
