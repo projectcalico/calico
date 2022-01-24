@@ -24,26 +24,22 @@
 //     - endpoints have their own labels; these take priority over any inherited labels
 //     - endpoints also inherit labels from any explicitly-named profiles in their data
 //     - profiles have explicit labels
-//     - profiles also have (now deprecated) tags, which we now treat as implicit <tagName>=""
-//       labels; explicit profile labels take precidence over implicit tag labels.
 //
 // For example, suppose an endpoint had labels
 //
 //     {"a": "ep-a", "b": "ep-b"}
 //
-// and it explicitly referenced profile "profile-A", which had these labels and tags:
+// and it explicitly referenced profile "profile-A", which had these labels:
 //
 //     {"a": "prof-a", "c": "prof-c", "d": "prof-d"}
-//     ["a", "tag-x", "d"]
 //
 // then the resulting labels for the endpoint after considering inheritance would be:
 //
 //     {
-//         "a": "ep-a",    // Explicit endpoint label "wins" over profile labels/tags.
+//         "a": "ep-a",    // Explicit endpoint label "wins" over profile labels.
 //         "b": "ep-b",
 //         "c": "prof-c",  // Profile label gets inherited.
-//         "d": "prof-d",  // Profile label "wins" over profile tag with same name.
-//         "tag-x": "",    // Profile tag inherited as empty label.
+//         "d": "prof-d",
 //     }
 package labelindex
 
@@ -77,12 +73,6 @@ func (itemData *itemData) Get(labelName string) (value string, present bool) {
 		if value, present = parent.labels[labelName]; present {
 			return
 		}
-		for _, tag := range parent.tags {
-			if tag == labelName {
-				present = true
-				return
-			}
-		}
 	}
 	return
 }
@@ -93,7 +83,6 @@ func (itemData *itemData) Get(labelName string) (value string, present bool) {
 type parentData struct {
 	id      string
 	labels  map[string]string
-	tags    []string
 	itemIDs set.Set
 }
 
@@ -167,15 +156,6 @@ func (l *InheritIndex) OnUpdate(update api.Update) (_ bool) {
 		} else {
 			log.Debugf("Removing profile labels %v from InheritIndex", key)
 			l.DeleteParentLabels(key.Name)
-		}
-	case model.ProfileTagsKey:
-		if update.Value != nil {
-			log.Debugf("Updating InheritIndex for profile tags %v", key)
-			labels := update.Value.([]string)
-			l.UpdateParentTags(key.Name, labels)
-		} else {
-			log.Debugf("Removing profile tags %v from InheritIndex", key)
-			l.DeleteParentTags(key.Name)
 		}
 	}
 	return
@@ -274,7 +254,7 @@ func (idx *InheritIndex) discardParentIfEmpty(id string) {
 	if parent == nil {
 		return
 	}
-	if parent.itemIDs == nil && parent.labels == nil && parent.tags == nil {
+	if parent.itemIDs == nil && parent.labels == nil {
 		delete(idx.parentDataByParentID, id)
 	}
 }
@@ -325,22 +305,6 @@ func (idx *InheritIndex) DeleteParentLabels(parentID string) {
 		return
 	}
 	parent.labels = nil
-	idx.discardParentIfEmpty(parentID)
-	idx.flushChildren(parentID)
-}
-
-func (idx *InheritIndex) UpdateParentTags(parentID string, tags []string) {
-	parent := idx.getOrCreateParent(parentID)
-	parent.tags = tags
-	idx.flushChildren(parentID)
-}
-
-func (idx *InheritIndex) DeleteParentTags(parentID string) {
-	parentData := idx.parentDataByParentID[parentID]
-	if parentData == nil {
-		return
-	}
-	parentData.tags = nil
 	idx.discardParentIfEmpty(parentID)
 	idx.flushChildren(parentID)
 }
