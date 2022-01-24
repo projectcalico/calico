@@ -83,6 +83,80 @@ Because you can configure IP address and subnet using either environment variabl
 
 #### Change the autodetection method
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+As noted previously, the default autodetection method is **first valid interface found** (first-found). To use a different autodetection method, edit the default [Installation]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation) custom resource, specifying the method. Below are examples of the supported autodetection methods:
+
+- **IP or domain name**
+
+  A reachable destination (IP address or domain). For example:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        canReach: 8.8.8.8
+  ```
+
+> **Note**: To configure the default autodetection method for IPv6, use the field `nodeAddressAutodetectionV6`.
+{: .alert .alert-info}
+
+
+- **Including matching interfaces**
+
+  A regular expression in Golang syntax that includes interfaces that match. For example:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        interface: eth.*
+  ```
+
+
+- **Excluding matching interfaces**
+
+  A regular expression in Golang syntax that excludes interfaces that match. For example:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+		skipInterface: eth.*
+  ```
+
+- **Including CIDRs**
+
+  A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from. For example:
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        cidrs:
+          - "192.168.200.0/24"
+  ```
+
+%>
+  <label:Manifest>
+<%
 As noted previously, the default autodetection method is **first valid interface found** (first-found). To use a different autodetection method, use the following `kubectl set env` command, specifying the method:
 
 - **IPv4**
@@ -130,6 +204,17 @@ Where autodetection methods are based on:
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=kubernetes-internal-ip
   ```
+
+- **Including CIDRs**
+
+  A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from. For example:
+
+  ```
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=cidr=192.168.200.0/24,172.15.0.0/24
+  ```
+
+%>
+{% endtabs %}
 
 #### Manually configure IP address and subnet for a node
 
