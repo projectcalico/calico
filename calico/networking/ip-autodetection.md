@@ -55,7 +55,6 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 
 > **Note**: `kubernetes-internal-ip` is not available via the [Installation API]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation).
 > Use the `cidrs` autodetection method and set its value to the node CIDR ranges used in your cluster.
-
 {: .alert .alert-info}
 For details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
 
@@ -103,7 +102,6 @@ As noted previously, the default autodetection method is **first valid interface
       nodeAddressAutodetectionV4:
         interface: eth.*
   ```
-
 
 - **Excluding matching interfaces**
 
@@ -193,7 +191,6 @@ Where autodetection methods are based on:
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=cidr=192.168.200.0/24,172.15.0.0/24
   ```
-
 %>
 {% endtabs %}
 
@@ -205,7 +202,6 @@ In the following scenarios, you may want to configure a specific IP and subnet:
 - Host interfaces with multiple IP addresses
 - Changes to cross subnet packet encapsulation
 - Changes to host IP address
-
 
 {% tabs %}
   <label:Operator,active:true>
@@ -252,7 +248,6 @@ kubectl set env daemonset/calico-node -n kube-system IP=10.0.2.10/24 IP6=fd80:24
 
 >**Note**: If the subnet is omitted, the defaults are: /32 (IPv4) and /128 (IPv6). We recommend that you include the subnet information for clarity when specifying IP addresses.
 {: .alert .alert-info}
-
 
 ##### Configure IP and subnet using node resource
 
