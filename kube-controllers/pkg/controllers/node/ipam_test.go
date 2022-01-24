@@ -16,6 +16,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/tools/cache"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -88,6 +89,7 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *ipamController
 	var cli client.Interface
 	var cs kubernetes.Interface
+	var ni cache.Indexer
 	var stopChan chan struct{}
 
 	BeforeEach(func() {
@@ -96,6 +98,8 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a fake Calico client.
 		cli = NewFakeCalicoClient()
+
+		ni = newFakeNodeIndexer(cs)
 
 		// Config for the test.
 		cfg := config.NodeControllerConfig{
@@ -107,7 +111,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs)
+		c = NewIPAMController(cfg, cli, cs, ni)
 	})
 
 	AfterEach(func() {
@@ -1140,4 +1144,79 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	})
 
+	It("should NOT clean up blocks assigned to a node being migrated from Flannel", func() {
+		// Create Calico and k8s nodes for the test.
+		n := libapiv3.Node{}
+		n.Name = "cnode"
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		kn := v1.Node{}
+		kn.Name = "kname"
+		kn.ObjectMeta.Labels = map[string]string{
+			"projectcalico.org/node-network-during-migration": "flannel",
+		}
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Start the controller.
+		c.Start(stopChan)
+
+		// Add 5 empty blocks to the node.
+		for i := 0; i < 5; i++ {
+			unallocated := make([]int, 64)
+			for i := 0; i < len(unallocated); i++ {
+				unallocated[i] = i
+			}
+			cidr := net.MustParseCIDR(fmt.Sprintf("10.0.%d.0/24", i))
+			aff := "host:cnode"
+			key := model.BlockKey{CIDR: cidr}
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: make([]*int, 64),
+				Unallocated: unallocated,
+				Attributes:  []model.AllocationAttribute{},
+			}
+			kvp := model.KVPair{
+				Key:   key,
+				Value: &b,
+			}
+			update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+			c.onUpdate(update)
+		}
+
+		// Wait for controller state to update with all blocks.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return len(c.allBlocks) == 5
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// The controller should recognize them as empty.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return len(c.emptyBlocks) == 5
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Mark the syncer as InSync so that the GC will be enabled.
+		c.onStatusUpdate(bapi.InSync)
+
+		// none of the empty blocks should be released
+		numBlocks := func() int {
+			done := c.pause()
+			defer done()
+			return len(c.blocksByNode["cnode"])
+		}
+		Eventually(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(5))
+		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(5))
+		numBlocks = func() int {
+			done := c.pause()
+			defer done()
+			return len(c.emptyBlocks)
+		}
+		Eventually(numBlocks, 1*time.Second, 100*time.Millisecond).Should(Equal(5))
+		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(5))
+	})
 })
