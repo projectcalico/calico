@@ -54,6 +54,7 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - Address assigned to kubernetes node (**kubernetes-internal-ip**)
 
 > **Note**: `kubernetes-internal-ip` is not available via the [Installation API]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation).
+> Use the `cidrs` autodetection method and set its value to the node CIDR ranges used in your cluster.
 
 {: .alert .alert-info}
 For details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
