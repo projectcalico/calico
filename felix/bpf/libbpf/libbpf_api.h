@@ -136,11 +136,13 @@ struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd
 
 	if (!(prog = bpf_object__find_program_by_name(obj, name))) {
 		err = ENOENT;
+		link = ERR_PTR(-ENOENT);
 		goto out;
 	}
 
-	if (!(link = bpf_program__attach_cgroup(prog, cgroup_fd))) {
-		err = libbpf_get_error(link);
+	link = bpf_program__attach_cgroup(prog, cgroup_fd);
+	err = libbpf_get_error(link);
+	if (err) {
 		goto out;
 	}
 
