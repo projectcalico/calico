@@ -914,13 +914,13 @@ spec:
                   routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
                 type: string
               routeTableRanges:
+                type: array
                 description: Calico programs additional Linux route tables for various
                   purposes. RouteTableRanges designates a set of table ranges
-                type: array
                 items:
                   routeTableRange:
                     description: RouteTableRange targets Linux route tables available
-                    to Calico by their indices.
+                    to Calico by their min and max indices.
                       that Calico should use.
                     properties:
                       max:
