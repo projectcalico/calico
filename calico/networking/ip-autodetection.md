@@ -71,6 +71,9 @@ For details on autodetection methods, see [node configuration]({{ site.baseurl }
 <%
 As noted previously, the default autodetection method is **first valid interface found** (first-found). To use a different autodetection method, edit the default [Installation]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation) custom resource, specifying the method. Below are examples of the supported autodetection methods:
 
+> **Note**: To configure the default autodetection method for IPv6 for any of the below methods, use the field `nodeAddressAutodetectionV6`.
+{: .alert .alert-info}
+
 - **IP or domain name**
 
   A reachable destination (IP address or domain). For example:
@@ -85,10 +88,6 @@ As noted previously, the default autodetection method is **first valid interface
       nodeAddressAutodetectionV4:
         canReach: 8.8.8.8
   ```
-
-> **Note**: To configure the default autodetection method for IPv6, use the field `nodeAddressAutodetectionV6`.
-{: .alert .alert-info}
-
 
 - **Including matching interfaces**
 
