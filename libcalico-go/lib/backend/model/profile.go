@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	matchProfile = regexp.MustCompile("^/?calico/v1/policy/profile/([^/]+)/(tags|rules|labels)$")
+	matchProfile = regexp.MustCompile("^/?calico/v1/policy/profile/([^/]+)/(rules|labels)$")
 	typeProfile  = reflect.TypeOf(Profile{})
 )
 
@@ -81,24 +81,6 @@ func (key ProfileRulesKey) String() string {
 	return fmt.Sprintf("ProfileRules(name=%s)", key.Name)
 }
 
-// ProfileTagsKey implements the KeyInterface for the profile tags
-type ProfileTagsKey struct {
-	ProfileKey
-}
-
-func (key ProfileTagsKey) defaultPath() (string, error) {
-	e, err := key.ProfileKey.defaultPath()
-	return e + "/tags", err
-}
-
-func (key ProfileTagsKey) valueType() (reflect.Type, error) {
-	return reflect.TypeOf([]string{}), nil
-}
-
-func (key ProfileTagsKey) String() string {
-	return fmt.Sprintf("ProfileTags(name=%s)", key.Name)
-}
-
 // ProfileLabelsKey implements the KeyInterface for the profile labels
 type ProfileLabelsKey struct {
 	ProfileKey
@@ -145,8 +127,6 @@ func (options ProfileListOptions) KeyFromDefaultPath(path string) Key {
 	}
 	pk := ProfileKey{Name: name}
 	switch kind {
-	case "tags":
-		return ProfileTagsKey{ProfileKey: pk}
 	case "labels":
 		return ProfileLabelsKey{ProfileKey: pk}
 	case "rules":
@@ -157,10 +137,9 @@ func (options ProfileListOptions) KeyFromDefaultPath(path string) Key {
 
 // The profile structure is defined to allow the client to define a conversion interface
 // to map between the API and backend profiles.  However, in the actual underlying
-// implementation the profile is written as three separate entries - rules, tags and labels.
+// implementation the profile is written as three separate entries - rules and labels.
 type Profile struct {
 	Rules  ProfileRules
-	Tags   []string
 	Labels map[string]string
 }
 
@@ -175,8 +154,6 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 	var name string
 	for _, d := range ds {
 		switch t := d.Key.(type) {
-		case ProfileTagsKey:
-			name = t.Name
 		case ProfileLabelsKey:
 			name = t.Name
 		case ProfileRulesKey:
@@ -198,10 +175,6 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 
 		p := pd.Value.(*Profile)
 		switch t := d.Value.(type) {
-		case []string: // must be tags #TODO should type these
-			log.Debugf("Store tags %v", t)
-			p.Tags = t
-			pd.Revision = d.Revision
 		case map[string]string: // must be labels
 			log.Debugf("Store labels %v", t)
 			p.Labels = t
