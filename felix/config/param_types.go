@@ -574,7 +574,7 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 	for _, r := range m {
 		// first match is the whole matching string - we only care about submatches
 		min, serr := strconv.Atoi(r[1])
-		if serr != nil {
+		if serr != nil || min <= 0 {
 			err = p.parseFailed(raw, "min value is not a valid number")
 			return
 		}
