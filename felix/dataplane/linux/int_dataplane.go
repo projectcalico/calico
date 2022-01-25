@@ -437,10 +437,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.VXLANEnabled {
 		var routeTableVXLAN routeTable
 		if !config.RouteSyncDisabled {
+			log.Info("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
 				dp.loopSummarizer)
 		} else {
+			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableVXLAN = &routetable.DummyTable{}
 		}
 
@@ -716,15 +718,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var routeTableV4 routeTable
-	routeTableV4 = &routetable.DummyTable{}
 
 	if !config.RouteSyncDisabled {
-		log.Warn("RouteSyncDisabled is false.")
+		log.Info("RouteSyncDisabled is false.")
 		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
 			dp.loopSummarizer)
 	} else {
-		log.Warn("RouteSyncDisabled is true.")
+		log.Info("RouteSyncDisabled is true, using DummyTable.")
+		routeTableV4 = &routetable.DummyTable{}
 	}
 
 	epManager := newEndpointManager(
@@ -812,11 +814,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		var routeTableV6 routeTable
 		if !config.RouteSyncDisabled {
+			log.Info("RouteSyncDisabled is false.")
 			routeTableV6 = routetable.New(
 				interfaceRegexes, 6, false, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
 				dp.loopSummarizer)
 		} else {
+			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableV6 = &routetable.DummyTable{}
 		}
 

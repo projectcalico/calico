@@ -107,6 +107,7 @@ func newVXLANManager(
 
 	var brt routeTable
 	if !dpConfig.RouteSyncDisabled {
+		log.Info("RouteSyncDisabled is false.")
 		brt = routetable.New(
 			[]string{routetable.InterfaceNone},
 			4,
@@ -119,6 +120,7 @@ func newVXLANManager(
 			opRecorder,
 		)
 	} else {
+		log.Info("RouteSyncDisabled is true, using DummyTable.")
 		brt = &routetable.DummyTable{}
 	}
 

@@ -198,6 +198,7 @@ func NewWithShims(
 
 	var rt routeTable
 	if !config.RouteSyncDisabled {
+		log.Info("RouteSyncDisabled is false.")
 		rt = routetable.NewWithShims(
 			[]string{"^" + config.InterfaceName + "$", routetable.InterfaceNone},
 			ipVersion,
@@ -214,6 +215,7 @@ func NewWithShims(
 			opRecorder,
 		)
 	} else {
+		log.Info("RouteSyncDisabled is true, using DummyTable.")
 		rt = &routetable.DummyTable{}
 	}
 	// Create routetable. We provide dummy callbacks for ARP and conntrack processing.
