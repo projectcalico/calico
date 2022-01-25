@@ -496,6 +496,18 @@ spec:
                   information. - WorkloadIPs: use workload endpoints to construct
                   routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
                 type: string
+              routeTableRange:
+                description: RouteTableRange is a deprecated option, replaced in favour
+                  or RouteTableRanges.
+                properties:
+                  max:
+                    type: integer
+                  min:
+                    type: integer
+                required:
+                - max
+                - min
+                type: object
               routeTableRanges:
                 description: Calico programs additional Linux route tables for various
                   purposes.  RouteTableRanges specifies the indices of the route tables

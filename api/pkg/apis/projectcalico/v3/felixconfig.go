@@ -369,6 +369,8 @@ type FelixConfigurationSpec struct {
 	// Calico programs additional Linux route tables for various purposes.  RouteTableRanges
 	// specifies the indices of the route tables that Calico should use.
 	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty,dive"`
+	// RouteTableRange is a deprecated option, replaced in favour or RouteTableRanges.
+	RouteTableRange *RouteTableRange `json:"routeTableRange,omitempty" validate:"omitempty"`
 
 	// WireguardEnabled controls whether Wireguard is enabled. [Default: false]
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`

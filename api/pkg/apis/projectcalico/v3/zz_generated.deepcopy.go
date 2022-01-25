@@ -1081,6 +1081,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 			copy(*out, *in)
 		}
 	}
+	if in.RouteTableRange != nil {
+		in, out := &in.RouteTableRange, &out.RouteTableRange
+		*out = new(RouteTableRange)
+		**out = **in
+	}
 	if in.WireguardEnabled != nil {
 		in, out := &in.WireguardEnabled, &out.WireguardEnabled
 		*out = new(bool)

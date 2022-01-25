@@ -2344,6 +2344,12 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
+					"routeTableRange": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RouteTableRange is a deprecated option, replaced in favour or RouteTableRanges.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange"),
+						},
+					},
 					"wireguardEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WireguardEnabled controls whether Wireguard is enabled. [Default: false]",

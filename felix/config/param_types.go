@@ -561,18 +561,32 @@ var routeTablesReservedLinux = []int{253, 254, 255}
 const routeTableMax = 0xffff
 
 type RouteTableRangesParam struct {
+	legacy bool
 	Metadata
 }
 
 func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error) {
-	m := regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)
-	if m == nil {
-		err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
-		return
+	var match [][]string
+	// in the case where the legacy param was passed, only search for a single range
+	if p.legacy {
+		m := regexp.MustCompile(`^(\d+)-(\d+)$`).FindStringSubmatch(raw)
+		if m == nil {
+			err = p.parseFailed(raw, "must be a range of route table indices within 1-250")
+			return
+		}
+		match = make([][]string, 1)
+		match[0] = m
+
+	} else {
+		match = regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)
+		if match == nil {
+			err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
+			return
+		}
 	}
 
 	ranges := make([]idalloc.IndexRange, 0)
-	for _, r := range m {
+	for _, r := range match {
 		// first match is the whole matching string - we only care about submatches
 		min, serr := strconv.Atoi(r[1])
 		if serr != nil || min <= 0 {
