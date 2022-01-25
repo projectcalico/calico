@@ -1601,7 +1601,7 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 
 	// check if ranges collide with reserved linux tables
 	for _, rsrv := range routeTablesReservedLinux {
-		if r.Min == rsrv || (r.Min < rsrv && r.Max >= rsrv) {
+		if r.Min <= rsrv && r.Max >= rsrv {
 			log.Warningf("RouteTableRange is invalid: %v", r)
 			structLevel.ReportError(
 				reflect.ValueOf(r),
