@@ -36,10 +36,6 @@ var (
 		"us.gcr.io/projectcalico-org",
 	}
 
-	// TODO: Not all components yet support all architectures, so for now just use the automatically
-	// detected architectures for each image.
-	architectures = []string{}
-
 	// Git configuration for publishing to GitHub.
 	organization = "projectcalico"
 	repo         = "calico"
@@ -149,6 +145,48 @@ func (r *ReleaseBuilder) PublishRelease() error {
 	if err = r.publishGithubRelease(ver); err != nil {
 		return fmt.Errorf("failed to publish github release: %s", err)
 	}
+
+	return nil
+}
+
+func (r *ReleaseBuilder) NewBranch() error {
+	// Check that we're on the master branch. We always cut branches from master.
+	branch := r.determineBranch()
+	if branch != "master" {
+		return fmt.Errorf("Release branches can only be cut from master")
+	}
+
+	// Determine the version for the branch. We can get this from the previous dev tag.
+	out, err := r.git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to git describe")
+	}
+	logrus.WithField("out", out).Info("Current git describe")
+	if !strings.Contains(out, "-0.dev") {
+		return fmt.Errorf("Unable to determine release branch name from tag: %s", out)
+	}
+
+	// Determine the name of the new branch.
+	nextBranchVersion := strings.Split(out, "-0.dev")[0]
+	sv, err := semver.NewVersion(strings.TrimPrefix(nextBranchVersion, "v"))
+	branchName := fmt.Sprintf("release-v%d.%d", sv.Major, sv.Minor)
+	logrus.WithField("branch", branchName).Info("Next release branch")
+
+	// Determine the next -0.dev tag.
+	nextVersion := fmt.Sprintf("v%d.%d.0", sv.Major, sv.Minor+1)
+	newDevTag := fmt.Sprintf("%s-0.dev", nextVersion)
+	logrus.WithField("tag", newDevTag).Info("Next dev tag")
+
+	// Create a new branch from the current master.
+	r.gitOrFail("checkout", "-b", branchName)
+	r.gitOrFail("push", origin, branchName)
+
+	// Create the new dev tag on master and push it.
+	r.gitOrFail("checkout", "master")
+	r.gitOrFail("commit", "--allow-empty", "-m", fmt.Sprintf("Begin development on %s", nextVersion))
+	r.gitOrFail("tag", newDevTag)
+	r.gitOrFail("push", origin, "master")
+	r.gitOrFail("push", origin, newDevTag)
 
 	return nil
 }
@@ -310,14 +348,15 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
-		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
 
 	for _, dir := range releaseDirs {
-		err := r.makeInDirectory(dir, "release-build", env...)
+		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
 		if err != nil {
+			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
 		}
+		logrus.Info(out)
 	}
 	return nil
 }
@@ -378,15 +417,29 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		"RELEASE=true",
 		"CONFIRM=true",
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
-		fmt.Sprintf("VALIDARCHES=%s", strings.Join(architectures, " ")),
 	)
 
+	// We allow for a certain number of retries when publishing each directory, since
+	// network flakes can occasionally result in images failing to push.
+	maxRetries := 1
 	for _, dir := range releaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
-		if err != nil {
-			return fmt.Errorf("Failed to publish %s: %s", dir, err)
+		attempt := 0
+		for {
+			out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
+			if err != nil {
+				if attempt < maxRetries {
+					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
+					attempt++
+					continue
+				}
+				logrus.Error(out)
+				return fmt.Errorf("Failed to publish %s: %s", dir, err)
+			}
+
+			// Success - move on to the next directory.
+			logrus.Info(out)
+			break
 		}
-		logrus.Info(out)
 	}
 	return nil
 }
@@ -434,6 +487,13 @@ func (r *ReleaseBuilder) archiveContainerImage(out, image string) error {
 
 func (r *ReleaseBuilder) git(args ...string) (string, error) {
 	return r.runner.Run("git", args, nil)
+}
+
+func (r *ReleaseBuilder) gitOrFail(args ...string) {
+	_, err := r.runner.Run("git", args, nil)
+	if err != nil {
+		logrus.WithError(err).Fatal("git command failed")
+	}
 }
 
 func (r *ReleaseBuilder) makeInDirectory(dir, target string, env ...string) error {

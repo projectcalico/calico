@@ -8,6 +8,8 @@ Kubernetes uses the Container Network Interface (CNI) to interact with networkin
 The {{site.prodname}} binary that presents this API to Kubernetes is called the **CNI plugin** and must be installed
 on every node in the Kubernetes cluster.
 
+To understand how the Container Network Interface (CNI) works with Kubernetes, and how it enhances Kubernetes networking, read our {% include open-new-window.html text='Kubernetes CNI guide' url='https://www.tigera.io/learn/guides/kubernetes-networking/kubernetes-cni/' %}.
+
 ## Provision Kubernetes user account for the plugin
 
 The CNI plugin interacts with the Kubernetes API server while creating pods, both to obtain additional information

@@ -30,3 +30,5 @@ filesystem/included-source
 config/
 kubeconfig.yaml
 ./tests/k8st/infra/calico.yaml.tmp
+apiserver.crt
+apiserver.key

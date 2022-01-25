@@ -29,8 +29,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 func TestNATPodPodXNode(t *testing.T) {
@@ -1404,9 +1406,11 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 
+	origTCPSrcPort := tcpSyn.SrcPort
+	var firstIP net.IP
+
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		// Part 1: if we resend the same SYN, then it should get conntracked to the same backend.
-		var firstIP net.IP
 		for attempt := 0; attempt < 10; attempt++ {
 			res, err := bpfrun(synPkt)
 			Expect(err).NotTo(HaveOccurred())
@@ -1439,6 +1443,37 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 			}
 		}
 		Expect(seenOtherIP).To(BeTrue(), "SYNs from varying source ports all went to same backend")
+	})
+
+	// Change back to the original SYN packet so that we can test the new policy
+	// with an existing CT entry.
+	tcpSyn.SrcPort = origTCPSrcPort
+	_, _, _, _, synPkt, err = testPacket(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	bpfIfaceName = "SYNP"
+	changedToDeny := &polprog.Rules{
+		Tiers: []polprog.Tier{{
+			Name: "base tier",
+			Policies: []polprog.Policy{{
+				Name: "allow->deny",
+				Rules: []polprog.Rule{{
+					Rule: &proto.Rule{
+						Action:      "Allow",
+						NotDstPorts: []*proto.PortRange{{First: 666, Last: 666}},
+						NotDstNet:   []string{firstIP.String()}, // We should hit the same backend as before
+					}}},
+			}},
+		}},
+	}
+
+	// Make sure that when the policy changes, it is applied to correctly to the next SYN
+	runBpfTest(t, "calico_from_workload_ep", changedToDeny, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(synPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
 	})
 }
 

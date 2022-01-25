@@ -27,7 +27,7 @@ endif
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
-VALIDARCHES ?= $(filter-out $(EXCLUDEARCH),$(ARCHES))
+VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
@@ -156,6 +156,7 @@ ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
 	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
+UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:$(UBI_VERSION)
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
@@ -1082,18 +1083,6 @@ release-dev-image-to-registry-%:
 # specified by DEV_TAG and RELEASE.
 release-dev-image-arch-to-registry-%:
 	$(CRANE) cp $(DEV_REGISTRY)/$(BUILD_IMAGE):$(DEV_TAG)-$* $(RELEASE_REGISTRY)/$(BUILD_IMAGE):$(RELEASE_TAG)-$*$(double_quote)
-
-# create-release-branch creates a release branch based off of the dev tag for the current commit on master. After the
-# release branch is created and pushed, git-create-next-dev-tag is called to create a new empty commit on master and
-# tag that empty commit with an incremented minor version of the previous dev tag for the next release.
-create-release-branch: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_TAG_SUFFIX-RELEASE_BRANCH_PREFIX fetch-all
-	$(if $(filter-out $(RELEASE_BRANCH_BASE),$(call current-branch)),$(error create-release-branch must be called on $(RELEASE_BRANCH_BASE)),)
-	$(eval NEXT_RELEASE_VERSION := $(shell echo "$(call git-release-tag-from-dev-tag)" | awk -F  "." '{print $$1"."$$2+1"."0}'))
-	$(eval RELEASE_BRANCH_VERSION := $(shell echo "$(call git-release-tag-from-dev-tag)" | awk -F  "." '{print $$1"."$$2}'))
-	git checkout -B $(RELEASE_BRANCH_PREFIX)-$(RELEASE_BRANCH_VERSION) $(GIT_REMOTE)/$(RELEASE_BRANCH_BASE)
-	$(GIT) push $(GIT_REMOTE) $(RELEASE_BRANCH_PREFIX)-$(RELEASE_BRANCH_VERSION)
-	$(MAKE) dev-tag-next-release push-next-release-dev-tag\
- 		BRANCH=$(call current-branch) NEXT_RELEASE_VERSION=$(NEXT_RELEASE_VERSION) DEV_TAG_SUFFIX=$(DEV_TAG_SUFFIX)
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:

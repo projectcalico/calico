@@ -1,4 +1,10 @@
+# If ../metadata.mk exists, we're running this logic from within the calico repository.
+# If it does not, then we're in the api repo and we should use the local metadata.mk.
+ifneq ("$(wildcard ../metadata.mk)", "")
 include ../metadata.mk
+else
+include ./metadata.mk
+endif
 
 PACKAGE_NAME    ?= github.com/projectcalico/api
 LOCAL_CHECKS     = lint-cache-dir goimports check-copyright
@@ -16,6 +22,9 @@ TOP_SRC_DIRS = pkg
 # If it does not, then we're in the api repo and should use the local lib.Makefile.
 ifneq ("$(wildcard ../lib.Makefile)", "")
 include ../lib.Makefile
+else
+include ./lib.Makefile
+endif
 
 # Override DOCKER_RUN from lib.Makefile. We need to trick this particular directory to think
 # that its package is github.com/projectcalico/api for easier mirroring.
@@ -34,10 +43,6 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 		-v $(CURDIR)/../.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
-else
-include ./lib.Makefile
-endif
-
 
 build: gen-files examples
 

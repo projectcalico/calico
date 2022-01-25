@@ -2,16 +2,18 @@ package main
 
 import (
 	"flag"
+	"os"
 
 	"github.com/projectcalico/calico/hack/release/pkg/builder"
 	"github.com/sirupsen/logrus"
 )
 
-var create, publish bool
+var create, publish, newBranch bool
 
 func init() {
 	flag.BoolVar(&create, "create", false, "Create a release from the current commit")
 	flag.BoolVar(&publish, "publish", false, "Publish the release built from the current tag")
+	flag.BoolVar(&newBranch, "new-branch", false, "Create a new release branch from master")
 
 	flag.Parse()
 }
@@ -37,6 +39,7 @@ func main() {
 		err := r.BuildRelease()
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create Calico release")
+			os.Exit(1)
 		}
 		return
 	}
@@ -45,6 +48,16 @@ func main() {
 		err := r.PublishRelease()
 		if err != nil {
 			logrus.WithError(err).Error("Failed to publish Calico release")
+			os.Exit(1)
+		}
+		return
+	}
+
+	if newBranch {
+		err := r.NewBranch()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create new release branch")
+			os.Exit(1)
 		}
 		return
 	}

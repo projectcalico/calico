@@ -1107,6 +1107,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.WireguardPersistentKeepAlive != nil {
+		in, out := &in.WireguardPersistentKeepAlive, &out.WireguardPersistentKeepAlive
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	if in.AWSSrcDstCheck != nil {
 		in, out := &in.AWSSrcDstCheck, &out.AWSSrcDstCheck
 		*out = new(AWSSrcDstCheckOption)

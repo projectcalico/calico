@@ -156,6 +156,7 @@ BINDIR?=bin
 clean: clean-windows-upgrade
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
+	find . -name '.*.published*' -type f -delete
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
@@ -283,7 +284,7 @@ clean-sub-image-%:
 
 $(NODE_IMAGE): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
-	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
+	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -427,7 +428,7 @@ busybox.tar:
 	docker save --output busybox.tar $(ARCH)/busybox:latest
 
 workload.tar:
-	cd workload && docker build -t workload --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
+	cd workload && docker build -t workload --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) -f Dockerfile.$(ARCH) .
 	docker save --output workload.tar workload
 
 stop-etcd:
@@ -438,7 +439,7 @@ IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "ca
 # Create the calico/test image
 test_image: calico_test.created
 calico_test.created: $(TEST_CONTAINER_FILES)
-	cd calico_test && docker build --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) .
+	cd calico_test && docker build --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) .
 	touch calico_test.created
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
@@ -582,7 +583,8 @@ release-verify: release-prereqs
 	if ! docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
 	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
@@ -594,6 +596,7 @@ release-publish: release-prereqs
 	# ghr -u projectcalico -r node \
 	# 	-n $(VERSION) \
 	# 	$(VERSION) $(WINDOWS_INSTALL_SCRIPT)
+	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.

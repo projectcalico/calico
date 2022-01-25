@@ -54,13 +54,6 @@ case "$CALICO_NETWORKING_BACKEND" in
 	# If running in VXLAN-only mode, we don't need to run BIRD / Confd.
 	echo "CALICO_NETWORKING_BACKEND is vxlan - no need to run a BGP daemon"
 	;;
-	"gobgp" )
-	# Run calico-bgp-daemon instead of BIRD / Confd.
-	echo "CALICO_NETWORKING_BACKEND is gobgp - run calico-bgp-daemon"
-	cp -a /etc/service/available/calico-bgp-daemon /etc/service/enabled/
-	sh -c 'for file in `find /etc/calico/confd/conf.d/ -not -name 'tunl-ip.toml' -type f`; do rm $file; done'
-	cp -a /etc/service/available/confd /etc/service/enabled/
-	;;
 	* )
 
 	# Enable the confd and bird services

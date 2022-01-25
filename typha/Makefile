@@ -46,6 +46,7 @@ SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune 
 clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
+	find . -name '.*.published*' -type f -delete
 	rm -rf .go-pkg-cache \
 		bin \
 		docker-image/bin \
@@ -102,7 +103,7 @@ $(TYPHA_IMAGE): bin/calico-typha-$(ARCH) register
 	mkdir -p docker-image/bin
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	docker buildx build --platform linux/$(ARCH) -t $(TYPHA_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	docker buildx build --platform linux/$(ARCH) -t $(TYPHA_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ###############################################################################
@@ -161,9 +162,10 @@ release-verify: release-prereqs
 	# TODO: Some sort of quick validation of the produced binaries.
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
-	# Push images.
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
