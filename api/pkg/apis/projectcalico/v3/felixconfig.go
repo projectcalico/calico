@@ -366,10 +366,14 @@ type FelixConfigurationSpec struct {
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
 	RouteSource string `json:"routeSource,omitempty" validate:"omitempty,routeSource"`
 
-	// Calico programs additional Linux route tables for various purposes.  RouteTableRanges
-	// specifies the indices of the route tables that Calico should use.
+	// Calico programs additional Linux route tables for various
+	// purposes. RouteTableRanges designates a set of table ranges that Calico
+	// is permitted to use. Overrides RouteTableRange if both are present.
 	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty,dive"`
-	// RouteTableRange is a deprecated option, replaced in favour or RouteTableRanges.
+
+	// Deprecated in favour of RouteTableRanges. Calico programs
+	// additional Linux route tables for various purposes. RouteTableRange
+	// specifies the indices of the route tables that Calico should use.
 	RouteTableRange *RouteTableRange `json:"routeTableRange,omitempty" validate:"omitempty"`
 
 	// WireguardEnabled controls whether Wireguard is enabled. [Default: false]
