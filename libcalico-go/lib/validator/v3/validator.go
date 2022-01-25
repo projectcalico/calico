@@ -43,7 +43,8 @@ var validate *validator.Validate
 
 const (
 	// Maximum size of annotations.
-	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
+	totalAnnotationSizeLimitB int64  = 256 * (1 << 10) // 256 kB
+	routeTableMaxLinux        uint32 = 0xFFFFFFFF
 
 	globalSelector = "global()"
 )
@@ -113,6 +114,9 @@ var (
 		IP:   net.ParseIP("fe80::"),
 		Mask: net.CIDRMask(10, 128),
 	}
+
+	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
+	routeTablesReservedLinux = []int{253, 254, 255}
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -1560,17 +1564,53 @@ func validateRuleMetadata(structLevel validator.StructLevel) {
 
 func validateRouteTableRange(structLevel validator.StructLevel) {
 	r := structLevel.Current().Interface().(api.RouteTableRange)
-	if r.Min >= 1 && r.Max >= r.Min && r.Max <= 250 {
-		log.Debugf("RouteTableRange is valid: %v", r)
-	} else {
+
+	if r.Min > r.Max {
 		log.Warningf("RouteTableRange is invalid: %v", r)
 		structLevel.ReportError(
 			reflect.ValueOf(r),
 			"RouteTableRange",
 			"",
-			reason("must be a range of route table indices within 1..250"),
+			reason("min value cannot be greater than max value"),
 			"",
 		)
+	}
+
+	if r.Min <= 0 {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("cannot target indices < 1"),
+			"",
+		)
+	}
+
+	// cast both ints to 64bit as casting the max 32-bit integer to int() would overflow on 32bit systems
+	if int64(r.Max) > int64(routeTableMaxLinux) {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("max index too high"),
+			"",
+		)
+	}
+
+	// check if ranges collide with reserved linux tables
+	for _, rsrv := range routeTablesReservedLinux {
+		if r.Min <= rsrv && r.Max >= rsrv {
+			log.Warningf("RouteTableRange is invalid: %v", r)
+			structLevel.ReportError(
+				reflect.ValueOf(r),
+				"RouteTableRange",
+				"",
+				reason("must be a range of route table indices that does not target reserved Linux tables (253, 254, and 255)"),
+				"",
+			)
+		}
 	}
 }
 
