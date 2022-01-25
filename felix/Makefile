@@ -133,10 +133,10 @@ sub-build-%:
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
-libbpf: $(LIBBPF_PATH)/libbpf.a
-$(LIBBPF_PATH)/libbpf.a: ../go.mod
-	$(MAKE) mod-download
+libbpf:
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/include/libbpf/src BUILD_STATIC_ONLY=1"
+$(LIBBPF_PATH)/libbpf.a: libbpf ../go.mod
+	$(MAKE) mod-download
 
 ifeq ($(ARCH), amd64)
 CGO_ENABLED=1
