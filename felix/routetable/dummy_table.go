@@ -1,6 +1,9 @@
 package routetable
 
-import "github.com/projectcalico/calico/felix/ifacemonitor"
+import (
+	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
+)
 
 type DummyTable struct {
 }
@@ -22,5 +25,13 @@ func (_ *DummyTable) SetRoutes(_ string, _ []Target) {
 }
 
 func (_ *DummyTable) SetL2Routes(_ string, _ []L2Target) {
+	return
+}
+
+func (_ *DummyTable) RouteRemove(_ string, _ ip.CIDR) {
+	return
+}
+
+func (_ *DummyTable) RouteUpdate(_ string, _ Target) {
 	return
 }

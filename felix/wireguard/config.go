@@ -11,4 +11,5 @@ type Config struct {
 	MTU                 int
 	RouteSource         string
 	EncryptHostTraffic  bool
+	RouteSyncDisabled   bool
 }
