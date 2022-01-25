@@ -557,7 +557,8 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 // reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
 var routeTablesReservedLinux = []int{253, 254, 255}
 
-const routeTableMaxLinux = 0xffffffff
+// linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
+const routeTableMax = 0xffff
 
 type RouteTableRangesParam struct {
 	Metadata
@@ -589,7 +590,7 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 			return
 		}
 
-		if int64(max) > int64(routeTableMaxLinux) {
+		if int64(max) > int64(routeTableMax) {
 			err = p.parseFailed(raw, "max value is too high")
 			return
 		}
