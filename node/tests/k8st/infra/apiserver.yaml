@@ -305,7 +305,7 @@ subjects:
 
 ---
 
-apiVersion: policy/v1
+apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
   annotations:
