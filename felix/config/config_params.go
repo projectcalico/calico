@@ -330,8 +330,8 @@ type Config struct {
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
-	RouteTableRange  idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
-	RouteSyncEnabled bool               `config:"bool;true"`
+	RouteTableRange   idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
+	RouteSyncDisabled bool               `config:"bool;false"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
