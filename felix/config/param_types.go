@@ -596,15 +596,9 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 
 		// check if ranges collide with reserved linux tables
 		for _, rsrv := range routeTablesReservedLinux {
-			if min == rsrv {
+			if min <= rsrv && max >= rsrv {
 				err = p.parseFailed(raw, "must not target a reserved table")
 				return
-			}
-			if min < rsrv {
-				if max >= rsrv {
-					err = p.parseFailed(raw, "must not target a reserved table")
-					return
-				}
 			}
 		}
 		ranges = append(ranges, idalloc.IndexRange{Min: min, Max: max})
