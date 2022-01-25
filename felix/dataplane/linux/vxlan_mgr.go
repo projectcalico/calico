@@ -105,17 +105,37 @@ func newVXLANManager(
 		blackHoleProto = dpConfig.DeviceRouteProtocol
 	}
 
-	brt := routetable.New(
-		[]string{routetable.InterfaceNone},
-		4,
-		false,
-		dpConfig.NetlinkTimeout,
-		dpConfig.DeviceRouteSourceAddress,
-		blackHoleProto,
-		false,
-		0,
-		opRecorder,
-	)
+	var brt routeTable
+	if !dpConfig.RouteSyncDisabled {
+		brt = routetable.New(
+			[]string{routetable.InterfaceNone},
+			4,
+			false,
+			dpConfig.NetlinkTimeout,
+			dpConfig.DeviceRouteSourceAddress,
+			blackHoleProto,
+			false,
+			0,
+			opRecorder,
+		)
+	} else {
+		brt = &routetable.DummyTable{}
+	}
+
+	noEncapRTConstruct := func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
+		return &routetable.DummyTable{}
+	}
+
+	if !dpConfig.RouteSyncDisabled {
+		noEncapRTConstruct = func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
+			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
+				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, 0,
+				opRecorder,
+			)
+		}
+	}
 
 	return newVXLANManagerWithShims(
 		ipsetsDataplane,
@@ -123,13 +143,7 @@ func newVXLANManager(
 		deviceName,
 		dpConfig,
 		nlHandle,
-		func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
-			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
-				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, 0,
-				opRecorder,
-			)
-		},
+		noEncapRTConstruct,
 	)
 }
 
