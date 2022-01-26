@@ -46,6 +46,7 @@ GENERATED_FILES=proto/felixbackend.pb.go bpf/asm/opcode_string.go
 
 # All Felix go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS) fv,-path ./$(dir) -prune -o) -type f -name '*.go' -print) $(GENERATED_FILES)
+SRC_FILES+=$(shell find bpf -name '*.h')
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
 EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
