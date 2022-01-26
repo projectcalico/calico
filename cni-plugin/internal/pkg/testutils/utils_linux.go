@@ -16,10 +16,9 @@ package testutils
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	uuid "github.com/satori/go.uuid"
 	"io"
 	"net"
 	"os"
@@ -470,11 +469,6 @@ func CheckSysctlValue(sysctlPath, value string) error {
 
 // Convert the netns name to a container ID.
 func netnsToContainerID(netns string) string {
-	hasher := sha256.New()
-	_, err := hasher.Write([]byte(netns))
-	if err != nil {
-		log.WithError(err).Panic("Failed to write netns to hash.")
-	}
-	hash := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
-	return hash[0:10]
+	id := uuid.NewV5(uuid.NamespaceURL, netns)
+	return string(id[:10])
 }
