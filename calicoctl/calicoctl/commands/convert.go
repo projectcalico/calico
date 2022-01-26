@@ -254,24 +254,17 @@ func getTypeConverter(resKind string) (converters.Converter, error) {
 
 func unpackResourceLists(convRes []unversioned.Resource) ([]unversioned.Resource, error) {
 	var unpackedConvRes []unversioned.Resource
-	for i, convResource := range convRes {
+	for _, convResource := range convRes {
 		if strings.EqualFold(convResource.GetTypeMetadata().Kind, resourceloader.KindK8sListV1) && strings.EqualFold(convResource.GetTypeMetadata().APIVersion, resourceloader.VersionK8sListV1) {
-			// Remove list from convRes
-			convRes[i] = convRes[len(convRes)-1]
-			convRes = convRes[:len(convRes)-1]
-
 			k8sNPList, ok := convResource.(*resourceloader.K8sNetworkPolicyList)
 			if !ok {
 				return nil, fmt.Errorf("failed to convert resource to K8sNetworkPolicyList")
 			}
 
-			var listResources []unversioned.Resource
 			for _, item := range k8sNPList.Items {
-				listResources = append(listResources, &item)
+				// Append the items from the list to unpackedConvRes
+				unpackedConvRes = append(unpackedConvRes, &item)
 			}
-
-			// Append the items from the list to convRes
-			unpackedConvRes = append(unpackedConvRes, listResources...)
 		} else {
 			unpackedConvRes = append(unpackedConvRes, convResource)
 		}
