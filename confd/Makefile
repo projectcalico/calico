@@ -55,12 +55,18 @@ endif
 # checking them.
 UPDATE_EXPECTED_DATA?=false
 
+# Location of the certs directory. 
+# TODO: Centralize this instead of just using cni-plugins certs. Right now each
+# directory has an exact copy of these files!
+CERTS_PATH=$(CURDIR)/../cni-plugin/tests/certs
+
 .PHONY: test-kdd
 ## Run template tests against KDD
 test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
 	-git clean -fx etc/calico/confd
 	mkdir -p tests/logs
 	docker run --rm --net=host \
+		-v $(CERTS_PATH):/home/user/certs \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
@@ -94,6 +100,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 	-git clean -fx etc/calico/confd
 	mkdir -p tests/logs
 	docker run --rm --net=host \
+		-v $(CERTS_PATH):/home/user/certs \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
@@ -128,12 +135,12 @@ stop-etcd:
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
+	  -v $(CERTS_PATH):/home/user/certs \
 	  -v $(CURDIR)/config:/config \
-	  -v $(CURDIR)/../cni-plugin/tests/certs:/home/user/certs \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
 	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-	    --service-cluster-ip-range=10.101.0.0/16 \
+	    --service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
             --authorization-mode=RBAC \
             --service-account-key-file=/home/user/certs/service-account.pem \
             --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
