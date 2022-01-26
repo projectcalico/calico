@@ -6,6 +6,7 @@ metadata:
     app: frontend
     projectcalico.org/namespace: default
   name: rack1--host1-k8s-frontend--5gs43-eth0
+  namespace: default
 spec:
   endpoint: eth0
   interfaceName: cali0ef24ba

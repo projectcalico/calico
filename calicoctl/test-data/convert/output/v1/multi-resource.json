@@ -1,78 +1,83 @@
-[
-  {
-    "kind": "BGPPeer",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "node1.00aa-00bb-0000-0000-0000-0000-0000-00ff",
-      "creationTimestamp": null
+{
+  "kind": "List",
+  "apiVersion": "v1",
+  "metadata": {},
+  "items": [
+    {
+      "kind": "BGPPeer",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "node1.00aa-00bb-0000-0000-0000-0000-0000-00ff",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "node": "node1",
+        "peerIP": "aa:bb::ff",
+        "asNumber": 64514
+      }
     },
-    "spec": {
-      "node": "node1",
-      "peerIP": "aa:bb::ff",
-      "asNumber": 64514
-    }
-  },
-  {
-    "kind": "BGPPeer",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "node2.1-2-3-4",
-      "creationTimestamp": null
+    {
+      "kind": "BGPPeer",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "node2.1-2-3-4",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "node": "node2",
+        "peerIP": "1.2.3.4",
+        "asNumber": 6455
+      }
     },
-    "spec": {
-      "node": "node2",
-      "peerIP": "1.2.3.4",
-      "asNumber": 6455
-    }
-  },
-  {
-    "kind": "BGPPeer",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "192-20-30-40",
-      "creationTimestamp": null
+    {
+      "kind": "BGPPeer",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "192-20-30-40",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "peerIP": "192.20.30.40",
+        "asNumber": 64567
+      }
     },
-    "spec": {
-      "peerIP": "192.20.30.40",
-      "asNumber": 64567
-    }
-  },
-  {
-    "kind": "IPPool",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "192-168-0-0-16",
-      "creationTimestamp": null
+    {
+      "kind": "IPPool",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "192-168-0-0-16",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "cidr": "192.168.0.0/16",
+        "vxlanMode": "Never",
+        "ipipMode": "Always",
+        "blockSize": 26,
+        "nodeSelector": "all()",
+        "allowedUses": [
+          "Workload",
+          "Tunnel"
+        ]
+      }
     },
-    "spec": {
-      "cidr": "192.168.0.0/16",
-      "vxlanMode": "Never",
-      "ipipMode": "Always",
-      "blockSize": 26,
-      "nodeSelector": "all()",
-      "allowedUses": [
-        "Workload",
-        "Tunnel"
-      ]
+    {
+      "kind": "IPPool",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "2001---120",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "cidr": "2001::/120",
+        "vxlanMode": "Never",
+        "ipipMode": "Never",
+        "blockSize": 122,
+        "nodeSelector": "all()",
+        "allowedUses": [
+          "Workload",
+          "Tunnel"
+        ]
+      }
     }
-  },
-  {
-    "kind": "IPPool",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "2001---120",
-      "creationTimestamp": null
-    },
-    "spec": {
-      "cidr": "2001::/120",
-      "vxlanMode": "Never",
-      "ipipMode": "Never",
-      "blockSize": 122,
-      "nodeSelector": "all()",
-      "allowedUses": [
-        "Workload",
-        "Tunnel"
-      ]
-    }
-  }
-]
+  ]
+}
