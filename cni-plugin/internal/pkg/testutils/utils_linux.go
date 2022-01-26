@@ -16,13 +16,14 @@ package testutils
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"syscall"
 
@@ -152,8 +153,7 @@ func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err e
 		return nil, "", err
 	}
 
-	netnsname := path.Base(containerNs.Path())
-	containerId = netnsname[:10]
+	containerId = netnsToContainerID(containerNs.Path())
 
 	err = containerNs.Do(func(_ ns.NetNS) error {
 		lo, err := netlink.LinkByName("lo")
@@ -368,8 +368,7 @@ func DeleteContainerWithId(netconf, netnspath, podName, podNamespace, containerI
 }
 
 func DeleteContainerWithIdAndIfaceName(netconf, netnspath, podName, podNamespace, containerId, ifaceName string) (exitCode int, err error) {
-	netnsname := path.Base(netnspath)
-	container_id := netnsname[:10]
+	container_id := netnsToContainerID(netnspath)
 	if containerId != "" {
 		container_id = containerId
 	}
@@ -467,4 +466,15 @@ func CheckSysctlValue(sysctlPath, value string) error {
 	}
 
 	return nil
+}
+
+// Convert the netns name to a container ID.
+func netnsToContainerID(netns string) string {
+	hasher := sha256.New()
+	_, err := hasher.Write([]byte(netns))
+	if err != nil {
+		log.WithError(err).Panic("Failed to write netns to hash.")
+	}
+	hash := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
+	return hash[0:10]
 }
