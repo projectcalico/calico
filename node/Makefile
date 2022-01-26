@@ -46,8 +46,6 @@ INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 TEST_CONTAINER_NAME_VER?=latest
 TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
 
-# TODO: Update this to use newer version of Kubernetes.
-HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.17.0
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
@@ -365,20 +363,27 @@ run-etcd:
 
 # Kubernetes apiserver used for tests
 run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
-	docker run \
-		--net=host --name st-apiserver \
-		-v $(CURDIR):/manifests \
-		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-		--detach \
-		${HYPERKUBE_IMAGE} kube-apiserver \
-			--bind-address=0.0.0.0 \
-			--insecure-bind-address=0.0.0.0 \
-			--etcd-servers=http://127.0.0.1:2379 \
-			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
-			--authorization-mode=RBAC \
-			--service-cluster-ip-range=10.101.0.0/16 \
-			--v=10 \
-			--logtostderr=true
+	docker run --detach --net=host \
+	  --name st-apiserver \
+	  -v $(CURDIR):/manifests \
+	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
+	  -v $(CURDIR)/config:/config \
+	  -v $(CURDIR)/../cni-plugin/tests/certs:/home/user/certs \
+	  -e KUBECONFIG=/home/user/certs/kubeconfig \
+	  $(CALICO_BUILD) kube-apiserver \
+	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+	    --service-cluster-ip-range=10.101.0.0/16 \
+            --authorization-mode=RBAC \
+            --service-account-key-file=/home/user/certs/service-account.pem \
+            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+            --service-account-issuer=https://localhost:443 \
+            --api-audiences=kubernetes.default \
+            --client-ca-file=/home/user/certs/ca.pem \
+            --tls-cert-file=/home/user/certs/kubernetes.pem \
+            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+            --enable-priority-and-fairness=false \
+            --max-mutating-requests-inflight=0 \
+            --max-requests-inflight=0
 
 	# Wait until we can configure a cluster role binding which allows anonymous auth.
 	while ! docker exec st-apiserver kubectl create \

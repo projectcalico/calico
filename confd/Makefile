@@ -128,10 +128,23 @@ stop-etcd:
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-	gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
-		  kube-apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-		  --feature-gates IPv6DualStack=true \
-		  --service-cluster-ip-range=10.101.0.0/16,fd00:96::/112
+	  -v $(CURDIR)/config:/config \
+	  -v $(CURDIR)/../cni-plugin/tests/certs:/home/user/certs \
+	  -e KUBECONFIG=/home/user/certs/kubeconfig \
+	  $(CALICO_BUILD) kube-apiserver \
+	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+	    --service-cluster-ip-range=10.101.0.0/16 \
+            --authorization-mode=RBAC \
+            --service-account-key-file=/home/user/certs/service-account.pem \
+            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+            --service-account-issuer=https://localhost:443 \
+            --api-audiences=kubernetes.default \
+            --client-ca-file=/home/user/certs/ca.pem \
+            --tls-cert-file=/home/user/certs/kubernetes.pem \
+            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+            --enable-priority-and-fairness=false \
+            --max-mutating-requests-inflight=0 \
+            --max-requests-inflight=0
 	# Wait until the apiserver is accepting requests.
 	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
 
