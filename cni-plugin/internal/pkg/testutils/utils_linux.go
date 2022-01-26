@@ -22,7 +22,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"syscall"
 
@@ -39,6 +38,7 @@ import (
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
+	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -152,8 +152,7 @@ func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err e
 		return nil, "", err
 	}
 
-	netnsname := path.Base(containerNs.Path())
-	containerId = netnsname[:10]
+	containerId = netnsToContainerID(containerNs.Path())
 
 	err = containerNs.Do(func(_ ns.NetNS) error {
 		lo, err := netlink.LinkByName("lo")
@@ -368,8 +367,7 @@ func DeleteContainerWithId(netconf, netnspath, podName, podNamespace, containerI
 }
 
 func DeleteContainerWithIdAndIfaceName(netconf, netnspath, podName, podNamespace, containerId, ifaceName string) (exitCode int, err error) {
-	netnsname := path.Base(netnspath)
-	container_id := netnsname[:10]
+	container_id := netnsToContainerID(netnspath)
 	if containerId != "" {
 		container_id = containerId
 	}
@@ -467,4 +465,10 @@ func CheckSysctlValue(sysctlPath, value string) error {
 	}
 
 	return nil
+}
+
+// Convert the netns name to a container ID.
+func netnsToContainerID(netns string) string {
+	id := uuid.NewV5(uuid.NamespaceURL, netns)
+	return string(id[:10])
 }
