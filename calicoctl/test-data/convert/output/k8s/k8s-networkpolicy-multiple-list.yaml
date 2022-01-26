@@ -4,6 +4,32 @@ items:
   kind: NetworkPolicy
   metadata:
     creationTimestamp: null
+    name: allow-all-egress
+    namespace: default
+  spec:
+    egress:
+    - action: Allow
+      destination: {}
+      source: {}
+    order: 1000
+    selector: projectcalico.org/orchestrator == 'k8s'
+    types:
+    - Egress
+- apiVersion: projectcalico.org/v3
+  kind: NetworkPolicy
+  metadata:
+    creationTimestamp: null
+    name: default-deny-ingress
+    namespace: default
+  spec:
+    order: 1000
+    selector: projectcalico.org/orchestrator == 'k8s'
+    types:
+    - Ingress
+- apiVersion: projectcalico.org/v3
+  kind: NetworkPolicy
+  metadata:
+    creationTimestamp: null
     name: test-network-policy1
     namespace: test-ns
   spec:
@@ -46,30 +72,6 @@ items:
     selector: projectcalico.org/orchestrator == 'k8s' && role == 'db'
     types:
     - Ingress
-    - Egress
-- apiVersion: projectcalico.org/v3
-  kind: NetworkPolicy
-  metadata:
-    creationTimestamp: null
-    name: default-deny-ingress
-  spec:
-    order: 1000
-    selector: projectcalico.org/orchestrator == 'k8s'
-    types:
-    - Ingress
-- apiVersion: projectcalico.org/v3
-  kind: NetworkPolicy
-  metadata:
-    creationTimestamp: null
-    name: allow-all-egress
-  spec:
-    egress:
-    - action: Allow
-      destination: {}
-      source: {}
-    order: 1000
-    selector: projectcalico.org/orchestrator == 'k8s'
-    types:
     - Egress
 kind: List
 metadata: {}
