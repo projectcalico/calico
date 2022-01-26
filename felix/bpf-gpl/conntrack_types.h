@@ -156,7 +156,8 @@ enum calico_ct_result_type {
 #define CALI_CT_RELATED         0x100
 #define CALI_CT_RPF_FAILED      0x200
 #define CALI_CT_TUN_SRC_CHANGED 0x400
-#define CALI_CT_SYN		0x800
+#define CALI_CT_RESERVED_800	0x800
+#define CALI_CT_SYN		0x1000
 
 #define ct_result_rc(rc)		((rc) & 0xff)
 #define ct_result_flags(rc)		((rc) & ~0xff)
