@@ -299,14 +299,17 @@ $(FELIX_GPL_SOURCE): ../go.mod
 ###############################################################################
 K8ST_IMAGE_TARS=calico-node.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
 
+# Location of the certs directory. 
+# TODO: Centralize this instead of just using cni-plugins certs. Right now each
+# directory has an exact copy of these files!
+CERTS_PATH=$(CURDIR)/../cni-plugin/tests/certs
+
 ## Run the ginkgo FVs
 fv: run-k8s-apiserver
-	docker run --rm \
-	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	$(DOCKER_RUN) \
+	-v $(CERTS_PATH):/home/user/certs \
+	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/cni-plugin/tests/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	--net=host \
-	-w /go/src/$(PACKAGE_NAME) \
 	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
 
 ## Create a local kind dual stack cluster.
