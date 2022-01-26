@@ -42,6 +42,8 @@ endif
 ###############################################################################
 # Building the binary
 ###############################################################################
+LDFLAGS=-ldflags "-linkmode=external -extldflags=-static"
+
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
 build-all: $(addprefix bin/flexvol-,$(VALIDARCHES))
@@ -56,7 +58,7 @@ bin/flexvol-armv7: ARCH=armv7
 bin/flexvol-ppc64le: ARCH=ppc64le
 bin/flexvol-s390x: ARCH=s390x
 bin/flexvol-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -tags osusergo,netgo -v -o bin/flexvol-$(ARCH) $(LDFLAGS) flexvol/flexvoldriver.go
 
 ###############################################################################
 # Building the image
