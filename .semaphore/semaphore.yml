@@ -74,7 +74,7 @@ global_job_config:
     - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
     - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
     # Disable initramfs update to save space on the Semaphore VM (and we don't need it because we're not going to reboot).
-    - sudo apt-get install -u crudini
+    - sudo apt-get install -y -u crudini
     - sudo crudini --set /etc/initramfs-tools/update-initramfs.conf '' update_initramfs no
     - cat /etc/initramfs-tools/update-initramfs.conf
 
@@ -223,7 +223,7 @@ blocks:
       - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${BACKEND}-${SHORT_WORKFLOW_ID}
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
-      - sudo apt-get install putty-tools
+      - sudo apt-get install -y putty-tools
       - git clone git@github.com:tigera/process.git ~/process
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
