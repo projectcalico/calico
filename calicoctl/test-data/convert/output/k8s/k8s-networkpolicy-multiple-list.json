@@ -7,6 +7,45 @@
       "kind": "NetworkPolicy",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
+        "name": "allow-all-egress",
+        "namespace": "default",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "order": 1000,
+        "egress": [
+          {
+            "action": "Allow",
+            "source": {},
+            "destination": {}
+          }
+        ],
+        "selector": "projectcalico.org/orchestrator == 'k8s'",
+        "types": [
+          "Egress"
+        ]
+      }
+    },
+    {
+      "kind": "NetworkPolicy",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "default-deny-ingress",
+        "namespace": "default",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "order": 1000,
+        "selector": "projectcalico.org/orchestrator == 'k8s'",
+        "types": [
+          "Ingress"
+        ]
+      }
+    },
+    {
+      "kind": "NetworkPolicy",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
         "name": "test-network-policy1",
         "namespace": "test-ns",
         "creationTimestamp": null
@@ -75,43 +114,6 @@
         "selector": "projectcalico.org/orchestrator == 'k8s' \u0026\u0026 role == 'db'",
         "types": [
           "Ingress",
-          "Egress"
-        ]
-      }
-    },
-    {
-      "kind": "NetworkPolicy",
-      "apiVersion": "projectcalico.org/v3",
-      "metadata": {
-        "name": "default-deny-ingress",
-        "creationTimestamp": null
-      },
-      "spec": {
-        "order": 1000,
-        "selector": "projectcalico.org/orchestrator == 'k8s'",
-        "types": [
-          "Ingress"
-        ]
-      }
-    },
-    {
-      "kind": "NetworkPolicy",
-      "apiVersion": "projectcalico.org/v3",
-      "metadata": {
-        "name": "allow-all-egress",
-        "creationTimestamp": null
-      },
-      "spec": {
-        "order": 1000,
-        "egress": [
-          {
-            "action": "Allow",
-            "source": {},
-            "destination": {}
-          }
-        ],
-        "selector": "projectcalico.org/orchestrator == 'k8s'",
-        "types": [
           "Egress"
         ]
       }
