@@ -76,7 +76,6 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
 		-e FELIX_TYPHAREADTIMEOUT=50 \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
-		-e GO111MODULE=on \
 		-w /go/src/$(PACKAGE_NAME) \
 		$(CALICO_BUILD) /tests/test_suite_kdd.sh || \
 	{ \
@@ -108,7 +107,6 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
-		-e GO111MODULE=on \
 		$(CALICO_BUILD) /tests/test_suite_etcd.sh
 	-git clean -fx etc/calico/confd
 
@@ -120,7 +118,6 @@ ut:
 
 run-etcd: stop-etcd
 	docker run --detach \
-	-e GO111MODULE=on \
 	--net=host \
 	--name calico-etcd $(ETCD_IMAGE) \
 	etcd \

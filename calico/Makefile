@@ -239,7 +239,7 @@ build-operator-reference:
 	   -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
 	   -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	   -w /go/src/$(PACKAGE_NAME) \
-	   $(CALICO_BUILD) /bin/bash -c 'export GO111MODULE=on && rm -rf builder && mkdir builder && cd builder && \
+	   $(CALICO_BUILD) /bin/bash -c 'rm -rf builder && mkdir builder && cd builder && \
 	           git clone --depth=1 -b $(API_GEN_BRANCH) https://github.com/$(API_GEN_REPO) api-gen && cd api-gen && \
 	           go mod edit -replace github.com/tigera/operator=github.com/$(OPERATOR_REPO)@$(OPERATOR_VERSION) && \
 	           go mod download && go build && \

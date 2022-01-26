@@ -305,7 +305,6 @@ fv: run-k8s-apiserver
 	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	-e GO111MODULE=on \
 	--net=host \
 	-w /go/src/$(PACKAGE_NAME) \
 	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
