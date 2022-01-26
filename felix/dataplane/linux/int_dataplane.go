@@ -651,6 +651,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create conntrack BPF map.")
 		}
 
+		srMsgMap := nat.SendRecvMsgMap(bpfMapContext)
+		err = srMsgMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create send recv msg map.")
+		}
+
+		ctNatsMap := nat.AllNATsMsgMap(bpfMapContext)
+		err = ctNatsMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create ct nats map.")
+		}
+
 		conntrackScanner := conntrack.NewScanner(ctMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
 
