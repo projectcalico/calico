@@ -698,15 +698,22 @@ var _ = DescribeTable("Config validation",
 	Entry("OpenstackRegion too long", map[string]string{
 		"OpenstackRegion": "my-region-has-a-very-long-and-extremely-interesting-name",
 	}, false),
-	Entry("valid RouteTableRanges", map[string]string{
-		"RouteTableRanges": "1-250,260-5000",
+	Entry("valid RouteTableRange", map[string]string{
+		"RouteTableRange": "1-250",
 	}, true),
-	Entry("invalid RouteTableRanges", map[string]string{
-		"RouteTableRanges": "1-255",
+	Entry("invalid RouteTableRange", map[string]string{
+		"RouteTableRange": "1-255",
 	}, false),
+	Entry("valid RouteTableRanges", map[string]string{
+		"RouteTableRanges": "1-10000",
+	}, true),
 	// 0xFFFFFFFF + 1
-	Entry("invalid RouteTableRanges", map[string]string{
-		"RouteTableRanges": "1-4294967296",
+	Entry("overflowing RouteTableRanges", map[string]string{
+		"RouteTableRanges": "4294967295-4294967296",
+	}, false),
+	// exceeds max allowed number of individual tables
+	Entry("excessive RouteTableRanges", map[string]string{
+		"RouteTableRanges": "1-100000000",
 	}, false),
 	Entry("invalid RouteTableRanges", map[string]string{
 		"RouteTableRanges": "abcde",

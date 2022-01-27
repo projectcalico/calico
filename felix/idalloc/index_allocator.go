@@ -27,6 +27,10 @@ type IndexRange struct {
 	Min, Max int
 }
 
+func (r IndexRange) contains(a int) bool {
+	return r.Min <= a && r.Max >= a
+}
+
 // ByMaxIndex sorts collections of IndexRange structs in order of their starting/lower index
 type ByMaxIndex []IndexRange
 
@@ -42,9 +46,12 @@ func (i ByMaxIndex) Swap(a, b int) { i[a], i[b] = i[b], i[a] }
 
 type IndexAllocator struct {
 	indexStack *stack.Stack
+	exclusions []IndexRange
 }
 
-func NewIndexAllocator(indexRanges ...IndexRange) *IndexAllocator {
+// NewIndexAllocator returns an index allocator from the provided indexRanges
+// any indices falling within the specified exclusions will not be returned, even if designated by indexRanges
+func NewIndexAllocator(indexRanges []IndexRange, exclusions []IndexRange) *IndexAllocator {
 	// sort index ranges in descending order of their Max bound
 	if len(indexRanges) > 1 {
 		sort.Sort(sort.Reverse(ByMaxIndex(indexRanges)))
@@ -52,6 +59,7 @@ func NewIndexAllocator(indexRanges ...IndexRange) *IndexAllocator {
 
 	r := &IndexAllocator{
 		indexStack: stack.New(),
+		exclusions: exclusions,
 	}
 
 	var lowestIndex int
@@ -63,10 +71,17 @@ func NewIndexAllocator(indexRanges ...IndexRange) *IndexAllocator {
 		}
 
 		// Push in reverse order so that the lowest index will come out first.
+		populating:
 		for i := indexRange.Max; i >= indexRange.Min; i-- {
 			// skip overlapping range indices
 			if i >= lowestIndex {
 				continue
+			}
+			// skip exclusions
+			for _, excl := range exclusions {
+				if excl.contains(i) {
+					continue populating
+				}
 			}
 			r.indexStack.Push(i)
 			lowestIndex = i

@@ -558,33 +558,46 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 var routeTablesReservedLinux = []int{253, 254, 255}
 
 // linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
-const routeTableMax = 0xffff
+const routeTableMaxLinux = 0xffffffff
+const routeTableRangeMaxTables = 0xffff
+
+type RouteTableRangeParam struct {
+	Metadata
+}
+
+func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error) {
+	err = p.parseFailed(raw, "must be a range of route table indices within 1-250")
+	m := regexp.MustCompile(`^(\d+)-(\d+)$`).FindStringSubmatch(raw)
+	if m == nil {
+		return
+	}
+	min, serr := strconv.Atoi(m[1])
+	if serr != nil {
+		return
+	}
+	max, serr := strconv.Atoi(m[2])
+	if serr != nil {
+		return
+	}
+	if min >= 1 && max >= min && max <= 250 {
+		result = idalloc.IndexRange{Min: min, Max: max}
+		err = nil
+	}
+	return
+}
 
 type RouteTableRangesParam struct {
-	legacy bool
 	Metadata
 }
 
 func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error) {
-	var match [][]string
-	// in the case where the legacy param was passed, only search for a single range
-	if p.legacy {
-		m := regexp.MustCompile(`^(\d+)-(\d+)$`).FindStringSubmatch(raw)
-		if m == nil {
-			err = p.parseFailed(raw, "must be a range of route table indices within 1-250")
-			return
-		}
-		match = make([][]string, 1)
-		match[0] = m
-
-	} else {
-		match = regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)
-		if match == nil {
-			err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
-			return
-		}
+	match := regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)
+	if match == nil {
+		err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
+		return
 	}
 
+	tablesTargeted := 0
 	ranges := make([]idalloc.IndexRange, 0)
 	for _, r := range match {
 		// first match is the whole matching string - we only care about submatches
@@ -604,16 +617,21 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 			return
 		}
 
-		if int64(max) > int64(routeTableMax) {
+		if int64(max) > int64(routeTableMaxLinux) {
 			err = p.parseFailed(raw, "max value is too high")
+			return
+		}
+
+		tablesTargeted += max - min
+		if tablesTargeted > routeTableRangeMaxTables {
+			err = p.parseFailed(raw, "targets too many tables")
 			return
 		}
 
 		// check if ranges collide with reserved linux tables
 		for _, rsrv := range routeTablesReservedLinux {
 			if min <= rsrv && max >= rsrv {
-				err = p.parseFailed(raw, "must not target a reserved table")
-				return
+				log.Warn("Felix route-table range includes reserved Linux tables, ignoring values 253-255.")
 			}
 		}
 		ranges = append(ranges, idalloc.IndexRange{Min: min, Max: max})

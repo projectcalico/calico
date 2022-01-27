@@ -787,7 +787,7 @@ func loadParams() {
 		case "cidr-list":
 			param = &CIDRListParam{}
 		case "route-table-range":
-			param = &RouteTableRangesParam{legacy: true}
+			param = &RouteTableRangeParam{}
 		case "route-table-ranges":
 			param = &RouteTableRangesParam{}
 		case "keyvaluelist":

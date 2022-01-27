@@ -28,7 +28,9 @@ var _ = Describe("IndexAllocator", func() {
 	Context("happy path", func() {
 		BeforeEach(func() {
 			By("constructing IndexAllocator")
-			r = NewIndexAllocator(IndexRange{Min: 43, Max: 47}, IndexRange{Min: 2, Max: 4})
+			ranges := []IndexRange{{Min: 43, Max: 47}, {Min: 2, Max: 4}}
+			reserved := []IndexRange{{Min: 253, Max: 255}}
+			r = NewIndexAllocator(ranges, reserved)
 			Expect(r).NotTo(BeNil())
 		})
 
@@ -63,7 +65,6 @@ var _ = Describe("IndexAllocator", func() {
 		})
 
 		It("GrabBlock works", func() {
-
 			By("allocating the first index")
 			idx, err := r.GrabIndex()
 			Expect(err).NotTo(HaveOccurred())
@@ -83,7 +84,9 @@ var _ = Describe("IndexAllocator", func() {
 	Context("allocator init with non-ideal ranges", func() {
 		It("should remove duplicates caused by overlapping ranges", func() {
 			By("constructing IndexAllocator with overlapping ranges")
-			r = NewIndexAllocator(IndexRange{Min: 3, Max: 5}, IndexRange{Min: 2, Max: 2}, IndexRange{Min: 2, Max: 6}) // expected to be sorted and truncated to [2,3,4,5,6]
+			ranges := []IndexRange{{Min: 3, Max: 5}, {Min: 2, Max: 2}, {Min: 2, Max: 6}}
+			reserved := []IndexRange{{Min: 253, Max: 255}}
+			r = NewIndexAllocator(ranges, reserved) // expected to be sorted and reduced to [2,3,4,5,6]
 			Expect(r).NotTo(BeNil())
 
 			By("allocating the first index")
