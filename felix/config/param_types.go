@@ -629,11 +629,16 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 		}
 
 		// check if ranges collide with reserved linux tables
+		includesReserved := false
 		for _, rsrv := range routeTablesReservedLinux {
 			if min <= rsrv && max >= rsrv {
-				log.Warn("Felix route-table range includes reserved Linux tables, ignoring values 253-255.")
+				includesReserved = true
 			}
 		}
+		if includesReserved {
+			log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
+		}
+
 		ranges = append(ranges, idalloc.IndexRange{Min: min, Max: max})
 	}
 
