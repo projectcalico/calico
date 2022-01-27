@@ -51,11 +51,8 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - Regex to include matching interfaces (**interface**)
 - Regex to exclude matching interfaces (**skip-interface**)
 - A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from (**cidrs**)
-- Address assigned to kubernetes node (**kubernetes-internal-ip**)
+- Address assigned to Kubernetes node (**kubernetes-internal-ip**)
 
-> **Note**: `kubernetes-internal-ip` is not available via the [Installation API]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation).
-> Use the `cidrs` autodetection method and set its value to the node CIDR ranges used in your cluster.
-{: .alert .alert-info}
 For details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
 
 ### How to
@@ -115,7 +112,7 @@ As noted previously, the default autodetection method is **first valid interface
   spec:
     calicoNetwork:
       nodeAddressAutodetectionV4:
-		skipInterface: eth.*
+        skipInterface: eth.*
   ```
 
 - **Including CIDRs**
@@ -133,6 +130,22 @@ As noted previously, the default autodetection method is **first valid interface
         cidrs:
           - "192.168.200.0/24"
   ```
+
+- **Kubernetes Node IP**
+
+  An internal IP address assigned to the Kubernetes node.
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        kubernetes: NodeInternalIP
+  ```
+
 %>
   <label:Manifest>
 <%
@@ -178,7 +191,7 @@ Where autodetection methods are based on:
   
 - **Kubernetes Node IP**
 
-  An IP address assigned to kubernetes node (INTERNAL-IP)
+  An internal IP address assigned to the Kubernetes node.
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=kubernetes-internal-ip
@@ -208,23 +221,8 @@ In the following scenarios, you may want to configure a specific IP and subnet:
 <%
 ##### Configure IP and subnet using default Installation resource
 
-To configure the IP addresses used by the node, edit the default [Installation]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation)
-custom resource and specify the desired IP ranges:
-
-  ```
-  kind: Installation
-  apiVersion: operator.tigera.io/v1
-  metadata:
-    name: default
-  spec:
-    calicoNetwork:
-      nodeAddressAutodetectionV4:
-        cidrs:
-          - "10.0.2.10/24"
-      nodeAddressAutodetectionV6:
-        cidrs:
-          - "fd80:24e2:f998:72d6::/120"
-  ```
+Manually specifying IP addresses for individual nodes is not supported when installing {{site.prodname}} via the operator.
+Please use one of the supported IP autodetection methods above instead.
 %>
   <label:Manifest>
 <%
