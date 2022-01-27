@@ -137,12 +137,6 @@ var _ = DescribeTable(
 		false,
 	),
 	Entry(
-		"profile labels with a /",
-		"/calico/v1/policy/profile/foo%2fbar/labels",
-		ProfileLabelsKey{ProfileKey: ProfileKey{Name: "foo/bar"}},
-		false,
-	),
-	Entry(
 		"policy with a /",
 		"/calico/v1/policy/tier/default/policy/biff%2fbop",
 		PolicyKey{Name: "biff/bop"},
