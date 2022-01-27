@@ -184,7 +184,7 @@ hack-lib:
 	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/golang.sh -o hack/lib/golang.sh
 	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/etcd.sh -o hack/lib/etcd.sh
 
-## Run a local kubernetes server with API via hyperkube
+## Run a local kubernetes server with API in a container.
 run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 	# Run a Kubernetes apiserver using Docker.
 	docker run --detach --net=host \
