@@ -17,11 +17,13 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
-	"k8s.io/client-go/tools/cache"
 	"net"
 	"strings"
 	"time"
+
+	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
