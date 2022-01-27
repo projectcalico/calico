@@ -19,6 +19,15 @@ LIBBPF_PATH=./bin/third-party/libbpf/src
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
 
+# Complete list of files pulled from other directories that we need to keep in sync.
+REMOTE_DEPS = config \
+	      bin/bpf/bpf-gpl \
+	      bin/bpf/bpf-apache \
+	      $(LIBBPF_PATH)/libbpf.a \
+	      filesystem/usr/lib/calico/bpf \
+	      filesystem/etc/calico/confd/conf.d \
+	      filesystem/etc/calico/confd/templates
+
 ###############################################################################
 # Include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -227,17 +236,6 @@ config: $(shell find ../libcalico-go/config -type f)
 	rm -rf $@ && cp -r ../libcalico-go/config $@
 	chmod +w $@
 
-# Complete list of files pulled from other directories that we need to keep in sync.
-REMOTE_DEPS = config \
-	      bin/bpf/bpf-gpl \
-	      bin/bpf/bpf-apache \
-	      $(LIBBPF_PATH)/libbpf.a \
-	      filesystem/usr/lib/calico/bpf \
-	      filesystem/etc/calico/confd/conf.d \
-	      filesystem/etc/calico/confd/templates
-.remote-deps.created: $(REMOTE_DEPS)
-	touch $@
-
 # We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
 # Currently CGO can be enbaled in ARM64 and AMD64 builds.
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
@@ -253,7 +251,7 @@ endif
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): $(LIBBPF_PATH)/libbpf.a $(SRC_FILES) ../go.mod
+$(NODE_CONTAINER_BINARY): bin/bpf/bpf-gpl bin/bpf/bpf-apache $(LIBBPF_PATH)/libbpf.a $(SRC_FILES) ../go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
@@ -284,7 +282,7 @@ sub-image-%:
 
 ## Create the image for the current ARCH
 image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED):  .remote-deps.created ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES)
+$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES)
 	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
@@ -373,7 +371,7 @@ run-etcd:
 	--listen-client-urls "http://0.0.0.0:2379"
 
 # Kubernetes apiserver used for tests
-run-k8s-apiserver: .remote-deps.created stop-k8s-apiserver run-etcd
+run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name st-apiserver \
 	  -v $(CURDIR):/manifests \
@@ -531,7 +529,7 @@ remove-go-build-image:
 
 .PHONY: st
 ## Run the system tests
-st: image .remote-deps.created dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
+st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
