@@ -161,6 +161,7 @@ clean: clean-windows-upgrade
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
+	rm -rf $(REMOTE_DEPS)
 	rm -f $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
@@ -171,9 +172,6 @@ clean: clean-windows-upgrade
 	rm -f $(WINDOWS_UPGRADE_BUILD)/*.zip
 	rm -rf filesystem/included-source
 	rm -rf dist
-	rm -rf filesystem/etc/calico/confd/conf.d filesystem/etc/calico/confd/config filesystem/etc/calico/confd/templates
-	rm -rf config/
-	rm -rf vendor
 	rm -rf bin
 	# Delete images that we built in this repo
 	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
@@ -293,18 +291,7 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 ## Create the images for all supported ARCHes
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-ifeq ($(TEST_IMAGE_BUILD),true)
-	# If testing image builds, clean sub-image afterwards to free disk space (for Semaphore CI)
-	$(MAKE) clean-sub-image-$*
-endif
-
-## Remove images for all supported ARCHes
-clean-image-all: $(addprefix clean-sub-image-,$(VALIDARCHES))
-## Remove sub-image from docker and delete $(NODE_CONTAINER_CREATED) file
-clean-sub-image-%:
-	rm -f .calico_node.created-$*
-	docker rmi $(NODE_IMAGE):latest-$* || true
+	$(MAKE) clean image ARCH=$*
 
 ## Create the image for the current ARCH
 image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
