@@ -267,6 +267,17 @@ IP_AUTODETECTION_METHOD=cidr=10.0.1.0/24,10.0.2.0/24
 IP6_AUTODETECTION_METHOD=cidr=2001:4860::0/64
 ```
 
+#### kubernetes-internal-ip
+
+The `kubernetes-internal-ip` method determines the node IP using the Kubernetes node's first status.Addresses entry of the relevant IP family.
+
+Example:
+
+```
+IP_AUTODETECTION_METHOD=kubernetes-internal-ip
+IP6_AUTODETECTION_METHOD=kubernetes-internal-ip
+```
+
 ### Node readiness
 
 The `calico/node` container supports an exec readiness endpoint.
