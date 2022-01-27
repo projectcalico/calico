@@ -263,7 +263,8 @@ func unpackResourceLists(convRes []unversioned.Resource) ([]unversioned.Resource
 
 			for _, item := range k8sNPList.Items {
 				// Append the items from the list to unpackedConvRes
-				unpackedConvRes = append(unpackedConvRes, &item)
+				i := item
+				unpackedConvRes = append(unpackedConvRes, &i)
 			}
 		} else {
 			unpackedConvRes = append(unpackedConvRes, convResource)
