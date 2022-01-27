@@ -47,11 +47,11 @@ spec:
 
 By default, {{site.prodname}} uses the **first-found** method; the first valid IP address on the first interface (excluding local interfaces such as the docker bridge). However, you can change the default method to any of the following:
 
+- Address assigned to Kubernetes node (**kubernetes-internal-ip**)
 - Address used by the node to reach a particular IP or domain (**can-reach**)
 - Regex to include matching interfaces (**interface**)
 - Regex to exclude matching interfaces (**skip-interface**)
 - A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from (**cidrs**)
-- Address assigned to Kubernetes node (**kubernetes-internal-ip**)
 
 For details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
 
@@ -70,9 +70,24 @@ As noted previously, the default autodetection method is **first valid interface
 > **Note**: To configure the default autodetection method for IPv6 for any of the below methods, use the field `nodeAddressAutodetectionV6`.
 {: .alert .alert-info}
 
+- **Kubernetes Node IP**
+
+  {{site.prodname}} will select the first internal IP address listed in the Kubernetes node's `Status.Addresses` field.
+
+  ```
+  kind: Installation
+  apiVersion: operator.tigera.io/v1
+  metadata:
+    name: default
+  spec:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        kubernetes: NodeInternalIP
+  ```
+ 
 - **IP or domain name**
 
-  {{site.prodname} will choose the IP address that is used to reach the given "can reach" IP address or domain. For example:
+  {{site.prodname}} will choose the IP address that is used to reach the given "can reach" IP address or domain. For example:
 
   ```
   kind: Installation
@@ -87,7 +102,7 @@ As noted previously, the default autodetection method is **first valid interface
 
 - **Including matching interfaces**
 
-  {{site.prodname} will choose an address on each node from an interface that matches the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
+  {{site.prodname}} will choose an address on each node from an interface that matches the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
   For example:
 
   ```
@@ -103,7 +118,7 @@ As noted previously, the default autodetection method is **first valid interface
 
 - **Excluding matching interfaces**
 
-  {{site.prodname} will choose an address on each node from an interface that does not match the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
+  {{site.prodname}} will choose an address on each node from an interface that does not match the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
   For example:
 
   ```
@@ -132,22 +147,6 @@ As noted previously, the default autodetection method is **first valid interface
         cidrs:
           - "192.168.200.0/24"
   ```
-
-- **Kubernetes Node IP**
-
-  {{site.prodname}} will select the first internal IP address listed in the Kubernetes node's `Status.Addresses` field.
-
-  ```
-  kind: Installation
-  apiVersion: operator.tigera.io/v1
-  metadata:
-    name: default
-  spec:
-    calicoNetwork:
-      nodeAddressAutodetectionV4:
-        kubernetes: NodeInternalIP
-  ```
-
 %>
   <label:Manifest>
 <%
@@ -167,32 +166,6 @@ As noted previously, the default autodetection method is **first valid interface
 
 Where autodetection methods are based on:
 
-- **IP or domain name**
-
-  {{site.prodname} will choose the IP address that is used to reach the given "can reach" IP address or domain. For example:
-
-  ```
-  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=can-reach=www.google.com
-  ```
-
-- **Including matching interfaces**
-
-  {{site.prodname} will choose an address on each node from an interface that matches the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
-  For example:
-
-  ```
-  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=interface=eth.*
-  ```
-
-- **Excluding matching interfaces**
-
-  {{site.prodname} will choose an address on each node from an interface that does not match the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
-  For example:
-
-  ```
-  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=skip-interface=eth.*
-  ```
-  
 - **Kubernetes Node IP**
 
   {{site.prodname}} will select the first internal IP address listed in the Kubernetes node's `Status.Addresses` field.
@@ -201,6 +174,32 @@ Where autodetection methods are based on:
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=kubernetes-internal-ip
   ```
 
+- **IP or domain name**
+
+  {{site.prodname}} will choose the IP address that is used to reach the given "can reach" IP address or domain. For example:
+
+  ```
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=can-reach=www.google.com
+  ```
+
+- **Including matching interfaces**
+
+  {{site.prodname}} will choose an address on each node from an interface that matches the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
+  For example:
+
+  ```
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=interface=eth.*
+  ```
+
+- **Excluding matching interfaces**
+
+  {{site.prodname}} will choose an address on each node from an interface that does not match the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
+  For example:
+
+  ```
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=skip-interface=eth.*
+  ```
+  
 - **Including CIDRs**
 
   {{site.prodname}} will select any IP address from the node that falls within the given CIDRs. For example:
