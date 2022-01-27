@@ -12,18 +12,19 @@ WINDOWS_UPGRADE_IMAGE ?=windows-upgrade
 
 WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
 BUILD_IMAGES ?=$(NODE_IMAGE)
-LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/calico/node/bin/third-party/libbpf/src
-BPF_GPL_DOCKER_PATH=/go/src/github.com/projectcalico/calico/node/bin/bpf/bpf-gpl
-LIBBPF_PATH=./bin/third-party/libbpf/src
+
+# Paths within the build container for BPF source.
+LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/include/libbpf/src
+BPF_GPL_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
+
+# Paths within the repository for BPF source.
+LIBBPF_PATH=../felix/bpf-gpl/include/libbpf/src
 
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
 
 # Complete list of files pulled from other directories that we need to keep in sync.
-REMOTE_DEPS = config \
-	      bin/bpf/bpf-gpl \
-	      bin/bpf/bpf-apache \
-	      $(LIBBPF_PATH)/libbpf.a \
+REMOTE_DEPS = $(LIBBPF_PATH)/libbpf.a \
 	      filesystem/usr/lib/calico/bpf \
 	      filesystem/etc/calico/confd/conf.d \
 	      filesystem/etc/calico/confd/templates
@@ -207,39 +208,14 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
 	chmod +w $@
 
-# BPF dependencies from felix.
-bin/bpf/bpf-apache: $(shell find ../felix/bpf-apache)
-	rm -rf $@
-	mkdir -p bin/bpf
-	cp -r ../felix/bpf-apache $@
+$(LIBBPF_PATH)/libbpf.a: $(shell find ../felix/bpf-gpl/include/libbpf -type f)
+	make -C ../felix bpf-gpl/include/libbpf/src/libbpf.a
 
-bin/bpf/bpf-gpl: $(shell find ../felix/bpf-gpl)
-	rm -rf $@
-	mkdir -p bin/bpf
-	cp -r ../felix/bpf-gpl $@
-
-$(LIBBPF_PATH)/libbpf.a: $(find ../felix/bpf-gpl/include/libbpf -type f)
-	mkdir -p bin/third-party
-	cp -r ../felix/bpf-gpl/include/libbpf bin/third-party
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-		$(GIT_CONFIG_SSH) \
-		chmod -R +w bin/third-party; \
-		make -j 16 -C $(LIBBPF_PATH) BUILD_STATIC_ONLY=1'
-
-filesystem/usr/lib/calico/bpf: bin/bpf/bpf-gpl bin/bpf/bpf-apache
-	rm -rf filesystem/usr/lib/calico/bpf/
-	mkdir -p filesystem/usr/lib/calico/bpf/
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-		$(GIT_CONFIG_SSH) \
-		make -j 16 -C ./bin/bpf/bpf-apache/ all; \
-		make -j 16 -C ./bin/bpf/bpf-gpl/ all; \
-		cp bin/bpf/bpf-gpl/bin/* filesystem/usr/lib/calico/bpf/; \
-		cp bin/bpf/bpf-apache/bin/* filesystem/usr/lib/calico/bpf/;'
-
-# CRDs from libcalico-go.
-config: $(shell find ../libcalico-go/config -type f)
-	rm -rf $@ && cp -r ../libcalico-go/config $@
-	chmod +w $@
+filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
+	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
+	make -C ../felix build-bpf
+	cp -r ../felix/bpf-gpl/bin/* $@
+	cp -r ../felix/bpf-apache/bin/* $@
 
 # We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
 # Currently CGO can be enbaled in ARM64 and AMD64 builds.
@@ -256,7 +232,7 @@ endif
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): bin/bpf/bpf-gpl bin/bpf/bpf-apache $(LIBBPF_PATH)/libbpf.a $(SRC_FILES) ../go.mod
+$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_PATH)/libbpf.a $(SRC_FILES) ../go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
@@ -383,9 +359,7 @@ run-etcd:
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name st-apiserver \
-	  -v $(CURDIR):/manifests \
 	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	  -v $(CURDIR)/config:/config \
 	  -v $(CURDIR)/../cni-plugin/tests/certs:/home/user/certs \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
@@ -412,11 +386,9 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 		sleep 1; \
 		done
 
-	# ClusterRoleBinding created
-
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	while ! docker exec st-apiserver kubectl \
-		apply -f /manifests/config/crd/; \
+		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
 		do echo "Trying to create CRDs"; \
 		sleep 1; \
 		done
