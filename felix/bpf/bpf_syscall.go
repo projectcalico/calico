@@ -270,7 +270,8 @@ func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
 			log.WithField("mapInfo", mapInfo).WithField("keyLen", keySize).Panic("Incorrect key length")
 		}
 		// The actual size of per cpu maps is equal to the value size * number of cpu
-		if mapInfo.Type == unix.BPF_MAP_TYPE_PERCPU_HASH || mapInfo.Type == unix.BPF_MAP_TYPE_PERCPU_ARRAY {
+		if mapInfo.Type == unix.BPF_MAP_TYPE_PERCPU_HASH || mapInfo.Type == unix.BPF_MAP_TYPE_PERCPU_ARRAY ||
+			mapInfo.Type == unix.BPF_MAP_TYPE_LRU_PERCPU_HASH || mapInfo.Type == unix.BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE {
 			if valueSize >= 0 && valueSize != mapInfo.ValueSize*runtime.NumCPU() {
 				log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length")
 			}
