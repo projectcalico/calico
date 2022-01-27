@@ -72,7 +72,7 @@ As noted previously, the default autodetection method is **first valid interface
 
 - **IP or domain name**
 
-  A reachable destination (IP address or domain). For example:
+  {{site.prodname} will choose the IP address that is used to reach the given "can reach" IP address or domain. For example:
 
   ```
   kind: Installation
@@ -87,7 +87,8 @@ As noted previously, the default autodetection method is **first valid interface
 
 - **Including matching interfaces**
 
-  A regular expression in Golang syntax that includes interfaces that match. For example:
+  {{site.prodname} will choose an address on each node from an interface that matches the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
+  For example:
 
   ```
   kind: Installation
@@ -102,7 +103,8 @@ As noted previously, the default autodetection method is **first valid interface
 
 - **Excluding matching interfaces**
 
-  A regular expression in Golang syntax that excludes interfaces that match. For example:
+  {{site.prodname} will choose an address on each node from an interface that does not match the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
+  For example:
 
   ```
   kind: Installation
@@ -117,7 +119,7 @@ As noted previously, the default autodetection method is **first valid interface
 
 - **Including CIDRs**
 
-  A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from. For example:
+  {{site.prodname}} will select any IP address from the node that falls within the given CIDRs. For example:
 
   ```
   kind: Installation
@@ -133,7 +135,7 @@ As noted previously, the default autodetection method is **first valid interface
 
 - **Kubernetes Node IP**
 
-  An internal IP address assigned to the Kubernetes node.
+  {{site.prodname}} will select the first internal IP address listed in the Kubernetes node's `Status.Addresses` field.
 
   ```
   kind: Installation
@@ -167,7 +169,7 @@ Where autodetection methods are based on:
 
 - **IP or domain name**
 
-  A reachable destination (IP address or domain). For example:
+  {{site.prodname} will choose the IP address that is used to reach the given "can reach" IP address or domain. For example:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=can-reach=www.google.com
@@ -175,7 +177,8 @@ Where autodetection methods are based on:
 
 - **Including matching interfaces**
 
-  A regular expression in Golang syntax that includes interfaces that match. For example:
+  {{site.prodname} will choose an address on each node from an interface that matches the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
+  For example:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=interface=eth.*
@@ -183,7 +186,8 @@ Where autodetection methods are based on:
 
 - **Excluding matching interfaces**
 
-  A regular expression in Golang syntax that excludes interfaces that match. For example:
+  {{site.prodname} will choose an address on each node from an interface that does not match the given [regex](https://pkg.go.dev/regexp){:target="_blank"}.
+  For example:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=skip-interface=eth.*
@@ -191,7 +195,7 @@ Where autodetection methods are based on:
   
 - **Kubernetes Node IP**
 
-  An internal IP address assigned to the Kubernetes node.
+  {{site.prodname}} will select the first internal IP address listed in the Kubernetes node's `Status.Addresses` field.
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=kubernetes-internal-ip
@@ -199,7 +203,7 @@ Where autodetection methods are based on:
 
 - **Including CIDRs**
 
-  A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from. For example:
+  {{site.prodname}} will select any IP address from the node that falls within the given CIDRs. For example:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=cidr=192.168.200.0/24,172.15.0.0/24
