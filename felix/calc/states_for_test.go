@@ -20,6 +20,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 
@@ -600,7 +601,7 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 	// Two local endpoints with overlapping IPs.
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 	KVPair{Key: localWlEpKey2, Value: &localWlEp2},
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels1},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{},
@@ -647,7 +648,7 @@ var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlapp
 
 // Add a second profile with the same labels so that both endpoints now match.
 var localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs = localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-2"}}, Value: profileLabels1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-2"}, Value: profileLabels1},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	"10.0.0.1,tcp:8080", // ep1
 	"fc00:fe11::1,tcp:8080",
@@ -681,7 +682,7 @@ var localEpsAndNamedPortPolicyDuplicatePorts = localEpsAndNamedPortPolicyMatchin
 
 // Then, change the label on EP2 so it no-longer matches.
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-2"}}, Value: profileLabels2},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-2"}, Value: profileLabels2},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	"10.0.0.1,tcp:8080", // ep1
 	"fc00:fe11::1,tcp:8080",
@@ -692,7 +693,7 @@ var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndN
 
 // Then, change the label on EP1 so it no-longer matches.
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1 = localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels2},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels2},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	// No longer any matches.
 }).withName("2 local WEPs with policy not matching inherited labels")
@@ -766,7 +767,7 @@ var localEpsWithPolicyUpdatedIPs = localEpsWithPolicy.withKVUpdates(
 // withProfile adds a profile to the initialised state.
 var withProfile = initialisedStore.withKVUpdates(
 	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRules1},
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1Tag1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels1Tag1},
 ).withName("profile")
 
 // localEpsWithProfile contains a pair of overlapping IP endpoints and a profile
@@ -855,7 +856,7 @@ var localEpsWithUpdatedProfileNegatedTags = localEpsWithUpdatedProfile.withKVUpd
 // tags as labels.  I.e. a tag of name foo should be equivalent to label foo=""
 var withProfileTagInherit = initialisedStore.withKVUpdates(
 	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1Tag1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels1Tag1},
 ).withName("profile")
 
 var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
@@ -887,7 +888,7 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 
 var withProfileTagOverriden = initialisedStore.withKVUpdates(
 	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabelsTag1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabelsTag1},
 ).withName("profile")
 
 // localEpsWithTagOverriddenProfile Checks that tags-inherited labels can be
