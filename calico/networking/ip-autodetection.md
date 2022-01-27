@@ -85,7 +85,7 @@ As noted previously, the default autodetection method is **first valid interface
         kubernetes: NodeInternalIP
   ```
  
-- **IP or domain name**
+- **Source address used to reach an IP or domain name**
 
   {{site.prodname}} will choose the IP address that is used to reach the given "can reach" IP address or domain. For example:
 
@@ -174,7 +174,7 @@ Where autodetection methods are based on:
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=kubernetes-internal-ip
   ```
 
-- **IP or domain name**
+- **Source address used to reach an IP or domain name**
 
   {{site.prodname}} will choose the IP address that is used to reach the given "can reach" IP address or domain. For example:
 
