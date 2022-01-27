@@ -16,6 +16,7 @@ package labelindex_test
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	. "github.com/projectcalico/calico/felix/labelindex"
 
 	. "github.com/onsi/ginkgo"
