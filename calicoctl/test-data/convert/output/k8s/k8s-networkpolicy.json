@@ -3,6 +3,7 @@
   "apiVersion": "projectcalico.org/v3",
   "metadata": {
     "name": "test-network-policy",
+    "namespace": "default",
     "creationTimestamp": null
   },
   "spec": {
