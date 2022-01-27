@@ -44,14 +44,6 @@ var (
 	cidr         = mustParseNet("10.0.0.0/16")
 	ports        = []numorstring.Port{numorstring.SinglePort(10)}
 
-	tag1   = "tag1"
-	tag1ID = ipSetIDForTag(tag1)
-	tag2   = "tag2"
-	tag3   = "tag3"
-	tag3ID = ipSetIDForTag(tag3)
-	tag4   = "tag4"
-	tag4ID = ipSetIDForTag(tag4)
-
 	sel1   = "a == 'b'"
 	sel1ID = selectorID(sel1)
 	sel2   = "b == 'c'"
@@ -60,10 +52,6 @@ var (
 	sel4   = "d in {'a', 'b'}"
 	sel4ID = selectorID(sel4)
 
-	combinedSrcSelID         = selectorID("(((a == 'b') && has(tag1)) && !(has(foo3))) && !(has(tag3))")
-	combinedDstSelID         = selectorID("(((b == 'c') && has(tag2)) && !(d in {'a', 'b'})) && !(has(tag4))")
-	combinedSrcTagsOnlySelID = selectorID("(has(tag1)) && !(has(tag3))")
-	combinedDstTagsOnlySelID = selectorID("(has(tag2)) && !(has(tag4))")
 	combinedSrcSelsOnlySelID = selectorID("(a == 'b') && !(has(foo3))")
 	combinedDstSelsOnlySelID = selectorID("(b == 'c') && !(d in {'a', 'b'})")
 )
@@ -176,81 +164,21 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 			OriginalSrcServiceNamespace: "default",
 		}),
 
-	// Tags/Selectors.
-	Entry("source tag", model.Rule{SrcTag: "tag1"}, ParsedRule{SrcIPSetIDs: []string{tag1ID}}),
-	Entry("dest tag", model.Rule{DstTag: "tag1"}, ParsedRule{DstIPSetIDs: []string{tag1ID}}),
+	// Selectors.
 	Entry("source selector", model.Rule{SrcSelector: sel1}, ParsedRule{SrcIPSetIDs: []string{sel1ID}}),
 	Entry("dest selector", model.Rule{DstSelector: sel1}, ParsedRule{DstIPSetIDs: []string{sel1ID}}),
-	Entry("!source tag", model.Rule{NotSrcTag: "tag1"}, ParsedRule{NotSrcIPSetIDs: []string{tag1ID}}),
-	Entry("!dest tag", model.Rule{NotDstTag: "tag1"}, ParsedRule{NotDstIPSetIDs: []string{tag1ID}}),
 	Entry("!source selector", model.Rule{NotSrcSelector: sel1}, ParsedRule{NotSrcIPSetIDs: []string{sel1ID}}),
 	Entry("!dest selector", model.Rule{NotDstSelector: sel1}, ParsedRule{NotDstIPSetIDs: []string{sel1ID}}),
 
-	Entry("fully-loaded tags/selectors should be combined",
-		model.Rule{
-			SrcTag:         tag1,
-			DstTag:         tag2,
-			SrcSelector:    sel1,
-			DstSelector:    sel2,
-			NotSrcTag:      tag3,
-			NotDstTag:      tag4,
-			NotSrcSelector: sel3,
-			NotDstSelector: sel4,
-		},
-		ParsedRule{
-			// In this case, all the selectors and tags can be squashed down into one that combines
-			// them all.
-			SrcIPSetIDs: []string{combinedSrcSelID},
-			DstIPSetIDs: []string{combinedDstSelID},
-		},
-	),
-	Entry("only negative tags/selectors",
-		model.Rule{
-			NotSrcTag:      tag3,
-			NotDstTag:      tag4,
-			NotSrcSelector: sel3,
-			NotDstSelector: sel4,
-		},
-		ParsedRule{
-			// With only negative tags/selectors, we can't combine them.
-			NotSrcIPSetIDs: []string{sel3ID, tag3ID},
-			NotDstIPSetIDs: []string{sel4ID, tag4ID},
-		},
-	),
-	Entry("only negative tags",
-		model.Rule{
-			NotSrcTag: tag3,
-			NotDstTag: tag4,
-		},
-		ParsedRule{
-			// With only negative tags/selectors, we can't combine them.
-			NotSrcIPSetIDs: []string{tag3ID},
-			NotDstIPSetIDs: []string{tag4ID},
-		},
-	),
 	Entry("only negative selectors",
 		model.Rule{
 			NotSrcSelector: sel3,
 			NotDstSelector: sel4,
 		},
 		ParsedRule{
-			// With only negative tags/selectors, we can't combine them.
+			// With only negative selectors, we can't combine them.
 			NotSrcIPSetIDs: []string{sel3ID},
 			NotDstIPSetIDs: []string{sel4ID},
-		},
-	),
-	Entry("positive tags should be combined with negative ones",
-		model.Rule{
-			SrcTag:    tag1,
-			DstTag:    tag2,
-			NotSrcTag: tag3,
-			NotDstTag: tag4,
-		},
-		ParsedRule{
-			// In this case, all the selectors and tags can be squashed down into one that combines
-			// them all.
-			SrcIPSetIDs: []string{combinedSrcTagsOnlySelID},
-			DstIPSetIDs: []string{combinedDstTagsOnlySelID},
 		},
 	),
 	Entry("positive selectors should be combined with negative ones",
@@ -261,7 +189,7 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 			NotDstSelector: sel4,
 		},
 		ParsedRule{
-			// In this case, all the selectors and tags can be squashed down into one that combines
+			// In this case, all the selectors can be squashed down into one that combines
 			// them all.
 			SrcIPSetIDs: []string{combinedSrcSelsOnlySelID},
 			DstIPSetIDs: []string{combinedDstSelsOnlySelID},
@@ -272,7 +200,7 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 var _ = Describe("ParsedRule", func() {
 	It("should have correct fields relative to model.Rule", func() {
 		// We expect all the fields to have the same name, except for
-		// the selectors and tags, which differ, and LogPrefix, which
+		// the selectors, which differ, and LogPrefix, which
 		// is deprecated.
 		prType := reflect.TypeOf(ParsedRule{})
 		numPRFields := prType.NumField()
