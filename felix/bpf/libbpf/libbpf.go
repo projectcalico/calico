@@ -218,7 +218,12 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 
 	link, err := C.bpf_program_attach_cgroup(o.obj, C.int(fd), cProgName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to attach %s to cgroup %s: %w", progName, cgroup, err)
+		link = nil
+		_, err2 := C.bpf_program_attach_cgroup_legacy(o.obj, C.int(fd), cProgName)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to attach %s to cgroup %s (legacy try %s): %w",
+				progName, cgroup, err2, err)
+		}
 	}
 
 	return &Link{link: link}, nil
