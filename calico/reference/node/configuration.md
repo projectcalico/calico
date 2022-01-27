@@ -206,6 +206,17 @@ IP_AUTODETECTION_METHOD=first-found
 IP6_AUTODETECTION_METHOD=first-found
 ```
 
+#### kubernetes-internal-ip
+
+The `kubernetes-internal-ip` method will select the first internal IP address listed in the Kubernetes node's `Status.Addresses` field
+
+Example:
+
+```
+IP_AUTODETECTION_METHOD=kubernetes-internal-ip
+IP6_AUTODETECTION_METHOD=kubernetes-internal-ip
+```
+
 #### can-reach=DESTINATION
 
 The `can-reach` method uses your local routing to determine which IP address
@@ -228,8 +239,8 @@ IP6_AUTODETECTION_METHOD=can-reach=www.google.com
 
 #### interface=INTERFACE-REGEX
 
-The `interface` method uses the supplied interface regular expression (golang
-syntax) to enumerate matching interfaces and to return the first IP address on
+The `interface` method uses the supplied interface [regular expression](https://pkg.go.dev/regexp){:target="_blank"}
+to enumerate matching interfaces and to return the first IP address on
 the first matching interface.  The order that both the interfaces
 and the IP addresses are listed is system dependent.
 
@@ -243,9 +254,9 @@ IP6_AUTODETECTION_METHOD=interface=eth.*
 
 #### skip-interface=INTERFACE-REGEX
 
-The `skip-interface` method uses the supplied interface regular expression (golang
-syntax) to exclude interfaces and to return the first IP address on the first
-interface that not matching. The order that both the interfaces
+The `skip-interface` method uses the supplied interface [regular expression](https://pkg.go.dev/regexp){:target="_blank"}
+to exclude interfaces and to return the first IP address on the first
+interface that does not match. The order that both the interfaces
 and the IP addresses are listed is system dependent.
 
 Example with valid IP address on interface exclude enp6s0f0, eth0, eth1, eth2 etc.:
@@ -257,8 +268,7 @@ IP6_AUTODETECTION_METHOD=skip-interface=enp6s0f0,eth.*
 
 #### cidr=CIDR
 
-The `cidr` method uses one or more comma-separated IP ranges in CIDR format to determine valid IP
-addresses to choose from.
+The `cidr` method will select any IP address from the node that falls within the given CIDRs. For example:
 
 Example:
 
