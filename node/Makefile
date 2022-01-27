@@ -551,7 +551,7 @@ st: image .remote-deps.created dist/calicoctl busybox.tar calico-node.tar worklo
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: mod-download static-checks fv image build-windows-archive st
+ci: static-checks fv image build-windows-archive st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-upgrade
@@ -616,7 +616,7 @@ release-publish-latest: release-verify
 # Windows packaging
 ###############################################################################
 # Pull the BGP configuration scripts and templates from the confd repo.
-$(WINDOWS_MOD_CACHED_FILES): mod-download
+$(WINDOWS_MOD_CACHED_FILES):
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
