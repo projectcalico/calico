@@ -2330,9 +2330,23 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"routeTableRanges": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Calico programs additional Linux route tables for various purposes. RouteTableRanges designates a set of table ranges that Calico is permitted to use. Overrides RouteTableRange if both are present.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange"),
+									},
+								},
+							},
+						},
+					},
 					"routeTableRange": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Calico programs additional Linux route tables for various purposes.  RouteTableRange specifies the indices of the route tables that Calico should use.",
+							Description: "Deprecated in favour of RouteTableRanges. Calico programs additional Linux route tables for various purposes. RouteTableRange specifies the indices of the route tables that Calico should use.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange"),
 						},
 					},

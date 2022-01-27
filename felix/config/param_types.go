@@ -554,28 +554,72 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 	return raw, nil
 }
 
-type RouteTableRangeParam struct {
+// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
+var routeTablesReservedLinux = []int{253, 254, 255}
+
+// linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
+const routeTableMax = 0xffff
+
+type RouteTableRangesParam struct {
+	legacy bool
 	Metadata
 }
 
-func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error) {
-	err = p.parseFailed(raw, "must be a range of route table indices within 1-250")
-	m := regexp.MustCompile(`^(\d+)-(\d+)$`).FindStringSubmatch(raw)
-	if m == nil {
-		return
+func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error) {
+	var match [][]string
+	// in the case where the legacy param was passed, only search for a single range
+	if p.legacy {
+		m := regexp.MustCompile(`^(\d+)-(\d+)$`).FindStringSubmatch(raw)
+		if m == nil {
+			err = p.parseFailed(raw, "must be a range of route table indices within 1-250")
+			return
+		}
+		match = make([][]string, 1)
+		match[0] = m
+
+	} else {
+		match = regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)
+		if match == nil {
+			err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
+			return
+		}
 	}
-	min, serr := strconv.Atoi(m[1])
-	if serr != nil {
-		return
+
+	ranges := make([]idalloc.IndexRange, 0)
+	for _, r := range match {
+		// first match is the whole matching string - we only care about submatches
+		min, serr := strconv.Atoi(r[1])
+		if serr != nil || min <= 0 {
+			err = p.parseFailed(raw, "min value is not a valid number")
+			return
+		}
+		max, serr := strconv.Atoi(r[2])
+		if serr != nil {
+			err = p.parseFailed(raw, "max value is not a valid number")
+			return
+		}
+		// max val must be greater than min val
+		if min > max {
+			err = p.parseFailed(raw, "min value is greater than max value")
+			return
+		}
+
+		if int64(max) > int64(routeTableMax) {
+			err = p.parseFailed(raw, "max value is too high")
+			return
+		}
+
+		// check if ranges collide with reserved linux tables
+		for _, rsrv := range routeTablesReservedLinux {
+			if min <= rsrv && max >= rsrv {
+				err = p.parseFailed(raw, "must not target a reserved table")
+				return
+			}
+		}
+		ranges = append(ranges, idalloc.IndexRange{Min: min, Max: max})
 	}
-	max, serr := strconv.Atoi(m[2])
-	if serr != nil {
-		return
-	}
-	if min >= 1 && max >= min && max <= 250 {
-		result = idalloc.IndexRange{Min: min, Max: max}
-		err = nil
-	}
+
+	result = ranges
 	return
 }
 
