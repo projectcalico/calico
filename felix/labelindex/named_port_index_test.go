@@ -15,6 +15,8 @@
 package labelindex_test
 
 import (
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	. "github.com/projectcalico/calico/felix/labelindex"
 
 	. "github.com/onsi/ginkgo"
@@ -82,8 +84,12 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 		It("should inherit labels from profiles", func() {
 			uut.OnUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key:   model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: "doo"}},
-					Value: map[string]string{"superhero": "scooby"},
+					Key: model.ResourceKey{Kind: v3.KindProfile, Name: "doo"},
+					Value: &v3.Profile{
+						Spec: v3.ProfileSpec{
+							LabelsToApply: map[string]string{"superhero": "scooby"},
+						},
+					},
 				},
 			})
 			uut.OnUpdate(api.Update{

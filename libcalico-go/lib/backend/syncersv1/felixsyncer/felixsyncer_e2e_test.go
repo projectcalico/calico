@@ -114,18 +114,9 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 				},
 			})
 
-			// Expect profile labels for each namespace as well. The labels should include the name
+			// And expect a v3 profile for each namespace. The labels should include the name
 			// of the namespace. As of Kubernetes v1.21, k8s also includes a label for the namespace name
 			// that will be inherited by the profile.
-			expected = append(expected, model.KVPair{
-				Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
-				Value: map[string]string{
-					"pcns.projectcalico.org/name":      ns.Name,
-					"pcns.kubernetes.io/metadata.name": ns.Name,
-				},
-			})
-
-			// And expect a v3 profile for each namespace.
 			prof := apiv3.Profile{
 				TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
 				ObjectMeta: metav1.ObjectMeta{Name: name, UID: ns.UID, CreationTimestamp: ns.CreationTimestamp},
@@ -157,16 +148,8 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 					},
 				})
 
-				// Expect profile labels for each default serviceaccount as well. The labels should include the name
+				//  We also expect one v3 Profile to be present for each ServiceAccount. The labels should include the name
 				// of the service account.
-				expected = append(expected, model.KVPair{
-					Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
-					Value: map[string]string{
-						"pcsa.projectcalico.org/name": sa.Name,
-					},
-				})
-
-				//  We also expect one v3 Profile to be present for each ServiceAccount.
 				prof := apiv3.Profile{
 					TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
 					ObjectMeta: metav1.ObjectMeta{Name: name, UID: sa.UID, CreationTimestamp: sa.CreationTimestamp},
