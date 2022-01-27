@@ -6,7 +6,7 @@ certs
 *.pyc
 .coverage
 *.tar
-*.created-*
+*.created*
 **/*.sw[pon]
 *.coverprofile
 vendor
@@ -14,7 +14,6 @@ nosetests.xml
 testfile.yaml
 testfile
 testfile.json
-calico_test.created
 release-notes*
 report/*.xml
 .empty
@@ -32,3 +31,4 @@ kubeconfig.yaml
 ./tests/k8st/infra/calico.yaml.tmp
 apiserver.crt
 apiserver.key
+.remote-deps
