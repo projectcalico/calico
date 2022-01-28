@@ -135,8 +135,7 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
 libbpf: $(LIBBPF_PATH)/libbpf.a
-$(LIBBPF_PATH)/libbpf.a: ../go.mod
-	$(MAKE) mod-download
+$(LIBBPF_PATH)/libbpf.a: ../go.mod $(shell find bpf-gpl/ -type f)
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/include/libbpf/src BUILD_STATIC_ONLY=1"
 
 ifeq ($(ARCH), amd64)
