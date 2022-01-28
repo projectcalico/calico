@@ -175,7 +175,10 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 
 	opts := &metav1.DeleteOptions{}
 	if uid != nil {
-		opts.Preconditions = &metav1.Preconditions{UID: uid}
+		// The UID of the underlying CRD is reversed (see ReverseUID, ConvertK8sResourceToCalicoResource and
+		// ConvertCalicoResourceToK8sResource for details)
+		ruid := ReverseUID(*uid)
+		opts.Preconditions = &metav1.Preconditions{UID: &ruid}
 	}
 
 	// Delete the resource using the name.
