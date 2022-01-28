@@ -59,7 +59,7 @@ resource "null_resource" "configure_vm" {
   provisioner "remote-exec" {
     inline = [
       "sudo apt-get update",
-      "sudo apt-get install -y git make ca-certificates curl gnupg lsb-release",
+      "sudo apt-get install -y git make zip unzip ca-certificates curl gnupg lsb-release",
       "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg",
       "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu bionic stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null",
       "sudo apt-get update",
@@ -68,8 +68,7 @@ resource "null_resource" "configure_vm" {
     ]
   }
 
-  // Authenticate the docker daemon with GCR.
-  // TODO: Also handle quay and dockerhub.
+  // Authenticate the docker daemon with GCR, dockerhub, and quay.
   provisioner "file" {
     source      = var.gcr_auth_path
     destination = "/tmp/gcr-credentials.json"
@@ -80,6 +79,8 @@ resource "null_resource" "configure_vm" {
       "cat /tmp/gcr-credentials.json | docker login -u _json_key --password-stdin https://eu.gcr.io",
       "cat /tmp/gcr-credentials.json | docker login -u _json_key --password-stdin https://asia.gcr.io",
       "cat /tmp/gcr-credentials.json | docker login -u _json_key --password-stdin https://us.gcr.io",
+      "echo ${var.dockerhub_token} | docker login --username ${var.dockerhub_user} --password-stdin"
+      "echo ${var.quay_token} | docker login --username ${var.quay_user} --password-stdin"
     ]
   }
 

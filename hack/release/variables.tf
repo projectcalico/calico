@@ -38,19 +38,31 @@ variable "google_network" {
   description = "The name of the network to bring instances up on."
 }
 
+variable "github_token" {
+  type        = string
+}
+
 variable "gcr_auth_path" {
   type        = string
-  description = "Path to docker authentication file. Needed to publish images to dockerhub, quay, and GCR."
+  description = "Path to docker authentication file for GCR."
   validation {
     condition     = fileexists(pathexpand(var.gcr_auth_path))
     error_message = "Invalid docker auth file."
   }
 }
 
-variable "github_token" {
+variable "dockerhub_token" {
   type        = string
-  validation {
-    condition     = var.github_token != ""
-    error_message = "Must specify a Github token."
-  }
+}
+
+variable "dockerhub_user" {
+  type        = string
+}
+
+variable "quay_token" {
+  type        = string
+}
+
+variable "quay_user" {
+  type        = string
 }
