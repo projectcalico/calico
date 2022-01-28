@@ -36,9 +36,9 @@ REMOTE_DEPS = $(LIBBPF_PATH)/libbpf.a \
 ###############################################################################
 include ../lib.Makefile
 
-# Required for eBPF support in ARM64
 ifeq ($(ARCH),arm64)
-# Forces ARM64 build image to be used in a crosscompilation run.
+# Required for eBPF support in ARM64.
+# We need to force ARM64 build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 # Prevents docker from tagging the output image incorrectly as amd64.
 TARGET_PLATFORM=--platform=linux/arm64/v8
@@ -180,6 +180,8 @@ clean: clean-windows-upgrade
 	rm -rf filesystem/included-source
 	rm -rf dist
 	rm -rf bin
+	# We build felix as part of the node build, so clean it as part of the clean.
+	make -C ../felix clean
 	# Delete images that we built in this repo
 	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
@@ -204,11 +206,11 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 	chmod +w $@
 
 $(LIBBPF_PATH)/libbpf.a: $(shell find ../felix/bpf-gpl/include/libbpf -type f)
-	make -C ../felix bpf-gpl/include/libbpf/src/libbpf.a
+	make -C ../felix bpf-gpl/include/libbpf/src/libbpf.a ARCH=$(ARCH)
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
-	make -C ../felix build-bpf
+	make -C ../felix build-bpf ARCH=$(ARCH)
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 

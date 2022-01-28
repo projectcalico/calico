@@ -55,10 +55,13 @@ EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectc
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-
 include ../lib.Makefile
+
+ifeq ($(ARCH),arm64)
+# Required for eBPF support in ARM64.
+# We need to force ARM64 build image to be used in a crosscompilation run.
+CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
+endif
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
