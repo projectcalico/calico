@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019,2021-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -220,7 +220,10 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 
 	opts := &metav1.DeleteOptions{}
 	if uid != nil {
-		opts.Preconditions = &metav1.Preconditions{UID: uid}
+		// The UID of the underlying CRD is reversed (see ReverseUID, ConvertK8sResourceToCalicoResource and
+		// ConvertCalicoResourceToK8sResource for details)
+		ruid := ReverseUID(*uid)
+		opts.Preconditions = &metav1.Preconditions{UID: &ruid}
 	}
 
 	// Delete the resource using the name.
