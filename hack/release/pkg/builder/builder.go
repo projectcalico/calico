@@ -15,6 +15,7 @@
 package builder
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -236,7 +237,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 	for _, b := range files {
-		if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calicoctl/bin/%s", b.Name()), uploadDir}, nil); err != nil {
+		if _, err := r.runner.Run(context.TODO(), "cp", []string{fmt.Sprintf("calicoctl/bin/%s", b.Name()), uploadDir}, nil); err != nil {
 			return err
 		}
 	}
@@ -247,10 +248,10 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	}
 
 	// Add in the already-buily windows zip archive and helm chart.
-	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run(context.TODO(), "cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run(context.TODO(), "cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
 		return err
 	}
 
@@ -308,21 +309,21 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 		"felix/bin/calico-bpf": binDir,
 	}
 	for src, dst := range binaries {
-		if _, err := r.runner.Run("cp", []string{"-r", src, dst}, nil); err != nil {
+		if _, err := r.runner.Run(context.TODO(), "cp", []string{"-r", src, dst}, nil); err != nil {
 			return err
 		}
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.runner.Run("cp", []string{"-r", "calico/_site/manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.Run(context.TODO(), "cp", []string{"-r", "calico/_site/manifests", releaseBase}, nil); err != nil {
 		return err
 	}
 
 	// tar up the whole thing.
-	if _, err := r.runner.Run("tar", []string{"-czvf", fmt.Sprintf("_output/release-%s.tgz", ver), "-C", "_output", fmt.Sprintf("release-%s", ver)}, nil); err != nil {
+	if _, err := r.runner.Run(context.TODO(), "tar", []string{"-czvf", fmt.Sprintf("_output/release-%s.tgz", ver), "-C", "_output", fmt.Sprintf("release-%s", ver)}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("_output/release-%s.tgz", ver), targetDir}, nil); err != nil {
+	if _, err := r.runner.Run(context.TODO(), "cp", []string{fmt.Sprintf("_output/release-%s.tgz", ver), targetDir}, nil); err != nil {
 		return err
 	}
 
@@ -330,34 +331,74 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 }
 
 func (r *ReleaseBuilder) buildContainerImages(ver string) error {
-	releaseDirs := []string{
+	// We'll run each batch in parallel, and each directory within a batch
+	// in serial.
+	batch1 := []string{
+		// Node takes a long time on its own, and due to a makefile bug
+		// felix must be built after node.
 		"node",
+		"felix",
+	}
+	batch2 := []string{
 		"pod2daemon",
 		"cni-plugin",
 		"apiserver",
 		"kube-controllers",
+	}
+	batch3 := []string{
 		"calicoctl",
 		"app-policy",
 		"typha",
-		"felix",
-		"calico", // Technically not a container image, but a helm chart.
+		"calico",
 	}
+	batches := [][]string{batch1, batch2, batch3}
 
 	// Build env.
-	// TODO: Pass CHART_RELEASE to calico repo if needed.
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
 	)
 
-	for _, dir := range releaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
-		if err != nil {
-			logrus.Error(out)
-			return fmt.Errorf("Failed to build %s: %s", dir, err)
-		}
-		logrus.Info(out)
+	// Kick off a goroutine for each batch. We'll return a result object for each
+	// repository, and cancel the other batches if we encounter an error.
+	type batchResult struct {
+		err error
+		out string
+		dir string
 	}
+	resultChan := make(chan batchResult)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	totalRepos := 0
+	for _, batch := range batches {
+		b := batch
+		totalRepos += len(b)
+		go func() {
+			for _, dir := range b {
+				out, err := r.makeInDirectoryWithOutput(ctx, dir, "release-build", env...)
+				resultChan <- batchResult{
+					out: out,
+					err: err,
+					dir: dir,
+				}
+				if err != nil {
+					return
+				}
+			}
+		}()
+	}
+
+	// Wait for all the repos to finish.
+	for i := 0; i < totalRepos; i++ {
+		res := <-resultChan
+		if res.err != nil {
+			logrus.Error(res.out)
+			return fmt.Errorf("Failed to build %s: %s", res.dir, res.err)
+		}
+		logrus.Info(res.out)
+	}
+
 	return nil
 }
 
@@ -395,7 +436,7 @@ Attached to this release are the following artifacts:
 		ver,
 		r.uploadDir(ver),
 	}
-	_, err = r.runner.Run("ghr", args, nil)
+	_, err = r.runner.Run(context.TODO(), "ghr", args, nil)
 	return err
 }
 
@@ -425,7 +466,7 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 	for _, dir := range releaseDirs {
 		attempt := 0
 		for {
-			out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
+			out, err := r.makeInDirectoryWithOutput(context.Background(), dir, "release-publish", env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
@@ -481,26 +522,26 @@ func (r *ReleaseBuilder) determineBranch() string {
 
 // Uses docker to build a tgz archive of the specified container image.
 func (r *ReleaseBuilder) archiveContainerImage(out, image string) error {
-	_, err := r.runner.Run("docker", []string{"save", "--output", out, image}, nil)
+	_, err := r.runner.Run(context.TODO(), "docker", []string{"save", "--output", out, image}, nil)
 	return err
 }
 
 func (r *ReleaseBuilder) git(args ...string) (string, error) {
-	return r.runner.Run("git", args, nil)
+	return r.runner.Run(context.TODO(), "git", args, nil)
 }
 
 func (r *ReleaseBuilder) gitOrFail(args ...string) {
-	_, err := r.runner.Run("git", args, nil)
+	_, err := r.runner.Run(context.TODO(), "git", args, nil)
 	if err != nil {
 		logrus.WithError(err).Fatal("git command failed")
 	}
 }
 
 func (r *ReleaseBuilder) makeInDirectory(dir, target string, env ...string) error {
-	_, err := r.runner.Run("make", []string{"-C", dir, target}, env)
+	_, err := r.runner.Run(context.TODO(), "make", []string{"-C", dir, target}, env)
 	return err
 }
 
-func (r *ReleaseBuilder) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	return r.runner.Run("make", []string{"-C", dir, target}, env)
+func (r *ReleaseBuilder) makeInDirectoryWithOutput(ctx context.Context, dir, target string, env ...string) (string, error) {
+	return r.runner.Run(ctx, "make", []string{"-C", dir, target}, env)
 }

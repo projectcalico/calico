@@ -2,6 +2,7 @@ package builder
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -13,15 +14,15 @@ import (
 type CommandRunner interface {
 	// Run takes the command to run, a list of args, and list of environment variables
 	// in the form A=B, and returns stdout / error.
-	Run(string, []string, []string) (string, error)
+	Run(context.Context, string, []string, []string) (string, error)
 }
 
 // RealCommandRunner runs a command for real on the host.
 type RealCommandRunner struct {
 }
 
-func (r *RealCommandRunner) Run(name string, args []string, env []string) (string, error) {
-	cmd := exec.Command(name, args...)
+func (r *RealCommandRunner) Run(ctx context.Context, name string, args []string, env []string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
 	if len(env) != 0 {
 		cmd.Env = env
 	}
@@ -45,7 +46,7 @@ type EchoRunner struct {
 	history   []string
 }
 
-func (r *EchoRunner) Run(name string, args []string, env []string) (string, error) {
+func (r *EchoRunner) Run(ctx context.Context, name string, args []string, env []string) (string, error) {
 	if r.history == nil {
 		r.history = []string{}
 	}
