@@ -71,7 +71,7 @@ func NewIndexAllocator(indexRanges []IndexRange, exclusions []IndexRange) *Index
 		}
 
 		// Push in reverse order so that the lowest index will come out first.
-		populating:
+	populating:
 		for i := indexRange.Max; i >= indexRange.Min; i-- {
 			// skip overlapping range indices
 			if i >= lowestIndex {
