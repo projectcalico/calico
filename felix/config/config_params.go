@@ -331,8 +331,9 @@ type Config struct {
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
-	// RouteTableRange is deprecated in favour of RouteTableRanges
-	RouteTableRange  idalloc.IndexRange   `config:"route-table-range;1-250;die-on-fail"`
+	// RouteTableRange is deprecated in favour of RouteTableRanges,
+	// however, if explicitly-set, will be honoured.
+	RouteTableRange  idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
 	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;1-10000;die-on-fail"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
@@ -857,6 +858,17 @@ func (config *Config) TyphaDiscoveryOpts() []discovery.Option {
 		discovery.WithAddrOverride(config.TyphaAddr),
 		discovery.WithKubeService(config.TyphaK8sNamespace, config.TyphaK8sServiceName),
 	}
+}
+
+// RouteTableIndices compares provided args for the deprecated RoutTableRange arg
+// and the newer RouteTableRanges arg, giving precedence to the deprecated arg, if it's explicitly-set
+func (config *Config) RouteTableIndices() []idalloc.IndexRange {
+	if config.RouteTableRange != (idalloc.IndexRange{}) {
+		return []idalloc.IndexRange{
+			config.RouteTableRange,
+		}
+	}
+	return config.RouteTableRanges
 }
 
 func New() *Config {

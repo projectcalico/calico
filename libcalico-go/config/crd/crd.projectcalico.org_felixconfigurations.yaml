@@ -500,6 +500,7 @@ spec:
                 description: Deprecated in favour of RouteTableRanges. Calico programs
                   additional Linux route tables for various purposes. RouteTableRange
                   specifies the indices of the route tables that Calico should use.
+                  If explicitly-set, will be honoured in favour of `RouteTableRanges`.
                 properties:
                   max:
                     type: integer
@@ -511,9 +512,8 @@ spec:
                 type: object
               routeTableRanges:
                 description: Calico programs additional Linux route tables for various
-                  purposes. RouteTableRanges designates a set of table ranges that
-                  Calico is permitted to use. Overrides RouteTableRange if both are
-                  present.
+                  purposes. RouteTableRanges specifies a set of table index ranges
+                  that Calico should use. Deprecates `RouteTableRange`.
                 items:
                   properties:
                     max:
