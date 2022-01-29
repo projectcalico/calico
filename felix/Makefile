@@ -57,12 +57,6 @@ EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectc
 ###############################################################################
 include ../lib.Makefile
 
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-endif
-
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
 FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
@@ -236,7 +230,7 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	mkdir -p docker-image/bpf/bin
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
-	docker build --pull -t $(FELIX_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
+	docker build --pull -t $(FELIX_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
@@ -246,11 +240,11 @@ FV_BINARY=calico-felix-amd64
 endif
 
 image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/$(FV_BINARY) image-wgtool
-	docker build -t $(FELIX_IMAGE)-test:latest-$(ARCH) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin;
+	docker build -t $(FELIX_IMAGE)-test:latest-$(ARCH) $(TARGET_PLATFORM) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin;
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-test
 
 image-wgtool: fv/Dockerfile.wgtool.amd64
-	docker build -t $(FELIX_IMAGE)-wgtool:latest-$(ARCH) --file ./fv/Dockerfile.wgtool.$(ARCH) fv;
+	docker build -t $(FELIX_IMAGE)-wgtool:latest-$(ARCH) $(TARGET_PLATFORM) --file ./fv/Dockerfile.wgtool.$(ARCH) fv;
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-wgtool
 
 ###############################################################################
