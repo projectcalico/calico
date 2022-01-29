@@ -12,12 +12,22 @@ WINDOWS_UPGRADE_IMAGE ?=windows-upgrade
 
 WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
 BUILD_IMAGES ?=$(NODE_IMAGE)
-LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/calico/node/bin/third-party/libbpf/src
-BPF_GPL_DOCKER_PATH=/go/src/github.com/projectcalico/calico/node/bin/bpf/bpf-gpl
-LIBBPF_PATH=./bin/third-party/libbpf/src
+
+# Paths within the build container for BPF source.
+LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/include/libbpf/src
+BPF_GPL_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
+
+# Paths within the repository for BPF source.
+LIBBPF_PATH=../felix/bpf-gpl/include/libbpf/src
 
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
+
+# Complete list of files pulled from other directories that we need to keep in sync.
+REMOTE_DEPS = $(LIBBPF_PATH)/libbpf.a \
+	      filesystem/usr/lib/calico/bpf \
+	      filesystem/etc/calico/confd/conf.d \
+	      filesystem/etc/calico/confd/templates
 
 ###############################################################################
 # Include ../lib.Makefile
@@ -130,8 +140,7 @@ K8ST_TO_RUN?=tests/
 # Can exclude the slower tests with "-a '!slow'"
 ST_OPTIONS?=
 
-# Variables for building the local binaries that go into the image
-MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist $(NODE_CONTAINER_BIN_DIR))
+# Filesystem of the node container that is checked in to this repository.
 NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 
 # Calculate a timestamp for any build artefacts.
@@ -143,7 +152,11 @@ LDFLAGS=-ldflags "\
 	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
 	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT)"
 
-SRC_FILES=$(shell find ./pkg -name '*.go')
+# Source golang files on which compiling the calico-node binary depends.
+SRC_FILES=$(shell find ./pkg -name '*.go') \
+	  $(shell find ../felix -name '*.go') \
+	  $(shell find ../libcalico-go -name '*.go') \
+	  $(shell find ../confd -name '*.go')
 
 BINDIR?=bin
 
@@ -155,6 +168,7 @@ clean: clean-windows-upgrade
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
+	rm -rf $(REMOTE_DEPS)
 	rm -f $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
@@ -165,10 +179,9 @@ clean: clean-windows-upgrade
 	rm -f $(WINDOWS_UPGRADE_BUILD)/*.zip
 	rm -rf filesystem/included-source
 	rm -rf dist
-	rm -rf filesystem/etc/calico/confd/conf.d filesystem/etc/calico/confd/config filesystem/etc/calico/confd/templates
-	rm -rf config/
-	rm -rf vendor
 	rm -rf bin
+	# We build felix as part of the node build, so clean it as part of the clean.
+	make -C ../felix clean
 	# Delete images that we built in this repo
 	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
@@ -183,42 +196,23 @@ clean-windows-upgrade:
 ###############################################################################
 build: $(NODE_CONTAINER_BINARY)
 
-remote-deps-copy-bpf: mod-download
-	rm -rf bin/bpf
-	mkdir -p bin/bpf
-	cp -r ../felix/bpf-gpl bin/bpf
-	cp -r ../felix/bpf-apache bin/bpf
+# Pull in config from confd.
+filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
+	rm -rf $@ && cp -r ../confd/etc/calico/confd/conf.d $@
+	chmod +w $@
 
-remote-deps: remote-deps-copy-bpf
-	# Recreate the directory so that we are sure to clean up any old files.
-	rm -rf filesystem/etc/calico/confd
-	mkdir -p filesystem/etc/calico/confd
-	rm -rf config
-	rm -rf bin/third-party
-	rm -rf filesystem/usr/lib/calico/bpf/
-	mkdir -p filesystem/usr/lib/calico/bpf/
+filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/templates -type f)
+	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
+	chmod +w $@
 
-	cp -r ../confd/etc/calico/confd/conf.d filesystem/etc/calico/confd/conf.d
-	cp -r ../confd/etc/calico/confd/config filesystem/etc/calico/confd/config
-	cp -r ../confd/etc/calico/confd/templates filesystem/etc/calico/confd/templates
-	cp -r ../libcalico-go/config config
+$(LIBBPF_PATH)/libbpf.a: $(shell find ../felix/bpf-gpl/include/libbpf -type f)
+	make -C ../felix bpf-gpl/include/libbpf/src/libbpf.a ARCH=$(ARCH)
 
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-		$(GIT_CONFIG_SSH) \
-		make -j 16 -C ./bin/bpf/bpf-apache/ all; \
-		make -j 16 -C ./bin/bpf/bpf-gpl/ all; \
-		cp bin/bpf/bpf-gpl/bin/* filesystem/usr/lib/calico/bpf/; \
-		cp bin/bpf/bpf-apache/bin/* filesystem/usr/lib/calico/bpf/; \
-		chmod -R +w filesystem/etc/calico/confd/ config/ filesystem/usr/lib/calico/bpf/'
-
-$(LIBBPF_PATH)/libbpf.a: ../go.mod
-	$(MAKE) mod-download
-	mkdir -p bin/third-party
-	cp -r ../felix/bpf-gpl/include/libbpf bin/third-party
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-		$(GIT_CONFIG_SSH) \
-		chmod -R +w bin/third-party; \
-		make -j 16 -C $(LIBBPF_PATH) BUILD_STATIC_ONLY=1'
+filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
+	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
+	make -C ../felix build-bpf ARCH=$(ARCH)
+	cp -r ../felix/bpf-gpl/bin/* $@
+	cp -r ../felix/bpf-apache/bin/* $@
 
 # We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
 # Currently CGO can be enbaled in ARM64 and AMD64 builds.
@@ -235,7 +229,7 @@ endif
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): remote-deps-copy-bpf $(LIBBPF_PATH)/libbpf.a $(SRC_FILES) ../go.mod
+$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_PATH)/libbpf.a $(SRC_FILES) ../go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
@@ -259,40 +253,31 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 ###############################################################################
 # Building the image
 ###############################################################################
-## Create the image for the current ARCH
-image: register remote-deps $(NODE_IMAGE)
 ## Create the images for all supported ARCHes
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-ifeq ($(TEST_IMAGE_BUILD),true)
-	# If testing image builds, clean sub-image afterwards to free disk space (for Semaphore CI)
-	$(MAKE) clean-sub-image-$*
-endif
+	$(MAKE) clean image ARCH=$*
 
-## Remove images for all supported ARCHes
-clean-image-all: $(addprefix clean-sub-image-,$(VALIDARCHES))
-## Remove sub-image from docker and delete $(NODE_CONTAINER_CREATED) file
-clean-sub-image-%:
-	rm -f .calico_node.created-$*
-	docker rmi $(NODE_IMAGE):latest-$* || true
-
-$(NODE_IMAGE): $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
+## Create the image for the current ARCH
+image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
+$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES)
 	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # download BIRD source to include in image.
-$(BIRD_SOURCE): ../go.mod
+$(BIRD_SOURCE): .bird-source.created
+.bird-source.created:
 	mkdir -p filesystem/included-source/
 	wget -O $@ https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+	touch $@
 
-# download any GPL felix code to include in the image.
-$(FELIX_GPL_SOURCE): ../go.mod
+# include GPL felix code in the image.
+$(FELIX_GPL_SOURCE):
+.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f)
 	mkdir -p filesystem/included-source/
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		tar cf $@ ../felix/bpf-gpl;'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'tar cf $@ ../felix/bpf-gpl;'
+	touch $@
 
 ###############################################################################
 # FV Tests
@@ -317,16 +302,16 @@ KUBECONFIG?=kubeconfig.yaml
 cluster-create: $(BINDIR)/kubectl $(BINDIR)/kind
 	# First make sure any previous cluster is deleted
 	make cluster-destroy
-	
+
 	# Create a kind cluster.
 	$(BINDIR)/kind create cluster \
 	        --config ./tests/kind-config.yaml \
 	        --kubeconfig $(KUBECONFIG) \
 	        --image kindest/node:$(K8S_VERSION)
-	
+
 	# Deploy resources needed in test env.
 	$(MAKE) deploy-test-resources
-	
+
 	# Wait for controller manager to be running and healthy.
 	while ! KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
 
@@ -352,8 +337,8 @@ $(BINDIR)/kubectl:
 # etcd is used by the STs
 .PHONY: run-etcd
 run-etcd:
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
+	# TODO: We shouldn't need to enable the v2 API, but some of our test code
+	# still relies on it.
 	@-docker rm -f calico-etcd
 	docker run --detach \
 	--net=host \
@@ -364,12 +349,10 @@ run-etcd:
 	--listen-client-urls "http://0.0.0.0:2379"
 
 # Kubernetes apiserver used for tests
-run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
+run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name st-apiserver \
-	  -v $(CURDIR):/manifests \
 	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	  -v $(CURDIR)/config:/config \
 	  -v $(CURDIR)/../cni-plugin/tests/certs:/home/user/certs \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
@@ -396,11 +379,9 @@ run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 		sleep 1; \
 		done
 
-	# ClusterRoleBinding created
-
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	while ! docker exec st-apiserver kubectl \
-		apply -f /manifests/config/crd/; \
+		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
 		do echo "Trying to create CRDs"; \
 		sleep 1; \
 		done
@@ -449,25 +430,34 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
 
-calico-apiserver.tar:
+calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go')
 	make -C ../apiserver image
 	docker save --output $@ calico/apiserver:latest-$(ARCH)
 
-calico-cni.tar:
+calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go')
 	make -C ../cni-plugin image
 	docker save --output $@ calico/cni:latest-$(ARCH)
 
-pod2daemon.tar:
+pod2daemon.tar: ../go.mod $(shell find ../pod2daemon -name '*.go')
 	make -C ../pod2daemon image
 	docker save --output $@ calico/pod2daemon-flexvol:latest-$(ARCH)
 
-calicoctl.tar:
+calicoctl.tar: ../go.mod $(shell find ../calicoctl -name '*.go')
 	make -C ../calicoctl image
 	docker save --output $@ calico/ctl:latest-$(ARCH)
 
-kube-controllers.tar:
+kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go')
 	make -C ../kube-controllers image
 	docker save --output $@ calico/kube-controllers:latest-$(ARCH)
+
+load-container-images: $(K8ST_IMAGE_TARS) $(BINDIR)/kubectl
+	# Load the latest tar files onto the currently running kind cluster.
+	KUBECONFIG=$(KUBECONFIG) ./tests/k8st/load_images_on_kind_cluster.sh
+	# Restart the Calico containers so they launch with the newly loaded code.
+	# TODO: We should be able to do this without restarting everything in kube-system.
+	KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl delete pods -n kube-system --all 
+	# calicoctl is deployed as a pod on the cluster and needs to be recreated.
+	KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl apply -f tests/k8st/infra/calicoctl.yaml
 
 .PHONY: st-checks
 st-checks:
@@ -513,13 +503,7 @@ remove-go-build-image:
 
 .PHONY: st
 ## Run the system tests
-st: image remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
-	# Check versions of Calico binaries that ST execution will use.
-	docker run --rm -v $(CURDIR)/dist:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
-	  echo; echo calicoctl version;	  /go/bin/calicoctl version; \
-	  echo; echo calico -v;       /go/bin/calico -v; \
-	  echo; echo calico-ipam -v;      /go/bin/calico-ipam -v; echo; \
-	"
+st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -546,7 +530,7 @@ st: image remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar ru
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: mod-download static-checks fv image build-windows-archive st
+ci: static-checks fv image build-windows-archive st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-upgrade
@@ -560,7 +544,7 @@ check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
@@ -611,7 +595,7 @@ release-publish-latest: release-verify
 # Windows packaging
 ###############################################################################
 # Pull the BGP configuration scripts and templates from the confd repo.
-$(WINDOWS_MOD_CACHED_FILES): mod-download
+$(WINDOWS_MOD_CACHED_FILES):
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
