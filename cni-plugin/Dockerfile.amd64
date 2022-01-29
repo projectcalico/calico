@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
+ARG UBI_IMAGE
+
+FROM ${UBI_IMAGE} as ubi
 
 FROM scratch
 
@@ -30,8 +32,8 @@ ADD licenses/ /licenses
 ADD LICENSE /licenses/
 
 # Include libraries from UBI for dynamic linking.
-COPY --from=base /lib64 /lib64
-COPY --from=base /lib /lib
+COPY --from=ubi /lib64 /lib64
+COPY --from=ubi /lib /lib
 
 ADD bin/amd64/ /opt/cni/bin/
 
