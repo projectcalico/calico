@@ -61,6 +61,9 @@ ifeq ($(ARCH),arm64)
 # Required for eBPF support in ARM64.
 # We need to force ARM64 build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
+# Prevents docker from tagging the output image incorrectly as amd64.
+TARGET_PLATFORM=--platform=linux/arm64/v8
+DOCKER_GO_BUILD:=$(DOCKER_RUN) $(CALICO_BUILD)
 endif
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
@@ -141,7 +144,8 @@ libbpf: $(LIBBPF_PATH)/libbpf.a
 $(LIBBPF_PATH)/libbpf.a: ../go.mod $(shell find bpf-gpl/ -type f)
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/include/libbpf/src BUILD_STATIC_ONLY=1"
 
-ifeq ($(ARCH), amd64)
+# Currently CGO can be enbaled in ARM64 and AMD64 builds.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_PATH)"
@@ -150,8 +154,8 @@ CGO_ENABLED=0
 CGO_LDFLAGS=""
 endif
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
-DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
 bin/calico-felix-$(ARCH): $(LIBBPF_PATH)/libbpf.a $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)

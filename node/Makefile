@@ -214,7 +214,7 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
-# We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
+# We need CGO when compiling in Felix for BPF support.
 # Currently CGO can be enbaled in ARM64 and AMD64 builds.
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
