@@ -36,10 +36,7 @@ REMOTE_DEPS = $(LIBBPF_PATH)/libbpf.a \
 ###############################################################################
 include ../lib.Makefile
 
-# Required for eBPF support in ARM64
 ifeq ($(ARCH),arm64)
-# Forces ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 # Prevents docker from tagging the output image incorrectly as amd64.
 TARGET_PLATFORM=--platform=linux/arm64/v8
 endif
