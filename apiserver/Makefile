@@ -56,7 +56,6 @@ KUBECONFIG_DIR? = /etc/kubernetes/admin.conf
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ##############################################################################
-
 include ../lib.Makefile
 
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
@@ -64,13 +63,6 @@ ifeq ($(ARCH), $(filter $(ARCH),amd64))
 CGO_ENABLED=1
 else
 CGO_ENABLED=0
-endif
-
-ifeq ($(ARCH),arm64)
-# Forces ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-# Prevents docker from tagging the output image incorrectly as amd64.
-TARGET_PLATFORM=--platform=linux/arm64/v8
 endif
 
 ###############################################################################

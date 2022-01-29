@@ -149,6 +149,16 @@ endif
 GO_BUILD_IMAGE ?= calico/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
+TARGET_PLATFORM ?=--platform=linux/$(ARCH)
+ifeq ($(ARCH),arm64)
+# Required for eBPF support in ARM64.
+# We need to force ARM64 build image to be used in a crosscompilation run.
+CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
+# Prevents docker from tagging the output image incorrectly as amd64.
+TARGET_PLATFORM=--platform=linux/arm64/v8
+endif
+
+
 # Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
