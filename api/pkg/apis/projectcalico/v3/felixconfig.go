@@ -366,8 +366,15 @@ type FelixConfigurationSpec struct {
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
 	RouteSource string `json:"routeSource,omitempty" validate:"omitempty,routeSource"`
 
-	// Calico programs additional Linux route tables for various purposes.  RouteTableRange
-	// specifies the indices of the route tables that Calico should use.
+	// Calico programs additional Linux route tables for various purposes.
+	// RouteTableRanges specifies a set of table index ranges that Calico should use.
+	// Deprecates `RouteTableRange`.
+	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty"`
+
+	// Deprecated in favour of RouteTableRanges.
+	// Calico programs additional Linux route tables for various purposes.
+	// RouteTableRange specifies the indices of the route tables that Calico should use.
+	// If explicitly-set, will be honoured in favour of `RouteTableRanges`.
 	RouteTableRange *RouteTableRange `json:"routeTableRange,omitempty" validate:"omitempty"`
 
 	// WireguardEnabled controls whether Wireguard is enabled. [Default: false]
@@ -406,6 +413,7 @@ type RouteTableRange struct {
 	Min int `json:"min"`
 	Max int `json:"max"`
 }
+type RouteTableRanges []RouteTableRange
 
 // ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.
 type ProtoPort struct {

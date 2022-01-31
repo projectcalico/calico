@@ -45,6 +45,9 @@ const (
 	// Maximum size of annotations.
 	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
 
+	// linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
+	routeTableMaxLinux uint32 = 0xffffffff
+
 	globalSelector = "global()"
 )
 
@@ -113,6 +116,9 @@ var (
 		IP:   net.ParseIP("fe80::"),
 		Mask: net.CIDRMask(10, 128),
 	}
+
+	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
+	routeTablesReservedLinux = []int{253, 254, 255}
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -212,6 +218,7 @@ func init() {
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
+	registerStructValidator(validate, validateRouteTableRanges, []api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
 }
 
@@ -1571,6 +1578,56 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 			reason("must be a range of route table indices within 1..250"),
 			"",
 		)
+	}
+}
+
+func validateRouteTableRanges(structLevel validator.StructLevel) {
+	rngs := structLevel.Current().Interface().([]api.RouteTableRange)
+	for _, r := range rngs {
+		if r.Min > r.Max {
+			log.Warningf("RouteTableRange is invalid: %v", r)
+			structLevel.ReportError(
+				reflect.ValueOf(r),
+				"RouteTableRange",
+				"",
+				reason("min value cannot be greater than max value"),
+				"",
+			)
+		}
+
+		if r.Min <= 0 {
+			log.Warningf("RouteTableRange is invalid: %v", r)
+			structLevel.ReportError(
+				reflect.ValueOf(r),
+				"RouteTableRange",
+				"",
+				reason("cannot target indices < 1"),
+				"",
+			)
+		}
+
+		// cast both ints to 64bit as casting the max 32-bit integer to int() would overflow on 32bit systems
+		if int64(r.Max) > int64(routeTableMaxLinux) {
+			log.Warningf("RouteTableRange is invalid: %v", r)
+			structLevel.ReportError(
+				reflect.ValueOf(r),
+				"RouteTableRange",
+				"",
+				reason("max index too high"),
+				"",
+			)
+		}
+
+		// check if ranges collide with reserved linux tables
+		includesReserved := false
+		for _, rsrv := range routeTablesReservedLinux {
+			if r.Min <= rsrv && r.Max >= rsrv {
+				includesReserved = false
+			}
+		}
+		if includesReserved {
+			log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
+		}
 	}
 }
 
