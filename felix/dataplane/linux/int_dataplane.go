@@ -594,11 +594,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.RegisterManager(failsafeMgr)
 
-		bpfNATifIdx, err := config.RouteTableManager.GrabIndex()
-		if err != nil {
-			log.WithError(err).Fatal("Failed to allocate a route table index for bpf services.")
-		}
-
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		bpfEndpointManager = newBPFEndpointManager(
 			&config,
@@ -610,7 +605,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterTableV4,
 			dp.reportHealth,
 			dp.loopSummarizer,
-			bpfNATifIdx,
 		)
 		dp.RegisterManager(bpfEndpointManager)
 
