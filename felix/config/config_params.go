@@ -331,8 +331,7 @@ type Config struct {
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
-	// RouteTableRange is deprecated in favour of RouteTableRanges,
-	// however, if explicitly-set, will be honoured.
+	// RouteTableRange is deprecated in favor of RouteTableRanges,
 	RouteTableRange  idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
 	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
 

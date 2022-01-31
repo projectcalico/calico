@@ -371,7 +371,7 @@ type FelixConfigurationSpec struct {
 	// Deprecates`RouteTableRange`, overrides `RouteTableRange`.
 	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty,dive"`
 
-	// Deprecated in favour of RouteTableRanges.
+	// Deprecated in favor of RouteTableRanges.
 	// Calico programs additional Linux route tables for various purposes.
 	// RouteTableRange specifies the indices of the route tables that Calico should use.
 	RouteTableRange *RouteTableRange `json:"routeTableRange,omitempty" validate:"omitempty"`

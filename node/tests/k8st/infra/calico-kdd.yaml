@@ -915,7 +915,7 @@ spec:
                 type: string
               routeTableRange:
                 type: object
-                description: Deprecated in favour of RouteTableRanges. Calico programs
+                description: Deprecated in favor of RouteTableRanges. Calico programs
                   additional Linux route tables for various purposes. RouteTableRange
                   specifies the indices of the route tables that Calico should use.
                 properties:
