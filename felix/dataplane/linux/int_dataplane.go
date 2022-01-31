@@ -594,6 +594,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create ARP BPF map.")
 		}
 
+		snatMap := bpfMapContext.NewPinnedMap(bpf.MapParameters{
+			Filename:   "/sys/fs/bpf/tc/globals/cali_snat",
+			Type:       "lru_hash",
+			KeySize:    8,
+			ValueSize:  36,
+			MaxEntries: 10000,
+			Name:       "cali_snat",
+			Version:    2,
+		})
+		err = snatMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create SNAT BPF map.")
+		}
+
 		// The failsafe manager sets up the failsafe port map.  It's important that it is registered before the
 		// endpoint managers so that the map is brought up to date before they run for the first time.
 		failsafesMap := failsafes.Map(bpfMapContext)
@@ -609,11 +623,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.RegisterManager(failsafeMgr)
 
-		bpfNATifIdx, err := config.RouteTableManager.GrabIndex()
-		if err != nil {
-			log.WithError(err).Fatal("Failed to allocate a route table index for bpf services.")
-		}
-
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		bpfEndpointManager = newBPFEndpointManager(
 			&config,
@@ -626,7 +635,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterTableV4,
 			dp.reportHealth,
 			dp.loopSummarizer,
-			bpfNATifIdx,
 		)
 		dp.RegisterManager(bpfEndpointManager)
 
