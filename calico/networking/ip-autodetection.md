@@ -222,10 +222,40 @@ In the following scenarios, you may want to configure a specific IP and subnet:
 {% tabs %}
   <label:Operator,active:true>
 <%
-##### Configure IP and subnet using default Installation resource
 
-Manually specifying IP addresses for individual nodes is not supported when installing {{site.prodname}} via the operator.
-Please use one of the supported IP autodetection methods above instead.
+You can configure specific IP address and subnet for a node by disabling IP autodetection and then updating the [Node resource]({{ site.baseurl }}/reference/resources/node).
+
+##### Disable autodetection
+
+To disable autodetection method, update the proper `NodeAddressAutodetection` field in the Installation resource:
+
+```yaml
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  variant: TigeraSecureEnterprise
+  ... 
+  calicoNetwork:
+    nodeAddressAutodetectionV4: {}
+    nodeAddressAutodetectionV4: {}
+```
+
+##### Configure IP and subnet using node resource
+
+You can also configure the IP address and subnet on a Node resource.
+
+>**Tip**: When configuring the IP address on a Node resource, you may want to disable IP address options or environment variables on the node. IP options on the container take precedence, and will overwrite the values you configure on the node resource.
+{: .alert .alert-info}
+
+Use `calicoctl patch` to update the current node configuration. For example:
+
+```
+calicoctl patch node kind-control-plane \
+  --patch='{"spec":{"bgp": {"ipv4Address": "10.0.2.10/24", "ipv6Address": "fd80:24e2:f998:72d6::/120"}}}'
+```
+
 %>
   <label:Manifest>
 <%
