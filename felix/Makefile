@@ -178,12 +178,12 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(MAKE) fix
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
-BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
+BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs $(ARCH)))
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
 BPF_APACHE_C_FILES:=$(wildcard bpf-apache/*.c)
-BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
+BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/$(ARCH)/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
 
 ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 
@@ -192,8 +192,8 @@ ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 # unnecessary rebuilds of anything that depends on the BPF prgrams.)
 .PHONY: build-bpf clean-bpf
 build-bpf:
-	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache all && \
-	                          make -j -C bpf-gpl all ut-objs"
+	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache all ARCH=$(ARCH) && \
+	                          make -j -C bpf-gpl all ut-objs ARCH=$(ARCH)"
 
 clean-bpf:
 	rm -f bpf-gpl/*.d bpf-apache/*.d

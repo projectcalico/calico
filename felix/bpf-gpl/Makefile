@@ -47,9 +47,9 @@ CC := clang-11
 LD := llc-11
 
 UT_C_FILES:=$(shell find ut -name '*.c')
-UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
+UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs $(ARCH))
 
-OBJS:=$(shell ./list-objs)
+OBJS:=$(shell ./list-objs $(ARCH) )
 C_FILES:=tc.c connect_balancer.c xdp.c
 
 all: $(OBJS)
@@ -86,23 +86,23 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
-bin/to%.o: to%.ll | bin
+bin/$(ARCH)/to%.o: to%.ll | bin/$(ARCH)
 	$(LINK)
-bin/from%.o: from%.ll | bin
+bin/$(ARCH)/from%.o: from%.ll | bin/$(ARCH)
 	$(LINK)
-bin/test%.o: test%.ll | bin
+bin/$(ARCH)/test%.o: test%.ll | bin/$(ARCH)
 	$(LINK)
-bin/xdp%.o: xdp%.ll | bin
+bin/$(ARCH)/xdp%.o: xdp%.ll | bin/$(ARCH)
 	$(LINK)
-bin/connect_time_%v4.o: connect_time_%v4.ll | bin
+bin/$(ARCH)/connect_time_%v4.o: connect_time_%v4.ll | bin/$(ARCH)
 	$(LINK)
-bin/connect_time_%v6.o: connect_time_%v6.ll | bin
+bin/$(ARCH)/connect_time_%v6.o: connect_time_%v6.ll | bin/$(ARCH)
 	$(LINK)
 ut/%.o: ut/%.ll
 	$(LINK)
 
-bin:
-	mkdir -p bin
+bin/$(ARCH):
+	mkdir -p bin/$(ARCH)
 
 .PRECIOUS: %.d
 
@@ -116,4 +116,4 @@ D_FILES=$(C_FILES:.c=.d)
 include $(D_FILES)
 
 clean:
-	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll
+	rm -rf *.o *.ll *.d bin/* -r ut/*.o ut/*.d ut/*.ll
