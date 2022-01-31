@@ -415,6 +415,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	__be32 ip_dst = ct_ctx->dst;
 	__u16 sport = ct_ctx->sport;
 	__u16 dport = ct_ctx->dport;
+
 	struct tcphdr *tcp_header = ct_ctx->tcp;
 	bool related = false;
 
