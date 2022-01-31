@@ -405,7 +405,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					BeforeEach(func() {
 						Eventually(func() int {
 							return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
-						}, "5s", "200ms").Should(Equal(len(felixes) - 1))
+						}, "10s", "200ms").Should(Equal(len(felixes) - 1))
 
 						ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 						defer cancel()

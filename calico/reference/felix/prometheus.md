@@ -1,6 +1,6 @@
 ---
 title: Prometheus statistics
-description: Review metrics for the Felix component if you are using Prometheus. 
+description: Review metrics for the Felix component if you are using Prometheus.
 canonical_url: '/reference/felix/prometheus'
 ---
 
@@ -21,7 +21,6 @@ existing metrics.
 | `felix_active_local_endpoints` | Number of active endpoints on this host. |
 | `felix_active_local_policies` | Number of active policies on this host. |
 | `felix_active_local_selectors` | Number of active selectors on this host. |
-| `felix_active_local_tags` | Number of active tags on this host. |
 | `felix_calc_graph_output_events` | Number of events emitted by the calculation graph. |
 | `felix_calc_graph_update_time_seconds` | Seconds to update calculation graph for each datastore OnUpdate call. |
 | `felix_calc_graph_updates_processed` | Number of datastore updates processed by the calculation graph. |
@@ -71,7 +70,6 @@ felix_active_local_policies 0
 # HELP felix_active_local_selectors Number of active selectors on this host.
 # TYPE felix_active_local_selectors gauge
 felix_active_local_selectors 82
-# HELP felix_active_local_tags Number of active tags on this host.
 ...
 ```
 {: .no-select-button}

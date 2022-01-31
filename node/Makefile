@@ -43,14 +43,9 @@ FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 
 # Versions and locations of dependencies used in tests.
-CALICOCTL_VER?=master
-CNI_VER?=master
 TEST_CONTAINER_NAME_VER?=latest
-CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
 TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
 
-# TODO: Update this to use newer version of Kubernetes.
-HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.17.0
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
@@ -156,6 +151,7 @@ BINDIR?=bin
 clean: clean-windows-upgrade
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
+	find . -name '.*.published*' -type f -delete
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
@@ -264,7 +260,7 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 # Building the image
 ###############################################################################
 ## Create the image for the current ARCH
-image: remote-deps $(NODE_IMAGE)
+image: register remote-deps $(NODE_IMAGE)
 ## Create the images for all supported ARCHes
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
@@ -283,7 +279,7 @@ clean-sub-image-%:
 
 $(NODE_IMAGE): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
-	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
+	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -303,15 +299,17 @@ $(FELIX_GPL_SOURCE): ../go.mod
 ###############################################################################
 K8ST_IMAGE_TARS=calico-node.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
 
+# Location of the certs directory. 
+# TODO: Centralize this instead of just using cni-plugins certs. Right now each
+# directory has an exact copy of these files!
+CERTS_PATH=$(CURDIR)/../cni-plugin/tests/certs
+
 ## Run the ginkgo FVs
 fv: run-k8s-apiserver
-	docker run --rm \
-	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	$(DOCKER_RUN) \
+	-v $(CERTS_PATH):/home/user/certs \
+	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/cni-plugin/tests/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	-e GO111MODULE=on \
-	--net=host \
-	-w /go/src/$(PACKAGE_NAME) \
 	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
 
 ## Create a local kind dual stack cluster.
@@ -367,20 +365,27 @@ run-etcd:
 
 # Kubernetes apiserver used for tests
 run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
-	docker run \
-		--net=host --name st-apiserver \
-		-v $(CURDIR):/manifests \
-		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-		--detach \
-		${HYPERKUBE_IMAGE} kube-apiserver \
-			--bind-address=0.0.0.0 \
-			--insecure-bind-address=0.0.0.0 \
-			--etcd-servers=http://127.0.0.1:2379 \
-			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
-			--authorization-mode=RBAC \
-			--service-cluster-ip-range=10.101.0.0/16 \
-			--v=10 \
-			--logtostderr=true
+	docker run --detach --net=host \
+	  --name st-apiserver \
+	  -v $(CURDIR):/manifests \
+	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
+	  -v $(CURDIR)/config:/config \
+	  -v $(CURDIR)/../cni-plugin/tests/certs:/home/user/certs \
+	  -e KUBECONFIG=/home/user/certs/kubeconfig \
+	  $(CALICO_BUILD) kube-apiserver \
+	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+	    --service-cluster-ip-range=10.101.0.0/16 \
+            --authorization-mode=RBAC \
+            --service-account-key-file=/home/user/certs/service-account.pem \
+            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+            --service-account-issuer=https://localhost:443 \
+            --api-audiences=kubernetes.default \
+            --client-ca-file=/home/user/certs/ca.pem \
+            --tls-cert-file=/home/user/certs/kubernetes.pem \
+            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+            --enable-priority-and-fairness=false \
+            --max-mutating-requests-inflight=0 \
+            --max-requests-inflight=0
 
 	# Wait until we can configure a cluster role binding which allows anonymous auth.
 	while ! docker exec st-apiserver kubectl create \
@@ -427,7 +432,7 @@ busybox.tar:
 	docker save --output busybox.tar $(ARCH)/busybox:latest
 
 workload.tar:
-	cd workload && docker build -t workload --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
+	cd workload && docker build -t workload --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) -f Dockerfile.$(ARCH) .
 	docker save --output workload.tar workload
 
 stop-etcd:
@@ -438,7 +443,7 @@ IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "ca
 # Create the calico/test image
 test_image: calico_test.created
 calico_test.created: $(TEST_CONTAINER_FILES)
-	cd calico_test && docker build --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) .
+	cd calico_test && docker build --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) .
 	touch calico_test.created
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
@@ -541,11 +546,10 @@ st: image remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar ru
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: mod-download static-checks fv image-all build-windows-archive st
+ci: mod-download static-checks fv image build-windows-archive st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-upgrade
-
 
 check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
@@ -582,7 +586,8 @@ release-verify: release-prereqs
 	if ! docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
 	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
@@ -594,6 +599,7 @@ release-publish: release-prereqs
 	# ghr -u projectcalico -r node \
 	# 	-n $(VERSION) \
 	# 	$(VERSION) $(WINDOWS_INSTALL_SCRIPT)
+	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
@@ -783,15 +789,3 @@ cd-windows-upgrade:
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 	done ;
-
-###############################################################################
-# Utilities
-###############################################################################
-$(info "Build dependency versions")
-$(info $(shell printf "%-21s = %-10s\n" "BIRD_VERSION" $(BIRD_VERSION)))
-
-$(info "Test dependency versions")
-$(info $(shell printf "%-21s = %-10s\n" "CNI_VER" $(CNI_VER)))
-
-$(info "Calico git version")
-$(info $(shell printf "%-21s = %-10s\n" "GIT_VERSION" $(GIT_VERSION)))

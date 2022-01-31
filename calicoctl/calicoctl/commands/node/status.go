@@ -28,8 +28,6 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/olekukonko/tablewriter"
-	gobgp "github.com/osrg/gobgp/client"
-	"github.com/osrg/gobgp/packet/bgp"
 	"github.com/shirou/gopsutil/process"
 	log "github.com/sirupsen/logrus"
 
@@ -97,15 +95,8 @@ Description:
 		} else {
 			fmt.Printf("\nINFO: BIRDv6 process: 'bird6' is not running.\n")
 		}
-	} else if psContains([]string{"calico-bgp-daemon"}, processes) {
-		if err := printGoBGPPeers("4"); err != nil {
-			return err
-		}
-		if err := printGoBGPPeers("6"); err != nil {
-			return err
-		}
 	} else {
-		fmt.Printf("\nNone of the BGP backend processes (BIRD or GoBGP) are running.\n")
+		fmt.Printf("\nThe BGP backend process (BIRD) is not running.\n")
 	}
 
 	// Have to manually enter an empty line because the table print
@@ -342,97 +333,6 @@ func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
 	}
 
 	return peers, scanner.Err()
-}
-
-// printGoBGPPeers queries GoBGP and displays the local peers in table format.
-func printGoBGPPeers(ipv string) error {
-	client, err := gobgp.New("")
-	if err != nil {
-		return fmt.Errorf("Error creating gobgp client: %s", err)
-	}
-	defer client.Close()
-
-	afi := bgp.AFI_IP
-	if ipv == "6" {
-		afi = bgp.AFI_IP6
-	}
-
-	fmt.Printf("\nIPv%s BGP status\n", ipv)
-
-	neighbors, err := client.ListNeighborByTransport(afi)
-	if err != nil {
-		return fmt.Errorf("Error retrieving neighbor info: %s", err)
-	}
-
-	formatTimedelta := func(d int64) string {
-		u := uint64(d)
-		neg := d < 0
-		if neg {
-			u = -u
-		}
-		secs := u % 60
-		u /= 60
-		mins := u % 60
-		u /= 60
-		hours := u % 24
-		days := u / 24
-
-		if days == 0 {
-			return fmt.Sprintf("%02d:%02d:%02d", hours, mins, secs)
-		} else {
-			return fmt.Sprintf("%dd ", days) + fmt.Sprintf("%02d:%02d:%02d", hours, mins, secs)
-		}
-	}
-
-	now := time.Now()
-	peers := make([]bgpPeer, 0, len(neighbors))
-
-	for _, n := range neighbors {
-		ipString := n.Config.NeighborAddress
-		description := n.Config.Description
-		adminState := string(n.State.AdminState)
-		sessionState := strings.Title(string(n.State.SessionState))
-
-		timeStr := "never"
-		if n.Timers.State.Uptime != 0 {
-			t := int(n.Timers.State.Downtime)
-			if sessionState == "Established" {
-				t = int(n.Timers.State.Uptime)
-			}
-			timeStr = formatTimedelta(int64(now.Sub(time.Unix(int64(t), 0)).Seconds()))
-		}
-
-		sm := bgpPeerRegex.FindStringSubmatch(description)
-		if len(sm) != 3 {
-			log.Debugf("Not a valid line: peer name '%s' is not recognized", description)
-			continue
-		}
-		var ok bool
-		var typ string
-		if typ, ok = bgpTypeMap[sm[1]]; !ok {
-			log.Debugf("Not a valid line: peer type '%s' is not recognized", sm[1])
-			continue
-		}
-
-		peers = append(peers, bgpPeer{
-			PeerIP:   ipString,
-			PeerType: typ,
-			State:    adminState,
-			Since:    timeStr,
-			BGPState: sessionState,
-		})
-	}
-
-	// If no peers were returned then just print a message.
-	if len(peers) == 0 {
-		fmt.Printf("No IPv%s peers found.\n", ipv)
-		return nil
-	}
-
-	// Finally, print the peers.
-	printPeers(peers)
-
-	return nil
 }
 
 // printPeers prints out the slice of peers in table format.

@@ -374,6 +374,19 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 	}
 }
 
+static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
+{
+	struct calico_ct_leg *a, *b;
+
+	a = &v->a_to_b;
+	b = &v->b_to_a;
+
+	/* When we see a SYN for a connection that has seen FIN or RST in both direction,
+	 * a new connection with the same tuple is trying to recycle this entry.
+	 */
+	return syn && (a->fin_seen || a->rst_seen) && (b->fin_seen || b->rst_seen);
+}
+
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_tc_ctx *tc_ctx)
 {
 	// TODO: refactor the conntrack code to simply use the tc_ctx instead of its own.  This
@@ -544,6 +557,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("Miss when looking for secondary entry.\n");
 			goto out_lookup_fail;
 		}
+		if (tcp_recycled(syn, tracking_v)) {
+			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			goto out_lookup_fail;
+		}
 		result.nat_sport = v->nat_sport ? : sport;
 		// Record timestamp.
 		tracking_v->last_seen = now;
@@ -588,6 +605,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 		break;
 	case CALI_CT_TYPE_NAT_REV:
+		if (tcp_recycled(syn, v)) {
+			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			goto out_lookup_fail;
+		}
 		if (srcLTDest) {
 			CALI_VERB("CT-ALL REV src_to_dst A->B\n");
 			src_to_dst = &v->a_to_b;
@@ -641,6 +662,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 	case CALI_CT_TYPE_NORMAL:
 		CALI_CT_DEBUG("Hit! NORMAL entry.\n");
+		if (tcp_recycled(syn, v)) {
+			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			goto out_lookup_fail;
+		}
 		CALI_CT_VERB("Created: %llu.\n", v->created);
 		if (tcp_header) {
 			CALI_CT_VERB("Last seen: %llu.\n", v->last_seen);
@@ -788,7 +813,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.ifindex_fwd = dst_to_src->ifindex;
 	}
 
-	CALI_CT_DEBUG("result: %d\n", result.rc);
+	if (syn) {
+		CALI_CT_DEBUG("packet is SYN\n");
+		ct_result_set_flag(result.rc, CALI_CT_SYN);
+	}
+
+
+	CALI_CT_DEBUG("result: 0x%x\n", result.rc);
 
 	if (related) {
 		ct_result_set_flag(result.rc, CALI_CT_RELATED);

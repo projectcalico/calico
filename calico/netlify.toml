@@ -20,7 +20,7 @@
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
 
     # move 404 page to root of the site so that netlify shows it automatically
-    mv calico/_site/archive/$RELEASE_VERSION/404.html calico/_site/404.html
+    mv $(pwd)/_site/archive/$RELEASE_VERSION/404.html $(pwd)/_site/404.html
 
   else
 
@@ -32,10 +32,9 @@
     # generate the website which is served at /archive/<version>/
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
 
-    mv calico/_site/sitemap.xml calico/_site/release-legacy-sitemap.xml
-    mv calico/_site/sitemap.xml calico/_site/latest-sitemap.xml
-    mv calico/netlify/sitemap-index.xml calico/_site/sitemap.xml
-    mv calico/netlify/_redirects calico/_site/_redirects
+    mv $(pwd)/_site/sitemap.xml $(pwd)/_site/latest-sitemap.xml
+    mv $(pwd)/netlify/sitemap-index.xml $(pwd)/_site/sitemap.xml
+    mv $(pwd)/netlify/_redirects $(pwd)/_site/_redirects
   fi
   '''
 
@@ -69,6 +68,12 @@
    to = "https://calico-public.s3.amazonaws.com/charts/:splat"
    status = 200
    headers = {X-From = "Netlify"}
+
+# proxy redirects for website and manifests for v3.22
+[[redirects]]
+  from = "/archive/v3.22/*"
+  to = "https://calico-v3-22.netlify.app/archive/v3.22/:splat"
+  status = 200
 
 # proxy redirects for website and manifests for v3.21
 [[redirects]]
