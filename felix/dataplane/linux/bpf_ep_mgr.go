@@ -50,7 +50,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
-	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -59,7 +58,6 @@ import (
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/ratelimited"
-	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 )
 
@@ -189,11 +187,6 @@ type bpfEndpointManager struct {
 	routeTable    *routetable.RouteTable
 	services      map[serviceKey][]string
 	dirtyServices map[serviceKey][]string
-
-	// Service return routing
-	routeTableSNAT    *routetable.RouteTable
-	routeTableSNATIdx int
-	routeRuleSNAT     *routerule.RouteRules
 }
 
 type serviceKey struct {
@@ -215,7 +208,6 @@ func newBPFEndpointManager(
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
-	natRtTableIdx int,
 ) *bpfEndpointManager {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -249,12 +241,10 @@ func newBPFEndpointManager(
 			log.Debug("Jump map cleanup triggered.")
 			tc.CleanUpJumpMaps()
 		}),
-		onStillAlive:      livenessCallback,
-		hostIfaceToEpMap:  map[string]proto.HostEndpoint{},
-		ifaceToIpMap:      map[string]net.IP{},
-		opReporter:        opReporter,
-		routeTableSNATIdx: natRtTableIdx,
-
+		onStillAlive:     livenessCallback,
+		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
+		ifaceToIpMap:     map[string]net.IP{},
+		opReporter:       opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
@@ -1446,93 +1436,6 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 	}
 
 	log.Info("Created bpfnatin pair.")
-
-	m.rulesMakeSpaceForNATIface(nl)
-
-	m.routeTableSNAT = routetable.New(
-		nil,
-		4,
-		false, // vxlan
-		10*time.Second,
-		nil, // deviceRouteSourceAddress
-		1,
-		true, // removeExternalRoutes
-		m.routeTableSNATIdx,
-		m.opReporter,
-	)
-
-	anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
-	m.routeTableSNAT.RouteUpdate("bpfnatout", routetable.Target{
-		Type: routetable.TargetTypeUnicast,
-		CIDR: anyV4,
-	})
-
-	m.routeRuleSNAT, err = routerule.New(
-		4,
-		0, // routing priority
-		set.From(m.routeTableSNATIdx),
-		routerule.RulesMatchSrcFWMarkTable,
-		routerule.RulesMatchSrcFWMarkTable,
-		10*time.Second,
-		func() (routerule.HandleIface, error) {
-			return netlinkshim.NewRealNetlink()
-		},
-		m.opReporter,
-	)
-	if err != nil {
-		log.WithError(err).Panic("Unexpected error creating rule manager")
-	}
-	m.routeRuleSNAT.SetRule(routerule.NewRule(4, 0).
-		GoToTable(m.routeTableSNATIdx).
-		MatchFWMarkWithMask(tcdefs.MarkSeenToNatIfaceOut, tcdefs.MarkSeenToNatIfaceOut),
-	)
-}
-
-func (m *bpfEndpointManager) rulesMakeSpaceForNATIface(nl netlinkshim.Interface) {
-	rules, err := nl.RuleList(unix.AF_INET)
-	if err != nil {
-		log.WithError(err).Fatalf("Failed to list routing rules.")
-	}
-	log.WithField("rules", rules).Debugf("Existing routing rules")
-
-	sort.SliceStable(rules, func(i, j int) bool { return rules[i].Priority < rules[j].Priority })
-
-	if len(rules) == 0 || rules[0].Priority > 1 {
-		return
-	}
-
-	i := 0
-
-	// Skip over the (one?) default rules
-	for ; rules[i].Priority < 0; i++ {
-	}
-
-	// Is there already a gap?
-	for ; rules[i].Priority < 1; i++ {
-	}
-
-	// If there are rules at the start, find a gap of 2 (as the -1 needs to become 1 so that we can enter 0)
-	if i > 0 {
-		for ; i < len(rules); i++ {
-			if rules[i].Priority-rules[i-1].Priority > 2 {
-				break
-			}
-		}
-	}
-
-	// Shift the rules
-	for i--; i >= 0; i-- {
-		rule := rules[i]
-		log.WithField("rule", rule).Debugf("Moving rule from prio %d to %d", rule.Priority, rule.Priority+2)
-		rule1 := rule
-		rule1.Priority += 2
-		if err := nl.RuleAdd(&rule1); err != nil {
-			log.WithError(err).Fatalf("Failed to move rule %+v to priority 1", rule)
-		}
-		if err := nl.RuleDel(&rule); err != nil {
-			log.WithError(err).Fatalf("Failed to remove rule %+v at priority 1", rule)
-		}
-	}
 }
 
 func (m *bpfEndpointManager) ensureQdisc(iface string) error {
@@ -1848,17 +1751,5 @@ func (m *bpfEndpointManager) delRoute(dst string) error {
 func (m *bpfEndpointManager) GetRouteTableSyncers() []routeTableSyncer {
 	tables := []routeTableSyncer{m.routeTable}
 
-	if m.routeTableSNAT != nil {
-		tables = append(tables, m.routeTableSNAT)
-	}
-
 	return tables
-}
-
-func (m *bpfEndpointManager) GetRouteRules() []routeRules {
-	if m.routeRuleSNAT != nil {
-		return []routeRules{m.routeRuleSNAT}
-	}
-
-	return nil
 }
