@@ -369,7 +369,7 @@ type FelixConfigurationSpec struct {
 	// Calico programs additional Linux route tables for various purposes.
 	// RouteTableRanges specifies a set of table index ranges that Calico should use.
 	// Deprecates `RouteTableRange`.
-	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty"`
+	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty,dive"`
 
 	// Deprecated in favour of RouteTableRanges.
 	// Calico programs additional Linux route tables for various purposes.
@@ -413,7 +413,13 @@ type RouteTableRange struct {
 	Min int `json:"min"`
 	Max int `json:"max"`
 }
-type RouteTableRanges []RouteTableRange
+
+type RouteTableIDRange struct {
+	Min int `json:"min"`
+	Max int `json:"max"`
+}
+
+type RouteTableRanges []RouteTableIDRange
 
 // ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.
 type ProtoPort struct {

@@ -39,6 +39,7 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 		map[string]ConfigFieldValueToV1ModelValue{
 			"FailsafeInboundHostPorts":  protoPortSliceToString,
 			"FailsafeOutboundHostPorts": protoPortSliceToString,
+			"RouteTableRange":           routeTableRangeToString,
 			"RouteTableRanges":          routeTableRangesToString,
 		},
 	)
@@ -73,7 +74,12 @@ var routeTableRangesToString = func(value interface{}) interface{} {
 	ranges := value.(apiv3.RouteTableRanges)
 	rangesStr := make([]string, 0)
 	for _, r := range ranges {
-		rangesStr = append(rangesStr, fmt.Sprintf("%d-%d", r.Min, r.Max))
+		rangesStr = append(rangesStr, routeTableRangeToString(r).(string))
 	}
 	return strings.Join(rangesStr, ",")
+}
+
+var routeTableRangeToString = func(value interface{}) interface{} {
+	r := value.(apiv3.RouteTableIDRange)
+	return fmt.Sprintf("%d-%d", r.Min, r.Max)
 }

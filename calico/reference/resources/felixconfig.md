@@ -156,7 +156,6 @@ Each item in the `RouteTableRanges` list designates a range of routing tables av
 calicoctl patch felixconfig default --type=merge -p '{"spec":{"routeTableRanges": [{Min: 65, Max: 99}, {Min: 256, Max: 10000}] }}
 ```
 
-
 *Note*, for performance reasons, the maximum total number of routing tables that Felix will accept is 65535 (or 2*16).
 
 If the deprecated `RouteTableRange` option is explicitly set, it will be honoured in favour of `RouteTableRanges`.

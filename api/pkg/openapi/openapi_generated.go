@@ -85,6 +85,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileList":                        schema_pkg_apis_projectcalico_v3_ProfileList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileSpec":                        schema_pkg_apis_projectcalico_v3_ProfileSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort":                          schema_pkg_apis_projectcalico_v3_ProtoPort(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange":                  schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange":                    schema_pkg_apis_projectcalico_v3_RouteTableRange(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule":                               schema_pkg_apis_projectcalico_v3_Rule(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata":                       schema_pkg_apis_projectcalico_v3_RuleMetadata(ref),
@@ -2338,7 +2339,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange"),
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange"),
 									},
 								},
 							},
@@ -2423,7 +2424,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -4100,6 +4101,33 @@ func schema_pkg_apis_projectcalico_v3_ProtoPort(ref common.ReferenceCallback) co
 					},
 				},
 				Required: []string{"protocol", "port"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"min": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+					"max": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+				},
+				Required: []string{"min", "max"},
 			},
 		},
 	}

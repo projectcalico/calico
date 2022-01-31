@@ -218,7 +218,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		}
 		res.Spec.ExternalNodesCIDRList = &[]string{"1.1.1.1", "2.2.2.2"}
 		res.Spec.IptablesNATOutgoingInterfaceFilter = "cali-123"
-		res.Spec.RouteTableRanges = &apiv3.RouteTableRanges{apiv3.RouteTableRange{Min: 43, Max: 211}}
+		res.Spec.RouteTableRanges = &apiv3.RouteTableRanges{{Min: 43, Max: 211}}
 		expected := map[string]interface{}{
 			"RouteRefreshInterval":               "12.345",
 			"IptablesLockProbeIntervalMillis":    "54.321",

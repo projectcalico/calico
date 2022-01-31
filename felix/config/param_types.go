@@ -554,9 +554,6 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 	return raw, nil
 }
 
-// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
-var routeTablesReservedLinux = []int{253, 254, 255}
-
 // linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
 const routeTableMaxLinux = 0xffffffff
 const routeTableRangeMaxTables = 0xffff
@@ -589,6 +586,9 @@ func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error)
 type RouteTableRangesParam struct {
 	Metadata
 }
+
+// reserved linux kernel routing tables (will be ignored if targeted by routetablerange)
+var routeTablesReservedLinux = []int{253, 254, 255}
 
 func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error) {
 	match := regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)

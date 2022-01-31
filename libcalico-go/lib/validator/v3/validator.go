@@ -217,8 +217,8 @@ func init() {
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
+	registerStructValidator(validate, validateRouteTableIDRange, api.RouteTableIDRange{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
-	registerStructValidator(validate, validateRouteTableRanges, []api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
 }
 
@@ -1581,54 +1581,53 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 	}
 }
 
-func validateRouteTableRanges(structLevel validator.StructLevel) {
-	rngs := structLevel.Current().Interface().([]api.RouteTableRange)
-	for _, r := range rngs {
-		if r.Min > r.Max {
-			log.Warningf("RouteTableRange is invalid: %v", r)
-			structLevel.ReportError(
-				reflect.ValueOf(r),
-				"RouteTableRange",
-				"",
-				reason("min value cannot be greater than max value"),
-				"",
-			)
-		}
+func validateRouteTableIDRange(structLevel validator.StructLevel) {
+	r := structLevel.Current().Interface().(api.RouteTableIDRange)
+	if r.Min > r.Max {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("min value cannot be greater than max value"),
+			"",
+		)
+	}
 
-		if r.Min <= 0 {
-			log.Warningf("RouteTableRange is invalid: %v", r)
-			structLevel.ReportError(
-				reflect.ValueOf(r),
-				"RouteTableRange",
-				"",
-				reason("cannot target indices < 1"),
-				"",
-			)
-		}
+	if r.Min <= 0 {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("cannot target indices < 1"),
+			"",
+		)
+	}
 
-		// cast both ints to 64bit as casting the max 32-bit integer to int() would overflow on 32bit systems
-		if int64(r.Max) > int64(routeTableMaxLinux) {
-			log.Warningf("RouteTableRange is invalid: %v", r)
-			structLevel.ReportError(
-				reflect.ValueOf(r),
-				"RouteTableRange",
-				"",
-				reason("max index too high"),
-				"",
-			)
-		}
+	// cast both ints to 64bit as casting the max 32-bit integer to int() would overflow on 32bit systems
+	if int64(r.Max) > int64(routeTableMaxLinux) {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("max index too high"),
+			"",
+		)
+	}
 
-		// check if ranges collide with reserved linux tables
-		includesReserved := false
-		for _, rsrv := range routeTablesReservedLinux {
-			if r.Min <= rsrv && r.Max >= rsrv {
-				includesReserved = false
-			}
-		}
-		if includesReserved {
-			log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
+	// check if ranges collide with reserved linux tables
+	includesReserved := false
+	for _, rsrv := range routeTablesReservedLinux {
+		if r.Min <= rsrv && r.Max >= rsrv {
+			includesReserved = false
 		}
 	}
+	if includesReserved {
+		log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
+	}
+
 }
 
 func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
