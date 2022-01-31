@@ -16,7 +16,7 @@ ARG GIT_VERSION=unknown
 ARG IPTABLES_VER=1.8.4-17
 ARG LIBNFTNL_VER=1.1.5-4
 ARG RUNIT_VER=2.1.2
-ARG QEMU_IMAGE=calico/go-build:v0.55-arm64
+ARG QEMU_IMAGE
 ARG BIRD_IMAGE=calico/bird:latest
 ARG UBI_IMAGE
 
@@ -24,7 +24,7 @@ FROM calico/bpftool:v5.0-arm64 as bpftool
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
-FROM arm64v8/centos:8 as centos
+FROM quay.io/centos/centos:stream8 as centos
 
 MAINTAINER Reza Ramezanpour <reza@projectcalico.org>
 # Enable non-native builds of this image on an amd64 hosts.
