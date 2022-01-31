@@ -331,7 +331,10 @@ type Config struct {
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
-	RouteTableRange idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
+	// RouteTableRange is deprecated in favour of RouteTableRanges,
+	// however, if explicitly-set, will be honoured.
+	RouteTableRange  idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
+	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
@@ -786,6 +789,8 @@ func loadParams() {
 			param = &CIDRListParam{}
 		case "route-table-range":
 			param = &RouteTableRangeParam{}
+		case "route-table-ranges":
+			param = &RouteTableRangesParam{}
 		case "keyvaluelist":
 			param = &KeyValueListParam{}
 		default:
@@ -853,6 +858,24 @@ func (config *Config) TyphaDiscoveryOpts() []discovery.Option {
 		discovery.WithAddrOverride(config.TyphaAddr),
 		discovery.WithKubeService(config.TyphaK8sNamespace, config.TyphaK8sServiceName),
 	}
+}
+
+// RouteTableIndices compares provided args for the deprecated RoutTableRange arg
+// and the newer RouteTableRanges arg, giving precedence to the newer arg if it's explicitly-set
+func (config *Config) RouteTableIndices() []idalloc.IndexRange {
+	if config.RouteTableRanges == nil || len(config.RouteTableRanges) == 0 {
+		if config.RouteTableRange != (idalloc.IndexRange{}) {
+			return []idalloc.IndexRange{
+				config.RouteTableRange,
+			}
+		}
+
+		// default RouteTableRanges val
+		return []idalloc.IndexRange{
+			{Min: 1, Max: 10000},
+		}
+	}
+	return config.RouteTableRanges
 }
 
 func New() *Config {
