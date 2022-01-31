@@ -57,7 +57,7 @@ bin/flexvol-armv7: ARCH=armv7
 bin/flexvol-ppc64le: ARCH=ppc64le
 bin/flexvol-s390x: ARCH=s390x
 bin/flexvol-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
+	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -v -o bin/flexvol-$(ARCH) -ldflags "-extldflags '-static'" flexvol/flexvoldriver.go
 
 ###############################################################################
 # Building the image

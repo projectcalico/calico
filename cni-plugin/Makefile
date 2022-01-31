@@ -81,8 +81,8 @@ sub-build-%:
 $(BIN)/install binary: $(SRC_FILES)
 	-mkdir -p .go-pkg-cache
 	-mkdir -p $(BIN)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -w" $(PACKAGE_NAME)/cmd/calico && \
+	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) sh -c '\
+		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -w -extldflags '-static'" $(PACKAGE_NAME)/cmd/calico && \
 		$(CHECK_BORINGSSL)'
 
 ## Build the Calico network plugin and ipam plugins for Windows
