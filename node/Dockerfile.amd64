@@ -25,7 +25,7 @@ FROM ${BIRD_IMAGE} as bird
 # Use this build stage to build iptables rpm and runit binaries.
 # We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
 # We need to build runit because there aren't any rpms for it in CentOS or ubi repositories.
-FROM centos:8 as centos
+FROM quay.io/centos/centos:stream8 as centos
 
 ARG ARCH
 ARG IPTABLES_VER
