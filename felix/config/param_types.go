@@ -593,7 +593,7 @@ type RouteTableRangesParam struct {
 func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error) {
 	match := regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)
 	if match == nil {
-		err = p.parseFailed(raw, "must be a list of route-table ranges which do not designate reserved tables")
+		err = p.parseFailed(raw, "must be a list of route-table ranges")
 		return
 	}
 
