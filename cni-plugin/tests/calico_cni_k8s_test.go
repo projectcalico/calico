@@ -10,6 +10,8 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"regexp"
@@ -2996,6 +2998,129 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
+		})
+	})
+
+	Context("using bogus readiness_gates", func() {
+		netconf := fmt.Sprintf(`
+				{
+				  "cniVersion": "%s",
+				  "name": "net10",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+				  "datastore_type": "%s",
+           			  "nodename_file_optional": true,
+				  "log_level": "info",
+				  "readiness_gates": "http://localhost:9099/invalid_x12vx",
+			 	  "ipam": {
+				    "type": "calico-ipam"
+				  },
+				  "kubernetes": {
+				    "kubeconfig": "/home/user/certs/kubeconfig"
+				  },
+				  "policy": {"type": "k8s"}
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+		It("should fail container creation", func() {
+			// Create a new ipPool.
+			testutils.MustCreateNewIPPool(calicoClient, "10.0.0.0/24", false, false, true)
+
+			clientset := getKubernetesClient()
+
+			// Now create a K8s pod.
+			name := "mypod-1"
+
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
+				&v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: name,
+					},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{{
+							Name:  name,
+							Image: "ignore",
+						}},
+						NodeName: hostname,
+					},
+				})
+
+			// Create the container, which will call CNI and by default it will create the container with interface name 'eth0'.
+			containerID, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+			Expect(err).Should(HaveOccurred())
+			// Make sure the pod gets cleaned up, whether we fail or not.
+			expectedIfaceName := "eth0"
+			defer func() {
+				_, err := testutils.DeleteContainerWithIdAndIfaceName(netconf, contNs.Path(), name, testutils.K8S_TEST_NS, containerID, expectedIfaceName)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
+			}()
+
+		})
+	})
+
+	Context("using valid readiness_gates", func() {
+		// Create a test http endpoint
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("Ok"))
+		}))
+		testEndpoint := srv.URL
+		netconf := fmt.Sprintf(`
+				{
+				  "cniVersion": "%s",
+				  "name": "net10",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+				  "datastore_type": "%s",
+           			  "nodename_file_optional": true,
+				  "log_level": "info",
+				  "readiness_gates": ["%s"],
+			 	  "ipam": {
+				    "type": "calico-ipam"
+				  },
+				  "kubernetes": {
+				    "kubeconfig": "/home/user/certs/kubeconfig"
+				  },
+				  "policy": {"type": "k8s"}
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testEndpoint)
+
+		It("should successfully create container", func() {
+			// Create a new ipPool.
+			testutils.MustCreateNewIPPool(calicoClient, "10.0.0.0/24", false, false, true)
+
+			clientset := getKubernetesClient()
+
+			// Now create a K8s pod.
+			name := "mypod-1"
+
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
+				&v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: name,
+					},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{{
+							Name:  name,
+							Image: "ignore",
+						}},
+						NodeName: hostname,
+					},
+				})
+
+			// Create the container, which will call CNI and by default it will create the container with interface name 'eth0'.
+			containerID, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+			Expect(err).ShouldNot(HaveOccurred())
+			// Make sure the pod gets cleaned up, whether we fail or not.
+			expectedIfaceName := "eth0"
+			defer func() {
+				_, err := testutils.DeleteContainerWithIdAndIfaceName(netconf, contNs.Path(), name, testutils.K8S_TEST_NS, containerID, expectedIfaceName)
+				Expect(err).ShouldNot(HaveOccurred())
+				ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
+				srv.Close()
+			}()
+
 		})
 	})
 
