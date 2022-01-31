@@ -334,7 +334,7 @@ type Config struct {
 	// RouteTableRange is deprecated in favour of RouteTableRanges,
 	// however, if explicitly-set, will be honoured.
 	RouteTableRange  idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
-	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;1-10000;die-on-fail"`
+	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
@@ -861,11 +861,18 @@ func (config *Config) TyphaDiscoveryOpts() []discovery.Option {
 }
 
 // RouteTableIndices compares provided args for the deprecated RoutTableRange arg
-// and the newer RouteTableRanges arg, giving precedence to the deprecated arg, if it's explicitly-set
+// and the newer RouteTableRanges arg, giving precedence to the newer arg if it's explicitly-set
 func (config *Config) RouteTableIndices() []idalloc.IndexRange {
-	if config.RouteTableRange != (idalloc.IndexRange{}) {
+	if config.RouteTableRanges == nil || len(config.RouteTableRanges) == 0 {
+		if config.RouteTableRange != (idalloc.IndexRange{}) {
+			return []idalloc.IndexRange{
+				config.RouteTableRange,
+			}
+		}
+
+		// default RouteTableRanges val
 		return []idalloc.IndexRange{
-			config.RouteTableRange,
+			{Min: 1, Max: 10000},
 		}
 	}
 	return config.RouteTableRanges
