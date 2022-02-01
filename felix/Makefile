@@ -116,8 +116,6 @@ clean:
 	find . -name "*.pyc" -type f -delete
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
-	$(DOCKER_GO_BUILD) make -C bpf-apache clean
-	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
 	-docker rmi $(FELIX_IMAGE)-wgtool:latest-amd64
 	-docker rmi $(FELIX_IMAGE)-wgtool:latest
 
@@ -186,27 +184,30 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(MAKE) fix
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
-BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
+BPF_GPL_O_FILES:=$(addprefix bin/$(ARCH)/bpf-gpl/,$(shell bin/$(ARCH)/bpf-gpl/list-objs))
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
-BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
-BPF_APACHE_C_FILES:=$(wildcard bpf-apache/*.c)
-BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
+BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bin/$(ARCH)/bpf-gpl/,$(shell bin/$(ARCH)/bpf-gpl/list-ut-objs))
+BPF_APACHE_C_FILES:=$(wildcard bin/$(ARCH)/bpf-apache/*.c)
+BPF_APACHE_O_FILES:=$(addprefix bin/$(ARCH)/bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
 
 ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
+
 
 # Mark the BPF programs phony so we'll always defer to their own makefile.  This is OK as long as
 # we're only depending on the BPF programs from other phony targets.  (Otherwise, we'd do
 # unnecessary rebuilds of anything that depends on the BPF prgrams.)
 .PHONY: build-bpf clean-bpf
 build-bpf:
-	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache all && \
-	                          make -j -C bpf-gpl all ut-objs"
+	mkdir -p bin/$(ARCH)
+	cp -r bpf-apache bin/$(ARCH)
+	cp -r bpf-gpl bin/$(ARCH)
+	$(DOCKER_GO_BUILD) sh -c "make -j -C bin/$(ARCH)/bpf-apache all && \
+	                          make -j -C bin/$(ARCH)/bpf-gpl all ut-objs"
 
 clean-bpf:
-	rm -f bpf-gpl/*.d bpf-apache/*.d
-	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
-	                          make -j -C bpf-gpl clean"
+	rm -rf bin/$(ARCH)/bpf-apache
+	rm -rf bin/$(ARCH)/bpf-gpl
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
