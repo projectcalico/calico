@@ -549,10 +549,6 @@ pre-commit:
 install-git-hooks:
 	./install-git-hooks
 
-.PHONY: foss-checks
-foss-checks:
-	$(DOCKER_RUN) -e FOSSA_API_KEY=$(FOSSA_API_KEY) $(CALICO_BUILD) /usr/local/bin/fossa
-
 .PHONY: check-module-path-tigera-api
 check-module-path-tigera-api:
 	@echo "Checking the repo importing tigera/api and not importing projectcalico/api"
