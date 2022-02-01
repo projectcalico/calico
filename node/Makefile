@@ -14,11 +14,11 @@ WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
 BUILD_IMAGES ?=$(NODE_IMAGE)
 
 # Paths within the build container for BPF source.
-LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/include/libbpf/src
+LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bin/$(ARCH)/libbpf/src
 BPF_GPL_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 
 # Paths within the repository for BPF source.
-LIBBPF_PATH=../felix/bpf-gpl/include/libbpf/src
+LIBBPF_PATH=../felix/bin/$(ARCH)/libbpf/src
 
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
@@ -206,7 +206,7 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 	chmod +w $@
 
 $(LIBBPF_PATH)/libbpf.a: $(shell find ../felix/bpf-gpl/include/libbpf -type f)
-	make -C ../felix bpf-gpl/include/libbpf/src/libbpf.a ARCH=$(ARCH)
+	make -C ../felix libbpf ARCH=$(ARCH)
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
