@@ -20,10 +20,8 @@
 #>
 
 Param(
-    # Note: we don't publish a release artifact for the "master" branch. To test
-    # against master, build calico-windows.zip from projectcalico/node.
-    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/master/",
-    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-master.zip",
+    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/v3.22.0/",
+    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-v3.22.0.zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
