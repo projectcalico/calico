@@ -9,8 +9,15 @@
 #
 # WARNING: should be kept in sync with the combinations used in tests, in particular bpf_prog_test.go.
 
+if [[ $# -gt 0 ]]
+then
+	arch=$1
+else
+	arch=$(arch)
+fi
+
 emit_filename() {
-  echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}_skb${skb}${dsr}.o"
+  echo "bin/$arch/test_${from_or_to}_${ep_type}_fib_${log_level}_skb${skb}${dsr}.o"
 }
 
 ((mark_seen = 0x1000000))
@@ -47,5 +54,5 @@ for ep_type in $ep_types; do
   done
 done
 
-echo "bin/test_from_hep_fib_no_log_skb0x0.o"
-echo "bin/test_xdp_debug.o"
+echo "bin/$arch/test_from_hep_fib_no_log_skb0x0.o"
+echo "bin/$arch/test_xdp_debug.o"

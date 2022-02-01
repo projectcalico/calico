@@ -9,14 +9,21 @@
 #
 # WARNING: naming and set of cases must be kept in sync with tc.ProgFilename() in Felix's compiler.go.
 
+if [[ $# -gt 0 ]]
+then
+	arch=$1
+else
+	arch=$(arch)
+fi
+
 emit_filename() {
-  echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}.o"
+	echo "bin/$arch/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}.o"
 }
 
 for log_level in debug info no_log; do
-  echo "bin/connect_time_${log_level}_v4.o"
-  echo "bin/connect_time_${log_level}_v6.o"
-  echo "bin/xdp_${log_level}.o"
+	echo "bin/$arch/connect_time_${log_level}_v4.o"
+	echo "bin/$arch/connect_time_${log_level}_v6.o"
+	echo "bin/$arch/xdp_${log_level}.o"
   for host_drop in "" "host_drop_"; do
     if [ "${host_drop}" = "host_drop_" ]; then
       # The workload-to-host drop setting only applies to the from-workload hook.

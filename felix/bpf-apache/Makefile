@@ -38,18 +38,18 @@ CC := clang-11
 LD := llc-11
 
 C_FILES:=filter.c redir.c sockops.c
-OBJS:=$(addprefix bin/,$(C_FILES:.c=.o))
+OBJS:=$(addprefix bin/$(ARCH)/,$(C_FILES:.c=.o))
 
 all: $(OBJS)
 
 %.ll: %.c %.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
-bin/%.o: %.ll | bin
+bin/$(ARCH)/%.o: %.ll | bin/$(ARCH)
 	$(LD) -march=bpf -filetype=obj -o $@ $<
 
-bin:
-	mkdir -p bin
+bin/$(ARCH):
+	mkdir -p bin/$(ARCH)
 
 .PRECIOUS: %.d
 
@@ -63,4 +63,4 @@ D_FILES:=$(C_FILES:.c=.d)
 include $(D_FILES)
 
 clean:
-	rm -f *.o *.ll *.d bin/*
+	rm -rf *.o *.ll *.d bin/*
