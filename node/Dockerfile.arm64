@@ -24,7 +24,7 @@ FROM calico/bpftool:v5.0-arm64 as bpftool
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
-FROM arm64v8/centos:8 as centos
+FROM quay.io/centos/arm64v8:stream8 as centos
 
 MAINTAINER Reza Ramezanpour <reza@projectcalico.org>
 # Enable non-native builds of this image on an amd64 hosts.
