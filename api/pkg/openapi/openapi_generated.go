@@ -2323,6 +2323,27 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
 						},
 					},
+					"bpfMapSizeNAT": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeNat sets the map size for nat maps",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeRT": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeRt sets the map size for route map",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeCT": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeCt sets the map size for conntrack map",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",

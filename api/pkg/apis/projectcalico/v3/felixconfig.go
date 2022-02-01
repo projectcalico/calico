@@ -360,6 +360,12 @@ type FelixConfigurationSpec struct {
 	// a problem if this range overlaps with the operating systems. Both ends of the range are
 	// inclusive. [Default: 20000:29999]
 	BPFPSNATPorts *numorstring.Port `json:"bpfPSNATPorts,omitempty"`
+	// BPFMapSizeNat sets the map size for nat maps
+	BPFMapSizeNat *int `json:"bpfMapSizeNAT,omitempty"`
+	// BPFMapSizeRt sets the map size for route map
+	BPFMapSizeRt *int `json:"bpfMapSizeRT,omitempty"`
+	// BPFMapSizeCt sets the map size for conntrack map
+	BPFMapSizeCt *int `json:"bpfMapSizeCT,omitempty"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
