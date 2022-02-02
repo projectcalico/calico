@@ -94,6 +94,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
    ```bash
    kubectl -n kube-system set env daemonset/calico-node FELIX_AWSSRCDSTCHECK=Disable
    ```
+%>
 {% endtabs %}
 
 1. Finally, add nodes to the cluster.

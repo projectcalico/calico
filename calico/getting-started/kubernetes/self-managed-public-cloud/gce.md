@@ -166,7 +166,7 @@ On the controller, install {{site.prodname}} using the operator:
 kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
 ```
 
-Downlaod the custom resources necessary to configure {{site.prodname}}
+Download the custom resources necessary to configure {{site.prodname}}
 
 ```
 curl {{ "/manifests/custom-resources.yaml" | absolute_url}} -O
