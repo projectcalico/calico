@@ -45,7 +45,7 @@ const (
 	// Maximum size of annotations.
 	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
 
-	// linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
+	// linux can support route-tables with indices up to 0xfffffff
 	routeTableMaxLinux uint32 = 0xffffffff
 
 	globalSelector = "global()"
