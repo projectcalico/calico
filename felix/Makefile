@@ -36,7 +36,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/felix
 FELIX_IMAGE    ?=felix
 BUILD_IMAGES   ?=$(FELIX_IMAGE)
 
-LIBBPF_A=bpf-gpl/include/libbpf/src/libbpf-$(ARCH).a
+LIBBPF_A=bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
 LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/include/libbpf/src
 BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
 
