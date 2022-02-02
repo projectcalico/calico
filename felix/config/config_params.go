@@ -156,8 +156,9 @@ func newProvider(s string) (Provider, error) {
 // We use tags to control the parsing and validation.
 type Config struct {
 	// Configuration parameters.
-	UseInternalDataplaneDriver bool   `config:"bool;true"`
-	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
+	UseInternalDataplaneDriver bool          `config:"bool;true"`
+	DataplaneDriver            string        `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
+	DataplaneWatchdogTimeout   time.Duration `config:"seconds;90"`
 
 	// Wireguard configuration
 	WireguardEnabled               bool          `config:"bool;false"`
