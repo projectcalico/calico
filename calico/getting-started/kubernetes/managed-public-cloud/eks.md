@@ -83,6 +83,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 %>
   <label:Manifest>
 <%
+
 1. Install the {{site.prodname}} manifest.
 
    ```bash
