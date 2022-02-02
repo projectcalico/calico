@@ -864,6 +864,7 @@ func (config *Config) TyphaDiscoveryOpts() []discovery.Option {
 func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 	if config.RouteTableRanges == nil || len(config.RouteTableRanges) == 0 {
 		if config.RouteTableRange != (idalloc.IndexRange{}) {
+			log.Warn("Proceeding with `RouteTableRange` config option. This field has been deprecated in favor of `RouteTableRanges`.")
 			return []idalloc.IndexRange{
 				config.RouteTableRange,
 			}
@@ -873,6 +874,8 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 		return []idalloc.IndexRange{
 			{Min: 1, Max: 10000},
 		}
+	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
+		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
 	return config.RouteTableRanges
 }
