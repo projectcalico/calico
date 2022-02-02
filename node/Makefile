@@ -14,17 +14,17 @@ WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
 BUILD_IMAGES ?=$(NODE_IMAGE)
 
 # Paths within the build container for BPF source.
-LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bin/$(ARCH)/libbpf/src
-BPF_GPL_DOCKER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
+LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/include/libbpf/src/
+BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 
 # Paths within the repository for BPF source.
-LIBBPF_PATH=../felix/bin/$(ARCH)/libbpf/src
+LIBBPF_PATH=../felix/bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
 
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
 
 # Complete list of files pulled from other directories that we need to keep in sync.
-REMOTE_DEPS = $(LIBBPF_PATH)/libbpf.a \
+REMOTE_DEPS = $(LIBBPF_PATH) \
 	      filesystem/usr/lib/calico/bpf \
 	      filesystem/etc/calico/confd/conf.d \
 	      filesystem/etc/calico/confd/templates
@@ -211,7 +211,7 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
 	chmod +w $@
 
-$(LIBBPF_PATH)/libbpf.a: $(shell find ../felix/bpf-gpl/include/libbpf -type f)
+$(LIBBPF_PATH): $(shell find ../felix/bpf-gpl/include/libbpf -type f)
 	make -C ../felix libbpf ARCH=$(ARCH)
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
@@ -224,8 +224,8 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 # Currently CGO can be enbaled in ARM64 and AMD64 builds.
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
-CGO_LDFLAGS="-L$(LIBBPF_DOCKER_PATH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_DOCKER_PATH) -I$(BPF_GPL_DOCKER_PATH)"
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
 else
 CGO_ENABLED=0
 CGO_LDFLAGS=""
@@ -235,7 +235,7 @@ endif
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_PATH)/libbpf.a $(SRC_FILES) ../go.mod
+$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_PATH) $(SRC_FILES) ../go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
