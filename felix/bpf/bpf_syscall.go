@@ -26,6 +26,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 
 	"golang.org/x/sys/unix"
 )
@@ -259,26 +260,31 @@ func GetMapEntry(mapFD MapFD, k []byte, valueSize int) ([]byte, error) {
 }
 
 func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
-	if log.GetLevel() >= log.DebugLevel {
-		mapInfo, err := GetMapInfo(mapFD)
+	if log.GetLevel() < log.DebugLevel {
+		return nil
+	}
+	mapInfo, err := GetMapInfo(mapFD)
+	if err != nil {
+		log.WithError(err).Error("Failed to read map information")
+		return err
+	}
+	log.WithField("mapInfo", mapInfo).Debug("Map metadata")
+	if keySize != mapInfo.KeySize {
+		log.WithField("mapInfo", mapInfo).WithField("keyLen", keySize).Panic("Incorrect key length")
+	}
+	switch mapInfo.Type {
+	case unix.BPF_MAP_TYPE_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_ARRAY, unix.BPF_MAP_TYPE_LRU_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE:
+		// The actual size of per cpu maps is equal to the value size * number of cpu
+		ncpus, err := libbpf.NumPossibleCPUs()
 		if err != nil {
-			log.WithError(err).Error("Failed to read map information")
-			return err
+			log.WithError(err).Panic("Failed to get number of possible cpus")
 		}
-		log.WithField("mapInfo", mapInfo).Debug("Map metadata")
-		if keySize != mapInfo.KeySize {
-			log.WithField("mapInfo", mapInfo).WithField("keyLen", keySize).Panic("Incorrect key length")
+		if valueSize >= 0 && valueSize != mapInfo.ValueSize*ncpus {
+			log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length for per-CPU map")
 		}
-		switch mapInfo.Type {
-		case unix.BPF_MAP_TYPE_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_ARRAY, unix.BPF_MAP_TYPE_LRU_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE:
-			// The actual size of per cpu maps is equal to the value size * number of cpu
-			if valueSize >= 0 && valueSize != mapInfo.ValueSize*runtime.NumCPU() {
-				log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length for per-CPU map")
-			}
-		default:
-			if valueSize >= 0 && valueSize != mapInfo.ValueSize {
-				log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length")
-			}
+	default:
+		if valueSize >= 0 && valueSize != mapInfo.ValueSize {
+			log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length")
 		}
 	}
 	return nil

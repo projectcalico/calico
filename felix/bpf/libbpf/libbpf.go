@@ -252,3 +252,11 @@ func CTLBSetGlobals(m *Map, udpNotSeen time.Duration) error {
 
 	return err
 }
+
+func NumPossibleCPUs() (int, error) {
+	ncpus := int(C.num_possible_cpu())
+	if ncpus < 0 {
+		return ncpus, fmt.Errorf("Invalid number of CPUs: %d", ncpus)
+	}
+	return ncpus, nil
+}
