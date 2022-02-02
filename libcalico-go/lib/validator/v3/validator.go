@@ -779,6 +779,11 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 				"DeviceRouteSourceAddress", "", reason("is not a valid IPv4 address"), "")
 		}
 	}
+
+	if c.RouteTableRange != nil && c.RouteTableRanges != nil {
+		structLevel.ReportError(reflect.ValueOf(c.RouteTableRange),
+			"RouteTableRange", "", reason("cannot be set when `RouteTableRanges` is also set"), "")
+	}
 }
 
 func validateWorkloadEndpointSpec(structLevel validator.StructLevel) {
