@@ -20,7 +20,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
 // #include "libbpf_api.h"
@@ -72,7 +72,7 @@ func (m *Map) IsMapInternal() bool {
 }
 
 func OpenObject(filename string) (*Obj, error) {
-	bpf.IncreaseLockedMemoryQuota()
+	bpfutils.IncreaseLockedMemoryQuota()
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 	obj, err := C.bpf_obj_open(cFilename)

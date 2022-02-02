@@ -18,7 +18,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -26,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 
 	"golang.org/x/sys/unix"
@@ -74,7 +74,7 @@ const maxLogSize = 128 * 1024 * 1024
 
 func LoadBPFProgramFromInsns(insns asm.Insns, license string, progType uint32) (fd ProgFD, err error) {
 	log.Debugf("LoadBPFProgramFromInsns(%v, %v, %v)", insns, license, progType)
-	IncreaseLockedMemoryQuota()
+	bpfutils.IncreaseLockedMemoryQuota()
 
 	// Occasionally see retryable errors here, retry silently a few times before going into log-collection mode.
 	backoff := 1 * time.Millisecond
@@ -151,17 +151,6 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, p
 		return 0, errno
 	}
 	return ProgFD(fd), nil
-}
-
-var memLockOnce sync.Once
-
-func IncreaseLockedMemoryQuota() {
-	memLockOnce.Do(func() {
-		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{Cur: unix.RLIM_INFINITY, Max: unix.RLIM_INFINITY})
-		if err != nil {
-			log.WithError(err).Error("Failed to increase RLIMIT_MEMLOCK, loading BPF programs may fail")
-		}
-	})
 }
 
 func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err error) {
