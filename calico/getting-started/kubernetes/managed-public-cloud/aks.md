@@ -15,9 +15,6 @@ AKS has built-in support for {{site.prodname}}, providing a robust implementatio
 
 To enable {{site.prodname}} network policy enforcement, follow these step-by-step instructions: {% include open-new-window.html text='Create an AKS cluster and enable network policy' url='https://docs.microsoft.com/en-us/azure/aks/use-network-policies' %}.
 
-> **Note**: The {{site.prodname}} network policy feature can only be enabled when the cluster is created. You can't enable Calico network policy on an existing AKS cluster.
-{: .alert .alert-info}
-
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
