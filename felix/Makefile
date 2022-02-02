@@ -116,6 +116,9 @@ clean:
 	find . -name "*.pyc" -type f -delete
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
+	$(DOCKER_GO_BUILD) make -C bpf-apache clean
+	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
+	$(DOCKER_GO_BUILD) make -C $(LIBBPF_CONTAINER_PATH) clean
 	-docker rmi $(FELIX_IMAGE)-wgtool:latest-amd64
 	-docker rmi $(FELIX_IMAGE)-wgtool:latest
 
