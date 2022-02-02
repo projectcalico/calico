@@ -160,16 +160,22 @@ worker-2     NotReady   <none>   5s      v1.17.2
 
 ##### Install {{site.prodname}}
 
-On the controller, install {{site.prodname}} from the manifest:
+On the controller, install {{site.prodname}} using the operator:
 
 ```
-curl {{ "/manifests/calico.yaml" | absolute_url }} -O
+kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
 ```
 
-If you wish to customize the {{site.prodname}} install, customize the downloaded calico.yaml manifest.  Then apply the manifest to install {{site.prodname}}.
+Downlaod the custom resources necessary to configure {{site.prodname}}
 
 ```
-kubectl apply -f calico.yaml
+curl {{ "/manifests/custom-resources.yaml" | absolute_url}} -O
+```
+
+If you wish to customize the {{site.prodname}} install, customize the downloaded custom-resources.yaml manifest.  Then create the manifest to install {{site.prodname}}.
+
+```
+kubectl create -f custom-resources.yaml
 ```
 
 The geeky details of what you get:
