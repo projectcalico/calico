@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -256,4 +256,12 @@ func CTLBSetGlobals(m *Map, udpNotSeen time.Duration) error {
 	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen))
 
 	return err
+}
+
+func NumPossibleCPUs() (int, error) {
+	ncpus := int(C.num_possible_cpu())
+	if ncpus < 0 {
+		return ncpus, fmt.Errorf("Invalid number of CPUs: %d", ncpus)
+	}
+	return ncpus, nil
 }
