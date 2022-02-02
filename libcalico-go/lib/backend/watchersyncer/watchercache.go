@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -44,12 +46,20 @@ type watcherCache struct {
 	hasSynced            bool
 	resourceType         ResourceType
 	currentWatchRevision string
+	backoff              wait.BackoffManager
 }
 
+const (
+	initBackoff   = 100 * time.Millisecond
+	maxBackoff    = 5 * time.Second
+	resetDuration = time.Minute
+	backoffFactor = 2.0
+	jitter        = 0.1
+)
+
 var (
-	ListRetryInterval     = 1000 * time.Millisecond
-	WatchPollInterval     = 5000 * time.Millisecond
-	DefaultErrorThreshold = 15
+	ListRetryInterval = 1000 * time.Millisecond
+	WatchPollInterval = 5000 * time.Millisecond
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -70,6 +80,8 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		results:              results,
 		resources:            make(map[string]cacheEntry, 0),
 		currentWatchRevision: "0",
+		backoff: wait.NewExponentialBackoffManager(
+			initBackoff, maxBackoff, resetDuration, backoffFactor, jitter, clock.RealClock{}),
 	}
 }
 
@@ -159,6 +171,18 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 	performFullResync := wc.currentWatchRevision == "0"
 
 	for {
+		bo := wc.backoff.Backoff()
+		wc.logger.Debug("Starting resync loop, waiting for (possibly zero) backoff to finish...")
+		select {
+		case <-bo.C():
+			wc.logger.Debug("Backoff complete.")
+		case <-ctx.Done():
+			wc.logger.Debug("Context finished before backoff, stop backoff timer.")
+			if !bo.Stop() { // Standard time.Timer.Stop() dance.
+				<-bo.C()
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			wc.logger.Debug("Context is done. Returning")
