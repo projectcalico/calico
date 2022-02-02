@@ -201,8 +201,9 @@ build-bpf:
 	                          make -j -C bpf-gpl all ut-objs"
 
 clean-bpf:
-	make -C bpf-apache clean
-	make -C bpf-gpl clean
+	rm -f bpf-gpl/*.d bpf-apache/*.d
+	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
+	                          make -j -C bpf-gpl clean"
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
