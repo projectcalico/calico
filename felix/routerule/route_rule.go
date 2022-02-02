@@ -96,7 +96,7 @@ func New(
 	indexOK := true
 	tableIndexSet.Iter(func(item interface{}) error {
 		i := item.(int)
-		if (i == 0) || (i >= unix.RT_TABLE_COMPAT) {
+		if (i == 0) || (i >= unix.RT_TABLE_MAX) {
 			indexOK = false
 			return set.StopIteration
 		}
