@@ -475,9 +475,10 @@ spec:
                   routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
                 type: string
               routeTableRange:
-                description: Calico programs additional Linux route tables for various
-                  purposes.  RouteTableRange specifies the indices of the route tables
-                  that Calico should use.
+                type: object
+                description: Deprecated in favor of `RouteTableRanges`. Calico programs
+                  additional Linux route tables for various purposes. RouteTableRange
+                  specifies the indices of the route tables that Calico should use.
                 properties:
                   max:
                     type: integer
@@ -486,7 +487,21 @@ spec:
                 required:
                 - max
                 - min
-                type: object
+              routeTableRanges:
+                type: array
+                description: 'Calico programs additional Linux route tables for various
+                  purposes. RouteTableRanges designates a set of table ranges that Calico
+                  is permitted to use. Deprecates `RouteTableRange`, overrides `RouteTableRange`. [Default: 1-10000]'
+                items:
+                  type: object
+                  properties:
+                    max:
+                      type: integer
+                    min:
+                      type: integer
+                  required:
+                  - max
+                  - min
               serviceLoopPrevention:
                 description: 'When service IP advertisement is enabled, prevent routing
                   loops to service IPs that are not in use, by dropping or rejecting
