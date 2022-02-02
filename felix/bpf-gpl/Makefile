@@ -117,3 +117,8 @@ include $(D_FILES)
 
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll
+
+# Fixes an issue where make thinks these .h files are dependencies that need
+# to be built. Just include them as a noop in order to trick make.
+/usr/include/aarch64-linux-gnu/%.h /usr/include/x86_64-linux-gnu/%.h:
+	@echo "No need to build $@"
