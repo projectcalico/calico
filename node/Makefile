@@ -18,13 +18,13 @@ LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/incl
 BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 
 # Paths within the repository for BPF source.
-LIBBPF_PATH=../felix/bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
+LIBBPF_A=../felix/bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
 
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
 
-# Complete list of files pulled from other directories that we need to keep in sync.
-REMOTE_DEPS = $(LIBBPF_PATH) \
+# Complete list of files from other directories that we need to build calico/node.
+REMOTE_DEPS = $(LIBBPF_A) \
 	      filesystem/usr/lib/calico/bpf \
 	      filesystem/etc/calico/confd/conf.d \
 	      filesystem/etc/calico/confd/templates
@@ -211,7 +211,7 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
 	chmod +w $@
 
-$(LIBBPF_PATH): $(shell find ../felix/bpf-gpl/include/libbpf -type f)
+$(LIBBPF_A): $(shell find ../felix/bpf-gpl/include/libbpf -type f)
 	make -C ../felix libbpf ARCH=$(ARCH)
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
@@ -235,7 +235,7 @@ endif
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_PATH) $(SRC_FILES) ../go.mod
+$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
@@ -262,7 +262,7 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 ## Create the images for all supported ARCHes
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) clean image ARCH=$*
+	$(MAKE) image ARCH=$*
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) 
