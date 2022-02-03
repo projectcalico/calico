@@ -97,7 +97,7 @@ func New(
 	tableIndexSet.Iter(func(item interface{}) error {
 		i := item.(int)
 		if (i == 0) ||
-			i >= unix.RT_TABLE_MAX ||
+			int64(i) >= int64(unix.RT_TABLE_MAX) ||
 			i == unix.RT_TABLE_DEFAULT ||
 			i == unix.RT_TABLE_LOCAL ||
 			i == unix.RT_TABLE_MAIN {
