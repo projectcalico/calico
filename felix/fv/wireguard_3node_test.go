@@ -44,18 +44,35 @@ var (
 )
 
 type wireguard3NodeTestConf struct {
-	routeSource           string
-	ipipEnabled           bool
-	borrowedIPs           bool
-	hostEncryptionEnabled bool
+	routeSource                    string
+	ipipEnabled                    bool
+	borrowedIPs                    bool
+	hostEncryptionEnabled          bool
+	skipWireguardHostConnBootstrap bool
 }
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported three-node cluster", dataStoreTypes, func(getInfra infrastructure.InfraFactory) {
 	for _, scenario := range []wireguard3NodeTestConf{
-		{routeSource: "CalicoIPAM", ipipEnabled: false, borrowedIPs: true, hostEncryptionEnabled: true},
-		{routeSource: "WorkloadIPs", ipipEnabled: false, borrowedIPs: false, hostEncryptionEnabled: true},
+		{
+			routeSource: "CalicoIPAM", ipipEnabled: false, borrowedIPs: true,
+			hostEncryptionEnabled: true,
+		},
+		{
+			routeSource: "WorkloadIPs", ipipEnabled: false, borrowedIPs: false,
+			hostEncryptionEnabled: true,
+		},
+		{
+			routeSource: "CalicoIPAM", ipipEnabled: false, borrowedIPs: true,
+			hostEncryptionEnabled:          true,
+			skipWireguardHostConnBootstrap: true,
+		},
+		{
+			routeSource: "WorkloadIPs", ipipEnabled: false, borrowedIPs: false,
+			hostEncryptionEnabled:          true,
+			skipWireguardHostConnBootstrap: true,
+		},
 	} {
-		FDescribe(
+		Describe(
 			fmt.Sprintf("WG TEST RouteSource: %v, BorrowedIPs: %v", scenario.routeSource, scenario.borrowedIPs),
 			runWireguard3NodeTests(getInfra, scenario),
 		)
@@ -89,8 +106,13 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 			}
 
 			infra = getInfra()
+			envs := map[string]string{}
+			if scene.skipWireguardHostConnBootstrap { // discc.Checable fix for negative test
+				envs["FELIX_SKIP_WIREGUARD_BOOTSTRAP"] = "true"
+			}
+
 			topologyOptions := wireguardTopologyOptions(
-				scene.routeSource, scene.ipipEnabled, scene.hostEncryptionEnabled,
+				scene.routeSource, scene.ipipEnabled, scene.hostEncryptionEnabled, envs,
 			)
 			felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
@@ -226,49 +248,72 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 			infra.Stop()
 		})
 
-		Context("with HostEncryption, 2 workloads per node with bootstrap fix enabled", func() {
-			It("should have basic connectivity", func() {
-				By("verifying packets between felix-0 and felix-1 is encrypted")
-				cc.ExpectSome(wlsByHost[0][1], wlsByHost[1][0])
-				cc.ExpectSome(wlsByHost[1][0], wlsByHost[0][1])
-				cc.CheckConnectivity()
-			})
+		Context(
+			fmt.Sprintf(
+				"with HostEncryption, 2 workloads per node with bootstrap fix %s",
+				func(nofix bool) string {
+					if nofix {
+						return "disabled"
+					}
+					return "enabled"
+				}(scene.skipWireguardHostConnBootstrap),
+			),
 
-			It("Dataplanes should have have a public key", func() {
-				pk, err := getWgPublicKey(felixes[1])
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(pk).NotTo(BeEmpty())
-				pks[1] = pk
-			})
-
-			When("The dataplane is restarted", func() {
-				var randomlySelectedNode = 1 // selected by dice roll mod 3
-				BeforeEach(func() {
-					opk, err := getWgPublicKey(felixes[1])
-					Expect(err).ShouldNot(HaveOccurred())
-					Expect(opk).NotTo(BeEmpty())
-
-					// restart dataplane of a randomly-selected felix
-					felixes[randomlySelectedNode].Container.Restart()
-
-					Eventually(func() error {
-						pk, err := getWgPublicKey(felixes[randomlySelectedNode])
-						if err != nil {
-							return err
-						}
-						if pk == opk {
-							return errors.New("same public key found")
-						}
-						return nil
-					}, "10s", "200ms").ShouldNot(HaveOccurred(), "assert public key refreshed")
-				})
-				It("Should still have basic connectivity", func() {
-					cc.ExpectSome(wlsByHost[0][1], wlsByHost[randomlySelectedNode][0])
-					cc.ExpectSome(wlsByHost[randomlySelectedNode][0], wlsByHost[0][1])
+			func() {
+				It("should have basic connectivity", func() {
+					By("verifying packets between felix-0 and felix-1 is encrypted")
+					cc.ExpectSome(wlsByHost[0][1], wlsByHost[1][0])
+					cc.ExpectSome(wlsByHost[1][0], wlsByHost[0][1])
 					cc.CheckConnectivity()
 				})
+
+				It("Dataplanes should have have a public key", func() {
+					pk, err := getWgPublicKey(felixes[1])
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(pk).NotTo(BeEmpty())
+					pks[1] = pk
+				})
+
+				When("the dataplane is restarted", func() {
+					var randomlySelectedNode = 1 // selected by dice roll mod 3
+					BeforeEach(func() {
+						cc.ResetExpectations()
+						opk, err := getWgPublicKey(felixes[1])
+						Expect(err).ShouldNot(HaveOccurred())
+						Expect(opk).NotTo(BeEmpty())
+
+						// restart dataplane of a randomly-selected felix
+						By("restarting the node")
+						felixes[randomlySelectedNode].Container.Restart()
+
+						By("checking public key difference")
+						Eventually(func() error {
+							pk, err := getWgPublicKey(felixes[randomlySelectedNode])
+							if err != nil {
+								return err
+							}
+							if pk == opk {
+								return errors.New("same public key found")
+							}
+							return nil
+						}, "10s", "200ms").ShouldNot(HaveOccurred(), "assert public key refreshed")
+					})
+
+					if scene.skipWireguardHostConnBootstrap {
+						It("Should still not have basic connectivity", func() {
+							cc.ExpectNone(wlsByHost[0][1], wlsByHost[randomlySelectedNode][0])
+							cc.ExpectNone(wlsByHost[randomlySelectedNode][0], wlsByHost[0][1])
+							cc.CheckConnectivity()
+						})
+					} else {
+						It("Should still have basic connectivity", func() {
+							cc.ExpectSome(wlsByHost[0][1], wlsByHost[randomlySelectedNode][0])
+							cc.ExpectSome(wlsByHost[randomlySelectedNode][0], wlsByHost[0][1])
+							cc.CheckConnectivity()
+						})
+					}
+				})
 			})
-		})
 		// TODO: move over the rest of the 3-node cluster tests as a context here
 	}
 }

@@ -303,6 +303,7 @@ func (c *Container) WatchStdoutFor(re *regexp.Regexp) chan struct{} {
 // Start executes "docker start" on a container. Useful when used after Stop()
 // to restart a container.
 func (c *Container) Start() {
+	log.Info("container start name: ", c.Name)
 	c.runCmd = utils.Command("docker", "start", "--attach", c.Name)
 
 	stdout, err := c.runCmd.StdoutPipe()

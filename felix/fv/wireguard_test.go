@@ -1248,7 +1248,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 
 // Setup cluster topology options.
 // mainly, enable Wireguard with delayed start option.
-func wireguardTopologyOptions(routeSource string, ipipEnabled, hostEncryption bool) infrastructure.TopologyOptions {
+func wireguardTopologyOptions(routeSource string, ipipEnabled, hostEncryption bool, extraEnvs ...map[string]string) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 
 	// Waiting for calico-node to be ready.
@@ -1272,6 +1272,12 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, hostEncryption bo
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
 	topologyOptions.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000
+
+	for _, envs := range extraEnvs {
+		for k, v := range envs {
+			topologyOptions.ExtraEnvVars[k] = v
+		}
+	}
 
 	// Enable Wireguard.
 	felixConfig := api.NewFelixConfiguration()
