@@ -145,10 +145,10 @@ The `RouteTableRange` option is now deprecated in favor of [RouteTableRanges](#r
 #### RouteTableRanges
 `RouteTableRanges` is a list of `RouteTableRange` objects:
 
-| Field    | Description          | Schema |
-|----------|----------------------|--------|
-| min      | Minimum index to use | int    |
-| max      | Maximum index to use | int    |
+| Field    | Description          | Accepted Values | Schema |
+|----------|----------------------|-----------------|--------|
+| min      | Minimum index to use | 1 - 4294967295  | int    |
+| max      | Maximum index to use | 1 - 4294967295  | int    |
 
 Each item in the `RouteTableRanges` list designates a range of routing tables available to Calico. By default, Calico will use a single range of `1-250`.  If a range spans Linux's reserved table range (`253-255`) then those tables are automatically excluded from the list. It's possible that other table ranges may also be reserved by third-party systems unknown to Calico. In that case, multiple ranges can be defined to target tables below and above the sensitive ranges:
 ```sh
