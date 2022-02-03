@@ -17,6 +17,7 @@
 package fv_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -77,6 +78,8 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 
 			cc       *connectivity.Checker
 			tcpdumps []*tcpdump.TCPDump
+
+			pks [nodeCount]string
 		)
 
 		BeforeEach(func() {
@@ -231,18 +234,56 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 				cc.CheckConnectivity()
 			})
 
+			It("Dataplanes should have have a public key", func() {
+				pk, err := getWgPublicKey(felixes[1])
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(pk).NotTo(BeEmpty())
+				pks[1] = pk
+			})
+
 			When("The dataplane is restarted", func() {
+				var randomlySelectedNode = 1 // selected by dice roll mod 3
 				BeforeEach(func() {
-					// restart dataplane
+					opk, err := getWgPublicKey(felixes[1])
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(opk).NotTo(BeEmpty())
+
+					// restart dataplane of a randomly-selected felix
+					felixes[randomlySelectedNode].Container.Restart()
+
+					Eventually(func() error {
+						pk, err := getWgPublicKey(felixes[randomlySelectedNode])
+						if err != nil {
+							return err
+						}
+						if pk == opk {
+							return errors.New("same public key found")
+						}
+						return nil
+					}, "10s", "200ms").ShouldNot(HaveOccurred(), "assert public key refreshed")
 				})
 				It("Should still have basic connectivity", func() {
-					Skip("TODO: can't test this yet")
-					cc.ExpectSome(wlsByHost[0][1], wlsByHost[1][0])
-					cc.ExpectSome(wlsByHost[1][0], wlsByHost[0][1])
+					cc.ExpectSome(wlsByHost[0][1], wlsByHost[randomlySelectedNode][0])
+					cc.ExpectSome(wlsByHost[randomlySelectedNode][0], wlsByHost[0][1])
 					cc.CheckConnectivity()
 				})
 			})
 		})
 		// TODO: move over the rest of the 3-node cluster tests as a context here
 	}
+}
+
+func getWgPublicKey(felix *infrastructure.Felix) (string, error) {
+	pkRegex := regexp.MustCompile(`public key: (.+)\n`)
+	out, err := felix.ExecOutput("wg")
+	if err != nil {
+		return "", fmt.Errorf("getWgPublicKey error: %w", err)
+	}
+	matches := pkRegex.FindStringSubmatch(out)
+	if len(matches) < 1 {
+		err := errors.New("getWgPublicKey error: no public key found")
+		log.WithError(err).Debug("output: ", out)
+		return "", err
+	}
+	return matches[0], nil
 }
