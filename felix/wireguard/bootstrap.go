@@ -78,10 +78,10 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguar
 			if err != nil {
 				switch err.(type) {
 				case cerrors.ErrorResourceUpdateConflict:
-					log.Debug("Conflict while clearing WireGuard config, retrying update (%v)", err)
+					log.Debugf("Conflict while clearing WireGuard config, retrying update (%v)", err)
 
 				default:
-					log.Debug("Failed to clear WireGuard config: %v", err)
+					log.Debugf("Failed to clear WireGuard config: %v", err)
 				}
 				continue
 			}
