@@ -704,8 +704,19 @@ var _ = DescribeTable("Config validation",
 	Entry("invalid RouteTableRange", map[string]string{
 		"RouteTableRange": "1-255",
 	}, false),
-	Entry("invalid RouteTableRange", map[string]string{
-		"RouteTableRange": "abcde",
+	Entry("valid RouteTableRanges", map[string]string{
+		"RouteTableRanges": "1-10000",
+	}, true),
+	// 0xFFFFFFFF + 1
+	Entry("overflowing RouteTableRanges", map[string]string{
+		"RouteTableRanges": "4294967295-4294967296",
+	}, false),
+	// exceeds max allowed number of individual tables
+	Entry("excessive RouteTableRanges", map[string]string{
+		"RouteTableRanges": "1-100000000",
+	}, false),
+	Entry("invalid RouteTableRanges", map[string]string{
+		"RouteTableRanges": "abcde",
 	}, false),
 )
 
