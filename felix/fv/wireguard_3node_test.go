@@ -96,6 +96,8 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 			cc       *connectivity.Checker
 			tcpdumps []*tcpdump.TCPDump
 
+			topologyOptions infrastructure.TopologyOptions
+
 			pks [nodeCount]string
 		)
 
@@ -111,7 +113,7 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 				envs["FELIX_SKIP_WIREGUARD_BOOTSTRAP"] = "true"
 			}
 
-			topologyOptions := wireguardTopologyOptions(
+			topologyOptions = wireguardTopologyOptions(
 				scene.routeSource, scene.ipipEnabled, scene.hostEncryptionEnabled, envs,
 			)
 			felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
@@ -226,11 +228,11 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 				}
 			}
 
-			for felixIdx, felixWls := range wlsByHost {
-				for i := range felixWls {
-					wlsByHost[felixIdx][i].Stop()
-				}
-			}
+			// for felixIdx, felixWls := range wlsByHost {
+			// 	for i := range felixWls {
+			// 		wlsByHost[felixIdx][i].Stop()
+			// 	}
+			// }
 
 			externalClient.Stop()
 
@@ -285,6 +287,18 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 						// restart dataplane of a randomly-selected felix
 						By("restarting the node")
 						felixes[randomlySelectedNode].Container.Restart()
+
+						// re-setup its workloads
+						for _, wlIdx := range []int{0, 1} {
+							wlsByHost[randomlySelectedNode][wlIdx] = createWorkloadWithAssignedIP(
+								&infra,
+								&topologyOptions,
+								&client,
+								fmt.Sprintf("10.65.%d.%d", randomlySelectedNode, 4+wlIdx),
+								fmt.Sprintf("wl-f%d-%d", randomlySelectedNode, 2+wlIdx),
+								felixes[randomlySelectedNode],
+							)
+						}
 
 						By("checking public key difference")
 						Eventually(func() error {
