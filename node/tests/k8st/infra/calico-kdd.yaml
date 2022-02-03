@@ -930,7 +930,7 @@ spec:
                 type: array
                 description: 'Calico programs additional Linux route tables for various
                   purposes. RouteTableRanges designates a set of table ranges that Calico
-                  is permitted to use. Deprecates `RouteTableRange`, overrides `RouteTableRange`. [Default: 1-10000]'
+                  is permitted to use. Deprecates `RouteTableRange`, overrides `RouteTableRange`. [Default: 1-250]'
                 items:
                   type: object
                   properties:

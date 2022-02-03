@@ -83,7 +83,7 @@ spec:
 | reportingTTL                       | Time-to-live setting for process-wide status reports. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | routeRefreshInterval               | Period at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | routeTableRange                    | *deprecated in favor of `RouteTableRanges`* Calico programs additional Linux route tables for various purposes. `RouteTableRange` specifies the indices of the route tables that Calico should use. |  | [RouteTableRanges](#routetablerange) | `""` |
-| routeTableRanges                    | Calico programs additional Linux route tables for various purposes. `RouteTableRanges` specifies a set of table index ranges that Calico should use. Deprecates `RouteTableRange`, overrides `RouteTableRange` |  | [RouteTableRanges](#routetableranges) | `[{"Min": 1, "Max": 10000}]` |
+| routeTableRanges                    | Calico programs additional Linux route tables for various purposes. `RouteTableRanges` specifies a set of table index ranges that Calico should use. Deprecates `RouteTableRange`, overrides `RouteTableRange` |  | [RouteTableRanges](#routetableranges) | `[{"Min": 1, "Max": 250}]` |
 | serviceLoopPrevention              | When [service IP advertisement is enabled]({{ site.baseurl }}/networking/advertise-service-ips), prevent routing loops to service IPs that are not in use, by dropping or rejecting packets that do not get DNAT'd by kube-proxy.  Unless set to "Disabled", in which case such routing loops continue to be allowed. | `Drop`, `Reject`, `Disabled` | string | `Drop` |
 | sidecarAccelerationEnabled         | Enable experimental acceleration between application and proxy sidecar when using [application layer policy]({{ site.baseurl }}/security/app-layer-policy). [Default: `false`] | boolean | boolean | `false` |
 | usageReportingEnabled              | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. | boolean | boolean | `true` |
@@ -150,10 +150,10 @@ The `RouteTableRange` option is now deprecated in favor of [RouteTableRanges](#r
 | min      | Minimum index to use | int    |
 | max      | Maximum index to use | int    |
 
-Each item in the `RouteTableRanges` list designates a range of routing tables available to Calico. By default, Calico will use a single range of `1-10000`, and will automatically ignore Linux's default reserved tables `253-255`. However, it's possible that other table ranges may also be reserved by third-party systems unknown to Calico. In that case, multiple ranges can be defined to target tables below and above the sensitive ranges:
+Each item in the `RouteTableRanges` list designates a range of routing tables available to Calico. By default, Calico will use a single range of `1-250`, and will automatically ignore Linux's default reserved tables `253-255`. However, it's possible that other table ranges may also be reserved by third-party systems unknown to Calico. In that case, multiple ranges can be defined to target tables below and above the sensitive ranges:
 ```sh
 # target tables 65-99, and 256-1000, skipping 100-255
-calicoctl patch felixconfig default --type=merge -p '{"spec":{"routeTableRanges": [{"Min": 65, "Max": 99}, {"Min": 256, "Max": 10000}] }}
+calicoctl patch felixconfig default --type=merge -p '{"spec":{"routeTableRanges": [{"Min": 65, "Max": 99}, {"Min": 256, "Max": 1000}] }}
 ```
 
 *Note*, for performance reasons, the maximum total number of routing tables that Felix will accept is 65535 (or 2*16).

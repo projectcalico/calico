@@ -872,7 +872,7 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 
 		// default RouteTableRanges val
 		return []idalloc.IndexRange{
-			{Min: 1, Max: 10000},
+			{Min: 1, Max: 250},
 		}
 	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
