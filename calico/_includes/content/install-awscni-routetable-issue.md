@@ -7,7 +7,7 @@
 >
 > 1. Configure Felix to manage a routing table range which is distinct from the range used by AWS CNI:
 >     ```bash
->     kubectl patch felixconfiguration default --type='merge' -p '{"spec": {"routeTableRange":{"min": 65, "max": 99}}}'
+>     kubectl patch felixconfiguration default --type='merge' -p '{"spec": {"routeTableRanges":[{"min": 65, "max": 99}]}}'
 >     ````
 >
 > 1. Delete any routing rules and tables in the range 1-64 as they could be damaged or incomplete
