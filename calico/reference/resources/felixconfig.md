@@ -150,7 +150,7 @@ The `RouteTableRange` option is now deprecated in favor of [RouteTableRanges](#r
 | min      | Minimum index to use | int    |
 | max      | Maximum index to use | int    |
 
-Each item in the `RouteTableRanges` list designates a range of routing tables available to Calico. By default, Calico will use a single range of `1-250`, and will automatically ignore Linux's default reserved tables `253-255`. However, it's possible that other table ranges may also be reserved by third-party systems unknown to Calico. In that case, multiple ranges can be defined to target tables below and above the sensitive ranges:
+Each item in the `RouteTableRanges` list designates a range of routing tables available to Calico. By default, Calico will use a single range of `1-250`.  If a range spans Linux's reserved table range (`253-255`) then those tables are automatically excluded from the list. It's possible that other table ranges may also be reserved by third-party systems unknown to Calico. In that case, multiple ranges can be defined to target tables below and above the sensitive ranges:
 ```sh
 # target tables 65-99, and 256-1000, skipping 100-255
 calicoctl patch felixconfig default --type=merge -p '{"spec":{"routeTableRanges": [{"Min": 65, "Max": 99}, {"Min": 256, "Max": 1000}] }}
