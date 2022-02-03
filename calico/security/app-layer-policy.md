@@ -49,6 +49,10 @@ Istio v1.7.x and lower are **not** supported.
 
 Although we expect future minor versions to work with the corresponding manifest below (for example, v1.9.7 or v1.10.3), manifest compatibility depends entirely on the upstream changes in the respective Istio release.
 
+**Kubernetes Support**
+
+As of Kubernetes v1.23, FlexVolumes have been deprecated in favor of the Container Storage Interface (CSI). Since our current application layer policy integration depends on FlexVolumes, it will not work on Kubernetes v1.23+.
+
 ### How to
 
 1. [Enable application layer policy](#enable-application-layer-policy)
