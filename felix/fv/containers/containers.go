@@ -75,6 +75,11 @@ func (c *Container) StopLogs() {
 	c.mutex.Unlock()
 }
 
+func (c *Container) Restart() {
+	c.Stop()
+	c.Start()
+}
+
 func (c *Container) Stop() {
 	if c == nil {
 		log.Info("Stop no-op because nil container")
