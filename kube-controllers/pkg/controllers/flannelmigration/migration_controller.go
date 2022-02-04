@@ -56,9 +56,9 @@ var (
 	// nodeNetworkFlannel is a map value indicates a node is still part of Flannel vxlan network.
 	// This is used both as a nodeSelector for Flannel daemonset and a label for a node.
 	nodeNetworkFlannel = map[string]string{migrationNodeSelectorKey: "flannel"}
-	// nodeNetworkCalico is a map value indicates a node is becoming part of Calico vxlan network.
+	// NodeNetworkCalico is a map value indicates a node is becoming part of Calico vxlan network.
 	// This is used both as a nodeSelector for Calico daemonset and a label for a node.
-	nodeNetworkCalico = map[string]string{migrationNodeSelectorKey: "calico"}
+	NodeNetworkCalico = map[string]string{migrationNodeSelectorKey: "calico"}
 	// nodeNetworkNone is a map value indicates there should be neither Flannel nor Calico running on the node.
 	nodeNetworkNone = map[string]string{migrationNodeSelectorKey: "none"}
 	// nodeMigrationInProgress is a map value indicates a node is running network migration.
@@ -240,7 +240,7 @@ func (c *flannelMigrationController) processNewNode(node *v1.Node) {
 	}
 
 	n := k8snode(node.Name)
-	err = n.addNodeLabels(c.k8sClientset, nodeNetworkCalico)
+	err = n.addNodeLabels(c.k8sClientset, NodeNetworkCalico)
 	if err != nil {
 		log.WithError(err).Fatalf("Error adding node label to enable Calico network for new node %s.", node.Name)
 		return
@@ -511,7 +511,7 @@ func (c *flannelMigrationController) completeMigration() error {
 	// Remove nodeSelector for Calico Daemonet.
 	d = daemonset(c.config.CalicoDaemonsetName)
 	log.Infof("Remove node selector for daemonset %s.", c.config.CalicoDaemonsetName)
-	err = d.RemoveNodeSelector(c.k8sClientset, namespaceKubeSystem, nodeNetworkCalico)
+	err = d.RemoveNodeSelector(c.k8sClientset, namespaceKubeSystem, NodeNetworkCalico)
 	if err != nil {
 		log.WithError(err).Errorf("Failed to remove node selector for daemonset %s.", c.config.CalicoDaemonsetName)
 		return err
