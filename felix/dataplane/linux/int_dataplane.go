@@ -840,7 +840,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Info("Registering to report health.")
 		timeout := config.WatchdogTimeout
 		if timeout < healthInterval*2 {
-			log.Warn("Dataplane watchdog timeout too low, defaulting to %v", healthInterval*2)
+			log.Warnf("Dataplane watchdog timeout too low, defaulting to %v", healthInterval*2)
 			timeout = healthInterval * 2
 		}
 		config.HealthAggregator.RegisterReporter(
