@@ -12,7 +12,7 @@ API_SERVER_IMAGE      ?=apiserver
 BUILD_IMAGES          ?=$(API_SERVER_IMAGE)
 
 EXTRA_DOCKER_ARGS += -e GOLANGCI_LINT_CACHE=/lint-cache -v $(CURDIR)/.lint-cache:/lint-cache:rw \
-				 -v $(CURDIR)/hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
+				 -v $(CURDIR)/../hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
 
 ###############################################################################
 BINDIR ?= bin
@@ -152,7 +152,7 @@ st:
 
 .PHONY: check-copyright
 check-copyright:
-	@hack/check-copyright.sh
+	@../hack/check-copyright.sh
 
 config/crd: mod-download
 	mkdir -p config/crd
