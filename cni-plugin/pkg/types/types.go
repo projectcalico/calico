@@ -120,6 +120,9 @@ type NetConf struct {
 
 	RuntimeConfig RuntimeConfig
 
+	// The CNI plugin waits until all the endpoints specified in ReadinessGates are ready
+	ReadinessGates []string `json:"readiness_gates"`
+
 	// Options below here are deprecated.
 	EtcdAuthority string `json:"etcd_authority"`
 	Hostname      string `json:"hostname"`

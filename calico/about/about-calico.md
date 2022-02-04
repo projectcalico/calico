@@ -146,7 +146,7 @@ custom_css: css/intro.css
   <div class="col-md-6">
     <img class="img-responsive center-block" src="{{ site.baseurl }}/images/calico-cloud-small.png">
     <div style="display: flex; justify-content: center; align-items: center;" id="enterprise-footer">
-      <a href="https://www.tigera.io/tigera-products/calico-enterprise/?utm_referring_url=dynamic&amp;utm_source=projectcalico-docs&amp;utm_medium=website&amp;utm_campaign=calico-docs-conversion" class="learn-more-button">Learn More</a>
+      <a href="https://www.tigera.io/tigera-products/calico-cloud/" class="learn-more-button">Learn More</a>
     </div>    
   </div>
 </div>
