@@ -49,7 +49,7 @@ WireGuard is included in Linux 5.6+ kernels, and has been backported to earlier 
 
 Install WireGuard on cluster nodes using {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}. Note that you may need to reboot your nodes after installing WireGuard to make the kernel modules available on your system.
 
-Use the following instructions for these platforms that are not listed on the WireGuard installation page.
+Use the following instructions for these platforms that are not listed on the WireGuard installation page, before proceeding to [enabling WireGuard](#Enable-WireGuard-for-a-cluster).
 
 {% tabs %}
 <label:EKS,active:true>
