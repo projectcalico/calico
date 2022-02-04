@@ -26,12 +26,17 @@ LOCAL_CHECKS=check-boring-ssl
 ###############################################################################
 include ../lib.Makefile
 
-# Required for eBPF support in ARM64
+# Set the platform correctly for building docker images.
+TARGET_PLATFORM=--platform=linux/$(ARCH)
 ifeq ($(ARCH),arm64)
 # Forces ARM64 build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 # Prevents docker from tagging the output image incorrectly as amd64.
 TARGET_PLATFORM=--platform=linux/arm64/v8
+endif
+
+ifeq ($(ARCH),armv7)
+TARGET_PLATFORM=--platform=linux/arm/v7
 endif
 
 ###############################################################################
@@ -284,7 +289,12 @@ clean-sub-image-%:
 
 $(NODE_IMAGE): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
-	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
+	docker buildx build $(TARGET_PLATFORM) -t $(NODE_IMAGE):latest-$(ARCH) \
+		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
+		--build-arg QEMU_IMAGE=$(CALICO_BUILD) \
+		--build-arg UBI_IMAGE=$(UBI_IMAGE) \
+		--build-arg GIT_VERSION=$(GIT_VERSION) \
+		-f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -428,7 +438,7 @@ busybox.tar:
 	docker save --output busybox.tar $(ARCH)/busybox:latest
 
 workload.tar:
-	cd workload && docker build -t workload --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
+	cd workload && docker build -t workload --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) -f Dockerfile.$(ARCH) .
 	docker save --output workload.tar workload
 
 stop-etcd:
@@ -439,7 +449,7 @@ IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "ca
 # Create the calico/test image
 test_image: calico_test.created
 calico_test.created: $(TEST_CONTAINER_FILES)
-	cd calico_test && docker build --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) .
+	cd calico_test && docker build --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) .
 	touch calico_test.created
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
