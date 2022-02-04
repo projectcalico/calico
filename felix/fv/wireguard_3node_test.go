@@ -49,6 +49,7 @@ type wireguard3NodeTestConf struct {
 	borrowedIPs                    bool
 	hostEncryptionEnabled          bool
 	skipWireguardHostConnBootstrap bool
+	withTypha                      bool
 }
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported three-node cluster", dataStoreTypes, func(getInfra infrastructure.InfraFactory) {
@@ -56,20 +57,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported three-n
 		{
 			routeSource: "CalicoIPAM", ipipEnabled: false, borrowedIPs: true,
 			hostEncryptionEnabled: true,
+			withTypha:             true,
 		},
 		{
 			routeSource: "WorkloadIPs", ipipEnabled: false, borrowedIPs: false,
 			hostEncryptionEnabled: true,
+			withTypha:             true,
 		},
 		{
 			routeSource: "CalicoIPAM", ipipEnabled: false, borrowedIPs: true,
 			hostEncryptionEnabled:          true,
 			skipWireguardHostConnBootstrap: true,
+			withTypha:                      true,
 		},
 		{
 			routeSource: "WorkloadIPs", ipipEnabled: false, borrowedIPs: false,
 			hostEncryptionEnabled:          true,
 			skipWireguardHostConnBootstrap: true,
+			withTypha:                      true,
 		},
 	} {
 		Describe(
@@ -114,7 +119,7 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 			}
 
 			topologyOptions = wireguardTopologyOptions(
-				scene.routeSource, scene.ipipEnabled, scene.hostEncryptionEnabled, envs,
+				scene.routeSource, scene.ipipEnabled, scene.hostEncryptionEnabled, scene.withTypha, envs,
 			)
 			felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
@@ -314,7 +319,7 @@ func runWireguard3NodeTests(getInfra infrastructure.InfraFactory, scene wireguar
 					})
 
 					if scene.skipWireguardHostConnBootstrap {
-						It("Should still not have basic connectivity", func() {
+						It("Should not have connectivity at all", func() {
 							cc.ExpectNone(wlsByHost[0][1], wlsByHost[randomlySelectedNode][0])
 							cc.ExpectNone(wlsByHost[randomlySelectedNode][0], wlsByHost[0][1])
 							cc.CheckConnectivity()

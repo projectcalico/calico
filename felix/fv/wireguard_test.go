@@ -97,7 +97,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		log.Info("Started dmesg log capture")
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true, false)
+		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true, false, false)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
@@ -641,7 +641,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 		const nodeCount = 1
 
 		infra = getInfra()
-		felixes, _ = infrastructure.StartNNodeTopology(nodeCount, wireguardTopologyOptions("CalicoIPAM", true, false), infra)
+		felixes, _ = infrastructure.StartNNodeTopology(nodeCount, wireguardTopologyOptions("CalicoIPAM", true, false, false), infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -702,7 +702,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 		}
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true, false)
+		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true, false, false)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
@@ -969,7 +969,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions("WorkloadIPs", false, false)
+		topologyOptions := wireguardTopologyOptions("WorkloadIPs", false, false, false)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
@@ -1248,7 +1248,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 
 // Setup cluster topology options.
 // mainly, enable Wireguard with delayed start option.
-func wireguardTopologyOptions(routeSource string, ipipEnabled, hostEncryption bool, extraEnvs ...map[string]string) infrastructure.TopologyOptions {
+func wireguardTopologyOptions(routeSource string, ipipEnabled, hostEncryption bool, withTypha bool, extraEnvs ...map[string]string) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 
 	// Waiting for calico-node to be ready.
@@ -1268,6 +1268,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, hostEncryption bo
 	if hostEncryption {
 		topologyOptions.ExtraEnvVars["FELIX_WIREGUARDHOSTENCRYPTIONENABLED"] = "true"
 	}
+	topologyOptions.WithTypha = withTypha
 	topologyOptions.IPIPEnabled = ipipEnabled
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
