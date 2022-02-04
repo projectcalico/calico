@@ -76,7 +76,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: default-deny
 spec:
-  selector: projectcalico.org/namespace != "kube-system" && projectcalico.org/namespace != "calico-system" 
+  selector: projectcalico.org/namespace != "kube-system" && projectcalico.org/namespace != "calico-system" && projectcalico.org/namespace != "calico-apiserver" 
   types:
   - Ingress
   - Egress
