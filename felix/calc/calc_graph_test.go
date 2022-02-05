@@ -51,7 +51,8 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		}
 		conf := config.New()
 		conf.FelixHostname = "hostname"
-		cg := NewCalculationGraph(eb, conf).AllUpdDispatcher
+		encapInfo := config.NewEncapInfo()
+		cg := NewCalculationGraph(eb, conf, encapInfo).AllUpdDispatcher
 
 		// Send in the update and flush the buffer.  It should deposit the message
 		// via our callback.
@@ -167,7 +168,8 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		}
 		conf := config.New()
 		conf.FelixHostname = "hostname"
-		cg = NewCalculationGraph(eb, conf).AllUpdDispatcher
+		encapInfo := config.NewEncapInfo()
+		cg = NewCalculationGraph(eb, conf, encapInfo).AllUpdDispatcher
 	})
 
 	It("should coalesce duplicate updates", func() {
@@ -272,7 +274,8 @@ var _ = Describe("specific scenario tests", func() {
 		eventBuf.Callback = mockDataplane.OnEvent
 		conf := config.New()
 		conf.FelixHostname = localHostname
-		calcGraph = NewCalculationGraph(eventBuf, conf)
+		encapInfo := config.NewEncapInfo()
+		calcGraph = NewCalculationGraph(eventBuf, conf, encapInfo)
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			return nil

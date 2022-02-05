@@ -145,9 +145,19 @@ class TestIPIP(TestBase):
             self.pool_action(host, "apply", ipv4_pool, ipip_mode="Always")
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
-            # Test that removing pool removes the tunl IP.
+            # Set IPIP encapsulation to "Never" and make sure the tunl IP is not from this IP pool anymore
+            self.pool_action(host, "apply", ipv4_pool, ipip_mode="Never")
+            # This triggers a felix restart, so use assert_tunl_ip_consistently()
+            self.assert_tunl_ip_consistently(host, ipv4_pool, expect=False)
+
+            # Set IPIP encapsulation back to "Always" and make sure the tunl IP is assigned from that IP pool again
+            self.pool_action(host, "apply", ipv4_pool, ipip_mode="Always")
+            self.assert_tunl_ip(host, ipv4_pool, expect=True)
+
+            # Test that removing the pool removes the tunl IP.
             self.pool_action(host, "delete", ipv4_pool, ipip_mode="Always")
-            self.assert_tunl_ip(host, ipv4_pool, expect=False)
+            # This triggers a felix restart, so use assert_tunl_ip_consistently()
+            self.assert_tunl_ip_consistently(host, ipv4_pool, expect=False)
 
             # Test that re-adding the pool triggers the confd watch and we get an IP
             self.pool_action(host, "create", ipv4_pool, ipip_mode="Always")
@@ -274,7 +284,7 @@ class TestIPIP(TestBase):
         """
         Helper function to make assertions on whether or not the tunl interface
         on the Host has been assigned an IP or not. This function will retry
-        7 times, ensuring that our 5 second confd watch will trigger.
+        8 times, ensuring that our 5 second confd watch will trigger.
 
         :param host: DockerHost object
         :param ip_network: IPNetwork object which describes the ip-range we do (or do not)
@@ -283,8 +293,8 @@ class TestIPIP(TestBase):
                        interface.
         :return:
         """
-        retries = 7
-        for retry in range(retries + 1):
+        retries = 8
+        for retry in range(retries):
             try:
                 output = host.execute("ip addr show tunl0")
                 match = re.search(r'inet ([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})', output)
@@ -303,6 +313,40 @@ class TestIPIP(TestBase):
                     raise e
             else:
                 return
+
+    def assert_tunl_ip_consistently(self, host, ip_network, expect=True):
+        """
+        Helper function to make assertions on whether or not the tunl interface
+        on the Host consistently keeps get an assigned IP or not.
+        This function will first call assert_tunl_ip() to reach the expected
+        state, then it will assert that the reached state does not change for
+        5 seconds, checking every 1 second.
+
+        :param host: DockerHost object
+        :param ip_network: IPNetwork object which describes the ip-range we do (or do not)
+        expect to see an IP from on the tunl interface.
+        :param expect: Whether or not we are expecting to see an IP from IPNetwork on the tunl
+                       interface.
+        :return:
+        """
+        # First wait until the expected state is reached (retrying if needed)
+        self.assert_tunl_ip(host, ip_network, expect=expect)
+
+        # Then make sure it stays consistently this way for 'duration' seconds,
+        # checking every 1 second
+        duration = 5
+        for n in range(duration):
+            output = host.execute("ip addr show tunl0")
+            match = re.search(r'inet ([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})', output)
+            if match:
+                ip_address = IPAddress(match.group(1))
+                if expect:
+                    self.assertIn(ip_address, ip_network)
+                else:
+                    self.assertNotIn(ip_address, ip_network)
+            else:
+                self.assertFalse(expect, "No IP address assigned to tunl interface.")
+            sleep(1)
 
     @staticmethod
     def remove_tunl_ip():

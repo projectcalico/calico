@@ -183,6 +183,8 @@ var _ = Describe("Config override empty", func() {
 	})
 })
 
+var t bool = true
+
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
 		cfg := config.New()
@@ -304,9 +306,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", "", (*regexp.Regexp)(nil)),
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", ".*", regexp.MustCompile(".*")),
 
-	Entry("IpInIpEnabled", "IpInIpEnabled", "true", true),
-	Entry("IpInIpEnabled", "IpInIpEnabled", "y", true),
-	Entry("IpInIpEnabled", "IpInIpEnabled", "True", true),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "true", &t),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "y", &t),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "True", &t),
 
 	Entry("IpInIpMtu", "IpInIpMtu", "1234", int(1234)),
 	Entry("IpInIpTunnelAddr", "IpInIpTunnelAddr",
@@ -537,24 +539,31 @@ var _ = DescribeTable("Kubernetes Provider tests",
 
 var _ = Describe("DatastoreConfig tests", func() {
 	var c *config.Config
+	var e *config.EncapInfo
 	Describe("with IPIP enabled", func() {
 		BeforeEach(func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
-			c.IpInIpEnabled = true
+			t := true
+			c.IpInIpEnabled = &t
+			e = config.NewEncapInfo()
+			e.UseIPIPEncap = true
 		})
 		It("should leave node polling enabled", func() {
-			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeFalse())
+			Expect(c.DatastoreConfig(*e).Spec.K8sDisableNodePoll).To(BeFalse())
 		})
 	})
 	Describe("with IPIP disabled", func() {
 		BeforeEach(func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
-			c.IpInIpEnabled = false
+			f := false
+			c.IpInIpEnabled = &f
+			e = config.NewEncapInfo()
+			e.UseIPIPEncap = false
 		})
 		It("should leave node polling enabled", func() {
-			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeTrue())
+			Expect(c.DatastoreConfig(*e).Spec.K8sDisableNodePoll).To(BeTrue())
 		})
 	})
 
@@ -576,7 +585,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 			})
 		})
 		It("sets the configuration options", func() {
-			spec := c.DatastoreConfig().Spec
+			spec := c.DatastoreConfig(*e).Spec
 			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
 			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234"))
 			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))
@@ -596,7 +605,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 		It("sets the etcd suboptions", func() {
-			spec := c.DatastoreConfig().Spec
+			spec := c.DatastoreConfig(*e).Spec
 			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
 			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234/"))
 			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))
@@ -632,7 +641,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 		It("sets the configuration to what the felix configuration is", func() {
-			spec := c.DatastoreConfig().Spec
+			spec := c.DatastoreConfig(*e).Spec
 			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
 			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234/"))
 			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))

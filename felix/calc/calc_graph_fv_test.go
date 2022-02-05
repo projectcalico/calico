@@ -484,12 +484,13 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					// Create the calculation graph.
 					conf := config.New()
 					conf.FelixHostname = localHostname
-					conf.VXLANEnabled = true
 					conf.BPFEnabled = true
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan interface{})
-					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
+					encapInfo := config.NewEncapInfo()
+					encapInfo.UseVXLANEncap = true
+					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil, encapInfo)
 					// And a validation filter, with a channel between it
 					// and the async graph.
 					validator := NewValidationFilter(asyncGraph)
@@ -624,14 +625,15 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	BeforeEach(func() {
 		conf := config.New()
 		conf.FelixHostname = localHostname
-		conf.VXLANEnabled = true
 		conf.BPFEnabled = true
 		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
 		conf.RouteSource = expandedTest.RouteSource()
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
-		calcGraph = NewCalculationGraph(eventBuf, conf)
+		encapInfo := config.NewEncapInfo()
+		encapInfo.UseVXLANEncap = true
+		calcGraph = NewCalculationGraph(eventBuf, conf, encapInfo)
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			lastStats = stats
@@ -719,7 +721,8 @@ var _ = Describe("calc graph with health state", func() {
 		conf.FelixHostname = localHostname
 		outputChan := make(chan interface{})
 		healthAggregator := health.NewHealthAggregator()
-		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator)
+		encapInfo := config.NewEncapInfo()
+		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator, encapInfo)
 		Expect(asyncGraph).NotTo(BeNil())
 	})
 })
