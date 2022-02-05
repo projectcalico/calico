@@ -145,6 +145,10 @@ class TestIPIP(TestBase):
             self.pool_action(host, "apply", ipv4_pool, ipip_mode="Always")
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
+            # Set IPIP encapsulation to "Never" and make sure this does not remove the tunl IP
+            self.pool_action(host, "apply", ipv4_pool, ipip_mode="Never")
+            self.assert_tunl_ip(host, ipv4_pool, expect=True)
+
             # Test that removing pool removes the tunl IP.
             self.pool_action(host, "delete", ipv4_pool, ipip_mode="Always")
             self.assert_tunl_ip(host, ipv4_pool, expect=False)
