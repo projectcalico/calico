@@ -422,10 +422,10 @@ stop-etcd:
 IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "calico-st-allow-etcd" -j ACCEPT
 
 # Create the calico/test image
-test_image: calico_test.created
-calico_test.created: $(TEST_CONTAINER_FILES)
+test_image: .calico_test.created
+.calico_test.created: $(TEST_CONTAINER_FILES)
 	cd calico_test && $(DOCKER_BUILD) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) . --load
-	touch calico_test.created
+	touch $@
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
@@ -479,7 +479,7 @@ k8s-test:
 kind-k8st-setup: $(K8ST_IMAGE_TARS) cluster-create
 
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: calico_test.created $(KUBECONFIG)
+kind-k8st-run-test: .calico_test.created $(KUBECONFIG)
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
@@ -503,7 +503,7 @@ remove-go-build-image:
 
 .PHONY: st
 ## Run the system tests
-st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
+st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd .calico_test.created dist/calico dist/calico-ipam
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
