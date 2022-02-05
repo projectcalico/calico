@@ -497,6 +497,7 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, attrType string) {
 	var updateError error
 	logCtx := getLogger(attrType)
+	logCtx.WithField("Node", nodename).Debug("Remove tunnel addresses")
 
 	// If the update fails with ResourceConflict error then retry 5 times with 1 second delay before failing.
 	for i := 0; i < 5; i++ {

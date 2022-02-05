@@ -59,7 +59,8 @@ func StartDataplaneDriver(configParams *config.Config,
 	healthAggregator *health.HealthAggregator,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset) (DataplaneDriver, *exec.Cmd) {
+	k8sClientSet *kubernetes.Clientset,
+	encapInfo *config.EncapInfo) (DataplaneDriver, *exec.Cmd) {
 
 	if !configParams.IsLeader() {
 		// Return an inactive dataplane, since we're not the leader.
@@ -257,11 +258,11 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesMarkEndpoint:        markEndpointMark,
 				IptablesMarkNonCaliEndpoint: markEndpointNonCaliEndpoint,
 
-				VXLANEnabled: configParams.VXLANEnabled,
+				VXLANEnabled: encapInfo.UseVXLANEncap,
 				VXLANPort:    configParams.VXLANPort,
 				VXLANVNI:     configParams.VXLANVNI,
 
-				IPIPEnabled:        configParams.IpInIpEnabled,
+				IPIPEnabled:        encapInfo.UseIPIPEncap,
 				IPIPTunnelAddress:  configParams.IpInIpTunnelAddr,
 				VXLANTunnelAddress: configParams.IPv4VXLANTunnelAddr,
 
