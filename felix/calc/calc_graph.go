@@ -80,6 +80,11 @@ type passthruCallbacks interface {
 	OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
 }
 
+type poolEncapCallbacks interface {
+	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
+	OnIPPoolRemove(model.IPPoolKey)
+}
+
 type routeCallbacks interface {
 	OnRouteUpdate(update *proto.RouteUpdate)
 	OnRouteRemove(dst string)
@@ -96,6 +101,7 @@ type PipelineCallbacks interface {
 	endpointCallbacks
 	configCallbacks
 	passthruCallbacks
+	poolEncapCallbacks
 	routeCallbacks
 	vxlanCallbacks
 }
@@ -106,7 +112,7 @@ type CalcGraph struct {
 	activeRulesCalculator *ActiveRulesCalculator
 }
 
-func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *CalcGraph {
+func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, encapInfo *config.EncapInfo) *CalcGraph {
 	hostname := conf.FelixHostname
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
 
@@ -329,7 +335,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
-	if conf.BPFEnabled || conf.VXLANEnabled || conf.WireguardEnabled {
+	if conf.BPFEnabled || encapInfo.UseVXLANEncap || conf.WireguardEnabled {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)
@@ -358,7 +364,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//         |
 	//      <dataplane>
 	//
-	if conf.VXLANEnabled {
+	if encapInfo.UseVXLANEncap {
 		vxlanResolver := NewVXLANResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
 		vxlanResolver.RegisterWith(allUpdDispatcher)
 	}
@@ -395,6 +401,24 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//
 	profileDecoder := NewProfileDecoder(callbacks)
 	profileDecoder.RegisterWith(allUpdDispatcher)
+
+	// Register for IP Pool updates. PoolEncapManager will call ConfigChangedRestartCallback()
+	// if IPIP and/or VXLAN encap use changes due to IP pool changes, so that it is
+	// recalculated at Felix startup.
+	//
+	//        ...
+	//     Dispatcher (all updates)
+	//         |
+	//         | IP pools
+	//         |
+	//       pool encap manager
+	//         |
+	//         |
+	//         |
+	//      <dataplane>
+	//
+	poolEncapManager := NewPoolEncapManager(callbacks, conf, encapInfo)
+	poolEncapManager.RegisterWith(allUpdDispatcher)
 
 	return &CalcGraph{
 		AllUpdDispatcher:      allUpdDispatcher,
