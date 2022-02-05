@@ -81,6 +81,22 @@ func (p *BoolParam) Parse(raw string) (interface{}, error) {
 	return nil, p.parseFailed(raw, "invalid boolean")
 }
 
+type BoolPtrParam struct {
+	Metadata
+}
+
+func (p *BoolPtrParam) Parse(raw string) (interface{}, error) {
+	t := true
+	f := false
+	switch strings.ToLower(raw) {
+	case "true", "1", "yes", "y", "t":
+		return &t, nil
+	case "false", "0", "no", "n", "f":
+		return &f, nil
+	}
+	return nil, p.parseFailed(raw, "invalid boolean")
+}
+
 type IntParam struct {
 	Metadata
 	Min int
