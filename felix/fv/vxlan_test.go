@@ -519,8 +519,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 
 					// Explicitly configure the MTU.
-					felixConfig, err := client.FelixConfigurations().Get(context.Background(), "default", options.GetOptions{})
-					Expect(err).NotTo(HaveOccurred())
+					felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
+					felixConfig.Name = "default"
 					mtu := 1300
 					vni := 4097
 					port := 4790
@@ -558,8 +558,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 
 					// Disable VXLAN in Felix.
-					felixConfig, err := client.FelixConfigurations().Get(context.Background(), "default", options.GetOptions{})
-					Expect(err).NotTo(HaveOccurred())
+					felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
+					felixConfig.Name = "default"
 					enabled := false
 					felixConfig.Spec.VXLANEnabled = &enabled
 					_, err = client.FelixConfigurations().Update(context.Background(), felixConfig, options.SetOptions{})
