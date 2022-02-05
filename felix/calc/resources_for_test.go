@@ -648,6 +648,10 @@ var ipPoolKey = IPPoolKey{
 	CIDR: mustParseNet("10.0.0.0/16"),
 }
 
+var ipPoolKey2 = IPPoolKey{
+	CIDR: mustParseNet("11.0.0.0/16"),
+}
+
 var hostCoveringIPPoolKey = IPPoolKey{
 	CIDR: mustParseNet("192.168.0.0/24"),
 }
@@ -673,6 +677,12 @@ var v6IPPool = IPPool{
 
 var ipPoolWithVXLAN = IPPool{
 	CIDR:       mustParseNet("10.0.0.0/16"),
+	VXLANMode:  encap.Always,
+	Masquerade: true,
+}
+
+var ipPool2WithVXLAN = IPPool{
+	CIDR:       mustParseNet("11.0.0.0/16"),
 	VXLANMode:  encap.Always,
 	Masquerade: true,
 }
