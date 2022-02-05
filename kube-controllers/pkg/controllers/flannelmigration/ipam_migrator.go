@@ -90,14 +90,14 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	// Instead, we need to update them to enable vxlan.
 	checkVxlan := !m.config.IsRunningCanal()
 
-	// Creating default ippool with vxlan enabled will also create a global felix configuration.
+	// Create default ippool with vxlan enabled
 	err = createDefaultVxlanIPPool(m.ctx, m.calicoClient, cidr, blockSize, m.config.FlannelIPMasq, checkVxlan)
 	if err != nil {
 		return fmt.Errorf("Failed to create default ippool")
 	}
 
-	// Update default Felix configuration with Flannel VNI and vxlan port.
-	err = updateDefaultFelixConfigurtion(m.ctx, m.calicoClient,
+	// Update or create default Felix configuration with Flannel VNI and vxlan port.
+	err = updateOrCreateDefaultFelixConfiguration(m.ctx, m.calicoClient,
 		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU,
 		checkVxlan)
 	if err != nil {
@@ -363,11 +363,19 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 // If migrating from Flannel, return error if vxlan is not enabled.
 // If migrating from Canal, set vxlan enabled.
 // Do nothing if correct values already been set.
-func updateDefaultFelixConfigurtion(ctx context.Context, client client.Interface, vni, port, mtu int, checkVxlan bool) error {
+func updateOrCreateDefaultFelixConfiguration(ctx context.Context, client client.Interface, vni, port, mtu int, checkVxlan bool) error {
 	// Get default Felix configuration. Return error if not exists.
 	defaultConfig, err := client.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
+	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+		// Create the default config if it doesn't already exist.
+		defaultConfig = api.NewFelixConfiguration()
+		defaultConfig.Name = defaultFelixConfigurationName
+		t := true
+		defaultConfig.Spec.VXLANEnabled = &t
+		defaultConfig, err = client.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
+	}
 	if err != nil {
-		log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
+		log.WithError(err).Errorf("Error creating default FelixConfiguration resource")
 		return err
 	}
 
