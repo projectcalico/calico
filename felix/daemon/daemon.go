@@ -76,6 +76,7 @@ const (
 	// String sent on the failure report channel to indicate we're shutting down for config
 	// change.
 	reasonConfigChanged = "config changed"
+	reasonEncapChanged  = "encapsulation changed"
 	reasonFatalError    = "fatal error"
 	// Process return code used to report a config change.  This is the same as the code used
 	// by SIGHUP, which means that the wrapper script also restarts Felix on a SIGHUP.
@@ -266,6 +267,18 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+
+		// List all IP pools and feed them into an EncapsulationCalculator to determine if
+		// IPIP and/or VXLAN encapsulations should be enabled
+		ippoolKVPList, err := backendClient.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
+		if err != nil {
+			log.WithError(err).Error("Failed to list IP Pools")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
+		encapCalculator := calc.NewEncapsulationCalculator(configParams, ippoolKVPList)
+		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
+		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
@@ -534,8 +547,7 @@ configRetry:
 	asyncCalcGraph := calc.NewAsyncCalcGraph(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
-		healthAggregator,
-	)
+		healthAggregator)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update
@@ -751,8 +763,12 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		go func() {
 			time.Sleep(2 * time.Second)
 
-			if reason == reasonConfigChanged {
+			switch reason {
+			case reasonConfigChanged:
 				exitWithCustomRC(configChangedRC, "Exiting for config change")
+				return
+			case reasonEncapChanged:
+				exitWithCustomRC(configChangedRC, "Exiting for encapsulation change")
 				return
 			}
 
@@ -1164,7 +1180,7 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				}
 
 				if restartNeeded {
-					fc.shutDownProcess("config changed")
+					fc.shutDownProcess(reasonConfigChanged)
 				}
 			}
 
@@ -1181,6 +1197,11 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 		case *calc.DatastoreNotReady:
 			log.Warn("Datastore became unready, need to restart.")
 			fc.shutDownProcess("datastore became unready")
+		case *proto.Encapsulation:
+			if msg.IpipEnabled != fc.config.Encapsulation.IPIPEnabled || msg.VxlanEnabled != fc.config.Encapsulation.VXLANEnabled {
+				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
+				fc.shutDownProcess(reasonEncapChanged)
+			}
 		}
 		if err := fc.dataplane.SendMessage(msg); err != nil {
 			fc.shutDownProcess("Failed to write to dataplane driver")
