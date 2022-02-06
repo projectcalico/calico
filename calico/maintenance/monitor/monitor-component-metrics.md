@@ -47,18 +47,37 @@ This tutorial will go through the necessary steps to implement basic monitoring 
 #### 1. Configure Calico to enable metrics reporting
 
 ##### **Felix configuration**
-Felix prometheus metrics are **disabled** by default. You have to manually change your Felix configuration (**prometheusMetricsEnabled**) via calicoctl in order to use this feature.
+Felix prometheus metrics are **disabled** by default. You have to manually change your Felix configuration (**prometheusMetricsEnabled**) via calicoctl or [Calico API server (Calico 3.20+)](http://localhost:4000/maintenance/install-apiserver) in order to use this feature.
 
 > **Note**: A comprehensive list of configuration values can be [found at this link]({{ site.baseurl }}/reference/felix/configuration).
    {: .alert .alert-info}
 
+{% tabs %}
+<label:apiserver,active:true>
+<% 
+```bash
+kubectl patch felixConfiguration default --type merge --patch '{"spec":{"prometheusMetricsEnabled": true}}'
+```
+
+You should see an output like below:
+```
+felixconfiguration.crd.projectcalico.org/default patched
+```
+%>
+
+<label:calicoctl>
+<%
+
 ```bash
 calicoctl patch felixConfiguration default  --patch '{"spec":{"prometheusMetricsEnabled": true}}'
 ```
+
 You should see an output like below:
 ```
 Successfully patched 1 'FelixConfiguration' resource
 ```
+%>
+{% endtabs %}
 
 ##### **Creating a service to expose Felix metrics**
 
@@ -85,8 +104,22 @@ EOF
 
 ##### **Typha Configuration**
 
+{% tabs %}
+<label:Operator,active:true>
+<%
+```bash
+kubectl patch installation default --type merge --patch='{"spec": {"calicoNetwork": {"hostPorts": "Disabled"}}}'
+```
+
+```bash
+installation.operator.tigera.io/default patched
+```
+
+%>
+<label:Manifest>
+<%
 > **Note** Typha implementation is optional, if you don't have Typha in your cluster you should skip [Typha configuration](#typha-configuration) section.
-   {: .alert .alert-danger}
+   {: .alert .alert-info}
 
 If you are uncertain whether you have `Typha` in your cluster execute the following code:
 
@@ -96,7 +129,7 @@ kubectl get pods -A | grep typha
 If your result is similar to what is shown below you are using Typha in your cluster.
 
 > **Note** The name suffix of pods shown below was dynamically generated. Your typha instance might have a different suffix.
-   {: .alert .alert-warning}
+   {: .alert .alert-info}
 
 ```
 kube-system     calico-typha-56fccfcdc4-z27xj                         1/1     Running   0          28h
@@ -105,10 +138,13 @@ kube-system     calico-typha-horizontal-autoscaler-74f77cd87c-6hx27   1/1     Ru
 
 You can enable Typha metrics to be consumed by Prometheus via [two ways]({{ site.baseurl }}/reference/typha/configuration).
 
+%>
+{% endtabs %}
+
 ##### **Creating a service to expose Typha metrics**
 
 > **Note**: Typha uses **port 9091** TCP by default to publish its metrics. However, if {{site.prodname}} is installed using [Amazon yaml file](https://github.com/aws/amazon-vpc-cni-k8s/blob/b001dc6a8fff52926ed9a93ee6c4104f02d365ab/config/v1.5/calico.yaml#L535-L536){:target="_blank"} this port will be 9093 as its set manually via **TYPHA_PROMETHEUSMETRICSPORT** environment variable.
-   {: .alert .alert-warning}
+   {: .alert .alert-info}
 
 ``` bash
 kubectl apply -f - <<EOF
@@ -127,7 +163,21 @@ EOF
 ```
 
 ##### **kube-controllers configuration**
+{% tabs %}
+<label:Operator,active:true>
+<%
+By default `tigera-operator` creates a service.
 
+```bash
+kubectl get svc -n calico-system
+```
+
+```bash
+calico-kube-controllers-metrics   ClusterIP   10.43.77.57     <none>        9094/TCP   39d
+```
+%>
+<label:Manifest>
+<%
 kube-controllers prometheus metrics are **enabled** by default on TCP port 9094. You can adjust the port by modifying the KubeControllersConfiguration resource.
 
 ```bash
@@ -155,7 +205,8 @@ spec:
     targetPort: 9094
 EOF
 ```
-
+%>
+{% endtabs %}
 #### 2. Cluster preparation
 
 ##### **Namespace creation**
@@ -165,7 +216,7 @@ EOF
    {: .alert .alert-info}
 
 ```bash
-kubectl apply -f -<<EOF
+kubectl create -f -<<EOF
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -228,7 +279,67 @@ We can configure Prometheus using a ConfigMap to persistently store the desired 
 
 > **Note**: A comprehensive guide about configuration file can be [found at this link](https://prometheus.io/docs/prometheus/latest/configuration/configuration/){:target="_blank"}.
    {: .alert .alert-info}
-
+{% tabs %}
+<label:Operator,active:true>
+<%
+```bash
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: calico-monitoring
+data:
+  prometheus.yml: |-
+    global:
+      scrape_interval:   15s
+      external_labels:
+        monitor: 'tutorial-monitor'
+    scrape_configs:
+    - job_name: 'prometheus'
+      scrape_interval: 5s
+      static_configs:
+      - targets: ['localhost:9090']
+    - job_name: 'felix_metrics'
+      scrape_interval: 5s
+      scheme: http
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: felix-metrics-svc
+        replacement: $1
+        action: keep
+    - job_name: 'typha_metrics'
+      scrape_interval: 5s
+      scheme: http
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: calico-typha
+        action: drop
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: service
+      - source_labels: [service]
+        action: keep
+        regex: typha-metrics-svc
+    - job_name: 'kube_controllers_metrics'
+      scrape_interval: 5s
+      scheme: http
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: calico-kube-controllers-metrics
+        replacement: $1
+        action: keep
+EOF
+```
+%>
+<label:manifest>
+<%
 ```bash
 kubectl apply -f - <<EOF
 apiVersion: v1
@@ -279,6 +390,8 @@ data:
         action: keep
 EOF
 ```
+%>
+{% endtabs %}
 ##### **Create Prometheus pod**
 
 Now that you have a `serviceaccount` with permissions to gather metrics and have a valid config file for your Prometheus, it's time to create the Prometheus pod.
