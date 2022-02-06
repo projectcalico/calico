@@ -160,12 +160,13 @@ type Config struct {
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
 	// Wireguard configuration
-	WireguardEnabled               bool   `config:"bool;false"`
-	WireguardListeningPort         int    `config:"int;51820"`
-	WireguardRoutingRulePriority   int    `config:"int;99"`
-	WireguardInterfaceName         string `config:"iface-param;wireguard.cali;non-zero"`
-	WireguardMTU                   int    `config:"int;0"`
-	WireguardHostEncryptionEnabled bool   `config:"bool;false"`
+	WireguardEnabled               bool          `config:"bool;false"`
+	WireguardListeningPort         int           `config:"int;51820"`
+	WireguardRoutingRulePriority   int           `config:"int;99"`
+	WireguardInterfaceName         string        `config:"iface-param;wireguard.cali;non-zero"`
+	WireguardMTU                   int           `config:"int;0"`
+	WireguardHostEncryptionEnabled bool          `config:"bool;false"`
+	WireguardPersistentKeepAlive   time.Duration `config:"seconds;0"`
 
 	BPFEnabled                         bool             `config:"bool;false"`
 	BPFDisableUnprivileged             bool             `config:"bool;true"`
@@ -330,7 +331,9 @@ type Config struct {
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
-	RouteTableRange idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
+	// RouteTableRange is deprecated in favor of RouteTableRanges,
+	RouteTableRange  idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
+	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
@@ -785,6 +788,8 @@ func loadParams() {
 			param = &CIDRListParam{}
 		case "route-table-range":
 			param = &RouteTableRangeParam{}
+		case "route-table-ranges":
+			param = &RouteTableRangesParam{}
 		case "keyvaluelist":
 			param = &KeyValueListParam{}
 		default:
@@ -852,6 +857,27 @@ func (config *Config) TyphaDiscoveryOpts() []discovery.Option {
 		discovery.WithAddrOverride(config.TyphaAddr),
 		discovery.WithKubeService(config.TyphaK8sNamespace, config.TyphaK8sServiceName),
 	}
+}
+
+// RouteTableIndices compares provided args for the deprecated RoutTableRange arg
+// and the newer RouteTableRanges arg, giving precedence to the newer arg if it's explicitly-set
+func (config *Config) RouteTableIndices() []idalloc.IndexRange {
+	if config.RouteTableRanges == nil || len(config.RouteTableRanges) == 0 {
+		if config.RouteTableRange != (idalloc.IndexRange{}) {
+			log.Warn("Proceeding with `RouteTableRange` config option. This field has been deprecated in favor of `RouteTableRanges`.")
+			return []idalloc.IndexRange{
+				config.RouteTableRange,
+			}
+		}
+
+		// default RouteTableRanges val
+		return []idalloc.IndexRange{
+			{Min: 1, Max: 250},
+		}
+	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
+		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
+	}
+	return config.RouteTableRanges
 }
 
 func New() *Config {

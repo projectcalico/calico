@@ -46,6 +46,7 @@ GENERATED_FILES=proto/felixbackend.pb.go bpf/asm/opcode_string.go
 
 # All Felix go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS) fv,-path ./$(dir) -prune -o) -type f -name '*.go' -print) $(GENERATED_FILES)
+SRC_FILES+=$(shell find bpf -name '*.h')
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
 EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
@@ -99,7 +100,6 @@ clean:
 	       dist \
 	       build \
 	       fv/fv.test \
-	       $(GENERATED_FILES) \
 	       go/docs/calc.pdf \
 	       release-notes-* \
 	       fv/infrastructure/crds/
@@ -115,6 +115,13 @@ clean:
 	$(DOCKER_GO_BUILD) make -C $(LIBBPF_CONTAINER_PATH) clean
 	-docker rmi $(FELIX_IMAGE)-wgtool:latest-amd64
 	-docker rmi $(FELIX_IMAGE)-wgtool:latest
+
+.PHONY: clean-generated
+# Delete (checked-in) generated files.  Intentionally not part of the main clean target since these files are
+# checked in and deleting them makes the repo "dirty" as far as git is concerned.  It also breaks downstream
+# builds that import these files since they don't know to rebuild felix's generated files.
+clean-generated:
+	rm -rf $(GENERATED_FILES)
 
 ###############################################################################
 # Building the binary

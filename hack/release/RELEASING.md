@@ -55,7 +55,7 @@ To publish Calico, you need **the following permissions**:
       region = us-east-2
       ```
   Your user will need permission for assuming the helm admin role in the production account.
-  
+
 You'll also need **several GB of disk space**.
 
 Some of the release scripts also require **tools to be installed** in your dev environment:
@@ -77,14 +77,26 @@ To verify that the code and GitHub are in the right state for releasing the chos
 
 ## 3. Create a release branch
 
-When starting development on a new minor release, the first step is to create a release branch. 
+When starting development on a new minor release, the first step is to create a release branch.
 
 **For patch releases, this section can be skipped and you can go directly to [Performing a release](#performing-a-release)**
 
-1. Create a new branch off of the latest master.
+### Setting up the branch
+
+1. Create a new branch off of the latest master and publish it, along with a dev tag for the next release.
 
    ```
-   git checkout master && git pull origin master && git checkout -b release-vX.Y
+   git checkout master && git pull origin master
+   ```
+
+   ```
+   make create-release-branch
+   ```
+
+1. Checkout the newly created branch.
+
+   ```
+   git checkout release-vX.Y
    ```
 
 1. Update versioning information in `github.com/projectcalico/calico/calico/_data/versions.yml`.
@@ -100,7 +112,14 @@ When starting development on a new minor release, the first step is to create a 
         ... etc ...
    ```
 
-1. Update the `version` in the `defaults` in `github.com/projectcalico/calico/calico/_config.yml` so that `page.version` will be set correctly:
+1. Create the the release notes file. This does not need to be populated now but does need to exist for the site to render. The file should match
+   the `title` field from `calico/_data/versions.yml` created in the previous step.
+
+   ```
+   touch calico/_includes/release-notes/<title>-release-notes.md
+   ```
+
+1. Update the `version` in the `defaults` section in `github.com/projectcalico/calico/calico/_config.yml` so that `page.version` will be set correctly:
 
    ```
    -
@@ -110,26 +129,12 @@ When starting development on a new minor release, the first step is to create a 
        version: vX.Y
    ```
 
-1. In `github.com/projectcalico/calico/calico/netlify.toml`
-    1. set the `RELEASE_VERSION` environment variable to `vX.Y`.
-    1. add the below redirect at the top of redirects.
-    ```
-       # unforced generic redirect of /vX.Y to /
-       [[redirects]]
-         from = "/vX.Y/*"
-         to = "/:splat"
-         status = 301
-    ```
+1. In `github.com/projectcalico/calico/calico/netlify.toml`, set `RELEASE_VERSION` to `vX.Y`
 
-1. In `github.com/projectcalico/calico/calico/netlify/_redirects` add a new for the new release following the other examples. This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't fail with 404.
+1. In `github.com/projectcalico/calico/calico/netlify/_redirects` add a new for the new release following the other examples.
+   This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't fail with 404.
 
-1. In netlify/sitemap-index.xml append a new sitemap location to the sitemap index for the release version.
-
-1. Create the the release notes file. This does not need to be populated now but does need to exist.
-
-   ```
-   touch calico/_includes/release-notes/<VERSION>-release-notes.md
-   ```
+1. In `calico/netlify/sitemap-index.xml` append a new sitemap location to the sitemap index for the release version.
 
 1. If appropriate, update the list of tested versions for different platforms in the appropriate documents.
 
@@ -138,12 +143,34 @@ When starting development on a new minor release, the first step is to create a 
    - OpenStack `calico/getting-started/openstack/requirements.md`
    - Non-cluster hosts `calico/getting-started/bare-metal/requirements.md`
 
-1. Commit your changes and push the branch. For example:
+1. Commit the changes you have made so far.
 
    ```
    git commit -a -m "Update docs for vX.Y"
+   ```
+
+1. In add the following redirect to the top of the redirects section in `github.com/projectcalico/calico/calico/netlify.toml`
+
+    ```
+    # proxy redirects for website and manifests for v3.21
+    [[redirects]]
+      from = "/archive/v3.21/*"
+      to = "https://calico-v3-21.netlify.app/archive/v3.21/:splat"
+      status = 200
+    ```
+1. Add another commit for the redirect.
+
+   ```
+   git commit -a -m "Add redirects for archive/vX.Y"
+   ```
+
+   Then, push your changes to the branch.
+
+   ```
    git push origin release-vX.Y
    ```
+
+### Setting up netlify
 
 1. On netlify create a new site using the `release-vX.Y` branch (You should at least have write access to this repo for site creation)
 
@@ -151,45 +178,53 @@ When starting development on a new minor release, the first step is to create a 
 
 1. Ensure that the site is generated properly by visiting site URL (Ex. https://calico-vX-Y.netlify.app/archive/vX.Y/).
 
-1. After ensuring that the site deployment is successful, in current production branch's `netlify.toml`, add below proxy rules for the release candidate at the top of `redirects` rules.
-
-   ```toml
-    [[redirects]]
-      from = "/archive/vX.Y/*"
-      to = "https://calico-vX-Y.netlify.app/archive/vX.Y/:splat"
-      status = 200
-
-    [[redirects]]
-      from = "/vX.Y/*"
-      to = "https://calico-vX-Y.netlify.app/vX.Y/:splat"
-      status = 200
-   ```
-
-1. Ensure that these proxy rules are cherry-picked to the master branch as well so that future releases, which would be cut from master, will have references to this release.
-
-1. Open a pull request to upstream production branch, get it reviewed and merged. This would make the candidate site docs available at `projectcalico.docs.tigera.io/archive/vX.Y/` (Note: the trailing slash)
-
-1. Add a commit to master to indicate the start of development on the next release version. e.g., If you just created release-v4.5, then `NEXT_VERSION` should be v4.6.0.
-
-   ```
-   git checkout master && git pull origin master
-   git commit --allow-empty -m "Begin development on $(NEXT_VERSION)" 
-   git tag $(NEXT_VERSION)-0.dev 
-   git push origin master $(NEXT_VERSION)-0.dev
-   ```
+1. Cherry-pick the proxy rules commit created earlier to the latest production branch, as well as `master`.
+   This will make the candidate site docs available at `projectcalico.docs.tigera.io/archive/vX.Y/` (Note: the trailing slash)
 
 ## 4. Performing a release
 
-### 4.a Build and publish the repository in Semaphore 
+### 4.a Create a temporary branch for this release against origin
 
-To build and publish the release artifacts, find the desired commit [in Semaphore](https://tigera.semaphoreci.com/projects/calico), verify that all tests for that 
+1. Create a new branch based off of `release-vX.Y`.
+
+   ```
+   git checkout release-vX.Y && git pull origin release-vX.Y
+   ```
+
+   ```
+   git checkout -b build-vX.Y.Z
+   ```
+
+1. Add the new version to the top of `calico/_data/versions.yml`
+
+1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
+
+   Then, add the newly created release note file to git.
+
+   ```
+   git add calico/_includes/release-notes/<VERSION>-release-notes.md
+   ```
+
+1. Commit your changes. For example:
+
+   ```
+   git commit -m "Updates for vX.Y.Z"
+   ```
+
+1. Push the branch to `github.com/projectcalico/calico` and create a pull request. Get it reviewed and ensure it passes CI before moving to the next step.
+
+### 4.b Build and publish the repository in Semaphore
+
+To build and publish the release artifacts, find the desired commit [in Semaphore](https://tigera.semaphoreci.com/projects/calico), verify that all tests for that
 commit have passed, and press the `Publish official release` manual promotion button.
 
-### 4.b Build and publish tigera/operator
+Wait for this job to complete before moving on to the next step.
+
+### 4.c Build and publish tigera/operator
 
 Follow [the tigera/operator release instructions](https://github.com/tigera/operator/blob/master/RELEASING.md).
 
-### 4.c Build and publish OpenStack packages
+### 4.d Build and publish OpenStack packages
 
 1. Check out the [packaging repository](https://github.com/projectcalico/packaging).
 
@@ -203,42 +238,22 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 1. Run `make release-publish VERSION=<version>`, where `<version>` is the Calico version being released.
 
-### 4.d Update the docs with the new version
+### 4.e Update the docs with the new version
 
-1. On a new branch, add the new version to the correct release section in `_data/versions.yml`
-
-1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
-
-   Then, add the newly created release note file to git.
-
-   ```
-   git add calico/_includes/release-notes/<VERSION>-release-notes.md
-   ```
-
-1. Commit your changes. For example:
-
-   ```
-   git commit -m "Documentation updates for release vX.Y.Z"
-   ```
-
-1. Push your branch and open a pull request. Get it reviewed and wait for it to pass CI before merging.
+1. Merge the PR branch created in step 4.a - `build-vX.Y.Z` and delete the branch from the repository.
 
 ## 5. Promoting to be the latest release in the docs
 
-For major or minor (vX.Y.0) releases, the candidate release branch created above must be promoted to the live documentation after publishing the release.
-
-This section describes how to create a new major or minor release. It assumes that the release branch has already been created
-as described in section 1.
+For major or minor (vX.Y.0) releases, the candidate release branch created above must also be promoted to the live documentation after publishing the release. For patch
+releases, the following steps can be skipped.
 
 1. Checkout the previously created release branch.
 
    ```
-   git checkout release-vX.Y
+   git checkout release-vX.Y && git pull origin release-vX.Y
    ```
 
 1. Add the previous release to `calico/_data/archives.yaml`. Make this change in master as well.
-
-1. Add the new version to the correct release section in `_data/versions.yml`.
 
 1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
 
@@ -246,18 +261,10 @@ as described in section 1.
    make -C calico update-authors
    ```
 
-1. Follow the steps in [writing release notes](#release-notes) to generate or update candidate release notes.
-
-   Then, add the newly created release note file to git.
-
-   ```
-   git add _data/release-notes/<VERSION>-release-notes.md
-   ```
-
 1. Commit your changes. For example:
 
    ```
-   git commit -m "Updates for release vX.Y.Z"
+   git commit -m "Promote vX.Y.Z to latest"
    ```
 
 1. Push your branch and open a pull request to the upstream release-vX.Y branch. Get it reviewed and wait for it to pass CI before merging.

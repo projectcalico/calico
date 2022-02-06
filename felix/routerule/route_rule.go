@@ -30,6 +30,7 @@ import (
 
 const (
 	maxConnFailures = 3
+	linuxRTTableMax = 0xffffffff
 )
 
 var (
@@ -41,13 +42,12 @@ var (
 	TableIndexFailed = errors.New("no table index specified")
 )
 
-// RouteRules represents set of routing rules with same ip family and priority.
+// RouteRules represents set of routing rules with same ip family.
 // The target of those rules are set of routing tables.
 type RouteRules struct {
 	logCxt *log.Entry
 
 	IPVersion int
-	Priority  int
 
 	// Routing table indexes which is exclusively managed by us.
 	tableIndexSet set.Set
@@ -83,7 +83,6 @@ type RouteRules struct {
 
 func New(
 	ipVersion int,
-	priority int,
 	tableIndexSet set.Set,
 	updateFunc RulesMatchFunc,
 	removeFunc RulesMatchFunc,
@@ -98,7 +97,11 @@ func New(
 	indexOK := true
 	tableIndexSet.Iter(func(item interface{}) error {
 		i := item.(int)
-		if (i == 0) || (i >= unix.RT_TABLE_COMPAT) {
+		if (i == 0) ||
+			int64(i) >= int64(linuxRTTableMax) ||
+			i == unix.RT_TABLE_DEFAULT ||
+			i == unix.RT_TABLE_LOCAL ||
+			i == unix.RT_TABLE_MAIN {
 			indexOK = false
 			return set.StopIteration
 		}
@@ -114,7 +117,6 @@ func New(
 			"ipVersion": ipVersion,
 		}),
 		IPVersion:        ipVersion,
-		Priority:         priority,
 		matchForUpdate:   updateFunc,
 		matchForRemove:   removeFunc,
 		tableIndexSet:    tableIndexSet,
@@ -144,6 +146,11 @@ func (r *RouteRules) getActiveRule(rule *Rule, f RulesMatchFunc) *Rule {
 
 // Set a Rule. Add to activeRules if it does not already exist based on matchForUpdate function.
 func (r *RouteRules) SetRule(rule *Rule) {
+
+	if r.netlinkFamily != rule.nlRule.Family {
+		log.WithField("rule", rule).Warnf("Rule does not match family %d, ignoring.", r.netlinkFamily)
+	}
+
 	if !r.tableIndexSet.Contains(rule.nlRule.Table) {
 		log.WithField("tableindex", rule.nlRule.Table).Panic("Unknown Table Index")
 	}
@@ -156,6 +163,11 @@ func (r *RouteRules) SetRule(rule *Rule) {
 
 // Remove a Rule. Do nothing if Rule not exists depends based on matchForRemove function.
 func (r *RouteRules) RemoveRule(rule *Rule) {
+
+	if r.netlinkFamily != rule.nlRule.Family {
+		log.WithField("rule", rule).Warnf("Rule does not match family %d, ignoring.", r.netlinkFamily)
+	}
+
 	if p := r.getActiveRule(rule, r.matchForRemove); p != nil {
 		r.activeRules.Discard(p)
 		r.inSync = false

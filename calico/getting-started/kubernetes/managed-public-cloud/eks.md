@@ -22,8 +22,6 @@ The geeky details of what you get:
 
 To enable {{site.prodname}} network policy enforcement on an EKS cluster using the AWS VPC CNI plugin, follow these step-by-step instructions: {% include open-new-window.html text='Installing Calico on Amazon EKS' url='https://docs.aws.amazon.com/eks/latest/userguide/calico.html' %}
 
-{% include /content/install-awscni-routetable-issue.md %}
-
 #### Install EKS with {{site.prodname}} networking
 
 The geeky details of what you get:
@@ -77,7 +75,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 ### Next steps
 
 **Required**
-- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+- [Install calicoctl command line tool]({{ site.baseurl }}/maintenance/clis/calicoctl/install)
 
 **Recommended**
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on AWS' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}

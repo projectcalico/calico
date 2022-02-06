@@ -223,13 +223,13 @@ The VPP dataplane has the following requirements:
 **Optional**
 For some hardware, the following hugepages configuration may enable VPP to use more efficient drivers:
 
-- At least 256 x 2MB-hugepages are available (`grep HugePages_Free /proc/meminfo`)
+- At least 512 x 2MB-hugepages are available (`grep HugePages_Free /proc/meminfo`)
 - The `vfio-pci` (`vfio_pci` on centos) or `uio_pci_generic` kernel module is loaded. For example:
 
    ````bash
    echo "vfio-pci" > /etc/modules-load.d/95-vpp.conf
    modprobe vfio-pci
-   echo "vm.nr_hugepages = 256" >> /etc/sysctl.conf
+   echo "vm.nr_hugepages = 512" >> /etc/sysctl.conf
    sysctl -p
    # restart kubelet to take the changes into account
    # you may need to use a different command depending on how kubelet was installed
@@ -251,7 +251,7 @@ For some hardware, the following hugepages configuration may enable VPP to use m
    {: .alert .alert-info}
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation.yaml
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-default.yaml
    ```
 
 #### Install the VPP dataplane components
@@ -326,7 +326,7 @@ After installing {{ site.prodname }} with the VPP dataplane, you can benefit fro
 
 **Tools**
 
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install) to configure and monitor your cluster.
+- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install) to configure and monitor your cluster.
 
 **Security**
 

@@ -110,18 +110,16 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		return nil, err
 	}
 
-	//Explicitly setting cipher suites in order to remove deprecated ones:
-	//- TLS_RSA --- lack perfect forward secrecy
-	//- 3DES --- widely considered to be too weak
-	//Order matters as indicates preference for the cipher in the selection algorithm. Also, some suites (TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
-	//for instance, for full list refer to golang.org/x/net/http2) are blacklisted by HTTP/2 spec and MUST be placed after the HTTP/2-approved
-	//cipher suites. Not doing that might cause client to be given an unapproved suite and reject the connection.
+	// Explicitly setting cipher suites in order to remove deprecated ones
+	// The list is taken from https://github.com/golang/go/blob/dev.boringcrypto.go1.13/src/crypto/tls/boring.go#L54
 	cipherSuites := []uint16{
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305, tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256, tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA, tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA, tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA}
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	}
 	serverConfig.SecureServing.CipherSuites = cipherSuites
 
 	if o.PrintSwagger {

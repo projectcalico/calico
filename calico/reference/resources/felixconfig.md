@@ -67,7 +67,7 @@ spec:
 | logSeverityScreen                  | The log severity above which logs are sent to the stdout. | Same as LogSeveritySys | string | `Info` |
 | logSeveritySys                     | The log severity above which logs are sent to the syslog. Set to `none` for no logging to syslog. | Debug, Info, Warning, Error, Fatal | string | `Info` |
 | logDebugFilenameRegex              | controls which source code files have their Debug log output included in the logs.  Only logs from files with names that match the given regular expression are included.  The filter only applies to Debug level logs. | regex | string | `""` |
-| maxIpsetSize                       | Maximum size for the ipsets used by Felix to implement tags. Should be set to a number that is greater than the maximum number of IP addresses that are ever expected in a tag. | int | int | `1048576` |
+| maxIpsetSize                       | Maximum size for the ipsets used by Felix. Should be set to a number that is greater than the maximum number of IP addresses that are ever expected in a selector. | int | int | `1048576` |
 | metadataAddr                       | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of `none` (case insensitive) means that Felix should not set up any NAT rule for the metadata path.  | IPv4, hostname, none | string | `127.0.0.1` |
 | metadataPort                       | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed. | int | int | `8775` |
 | natOutgoingAddress                 | The source address to use for outgoing NAT. By default an iptables MASQUERADE rule determines the source address which will use the address on the host interface the traffic leaves on. | IPV4 | string | `""` |
@@ -82,7 +82,8 @@ spec:
 | reportingInterval                  | Interval at which Felix reports its status into the datastore, or 0 to disable.  Must be non-zero in OpenStack deployments. | `5s`, `10s`, `1m` etc. | duration | `30s` |
 | reportingTTL                       | Time-to-live setting for process-wide status reports. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | routeRefreshInterval               | Period at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
-| routeTableRange                    | Calico programs additional Linux route tables for various purposes.  `RouteTableRange` specifies the indices of the route tables that Calico should use. |  | [RouteTableRange](#routetablerange) | `{Min: 1, Max: 250}` |
+| routeTableRange                    | *deprecated in favor of `RouteTableRanges`* Calico programs additional Linux route tables for various purposes. `RouteTableRange` specifies the indices of the route tables that Calico should use. |  | [RouteTableRanges](#routetablerange) | `""` |
+| routeTableRanges                    | Calico programs additional Linux route tables for various purposes. `RouteTableRanges` specifies a set of table index ranges that Calico should use. Deprecates `RouteTableRange`, overrides `RouteTableRange` |  | [RouteTableRanges](#routetableranges) | `[{"Min": 1, "Max": 250}]` |
 | serviceLoopPrevention              | When [service IP advertisement is enabled]({{ site.baseurl }}/networking/advertise-service-ips), prevent routing loops to service IPs that are not in use, by dropping or rejecting packets that do not get DNAT'd by kube-proxy.  Unless set to "Disabled", in which case such routing loops continue to be allowed. | `Drop`, `Reject`, `Disabled` | string | `Drop` |
 | sidecarAccelerationEnabled         | Enable experimental acceleration between application and proxy sidecar when using [application layer policy]({{ site.baseurl }}/security/app-layer-policy). [Default: `false`] | boolean | boolean | `false` |
 | usageReportingEnabled              | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. | boolean | boolean | `true` |
@@ -100,6 +101,7 @@ spec:
 | wireguardMTU                       | MTU set on the WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
 | wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
 | wireguardHostEncryptionEnabled     | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | boolean | false |
+| wireguardKeepAlive                 | WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0] | `5s`, `10s`, `1m` etc. | duration | `0` |
 | xdpRefreshInterval                 | Period at which Felix re-checks the XDP state in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable XDP refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | xdpEnabled                         | When `bpfEnabled` is `false`: enable XDP acceleration for host endpoint policies.  When `bpfEnabled` is `true`, XDP is automatically used for Calico policy where that makes sense, regardless of this setting.  [Default: `true`] | true,false | boolean | `true` |
 | bpfEnabled                         | Enable eBPF dataplane mode.  eBPF mode has some limitations, see the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for more details. | true, false | boolean | false |
@@ -131,12 +133,32 @@ policy is always accelerated, using the best available BPF technology.
 | protocol | The protocol match   | tcp, udp, sctp                       | string |
 | net      | The CIDR match       | any valid CIDR (e.g. 192.168.0.0/16) | string |
 
+
 #### RouteTableRange
+The `RouteTableRange` option is now deprecated in favor of [RouteTableRanges](#routetableranges).
 
 | Field    | Description          | Accepted Values   | Schema |
 |----------|----------------------|-------------------|--------|
 | min      | Minimum index to use | 1-250             | int    |
 | max      | Maximum index to use | 1-250             | int    |
+
+#### RouteTableRanges
+`RouteTableRanges` is a list of `RouteTableRange` objects:
+
+| Field    | Description          | Accepted Values | Schema |
+|----------|----------------------|-----------------|--------|
+| min      | Minimum index to use | 1 - 4294967295  | int    |
+| max      | Maximum index to use | 1 - 4294967295  | int    |
+
+Each item in the `RouteTableRanges` list designates a range of routing tables available to Calico. By default, Calico will use a single range of `1-250`.  If a range spans Linux's reserved table range (`253-255`) then those tables are automatically excluded from the list. It's possible that other table ranges may also be reserved by third-party systems unknown to Calico. In that case, multiple ranges can be defined to target tables below and above the sensitive ranges:
+```sh
+# target tables 65-99, and 256-1000, skipping 100-255
+calicoctl patch felixconfig default --type=merge -p '{"spec":{"routeTableRanges": [{"Min": 65, "Max": 99}, {"Min": 256, "Max": 1000}] }}
+```
+
+*Note*, for performance reasons, the maximum total number of routing tables that Felix will accept is 65535 (or 2*16).
+
+If both `RouteTableRanges` and `RouteTableRange` are set, `RouteTableRanges` takes precedence and `RouteTableRange` is ignored.
 
 #### AWS IAM Role/Policy for source-destination-check configuration
 

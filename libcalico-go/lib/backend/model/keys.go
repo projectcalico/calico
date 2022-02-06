@@ -244,9 +244,6 @@ func KeyFromDefaultPath(path string) Key {
 		log.Debugf("Path is a profile: %v (%v)", path, m[2])
 		pk := ProfileKey{unescapeName(m[1])}
 		switch m[2] {
-		case "tags":
-			log.Debugf("Profile tags")
-			return ProfileTagsKey{ProfileKey: pk}
 		case "rules":
 			log.Debugf("Profile rules")
 			return ProfileRulesKey{ProfileKey: pk}

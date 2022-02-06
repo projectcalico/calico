@@ -71,6 +71,7 @@ _site build: bin/helm
 clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
+	find . -name '.*.published*' -type f -delete
 	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
 
 ###############################################################################
@@ -144,7 +145,7 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean chart _site
 	touch $@
 
-chart: _includes/charts/tigera-operator/values.yaml bin/helm3
+chart: clean _includes/charts/tigera-operator/values.yaml bin/helm3
 	bin/helm3 package ./_includes/charts/tigera-operator \
 	--destination ./bin/ \
 	--version $(GIT_VERSION) \
@@ -153,15 +154,11 @@ ifdef CHART_RELEASE
 	mv ./bin/tigera-operator-$(GIT_VERSION).tgz ./bin/tigera-operator-$(GIT_VERSION)-$(CHART_RELEASE).tgz
 endif
 
-# Build values.yaml for the tigera-operator chart
-.PHONY: values.yaml
-CONTAINERIZED_VALUES?=docker run --rm -v $(CURDIR):/calico -w /calico ruby:2.5
-_includes/charts/tigera-operator/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
-	$(CONTAINERIZED_VALUES) ruby ./hack/gen_values_yml.rb --registry $(REGISTRY) --chart tigera-operator > $@
-
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
 	$(MAKE) helm-index
+	touch $@
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
 .PHONY: helm-index
@@ -242,9 +239,9 @@ build-operator-reference:
 	   -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
 	   -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	   -w /go/src/$(PACKAGE_NAME) \
-	   $(CALICO_BUILD) /bin/bash -c 'export GO111MODULE=on && rm -rf builder && mkdir builder && cd builder && \
+	   $(CALICO_BUILD) /bin/bash -c 'rm -rf builder && mkdir builder && cd builder && \
 	           git clone --depth=1 -b $(API_GEN_BRANCH) https://github.com/$(API_GEN_REPO) api-gen && cd api-gen && \
 	           go mod edit -replace github.com/tigera/operator=github.com/$(OPERATOR_REPO)@$(OPERATOR_VERSION) && \
-	           go mod download && go build && \
+	           go mod download all && go build && \
 	           ./gen-crd-api-reference-docs -config /go/src/$(PACKAGE_NAME)/reference/installation/config.json \
 	                   -api-dir github.com/tigera/operator/api -out-file /go/src/$(PACKAGE_NAME)/reference/installation/_api.html'

@@ -13,7 +13,7 @@ section.
 
 > **Note**: This section provides full reference information for `calicoctl`. To learn
 > how to install and configure `calicoctl`, refer to
-> [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install).
+> [Installing calicoctl]({{ site.baseurl }}/maintenance/clis/calicoctl/install).
 {: .alert .alert-info}
 
 The calicoctl command line interface provides a number of resource management

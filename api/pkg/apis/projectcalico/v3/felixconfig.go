@@ -366,8 +366,14 @@ type FelixConfigurationSpec struct {
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
 	RouteSource string `json:"routeSource,omitempty" validate:"omitempty,routeSource"`
 
-	// Calico programs additional Linux route tables for various purposes.  RouteTableRange
-	// specifies the indices of the route tables that Calico should use.
+	// Calico programs additional Linux route tables for various purposes.
+	// RouteTableRanges specifies a set of table index ranges that Calico should use.
+	// Deprecates`RouteTableRange`, overrides `RouteTableRange`.
+	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty,dive"`
+
+	// Deprecated in favor of RouteTableRanges.
+	// Calico programs additional Linux route tables for various purposes.
+	// RouteTableRange specifies the indices of the route tables that Calico should use.
 	RouteTableRange *RouteTableRange `json:"routeTableRange,omitempty" validate:"omitempty"`
 
 	// WireguardEnabled controls whether Wireguard is enabled. [Default: false]
@@ -382,6 +388,8 @@ type FelixConfigurationSpec struct {
 	WireguardMTU *int `json:"wireguardMTU,omitempty"`
 	// WireguardHostEncryptionEnabled controls whether Wireguard host-to-host encryption is enabled. [Default: false]
 	WireguardHostEncryptionEnabled *bool `json:"wireguardHostEncryptionEnabled,omitempty"`
+	// WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]
+	WireguardPersistentKeepAlive *metav1.Duration `json:"wireguardKeepAlive,omitempty"`
 
 	// Set source-destination-check on AWS EC2 instances. Accepted value must be one of "DoNothing", "Enable" or "Disable".
 	// [Default: DoNothing]
@@ -404,6 +412,13 @@ type RouteTableRange struct {
 	Min int `json:"min"`
 	Max int `json:"max"`
 }
+
+type RouteTableIDRange struct {
+	Min int `json:"min"`
+	Max int `json:"max"`
+}
+
+type RouteTableRanges []RouteTableIDRange
 
 // ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.
 type ProtoPort struct {

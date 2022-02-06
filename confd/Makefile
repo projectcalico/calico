@@ -55,12 +55,18 @@ endif
 # checking them.
 UPDATE_EXPECTED_DATA?=false
 
+# Location of the certs directory. 
+# TODO: Centralize this instead of just using cni-plugins certs. Right now each
+# directory has an exact copy of these files!
+CERTS_PATH=$(CURDIR)/../cni-plugin/tests/certs
+
 .PHONY: test-kdd
 ## Run template tests against KDD
 test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
 	-git clean -fx etc/calico/confd
 	mkdir -p tests/logs
 	docker run --rm --net=host \
+		-v $(CERTS_PATH):/home/user/certs \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
@@ -70,7 +76,6 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
 		-e FELIX_TYPHAREADTIMEOUT=50 \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
-		-e GO111MODULE=on \
 		-w /go/src/$(PACKAGE_NAME) \
 		$(CALICO_BUILD) /tests/test_suite_kdd.sh || \
 	{ \
@@ -94,6 +99,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 	-git clean -fx etc/calico/confd
 	mkdir -p tests/logs
 	docker run --rm --net=host \
+		-v $(CERTS_PATH):/home/user/certs \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
@@ -101,7 +107,6 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
-		-e GO111MODULE=on \
 		$(CALICO_BUILD) /tests/test_suite_etcd.sh
 	-git clean -fx etc/calico/confd
 
@@ -113,7 +118,6 @@ ut:
 
 run-etcd: stop-etcd
 	docker run --detach \
-	-e GO111MODULE=on \
 	--net=host \
 	--name calico-etcd $(ETCD_IMAGE) \
 	etcd \
@@ -128,10 +132,23 @@ stop-etcd:
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-	gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
-		  kube-apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-		  --feature-gates IPv6DualStack=true \
-		  --service-cluster-ip-range=10.101.0.0/16,fd00:96::/112
+	  -v $(CERTS_PATH):/home/user/certs \
+	  -v $(CURDIR)/config:/config \
+	  -e KUBECONFIG=/home/user/certs/kubeconfig \
+	  $(CALICO_BUILD) kube-apiserver \
+	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+	    --service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
+            --authorization-mode=RBAC \
+            --service-account-key-file=/home/user/certs/service-account.pem \
+            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+            --service-account-issuer=https://localhost:443 \
+            --api-audiences=kubernetes.default \
+            --client-ca-file=/home/user/certs/ca.pem \
+            --tls-cert-file=/home/user/certs/kubernetes.pem \
+            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+            --enable-priority-and-fairness=false \
+            --max-mutating-requests-inflight=0 \
+            --max-requests-inflight=0
 	# Wait until the apiserver is accepting requests.
 	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
 

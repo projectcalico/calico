@@ -41,6 +41,7 @@ LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
 clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
+	find . -name '.*.published*' -type f -delete
 	rm -rf .go-pkg-cache bin build certs *.tar calicoctl/commands/report $(CALICO_VERSION_HELPER_DIR)/bin
 	docker rmi $(CALICOCTL_IMAGE):latest-$(ARCH) || true
 	docker rmi $(CALICOCTL_IMAGE):$(VERSION)-$(ARCH) || true
@@ -95,7 +96,7 @@ gen-crds:
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
 $(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH) register
-	docker buildx build --pull -t $(CALICOCTL_IMAGE):latest-$(ARCH) --platform=linux/$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) . --load
+	docker buildx build --pull -t $(CALICOCTL_IMAGE):latest-$(ARCH) --platform=linux/$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -282,14 +283,9 @@ cd: image-all cd-common
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created 
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) clean build-all image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
-
-	# Copy the amd64 variant to calicoctl - for now various downstream projects
-	# expect this naming convention. Until they can be swapped over, we still need to
-	# publish a binary called calicoctl.
-	$(MAKE) bin/calicoctl
 	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
@@ -303,8 +299,10 @@ release-verify: release-prereqs
 	fi
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.

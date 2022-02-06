@@ -16,7 +16,7 @@ if ! test -n "${FV_ETCDIMAGE}"; then
 fi
 
 if ! test -n "${FV_K8SIMAGE}"; then
-    echo FV_K8SIMAGE must be set to indicate the hyperkube image to use.
+    echo FV_K8SIMAGE must be set to indicate the calico/go-build image to use.
     exit -1
 fi
 

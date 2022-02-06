@@ -1,28 +1,33 @@
-[
-  {
-    "kind": "Node",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "node1",
-      "creationTimestamp": null
+{
+  "kind": "List",
+  "apiVersion": "v1",
+  "metadata": {},
+  "items": [
+    {
+      "kind": "Node",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "node1",
+        "creationTimestamp": null
+      },
+      "spec": {},
+      "status": {}
     },
-    "spec": {},
-    "status": {}
-  },
-  {
-    "kind": "Node",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "node2",
-      "creationTimestamp": null
-    },
-    "spec": {
-      "bgp": {
-        "asNumber": 12345,
-        "ipv4Address": "1.2.3.4/24",
-        "ipv6Address": "aa::ff/128"
-      }
-    },
-    "status": {}
-  }
-]
+    {
+      "kind": "Node",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "node2",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "bgp": {
+          "asNumber": 12345,
+          "ipv4Address": "1.2.3.4/24",
+          "ipv6Address": "aa::ff/128"
+        }
+      },
+      "status": {}
+    }
+  ]
+}

@@ -23,7 +23,7 @@ documentation.
 
 - Ensure that your Calico installation is configured to use an etcdv3 datastore. This guide does not apply to clusters installed using the Kubernetes API datastore.
 
-- The **latest version of calicoctl** must be [installed and configured to access etcd]({{ site.baseurl }}/getting-started/clis/calicoctl/install).
+- The **latest version of calicoctl** must be [installed and configured to access etcd]({{ site.baseurl }}/maintenance/clis/calicoctl/install).
 
   > **Note**: Since the steps below require modifying calicoctl configuration, we do not recommend using calicoctl installed
   > as a Kubernetes pod for this procedure. Instead, install the binary directly on a host with access to etcd and the Kubernetes API.
@@ -54,7 +54,7 @@ documentation.
    ```
 
 1. Configure `calicoctl` to access the
-   [Kubernetes datastore]({{ site.baseurl }}/getting-started/clis/calicoctl/configure/kdd).
+   [Kubernetes datastore]({{ site.baseurl }}/maintenance/clis/calicoctl/configure/kdd).
 
 1. Import the datastore contents from your exported file.
 
@@ -125,7 +125,7 @@ configure the cluster to once again read from the original etcd datastore.
    ```
 
 1. Configure `calicoctl` to access the
-   [etcd datastore]({{ site.baseurl }}/getting-started/clis/calicoctl/configure/etcd).
+   [etcd datastore]({{ site.baseurl }}/maintenance/clis/calicoctl/configure/etcd).
 
 1. Unlock the etcd datastore. This allows the {{site.prodname}} resources to affect the cluster again.
 

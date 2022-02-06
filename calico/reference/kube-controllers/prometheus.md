@@ -20,7 +20,7 @@ existing metrics.
 | ------------- | --------------- |
 | `ipam_blocks_per_node` | Number of IPAM blocks, indexed by the node to which they have affinity. |
 | `ipam_allocations_per_node` | Number of Calico IP allocations, indexed by node on which the allocation was made. |
-| `ipam_borrowed_allocations_per_node` | Number of Calico IP allocations borrowed from a non-affine block, indexed by node on which the allocation was made. |
+| `ipam_allocations_borrowed_per_node` | Number of Calico IP allocations borrowed from a non-affine block, indexed by node on which the allocation was made. |
 
 Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
 metrics along with their help text and type information.

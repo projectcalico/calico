@@ -184,7 +184,7 @@ The test architecture involves:
 
 - an etcd container, as backing store for the k8s API server
 
-- a k8s API server container (hyperkube, 1.5.3)
+- a k8s API server container (generally via calico/go-build)
 
 - a full Felix executable:
   - running in a container, so as to have its own network namespace

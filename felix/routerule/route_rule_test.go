@@ -53,7 +53,6 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet := set.New()
 		_, err := New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
@@ -70,7 +69,6 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet.Add(10)
 		_, err := New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
@@ -81,10 +79,22 @@ var _ = Describe("RouteRules Construct", func() {
 		Expect(err).To(HaveOccurred())
 
 		tableIndexSet.Discard(0)
-		tableIndexSet.Add(252)
+		tableIndexSet.Add(254)
 		_, err = New(
 			4,
-			100,
+			tableIndexSet,
+			RulesMatchSrcFWMarkTable,
+			RulesMatchSrcFWMark,
+			10*time.Second,
+			dataplane.NewNetlinkHandle,
+			logutils.NewSummarizer("test loop"),
+		)
+		Expect(err).To(HaveOccurred())
+
+		tableIndexSet.Discard(254)
+		tableIndexSet.Add(0x100000000)
+		_, err = New(
+			4,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
@@ -102,7 +112,6 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet.Add(250)
 		_, err := New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,
@@ -133,7 +142,6 @@ var _ = Describe("RouteRules", func() {
 		var err error
 		rrs, err = New(
 			4,
-			100,
 			tableIndexSet,
 			RulesMatchSrcFWMarkTable,
 			RulesMatchSrcFWMark,

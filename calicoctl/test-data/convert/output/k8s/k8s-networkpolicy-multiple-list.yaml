@@ -1,0 +1,77 @@
+apiVersion: v1
+items:
+- apiVersion: projectcalico.org/v3
+  kind: NetworkPolicy
+  metadata:
+    creationTimestamp: null
+    name: allow-all-egress
+    namespace: default
+  spec:
+    egress:
+    - action: Allow
+      destination: {}
+      source: {}
+    order: 1000
+    selector: projectcalico.org/orchestrator == 'k8s'
+    types:
+    - Egress
+- apiVersion: projectcalico.org/v3
+  kind: NetworkPolicy
+  metadata:
+    creationTimestamp: null
+    name: default-deny-ingress
+    namespace: default
+  spec:
+    order: 1000
+    selector: projectcalico.org/orchestrator == 'k8s'
+    types:
+    - Ingress
+- apiVersion: projectcalico.org/v3
+  kind: NetworkPolicy
+  metadata:
+    creationTimestamp: null
+    name: test-network-policy1
+    namespace: test-ns
+  spec:
+    egress:
+    - action: Allow
+      destination:
+        nets:
+        - 10.0.0.0/24
+        ports:
+        - 5978
+      protocol: TCP
+      source: {}
+    ingress:
+    - action: Allow
+      destination:
+        ports:
+        - 6379
+      protocol: TCP
+      source:
+        nets:
+        - 172.17.0.0/16
+        notNets:
+        - 172.17.1.0/24
+    - action: Allow
+      destination:
+        ports:
+        - 6379
+      protocol: TCP
+      source:
+        namespaceSelector: project == 'myproject'
+        selector: projectcalico.org/orchestrator == 'k8s'
+    - action: Allow
+      destination:
+        ports:
+        - 6379
+      protocol: TCP
+      source:
+        selector: projectcalico.org/orchestrator == 'k8s' && role == 'frontend'
+    order: 1000
+    selector: projectcalico.org/orchestrator == 'k8s' && role == 'db'
+    types:
+    - Ingress
+    - Egress
+kind: List
+metadata: {}
