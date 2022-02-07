@@ -473,7 +473,6 @@ blocks:
     - name: "calicoctl tests"
       commands:
       - make ci
-      -
 
 - name: "cni-plugin CI"
   run:
