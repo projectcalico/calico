@@ -110,7 +110,7 @@ struct bpf_map_def_extended {
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
-#define CALI_FIB_ENABLED (!CALI_F_NAT_IF && !CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
+#define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
