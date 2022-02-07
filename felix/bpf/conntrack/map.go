@@ -80,13 +80,14 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 //  __u64 created;
 //  __u64 last_seen; // 8
 //  __u8 type;     // 16
-//  __u8 flags;     // 17
+//  __u8 pad;     // 17
+//  __u16 flags; // 18
 //
 //  // Important to use explicit padding, otherwise the compiler can decide
 //  // not to zero the padding bytes, which upsets the verifier.  Worse than
 //  // that, debug logging often prevents such optimisation resulting in
 //  // failures when debug logging is compiled out only :-).
-//  __u8 pad0[6];
+//  __u8 pad0[4];
 //  union {
 //    // CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 //    struct {
@@ -122,8 +123,8 @@ func (e Value) Type() uint8 {
 	return e[16]
 }
 
-func (e Value) Flags() uint8 {
-	return e[17]
+func (e Value) Flags() uint16 {
+	return binary.LittleEndian.Uint16(e[18:20])
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -152,14 +153,14 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut    uint8 = (1 << 0)
-	FlagNATFwdDsr uint8 = (1 << 1)
-	FlagNATNPFwd  uint8 = (1 << 2)
-	FlagSkipFIB   uint8 = (1 << 3)
-	FlagReserved4 uint8 = (1 << 4)
-	FlagReserved5 uint8 = (1 << 5)
-	FlagExtLocal  uint8 = (1 << 6)
-	FlagViaNATIf  uint8 = (1 << 7)
+	FlagNATOut    uint16 = (1 << 0)
+	FlagNATFwdDsr uint16 = (1 << 1)
+	FlagNATNPFwd  uint16 = (1 << 2)
+	FlagSkipFIB   uint16 = (1 << 3)
+	FlagReserved4 uint16 = (1 << 4)
+	FlagReserved5 uint16 = (1 << 5)
+	FlagExtLocal  uint16 = (1 << 6)
+	FlagViaNATIf  uint16 = (1 << 7)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -176,15 +177,15 @@ func (e Value) AsBytes() []byte {
 	return e[:]
 }
 
-func initValue(v *Value, created, lastSeen time.Duration, typ, flags uint8) {
+func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint16) {
 	binary.LittleEndian.PutUint64(v[:8], uint64(created))
 	binary.LittleEndian.PutUint64(v[8:16], uint64(lastSeen))
 	v[16] = typ
-	v[17] = flags
+	binary.LittleEndian.PutUint16(v[18:20], uint16(flags))
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(created, lastSeen time.Duration, flags uint8, legA, legB Leg) Value {
+func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
 	v := Value{}
 
 	initValue(&v, created, lastSeen, TypeNormal, flags)
@@ -197,7 +198,7 @@ func NewValueNormal(created, lastSeen time.Duration, flags uint8, legA, legB Leg
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(created, lastSeen time.Duration, flags uint8, revKey Key) Value {
+func NewValueNATForward(created, lastSeen time.Duration, flags uint16, revKey Key) Value {
 	v := Value{}
 
 	initValue(&v, created, lastSeen, TypeNATForward, flags)
@@ -209,7 +210,7 @@ func NewValueNATForward(created, lastSeen time.Duration, flags uint8, revKey Key
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueNATReverse(created, lastSeen time.Duration, flags uint8, legA, legB Leg,
+func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
 	v := Value{}
 
