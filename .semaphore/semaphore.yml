@@ -473,8 +473,9 @@ blocks:
     - name: "calicoctl tests"
       commands:
       - make ci
+      -
 
-- name: "cni-plugin"
+- name: "cni-plugin CI"
   run:
     when: "branch =~ '.*' or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
@@ -486,6 +487,19 @@ blocks:
     - name: "cni-plugin tests"
       commands:
       - make ci
+
+- name: "cni-plugin: Build Windows binaries"
+  run:
+    when: "branch =~ '.*' or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - cd cni-plugin
+    jobs:
+    - name: "build Windows binaries"
+      commands:
+      - make build && make bin/windows/win-fv.exe
 
 - name: "Documentation"
   run:
