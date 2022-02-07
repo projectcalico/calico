@@ -214,17 +214,12 @@ skip_fib:
 		}
 
 		if (CALI_F_NAT_IF) {
-			/* Only we route stuff via this iface and it is from local host to a
-			 * service.
-			 *
-			 * XXX we may check to make sure ourselves that it is from local host
-			 */
-			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_RPF;
 			/* We mark the packet so that next iface knows, it went through
 			 * bpfnatout - if it gets (S)NATed, a new connection is created
 			 * and we know that returning packets must go via bpfnatout again.
 			 */
 			ctx->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
+			CALI_DEBUG("marking CALI_SKB_MARK_FROM_NAT_IFACE_OUT\n");
 		}
 
 		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.\n", ctx->fwd.mark);
