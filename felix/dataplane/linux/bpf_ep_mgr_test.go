@@ -608,7 +608,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(1))
-			Expect(dp.routes).To(HaveKey("5.6.7.8"))
+			Expect(dp.routes).To(HaveKey("1.2.3.4"))
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
