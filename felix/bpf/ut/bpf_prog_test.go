@@ -209,6 +209,9 @@ outter:
 		if strings.Contains(section, "host") {
 			obj += "hep_"
 			progLog = "HEP"
+		} else if strings.Contains(section, "nat") {
+			obj += "nat_"
+			progLog = "HEP"
 		} else {
 			obj += "wep_"
 			progLog = "WEP"
