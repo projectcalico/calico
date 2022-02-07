@@ -70,6 +70,8 @@ def issues_by_repo():
 # issue as a list.  If it has a release-note section defined, that is used.
 # If not, then it simply returns the title.
 def extract_release_notes(issue):
+    if not issue.body:
+        return []
     # Look for a release note section in the body.
     matches = re.findall(r'```release-note(.*?)```', issue.body, re.DOTALL)
     if matches:
