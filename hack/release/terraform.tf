@@ -127,6 +127,6 @@ output "instance_ssh_key" {
 }
 
 output "connect_command" {
-  value      = "ssh -i ${abspath(path.root)}/ssh_key -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${google_compute_instance.vm_instance.network_interface.0.access_config.0.nat_ip}"
+  value      = "ssh -A -i ${abspath(path.root)}/ssh_key -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${google_compute_instance.vm_instance.network_interface.0.access_config.0.nat_ip}"
   depends_on = [tls_private_key.ssh]
 }
