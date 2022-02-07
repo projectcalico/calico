@@ -501,7 +501,7 @@ blocks:
         commands:
           - make build && make bin/windows/win-fv.exe
 
-- name: Windows FV - docker
+- name: "cni-plugin: Windows FV - docker"
     run:
       when: "branch =~ '.*' or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies: ["cni-plugin: Build Windows binaries"]
