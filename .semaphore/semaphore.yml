@@ -510,7 +510,7 @@ blocks:
       - name: private-repo
     prologue:
       commands:
-        - # Load the github access secrets.  First fix the permissions.
+        # Load the github access secrets.  First fix the permissions.
         - chmod 0600 ~/.keys/*
         - ssh-add ~/.keys/*
         # Prepare aws configuration.
