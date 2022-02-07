@@ -2330,14 +2330,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
-					"bpfMapSizeRT": {
+					"bpfMapSizeRoute": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFMapSizeRt sets the map size for route map",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
 					},
-					"bpfMapSizeCT": {
+					"bpfMapSizeConntrack": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFMapSizeCt sets the map size for conntrack map",
 							Type:        []string{"integer"},

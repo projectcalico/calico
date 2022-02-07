@@ -1077,13 +1077,13 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
-	if in.BPFMapSizeRt != nil {
-		in, out := &in.BPFMapSizeRt, &out.BPFMapSizeRt
+	if in.BPFMapSizeRoute != nil {
+		in, out := &in.BPFMapSizeRoute, &out.BPFMapSizeRoute
 		*out = new(int)
 		**out = **in
 	}
-	if in.BPFMapSizeCt != nil {
-		in, out := &in.BPFMapSizeCt, &out.BPFMapSizeCt
+	if in.BPFMapSizeConntrack != nil {
+		in, out := &in.BPFMapSizeConntrack, &out.BPFMapSizeConntrack
 		*out = new(int)
 		**out = **in
 	}

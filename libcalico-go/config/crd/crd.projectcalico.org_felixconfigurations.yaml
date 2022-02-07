@@ -118,14 +118,14 @@ spec:
                   logs are emitted to the BPF trace pipe, accessible with the command
                   `tc exec bpf debug`. [Default: Off].'
                 type: string
-              bpfMapSizeCT:
-                description: BPFMapSizeCt sets the map size for conntrack map
+              bpfMapSizeConntrack:
+                description: BPFMapSizeConntrack sets the map size for conntrack map
                 type: integer
               bpfMapSizeNAT:
                 description: BPFMapSizeNat sets the map size for nat maps
                 type: integer
-              bpfMapSizeRT:
-                description: BPFMapSizeRt sets the map size for route map
+              bpfMapSizeRoute:
+                description: BPFMapSizeRoute sets the map size for route map
                 type: integer
               bpfPSNATPorts:
                 anyOf:

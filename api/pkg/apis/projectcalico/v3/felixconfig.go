@@ -363,9 +363,9 @@ type FelixConfigurationSpec struct {
 	// BPFMapSizeNat sets the map size for nat maps
 	BPFMapSizeNat *int `json:"bpfMapSizeNAT,omitempty"`
 	// BPFMapSizeRt sets the map size for route map
-	BPFMapSizeRt *int `json:"bpfMapSizeRT,omitempty"`
+	BPFMapSizeRoute *int `json:"bpfMapSizeRoute,omitempty"`
 	// BPFMapSizeCt sets the map size for conntrack map
-	BPFMapSizeCt *int `json:"bpfMapSizeCT,omitempty"`
+	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.

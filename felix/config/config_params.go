@@ -180,8 +180,8 @@ type Config struct {
 	BPFExtToServiceConnmark            int              `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port `config:"portrange;20000:29999"`
 	BPFMapSizeNat                      int              `config:"int;511000;non-zero"`
-	BPFMapSizeRt                       int              `config:"int;1048576;non-zero"`
-	BPFMapSizeCt                       int              `config:"int;512000;non-zero"`
+	BPFMapSizeRoute                    int              `config:"int;1048576;non-zero"`
+	BPFMapSizeConntrack                int              `config:"int;512000;non-zero"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but hte root cgroup v2 from working so this is only useful
