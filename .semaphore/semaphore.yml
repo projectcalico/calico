@@ -499,7 +499,7 @@ blocks:
     jobs:
       - name: "build Windows binaries"
         commands:
-          - make build && make bin/windows/win-fv.exe
+        - make build && make bin/windows/win-fv.exe
 
 - name: "cni-plugin: Windows FV - docker"
   run:
