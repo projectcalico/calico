@@ -45,9 +45,6 @@ clean:
 	-docker rmi $(FLANNEL_MIGRATION_IMAGE):latest-amd64
 	rm -f tests/fv/fv.test
 	rm -f report/*.xml
-	rm -f tests/crds.yaml
-	rm -rf tests/crds
-	rm -rf vendor
 
 ###############################################################################
 # Building the binary
@@ -88,13 +85,6 @@ image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-.PHONY: remote-deps
-remote-deps: mod-download
-	@mkdir -p tests/crds/
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		cp ../libcalico-go/config/crd/* tests/crds/; \
-		chmod +w tests/crds/*'
-
 ###############################################################################
 # Static checks
 ###############################################################################
@@ -116,14 +106,14 @@ ut:
 
 .PHONY: fv
 ## Build and run the FV tests.
-fv: remote-deps tests/fv/fv.test image
+fv: tests/fv/fv.test image
 	@echo Running Go FVs.
 	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) \
 		KUBE_IMAGE=$(CALICO_BUILD) \
 		CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
 		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
-		CRDS=$(CURDIR)/tests/crds \
+		CRDS=$(CURDIR)/../libcalico-go/tests/crds \
 		CERTS=$(CURDIR)/tests/certs \
 		GO111MODULE=on \
 		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
