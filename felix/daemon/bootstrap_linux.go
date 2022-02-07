@@ -15,8 +15,6 @@
 package daemon
 
 import (
-	"os"
-
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -25,10 +23,6 @@ import (
 )
 
 func bootstrapWireguard(ifaceName string, felixHostName string, v3Client clientv3.Interface) error {
-	if _, ok := os.LookupEnv("FELIX_SKIP_WIREGUARD_BOOTSTRAP"); ok {
-		log.Debug("skipping bootstrap for wireguard host connectivity")
-		return nil
-	}
 	log.Debug("bootstrapping wireguard host connectivity")
 	return wireguard.BootstrapHostConnectivity(
 		ifaceName, felixHostName, netlinkshim.NewRealWireguard, v3Client)
