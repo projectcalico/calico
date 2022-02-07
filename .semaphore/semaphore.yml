@@ -519,7 +519,7 @@ blocks:
         - export KEYPAIR_NAME=${CLUSTER_NAME}
         - echo CLUSTER_NAME=${CLUSTER_NAME}
         - sudo apt-get install putty-tools
-        - git clone git@github.com:tigera/process.git
+        - git clone git@github.com:tigera/process.git ~/process
         - cd cni-plugin
         - make build && make bin/windows/win-fv.exe
     epilogue:
