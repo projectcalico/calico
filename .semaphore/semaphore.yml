@@ -497,9 +497,9 @@ blocks:
       commands:
       - cd cni-plugin
     jobs:
-      - name: "build Windows binaries"
-        commands:
-        - make build && make bin/windows/win-fv.exe
+    - name: "build Windows binaries"
+      commands:
+      - make build && make bin/windows/win-fv.exe
 
 - name: "cni-plugin: Windows FV - docker"
   run:
@@ -543,11 +543,11 @@ blocks:
       - name: K8S_VERSION
         value: 1.17.2
     jobs:
-      - name: FV Test matrix
-        execution_time_limit:
-          minutes: 60
-        commands:
-        - ./.semaphore/run-win-fv.sh
+    - name: FV Test matrix
+      execution_time_limit:
+        minutes: 60
+      commands:
+      - ./.semaphore/run-win-fv.sh
 
 - name: "Documentation"
   run:
