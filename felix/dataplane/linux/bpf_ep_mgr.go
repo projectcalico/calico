@@ -32,6 +32,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -1030,6 +1031,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tc.EpTypeL3Device
 	} else if ifaceName == "bpfnatin" || ifaceName == "bpfnatout" {
 		endpointType = tc.EpTypeNAT
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
 	} else {
@@ -1417,7 +1420,9 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 		log.Fatal("Failed to create nelink.")
 	}
 
-	_, err = nl.LinkByName("bpfnatin")
+	var bpfout, bpfin netlink.Link
+
+	bpfin, err = nl.LinkByName("bpfnatin")
 	if err != nil {
 		nat := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
@@ -1428,20 +1433,39 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 		if err := nl.LinkAdd(nat); err != nil {
 			log.Fatal("Failed to add bpfnatin.")
 		}
-		link, err := nl.LinkByName("bpfnatin")
+		bpfin, err = nl.LinkByName("bpfnatin")
 		if err != nil {
 			log.WithError(err).Fatal("Miss bpfnatin after add.")
 		}
-		if err := nl.LinkSetUp(link); err != nil {
+		if err := nl.LinkSetUp(bpfin); err != nil {
 			log.WithError(err).Fatal("Failed to set bpfnatin up.")
 		}
-		link, err = nl.LinkByName("bpfnatout")
+		bpfout, err = nl.LinkByName("bpfnatout")
 		if err != nil {
 			log.WithError(err).Fatal("Miss bpfnatout after add.")
 		}
-		if err := nl.LinkSetUp(link); err != nil {
+		if err := nl.LinkSetUp(bpfout); err != nil {
 			log.WithError(err).Fatal("Failed to set bpfnatout up.")
 		}
+	}
+
+	if bpfout == nil {
+		bpfout, err = nl.LinkByName("bpfnatout")
+		if err != nil {
+			log.WithError(err).Fatal("Miss bpfnatout after add.")
+		}
+	}
+
+	// Add a permanent ARP entry to point to the other side of the veth to avoid
+	// ARP requests that would not be proxied if .all.rp_filter == 1
+	arp := &netlink.Neigh{
+		State:        netlink.NUD_PERMANENT,
+		IP:           net.IPv4(169, 254, 1, 1),
+		HardwareAddr: bpfout.Attrs().HardwareAddr,
+		LinkIndex:    bpfin.Attrs().Index,
+	}
+	if err := nl.NeighAdd(arp); err != nil && err != syscall.EEXIST {
+		log.WithError(err).Fatal("Failed to update neight for bpfnatout.")
 	}
 
 	if err := configureInterface("bpfnatin", 4, writeProcSys); err != nil {
@@ -1462,6 +1486,16 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 	if err := m.dp.setRPFilter("bpfnatout", 0); err != nil {
 		log.WithError(err).Fatalf("Failed to disable RPF on bpfnatout.")
 	}
+
+	// Setup a link local route to a non-existent link local address that would
+	// serve as a gateway to route services via bpfnat veth rather than having
+	// link local routes for each service that would trigger ARP querries.
+	cidr, _ := ip.CIDRFromString("169.254.1.1/32")
+
+	m.routeTable.RouteUpdate("bpfnatin", routetable.Target{
+		Type: routetable.TargetTypeUnicastLinkLocal,
+		CIDR: cidr,
+	})
 
 	log.Info("Created bpfnatin pair.")
 }
@@ -1711,7 +1745,7 @@ func (m *bpfEndpointManager) reconcileServices() {
 	for svc, ips := range m.dirtyServices {
 		errored := false
 		for _, ip := range ips {
-			if err := m.setRoute(ip); err != nil {
+			if err := m.dp.setRoute(ip); err != nil {
 				log.WithError(err).Errorf("Failed to set route to %s via bpfnatin.", ip)
 				errored = true
 			}
@@ -1729,7 +1763,7 @@ func (m *bpfEndpointManager) reconcileServices() {
 			}
 
 			if !exist {
-				if err := m.delRoute(old); err != nil {
+				if err := m.dp.delRoute(old); err != nil {
 					log.WithError(err).Errorf("Failed to delete route to %s via bpfnatin.", old)
 					errored = true
 				}
@@ -1747,6 +1781,8 @@ func (m *bpfEndpointManager) reconcileServices() {
 	}
 }
 
+var bpfnatGW = ip.FromNetIP(net.IPv4(169, 254, 1, 1))
+
 func (m *bpfEndpointManager) setRoute(dst string) error {
 	cidr, err := ip.CIDRFromString(dst + "/32")
 	if err != nil {
@@ -1754,8 +1790,9 @@ func (m *bpfEndpointManager) setRoute(dst string) error {
 	}
 
 	m.routeTable.RouteUpdate("bpfnatin", routetable.Target{
-		Type: routetable.TargetTypeUnicast,
+		Type: routetable.TargetTypeUnicastGlobal,
 		CIDR: cidr,
+		GW:   bpfnatGW,
 	})
 	log.WithFields(log.Fields{
 		"cidr": dst + "/32",
