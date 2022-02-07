@@ -154,12 +154,6 @@ st:
 check-copyright:
 	@hack/check-copyright.sh
 
-config/crd: mod-download
-	mkdir -p config/crd
-	$(DOCKER_GO_BUILD) sh -c ' \
-		cp -r ../libcalico-go/config/crd/* config/crd; \
-		chmod +w config/crd/*'
-
 ## Run etcd as a container (calico-etcd)
 run-etcd: stop-etcd
 	docker run --detach \
@@ -185,11 +179,12 @@ hack-lib:
 	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/etcd.sh -o hack/lib/etcd.sh
 
 ## Run a local kubernetes server with API in a container.
-run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
+run-kubernetes-server: run-etcd stop-kubernetes-server
 	# Run a Kubernetes apiserver using Docker.
 	docker run --detach --net=host \
 	  --name st-apiserver \
-	  -v `pwd`/test/certs:/home/user/certs \
+	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
+	  -v $(CURDIR)/test/certs:/home/user/certs \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
 	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
@@ -232,7 +227,7 @@ run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 		-v $(CURDIR)/test/certs:/home/user/certs \
 		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--kubeconfig=/home/user/certs/kubeconfig \
-		apply -f /manifests/config/crd/
+		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/
 
 	# Create a Node in the API for the tests to use.
 	docker run \
