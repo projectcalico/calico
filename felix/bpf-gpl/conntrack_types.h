@@ -56,13 +56,14 @@ struct calico_ct_value {
 	__u64 created;
 	__u64 last_seen; // 8
 	__u8 type;		 // 16
-	__u8 flags;
+	__u8 pad0;
+	__u16 flags;
 
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
 	// failures when debug logging is compiled out only :-).
-	__u8 pad0[6];
+	__u8 pad1[4];
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
@@ -109,7 +110,7 @@ struct ct_create_ctx {
 	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
 			* It is also set on the first node when we create the
 			* initial CT entry for the tunneled traffic. */
-	__u8 flags;
+	__u16 flags;
 	enum cali_ct_type type;
 	bool allow_return;
 };
