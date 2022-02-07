@@ -76,9 +76,10 @@ const (
 type TargetType string
 
 const (
-	TargetTypeUnicast TargetType = "unicast"
-	TargetTypeVXLAN   TargetType = "vxlan"
-	TargetTypeNoEncap TargetType = "noencap"
+	TargetTypeUnicastGlobal    TargetType = "unicast-link-local"
+	TargetTypeUnicastLinkLocal TargetType = "unicast"
+	TargetTypeVXLAN            TargetType = "vxlan"
+	TargetTypeNoEncap          TargetType = "noencap"
 
 	// The following target types should be used with InterfaceNone.
 	TargetTypeBlackhole TargetType = "blackhole"
@@ -105,6 +106,7 @@ type Target struct {
 	Type    TargetType
 	CIDR    ip.CIDR
 	GW      ip.Addr
+	Src     ip.Addr
 	DestMAC net.HardwareAddr
 }
 
@@ -120,7 +122,7 @@ func (t Target) RouteType() int {
 		return syscall.RTN_BLACKHOLE
 	case TargetTypeProhibit:
 		return syscall.RTN_PROHIBIT
-	case TargetTypeUnicast:
+	case TargetTypeUnicastGlobal, TargetTypeUnicastLinkLocal:
 		return syscall.RTN_UNICAST
 	default:
 		return syscall.RTN_UNICAST
@@ -135,7 +137,9 @@ func (t Target) RouteScope() netlink.Scope {
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeProhibit:
 		return netlink.SCOPE_UNIVERSE
-	case TargetTypeUnicast:
+	case TargetTypeUnicastGlobal:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeUnicastLinkLocal:
 		return netlink.SCOPE_LINK
 	default:
 		return netlink.SCOPE_LINK
@@ -722,11 +726,13 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 		r.waitForPendingConntrackDeletion(target.CIDR.Addr())
 		if err := nl.RouteAdd(&route); err != nil {
 			if firstTry {
-				logCxt.WithError(err).Debug("Failed to add route on first attempt, retrying...")
+				logCxt.WithError(err).WithField("route", route).Debug("Failed to add route on first attempt, retrying...")
 			} else {
-				logCxt.WithError(err).Warn("Failed to add route")
+				logCxt.WithError(err).WithField("route", route).Warn("Failed to add route")
 			}
 			updatesFailed = true
+		} else {
+			logCxt.WithField("route", route).Debug("Added route")
 		}
 		if r.ipVersion == 4 && target.DestMAC != nil {
 			// TODO(smc) clean up/sync old ARP entries
@@ -813,7 +819,9 @@ func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) 
 		route.LinkIndex = 1
 	}
 
-	if r.deviceRouteSourceAddress != nil {
+	if target.Src != nil {
+		route.Src = target.Src.AsNetIP()
+	} else if r.deviceRouteSourceAddress != nil {
 		route.Src = r.deviceRouteSourceAddress
 	}
 
