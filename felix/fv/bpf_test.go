@@ -83,6 +83,8 @@ var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
 var _ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"))
 var _ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"))
+var _ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
 // with debug disabled and that can lead to verifier issues.
@@ -258,6 +260,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			case "ipip":
 				options.IPIPEnabled = true
 				options.IPIPRoutesEnabled = true
+			case "vxlan":
+				options.VXLANMode = api.VXLANModeAlways
 			case "wireguard":
 				// Delay running Felix until Node resource has been created.
 				options.DelayFelixStart = true
@@ -290,6 +294,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("ip", "addr")
 					felix.Exec("ip", "rule")
 					felix.Exec("ip", "route")
+					felix.Exec("ip", "route", "show", "table", "1")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
