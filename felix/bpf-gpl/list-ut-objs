@@ -14,13 +14,13 @@ emit_filename() {
 }
 
 log_level=debug
-ep_types="wep hep"
+ep_types="wep hep nat"
 for ep_type in $ep_types; do
   directions="from to"
   for from_or_to in $directions; do
     for dsr in "" "_dsr"; do
       if [ "${dsr}" = "_dsr" ]; then
-        if [ "${ep_type}" = "hep" ]; then
+        if [ "${ep_type}" = "hep" ] || [ "${ep_type}" = "nat" ]; then
           emit_filename
           continue
         fi
