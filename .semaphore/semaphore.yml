@@ -507,6 +507,7 @@ blocks:
   task:
     secrets:
       - name: banzai-secrets
+      - name: private-repo
     prologue:
       commands:
         # Prepare aws configuration.
