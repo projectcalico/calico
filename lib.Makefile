@@ -217,6 +217,20 @@ ifdef ARM_VERSION
 GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
 endif
 
+# Set the platform correctly for building docker images so that 
+# cross-builds get the correct architecture set in the produced images.
+ifeq ($(ARCH),arm64)
+TARGET_PLATFORM=--platform=linux/arm64/v8
+endif
+ifeq ($(ARCH),armv7)
+TARGET_PLATFORM=--platform=linux/arm/v7
+endif
+
+# DOCKER_BUILD is the base build command used for building all images.
+DOCKER_BUILD=docker buildx build --pull \
+	     --build-arg QEMU_IMAGE=$(CALICO_BUILD) \
+	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
+	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
