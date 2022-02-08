@@ -181,7 +181,6 @@ run-kubernetes-server: run-etcd stop-kubernetes-server
 	# Run a Kubernetes apiserver using Docker.
 	docker run --detach --net=host \
 	  --name st-apiserver \
-	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 	  -v $(CURDIR)/test/certs:/home/user/certs \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
@@ -221,7 +220,7 @@ run-kubernetes-server: run-etcd stop-kubernetes-server
 	docker run \
 		--net=host \
 		--rm \
-		-v  $(CURDIR):/manifests \
+		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 		-v $(CURDIR)/test/certs:/home/user/certs \
 		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--kubeconfig=/home/user/certs/kubeconfig \
