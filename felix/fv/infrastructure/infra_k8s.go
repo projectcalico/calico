@@ -334,7 +334,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	log.Info("Started controller manager.")
 
 	// Copy CRD registration manifests into the API server container, and apply it.
-	err := kds.k8sApiContainer.CopyFileIntoContainer("infrastructure/crds", "/crds")
+	err := kds.k8sApiContainer.CopyFileIntoContainer("../../libcalico-go/config/crd", "/crds")
 	if err != nil {
 		TearDownK8sInfra(kds)
 		return nil, err
@@ -681,15 +681,17 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 			{
 				Type:   v1.PodReady,
 				Status: v1.ConditionTrue,
-			}},
+			},
+		},
 		PodIP: podIP,
 	}
 	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
-		Spec: v1.PodSpec{Containers: []v1.Container{{
-			Name:  wep.Spec.Endpoint,
-			Image: "ignore",
-		}},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name:  wep.Spec.Endpoint,
+				Image: "ignore",
+			}},
 			NodeName: wep.Spec.Node,
 		},
 		Status: desiredStatus,
@@ -811,10 +813,12 @@ func (kds *K8sDatastoreInfra) DumpErrorData() {
 	}
 }
 
-var zeroGracePeriod int64 = 0
-var DeleteImmediately = metav1.DeleteOptions{
-	GracePeriodSeconds: &zeroGracePeriod,
-}
+var (
+	zeroGracePeriod   int64 = 0
+	DeleteImmediately       = metav1.DeleteOptions{
+		GracePeriodSeconds: &zeroGracePeriod,
+	}
+)
 
 func isSystemNamespace(ns string) bool {
 	return ns == "default" || ns == "kube-system" || ns == "kube-public"
