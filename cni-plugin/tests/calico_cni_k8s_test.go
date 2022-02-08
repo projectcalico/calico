@@ -667,7 +667,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			{
 				// This scenario tests IPv4+IPv6 without specifying any routes.
 				description: "new-style with IPv4 and IPv6 ranges, no routes",
-				cniVersion:  "0.3.0",
+				cniVersion:  "0.3.1",
 				config: `
 					{
 					  "cniVersion": "%s",
@@ -713,7 +713,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			{
 				// This scenario tests IPv4+IPv6 without specifying any routes.
 				description: "new-style with IPv4 and IPv6 both using usePodCidr, no routes",
-				cniVersion:  "0.3.0",
+				cniVersion:  "0.3.1",
 				config: `
 					{
 					  "cniVersion": "%s",
@@ -763,7 +763,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				// This configuration is only supported for CNI version >= 0.3.0 since we assign multiple
 				// addresses per family.
 				description: "new-style with IPv4 and IPv6 ranges and routes",
-				cniVersion:  "0.3.0",
+				cniVersion:  "0.3.1",
 				config: `
 					{
 					  "cniVersion": "%s",
@@ -822,7 +822,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
 				// - we add custom routes, but configure the plugin to also include our default routes.
 				description: "new-style with IPv4 and IPv6 ranges and routes and Calico default routes",
-				cniVersion:  "0.3.0",
+				cniVersion:  "0.3.1",
 				config: `
 					{
 					  "cniVersion": "%s",
@@ -1718,7 +1718,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			})
 
 			containerID, _, contVeth, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred()) // TODO: here error
 			mac := contVeth.Attrs().HardwareAddr
 
 			podIP := contAddresses[0].IP
