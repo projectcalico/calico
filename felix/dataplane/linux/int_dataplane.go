@@ -437,7 +437,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.VXLANEnabled {
 		routeTableVXLAN := routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
-			dp.loopSummarizer)
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 		vxlanManager := newVXLANManager(
 			ipSetsV4,
@@ -652,6 +652,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create conntrack BPF map.")
 		}
 
+		srMsgMap := nat.SendRecvMsgMap(bpfMapContext)
+		err = srMsgMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create send recv msg map.")
+		}
+
+		ctNatsMap := nat.AllNATsMsgMap(bpfMapContext)
+		err = ctNatsMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create ct nats map.")
+		}
+
 		conntrackScanner := conntrack.NewScanner(ctMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
 
@@ -712,7 +724,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
 		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-		dp.loopSummarizer)
+		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -800,7 +812,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(
 			interfaceRegexes, 6, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-			dp.loopSummarizer)
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))

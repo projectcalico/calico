@@ -77,7 +77,7 @@ type EventSequencer struct {
 	pendingWireguardDeletes      set.Set
 	pendingGlobalBGPConfig       *proto.GlobalBGPConfigUpdate
 
-	// Sets to record what we've sent downstream.  Updated whenever we flush.
+	// Sets to record what we've sent downstream. Updated whenever we flush.
 	sentIPSets          set.Set
 	sentPolicies        set.Set
 	sentProfiles        set.Set
@@ -133,7 +133,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingWireguardUpdates:      map[string]*model.Wireguard{},
 		pendingWireguardDeletes:      set.New(),
 
-		// Sets to record what we've sent downstream.  Updated whenever we flush.
+		// Sets to record what we've sent downstream. Updated whenever we flush.
 		sentIPSets:          set.New(),
 		sentPolicies:        set.New(),
 		sentProfiles:        set.New(),
@@ -155,7 +155,9 @@ type routeID struct {
 
 func (buf *EventSequencer) OnIPSetAdded(setID string, ipSetType proto.IPSetUpdate_IPSetType) {
 	log.Debugf("IP set %v now active", setID)
-	if buf.sentIPSets.Contains(setID) && !buf.pendingRemovedIPSets.Contains(setID) {
+	sent := buf.sentIPSets.Contains(setID)
+	removePending := buf.pendingRemovedIPSets.Contains(setID)
+	if sent && !removePending {
 		log.Panic("OnIPSetAdded called for existing IP set")
 	}
 	buf.pendingAddedIPSets[setID] = ipSetType
@@ -167,11 +169,12 @@ func (buf *EventSequencer) OnIPSetAdded(setID string, ipSetType proto.IPSetUpdat
 
 func (buf *EventSequencer) OnIPSetRemoved(setID string) {
 	log.Debugf("IP set %v no longer active", setID)
+	sent := buf.sentIPSets.Contains(setID)
 	_, updatePending := buf.pendingAddedIPSets[setID]
-	if !buf.sentIPSets.Contains(setID) && !updatePending {
+	if !sent && !updatePending {
 		log.WithField("setID", setID).Panic("IPSetRemoved called for unknown IP set")
 	}
-	if buf.sentIPSets.Contains(setID) {
+	if sent {
 		buf.pendingRemovedIPSets.Add(setID)
 	}
 	delete(buf.pendingAddedIPSets, setID)
@@ -181,8 +184,9 @@ func (buf *EventSequencer) OnIPSetRemoved(setID string) {
 
 func (buf *EventSequencer) OnIPSetMemberAdded(setID string, member labelindex.IPSetMember) {
 	log.Debugf("IP set %v now contains %v", setID, member)
+	sent := buf.sentIPSets.Contains(setID)
 	_, updatePending := buf.pendingAddedIPSets[setID]
-	if !buf.sentIPSets.Contains(setID) && !updatePending {
+	if !sent && !updatePending {
 		log.WithField("setID", setID).Panic("Member added to unknown IP set")
 	}
 	if buf.pendingRemovedIPSetMembers.Contains(setID, member) {
@@ -194,8 +198,9 @@ func (buf *EventSequencer) OnIPSetMemberAdded(setID string, member labelindex.IP
 
 func (buf *EventSequencer) OnIPSetMemberRemoved(setID string, member labelindex.IPSetMember) {
 	log.Debugf("IP set %v no longer contains %v", setID, member)
+	sent := buf.sentIPSets.Contains(setID)
 	_, updatePending := buf.pendingAddedIPSets[setID]
-	if !buf.sentIPSets.Contains(setID) && !updatePending {
+	if !sent && !updatePending {
 		log.WithField("setID", setID).Panic("Member removed from unknown IP set")
 	}
 	if buf.pendingAddedIPSetMembers.Contains(setID, member) {

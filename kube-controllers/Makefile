@@ -125,7 +125,6 @@ fv: remote-deps tests/fv/fv.test image
 		PRIVATE_KEY=`pwd`/private.key \
 		CRDS=$(CURDIR)/tests/crds \
 		CERTS=$(CURDIR)/tests/certs \
-		GO111MODULE=on \
 		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
 
 tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)

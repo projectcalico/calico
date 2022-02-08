@@ -32,6 +32,8 @@ import (
 	v1validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 )
 
+var KindK8sListV1 = "List"
+var VersionK8sListV1 = "v1"
 var VersionK8sNetworkingV1 = "networking.k8s.io/v1"
 
 // Store a resourceHelper for each resource unversioned.TypeMetadata.
@@ -53,6 +55,7 @@ func populateResourceTypes() {
 		apiv1.NewProfile(),
 		apiv1.NewWorkloadEndpoint(),
 		NewK8sNetworkPolicy(),
+		NewK8sNetworkPolicyList(),
 	}
 
 	for _, rt := range resTypes {
@@ -218,6 +221,29 @@ func NewK8sNetworkPolicy() *K8sNetworkPolicy {
 		TypeMetadata: unversioned.TypeMetadata{
 			Kind:       "NetworkPolicy",
 			APIVersion: VersionK8sNetworkingV1,
+		},
+	}
+}
+
+type K8sListMetadata struct {
+	ResourceVersion string `json:"resourceVersion"`
+	SelfLink        string `json:"selfLink"`
+}
+
+// K8sNetworkPolicyList contains a list of resources.
+type K8sNetworkPolicyList struct {
+	unversioned.TypeMetadata
+	Metadata K8sListMetadata    `json:"metadata"`
+	Items    []K8sNetworkPolicy `json:"items" validate:"dive"`
+}
+
+// NewK8sNetworkPolicyList creates a new (zeroed) K8sNetworkPolicyList struct with the
+// TypeMetadata initialised to the current version.
+func NewK8sNetworkPolicyList() *K8sNetworkPolicyList {
+	return &K8sNetworkPolicyList{
+		TypeMetadata: unversioned.TypeMetadata{
+			Kind:       KindK8sListV1,
+			APIVersion: VersionK8sListV1,
 		},
 	}
 }

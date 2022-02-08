@@ -145,6 +145,7 @@ def test_docker_release_tag_present():
                 req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
                 metadata = json.loads(req.stdout.read())
                 found_archs = []
+                print("[INFO] metadata: %s" % metadata)
                 for platform in metadata["manifests"]:
                     found_archs.append(platform["platform"]["architecture"])
 

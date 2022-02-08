@@ -156,7 +156,8 @@ func StartDataplaneDriver(configParams *config.Config,
 
 		// Create a routing table manager. There are certain components that should take specific indices in the range
 		// to simplify table tidy-up.
-		routeTableIndexAllocator := idalloc.NewIndexAllocator(configParams.RouteTableRange)
+		reservedTables := []idalloc.IndexRange{{Min: 253, Max: 255}}
+		routeTableIndexAllocator := idalloc.NewIndexAllocator(configParams.RouteTableIndices(), reservedTables)
 
 		// Always allocate the wireguard table index (even when not enabled). This ensures we can tidy up entries
 		// if wireguard is disabled after being previously enabled.
@@ -299,6 +300,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				MTU:                 configParams.WireguardMTU,
 				RouteSource:         configParams.RouteSource,
 				EncryptHostTraffic:  configParams.WireguardHostEncryptionEnabled,
+				PersistentKeepAlive: configParams.WireguardPersistentKeepAlive,
 			},
 			IPIPMTU:                        configParams.IpInIpMtu,
 			VXLANMTU:                       configParams.VXLANMTU,

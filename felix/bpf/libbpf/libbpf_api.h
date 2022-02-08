@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -139,14 +139,41 @@ struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd
 		goto out;
 	}
 
-	if (!(link = bpf_program__attach_cgroup(prog, cgroup_fd))) {
-		err = libbpf_get_error(link);
+	link = bpf_program__attach_cgroup(prog, cgroup_fd);
+	err = libbpf_get_error(link);
+	if (err) {
+		link = NULL;
 		goto out;
 	}
 
 out:
 	set_errno(err);
 	return link;
+}
+
+int bpf_program_attach_cgroup_legacy(struct bpf_object *obj, int cgroup_fd, char *name)
+{
+	int err = 0, prog_fd;
+	struct bpf_program *prog;
+	enum bpf_attach_type attach_type;
+
+	if (!(prog = bpf_object__find_program_by_name(obj, name))) {
+		err = ENOENT;
+		goto out;
+	}
+
+	prog_fd = bpf_program__fd(prog);
+	if (prog_fd < 0) {
+		err = EINVAL;
+		goto out;
+	}
+
+	attach_type = bpf_program__get_expected_attach_type(prog);
+	err = bpf_prog_attach(prog_fd, cgroup_fd, attach_type, 0);
+
+out:
+	set_errno(err);
+	return err;
 }
 
 void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo)
@@ -156,4 +183,9 @@ void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo)
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
+int num_possible_cpu()
+{
+    return libbpf_num_possible_cpus();
 }

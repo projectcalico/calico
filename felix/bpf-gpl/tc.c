@@ -533,6 +533,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	// dport to hold icmp type and code
 	if (state->ip_proto == IPPROTO_ICMP) {
 		state->dport = 0;
+		state->post_nat_dport = 0;
 	}
 
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
@@ -1089,6 +1090,12 @@ nat_encap:
 	}
 
 allow:
+	if (CALI_F_FROM_WEP && state->ip_src == state->ip_dst) {
+		CALI_DEBUG("Loopback SNAT\n");
+		seen_mark |=  CALI_SKB_MARK_MASQ;
+		fib = false; /* Disable FIB because we want to drop to iptables */
+	}
+
 	{
 		struct fwd fwd = {
 			.res = rc,
