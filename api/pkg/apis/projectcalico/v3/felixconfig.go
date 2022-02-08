@@ -62,9 +62,19 @@ const (
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
-	UseInternalDataplaneDriver *bool  `json:"useInternalDataplaneDriver,omitempty"`
-	DataplaneDriver            string `json:"dataplaneDriver,omitempty"`
+	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
+	// will launch an external dataplane driver and communicate with it over protobuf.
+	UseInternalDataplaneDriver *bool `json:"useInternalDataplaneDriver,omitempty"`
+	// DataplaneDriver filename of the external dataplane driver to use.  Only used if UseInternalDataplaneDriver
+	// is set to false.
+	DataplaneDriver string `json:"dataplaneDriver,omitempty"`
 
+	// DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver.
+	// Increase this value if you experience spurious non-ready or non-live events when Felix is under heavy load.
+	// Decrease the value to get felix to report non-live or non-ready more quickly. [Default: 90s]
+	DataplaneWatchdogTimeout *metav1.Duration `json:"dataplaneWatchdogTimeout,omitempty" configv1timescale:"seconds"`
+
+	// IPv6Support controls whether Felix enables support for IPv6 (if supported by the in-use dataplane).
 	IPv6Support *bool `json:"ipv6Support,omitempty" confignamev1:"Ipv6Support"`
 
 	// RouteRefreshInterval is the period at which Felix re-checks the routes
