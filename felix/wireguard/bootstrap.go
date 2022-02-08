@@ -17,13 +17,15 @@ package wireguard
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -33,7 +35,35 @@ import (
 // BootstrapHostConnectivity forces WireGuard peers with hostencryption enabled to communicate with this node unencrypted.
 // This ensures connectivity in scenarios where we have lost our WireGuard config, but will be sent WireGuard traffic
 // e.g. after a node restart, during felix startup, when we need to fetch config from Typha (calico/issues/5125)
-func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguardHandle func() (netlinkshim.Wireguard, error), calicoClient clientv3.Interface) error {
+func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle func() (netlinkshim.Wireguard, error), calicoClient clientv3.Interface) error {
+	wgDeviceName := configParams.WireguardInterfaceName
+	nodeName := configParams.FelixHostname
+	_, dbgBootstrap := os.LookupEnv("FELIX_DBG_WGBOOTSTRAP_TOFILE")
+
+	if !configParams.WireguardHostEncryptionEnabled && !dbgBootstrap {
+		return nil
+	}
+
+	logInstance := logrus.StandardLogger()
+	if dbgBootstrap {
+		fp := fmt.Sprintf("/tmp/%s-wgbootstrap.log", nodeName)
+		f, err := os.OpenFile(fp, os.O_WRONLY|os.O_CREATE, 0755)
+		if err != nil {
+			panic(err)
+		}
+		logInstance = logrus.New()
+		logInstance.SetLevel(logrus.DebugLevel)
+		logInstance.SetOutput(f)
+
+	}
+
+	logCtx := logInstance.WithFields(logrus.Fields{
+		"iface":    wgDeviceName,
+		"hostName": nodeName,
+	})
+
+	logCtx.Debug("Bootstrapping wireguard")
+
 	var storedPublicKey string
 	var kernelPublicKey string
 	const (
@@ -49,9 +79,9 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguar
 
 	wg, err := getWireguardHandle()
 	if err != nil {
-		log.Debug("Couldn't acquire WireGuard handle, treating public key as unset")
+		logCtx.Debug("Couldn't acquire WireGuard handle, treating public key as unset")
 	} else {
-		kernelPublicKey = getPublicKey(wgDeviceName, wg).String()
+		kernelPublicKey = getPublicKey(logCtx, wgDeviceName, wg).String()
 		defer wg.Close()
 	}
 
@@ -62,7 +92,7 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguar
 		thisNode, err := calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
 		cancel()
 		if err != nil {
-			log.WithError(err).Debug("Couldn't fetch node config from datastore, retrying")
+			logCtx.WithError(err).Debug("Couldn't fetch node config from datastore, retrying")
 			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
 			continue
 		}
@@ -70,7 +100,7 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguar
 		// if there is any config mismatch, wipe the datastore's publickey (forces peers to send unencrypted traffic)
 		storedPublicKey = thisNode.Status.WireguardPublicKey
 		if storedPublicKey != kernelPublicKey {
-			log.Debug("Found mismatch between kernel and datastore WireGuard keys. Clearing stale key from datastore")
+			logCtx.Debug("Found mismatch between kernel and datastore WireGuard keys. Clearing stale key from datastore")
 			thisNode.Status.WireguardPublicKey = ""
 			ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 			_, err := calicoClient.Nodes().Update(ctx, thisNode, options.SetOptions{})
@@ -78,14 +108,14 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguar
 			if err != nil {
 				switch err.(type) {
 				case cerrors.ErrorResourceUpdateConflict:
-					log.Debugf("Conflict while clearing WireGuard config, retrying update (%v)", err)
+					logCtx.Debugf("Conflict while clearing WireGuard config, retrying update (%v)", err)
 
 				default:
-					log.Debugf("Failed to clear WireGuard config: %v", err)
+					logCtx.Debugf("Failed to clear WireGuard config: %v", err)
 				}
 				continue
 			}
-			log.Debug("Cleared WireGuard public key from datastore")
+			logCtx.Debug("Cleared WireGuard public key from datastore")
 		}
 		return nil
 	}
@@ -95,7 +125,7 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, getWireguar
 
 // getPublicKey attempts to fetch a wireguard key from the kernel statelessly
 // this is intended for use during startup; an error may simply mean wireguard is not configured
-func getPublicKey(wgIfaceName string, wg netlinkshim.Wireguard) wgtypes.Key {
+func getPublicKey(log *logrus.Entry, wgIfaceName string, wg netlinkshim.Wireguard) wgtypes.Key {
 	dev, err := wg.DeviceByName(wgIfaceName)
 	if err != nil {
 		log.WithError(err).Debugf("Couldn't find WireGuard device '%s', reporting unset key", wgIfaceName)
