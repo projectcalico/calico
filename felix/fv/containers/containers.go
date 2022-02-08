@@ -564,11 +564,7 @@ func (c *Container) WaitUntilRunning() {
 	}()
 
 	for {
-		select {
-		case <-stoppedChan:
-			return
-		default:
-		}
+		Expect(stoppedChan).NotTo(BeClosed(), fmt.Sprintf("Container %s failed before being listed in 'docker ps'", c.Name))
 
 		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
