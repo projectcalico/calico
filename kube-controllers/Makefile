@@ -113,7 +113,7 @@ fv: tests/fv/fv.test image
 		CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
 		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
-		CRDS=$(CURDIR)/../libcalico-go/tests/crds \
+		CRDS=$(CURDIR)/../libcalico-go/config/crd \
 		CERTS=$(CURDIR)/tests/certs \
 		GO111MODULE=on \
 		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30

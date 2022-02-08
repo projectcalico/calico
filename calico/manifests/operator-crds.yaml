@@ -2,6 +2,6 @@
 layout: null
 ---
 
-{% helm tigera-operator --execute-dir crds --execute-dir crds/calico/kdd %}
+{% helm tigera-operator --execute-dir crds --execute-dir crds/calico %}
 # todo fix bug where empty helm tags doesn't render chart
 {% endhelm %}
