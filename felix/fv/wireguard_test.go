@@ -24,16 +24,13 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
-
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
-
-	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -66,7 +63,10 @@ const (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-	const nodeCount = 2
+	const (
+		nodeCount          = 2
+		wgBootstrapLogfile = "/wgbootstrap.log"
+	)
 
 	var (
 		infra        infrastructure.DatastoreInfra
@@ -177,6 +177,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 					return fmt.Errorf("felix %d has no Wireguard device", i)
 				}, "10s", "100ms").ShouldNot(HaveOccurred())
+			}
+		})
+
+		It("should have called bootstrap", func() {
+			if runtime.GOOS != "linux" {
+				Skip("Must only run on linux")
+			}
+			for _, felix := range felixes {
+				s, err := felix.ExecCombinedOutput(
+					"cat",
+					fmt.Sprintf("/tmp/%s-wgbootstrap.log", felix.Name),
+				)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).ToNot(BeEmpty())
+				Expect(strings.Split(s, "\n")).Should(ContainElements(
+					ContainSubstring("Found mismatch between kernel and datastore"),
+					ContainSubstring("Cleared WireGuard public key from datastore"),
+				))
 			}
 		})
 
@@ -706,7 +724,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 		}
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true)
+		topologyOptions := wireguardTopologyOptions(
+			"CalicoIPAM", true,
+			map[string]string{"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "true"},
+		)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
@@ -993,7 +1014,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		// initialise host-networked pods
-		for i, _ := range hostNetworkedWls {
+		for i := range hostNetworkedWls {
 			hostNetworkedWls[i] = createHostNetworkedWorkload(fmt.Sprintf("wl-f%d-hn-0", i), felixes[i])
 		}
 
@@ -1039,9 +1060,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 
 		// Ping other felix nodes from each node to trigger Wireguard handshakes.
 		for i, felix := range felixes {
-			for j, _ := range felixes {
+			for j := range felixes {
 				if i != j {
-					felix.ExecMayFail("ping", "-c", "1", "-W", "1", "-s", "1", felixes[j].IP)
+					if err := felix.ExecMayFail("ping", "-c", "1", "-W", "1", "-s", "1", felixes[j].IP); err != nil {
+						log.WithError(err).Warning("felix.ExecMayFail returned err")
+					}
 				}
 			}
 		}
@@ -1049,7 +1072,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		// Check felix nodes have performed Wireguard handshakes.
 		for i, felix := range felixes {
 			var matchers []types.GomegaMatcher
-			for j, _ := range felixes {
+			for j := range felixes {
 				if i != j {
 					matchers = append(matchers, BeNumerically(">", 0))
 				}
@@ -1130,7 +1153,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		By("Checking the routing table entries exist")
-		for i, _ := range wlsByHost {
+		for i := range wlsByHost {
 			var matchers []types.GomegaMatcher
 			for j, wls := range wlsByHost {
 				if i != j {
@@ -1166,7 +1189,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		By("Checking wireguard allowed ips")
-		for i, _ := range wlsByHost {
+		for i := range wlsByHost {
 			var matchers []types.GomegaMatcher
 			for j, wls := range wlsByHost {
 				if i != j {
@@ -1213,15 +1236,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		By("checking different node pod-to-pod connectivity")
-		for i, _ := range wlsByHost {
-			for j, _ := range wlsByHost {
+		for i := range wlsByHost {
+			for j := range wlsByHost {
 				cc.ExpectSome(wlsByHost[i][0], wlsByHost[j][0])
 			}
 		}
 
 		By("checking host-networked pod to regular pod connectivity")
 		for _, wl := range hostNetworkedWls {
-			for j, _ := range wlsByHost {
+			for j := range wlsByHost {
 				cc.ExpectSome(wl, wlsByHost[j][0])
 			}
 		}
@@ -1250,7 +1273,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 
 // Setup cluster topology options.
 // mainly, enable Wireguard with delayed start option.
-func wireguardTopologyOptions(routeSource string, ipipEnabled bool) infrastructure.TopologyOptions {
+func wireguardTopologyOptions(routeSource string, ipipEnabled bool, extraEnvs ...map[string]string) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 
 	// Waiting for calico-node to be ready.
@@ -1267,10 +1290,17 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled bool) infrastructu
 	}
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	topologyOptions.ExtraEnvVars["FELIX_PROMETHEUSMETRICSENABLED"] = "true"
+	topologyOptions.ExtraEnvVars["FELIX_DBG_WGBOOTSTRAP_TOFILE"] = "true"
 	topologyOptions.IPIPEnabled = ipipEnabled
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
 	topologyOptions.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000
+
+	for _, envs := range extraEnvs {
+		for k, v := range envs {
+			topologyOptions.ExtraEnvVars[k] = v
+		}
+	}
 
 	// Enable Wireguard.
 	felixConfig := api.NewFelixConfiguration()
@@ -1367,36 +1397,17 @@ func createHostNetworkedWorkload(wlName string, felix *infrastructure.Felix) *wo
 	return workload.RunWithMTU(felix, wlName, "default", felix.IP, defaultWorkloadPort, "tcp", wireguardMTUDefault)
 }
 
-func k8sServiceWireguard(name, clusterIP string, w *workload.Workload, port,
-	tgtPort int, nodePort int32, protocol string) *v1.Service {
-	k8sProto := v1.ProtocolTCP
-	if protocol == "udp" {
-		k8sProto = v1.ProtocolUDP
+func getWgPublicKeyFromFelix(felix *infrastructure.Felix) (string, error) {
+	pkRegex := regexp.MustCompile(`public key: (.+)\n`)
+	out, err := felix.ExecOutput("wg")
+	if err != nil {
+		return "", fmt.Errorf("getWgPublicKey error: %w", err)
 	}
-
-	svcType := v1.ServiceTypeClusterIP
-	if nodePort != 0 {
-		svcType = v1.ServiceTypeNodePort
+	matches := pkRegex.FindStringSubmatch(out)
+	if len(matches) < 1 {
+		err := errors.New("getWgPublicKey error: no public key found")
+		log.WithError(err).Debug("output: ", out)
+		return "", err
 	}
-
-	return &v1.Service{
-		TypeMeta:   typeMetaV1("Service"),
-		ObjectMeta: objectMetaV1(name),
-		Spec: v1.ServiceSpec{
-			ClusterIP: clusterIP,
-			Type:      svcType,
-			Selector: map[string]string{
-				"name": w.Name,
-			},
-			Ports: []v1.ServicePort{
-				{
-					Protocol:   k8sProto,
-					Port:       int32(port),
-					NodePort:   nodePort,
-					Name:       fmt.Sprintf("port-%d", tgtPort),
-					TargetPort: intstr.FromInt(tgtPort),
-				},
-			},
-		},
-	}
+	return matches[0], nil
 }
