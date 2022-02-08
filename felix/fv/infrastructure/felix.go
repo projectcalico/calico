@@ -147,7 +147,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	)
 
 	felixOpts := containers.RunOpts{
-		AutoRemove: false,
+		AutoRemove: true,
 	}
 	if options.FelixStopGraceful {
 		// Leave StopSignal defaulting to SIGTERM, and allow 10 seconds for Felix
