@@ -172,7 +172,7 @@ spec:
                 type: string
               dataplaneDriver:
                 description: DataplaneDriver filename of the external dataplane driver
-                  to use.  Only useed if UseInternalDataplaneDriver is set to false.
+                  to use.  Only used if UseInternalDataplaneDriver is set to false.
                 type: string
               dataplaneWatchdogTimeout:
                 description: 'DataplaneWatchdogTimeout is the readiness/liveness timeout
