@@ -1396,18 +1396,3 @@ func createWorkloadWithAssignedIP(
 func createHostNetworkedWorkload(wlName string, felix *infrastructure.Felix) *workload.Workload {
 	return workload.RunWithMTU(felix, wlName, "default", felix.IP, defaultWorkloadPort, "tcp", wireguardMTUDefault)
 }
-
-func getWgPublicKeyFromFelix(felix *infrastructure.Felix) (string, error) {
-	pkRegex := regexp.MustCompile(`public key: (.+)\n`)
-	out, err := felix.ExecOutput("wg")
-	if err != nil {
-		return "", fmt.Errorf("getWgPublicKey error: %w", err)
-	}
-	matches := pkRegex.FindStringSubmatch(out)
-	if len(matches) < 1 {
-		err := errors.New("getWgPublicKey error: no public key found")
-		log.WithError(err).Debug("output: ", out)
-		return "", err
-	}
-	return matches[0], nil
-}
