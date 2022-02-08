@@ -57,7 +57,6 @@ import (
 	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
-	_ "github.com/projectcalico/calico/felix/config"
 	dp "github.com/projectcalico/calico/felix/dataplane"
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -370,8 +369,8 @@ configRetry:
 	}
 
 	// We may need to temporarily disable encrypted traffic to this node in order to connect to Typha
-	if configParams.WireguardEnabled && configParams.WireguardHostEncryptionEnabled {
-		err := bootstrapWireguard(configParams.WireguardInterfaceName, configParams.FelixHostname, v3Client)
+	if configParams.WireguardEnabled {
+		err := bootstrapWireguard(configParams, v3Client)
 		if err != nil {
 			time.Sleep(2 * time.Second) // avoid a tight restart loop
 			log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
