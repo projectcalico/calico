@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
