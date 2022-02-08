@@ -287,9 +287,9 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		})
 	})
 
-	Describe("with Felix (no Typha) and Felix calc graph set to hang (default 90s timeout)", func() {
+	Describe("with Felix (no Typha) and Felix dataplane set to hang (default 90s timeout)", func() {
 		BeforeEach(func() {
-			startFelix("", k8sInfra.GetDockerArgs, "", "5", "", "0.0.0.0")
+			startFelix("", k8sInfra.GetDockerArgs, "", "", "5", "0.0.0.0")
 		})
 
 		AfterEach(func() {
