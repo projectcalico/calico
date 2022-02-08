@@ -58,12 +58,13 @@ resource "null_resource" "configure_vm" {
   // Install the necessary environment for release.
   provisioner "remote-exec" {
     inline = [
-      "sudo apt-get update",
-      "sudo apt-get install -y git make zip unzip ca-certificates curl gnupg lsb-release",
+      "sudo apt update",
+      "sudo apt install -y ca-certificates curl",
       "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg",
       "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu bionic stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null",
-      "sudo apt-get update",
-      "sudo apt-get install -y docker-ce docker-ce-cli containerd.io",
+      "sudo apt update",
+      "sudo apt install -y docker-ce docker-ce-cli containerd.io",
+      "sudo apt install -y git make zip unzip",
       "sudo usermod -aG docker ubuntu"
     ]
   }
@@ -91,10 +92,14 @@ resource "null_resource" "configure_vm" {
     ]
   }
 
-  // Clone the Calico repository.
+  // Clone the Calico repository. We do this via HTTPS to clone initially, but change the remote to SSH
+  // to work around the fact that Terraform doesn't seem to forward SSH.
   provisioner "remote-exec" {
     inline = [
       "git clone https://github.com/projectcalico/calico /home/ubuntu/calico",
+      "cd /home/ubuntu/calico",
+      "git remote remove origin",
+      "git remote add origin git@github.com:projectcalico/calico.git",
     ]
   }
 }
