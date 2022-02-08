@@ -75,8 +75,8 @@ fi
 # Typha logging level.
 : ${TYPHA_LOG_LEVEL:=info}
 #
-# CRD Manifest to use
-: ${CRD_PATH:=./fv/infrastructure/crds}
+# CRD manifests to use
+: ${CRD_PATH:=../libcalico-go/config/crd}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
