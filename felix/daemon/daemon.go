@@ -39,6 +39,7 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
@@ -175,6 +176,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var numClientsCreated int
 	var k8sClientSet *kubernetes.Clientset
 	var kubernetesVersion string
+	var encapInfo *config.EncapInfo
 configRetry:
 	for {
 		if numClientsCreated > 60 {
@@ -190,6 +192,7 @@ configRetry:
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
 		configParams = config.New()
+		encapInfo = config.NewEncapInfo()
 		envConfig := config.LoadConfigFromEnvironment(os.Environ())
 		// Then, the config file.
 		log.Infof("Loading config file: %v", configFile)
@@ -222,7 +225,7 @@ configRetry:
 
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
-		datastoreConfig = configParams.DatastoreConfig()
+		datastoreConfig = configParams.DatastoreConfig(*encapInfo)
 		// Can't dump the whole config because it may have sensitive information...
 		log.WithField("datastore", datastoreConfig.Spec.DatastoreType).Info("Connecting to datastore")
 		v3Client, err = client.New(datastoreConfig)
@@ -272,7 +275,7 @@ configRetry:
 		// After loading the config from the datastore, reconnect, possibly with new
 		// config.  We don't need to re-load the configuration _again_ because the
 		// calculation graph will spot if the config has changed since we were initialised.
-		datastoreConfig = configParams.DatastoreConfig()
+		datastoreConfig = configParams.DatastoreConfig(*encapInfo)
 		backendClient, err = backend.NewClient(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to (re)connect to datastore")
@@ -280,6 +283,29 @@ configRetry:
 			continue configRetry
 		}
 		numClientsCreated++
+
+		// Get all IP Pools to populate encapInfo.IPIPPools and encapInfo.VXLANPools
+		// and calculate encapInfo.UseIPIPEncap and encapInfo.UseVXLANEncap
+		ippoolKVList, err := backendClient.List(ctx, model.IPPoolListOptions{}, "")
+		if _, ok := err.(cerrors.ErrorOperationNotSupported); !ok && err != nil {
+			// There was an error and it wasn't OperationNotSupported - log and retry
+			log.WithError(err).Error("Failed to list IP Pools")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		} else if err == nil {
+			for _, kvp := range ippoolKVList.KVPairs {
+				k := kvp.Key.(model.IPPoolKey)
+				poolKey := k.String()
+				pool := kvp.Value.(*model.IPPool)
+				if pool.IPIPMode != encap.Undefined {
+					encapInfo.IPIPPools[poolKey] = struct{}{}
+				}
+				if pool.VXLANMode != encap.Undefined {
+					encapInfo.VXLANPools[poolKey] = struct{}{}
+				}
+			}
+		}
+		encapInfo.UseIPIPEncap, encapInfo.UseVXLANEncap = calc.CalcIPIPVXLANEncaps(configParams.IpInIpEnabled, configParams.VXLANEnabled, encapInfo.IPIPPools, encapInfo.VXLANPools)
 
 		// Try to get a Kubernetes client.  This is needed for discovering Typha and for the BPF mode of the dataplane.
 		k8sClientSet = nil
@@ -380,6 +406,7 @@ configRetry:
 		time.Sleep(gracefulShutdownTimeout)
 		log.Panic("Graceful shutdown took too long")
 	}
+	encapInfo.ConfigChangedRestartCallback = configChangedRestartCallback
 	fatalErrorCallback := func(err error) {
 		log.WithError(err).Error("Shutting down due to fatal error")
 		failureReportChan <- reasonFatalError
@@ -392,7 +419,8 @@ configRetry:
 		healthAggregator,
 		configChangedRestartCallback,
 		fatalErrorCallback,
-		k8sClientSet)
+		k8sClientSet,
+		encapInfo) //TODO: .Copy()?
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
@@ -527,6 +555,7 @@ configRetry:
 		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
 		healthAggregator,
+		encapInfo, //TODO: .Copy()?
 	)
 
 	if configParams.UsageReportingEnabled {
