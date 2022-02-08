@@ -65,7 +65,7 @@ type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
 	UseInternalDataplaneDriver *bool `json:"useInternalDataplaneDriver,omitempty"`
-	// DataplaneDriver filename of the external dataplane driver to use.  Only useed if UseInternalDataplaneDriver
+	// DataplaneDriver filename of the external dataplane driver to use.  Only used if UseInternalDataplaneDriver
 	// is set to false.
 	DataplaneDriver string `json:"dataplaneDriver,omitempty"`
 
