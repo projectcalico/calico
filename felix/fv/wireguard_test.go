@@ -1311,7 +1311,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled bool, extraEnvs ..
 
 	// Debugging.
 	//topologyOptions.ExtraEnvVars["FELIX_DebugUseShortPollIntervals"] = "true"
-	topologyOptions.FelixLogSeverity = "debug"
+	//topologyOptions.FelixLogSeverity = "debug"
 
 	return topologyOptions
 }

@@ -75,11 +75,6 @@ func (c *Container) StopLogs() {
 	c.mutex.Unlock()
 }
 
-func (c *Container) Restart() {
-	c.Stop()
-	c.Start()
-}
-
 func (c *Container) Stop() {
 	if c == nil {
 		log.Info("Stop no-op because nil container")
@@ -303,7 +298,6 @@ func (c *Container) WatchStdoutFor(re *regexp.Regexp) chan struct{} {
 // Start executes "docker start" on a container. Useful when used after Stop()
 // to restart a container.
 func (c *Container) Start() {
-	log.Info("container start name: ", c.Name)
 	c.runCmd = utils.Command("docker", "start", "--attach", c.Name)
 
 	stdout, err := c.runCmd.StdoutPipe()
@@ -564,11 +558,7 @@ func (c *Container) WaitUntilRunning() {
 	}()
 
 	for {
-		select {
-		case <-stoppedChan:
-			return
-		default:
-		}
+		Expect(stoppedChan).NotTo(BeClosed(), fmt.Sprintf("Container %s failed before being listed in 'docker ps'", c.Name))
 
 		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
