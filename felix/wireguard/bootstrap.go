@@ -79,7 +79,7 @@ func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle f
 
 	wg, err := getWireguardHandle()
 	if err != nil {
-		logCtx.Debug("Couldn't acquire WireGuard handle, treating public key as unset")
+		logCtx.Info("Couldn't acquire WireGuard handle, treating public key as unset")
 	} else {
 		kernelPublicKey = getPublicKey(logCtx, wgDeviceName, wg).String()
 		defer wg.Close()
@@ -108,14 +108,14 @@ func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle f
 			if err != nil {
 				switch err.(type) {
 				case cerrors.ErrorResourceUpdateConflict:
-					logCtx.Debugf("Conflict while clearing WireGuard config, retrying update (%v)", err)
+					logCtx.Infof("Conflict while clearing WireGuard config, retrying update (%v)", err)
 
 				default:
-					logCtx.Debugf("Failed to clear WireGuard config: %v", err)
+					logCtx.Errorf("Failed to clear WireGuard config: %v", err)
 				}
 				continue
 			}
-			logCtx.Debug("Cleared WireGuard public key from datastore")
+			logCtx.Info("Cleared WireGuard public key from datastore")
 		}
 		return nil
 	}
