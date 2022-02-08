@@ -360,13 +360,14 @@ type FelixConfigurationSpec struct {
 	// a problem if this range overlaps with the operating systems. Both ends of the range are
 	// inclusive. [Default: 20000:29999]
 	BPFPSNATPorts *numorstring.Port `json:"bpfPSNATPorts,omitempty"`
-	// BPFMapSizeNat sets the map size for nat maps
-	BPFMapSizeNat *int `json:"bpfMapSizeNAT,omitempty"`
-	// BPFMapSizeRt sets the map size for route map
+	// BPFMapSizeNAT sets the size for nat maps
+	BPFMapSizeNAT *int `json:"bpfMapSizeNAT,omitempty"`
+	// BPFMapSizeRoute sets the size for route map
 	BPFMapSizeRoute *int `json:"bpfMapSizeRoute,omitempty"`
-	// BPFMapSizeCt sets the map size for conntrack map
+	// BPFMapSizeConntrack sets the size for conntrack map
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
-
+	// BPFMapSizeIPSets sets the size for ipsets map
+	BPFMapSizeIPSets *int `json:"bpfMapSizeIPSets,omitempty"`
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.

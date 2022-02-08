@@ -2325,21 +2325,28 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfMapSizeNAT": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeNat sets the map size for nat maps",
+							Description: "BPFMapSizeNAT sets the size for nat maps",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
 					},
 					"bpfMapSizeRoute": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeRt sets the map size for route map",
+							Description: "BPFMapSizeRoute sets the size for route map",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
 					},
 					"bpfMapSizeConntrack": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeCt sets the map size for conntrack map",
+							Description: "BPFMapSizeConntrack sets the size for conntrack map",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeIPSets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeIPSets sets the size for ipsets map",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

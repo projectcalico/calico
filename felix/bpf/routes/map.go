@@ -187,6 +187,10 @@ var MapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
+func SetMaxEntries(maxEntries int) {
+	MapParameters.MaxEntries = maxEntries
+}
+
 func Map(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(MapParameters)
 }

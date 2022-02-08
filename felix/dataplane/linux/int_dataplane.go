@@ -179,6 +179,10 @@ type Config struct {
 	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
 	BPFPSNATPorts                      numorstring.Port
+	BPFMapSizeRoute                    int
+	BPFMapSizeConntrack                int
+	BPFMapSizeNAT                      int
+	BPFMapSizeIPSets                   int
 	KubeProxyMinSyncPeriod             time.Duration
 	KubeProxyEndpointSlicesEnabled     bool
 
@@ -639,6 +643,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create NAT backend affinity BPF map.")
 		}
 
+		routes.SetMaxEntries(config.BPFMapSizeRoute)
 		routeMap := routes.Map(bpfMapContext)
 		err = routeMap.EnsureExists()
 		if err != nil {

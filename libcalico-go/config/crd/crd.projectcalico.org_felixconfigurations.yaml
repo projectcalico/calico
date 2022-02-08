@@ -119,14 +119,17 @@ spec:
                   `tc exec bpf debug`. [Default: Off].'
                 type: string
               bpfMapSizeConntrack:
-                description: BPFMapSizeConntrack sets the map size for conntrack map
+                description: BPFMapSizeConntrack sets the size for conntrack map
                 type: integer
               bpfMapSizeNAT:
-                description: BPFMapSizeNat sets the map size for nat maps
+                description: BPFMapSizeNAT sets the size for nat maps
                 type: integer
               bpfMapSizeRoute:
-                description: BPFMapSizeRoute sets the map size for route map
+                description: BPFMapSizeRoute sets the size for route map
                 type: integer
+              bpfMapSizeIPSets:
+                description: BPFMapSizeIPSets sets the size for ipsets map
+                type: integer 
               bpfPSNATPorts:
                 anyOf:
                 - type: integer

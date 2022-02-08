@@ -316,7 +316,15 @@ func (b *PinnedMap) Open() error {
 
 func (b *PinnedMap) EnsureExists() error {
 	if b.fdLoaded {
-		return nil
+		mapInfo, err := GetMapInfo(b.fd)
+		if err != nil {
+			return err
+		}
+		if mapInfo.MaxEntries == b.MaxEntries {
+			return nil
+		} else {
+			os.Remove(b.Path())
+		}
 	}
 
 	if err := b.Open(); err == nil {
