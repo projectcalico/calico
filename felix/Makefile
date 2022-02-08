@@ -119,8 +119,6 @@ clean:
 	$(DOCKER_GO_BUILD) make -C bpf-apache clean
 	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
 	$(DOCKER_GO_BUILD) make -C $(LIBBPF_CONTAINER_PATH) clean
-	-docker rmi $(FELIX_IMAGE)-wgtool:latest-amd64
-	-docker rmi $(FELIX_IMAGE)-wgtool:latest
 
 .PHONY: clean-generated
 # Delete (checked-in) generated files.  Intentionally not part of the main clean target since these files are
@@ -253,13 +251,9 @@ else
 FV_BINARY=calico-felix-amd64
 endif
 
-image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/$(FV_BINARY) image-wgtool
+image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/$(FV_BINARY)
 	docker buildx build $(TARGET_PLATFORM) -t $(FELIX_IMAGE)-test:latest-$(ARCH) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin --load;
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-test
-
-image-wgtool: fv/Dockerfile.wgtool.amd64
-	docker buildx build $(TARGET_PLATFORM) -t $(FELIX_IMAGE)-wgtool:latest-$(ARCH) --file ./fv/Dockerfile.wgtool.$(ARCH) fv --load;
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-wgtool
 
 ###############################################################################
 # Unit Tests
