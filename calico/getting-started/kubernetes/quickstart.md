@@ -131,7 +131,7 @@ Congratulations! You now have a single-host Kubernetes cluster with {{site.prodn
 
 ### Next steps
 
-**Required**
+**Optional**
 - [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended tutorials**

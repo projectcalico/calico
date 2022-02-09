@@ -68,7 +68,7 @@ Congratulations! You now have an RKE cluster running {{site.prodname}}
 
 ### Next steps
 
-**Required**
+**Optional**
 - [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended tutorials**

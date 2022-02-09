@@ -154,7 +154,7 @@ The OpenShift console provides an interface for editing the operator installatio
 
 ### Next steps 
 
-**Required**
+**Optional**
 
 - [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
