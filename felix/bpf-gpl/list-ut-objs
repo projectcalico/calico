@@ -20,7 +20,7 @@ for ep_type in $ep_types; do
   for from_or_to in $directions; do
     for dsr in "" "_dsr"; do
       if [ "${dsr}" = "_dsr" ]; then
-        if [ "${ep_type}" = "hep" ] || [ "${ep_type}" = "nat" ]; then
+        if [ "${ep_type}" = "hep" ]; then
           emit_filename
           continue
         fi
