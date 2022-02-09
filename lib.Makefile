@@ -147,7 +147,7 @@ endif
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
 GO_BUILD_IMAGE ?= calico/go-build
-CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
+CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(ARCH)
 
 # Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
@@ -217,6 +217,21 @@ ifdef ARM_VERSION
 GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
 endif
 
+# Set the platform correctly for building docker images so that 
+# cross-builds get the correct architecture set in the produced images.
+TARGET_PLATFORM=--platform=linux/$(ARCH)
+ifeq ($(ARCH),arm64)
+TARGET_PLATFORM=--platform=linux/arm64/v8
+endif
+ifeq ($(ARCH),armv7)
+TARGET_PLATFORM=--platform=linux/arm/v7
+endif
+
+# DOCKER_BUILD is the base build command used for building all images.
+DOCKER_BUILD=docker buildx build --pull \
+	     --build-arg QEMU_IMAGE=$(CALICO_BUILD) \
+	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
+	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
