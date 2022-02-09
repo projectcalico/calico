@@ -124,7 +124,7 @@ func (e Value) Type() uint8 {
 }
 
 func (e Value) Flags() uint16 {
-	return binary.LittleEndian.Uint16(e[18:19])
+	return binary.LittleEndian.Uint16(e[18:20])
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -161,6 +161,8 @@ const (
 	FlagReserved5 uint16 = (1 << 5)
 	FlagExtLocal  uint16 = (1 << 6)
 	FlagViaNATIf  uint16 = (1 << 7)
+	FlagHostSNAT  uint16 = (1 << 8)
+	FlagSrcDstBA  uint16 = (1 << 9)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -181,7 +183,7 @@ func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint1
 	binary.LittleEndian.PutUint64(v[:8], uint64(created))
 	binary.LittleEndian.PutUint64(v[8:16], uint64(lastSeen))
 	v[16] = typ
-	binary.LittleEndian.PutUint16(v[18:19], uint16(flags))
+	binary.LittleEndian.PutUint16(v[18:20], uint16(flags))
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
@@ -372,6 +374,14 @@ func (e Value) String() string {
 
 		if flags&FlagViaNATIf != 0 {
 			flagsStr += " via-nat-iface"
+		}
+
+		if flags&FlagHostSNAT != 0 {
+			flagsStr += " host-snat"
+		}
+
+		if flags&FlagSrcDstBA != 0 {
+			flagsStr += " B-A"
 		}
 	}
 
