@@ -343,12 +343,6 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 		ipamData["subnet"] = ipv4Cidr
 		subnet = ipv4Cidr
 		logger.Infof("Calico CNI passing podCidr to host-local IPAM: %s", ipv4Cidr)
-
-		// updateHostLocalIPAMDataForOS is only required for Windows and only ipv4 is supported
-		err = updateHostLocalIPAMDataForOS(subnet, ipamData)
-		if err != nil {
-			return err
-		}
 	}
 
 	if strings.EqualFold(subnet, "usePodCidrIPv6") {
@@ -363,6 +357,13 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 
 		ipamData["subnet"] = ipv6Cidr
 		logger.Infof("Calico CNI passing podCidrv6 to host-local IPAM: %s", ipv6Cidr)
+		return nil
+	}
+
+	// updateHostLocalIPAMDataForOS is only required for Windows and only ipv4 is supported
+	err := updateHostLocalIPAMDataForOS(subnet, ipamData)
+	if err != nil {
+		return err
 	}
 
 	return nil
