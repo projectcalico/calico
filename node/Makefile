@@ -36,13 +36,6 @@ REMOTE_DEPS = $(LIBBPF_A) \
 ###############################################################################
 include ../lib.Makefile
 
-# Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-endif
-
 ###############################################################################
 
 # Versions and location of dependencies used in the build.
