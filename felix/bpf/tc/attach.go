@@ -41,6 +41,13 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
 
+type MapSize struct {
+	MapSizeRoute     int
+	MapSizeNAT       int
+	MapSizeConntrack int
+	MapSizeIPSets    int
+}
+
 type AttachPoint struct {
 	Type                 EndpointType
 	ToOrFrom             ToOrFromEp
@@ -57,6 +64,7 @@ type AttachPoint struct {
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
+	MapSize
 }
 
 var tcLock sync.RWMutex
