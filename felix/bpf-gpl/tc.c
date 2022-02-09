@@ -49,11 +49,11 @@ const volatile struct cali_tc_globals __globals;
  */
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 {
-#ifdef CALI_SET_SKB_MARK
+#ifdef UNITTEST
 	/* UT-only workaround to allow us to run the program with BPF_TEST_PROG_RUN
 	 * and simulate a specific mark
 	 */
-	skb->mark = CALI_SET_SKB_MARK;
+	skb->mark = SKB_MARK;
 #endif
 	CALI_DEBUG("New packet at ifindex=%d; mark=%x\n", skb->ifindex, skb->mark);
 
@@ -229,13 +229,13 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	}
 
        if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
-		       (ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_ESTABLISHED ||
-		       ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS) &&
-		       ctx.state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
+		       (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED ||
+		       ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS) &&
+		       ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
                CALI_DEBUG("should route via bpfnatout\n");
-               ctx.fwd.mark |= CALI_SKB_MARK_TO_NAT_IFACE_OUT;
+               ctx->fwd.mark |= CALI_SKB_MARK_TO_NAT_IFACE_OUT;
 	       /* bpfnatout need to process the packet */
-	       ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_ESTABLISHED);
+	       ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_ESTABLISHED);
        }
 
 	/* We are possibly past (D)NAT, but that is ok, we need to let the IP
