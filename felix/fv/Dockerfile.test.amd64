@@ -18,20 +18,18 @@
 # userspace environment as it will be deployed in calico/node.
 FROM ubuntu:focal as wgtool
 
-RUN apt-get update && \
-    apt-get install --no-install-recommends wireguard-tools -y
+# Install remaining runtime deps required for felix from the global repository
+RUN apt-get update && apt-get install -y --no-install-recommends \
+	wireguard-tools ethtool wget tcpdump
 
 FROM calico/felix:latest
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
+# Felix FV tests require these
 COPY --from=wgtool /usr/bin/wg /usr/bin/wg
-
-# Install remaining runtime deps required for felix from the global repository
-RUN apt-get update && apt-get install -y \
-    # Felix FV tests require these
-    wget \
-    ethtool \
-    tcpdump
+COPY --from=wgtool /usr/sbin/ethtool /usr/sbin/ethtool
+COPY --from=wgtool /usr/bin/wget /usr/bin/wget
+COPY --from=wgtool /usr/sbin/tcpdump /usr/sbin/tcpdump
 
 ARG FV_BINARY=calico-felix-amd64
 
