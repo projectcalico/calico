@@ -292,6 +292,8 @@ CALI_CONFIGURABLE_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) 
 #define SKB_MARK	CALI_CONFIGURABLE(__skb_mark)
 #endif
 
+#define HOST_TUNNEL_IP HOST_IP /* XXX temp must be set propertly XXX */
+
 #define MAP_PIN_GLOBAL	2
 
 #ifndef __BPFTOOL_LOADER__

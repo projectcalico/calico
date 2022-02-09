@@ -161,6 +161,8 @@ const (
 	FlagReserved5 uint16 = (1 << 5)
 	FlagExtLocal  uint16 = (1 << 6)
 	FlagViaNATIf  uint16 = (1 << 7)
+	FlagHostSNAT  uint16 = (1 << 8)
+	FlagSrcDstBA  uint16 = (1 << 9)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -380,6 +382,14 @@ func (e Value) String() string {
 
 		if flags&FlagViaNATIf != 0 {
 			flagsStr += " via-nat-iface"
+		}
+
+		if flags&FlagHostSNAT != 0 {
+			flagsStr += " host-snat"
+		}
+
+		if flags&FlagSrcDstBA != 0 {
+			flagsStr += " B-A"
 		}
 	}
 
