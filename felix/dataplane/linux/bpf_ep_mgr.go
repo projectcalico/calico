@@ -146,10 +146,7 @@ type bpfEndpointManager struct {
 	dsrEnabled              bool
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
-	bpfMapSizeRoute         int
-	bpfMapSizeCt            int
-	bpfMapSizeNAT           int
-	bpfMapSizeIPSets        int
+	maxEntries              map[string]uint32
 
 	ipSetMap bpf.Map
 	stateMap bpf.Map
@@ -193,6 +190,7 @@ func newBPFEndpointManager(
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
+	maxEntriesMap map[string]uint32,
 ) *bpfEndpointManager {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -219,10 +217,7 @@ func newBPFEndpointManager(
 		dsrEnabled:              config.BPFNodePortDSREnabled,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
-		bpfMapSizeRoute:         config.BPFMapSizeRoute,
-		bpfMapSizeCt:            config.BPFMapSizeConntrack,
-		bpfMapSizeNAT:           config.BPFMapSizeNAT,
-		bpfMapSizeIPSets:        config.BPFMapSizeIPSets,
+		maxEntries:              maxEntriesMap,
 		ipSetMap:                ipSetMap,
 		stateMap:                stateMap,
 		ruleRenderer:            iptablesRuleRenderer,
@@ -1010,10 +1005,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.VXLANPort = m.vxlanPort
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
-	ap.MapSizeRoute = m.bpfMapSizeRoute
-	ap.MapSizeConntrack = m.bpfMapSizeCt
-	ap.MapSizeNAT = m.bpfMapSizeNAT
-	ap.MapSizeIPSets = m.bpfMapSizeIPSets
+	ap.MaxEntriesMap = m.maxEntries
 
 	return ap
 }

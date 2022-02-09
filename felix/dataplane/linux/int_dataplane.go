@@ -556,11 +556,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var (
+		maxEntriesMap      map[string]uint32
 		bpfEndpointManager *bpfEndpointManager
 	)
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
+		maxEntriesMap = make(map[string]uint32)
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
@@ -570,6 +572,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err != nil {
 			log.WithError(err).Panic("Failed to create ipsets BPF map.")
 		}
+		maxEntriesMap[ipSetsMap.GetName()] = uint32(config.BPFMapSizeIPSets)
 		ipSetsV4 := bpfipsets.NewBPFIPSets(
 			ipSetsConfigV4,
 			ipSetIDAllocator,
@@ -611,37 +614,27 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.RegisterManager(failsafeMgr)
 
-		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
-		bpfEndpointManager = newBPFEndpointManager(
-			&config,
-			fibLookupEnabled,
-			workloadIfaceRegex,
-			ipSetIDAllocator,
-			ipSetsMap,
-			stateMap,
-			ruleRenderer,
-			filterTableV4,
-			dp.reportHealth,
-			dp.loopSummarizer,
-		)
-		dp.RegisterManager(bpfEndpointManager)
-
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap(bpfMapContext)
 		err = frontendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT frontend BPF map.")
 		}
+		maxEntriesMap[frontendMap.GetName()] = uint32(config.BPFMapSizeNAT)
+
 		backendMap := nat.BackendMap(bpfMapContext)
 		err = backendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend BPF map.")
 		}
+		maxEntriesMap[backendMap.GetName()] = uint32(config.BPFMapSizeNAT)
+
 		backendAffinityMap := nat.AffinityMap(bpfMapContext)
 		err = backendAffinityMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend affinity BPF map.")
 		}
+		maxEntriesMap[backendAffinityMap.GetName()] = uint32(config.BPFMapSizeNAT)
 
 		routes.SetMaxEntries(config.BPFMapSizeRoute)
 		routeMap := routes.Map(bpfMapContext)
@@ -649,12 +642,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err != nil {
 			log.WithError(err).Panic("Failed to create routes BPF map.")
 		}
+		maxEntriesMap[routeMap.GetName()] = uint32(config.BPFMapSizeRoute)
 
 		ctMap := conntrack.Map(bpfMapContext)
 		err = ctMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create conntrack BPF map.")
 		}
+		maxEntriesMap[ctMap.GetName()] = uint32(config.BPFMapSizeConntrack)
 
 		srMsgMap := nat.SendRecvMsgMap(bpfMapContext)
 		err = srMsgMap.EnsureExists()
@@ -667,6 +662,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err != nil {
 			log.WithError(err).Panic("Failed to create ct nats map.")
 		}
+
+		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
+		bpfEndpointManager = newBPFEndpointManager(
+			&config,
+			fibLookupEnabled,
+			workloadIfaceRegex,
+			ipSetIDAllocator,
+			ipSetsMap,
+			stateMap,
+			ruleRenderer,
+			filterTableV4,
+			dp.reportHealth,
+			dp.loopSummarizer,
+			maxEntriesMap,
+		)
+		dp.RegisterManager(bpfEndpointManager)
 
 		conntrackScanner := conntrack.NewScanner(ctMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
