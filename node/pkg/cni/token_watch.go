@@ -79,7 +79,7 @@ func Run() {
 			logrus.Debug("Triggering periodic CNI config refresh")
 			err := configWriter.handleEvent()
 			if err != nil {
-				logrus.WithError(err).Error("Failed to handle fsnotify event")
+				logrus.WithError(err).Error("Periodic CNI config refresh failed")
 			}
 		case event := <-watcher.Events:
 			// We've received a notification that the Kubernetes secrets files have changed.
