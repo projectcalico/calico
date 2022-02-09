@@ -31,8 +31,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_RES_0x20	0x20 /* reserved */
 #define CALI_CT_FLAG_EXT_LOCAL	0x40 /* marks traffic from external client to a local serice */
 #define CALI_CT_FLAG_VIA_NAT_IF	0x80 /* marks connection first seen on the service veth */
-#define CALI_CT_FLAG_HOST_SNAT	0x100 /* marks connections from the host that were snatted */
-#define CALI_CT_FLAG_BA		0x200 /* masks that src->dst is the B->A leg */
+#define CALI_CT_FLAG_BA		0x100 /* masks that src->dst is the B->A leg */
 
 struct calico_ct_leg {
 	__u32 seqno;
@@ -77,7 +76,7 @@ struct calico_ct_value {
 			__u16 orig_port;                   // 48
 			__u16 orig_sport;                  // 50
 			__u32 tun_ip;                      // 52
-			__u32 pad3;                        // 56
+			__u32 orig_sip;                    // 56
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
