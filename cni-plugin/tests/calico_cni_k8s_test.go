@@ -175,6 +175,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
+	Expect(cniVersion).NotTo(BeEmpty())
 	Context("using host-local IPAM", func() {
 		netconf := fmt.Sprintf(`
 			{
@@ -1686,6 +1687,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				FeatureControl:       types.FeatureControl{IPAddrsNoIpam: true},
 			}
 			nc.IPAM.Type = "calico-ipam"
+			Expect(nc.CNIVersion).NotTo(BeEmpty())
 			ncb, err := json.Marshal(nc)
 			Expect(err).NotTo(HaveOccurred())
 			netconf = string(ncb)

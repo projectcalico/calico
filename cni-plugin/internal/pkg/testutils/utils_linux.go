@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -260,6 +261,9 @@ func RunCNIPluginWithId(
 	}
 
 	// Parse the result as the target CNI version.
+	if len(nc.CNIVersion) < 1 {
+		return nil, nil, nil, nil, errors.New(fmt.Sprintf("no version for %+v", nc))
+	}
 	if version.Compare(nc.CNIVersion, "0.3.0", "<") {
 		// Special case for older CNI versions.
 		var out []byte
