@@ -21,6 +21,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -76,7 +80,7 @@ func init() {
 	prometheus.MustRegister(blocksGauge)
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface) *ipamController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, ni cache.Indexer) *ipamController {
 	return &ipamController{
 		client:    c,
 		clientset: cs,
@@ -84,6 +88,8 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		rl:        workqueue.DefaultControllerRateLimiter(),
 
 		syncChan: make(chan interface{}, 1),
+
+		nodeIndexer: ni,
 
 		// Channel for updates
 
@@ -109,10 +115,11 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 }
 
 type ipamController struct {
-	rl        workqueue.RateLimiter
-	client    client.Interface
-	clientset kubernetes.Interface
-	config    config.NodeControllerConfig
+	rl          workqueue.RateLimiter
+	client      client.Interface
+	clientset   kubernetes.Interface
+	nodeIndexer cache.Indexer
+	config      config.NodeControllerConfig
 
 	syncStatus bapi.SyncStatus
 
@@ -539,6 +546,7 @@ func (c *ipamController) updateMetrics() {
 // - The block is empty.
 // - The block's node has at least one other affine block.
 // - The other blocks on the node are not at capacity.
+// - The node is not currently undergoing a migration from Flannel
 func (c *ipamController) checkEmptyBlocks() error {
 	for blockCIDR, node := range c.emptyBlocks {
 		logc := log.WithFields(log.Fields{"blockCIDR": blockCIDR, "node": node})
@@ -568,6 +576,17 @@ func (c *ipamController) checkEmptyBlocks() error {
 			continue
 		}
 
+		// During a Flannel migration, we can only migrate blocks affined to nodes that have already undergone the migration
+		migrating, err := c.nodeIsBeingMigrated(node)
+		if err != nil {
+			logc.WithError(err).Warn("Failed to check if node is being migrated from Flannel, skipping affinity release")
+			continue
+		}
+		if migrating {
+			logc.Info("Node affined to block is currently undergoing a migration from Flannel, skipping affinity release")
+			continue
+		}
+
 		// Find the actual block object.
 		block, ok := c.allBlocks[blockCIDR]
 		if !ok {
@@ -577,7 +596,7 @@ func (c *ipamController) checkEmptyBlocks() error {
 
 		// We can release the empty one.
 		logc.Infof("Releasing affinity for empty block (node has %d total blocks)", len(nodeBlocks))
-		err := c.client.IPAM().ReleaseBlockAffinity(context.TODO(), block.Value.(*model.AllocationBlock), true)
+		err = c.client.IPAM().ReleaseBlockAffinity(context.TODO(), block.Value.(*model.AllocationBlock), true)
 		if err != nil {
 			logc.WithError(err).Warn("unable or unwilling to release affinity for block")
 			continue
@@ -965,6 +984,41 @@ func (c *ipamController) nodeExists(knode string) bool {
 		log.WithError(err).Warn("Failed to query node, assume it exists")
 	}
 	return true
+}
+
+// nodeIsBeingMigrated looks up a Kubernetes node for a Calico node and checks,
+// if it is marked by the flannel-migration controller to undergo migration.
+func (c *ipamController) nodeIsBeingMigrated(name string) (bool, error) {
+	// Find the Kubernetes node referenced by the Calico node
+	kname, err := c.kubernetesNodeForCalico(name)
+	if err != nil {
+		return false, err
+	}
+	// Get node to inspect labels
+	obj, ok, err := c.nodeIndexer.GetByKey(kname)
+	if !ok {
+		// Node doesn't exist, so isn't being migrated.
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check node for migration status: %w", err)
+	}
+	node, ok := obj.(*v1.Node)
+	if !ok {
+		return false, fmt.Errorf("failed to check node for migration status: unexpected error: object is not a node")
+	}
+
+	for labelName, labelVal := range node.ObjectMeta.Labels {
+		// Check against labels used by the migration controller
+		for migrationLabelName, migrationLabelValue := range flannelmigration.NodeNetworkCalico {
+			// Only the label value "calico" specifies a migrated node where we can release the affinity
+			if labelName == migrationLabelName && labelVal != migrationLabelValue {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
 
 // kubernetesNodeForCalico returns the name of the Kubernetes node that corresponds to this Calico node.

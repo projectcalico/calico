@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ func (wc *watcher) watchLoop() {
 		if wres.Err() != nil {
 			// A watch channel error is a terminating event, so exit the loop.
 			err := wres.Err()
-			log.WithError(err).Error("Watch channel error")
+			log.WithError(err).Warning("Watch channel error")
 			wc.sendError(err)
 			return
 		}

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -187,4 +187,9 @@ void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo)
 
 void bpf_map_set_max_entries(struct bpf_map *map, uint max_entries) {
 	set_errno(bpf_map__set_max_entries(map, max_entries));
+}
+
+int num_possible_cpu()
+{
+    return libbpf_num_possible_cpus();
 }

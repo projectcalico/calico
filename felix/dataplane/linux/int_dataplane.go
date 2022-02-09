@@ -440,7 +440,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.VXLANEnabled {
 		routeTableVXLAN := routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
-			dp.loopSummarizer)
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 		vxlanManager := newVXLANManager(
 			ipSetsV4,
@@ -739,7 +739,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
 		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-		dp.loopSummarizer)
+		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -827,7 +827,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(
 			interfaceRegexes, 6, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-			dp.loopSummarizer)
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))

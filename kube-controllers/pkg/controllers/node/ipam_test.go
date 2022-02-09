@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/tools/cache"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -88,6 +91,7 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *ipamController
 	var cli client.Interface
 	var cs kubernetes.Interface
+	var ni cache.Indexer
 	var stopChan chan struct{}
 
 	BeforeEach(func() {
@@ -96,6 +100,10 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a fake Calico client.
 		cli = NewFakeCalicoClient()
+
+		// Create a node indexer with the fake clientset
+		factory := informers.NewSharedInformerFactory(cs, 0)
+		ni = factory.Core().V1().Nodes().Informer().GetIndexer()
 
 		// Config for the test.
 		cfg := config.NodeControllerConfig{
@@ -107,7 +115,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs)
+		c = NewIPAMController(cfg, cli, cs, ni)
 	})
 
 	AfterEach(func() {

@@ -79,7 +79,20 @@ var _ = Describe("RouteRules Construct", func() {
 		Expect(err).To(HaveOccurred())
 
 		tableIndexSet.Discard(0)
-		tableIndexSet.Add(252)
+		tableIndexSet.Add(254)
+		_, err = New(
+			4,
+			tableIndexSet,
+			RulesMatchSrcFWMarkTable,
+			RulesMatchSrcFWMark,
+			10*time.Second,
+			dataplane.NewNetlinkHandle,
+			logutils.NewSummarizer("test loop"),
+		)
+		Expect(err).To(HaveOccurred())
+
+		tableIndexSet.Discard(254)
+		tableIndexSet.Add(0x100000000)
 		_, err = New(
 			4,
 			tableIndexSet,
