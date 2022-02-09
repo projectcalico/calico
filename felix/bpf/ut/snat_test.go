@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 )
 
@@ -37,7 +38,9 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	bpfIfaceName = "SNAT"
 	defer func() { bpfIfaceName = "" }()
 
-	eth, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	ipHdr := ipv4Default
+	ipHdr.Id = 1
+	eth, ipv4, l4, payload, pktBytes, err := testPacket(nil, ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -95,7 +98,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Leaving workload
+	// From host via bpfnat - first packet - conntrack miss
 	runBpfTest(t, "calico_from_nat_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
@@ -106,12 +109,105 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 		ipv4Nat := *ipv4
 		ipv4Nat.DstIP = natIP
+		ipv4Nat.SrcIP = hostIP
 
 		udpNat := *udp
 		udpNat.DstPort = layers.UDPPort(natPort)
 
 		// created the expected packet after NAT, with recalculated csums
 		_, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, &udpNat, payload)
+		Expect(err).NotTo(HaveOccurred())
+
+		// expect them to be the same
+		Expect(res.dataOut).To(Equal(resPktBytes))
+
+		pktBytes = res.dataOut
+	})
+
+	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut | tcdefs.MarkSeenBypassSkipRPF
+
+	dumpCTMap(ctMap)
+
+	// Out via host iface. We shoul duse a L3 tunnel, but that is not supported
+	// by the test infra. Host interface does pretty much the same for what we
+	// need. It creates extra CT entries of type 0.
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.dataOut).To(Equal(pktBytes))
+	})
+
+	dumpCTMap(ctMap)
+
+	// Second packet - conntrack hit
+
+	ipHdr.Id = 2
+	eth, ipv4, l4, payload, pktBytes, err = testPacket(nil, ipHdr, nil, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	skbMark = 0
+
+	runBpfTest(t, "calico_from_nat_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4Nat := *ipv4
+		ipv4Nat.DstIP = natIP
+		ipv4Nat.SrcIP = hostIP
+
+		udpNat := *udp
+		udpNat.DstPort = layers.UDPPort(natPort)
+
+		// created the expected packet after NAT, with recalculated csums
+		_, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, &udpNat, payload)
+		Expect(err).NotTo(HaveOccurred())
+
+		// expect them to be the same
+		Expect(res.dataOut).To(Equal(resPktBytes))
+
+		pktBytes = res.dataOut
+	})
+
+	// Out via wg tunnel (to intruduce ct entries)
+
+	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut | tcdefs.MarkSeenBypassSkipRPF
+
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.dataOut).To(Equal(pktBytes))
+	})
+
+	// Return path
+
+	skbMark = 0
+
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		respPkt := udpResponseRaw(pktBytes)
+		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipResp := *ipHdr
+		ipResp.SrcIP, ipResp.DstIP = ipResp.DstIP, ipResp.DstIP
+
+		udpResp := *udp
+		udpResp.DstPort, udpResp.SrcPort = udpResp.SrcPort, udpResp.DstPort
+
+		ethResp := *eth
+		ethResp.SrcMAC, ethResp.DstMAC = ethResp.DstMAC, ethResp.SrcMAC
+
+		// created the expected packet after NAT, with recalculated csums
+		_, _, _, _, resPktBytes, err := testPacket(&ethResp, &ipResp, &udpResp, payload)
 		Expect(err).NotTo(HaveOccurred())
 
 		// expect them to be the same
