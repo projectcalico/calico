@@ -149,7 +149,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	   			"windows_use_single_network":true,
 	   			"ipam": {
 	   				"type": "host-local",
-	   				"subnet": "10.254.112.0/20"
+					"subnet": "10.254.112.0/20"
 	   			},
 	   			"kubernetes": {
 	   				"k8s_api_root": "%s",
@@ -285,6 +285,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Ensure host and container endpoints are created
 			hostEP, err := hcsshim.GetHNSEndpointByName("calico-fv_ep")
+			if err != nil {
+				log.Infof("Stop for debug")
+				time.Sleep(36000*time.Second)
+			}
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostEP.GatewayAddress).Should(Equal("10.254.112.1"))
 			Expect(hostEP.IPAddress.String()).Should(Equal("10.254.112.2"))
