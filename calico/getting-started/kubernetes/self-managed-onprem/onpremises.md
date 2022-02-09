@@ -157,6 +157,7 @@ The geeky details of what you get:
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:etcd' %}
 
+%>
 {% endtabs %}
 
 ### Next steps

@@ -22,7 +22,8 @@ installed directly on the cluster as a Deployment, and is configured through one
 ### How to
 
 {% tabs %}
-  <label:Operator,active:true>
+
+<label:Operator,active:true>
 <%
 
 #### About customizing an operator install
@@ -74,7 +75,8 @@ spec:
 ```
 
 %>
-  <label:Manifest>
+
+<label:Manifest>
 <%
 
 We provide a number of manifests to make deployment of {{site.prodname}} easy. You can optionally
@@ -325,5 +327,7 @@ channel. The volumes are not used for any kind of stateful storage on disk.
 Refer to the
 [Calico ConfigMap manifest](/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
 example with the above changes.
+
+%>
 
 {% endtabs %}
