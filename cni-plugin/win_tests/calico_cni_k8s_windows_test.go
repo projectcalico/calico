@@ -149,7 +149,13 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	   			"windows_use_single_network":true,
 	   			"ipam": {
 	   				"type": "host-local",
-	   				"subnet": "10.254.112.0/20"
+ 					"ranges": [
+						[
+							{
+								"subnet": "usePodCidr"
+							}
+						]
+					]
 	   			},
 	   			"kubernetes": {
 	   				"k8s_api_root": "%s",
@@ -196,7 +202,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: hostname},
 				Spec: v1.NodeSpec{
-					PodCIDR: "10.0.0.0/24",
+					PodCIDRs: []string{"10.254.112.0/20"},
 				},
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -285,6 +291,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Ensure host and container endpoints are created
 			hostEP, err := hcsshim.GetHNSEndpointByName("calico-fv_ep")
+			if err != nil {
+				log.Infof("Stop for debug")
+				time.Sleep(36000*time.Second)
+			}
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostEP.GatewayAddress).Should(Equal("10.254.112.1"))
 			Expect(hostEP.IPAddress.String()).Should(Equal("10.254.112.2"))
