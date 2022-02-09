@@ -732,7 +732,6 @@ func udpResponseRaw(in []byte) []byte {
 	ipv4L := pkt.Layer(layers.LayerTypeIPv4)
 	ipv4R := ipv4L.(*layers.IPv4)
 	ipv4R.SrcIP, ipv4R.DstIP = ipv4R.DstIP, ipv4R.SrcIP
-	ipv4R.Id++
 
 	udpL := pkt.Layer(layers.LayerTypeUDP)
 	udpR := udpL.(*layers.UDP)
