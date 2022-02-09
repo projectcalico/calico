@@ -251,7 +251,8 @@ func RunCNIPluginWithId(
 	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, customExec)
 	//TODO: error
 	if err != nil {
-		err = je.Wrap(err, je.Errorf("config is: %s\nargs: %+v\n,exec: %+v", netconf, args, customExec))
+		log.Debugf("config is: %s", netconf)
+		err = je.Trace(err)
 		return
 	}
 
