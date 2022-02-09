@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -33,6 +32,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	je "github.com/juju/errors"
 	"github.com/mcuadros/go-version"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
@@ -213,7 +213,6 @@ func RunCNIPluginWithId(
 	contRoutes []netlink.Route,
 	err error,
 ) {
-
 	// Set up the env for running the CNI plugin
 	k8sEnv := ""
 	if podName != "" {
@@ -250,7 +249,9 @@ func RunCNIPluginWithId(
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, customExec)
+	//TODO: error
 	if err != nil {
+		err = je.Wrap(err, je.Errorf("config is: %s\nargs: %+v\n,exec: %+v", netconf, args, customExec))
 		return
 	}
 
@@ -261,9 +262,6 @@ func RunCNIPluginWithId(
 	}
 
 	// Parse the result as the target CNI version.
-	if len(nc.CNIVersion) < 1 {
-		return nil, nil, nil, nil, errors.New(fmt.Sprintf("no version for %+v", nc))
-	}
 	if version.Compare(nc.CNIVersion, "0.3.0", "<") {
 		// Special case for older CNI versions.
 		var out []byte
@@ -271,6 +269,7 @@ func RunCNIPluginWithId(
 		r020 := types020.Result{}
 		if err = json.Unmarshal(out, &r020); err != nil {
 			log.WithField("out", out).Errorf("Error unmarshaling output to Result: %v\n", err)
+			err = je.Wrap(je.Trace(err), je.Errorf("cniVersion is: %s\n", nc.CNIVersion))
 			return
 		}
 

@@ -1720,7 +1720,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			})
 
 			containerID, _, contVeth, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
-			Expect(err).NotTo(HaveOccurred()) // TODO: here error
+			Expect(err).NotTo(HaveOccurred())
 			mac := contVeth.Attrs().HardwareAddr
 
 			podIP := contAddresses[0].IP
