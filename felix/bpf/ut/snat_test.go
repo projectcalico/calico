@@ -198,7 +198,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		fmt.Printf("pktR = %+v\n", pktR)
 
 		ipResp := *ipHdr
-		ipResp.SrcIP, ipResp.DstIP = ipResp.DstIP, ipResp.DstIP
+		ipResp.SrcIP, ipResp.DstIP = ipResp.DstIP, ipResp.SrcIP
 
 		udpResp := *udp
 		udpResp.DstPort, udpResp.SrcPort = udpResp.SrcPort, udpResp.DstPort
@@ -212,7 +212,5 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 		// expect them to be the same
 		Expect(res.dataOut).To(Equal(resPktBytes))
-
-		//		natedPkt = res.dataOut
 	})
 }
