@@ -19,6 +19,31 @@ const (
 	kubeconfigPath          = "/host/etc/cni/net.d/calico-kubeconfig"
 )
 
+// Track which files we've successfully started watching.
+var filesToWatch = map[string]bool{
+	tokenFile:               false,
+	rootCAFile:              false,
+	serviceaccountDirectory: false,
+}
+
+func watchFiles(watcher *fsnotify.Watcher) error {
+	for file, watched := range filesToWatch {
+		if watched {
+			continue
+		}
+		if err := watcher.Add(file); err != nil {
+			// Error watching the file - retry
+			logrus.WithError(err).Errorf("Failed to watch %s", file)
+			return err
+		}
+
+		// Mark the file as watched.
+		filesToWatch[file] = true
+		logrus.WithField("file", file).Info("Watching contents for changes")
+	}
+	return nil
+}
+
 func Run() {
 	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
 	// fluentd's default configuration.
@@ -33,27 +58,11 @@ func Run() {
 
 	// Watch for changes to the serviceaccount directory, token file, and crt. Rety if necessary.
 	for {
-		if err := watcher.Add(serviceaccountDirectory); err != nil {
-			// Error watching the file - retry
-			logrus.WithError(err).Error("Failed to watch Kubernetes serviceaccount directory.")
+		if err := watchFiles(watcher); err != nil {
+			// Error watching one or more files, retry.
 			time.Sleep(5 * time.Second)
 			continue
 		}
-		if err := watcher.Add(tokenFile); err != nil {
-			// Error watching the file - retry
-			logrus.WithError(err).Error("Failed to watch Kubernetes serviceaccount token file.")
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		if err := watcher.Add(rootCAFile); err != nil {
-			// Error watching the file - retry
-			logrus.WithError(err).Error("Failed to watch Kubernetes serviceaccount ca.crt.")
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		// Successfully watched the file. Break from the retry loop.
-		logrus.WithField("directory", serviceaccountDirectory).Info("Watching contents for changes.")
 		break
 	}
 
