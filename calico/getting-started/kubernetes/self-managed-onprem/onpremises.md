@@ -20,7 +20,7 @@ installed directly on the cluster as a Deployment, and is configured through one
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} can also be installed using raw manifests as an alternative to the operator which contain the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. Using manifests is not recommended as they cannot automatically manage the lifecycle of the {{site.prodname}} as the operator does. However, manifests may be useful for clusters which require highly specific modifications to the underlying Kubernetes resources.
+{{site.prodname}} can also be installed using raw manifests as an alternative to the operator. The manifests contain the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. Using manifests is not recommended as they cannot automatically manage the lifecycle of the {{site.prodname}} as the operator does. However, manifests may be useful for clusters that require highly specific modifications to the underlying Kubernetes resources.
 
 ### Before you begin...
 
