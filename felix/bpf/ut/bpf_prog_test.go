@@ -219,7 +219,7 @@ outter:
 
 		log.WithField("hostIP", hostIP).Info("Host IP")
 		log.WithField("intfIP", intfIP).Info("Intf IP")
-		obj += fmt.Sprintf("fib_%s_skb0x%x", loglevel, skbMark)
+		obj += fmt.Sprintf("fib_%s", loglevel)
 
 		if strings.Contains(section, "_dsr") {
 			obj += "_dsr"
@@ -241,6 +241,7 @@ outter:
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
+	bin.PatchSkbMark(skbMark)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
