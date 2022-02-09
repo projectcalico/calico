@@ -103,6 +103,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct
 			} else {
 				ct_value->a_to_b.whitelisted = 1;
 			}
+			ct_ctx->flags = CALI_CT_FLAG_BA;
 		}
 
 		return 0;
@@ -235,7 +236,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 						       struct calico_ct_key *rk)
 {
 	__u8 ip_proto = ct_ctx->proto;
-	__be32 ip_src = ct_ctx->src;
+	__be32 ip_src = ct_ctx->orig_src;
 	__be32 ip_dst = ct_ctx->orig_dst;
 	__u16 sport = ct_ctx->orig_sport;
 	__u16 dport = ct_ctx->orig_dport;
@@ -243,6 +244,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	__u64 now = bpf_ktime_get_ns();
 
 	CALI_DEBUG("CT-%d Creating FWD entry at %llu.\n", ip_proto, now);
+	CALI_DEBUG("FWD %x -> %x\n", ip_src, ip_dst);
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
@@ -578,23 +580,36 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
 			goto out_lookup_fail;
 		}
-		result.nat_sport = v->nat_sport ? : sport;
+
 		// Record timestamp.
 		tracking_v->last_seen = now;
 
-		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
+		if (!(tracking_v->flags & CALI_CT_FLAG_BA)) {
 			CALI_VERB("CT-ALL FWD-REV src_to_dst A->B\n");
 			src_to_dst = &tracking_v->a_to_b;
 			dst_to_src = &tracking_v->b_to_a;
 			result.nat_ip = v->nat_rev_key.addr_b;
 			result.nat_port = v->nat_rev_key.port_b;
+			result.nat_sip = v->nat_rev_key.addr_a;
+			result.nat_sport = v->nat_rev_key.port_a;
 		} else {
 			CALI_VERB("CT-ALL FWD-REV src_to_dst B->A\n");
 			src_to_dst = &tracking_v->b_to_a;
 			dst_to_src = &tracking_v->a_to_b;
 			result.nat_ip = v->nat_rev_key.addr_a;
 			result.nat_port = v->nat_rev_key.port_a;
+			result.nat_sip = v->nat_rev_key.addr_b;
+			result.nat_sport = v->nat_rev_key.port_b;
 		}
+
+		if (v->nat_sport) {
+			/* This would override the host SNAT, but those two features are
+			 * mutually exclusive. One happens for nodeport only (psnat) the
+			 * other for host -> service only (full SNAT)
+			 */
+			result.nat_sport = sport;
+		}
+
 		result.tun_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
