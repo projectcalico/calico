@@ -211,7 +211,10 @@ outter:
 			progLog = "HEP"
 		} else if strings.Contains(section, "nat") {
 			obj += "nat_"
-			progLog = "HEP"
+			progLog = "NAT"
+		} else if strings.Contains(section, "wireguard") {
+			obj += "wg_"
+			progLog = "WG"
 		} else {
 			obj += "wep_"
 			progLog = "WEP"
@@ -726,6 +729,7 @@ func udpResponseRaw(in []byte) []byte {
 	ipv4L := pkt.Layer(layers.LayerTypeIPv4)
 	ipv4R := ipv4L.(*layers.IPv4)
 	ipv4R.SrcIP, ipv4R.DstIP = ipv4R.DstIP, ipv4R.SrcIP
+	ipv4R.Id++
 
 	udpL := pkt.Layer(layers.LayerTypeUDP)
 	udpR := udpL.(*layers.UDP)

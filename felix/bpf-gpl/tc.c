@@ -797,10 +797,21 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto allow;
 		}
 
+		ct_ctx_nat.orig_src = state->ip_src;
 		ct_ctx_nat.orig_dst = state->ip_dst;
 		ct_ctx_nat.orig_dport = state->dport;
 		state->ct_result.nat_sport = ct_ctx_nat.sport;
 		/* fall through as DNAT is now established */
+
+		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
+			struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
+			if (r && cali_rt_flags_remote_workload(r->flags) && r->flags & CALI_RT_TUNNELED) {
+				CALI_DEBUG("remote wl %x tunneled\n", bpf_htonl(state->post_nat_ip_dst));
+				ct_ctx_nat.src = HOST_TUNNEL_IP;
+				state->ct_result.nat_sip = ct_ctx_nat.src;
+				ct_ctx_nat.flags |= CALI_CT_FLAG_HOST_SNAT;
+			}
+		}
 
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
@@ -879,6 +890,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Creating NAT conntrack failed with %d\n", err);
 				goto deny;
 			}
+			state->ct_result.nat_sip = ct_ctx_nat.src;
 			state->ct_result.nat_sport = ct_ctx_nat.sport;
 		} else {
 			if (encap_needed && ct_result_np_node(state->ct_result)) {
@@ -903,6 +915,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto nat_encap;
 		}
 
+		ctx->ip_header->saddr = state->ct_result.nat_sip;
 		ctx->ip_header->daddr = state->post_nat_ip_dst;
 
 		switch (ctx->ip_header->protocol) {
@@ -927,7 +940,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
 
 		if (l4_csum_off) {
-			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_dst,
+			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off,
+					state->ip_src,
+					state->ct_result.nat_sip,
+					state->ip_dst,
 					state->post_nat_ip_dst,
 					bpf_htons(state->dport),
 					bpf_htons(state->post_nat_dport),
@@ -936,7 +952,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
+		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_src, state->ct_result.nat_sip, 4);
 		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_dst, state->post_nat_ip_dst, 4);
+		/* From now on, the packet has a new source IP */
+		if (state->ct_result.nat_sip) {
+			state->ip_src = state->ct_result.nat_sip;
+		}
+
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
@@ -1025,6 +1047,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (l4_csum_off) {
 			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off,
 				state->ip_src, state->ct_result.nat_ip,
+				0, 0, /* anything that matches -> no change */
 				bpf_htons(state->dport), bpf_htons(state->ct_result.nat_sport ? : state->dport),
 				bpf_htons(state->sport), bpf_htons(state->ct_result.nat_port),
 				ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
