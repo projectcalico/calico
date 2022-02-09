@@ -193,7 +193,7 @@ You may have noticed that the bulk of the above instructions are about provision
 
 ### Next steps
 
-**Required**
+**Optional**
 - [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended**

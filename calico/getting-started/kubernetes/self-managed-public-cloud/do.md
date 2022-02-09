@@ -106,7 +106,7 @@ Use the DigitalOcean web UI to remove the API tokens and Space you created.
 
 ### Next steps
 
-**Required**
+**Optional**
 - [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended**
