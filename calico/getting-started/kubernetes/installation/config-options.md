@@ -17,7 +17,7 @@ installed directly on the cluster as a Deployment, and is configured through one
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} can also be installed using raw manifests as an alternative to the operator which contain the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. Using manifests is not recommended as they cannot automatically manage the lifecycle of the {{site.prodname}} as the operator does. However, manifests may be useful for clusters which require highly specific modifications to the underlying Kubernetes resources.
+{{site.prodname}} can also be installed using raw manifests as an alternative to the operator. The manifests contain the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. Using manifests is not recommended as they cannot automatically manage the lifecycle of the {{site.prodname}} as the operator does. However, manifests may be useful for clusters that require highly specific modifications to the underlying Kubernetes resources.
 
 ### How to
 
@@ -27,7 +27,7 @@ installed directly on the cluster as a Deployment, and is configured through one
 
 #### About customizing an operator install
 
-Operator installations read their configuration from a specifc set of Kubernetes APIs. This APIs are installed on the cluster
+Operator installations read their configuration from a specific set of Kubernetes APIs. These APIs are installed on the cluster
 as part of `tigera-operator.yaml` in the `operator.tigera.io/v1` API group.
 
 - [Installation]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation): a singleton resource with name "default" that
