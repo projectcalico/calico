@@ -17,7 +17,6 @@ package wireguard
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -38,9 +37,8 @@ import (
 func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle func() (netlinkshim.Wireguard, error), calicoClient clientv3.Interface) error {
 	wgDeviceName := configParams.WireguardInterfaceName
 	nodeName := configParams.FelixHostname
-	_, dbgBootstrap := os.LookupEnv("FELIX_DBG_WGBOOTSTRAP")
 
-	if !configParams.WireguardHostEncryptionEnabled && !dbgBootstrap {
+	if !configParams.WireguardHostEncryptionEnabled {
 		return nil
 	}
 

@@ -102,7 +102,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		infra = getInfra()
 		topologyOptions := wireguardTopologyOptions(
 			"CalicoIPAM", true,
-			map[string]string{"FELIX_DBG_WGBOOTSTRAP": "true"},
+			map[string]string{"FELIX_WireguardHostEncryptionEnabled": "true"},
 		)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
