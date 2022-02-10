@@ -120,5 +120,5 @@ clean:
 
 # Fixes an issue where make thinks these .h files are dependencies that need
 # to be built. Just include them as a noop in order to trick make.
-/usr/include/aarch64-linux-gnu/%.h /usr/include/x86_64-linux-gnu/%.h:
+/usr/include/%.h:
 	@echo "No need to build $@"
