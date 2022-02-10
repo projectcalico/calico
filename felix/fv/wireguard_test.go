@@ -63,10 +63,7 @@ const (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-	const (
-		nodeCount          = 2
-		wgBootstrapLogfile = "/wgbootstrap.log"
-	)
+	const nodeCount = 2
 
 	var (
 		infra        infrastructure.DatastoreInfra
@@ -79,6 +76,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		dmesgCmd     *exec.Cmd
 		dmesgBuf     bytes.Buffer
 		dmesgKill    func()
+
+		wgBootstrapEvents chan struct{}
 	)
 
 	BeforeEach(func() {
@@ -101,7 +100,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		log.Info("Started dmesg log capture")
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true)
+		topologyOptions := wireguardTopologyOptions(
+			"CalicoIPAM", true,
+			map[string]string{"FELIX_DBG_WGBOOTSTRAP": "true"},
+		)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
@@ -119,6 +121,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			// Prepare route entry.
 			routeEntries[i] = fmt.Sprintf("10.65.%d.0/26 dev %s scope link", i, wireguardInterfaceNameDefault)
 
+			wgBootstrapEvents = felixes[i].WatchStdoutFor(
+				regexp.MustCompile(".*Cleared WireGuard public key from datastore.+"),
+			)
 			felixes[i].TriggerDelayedStart()
 		}
 		// Swap route entry to match between workloads.
@@ -184,18 +189,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			if runtime.GOOS != "linux" {
 				Skip("Must only run on linux")
 			}
-			for _, felix := range felixes {
-				s, err := felix.ExecCombinedOutput(
-					"cat",
-					fmt.Sprintf("/tmp/%s-wgbootstrap.log", felix.Name),
-				)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(s).ToNot(BeEmpty())
-				Expect(strings.Split(s, "\n")).Should(ContainElements(
-					ContainSubstring("Found mismatch between kernel and datastore"),
-					ContainSubstring("Cleared WireGuard public key from datastore"),
-				))
-			}
+
+			Eventually(wgBootstrapEvents, "5s", "100ms").Should(BeClosed())
 		})
 
 		It("the Wireguard routing rule should exist", func() {
@@ -1290,7 +1285,6 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled bool, extraEnvs ..
 	}
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	topologyOptions.ExtraEnvVars["FELIX_PROMETHEUSMETRICSENABLED"] = "true"
-	topologyOptions.ExtraEnvVars["FELIX_DBG_WGBOOTSTRAP_TOFILE"] = "true"
 	topologyOptions.IPIPEnabled = ipipEnabled
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
