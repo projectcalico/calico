@@ -719,10 +719,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 		}
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions(
-			"CalicoIPAM", true,
-			map[string]string{"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "true"},
-		)
+		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
