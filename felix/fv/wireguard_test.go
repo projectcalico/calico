@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -102,7 +101,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		infra = getInfra()
 		topologyOptions := wireguardTopologyOptions(
 			"CalicoIPAM", true,
-			map[string]string{"FELIX_WireguardHostEncryptionEnabled": "true"},
+			map[string]string{
+				"FELIX_DebugDisableLogDropping":        "true",
+				"FELIX_WireguardHostEncryptionEnabled": "true",
+			},
 		)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
@@ -186,10 +188,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		})
 
 		It("should have called bootstrap", func() {
-			if runtime.GOOS != "linux" {
-				Skip("Must only run on linux")
-			}
-
 			Eventually(wgBootstrapEvents, "5s", "100ms").Should(BeClosed())
 		})
 

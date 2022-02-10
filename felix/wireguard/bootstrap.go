@@ -78,7 +78,7 @@ func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle f
 		thisNode, err := calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
 		cancel()
 		if err != nil {
-			logCtx.WithError(err).Debug("Couldn't fetch node config from datastore, retrying")
+			logCtx.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
 			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
 			continue
 		}
@@ -86,7 +86,7 @@ func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle f
 		// if there is any config mismatch, wipe the datastore's publickey (forces peers to send unencrypted traffic)
 		storedPublicKey = thisNode.Status.WireguardPublicKey
 		if storedPublicKey != kernelPublicKey {
-			logCtx.Debug("Found mismatch between kernel and datastore WireGuard keys. Clearing stale key from datastore")
+			logCtx.Info("Found mismatch between kernel and datastore WireGuard keys. Clearing stale key from datastore")
 			thisNode.Status.WireguardPublicKey = ""
 			ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 			_, err := calicoClient.Nodes().Update(ctx, thisNode, options.SetOptions{})
@@ -99,6 +99,7 @@ func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle f
 				default:
 					logCtx.Errorf("Failed to clear WireGuard config: %v", err)
 				}
+				<-expBackoffMgr.Backoff().C()
 				continue
 			}
 			logCtx.Info("Cleared WireGuard public key from datastore")
