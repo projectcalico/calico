@@ -61,9 +61,6 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct
 	bool syn = false;
 	__u64 now;
 
-	/* Make sure we have the right port in case we change it. */
-	ct_ctx->orig_sport = ct_ctx->sport;
-
 	if (ct_ctx->tcp) {
 		seq = ct_ctx->tcp->seq;
 		syn = ct_ctx->tcp->syn;
@@ -224,11 +221,11 @@ create:
 				ct_ctx->sport = sport;
 				break;
 			}
+		}
 
-			if (i == PSNAT_RETRIES) {
-				CALI_INFO("Source collision unresolved 0x%x:%d\n",
-						bpf_htonl(ip_src), ct_value.orig_sport);
-			}
+		if (i == PSNAT_RETRIES) {
+			CALI_INFO("Source collision unresolved 0x%x:%d\n",
+					bpf_htonl(ip_src), ct_value.orig_sport);
 		}
 	}
 
