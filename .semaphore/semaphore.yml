@@ -501,7 +501,7 @@ blocks:
         - export REPORT_DIR=~/report
         - export LOGS_DIR=~/fv.log
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-        - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}
+        - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${CONTAINER_RUNTIME}-${SHORT_WORKFLOW_ID}
         - export KEYPAIR_NAME=${CLUSTER_NAME}
         - echo CLUSTER_NAME=${CLUSTER_NAME}
         - sudo apt-get install putty-tools
@@ -534,6 +534,9 @@ blocks:
           minutes: 60
         commands:
           - ./.semaphore/run-win-fv.sh
+        env_vars:
+          - name: CONTAINER_RUNTIME
+            value: docker
       - name: Containerd - Windows FV
         execution_time_limit:
           minutes: 60
