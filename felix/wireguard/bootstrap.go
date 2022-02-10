@@ -20,7 +20,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -38,28 +38,16 @@ import (
 func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle func() (netlinkshim.Wireguard, error), calicoClient clientv3.Interface) error {
 	wgDeviceName := configParams.WireguardInterfaceName
 	nodeName := configParams.FelixHostname
-	_, dbgBootstrap := os.LookupEnv("FELIX_DBG_WGBOOTSTRAP_TOFILE")
+	_, dbgBootstrap := os.LookupEnv("FELIX_DBG_WGBOOTSTRAP")
 
 	if !configParams.WireguardHostEncryptionEnabled && !dbgBootstrap {
 		return nil
 	}
 
-	logInstance := logrus.StandardLogger()
-	if dbgBootstrap {
-		fp := fmt.Sprintf("/tmp/%s-wgbootstrap.log", nodeName)
-		f, err := os.OpenFile(fp, os.O_WRONLY|os.O_CREATE, 0755)
-		if err != nil {
-			panic(err)
-		}
-		logInstance = logrus.New()
-		logInstance.SetLevel(logrus.DebugLevel)
-		logInstance.SetOutput(f)
-
-	}
-
-	logCtx := logInstance.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"iface":    wgDeviceName,
 		"hostName": nodeName,
+		"ref":      "wgBootstrap",
 	})
 
 	logCtx.Debug("Bootstrapping wireguard")
@@ -125,7 +113,7 @@ func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle f
 
 // getPublicKey attempts to fetch a wireguard key from the kernel statelessly
 // this is intended for use during startup; an error may simply mean wireguard is not configured
-func getPublicKey(log *logrus.Entry, wgIfaceName string, wg netlinkshim.Wireguard) wgtypes.Key {
+func getPublicKey(log *log.Entry, wgIfaceName string, wg netlinkshim.Wireguard) wgtypes.Key {
 	dev, err := wg.DeviceByName(wgIfaceName)
 	if err != nil {
 		log.WithError(err).Debugf("Couldn't find WireGuard device '%s', reporting unset key", wgIfaceName)
