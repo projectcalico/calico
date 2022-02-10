@@ -182,6 +182,14 @@ func (p *passthruCallbackRecorder) OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
 	Fail("OnGlobalBGPConfigUpdate received")
 }
 
+func (p *passthruCallbackRecorder) OnServiceUpdate(_ *proto.ServiceUpdate) {
+	Fail("OnServiceUpdate received")
+}
+
+func (p *passthruCallbackRecorder) OnServiceRemove(_ *proto.ServiceRemove) {
+	Fail("OnServiceRemove received")
+}
+
 func labelsKV(name string, labels interface{}) model.KVPair {
 	return model.KVPair{
 		Key: model.ProfileLabelsKey{

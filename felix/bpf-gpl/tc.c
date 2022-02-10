@@ -50,11 +50,11 @@ const volatile struct cali_tc_globals __globals;
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 {
 	__u64 cookie;
-#ifdef CALI_SET_SKB_MARK
+#ifdef UNITTEST
 	/* UT-only workaround to allow us to run the program with BPF_TEST_PROG_RUN
 	 * and simulate a specific mark
 	 */
-	skb->mark = CALI_SET_SKB_MARK;
+	skb->mark = SKB_MARK;
 #endif
 	CALI_DEBUG("New packet at ifindex=%d; mark=%x\n", skb->ifindex, skb->mark);
 
@@ -200,6 +200,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->flags |= CALI_ST_NAT_OUTGOING;
 	}
 
+       if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
+		       (ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_ESTABLISHED ||
+		       ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS) &&
+		       ctx.state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
+               CALI_DEBUG("should route via bpfnatout\n");
+               ctx.fwd.mark |= CALI_SKB_MARK_TO_NAT_IFACE_OUT;
+	       /* bpfnatout need to process the packet */
+	       ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_ESTABLISHED);
+       }
+
 	/* We are possibly past (D)NAT, but that is ok, we need to let the IP
 	 * stack do the RPF check on the source, dest is not important.
 	 */
@@ -279,9 +289,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* No conntrack entry, check if we should do NAT */
 	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
-	ctx.nat_dest = calico_v4_nat_lookup2(ctx.state->ip_src, ctx.state->ip_dst,
-					     ctx.state->ip_proto, ctx.state->dport,
-					     ctx.state->tun_ip != 0, &nat_res);
+
+	/* Skip NAT lookup for traffic leaving the host namespace */
+	if (CALI_F_TO_HOST) {
+		ctx.nat_dest = calico_v4_nat_lookup2(ctx.state->ip_src, ctx.state->ip_dst,
+						     ctx.state->ip_proto, ctx.state->dport,
+						     ctx.state->tun_ip != 0, &nat_res);
+	}
 
 	if (nat_res == NAT_FE_LOOKUP_DROP) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
@@ -517,7 +531,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	struct ct_create_ctx ct_ctx_nat = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
-	__u32 seen_mark;
+	__u32 seen_mark = ctx->fwd.mark;
 	size_t l4_csum_off = 0, l3_csum_off;
 
 	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
@@ -528,6 +542,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	CALI_DEBUG("flags=%x\n", state->flags);
 	CALI_DEBUG("ct_rc=%d\n", ct_rc);
 	CALI_DEBUG("ct_related=%d\n", ct_related);
+	CALI_DEBUG("mark=0x%x\n", seen_mark);
 
 	// Set the dport to 0, to make sure conntrack entries for icmp is proper as we use
 	// dport to hold icmp type and code
@@ -549,7 +564,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			// hit verifier issues so recalculate it here.
 			fib = true;
 		}
-		seen_mark = CALI_SKB_MARK_SEEN;
+		seen_mark |= CALI_SKB_MARK_SEEN;
+		if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
+				state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
+			CALI_DEBUG("should skip rpf as the source IP is a service IP\n");
+			seen_mark |= CALI_SKB_MARK_SKIP_RPF;
+		}
 	}
 
 	/* We check the ttl here to avoid needing complicated handling of
@@ -700,6 +720,18 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
 		}
+		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
+		}
+		/* Mark connections that were routed via bpfnatout, but had CT miss at
+		 * HEP. That is because of SNAT happened between bpfnatout and here.
+		 * Returning packets on such a connection must go back via natbpfout
+		 * without a short-circuit to revers the service NAT.
+		 */
+		if (CALI_F_TO_HEP &&
+				((skb->mark & CALI_SKB_MARK_FROM_NAT_IFACE_OUT) == CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
+		}
 
 		if (state->ip_proto == IPPROTO_TCP) {
 			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
@@ -726,10 +758,20 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto allow;
 		}
 
+		ct_ctx_nat.orig_src = state->ip_src;
 		ct_ctx_nat.orig_dst = state->ip_dst;
 		ct_ctx_nat.orig_dport = state->dport;
 		state->ct_result.nat_sport = ct_ctx_nat.sport;
 		/* fall through as DNAT is now established */
+
+		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
+			struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
+			if (r && cali_rt_flags_remote_workload(r->flags) && r->flags & CALI_RT_TUNNELED) {
+				CALI_DEBUG("remote wl %x tunneled\n", bpf_htonl(state->post_nat_ip_dst));
+				ct_ctx_nat.src = HOST_TUNNEL_IP;
+				state->ct_result.nat_sip = ct_ctx_nat.src;
+			}
+		}
 
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
@@ -782,7 +824,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					ct_ctx_nat.allow_return = true;
 					ct_ctx_nat.tun_ip = rt->next_hop;
 					state->ip_dst = rt->next_hop;
-				} else if (cali_rt_is_workload(rt) && state->ip_dst != state->post_nat_ip_dst) {
+				} else if (cali_rt_is_workload(rt) &&
+						state->ip_dst != state->post_nat_ip_dst &&
+						!CALI_F_NAT_IF) {
 					/* Packet arrived from a HEP for a workload and we're
 					 * about to NAT it.  We can't rely on the kernel's RPF check
 					 * to do the right thing here in the presence of source
@@ -806,6 +850,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Creating NAT conntrack failed with %d\n", err);
 				goto deny;
 			}
+			state->ct_result.nat_sip = ct_ctx_nat.src;
 			state->ct_result.nat_sport = ct_ctx_nat.sport;
 		} else {
 			if (encap_needed && ct_result_np_node(state->ct_result)) {
@@ -830,6 +875,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto nat_encap;
 		}
 
+		ctx->ip_header->saddr = state->ct_result.nat_sip;
 		ctx->ip_header->daddr = state->post_nat_ip_dst;
 
 		switch (ctx->ip_header->protocol) {
@@ -854,7 +900,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
 
 		if (l4_csum_off) {
-			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_dst,
+			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off,
+					state->ip_src,
+					state->ct_result.nat_sip,
+					state->ip_dst,
 					state->post_nat_ip_dst,
 					bpf_htons(state->dport),
 					bpf_htons(state->post_nat_dport),
@@ -863,7 +912,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
+		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_src, state->ct_result.nat_sip, 4);
 		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_dst, state->post_nat_ip_dst, 4);
+		/* From now on, the packet has a new source IP */
+		if (state->ct_result.nat_sip) {
+			state->ip_src = state->ct_result.nat_sip;
+		}
+
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
@@ -927,6 +982,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		// Actually do the NAT.
 		ctx->ip_header->saddr = state->ct_result.nat_ip;
+		ctx->ip_header->daddr = state->ct_result.nat_sip;
 
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
@@ -952,6 +1008,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (l4_csum_off) {
 			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off,
 				state->ip_src, state->ct_result.nat_ip,
+				state->ip_dst, state->ct_result.nat_sip,
 				bpf_htons(state->dport), bpf_htons(state->ct_result.nat_sport ? : state->dport),
 				bpf_htons(state->sport), bpf_htons(state->ct_result.nat_port),
 				ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
@@ -962,6 +1019,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		int csum_rc = bpf_l3_csum_replace(skb, l3_csum_off,
 						  state->ip_src, state->ct_result.nat_ip, 4);
+		csum_rc |= bpf_l3_csum_replace(skb, l3_csum_off,
+						  state->ip_dst, state->ct_result.nat_sip, 4);
 		CALI_VERB("bpf_l3_csum_replace(IP): %d\n", csum_rc);
 		res |= csum_rc;
 

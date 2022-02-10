@@ -101,6 +101,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct
 			} else {
 				ct_value->a_to_b.whitelisted = 1;
 			}
+			ct_ctx->flags = CALI_CT_FLAG_BA;
 		}
 
 		return 0;
@@ -120,6 +121,11 @@ create:
 
 	ct_value.flags = ct_ctx->flags;
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
+
+	ct_value.orig_sip = ct_ctx->orig_src;
+	ct_value.orig_sport = ct_ctx->orig_sport;
+	CALI_DEBUG("CT-ALL SNAT orig %x:%d\n", bpf_htonl(ct_ctx->orig_src),  ct_ctx->orig_sport);
+
 
 	if (ct_ctx->type == CALI_CT_TYPE_NAT_REV && ct_ctx->tun_ip) {
 		if (ct_ctx->flags & CALI_CT_FLAG_NP_FWD) {
@@ -197,7 +203,7 @@ create:
 
 	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
-	if (err == -17 /* EEXIST */) {
+	if (CALI_F_FROM_HEP && !CALI_F_NAT_IF && err == -17 /* EEXIST */) {
 		CALI_DEBUG("Source collision for 0x%x:%d\n", bpf_htonl(ip_src), sport);
 
 		ct_value.orig_sport = sport;
@@ -226,7 +232,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 						       struct calico_ct_key *rk)
 {
 	__u8 ip_proto = ct_ctx->proto;
-	__be32 ip_src = ct_ctx->src;
+	__be32 ip_src = ct_ctx->orig_src;
 	__be32 ip_dst = ct_ctx->orig_dst;
 	__u16 sport = ct_ctx->orig_sport;
 	__u16 dport = ct_ctx->orig_dport;
@@ -234,6 +240,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	__u64 now = bpf_ktime_get_ns();
 
 	CALI_DEBUG("CT-%d Creating FWD entry at %llu.\n", ip_proto, now);
+	CALI_DEBUG("FWD %x -> %x\n", ip_src, ip_dst);
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
@@ -561,23 +568,36 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
 			goto out_lookup_fail;
 		}
-		result.nat_sport = v->nat_sport ? : sport;
+
 		// Record timestamp.
 		tracking_v->last_seen = now;
 
-		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
+		if (!(tracking_v->flags & CALI_CT_FLAG_BA)) {
 			CALI_VERB("CT-ALL FWD-REV src_to_dst A->B\n");
 			src_to_dst = &tracking_v->a_to_b;
 			dst_to_src = &tracking_v->b_to_a;
 			result.nat_ip = v->nat_rev_key.addr_b;
 			result.nat_port = v->nat_rev_key.port_b;
+			result.nat_sip = v->nat_rev_key.addr_a;
+			result.nat_sport = v->nat_rev_key.port_a;
 		} else {
 			CALI_VERB("CT-ALL FWD-REV src_to_dst B->A\n");
 			src_to_dst = &tracking_v->b_to_a;
 			dst_to_src = &tracking_v->a_to_b;
 			result.nat_ip = v->nat_rev_key.addr_a;
 			result.nat_port = v->nat_rev_key.port_a;
+			result.nat_sip = v->nat_rev_key.addr_b;
+			result.nat_sport = v->nat_rev_key.port_b;
 		}
+
+		if (v->nat_sport) {
+			/* This would override the host SNAT, but those two features are
+			 * mutually exclusive. One happens for nodeport only (psnat) the
+			 * other for host -> service only (full SNAT)
+			 */
+			result.nat_sport = v->nat_sport;
+		}
+
 		result.tun_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
@@ -628,6 +648,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
 			result.nat_port = v->orig_port;
+			result.nat_sip = v->orig_sip;
+			result.nat_sport = v->orig_sport;
 			break;
 		}
 
@@ -646,12 +668,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		snat = CALI_F_FROM_HOST;
 		/* if returning packet into a tunnel */
 		snat |= (dnat_return_should_encap() && v->tun_ip);
+		snat |= result.flags & CALI_CT_FLAG_VIA_NAT_IF;
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
 			CALI_CT_DEBUG("Hit! NAT REV entry at ingress to connection opener: SNAT.\n");
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
+			result.nat_sip = v->orig_sip;
 			result.nat_port = v->orig_port;
 			result.nat_sport = v->orig_sport;
 		} else {
