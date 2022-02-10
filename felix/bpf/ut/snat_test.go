@@ -113,6 +113,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 		udpNat := *udp
 		udpNat.DstPort = layers.UDPPort(natPort)
+		udpNat.SrcPort = layers.UDPPort(10101)
 
 		// created the expected packet after NAT, with recalculated csums
 		_, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, &udpNat, payload)
@@ -162,6 +163,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 		udpNat := *udp
 		udpNat.DstPort = layers.UDPPort(natPort)
+		udpNat.SrcPort = layers.UDPPort(10101)
 
 		// created the expected packet after NAT, with recalculated csums
 		_, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, &udpNat, payload)
