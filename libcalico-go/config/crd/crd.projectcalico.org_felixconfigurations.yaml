@@ -121,15 +121,15 @@ spec:
               bpfMapSizeConntrack:
                 description: BPFMapSizeConntrack sets the size for conntrack map
                 type: integer
+              bpfMapSizeIPSets:
+                description: BPFMapSizeIPSets sets the size for ipsets map
+                type: integer
               bpfMapSizeNAT:
                 description: BPFMapSizeNAT sets the size for nat maps
                 type: integer
               bpfMapSizeRoute:
                 description: BPFMapSizeRoute sets the size for route map
                 type: integer
-              bpfMapSizeIPSets:
-                description: BPFMapSizeIPSets sets the size for ipsets map
-                type: integer 
               bpfPSNATPorts:
                 anyOf:
                 - type: integer
