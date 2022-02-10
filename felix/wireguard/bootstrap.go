@@ -17,6 +17,7 @@ package wireguard
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -38,7 +39,9 @@ func BootstrapHostConnectivity(configParams *config.Config, getWireguardHandle f
 	wgDeviceName := configParams.WireguardInterfaceName
 	nodeName := configParams.FelixHostname
 
-	if !configParams.WireguardHostEncryptionEnabled {
+	_, dbgBootstrap := os.LookupEnv("FELIX_DBG_WGBOOTSTRAP")
+
+	if !configParams.WireguardHostEncryptionEnabled && !dbgBootstrap {
 		return nil
 	}
 
