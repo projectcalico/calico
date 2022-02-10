@@ -58,7 +58,7 @@ The geeky details of what you get:
 
 ### Next steps
 
-**Required**
+**Optional**
 - [Install and configure calicoctl]({{site.basurl}}/maintenance/clis/calicoctl/install)
 
 **Optional**

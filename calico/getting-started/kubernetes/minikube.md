@@ -129,7 +129,7 @@ minikube delete
 
 ### Next steps
 
-**Required**
+**Optional**
 - [Install and configure calicoctl]({{site.basurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended tutorials**

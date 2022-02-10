@@ -72,7 +72,7 @@ Terraform is a tool for automating infrastructure provisioning using declarative
 
 ### Next steps
 
-**Required**
+**Optional**
 - [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommmended**

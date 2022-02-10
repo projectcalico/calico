@@ -81,7 +81,7 @@ Congratulations! You have now installed {{site.prodname}} using the Helm 3 chart
 
 ### Next steps
 
-**Required**
+**Optional**
 - [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
 
 **Recommended tutorials**
