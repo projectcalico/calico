@@ -38,7 +38,8 @@ func StartDataplaneDriver(configParams *config.Config,
 	healthAggregator *health.HealthAggregator,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset) (DataplaneDriver, *exec.Cmd) {
+	k8sClientSet *kubernetes.Clientset,
+	encapInfo *config.EncapInfo) (DataplaneDriver, *exec.Cmd) {
 	log.Info("Using Windows dataplane driver.")
 
 	dpConfig := windataplane.Config{
@@ -46,7 +47,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		HealthAggregator: healthAggregator,
 
 		Hostname:     configParams.FelixHostname,
-		VXLANEnabled: configParams.VXLANEnabled,
+		VXLANEnabled: encapInfo.UseVXLANEncap,
 		VXLANID:      configParams.VXLANVNI,
 		VXLANPort:    configParams.VXLANPort,
 	}
