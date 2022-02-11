@@ -51,6 +51,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// To run semaphore jobs for cni-plugin Windows FV
 func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
