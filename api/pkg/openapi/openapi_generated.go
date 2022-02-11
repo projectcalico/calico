@@ -599,11 +599,23 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							Format:      "int32",
 						},
 					},
+					"nodeMeshPassword": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Optional BGP password for full node-to-mesh peerings.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword"),
+						},
+					},
+					"nodeMeshMaxRestartTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Time to allow for software restart for node-to-mesh peerings.  When specified, this is configured as the graceful restart timeout.  When not specified, the BIRD default of 120s is used.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Community", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PrefixAdvertisement", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceClusterIPBlock", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceExternalIPBlock", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceLoadBalancerIPBlock"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.Community", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PrefixAdvertisement", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceClusterIPBlock", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceExternalIPBlock", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceLoadBalancerIPBlock", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
