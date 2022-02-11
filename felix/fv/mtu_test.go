@@ -99,8 +99,9 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 			}
 
 			// Disable VXLAN. We should expect the MTU to change, but still based on the default 1460.
-			fc, err := client.FelixConfigurations().Get(context.Background(), "default", options.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			// Create a default FelixConfiguration
+			fc := api.NewFelixConfiguration()
+			fc.Name = "default"
 			f := false
 			fc.Spec.VXLANEnabled = &f
 			_, err = client.FelixConfigurations().Update(context.Background(), fc, options.SetOptions{})
