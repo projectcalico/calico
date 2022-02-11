@@ -28,12 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
-
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
-
-	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -79,6 +75,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		dmesgCmd     *exec.Cmd
 		dmesgBuf     bytes.Buffer
 		dmesgKill    func()
+
+		wgBootstrapEvents chan struct{}
 	)
 
 	BeforeEach(func() {
@@ -101,7 +99,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		log.Info("Started dmesg log capture")
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true)
+		topologyOptions := wireguardTopologyOptions(
+			"CalicoIPAM", true,
+			map[string]string{
+				"FELIX_DebugDisableLogDropping": "true",
+				"FELIX_DBG_WGBOOTSTRAP":         "true",
+			},
+		)
 		felixes, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
@@ -119,6 +123,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			// Prepare route entry.
 			routeEntries[i] = fmt.Sprintf("10.65.%d.0/26 dev %s scope link", i, wireguardInterfaceNameDefault)
 
+			wgBootstrapEvents = felixes[i].WatchStdoutFor(
+				regexp.MustCompile(".*Cleared WireGuard public key from datastore.+"),
+			)
 			felixes[i].TriggerDelayedStart()
 		}
 		// Swap route entry to match between workloads.
@@ -178,6 +185,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					return fmt.Errorf("felix %d has no Wireguard device", i)
 				}, "10s", "100ms").ShouldNot(HaveOccurred())
 			}
+		})
+
+		It("should have called bootstrap", func() {
+			Eventually(wgBootstrapEvents, "5s", "100ms").Should(BeClosed())
 		})
 
 		It("the Wireguard routing rule should exist", func() {
@@ -993,7 +1004,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		// initialise host-networked pods
-		for i, _ := range hostNetworkedWls {
+		for i := range hostNetworkedWls {
 			hostNetworkedWls[i] = createHostNetworkedWorkload(fmt.Sprintf("wl-f%d-hn-0", i), felixes[i])
 		}
 
@@ -1039,9 +1050,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 
 		// Ping other felix nodes from each node to trigger Wireguard handshakes.
 		for i, felix := range felixes {
-			for j, _ := range felixes {
+			for j := range felixes {
 				if i != j {
-					felix.ExecMayFail("ping", "-c", "1", "-W", "1", "-s", "1", felixes[j].IP)
+					if err := felix.ExecMayFail("ping", "-c", "1", "-W", "1", "-s", "1", felixes[j].IP); err != nil {
+						log.WithError(err).Warning("felix.ExecMayFail returned err")
+					}
 				}
 			}
 		}
@@ -1049,7 +1062,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		// Check felix nodes have performed Wireguard handshakes.
 		for i, felix := range felixes {
 			var matchers []types.GomegaMatcher
-			for j, _ := range felixes {
+			for j := range felixes {
 				if i != j {
 					matchers = append(matchers, BeNumerically(">", 0))
 				}
@@ -1130,7 +1143,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		By("Checking the routing table entries exist")
-		for i, _ := range wlsByHost {
+		for i := range wlsByHost {
 			var matchers []types.GomegaMatcher
 			for j, wls := range wlsByHost {
 				if i != j {
@@ -1166,7 +1179,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		By("Checking wireguard allowed ips")
-		for i, _ := range wlsByHost {
+		for i := range wlsByHost {
 			var matchers []types.GomegaMatcher
 			for j, wls := range wlsByHost {
 				if i != j {
@@ -1213,15 +1226,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		By("checking different node pod-to-pod connectivity")
-		for i, _ := range wlsByHost {
-			for j, _ := range wlsByHost {
+		for i := range wlsByHost {
+			for j := range wlsByHost {
 				cc.ExpectSome(wlsByHost[i][0], wlsByHost[j][0])
 			}
 		}
 
 		By("checking host-networked pod to regular pod connectivity")
 		for _, wl := range hostNetworkedWls {
-			for j, _ := range wlsByHost {
+			for j := range wlsByHost {
 				cc.ExpectSome(wl, wlsByHost[j][0])
 			}
 		}
@@ -1250,7 +1263,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 
 // Setup cluster topology options.
 // mainly, enable Wireguard with delayed start option.
-func wireguardTopologyOptions(routeSource string, ipipEnabled bool) infrastructure.TopologyOptions {
+func wireguardTopologyOptions(routeSource string, ipipEnabled bool, extraEnvs ...map[string]string) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 
 	// Waiting for calico-node to be ready.
@@ -1272,6 +1285,12 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled bool) infrastructu
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
 	topologyOptions.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000
 
+	for _, envs := range extraEnvs {
+		for k, v := range envs {
+			topologyOptions.ExtraEnvVars[k] = v
+		}
+	}
+
 	// Enable Wireguard.
 	felixConfig := api.NewFelixConfiguration()
 	felixConfig.SetName("default")
@@ -1281,7 +1300,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled bool) infrastructu
 
 	// Debugging.
 	//topologyOptions.ExtraEnvVars["FELIX_DebugUseShortPollIntervals"] = "true"
-	//topologyOptions.FelixLogSeverity = "debug"
+	topologyOptions.FelixLogSeverity = "debug"
 
 	return topologyOptions
 }
@@ -1365,38 +1384,4 @@ func createWorkloadWithAssignedIP(
 
 func createHostNetworkedWorkload(wlName string, felix *infrastructure.Felix) *workload.Workload {
 	return workload.RunWithMTU(felix, wlName, "default", felix.IP, defaultWorkloadPort, "tcp", wireguardMTUDefault)
-}
-
-func k8sServiceWireguard(name, clusterIP string, w *workload.Workload, port,
-	tgtPort int, nodePort int32, protocol string) *v1.Service {
-	k8sProto := v1.ProtocolTCP
-	if protocol == "udp" {
-		k8sProto = v1.ProtocolUDP
-	}
-
-	svcType := v1.ServiceTypeClusterIP
-	if nodePort != 0 {
-		svcType = v1.ServiceTypeNodePort
-	}
-
-	return &v1.Service{
-		TypeMeta:   typeMetaV1("Service"),
-		ObjectMeta: objectMetaV1(name),
-		Spec: v1.ServiceSpec{
-			ClusterIP: clusterIP,
-			Type:      svcType,
-			Selector: map[string]string{
-				"name": w.Name,
-			},
-			Ports: []v1.ServicePort{
-				{
-					Protocol:   k8sProto,
-					Port:       int32(port),
-					NodePort:   nodePort,
-					Name:       fmt.Sprintf("port-%d", tgtPort),
-					TargetPort: intstr.FromInt(tgtPort),
-				},
-			},
-		},
-	}
 }
