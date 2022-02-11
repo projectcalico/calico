@@ -47,6 +47,9 @@ type Map interface {
 	// Path returns the path that the map is (to be) pinned to.
 	Path() string
 
+	// SetMaxEntries sets the max entries of the pinned map
+	SetMaxEntries(maxEntries int)
+
 	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
@@ -118,6 +121,10 @@ func (b *PinnedMap) MapFD() MapFD {
 
 func (b *PinnedMap) Path() string {
 	return b.versionedFilename()
+}
+
+func (b *PinnedMap) SetMaxEntries(maxEntries int) {
+	b.MaxEntries = maxEntries
 }
 
 func (b *PinnedMap) Close() error {
@@ -314,21 +321,41 @@ func (b *PinnedMap) Open() error {
 	return err
 }
 
+func (b *PinnedMap) compareSize() (bool, error) {
+	mapInfo, err := GetMapInfo(b.fd)
+	if err != nil {
+		return false, fmt.Errorf("error getting map info %s", b.versionedName())
+	}
+	if mapInfo.MaxEntries == b.MaxEntries {
+		return true, nil
+	}
+	err = RepinMap(b.versionedName(), b.Path()+"_old")
+	if err != nil {
+		return false, fmt.Errorf("error repinning %s to %s: %w", b.Path(), b.Path()+"_old", err)
+	}
+	err = os.Remove(b.Path())
+	if err != nil {
+		return false, fmt.Errorf("error removing the pin %s", b.versionedName())
+	}
+	return false, nil
+}
+
 func (b *PinnedMap) EnsureExists() error {
+	var oldfd MapFD
+	same := false
 	if b.fdLoaded {
-		mapInfo, err := GetMapInfo(b.fd)
-		if err != nil {
-			return err
-		}
-		if mapInfo.MaxEntries == b.MaxEntries {
-			return nil
-		} else {
-			os.Remove(b.Path())
-		}
+		return nil
 	}
 
 	if err := b.Open(); err == nil {
-		return nil
+		oldfd = b.MapFD()
+		same, err := b.compareSize()
+		if err != nil {
+			return err
+		}
+		if same {
+			return nil
+		}
 	}
 
 	logrus.Debug("Map didn't exist, creating it")
@@ -350,6 +377,10 @@ func (b *PinnedMap) EnsureExists() error {
 		b.fdLoaded = true
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
+		if !same {
+			os.Remove(b.Path() + "_old")
+			oldfd.Close()
+		}
 	}
 	return err
 }

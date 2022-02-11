@@ -161,7 +161,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 			}
 		}
 		if err := ap.setMapSize(m); err != nil {
-			logCxt.Errorf("Error setting size of %s map", m.Name())
+			return "", fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
 		pinPath := path.Join(baseDir, subDir, m.Name())
 		if err := m.SetPinPath(pinPath); err != nil {
