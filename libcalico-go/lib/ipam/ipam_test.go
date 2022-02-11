@@ -97,7 +97,6 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 				} else {
 					pool.Spec.BlockSize = 122
 				}
-
 			} else {
 				pool.Spec.BlockSize = i.pools[p].blockSize
 			}
@@ -123,9 +122,17 @@ func (i *ipPoolAccessor) GetAllPools() ([]v3.IPPool, error) {
 	return i.getPools(sorted, 0, "GetAllPools"), nil
 }
 
-var (
-	ipPools = &ipPoolAccessor{pools: map[string]pool{}}
-)
+var ipPools = &ipPoolAccessor{pools: map[string]pool{}}
+
+// buildReleaseOptions is a helper function for the tests to easily
+// turn a slice of IPs into a slice of release options.
+func buildReleaseOptions(ips ...cnet.IP) []ReleaseOptions {
+	opts := []ReleaseOptions{}
+	for _, ip := range ips {
+		opts = append(opts, ReleaseOptions{Address: ip.String()})
+	}
+	return opts
+}
 
 type testArgsClaimAff struct {
 	inNet, host                 string
@@ -208,7 +215,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Set log level to Info and save original value to be restored later
 			origLogLevel = log.GetLevel()
 			log.SetLevel(log.InfoLevel)
-
 		})
 
 		AfterEach(func() {
@@ -294,18 +300,17 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(err).NotTo(HaveOccurred())
 				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
-				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
-				v4IP := make([]cnet.IP, 0, 0)
+				v4ia, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
+				v4IP := make([]ReleaseOptions, 0, 0)
 				Expect(v4ia).ToNot(BeNil())
 				for _, ipNets := range v4ia.IPs {
-					IP, _, _ := cnet.ParseCIDR(ipNets.String())
-					v4IP = append(v4IP, *IP)
+					v4IP = append(v4IP, ReleaseOptions{Address: ipNets.IP.String()})
 				}
-				Expect(outErr).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(len(v4IP)).To(Equal(1))
-				v4IP, outErr = ic.ReleaseIPs(context.Background(), v4IP)
-				Expect(outErr).NotTo(HaveOccurred())
-				Expect(len(v4IP)).To(Equal(0))
+				out, err := ic.ReleaseIPs(context.Background(), v4IP...)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(out)).To(Equal(0))
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
@@ -313,6 +318,157 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	})
 
 	Describe("ReleaseIPs test", func() {
+		It("should handle when an IP is released and reallocated with the same handle", func() {
+			// This test simulates a scenario where client A queries the allocation and determines that the
+			// IP should be released. In the meantime, client B releases and re-allocates the address with the same IP and handle, thus
+			// invalidating client A's decision. Client A should receive an error indicating as much.
+			//
+			// This condition can happen in real clusters between kube-controllers and the tunnel IP allocation process in calico/node.
+
+			// Set up a node and pool for the test.
+			handle := "testnode-ipip-tunnel-address"
+			hostname := "testnode"
+			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
+			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+
+			// Run this test several times so that we can assert the logic works with a multitude of different sequence numbers, and
+			// that the sequence number is actually incremented properly.
+			var expectedSeqNum uint64
+			for i := 0; i < 10; i++ {
+				// Allocate an IP address.
+				v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 0, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseTunnel})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(v4.IPs)).To(Equal(1))
+
+				// Get the specific IP that was allocated.
+				ip := v4.IPs[0]
+
+				// Query the block in order to get information about the allocation necessary to safely release.
+				blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(blocks.KVPairs)).To(Equal(1))
+				block := blocks.KVPairs[0].Value.(*model.AllocationBlock)
+				ordinal, err := block.IPToOrdinal(cnet.MustParseIP(ip.IP.String()))
+				Expect(err).NotTo(HaveOccurred())
+				seq := blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
+				if expectedSeqNum == 0 {
+					// First iteration - set the base expected number.
+					expectedSeqNum = seq
+				} else {
+					// Subsequent iteration - assert the number is incrementing as expected.
+					Expect(seq).To(Equal(expectedSeqNum))
+				}
+
+				// Simulate calico/node releasing and then re-allocating the tunnel address - same IP, same handle.
+				err = ic.ReleaseByHandle(context.TODO(), handle)
+				Expect(err).NotTo(HaveOccurred())
+				args := AssignIPArgs{
+					IP:       cnet.MustParseIP(ip.IP.String()),
+					Hostname: hostname,
+					HandleID: &handle,
+				}
+				err = ic.AssignIP(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+				expectedSeqNum += 2
+
+				// Release the IP address using the sequence number and handle. This simulates what kube-controllers will do, and
+				// should result in a conflict error being returned.
+				u, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+				Expect(err).To(HaveOccurred())
+				Expect(len(u)).To(Equal(0))
+
+				// Requery the block in order to get information about the allocation necessary to safely release. This time,
+				// we won't race and will successfully release.
+				blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(blocks.KVPairs)).To(Equal(1))
+				block = blocks.KVPairs[0].Value.(*model.AllocationBlock)
+				Expect(err).NotTo(HaveOccurred())
+				seq = blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
+				Expect(seq).To(Equal(uint64(expectedSeqNum)))
+
+				// Release the IP using the correct sequence number.
+				u, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(u)).To(Equal(0))
+				expectedSeqNum += 2
+			}
+		})
+
+		It("should handle when an IP is released causing block deletion, then reallocated with the same handle", func() {
+			// This test simulates a scenario where client A queries the allocation and determines that the
+			// IP should be released. In the meantime, client B releases and re-allocates the address with the same IP and handle, thus
+			// invalidating client A's decision. For this particular case, we will use a block with no affinity so that releasing the
+			// address results in a block deletion, and then recreation. Client A should receive an error indicating its request is out of
+			// date.
+
+			// Set up a node and pool for the test. Ensure we have a clean starting spot.
+			bc.Clean()
+			handle := "testnode-ipip-tunnel-address"
+			hostname := "testnode"
+			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
+			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+
+			// Allocate an IP address.
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 0, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseTunnel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4.IPs)).To(Equal(1))
+
+			// Release the affinity of the created block, so that releasing the IP below causes a block deletion.
+			err = ic.ReleaseHostAffinities(context.Background(), hostname, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get the specific IP that was allocated.
+			ip := v4.IPs[0]
+
+			// Query the block in order to get information about the allocation necessary to safely release.
+			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
+			block := blocks.KVPairs[0].Value.(*model.AllocationBlock)
+			ordinal, err := block.IPToOrdinal(cnet.MustParseIP(ip.IP.String()))
+			Expect(err).NotTo(HaveOccurred())
+			seq := blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
+
+			// Simulate calico/node releasing and then re-allocating the tunnel address - same IP, same handle.
+			err = ic.ReleaseByHandle(context.TODO(), handle)
+			Expect(err).NotTo(HaveOccurred())
+			args := AssignIPArgs{
+				IP:       cnet.MustParseIP(ip.IP.String()),
+				Hostname: hostname,
+				HandleID: &handle,
+			}
+
+			// Before reallocating, assert that the block has been deleted.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(0))
+
+			// Now, reallocate the IP, creating a new block.
+			err = ic.AssignIP(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Release the IP address using the sequence number and handle. This simulates what kube-controllers will do, and
+			// should result in a conflict error being returned.
+			u, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+			Expect(err).To(HaveOccurred())
+			Expect(len(u)).To(Equal(0))
+
+			// Requery the block in order to get information about the allocation necessary to safely release. This time,
+			// we won't race and will successfully release.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
+			block = blocks.KVPairs[0].Value.(*model.AllocationBlock)
+			Expect(err).NotTo(HaveOccurred())
+			seq = blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
+
+			// Release the IP using the correct sequence number.
+			u, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(u)).To(Equal(0))
+		})
+
 		It("should release a multitude of IPs in different blocks", func() {
 			// Create an IP pool with a blocksize such that we'll get multiple blocks per-node.
 			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
@@ -363,7 +519,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Release them all. This should complete within a minute easily.
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
-			unalloc, err := ic.ReleaseIPs(ctx, ips)
+			unalloc, err := ic.ReleaseIPs(ctx, buildReleaseOptions(ips...)...)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(unalloc)).To(Equal(0))
 		})
@@ -743,10 +899,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		It("Should release with sentinel IP duplicated in the request args", func() {
 			// Releasing the same IP multiple times in a single request
 			// should be handled gracefully by the IPAM Block allocator
-			_, releaseErr := ic.ReleaseIPs(context.Background(), []cnet.IP{
-				{IP: sentinelIP},
-				{IP: sentinelIP},
-			})
+			_, releaseErr := ic.ReleaseIPs(context.Background(),
+				ReleaseOptions{Address: sentinelIP.String()},
+				ReleaseOptions{Address: sentinelIP.String()},
+			)
 			Expect(releaseErr).NotTo(HaveOccurred())
 		})
 
@@ -785,7 +941,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		var block cnet.IPNet
 
 		Context("AutoAssign a single IP without specifying a pool", func() {
-
 			It("should auto-assign from the only available pool", func() {
 				bc.Clean()
 				deleteAllPools()
@@ -1516,7 +1671,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Release one of the IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), v4IPs[0:1])
+			unallocated, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[0:1]...)...)
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1528,7 +1683,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			applyPool(pool1.String(), true, `foo != "bar"`)
 
 			// Release another one of the IPs.
-			unallocated, err = ic.ReleaseIPs(context.Background(), v4IPs[1:2])
+			unallocated, err = ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[1:2]...)...)
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1542,7 +1697,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(out.KVPairs)).To(Equal(1))
 
 			// Release the last IP.
-			unallocated, err = ic.ReleaseIPs(context.Background(), v4IPs[2:3])
+			unallocated, err = ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[2:3]...)...)
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1745,7 +1900,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Release all IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), v4IPs)
+			unallocated, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1792,7 +1947,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			out, err = bc.List(context.Background(), opts, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(out.KVPairs)).To(Equal(1))
-
 		})
 
 		// Allocates IPs from a pool that has a matching node selector,
@@ -1833,7 +1987,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Release all IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), v4IPs)
+			unallocated, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1909,7 +2063,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(seenP1).To(BeTrue(), "Pool 1's block was cleaned up.")
 				Expect(seenP2).To(BeTrue(), "Pool 2's block was cleaned up.")
 			}
-
 		})
 
 		// Create one ip pool, call AutoAssign, call ReleaseIPs,
@@ -1948,7 +2101,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Release all IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), v4IPs)
+			unallocated, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -2523,8 +2676,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 1a: AutoAssign 1 IPv4, 1 IPv6 with tiny block - expect one of each to be returned.
 		Entry("1 v4 1 v6 - tiny block", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 32, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 128, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 32, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 128, enabled: true},
+			},
 			"192.168.1.0/24", 1, 1,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 1),
@@ -2544,8 +2699,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 1b: AutoAssign 1 IPv4, 1 IPv6 with massive block - expect one of each to be returned.
 		Entry("1 v4 1 v6 - big block", "test-host", true,
-			[]pool{{cidr: "192.168.0.0/16", blockSize: 20, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/110", blockSize: 116, enabled: true}},
+			[]pool{
+				{cidr: "192.168.0.0/16", blockSize: 20, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/110", blockSize: 116, enabled: true},
+			},
 			"192.168.0.0/16", 1, 1,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 1),
@@ -2565,8 +2722,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 1c: AutoAssign 1 IPv4, 1 IPv6 with default block - expect one of each to be returned.
 		Entry("1 v4 1 v6 - default block", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			},
 			"192.168.1.0/24", 1, 1,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 1),
@@ -2586,8 +2745,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 2a: AutoAssign 256 IPv4, 256 IPv6 with default blocksize- expect 256 IPv4 + IPv6 addresses.
 		Entry("256 v4 256 v6", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			},
 			"192.168.1.0/24", 256, 256,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 256),
@@ -2606,8 +2767,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 2b: AutoAssign 256 IPv4, 256 IPv6 with small blocksize- expect 256 IPv4 + IPv6 addresses.
 		Entry("256 v4 256 v6 - small blocks", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 30, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 126, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 30, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 126, enabled: true},
+			},
 			"192.168.1.0/24", 256, 256,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 256),
@@ -2627,8 +2790,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 2a: AutoAssign 256 IPv4, 256 IPv6 with num blocks limit expect 64 IPv4 + IPv6 addresses.
 		Entry("256 v4 0 v6 block limit", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			},
 			"192.168.1.0/24", 256, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 64),
@@ -2639,8 +2804,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			},
 			nil, 1, false, ErrBlockLimit),
 		Entry("256 v4 0 v6 block limit 2", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			},
 			"192.168.1.0/24", 256, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 128),
@@ -2651,8 +2818,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			},
 			nil, 2, false, ErrBlockLimit),
 		Entry("0 v4 256 v6 block limit", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			},
 			"192.168.1.0/24", 0, 256, nil,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 64),
@@ -2665,8 +2834,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and no error.
 		Entry("257 v4 0 v6", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			},
 			"192.168.1.0/24", 257, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 256),
@@ -2679,8 +2850,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 4: AutoAssign 0 IPv4, 257 IPv6 - expect 256 IPv6 addresses, no IPv6, and no error.
 		Entry("0 v4 257 v6", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			},
 			"192.168.1.0/24", 0, 257, nil,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 256),
@@ -2694,8 +2867,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		// Test 5: (use pool of size /25 so only two blocks are contained):
 		// - Assign 1 address on host A (Expect 1 address).
 		Entry("1 v4 0 v6 host-a", "host-a", true,
-			[]pool{{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true},
+			},
 			"10.0.0.0/25", 1, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 1),
@@ -2708,8 +2883,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// - Assign 1 address on host B (Expect 1 address, different block).
 		Entry("1 v4 0 v6 host-b", "host-b", false,
-			[]pool{{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true},
+			},
 			"10.0.0.0/25", 1, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 1),
@@ -2722,8 +2899,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block).
 		Entry("64 v4 0 v6 host-a", "host-a", false,
-			[]pool{{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true}},
+			[]pool{
+				{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
+				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true},
+			},
 			"10.0.0.0/25", 64, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 64),
@@ -2735,9 +2914,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			nil, 0, false, nil),
 		// - Try to assign 256 addresses with strict affinity enabled, expect 64 addresses.
 		Entry("256 v4 0 v6 strict affinity", "test-host", true,
-			[]pool{{cidr: "192.168.1.0/26", blockSize: 26, enabled: true},
+			[]pool{
+				{cidr: "192.168.1.0/26", blockSize: 26, enabled: true},
 				{cidr: "192.168.1.64/26", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}},
+				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			},
 			"192.168.1.0/26", 256, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 64),
@@ -2793,6 +2974,62 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		Entry("Assign 1 IPv4 from a configured pool twice (second time)", net.ParseIP("192.168.1.0"), "test-host", false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, cerrors.ErrorResourceAlreadyExists{Err: errors.New("Address already assigned in block"), Identifier: "192.168.1.0"}),
 	)
 
+	// Arguments for ReleaseOptions tests.
+	type ipToRelease struct {
+		Options ReleaseOptions
+		Error   bool
+	}
+
+	// Helper for converting a uint64 to a pointer.
+	ptr := func(i uint64) *uint64 {
+		n := i
+		return &n
+	}
+
+	DescribeTable("ReleaseOptions test",
+		func(ipsToAllocate []string, ipsToRelease []ipToRelease) {
+			hostname := "host-seqnum-test"
+
+			// Ensure a clean environment before each test.
+			bc.Clean()
+			deleteAllPools()
+			applyNode(bc, kc, hostname, nil)
+			defer deleteNode(bc, kc, hostname)
+			applyPool("192.168.0.0/16", true, "")
+
+			// Allocate the IPs given.
+			for _, ip := range ipsToAllocate {
+				err := ic.AssignIP(context.Background(), AssignIPArgs{
+					IP:       cnet.MustParseIP(ip),
+					Hostname: hostname,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Release IPs using the given options.
+			for _, r := range ipsToRelease {
+				_, err := ic.ReleaseIPs(context.Background(), r.Options)
+				if r.Error {
+					Expect(err).To(HaveOccurred())
+				} else {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
+		},
+
+		// Test 1: base case - assign a single IP, and then release it.
+		Entry("Base case", []string{"192.168.0.1"}, []ipToRelease{{Options: ReleaseOptions{Address: "192.168.0.1"}}}),
+
+		// Test 2: same as base case, but passing in a valid SequenceNumber.
+		Entry("Valid sequence number", []string{"192.168.0.1"}, []ipToRelease{{Options: ReleaseOptions{Address: "192.168.0.1", SequenceNumber: ptr(0)}}}),
+
+		// Test 3: same as base case, but passing in an invalid SequenceNumber.
+		Entry("Invalid sequence number", []string{"192.168.0.1"}, []ipToRelease{{Options: ReleaseOptions{Address: "192.168.0.1", SequenceNumber: ptr(1)}, Error: true}}),
+
+		// Test 4: same as base case, but passing in an invalid handle.
+		Entry("Invalid handle", []string{"192.168.0.1"}, []ipToRelease{{Options: ReleaseOptions{Address: "192.168.0.1", Handle: "fakehandle"}, Error: true}}),
+	)
+
 	DescribeTable("ReleaseIPs: requested IPs to be released vs actual unallocated IPs",
 		func(inIP net.IP, cleanEnv bool, pool []string, assignIP net.IP, autoAssignNumIPv4 int, expUnallocatedIPs []cnet.IP, expError error) {
 			inIPs := []cnet.IP{{IP: inIP}}
@@ -2840,7 +3077,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				inIPs = inIPs[1:]
 			}
 
-			unallocatedIPs, outErr := ic.ReleaseIPs(context.Background(), inIPs)
+			unallocatedIPs, outErr := ic.ReleaseIPs(context.Background(), buildReleaseOptions(inIPs...)...)
 			if outErr != nil {
 				log.Println(outErr)
 			}
@@ -2859,10 +3096,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test cases (ReleaseIPs):
 		// Test 1: release an IP that's not configured in any pools - expect a slice with the same IP as unallocatedIPs and no error.
-		Entry("Release an IP that's not configured in any pools", net.ParseIP("1.1.1.1"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{IP: net.ParseIP("1.1.1.1")}}, nil),
+		Entry("Release an IP that's not configured in any pools", net.ParseIP("1.1.1.1"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{cnet.MustParseIP("1.1.1.1")}, nil),
 
 		// Test 2: release an IP that's not allocated in the pool - expect a slice with one (unallocatedIPs) and no error.
-		Entry("Release an IP that's not allocated in the pool", net.ParseIP("192.168.1.0"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{IP: net.ParseIP("192.168.1.0")}}, nil),
+		Entry("Release an IP that's not allocated in the pool", net.ParseIP("192.168.1.0"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{cnet.MustParseIP("192.168.1.0")}, nil),
 
 		// Test 3: Assign 1 IPv4 with AssignIP from a configured pool and then release it.
 		// - Assign should not return an error.
@@ -3134,6 +3371,7 @@ func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 	}
 	return blocks
 }
+
 func deleteAllPools() {
 	log.Infof("Deleting all pools")
 	ipPools.pools = map[string]pool{}
@@ -3210,7 +3448,6 @@ func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
 }
 
 var _ = DescribeTable("IPAMAssignmentInfo.String() tests", func(ia *IPAMAssignments, expErr error) {
-
 	if expErr == nil {
 		Expect(ia.PartialFulfillmentError()).To(BeNil())
 	} else {

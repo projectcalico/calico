@@ -2205,27 +2205,23 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "The block's CIDR.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"affinity": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"strictAffinity": {
-						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
+							Description: "Affinity of the block, if this block has one. If set, it will be of the form \"host:<hostname>\". If not set, this block it not affine to a host.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"allocations": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "Array of allocations in-use within this block. nil entries mean the allocation is free. For non-nil entries at index i, the index is the ordinal of the allocation within this block and the value is the index of the associated attributes in the Attributes array.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -2238,7 +2234,8 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 					},
 					"unallocated": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "Unallocated is an ordered list of allocations which are free in the block.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -2252,7 +2249,8 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 					},
 					"attributes": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "Attributes is an array of arbitrary metadata associated with allocations in the block. To find attributes for a given allocation, use the value of the allocation's entry in the Allocations array as the index of the element in this array.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -2263,15 +2261,48 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 							},
 						},
 					},
+					"sequenceNumber": {
+						SchemaProps: spec.SchemaProps{
+							Description: "We store a sequence number that is updated each time the block is written. Each allocation will also store the sequence number of the block at the time of its creation. When releasing an IP, passing the sequence number associated with the allocation allows us to protect against a race condition and ensure the IP hasn't been released and re-allocated since the release request.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"sequenceNumberForAllocation": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Map of allocated ordinal within the block to sequence number of the block at the time of allocation. Kubenrnetes does not allow numerical keys for maps, so the key is cast to a string.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int64",
+									},
+								},
+							},
+						},
+					},
 					"deleted": {
 						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
+							Description: "Deleted is an internal boolean used to workaround a limitation in the Kubernetes API whereby deletion will not return a conflict error if the block has been updated. It should not be set manually.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"strictAffinity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "StrictAffinity on the IPAMBlock is deprecated and no longer used by the code. Use IPAMConfig StrictAffinity instead.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},
-				Required: []string{"cidr", "strictAffinity", "allocations", "unallocated", "attributes"},
+				Required: []string{"cidr", "allocations", "unallocated", "attributes", "sequenceNumber", "strictAffinity"},
 			},
 		},
 		Dependencies: []string{
