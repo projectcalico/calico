@@ -78,6 +78,7 @@ type NetConf struct {
 		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
 		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
 	} `json:"ipam,omitempty"`
+	LoopbackDSR          bool                   `json:"loopbackDSR"`
 	Args                 Args                   `json:"args"`
 	MTU                  int                    `json:"mtu"`
 	NumQueues            int                    `json:"num_queues"`
