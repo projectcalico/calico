@@ -126,6 +126,9 @@ func (b *allocationBlock) autoAssign(num int, handleID *string, host string, att
 		ipNet := *mask
 		ipNet.IP = addr.IP
 		ips = append(ips, ipNet)
+
+		// Set the sequence number for this allocation.
+		b.SequenceNumberForAllocation[ordinal] = b.SequenceNumber
 		continue
 	}
 	b.Unallocated = updatedUnallocated
@@ -151,6 +154,9 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 	if err != nil {
 		return err
 	}
+
+	// Set the sequence number for this allocation.
+	b.SequenceNumberForAllocation[ordinal] = b.SequenceNumber
 
 	// Check if already allocated.
 	if b.Allocations[ordinal] != nil {
@@ -225,7 +231,7 @@ func (b *allocationBlock) containsOnlyReservedIPs() bool {
 	return true
 }
 
-func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]int, error) {
+func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[string]int, error) {
 	// Store return values.
 	unallocated := []cnet.IP{}
 	countByHandle := map[string]int{}
@@ -236,15 +242,15 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 	attrsToDelete := []int{}
 
 	// De-duplicate addresses to ensure reference counting is correcet
-	uniqueAddresses := make(map[string]struct{})
-	for _, ip := range addresses {
-		uniqueAddresses[ip.IP.String()] = struct{}{}
+	uniqueAddresses := make(map[string]ReleaseOptions)
+	for _, opt := range addresses {
+		uniqueAddresses[opt.Address] = opt
 	}
 
 	// Determine the ordinals that need to be released and the
 	// attributes that need to be cleaned up.
 	log.Debugf("Releasing addresses from block: %v", uniqueAddresses)
-	for ipStr := range uniqueAddresses {
+	for ipStr, opts := range uniqueAddresses {
 		ip := cnet.MustParseIP(ipStr)
 		// Convert to an ordinal.
 		ordinal, err := b.IPToOrdinal(ip)
@@ -252,6 +258,20 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 			return nil, nil, err
 		}
 		log.Debugf("Address %s is ordinal %d", ip, ordinal)
+
+		// Compare sequence numbers.
+		if opts.SequenceNumber != b.SequenceNumberForAllocation[ordinal] {
+			// Mismatched sequence number on the request and the stored allocation.
+			// This means that whoever is requesting release of this IP address is doing so
+			// based on out-of-date information. Fail the request wholesale.
+			return nil, nil, cerrors.ErrorResourceUpdateConflict{
+				Err: cerrors.ErrorBadSequenceNumber{
+					Requested: opts.SequenceNumber,
+					Expected:  b.SequenceNumberForAllocation[ordinal],
+					Address:   opts.Address,
+				},
+			}
+		}
 
 		// Check if allocated.
 		log.Debugf("Checking if allocated: %v", b.Allocations)
@@ -264,6 +284,21 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 		ordinals = append(ordinals, ordinal)
 		log.Debugf("%s is allocated, ordinals to release are now %v", ip, ordinals)
 
+		// Compare handles.
+		handleID := b.Attributes[*attrIdx].AttrPrimary
+		if opts.Handle != "" && handleID != nil && *handleID != opts.Handle {
+			// The handle given on the request doesn't match the stored handle.
+			// This means that whoever is requesting release of this IP address is doing so
+			// based on out-of-date information. Fail the request wholesale.
+			return nil, nil, cerrors.ErrorResourceUpdateConflict{
+				Err: cerrors.ErrorBadHandle{
+					Requested: opts.Handle,
+					Expected:  *handleID,
+					Address:   opts.Address,
+				},
+			}
+		}
+
 		// Increment reference counting for attributes.
 		cnt := 1
 		if cur, exists := delRefCounts[*attrIdx]; exists {
@@ -275,7 +310,6 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 		// Increment count of addresses by handle if a handle
 		// exists.
 		log.Debugf("Looking up attribute with index %d", *attrIdx)
-		handleID := b.Attributes[*attrIdx].AttrPrimary
 		if handleID != nil {
 			log.Debugf("HandleID is %s", *handleID)
 			handleCount := 0
@@ -312,6 +346,7 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 		log.Debugf("Releasing ordinal %d", ordinal)
 		b.Allocations[ordinal] = nil
 		b.Unallocated = append(b.Unallocated, ordinal)
+		delete(b.SequenceNumberForAllocation, ordinal)
 	}
 	return unallocated, countByHandle, nil
 }
@@ -378,7 +413,7 @@ func sanitizeHandle(handleID string) string {
 	return strings.Split(handleID, "\r")[0]
 }
 
-func (b *allocationBlock) releaseByHandle(handleID string) int {
+func (b *allocationBlock) releaseByHandle(handleID string, opts ReleaseOptions) int {
 	attrIndexes := b.attributeIndexesByHandle(handleID)
 	log.Debugf("Attribute indexes to release: %v", attrIndexes)
 	if len(attrIndexes) == 0 {
@@ -393,6 +428,12 @@ func (b *allocationBlock) releaseByHandle(handleID string) int {
 	for o = 0; o < b.NumAddresses(); o++ {
 		// Only check allocated ordinals.
 		if b.Allocations[o] != nil && intInSlice(*b.Allocations[o], attrIndexes) {
+			if opts.SequenceNumber != b.SequenceNumberForAllocation[o] {
+				// TODO: Add context to log, should we return an error instead?
+				log.Warnf("Skipping release of IP with mismatched sequence number")
+				continue
+			}
+
 			// Release this ordinal.
 			ordinals = append(ordinals, o)
 		}
@@ -459,7 +500,7 @@ func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]
 	if handleID != nil {
 		logCtx = log.WithField("handle", *handleID)
 	}
-	attr := model.AllocationAttribute{handleID, attrs}
+	attr := model.AllocationAttribute{AttrPrimary: handleID, AttrSecondary: attrs}
 	for idx, existing := range b.Attributes {
 		if reflect.DeepEqual(attr, existing) {
 			log.Debugf("Attribute '%+v' already exists", attr)
