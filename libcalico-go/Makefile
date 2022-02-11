@@ -221,7 +221,7 @@ $(BINDIR)/kind:
 
 $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
+	curl -L https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/amd64/kubectl -o $@
 	chmod +x $(BINDIR)/kubectl
 
 ## Stop the etcd container (calico-etcd)
