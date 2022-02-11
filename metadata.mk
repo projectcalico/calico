@@ -6,8 +6,8 @@
 GO_BUILD_VER = v0.66
 
 # Version of Kubernetes to use for tests.
-K8S_VERSION     = v1.23.1
-KUBECTL_VERSION = v1.23.1
+K8S_VERSION     = v1.23.3
+KUBECTL_VERSION = v1.23.3
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
