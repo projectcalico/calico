@@ -71,6 +71,10 @@ var (
 	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 )
 
+var sensitiveValues = map[string]interface{}{
+	"/calico/bgp/v1/global/node_mesh_password": nil,
+}
+
 // backendClientAccessor is an interface to access the backend client from the main v2 client.
 type backendClientAccessor interface {
 	Backend() api.Client
@@ -1390,7 +1394,11 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 		c.cache[k] = newValue
 	}
 
-	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, c.cache[k])
+	logVal := c.cache[k]
+	if c.isSensitive(k) {
+		logVal = "redacted"
+	}
+	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, logVal)
 	if c.syncedOnce {
 		c.keyUpdated(k)
 	}
@@ -1626,4 +1634,13 @@ func (c *client) updateNodeMeshPassword() {
 
 	// Only call the update on the password
 	c.getNodeMeshPasswordKVPair(cfg, model.GlobalBGPConfigKey{})
+}
+
+// Checks whether or not a key references sensitive information (like a BGP password) so that
+// logging output for the field can be redacted.
+func (c *client) isSensitive(path string) bool {
+	if _, ok := sensitiveValues[path]; ok {
+		return true
+	}
+	return false
 }
