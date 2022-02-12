@@ -71,6 +71,10 @@ var (
 	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 )
 
+var sensitiveValues = map[string]interface{}{
+	"/calico/bgp/v1/global/node_mesh_password": nil,
+}
+
 // backendClientAccessor is an interface to access the backend client from the main v2 client.
 type backendClientAccessor interface {
 	Backend() api.Client
@@ -624,6 +628,9 @@ func (c *client) updatePeersV1() {
 		}
 	}
 
+	// Also update BGP config passwords before removing old watched secrets
+	c.updateNodeMeshPassword()
+
 	// Clean up any secrets that are no longer of interest.
 	if c.secretWatcher != nil {
 		c.secretWatcher.SweepStale()
@@ -965,6 +972,8 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getServiceLoadBalancerIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getNodeToNodeMeshKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getLogSeverityKVPair(v3res, model.GlobalBGPConfigKey{})
+		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
+		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
 	} else if strings.HasPrefix(resName, perNodeConfigNamePrefix) {
 		// The name of a configuration resource has a strict format.  It is either "default"
 		// for the global default values, or "node.<nodename>" for the node specific vales.
@@ -1187,6 +1196,36 @@ func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key interfa
 	}
 }
 
+func (c *client) getNodeMeshRestartTimeKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+	meshRestartKey := getBGPConfigKey("node_mesh_restart_time", key)
+
+	if v3res != nil && v3res.Spec.NodeMeshMaxRestartTime != nil {
+		restartTime := *v3res.Spec.NodeMeshMaxRestartTime
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(meshRestartKey, fmt.Sprintf("%v", int(math.Round(restartTime.Duration.Seconds())))))
+	} else {
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(meshRestartKey))
+	}
+}
+
+func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+	meshPasswordKey := getBGPConfigKey("node_mesh_password", key)
+
+	if c.secretWatcher != nil && v3res.Spec.NodeMeshPassword != nil && v3res.Spec.NodeMeshPassword.SecretKeyRef != nil {
+		password, err := c.secretWatcher.GetSecret(
+			v3res.Spec.NodeMeshPassword.SecretKeyRef.Name,
+			v3res.Spec.NodeMeshPassword.SecretKeyRef.Key,
+		)
+		if err != nil {
+			log.WithError(err).Warningf("Can't read node mesh password in BGP Configuration %v", v3res.Name)
+			// Skip updating the password if it is unreadable
+			return
+		}
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(meshPasswordKey, password))
+	} else {
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(meshPasswordKey))
+	}
+}
+
 func getNodeName(nodeName string) string {
 	return strings.TrimPrefix(nodeName, perNodeConfigNamePrefix)
 }
@@ -1355,7 +1394,11 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 		c.cache[k] = newValue
 	}
 
-	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, c.cache[k])
+	logVal := c.cache[k]
+	if c.isSensitive(k) {
+		logVal = "redacted"
+	}
+	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, logVal)
 	if c.syncedOnce {
 		c.keyUpdated(k)
 	}
@@ -1569,4 +1612,35 @@ func withDefault(val, dflt string) string {
 		return val
 	}
 	return dflt
+}
+
+func (c *client) updateNodeMeshPassword() {
+	// Retrieve the default BGPConfig for the password secret information
+	key := model.ResourceKey{
+		Kind:      apiv3.KindBGPConfiguration,
+		Name:      globalConfigName,
+		Namespace: "",
+	}
+
+	cfgKVPair, err := c.client.Get(context.Background(), key, "")
+	if _, ok := err.(lerr.ErrorResourceDoesNotExist); err != nil && !ok {
+		// Failed to get the BGP configuration (and not because it doesn't exist).
+		// Exit.
+		log.Errorf("Failed to query current BGP settings for node mesh password update: %v", err)
+		return
+	}
+
+	cfg, _ := cfgKVPair.Value.(*apiv3.BGPConfiguration)
+
+	// Only call the update on the password
+	c.getNodeMeshPasswordKVPair(cfg, model.GlobalBGPConfigKey{})
+}
+
+// Checks whether or not a key references sensitive information (like a BGP password) so that
+// logging output for the field can be redacted.
+func (c *client) isSensitive(path string) bool {
+	if _, ok := sensitiveValues[path]; ok {
+		return true
+	}
+	return false
 }
