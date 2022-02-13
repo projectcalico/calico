@@ -758,7 +758,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	}
 
 	// if supported add loopback DSR
-	if d.conf.LoopbackDSR {
+	if d.conf.WindowsLoopbackDSR {
 		// v1
 		v1pols = append(v1pols, []json.RawMessage{
 			[]byte(fmt.Sprintf(`{"Type":"OutBoundNAT","Destinations":["%s"]}`, epIP.String())),
