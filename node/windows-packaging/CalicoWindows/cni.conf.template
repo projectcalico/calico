@@ -15,7 +15,7 @@
 
   "log_level": "info",
 
-  "loopbackDSR": "__DSR_SUPPORT__",
+  "windows_loopback_DSR": __DSR_SUPPORT__,
 
   "capabilities": {"dns": true},
 

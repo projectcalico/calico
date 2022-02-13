@@ -42,6 +42,7 @@ if ($kubeProxyVer -match "v([0-9])\.([0-9]+)") {
     $minor = $Matches.2 -as [int]
     $kubeProxyGE114 = ($major -GT 1 -OR $major -EQ 1 -AND $minor -GE 14)
 }
+$PlatformSupportDSR = Get-IsDSRSupported
 
 # Build up the arguments for starting kube-proxy.
 $argList = @(`
@@ -52,7 +53,7 @@ $argList = @(`
 )
 $extraFeatures = @()
 
-if ($kubeProxyGE114 -And Get-IsDSRSupported) {
+if ($kubeProxyGE114 -And $PlatformSupportDSR) {
     Write-Host "Detected kube-proxy >= 1.14 and Windows version supporting DSR $OSInfo, enabling WinDSR feature gate."
     $extraFeatures += "WinDSR=true"
     $argList += "--enable-dsr=true"

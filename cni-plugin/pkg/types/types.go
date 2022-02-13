@@ -78,7 +78,6 @@ type NetConf struct {
 		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
 		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
 	} `json:"ipam,omitempty"`
-	LoopbackDSR          bool                   `json:"loopbackDSR"`
 	Args                 Args                   `json:"args"`
 	MTU                  int                    `json:"mtu"`
 	NumQueues            int                    `json:"num_queues"`
@@ -118,6 +117,8 @@ type NetConf struct {
 	// If WindowsDisableDefaultBlockAllPolicy = true, then the default policy is disabled and pod network
 	// is created without "block all traffic" policy.
 	WindowsDisableDefaultDenyAllPolicy bool `json:"windows_disable_default_deny_all_policy"`
+	// WindowsLoopbackDSR indicates if the running platform supports loopback DSR.
+	WindowsLoopbackDSR bool `json:"windows_loopback_DSR,omitempty"`
 
 	RuntimeConfig RuntimeConfig
 
