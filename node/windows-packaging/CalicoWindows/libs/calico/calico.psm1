@@ -542,8 +542,7 @@ function Get-IsDSRSupported()
     $windows1809 = (($OSInfo.WindowsVersion -as [int]) -EQ 1809 -And ($OSInfo.OsBuildNumber -as [int]) -GE 17763)
     $windows1903OrNewer = (($OSInfo.WindowsVersion -as [int]) -GE 1903 -And ($OSInfo.OsBuildNumber -as [int]) -GE 18317)
 
-    $PlatformSupportDSR = ($windows1809 -And $min1809BuildSupportingDSR) -Or $windows1903OrNewer
-    return($PlatformSupportedDSR)
+    return ($windows1809 -And $min1809BuildSupportingDSR) -Or $windows1903OrNewer
 }
 
 Export-ModuleMember -Function 'Test-*'
