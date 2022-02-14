@@ -1072,8 +1072,18 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(numorstring.Port)
 		**out = **in
 	}
-	if in.BPFMapSizeNAT != nil {
-		in, out := &in.BPFMapSizeNAT, &out.BPFMapSizeNAT
+	if in.BPFMapSizeNATFE != nil {
+		in, out := &in.BPFMapSizeNATFE, &out.BPFMapSizeNATFE
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMapSizeNATBE != nil {
+		in, out := &in.BPFMapSizeNATBE, &out.BPFMapSizeNATBE
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMapSizeNATAFF != nil {
+		in, out := &in.BPFMapSizeNATAFF, &out.BPFMapSizeNATAFF
 		*out = new(int)
 		**out = **in
 	}

@@ -59,6 +59,10 @@ func (m *Map) Path() string {
 	return m.Filename
 }
 
+func (m *Map) SetMaxEntries(maxEntries int) {
+	m.MaxEntries = maxEntries
+}
+
 func (m *Map) Iter(f bpf.IterCallback) error {
 	m.IterCount++
 
@@ -177,4 +181,8 @@ func (*DummyMap) Get(k []byte) ([]byte, error) {
 
 func (*DummyMap) Delete(k []byte) error {
 	return nil
+}
+
+func (*DummyMap) SetMaxEntries(maxEntries int) {
+	return
 }

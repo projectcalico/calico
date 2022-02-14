@@ -2324,11 +2324,24 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
 						},
 					},
-					"bpfMapSizeNAT": {
+					"bpfMapSizeNATFE": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeNAT sets the size for nat maps",
+							Description: "BPFMapSizeNatFE sets the size for nat front end map. This is equal to the number of kubernetes services.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"bpfMapSizeNATBE": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeNatBE sets the size for nat back end map. This is the total number of endpoints. This is mostly more than the size of the number of services.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeNATAFF": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
 						},
 					},
 					"bpfMapSizeRoute": {

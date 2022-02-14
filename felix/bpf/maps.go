@@ -342,14 +342,14 @@ func (b *PinnedMap) compareSize() (bool, error) {
 
 func (b *PinnedMap) EnsureExists() error {
 	var oldfd MapFD
-	same := false
+	same := true
 	if b.fdLoaded {
 		return nil
 	}
 
 	if err := b.Open(); err == nil {
 		oldfd = b.MapFD()
-		same, err := b.compareSize()
+		same, err = b.compareSize()
 		if err != nil {
 			return err
 		}
@@ -358,7 +358,7 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 	}
 
-	logrus.Debug("Map didn't exist, creating it")
+	logrus.Debug("Map didn't exist, creating it ", same, b.GetName())
 	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),
 		"type", b.Type,
 		"key", fmt.Sprint(b.KeySize),

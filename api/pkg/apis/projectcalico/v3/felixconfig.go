@@ -360,8 +360,14 @@ type FelixConfigurationSpec struct {
 	// a problem if this range overlaps with the operating systems. Both ends of the range are
 	// inclusive. [Default: 20000:29999]
 	BPFPSNATPorts *numorstring.Port `json:"bpfPSNATPorts,omitempty"`
-	// BPFMapSizeNAT sets the size for nat maps
-	BPFMapSizeNAT *int `json:"bpfMapSizeNAT,omitempty"`
+	// BPFMapSizeNatFE sets the size for nat front end map.
+	// This is equal to the number of kubernetes services.
+	BPFMapSizeNATFE *int `json:"bpfMapSizeNATFE,omitempty"`
+	// BPFMapSizeNatBE sets the size for nat back end map.
+	// This is the total number of endpoints. This is mostly
+	// more than the size of the number of services.
+	BPFMapSizeNATBE  *int `json:"bpfMapSizeNATBE,omitempty"`
+	BPFMapSizeNATAFF *int `json:"bpfMapSizeNATAFF,omitempty"`
 	// BPFMapSizeRoute sets the size for route map
 	BPFMapSizeRoute *int `json:"bpfMapSizeRoute,omitempty"`
 	// BPFMapSizeConntrack sets the size for conntrack map

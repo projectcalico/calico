@@ -181,7 +181,9 @@ type Config struct {
 	BPFPSNATPorts                      numorstring.Port
 	BPFMapSizeRoute                    int
 	BPFMapSizeConntrack                int
-	BPFMapSizeNAT                      int
+	BPFMapSizeNATFE                    int
+	BPFMapSizeNATBE                    int
+	BPFMapSizeNATAFF                   int
 	BPFMapSizeIPSets                   int
 	KubeProxyMinSyncPeriod             time.Duration
 	KubeProxyEndpointSlicesEnabled     bool
@@ -617,25 +619,28 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap(bpfMapContext)
+		frontendMap.SetMaxEntries(config.BPFMapSizeNATFE)
 		err = frontendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT frontend BPF map.")
 		}
-		maxEntriesMap[frontendMap.GetName()] = uint32(config.BPFMapSizeNAT)
+		maxEntriesMap[frontendMap.GetName()] = uint32(config.BPFMapSizeNATFE)
 
 		backendMap := nat.BackendMap(bpfMapContext)
+		backendMap.SetMaxEntries(config.BPFMapSizeNATBE)
 		err = backendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend BPF map.")
 		}
-		maxEntriesMap[backendMap.GetName()] = uint32(config.BPFMapSizeNAT - 1000)
+		maxEntriesMap[backendMap.GetName()] = uint32(config.BPFMapSizeNATBE)
 
 		backendAffinityMap := nat.AffinityMap(bpfMapContext)
+		backendAffinityMap.SetMaxEntries(config.BPFMapSizeNATAFF)
 		err = backendAffinityMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend affinity BPF map.")
 		}
-		maxEntriesMap[backendAffinityMap.GetName()] = uint32(config.BPFMapSizeNAT - 1000)
+		maxEntriesMap[backendAffinityMap.GetName()] = uint32(config.BPFMapSizeNATAFF)
 
 		routeMap := routes.Map(bpfMapContext)
 		routeMap.SetMaxEntries(config.BPFMapSizeRoute)
