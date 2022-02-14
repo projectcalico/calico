@@ -117,6 +117,8 @@ type NetConf struct {
 	// If WindowsDisableDefaultBlockAllPolicy = true, then the default policy is disabled and pod network
 	// is created without "block all traffic" policy.
 	WindowsDisableDefaultDenyAllPolicy bool `json:"windows_disable_default_deny_all_policy"`
+	// WindowsLoopbackDSR indicates if the running platform supports loopback DSR.
+	WindowsLoopbackDSR bool `json:"windows_loopback_DSR,omitempty"`
 
 	RuntimeConfig RuntimeConfig
 

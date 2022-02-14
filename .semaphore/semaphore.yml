@@ -413,6 +413,9 @@ blocks:
         values: [ "arm64", "armv7", "ppc64le" ]
       commands:
       - make image ARCH=$ARCH
+    - name: "Build Windows archive"
+      commands:
+      - make build-windows-archive
 
 - name: "e2e tests"
   run:
