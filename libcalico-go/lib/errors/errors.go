@@ -152,7 +152,31 @@ type ErrorResourceUpdateConflict struct {
 }
 
 func (e ErrorResourceUpdateConflict) Error() string {
-	return fmt.Sprintf("update conflict: %v", e.Identifier)
+	return fmt.Sprintf("update conflict: %v: %s", e.Identifier, e.Err)
+}
+
+// Error indicating that the caller has attempted to release an IP address using
+// outdated information.
+type ErrorBadHandle struct {
+	Requested string
+	Expected  string
+}
+
+func (e ErrorBadHandle) Error() string {
+	f := "then given handle (%d) does not match (%d) when attempting to release IP"
+	return fmt.Sprintf(f, e.Requested, e.Expected)
+}
+
+// Error indicating that the caller has attempted to release an IP address using
+// outdated information.
+type ErrorBadSequenceNumber struct {
+	Requested uint64
+	Expected  uint64
+}
+
+func (e ErrorBadSequenceNumber) Error() string {
+	f := "then given sequence number (%d) does not match (%d) when attempting to release IP"
+	return fmt.Sprintf(f, e.Requested, e.Expected)
 }
 
 // Error indicating that the operation may have partially succeeded, then
