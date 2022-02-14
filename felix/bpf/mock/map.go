@@ -63,6 +63,10 @@ func (m *Map) SetMaxEntries(maxEntries int) {
 	m.MaxEntries = maxEntries
 }
 
+func (m *Map) GetMaxEntries() int {
+	return m.MaxEntries
+}
+
 func (m *Map) Iter(f bpf.IterCallback) error {
 	m.IterCount++
 
@@ -184,5 +188,8 @@ func (*DummyMap) Delete(k []byte) error {
 }
 
 func (*DummyMap) SetMaxEntries(maxEntries int) {
-	return
+}
+
+func (*DummyMap) GetMaxEntries() int {
+	return 0
 }

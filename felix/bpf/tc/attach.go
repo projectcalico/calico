@@ -619,6 +619,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
 }
 
+// nolint
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
 	if size, ok := ap.MaxEntriesMap[m.Name()]; ok {
 		return m.SetMapSize(size)
