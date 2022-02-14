@@ -13,6 +13,8 @@
 
 // Connection tracking.
 
+#define PSNAT_RETRIES	3
+
 static CALI_BPF_INLINE int psnat_get_port(void)
 {
 	return PSNAT_START + (bpf_get_prandom_u32() % PSNAT_LEN);
@@ -198,23 +200,30 @@ create:
 	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
 	if (err == -17 /* EEXIST */) {
+		int i;
+
 		CALI_DEBUG("Source collision for 0x%x:%d\n", bpf_htonl(ip_src), sport);
 
 		ct_value.orig_sport = sport;
 
-		sport = psnat_get_port();
-		CALI_DEBUG("New sport %d\n", sport);
+		for (i = 0; i < PSNAT_RETRIES; i++) {
+			sport = psnat_get_port();
+			CALI_DEBUG("New sport %d\n", sport);
 
-		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
+			bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 
-		*k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
+			*k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
 
-		if ((err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST))) {
-			CALI_DEBUG("Source collision with randomized port 0x%x:%d\n", bpf_htonl(ip_src), sport);
-			goto out;
+			if (!(err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST))) {
+				ct_ctx->sport = sport;
+				break;
+			}
+
+			if (i == PSNAT_RETRIES) {
+				CALI_INFO("Source collision unresolved 0x%x:%d\n",
+						bpf_htonl(ip_src), ct_value.orig_sport);
+			}
 		}
-
-		ct_ctx->sport = sport;
 	}
 
 out:
