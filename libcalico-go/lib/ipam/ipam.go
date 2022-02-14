@@ -950,10 +950,14 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 // ReleaseIPs releases any of the given IP addresses that are currently assigned,
 // so that they are available to be used in another assignment.
 func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]net.IP, error) {
-	for _, opts := range ips {
-		if opts.Address == "" {
+	for i := 0; i < len(ips); i++ {
+		// Validate the input.
+		if ips[i].Address == "" {
 			return nil, fmt.Errorf("No IP address specified")
 		}
+
+		// Sanitize any handles.
+		ips[i].Handle = sanitizeHandle(ips[i].Handle)
 	}
 
 	log.Debugf("Releasing IP addresses: %v", ips)
@@ -1039,7 +1043,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 			return unallocated, err
 		}
 		for _, h := range allHandles.KVPairs {
-			handleMap[h.Key.(model.IPAMHandleKey).HandleID] = h
+			handleMap[sanitizeHandle(h.Key.(model.IPAMHandleKey).HandleID)] = h
 		}
 	}
 

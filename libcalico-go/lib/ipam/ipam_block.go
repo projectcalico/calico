@@ -292,20 +292,21 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		log.Debugf("%s is allocated, ordinals to release are now %v", ip, ordinals)
 
 		// Compare handles.
-		handleID := b.Attributes[*attrIdx].AttrPrimary
-		if opts.Handle != "" && (handleID == nil || *handleID != opts.Handle) {
+		handleID := ""
+		if h := b.Attributes[*attrIdx].AttrPrimary; h != nil {
+			// The handle in the allocation may be malformed, so requires sanitation
+			// before use in the code.
+			handleID = sanitizeHandle(*h)
+		}
+		if opts.Handle != "" && handleID != opts.Handle {
 			// The handle given on the request doesn't match the stored handle.
 			// This means that whoever is requesting release of this IP address is doing so
 			// based on out-of-date information. Fail the request wholesale.
-			var exp string
-			if handleID != nil {
-				exp = *handleID
-			}
 			return nil, nil, cerrors.ErrorResourceUpdateConflict{
 				Identifier: opts.Address,
 				Err: cerrors.ErrorBadHandle{
 					Requested: opts.Handle,
-					Expected:  exp,
+					Expected:  handleID,
 				},
 			}
 		}
@@ -321,15 +322,15 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		// Increment count of addresses by handle if a handle
 		// exists.
 		log.Debugf("Looking up attribute with index %d", *attrIdx)
-		if handleID != nil {
-			log.Debugf("HandleID is %s", *handleID)
+		if handleID != "" {
+			log.Debugf("HandleID is %s", handleID)
 			handleCount := 0
-			if count, ok := countByHandle[*handleID]; !ok {
+			if count, ok := countByHandle[handleID]; !ok {
 				handleCount = count
 			}
 			log.Debugf("Handle ref count is %d, incrementing", handleCount)
 			handleCount += 1
-			countByHandle[*handleID] = handleCount
+			countByHandle[handleID] = handleCount
 			log.Debugf("countByHandle %v", countByHandle)
 		}
 	}
@@ -503,7 +504,13 @@ func (b allocationBlock) handleForIP(ip cnet.IP) (*string, error) {
 		log.Debugf("IP %s is not currently assigned in block", ip)
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
 	}
-	return b.Attributes[*attrIndex].AttrPrimary, nil
+	if h := b.Attributes[*attrIndex].AttrPrimary; h != nil {
+		// The handle in the allocation may be malformed, so requires sanitation
+		// before use in the code.
+		s := sanitizeHandle(*h)
+		return &s, nil
+	}
+	return nil, nil
 }
 
 func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]string) int {

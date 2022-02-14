@@ -163,7 +163,7 @@ type ErrorBadHandle struct {
 }
 
 func (e ErrorBadHandle) Error() string {
-	f := "then given handle (%d) does not match (%d) when attempting to release IP"
+	f := "the given handle (%s) does not match (%s) when attempting to release IP"
 	return fmt.Sprintf(f, e.Requested, e.Expected)
 }
 
@@ -175,7 +175,7 @@ type ErrorBadSequenceNumber struct {
 }
 
 func (e ErrorBadSequenceNumber) Error() string {
-	f := "then given sequence number (%d) does not match (%d) when attempting to release IP"
+	f := "the given sequence number (%d) does not match (%d) when attempting to release IP"
 	return fmt.Sprintf(f, e.Requested, e.Expected)
 }
 
