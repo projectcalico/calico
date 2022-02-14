@@ -197,6 +197,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			filterTableV4,
 			nil,
 			logutils.NewSummarizer("test"),
+			map[string]uint32{},
 		)
 		bpfEpMgr.dp = dp
 	})

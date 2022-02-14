@@ -146,6 +146,7 @@ type bpfEndpointManager struct {
 	dsrEnabled              bool
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
+	maxEntries              map[string]uint32
 
 	ipSetMap bpf.Map
 	stateMap bpf.Map
@@ -189,6 +190,7 @@ func newBPFEndpointManager(
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
+	maxEntriesMap map[string]uint32,
 ) *bpfEndpointManager {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -215,6 +217,7 @@ func newBPFEndpointManager(
 		dsrEnabled:              config.BPFNodePortDSREnabled,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
+		maxEntries:              maxEntriesMap,
 		ipSetMap:                ipSetMap,
 		stateMap:                stateMap,
 		ruleRenderer:            iptablesRuleRenderer,
@@ -1002,6 +1005,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.VXLANPort = m.vxlanPort
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
+	ap.MaxEntriesMap = m.maxEntries
 
 	return ap
 }
