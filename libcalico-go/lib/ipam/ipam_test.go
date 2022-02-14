@@ -2823,6 +2823,62 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		Entry("Assign 1 IPv4 from a configured pool twice (second time)", net.ParseIP("192.168.1.0"), "test-host", false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, cerrors.ErrorResourceAlreadyExists{Err: errors.New("Address already assigned in block"), Identifier: "192.168.1.0"}),
 	)
 
+	// Arguments for ReleaseOptions tests.
+	type ipToRelease struct {
+		Options ReleaseOptions
+		Error   bool
+	}
+
+	// Helper for converting a uint64 to a pointer.
+	ptr := func(i uint64) *uint64 {
+		n := i
+		return &n
+	}
+
+	DescribeTable("ReleaseOptions test",
+		func(ipsToAllocate []string, ipsToRelease []ipToRelease) {
+			hostname := "host-seqnum-test"
+
+			// Ensure a clean environment before each test.
+			bc.Clean()
+			deleteAllPools()
+			applyNode(bc, kc, hostname, nil)
+			defer deleteNode(bc, kc, hostname)
+			applyPool("192.168.0.0/16", true, "")
+
+			// Allocate the IPs given.
+			for _, ip := range ipsToAllocate {
+				err := ic.AssignIP(context.Background(), AssignIPArgs{
+					IP:       cnet.MustParseIP(ip),
+					Hostname: hostname,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Release IPs using the given options.
+			for _, r := range ipsToRelease {
+				_, err := ic.ReleaseIPs(context.Background(), r.Options)
+				if r.Error {
+					Expect(err).To(HaveOccurred())
+				} else {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
+		},
+
+		// Test 1: base case - assign a single IP, and then release it.
+		Entry("Base case", []string{"192.168.0.1"}, []ipToRelease{{Options: ReleaseOptions{Address: "192.168.0.1"}}}),
+
+		// Test 2: same as base case, but passing in a valid SequenceNumber.
+		Entry("Valid sequence number", []string{"192.168.0.1"}, []ipToRelease{{Options: ReleaseOptions{Address: "192.168.0.1", SequenceNumber: ptr(0)}}}),
+
+		// Test 3: same as base case, but passing in an invalid SequenceNumber.
+		Entry("Invalid sequence number", []string{"192.168.0.1"}, []ipToRelease{{Options: ReleaseOptions{Address: "192.168.0.1", SequenceNumber: ptr(1)}, Error: true}}),
+
+		// Test 4: same as base case, but passing in an invalid handle.
+		Entry("Invalid handle", []string{"192.168.0.1"}, []ipToRelease{{Options: ReleaseOptions{Address: "192.168.0.1", Handle: "fakehandle"}, Error: true}}),
+	)
+
 	DescribeTable("ReleaseIPs: requested IPs to be released vs actual unallocated IPs",
 		func(inIP net.IP, cleanEnv bool, pool []string, assignIP net.IP, autoAssignNumIPv4 int, expUnallocatedIPs []cnet.IP, expError error) {
 			inIPs := []cnet.IP{{IP: inIP}}

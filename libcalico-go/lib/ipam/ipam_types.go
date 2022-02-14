@@ -182,7 +182,7 @@ type ReleaseOptions struct {
 	// check for race conditions with other users of the IPAM API. It is
 	// highly recommended that both values be set on release requests.
 	Handle         string
-	SequenceNumber uint64
+	SequenceNumber *uint64
 }
 
 func (opts *ReleaseOptions) AsNetIP() (*cnet.IP, error) {

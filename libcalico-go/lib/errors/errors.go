@@ -160,12 +160,11 @@ func (e ErrorResourceUpdateConflict) Error() string {
 type ErrorBadHandle struct {
 	Requested string
 	Expected  string
-	Address   string
 }
 
 func (e ErrorBadHandle) Error() string {
-	f := "then given handle (%d) does not match (%d) when attempting to release IP %s"
-	return fmt.Sprintf(f, e.Requested, e.Expected, e.Address)
+	f := "then given handle (%d) does not match (%d) when attempting to release IP"
+	return fmt.Sprintf(f, e.Requested, e.Expected)
 }
 
 // Error indicating that the caller has attempted to release an IP address using
@@ -173,12 +172,11 @@ func (e ErrorBadHandle) Error() string {
 type ErrorBadSequenceNumber struct {
 	Requested uint64
 	Expected  uint64
-	Address   string
 }
 
 func (e ErrorBadSequenceNumber) Error() string {
-	f := "then given sequence number (%d) does not match (%d) when attempting to release IP %s"
-	return fmt.Sprintf(f, e.Requested, e.Expected, e.Address)
+	f := "then given sequence number (%d) does not match (%d) when attempting to release IP"
+	return fmt.Sprintf(f, e.Requested, e.Expected)
 }
 
 // Error indicating that the operation may have partially succeeded, then

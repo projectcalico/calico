@@ -267,15 +267,15 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		log.Debugf("Address %s is ordinal %d", ip, ordinal)
 
 		// Compare sequence numbers if one was given.
-		if opts.SequenceNumber != 0 && opts.SequenceNumber != b.SequenceNumberForAllocation[ordinal] {
+		if opts.SequenceNumber != nil && *opts.SequenceNumber != b.SequenceNumberForAllocation[ordinal] {
 			// Mismatched sequence number on the request and the stored allocation.
 			// This means that whoever is requesting release of this IP address is doing so
 			// based on out-of-date information. Fail the request wholesale.
 			return nil, nil, cerrors.ErrorResourceUpdateConflict{
+				Identifier: opts.Address,
 				Err: cerrors.ErrorBadSequenceNumber{
-					Requested: opts.SequenceNumber,
+					Requested: *opts.SequenceNumber,
 					Expected:  b.SequenceNumberForAllocation[ordinal],
-					Address:   opts.Address,
 				},
 			}
 		}
@@ -293,15 +293,19 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 
 		// Compare handles.
 		handleID := b.Attributes[*attrIdx].AttrPrimary
-		if opts.Handle != "" && handleID != nil && *handleID != opts.Handle {
+		if opts.Handle != "" && (handleID == nil || *handleID != opts.Handle) {
 			// The handle given on the request doesn't match the stored handle.
 			// This means that whoever is requesting release of this IP address is doing so
 			// based on out-of-date information. Fail the request wholesale.
+			var exp string
+			if handleID != nil {
+				exp = *handleID
+			}
 			return nil, nil, cerrors.ErrorResourceUpdateConflict{
+				Identifier: opts.Address,
 				Err: cerrors.ErrorBadHandle{
 					Requested: opts.Handle,
-					Expected:  *handleID,
-					Address:   opts.Address,
+					Expected:  exp,
 				},
 			}
 		}
@@ -435,7 +439,7 @@ func (b *allocationBlock) releaseByHandle(handleID string, opts ReleaseOptions) 
 	for o = 0; o < b.NumAddresses(); o++ {
 		// Only check allocated ordinals.
 		if b.Allocations[o] != nil && intInSlice(*b.Allocations[o], attrIndexes) {
-			if opts.SequenceNumber != 0 && opts.SequenceNumber != b.SequenceNumberForAllocation[o] {
+			if opts.SequenceNumber != nil && *opts.SequenceNumber != b.SequenceNumberForAllocation[o] {
 				// TODO: Add context to log, should we return an error instead?
 				log.Warnf("Skipping release of IP with mismatched sequence number")
 				continue
