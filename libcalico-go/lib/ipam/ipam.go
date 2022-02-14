@@ -949,7 +949,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 // ReleaseIPs releases any of the given IP addresses that are currently assigned,
 // so that they are available to be used in another assignment.
-func (c ipamClient) ReleaseIPs(ctx context.Context, ips []ReleaseOptions) ([]net.IP, error) {
+func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]net.IP, error) {
 	for _, opts := range ips {
 		if opts.Address == "" {
 			return nil, fmt.Errorf("No IP address specified")

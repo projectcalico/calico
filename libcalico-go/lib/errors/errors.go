@@ -152,7 +152,7 @@ type ErrorResourceUpdateConflict struct {
 }
 
 func (e ErrorResourceUpdateConflict) Error() string {
-	return fmt.Sprintf("update conflict: %v", e.Identifier)
+	return fmt.Sprintf("update conflict: %v: %s", e.Identifier, e.Err)
 }
 
 // Error indicating that the caller has attempted to release an IP address using

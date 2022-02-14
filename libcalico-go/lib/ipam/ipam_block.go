@@ -47,6 +47,7 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 	b.Allocations = make([]*int, numAddresses)
 	b.Unallocated = make([]int, numAddresses)
 	b.CIDR = cidr
+	b.SequenceNumberForAllocation = make(map[int]uint64, 0)
 
 	// Initialize unallocated ordinals.
 	for i := 0; i < numAddresses; i++ {
@@ -76,7 +77,7 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 
 		// Create slice of IPs and perform the allocations.
 		log.Debugf("Reserving allocation attribute: %#v handle %s", attrs, handleID)
-		attr := model.AllocationAttribute{&handleID, attrs}
+		attr := model.AllocationAttribute{AttrPrimary: &handleID, AttrSecondary: attrs}
 		b.Attributes = append(b.Attributes, attr)
 	}
 
@@ -128,6 +129,9 @@ func (b *allocationBlock) autoAssign(num int, handleID *string, host string, att
 		ips = append(ips, ipNet)
 
 		// Set the sequence number for this allocation.
+		if b.SequenceNumberForAllocation == nil {
+			b.SequenceNumberForAllocation = map[int]uint64{}
+		}
 		b.SequenceNumberForAllocation[ordinal] = b.SequenceNumber
 		continue
 	}
@@ -156,6 +160,9 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 	}
 
 	// Set the sequence number for this allocation.
+	if b.SequenceNumberForAllocation == nil {
+		b.SequenceNumberForAllocation = map[int]uint64{}
+	}
 	b.SequenceNumberForAllocation[ordinal] = b.SequenceNumber
 
 	// Check if already allocated.
@@ -259,8 +266,8 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		}
 		log.Debugf("Address %s is ordinal %d", ip, ordinal)
 
-		// Compare sequence numbers.
-		if opts.SequenceNumber != b.SequenceNumberForAllocation[ordinal] {
+		// Compare sequence numbers if one was given.
+		if opts.SequenceNumber != 0 && opts.SequenceNumber != b.SequenceNumberForAllocation[ordinal] {
 			// Mismatched sequence number on the request and the stored allocation.
 			// This means that whoever is requesting release of this IP address is doing so
 			// based on out-of-date information. Fail the request wholesale.
@@ -428,7 +435,7 @@ func (b *allocationBlock) releaseByHandle(handleID string, opts ReleaseOptions) 
 	for o = 0; o < b.NumAddresses(); o++ {
 		// Only check allocated ordinals.
 		if b.Allocations[o] != nil && intInSlice(*b.Allocations[o], attrIndexes) {
-			if opts.SequenceNumber != b.SequenceNumberForAllocation[o] {
+			if opts.SequenceNumber != 0 && opts.SequenceNumber != b.SequenceNumberForAllocation[o] {
 				// TODO: Add context to log, should we return an error instead?
 				log.Warnf("Skipping release of IP with mismatched sequence number")
 				continue
