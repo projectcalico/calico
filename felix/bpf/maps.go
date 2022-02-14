@@ -389,7 +389,7 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 	}
 
-	logrus.Debug("Map didn't exist, creating it ", b.GetName())
+	logrus.Debug("Map didn't exist, creating it")
 	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),
 		"type", b.Type,
 		"key", fmt.Sprint(b.KeySize),
