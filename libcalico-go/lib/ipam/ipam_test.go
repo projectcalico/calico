@@ -331,10 +331,92 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
 			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
 
+			// Run this test several times so that we can assert the logic works with a multitude of different sequence numbers, and
+			// that the sequence number is actually incremented properly.
+			var expectedSeqNum uint64
+			for i := 0; i < 10; i++ {
+				// Allocate an IP address.
+				v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 0, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseTunnel})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(v4.IPs)).To(Equal(1))
+
+				// Get the specific IP that was allocated.
+				ip := v4.IPs[0]
+
+				// Query the block in order to get information about the allocation necessary to safely release.
+				blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(blocks.KVPairs)).To(Equal(1))
+				block := blocks.KVPairs[0].Value.(*model.AllocationBlock)
+				ordinal, err := block.IPToOrdinal(cnet.MustParseIP(ip.IP.String()))
+				Expect(err).NotTo(HaveOccurred())
+				seq := blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
+				if expectedSeqNum == 0 {
+					// First iteration - set the base expected number.
+					expectedSeqNum = seq
+				} else {
+					// Subsequent iteration - assert the number is incrementing as expected.
+					Expect(seq).To(Equal(expectedSeqNum))
+				}
+
+				// Simulate calico/node releasing and then re-allocating the tunnel address - same IP, same handle.
+				err = ic.ReleaseByHandle(context.TODO(), handle)
+				Expect(err).NotTo(HaveOccurred())
+				args := AssignIPArgs{
+					IP:       cnet.MustParseIP(ip.IP.String()),
+					Hostname: hostname,
+					HandleID: &handle,
+				}
+				err = ic.AssignIP(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+				expectedSeqNum += 2
+
+				// Release the IP address using the sequence number and handle. This simulates what kube-controllers will do, and
+				// should result in a conflict error being returned.
+				u, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+				Expect(err).To(HaveOccurred())
+				Expect(len(u)).To(Equal(0))
+
+				// Requery the block in order to get information about the allocation necessary to safely release. This time,
+				// we won't race and will successfully release.
+				blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(blocks.KVPairs)).To(Equal(1))
+				block = blocks.KVPairs[0].Value.(*model.AllocationBlock)
+				Expect(err).NotTo(HaveOccurred())
+				seq = blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
+				Expect(seq).To(Equal(uint64(expectedSeqNum)))
+
+				// Release the IP using the correct sequence number.
+				u, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(u)).To(Equal(0))
+				expectedSeqNum += 2
+			}
+		})
+
+		It("should handle when an IP is released causing block deletion, then reallocated with the same handle", func() {
+			// This test simulates a scenario where client A queries the allocation and determines that the
+			// IP should be released. In the meantime, client B releases and re-allocates the address with the same IP and handle, thus
+			// invalidating client A's decision. For this particular case, we will use a block with no affinity so that releasing the
+			// address results in a block deletion, and then recreation. Client A should receive an error indicating its request is out of
+			// date.
+
+			// Set up a node and pool for the test. Ensure we have a clean starting spot.
+			bc.Clean()
+			handle := "testnode-ipip-tunnel-address"
+			hostname := "testnode"
+			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
+			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+
 			// Allocate an IP address.
 			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 0, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseTunnel})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(v4.IPs)).To(Equal(1))
+
+			// Release the affinity of the created block, so that releasing the IP below causes a block deletion.
+			err = ic.ReleaseHostAffinities(context.Background(), hostname, false)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Get the specific IP that was allocated.
 			ip := v4.IPs[0]
@@ -347,7 +429,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			ordinal, err := block.IPToOrdinal(cnet.MustParseIP(ip.IP.String()))
 			Expect(err).NotTo(HaveOccurred())
 			seq := blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
-			Expect(seq).To(Equal(uint64(0)))
 
 			// Simulate calico/node releasing and then re-allocating the tunnel address - same IP, same handle.
 			err = ic.ReleaseByHandle(context.TODO(), handle)
@@ -357,6 +438,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Hostname: hostname,
 				HandleID: &handle,
 			}
+
+			// Before reallocating, assert that the block has been deleted.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(0))
+
+			// Now, reallocate the IP, creating a new block.
 			err = ic.AssignIP(context.Background(), args)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -374,7 +462,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			block = blocks.KVPairs[0].Value.(*model.AllocationBlock)
 			Expect(err).NotTo(HaveOccurred())
 			seq = blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
-			Expect(seq).To(Equal(uint64(2)))
 
 			// Release the IP using the correct sequence number.
 			u, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})

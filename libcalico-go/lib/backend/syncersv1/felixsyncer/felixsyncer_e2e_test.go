@@ -188,7 +188,6 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 }
 
 var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	var ctx context.Context
 	var c clientv3.Interface
 	var be api.Client
@@ -399,7 +398,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Key:   model.WireguardKey{NodeName: "127.0.0.1"},
 					Value: &model.Wireguard{InterfaceIPv4Addr: &wip, PublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="},
 				})
-				//add one for the node resource
+				// add one for the node resource
 				expectedCacheSize += 6
 			}
 
@@ -594,10 +593,12 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectData(model.KVPair{
 				Key: model.BlockKey{CIDR: *cidr},
 				Value: &model.AllocationBlock{
-					CIDR:        *cidr,
-					Affinity:    &affinity,
-					Allocations: []*int{nil, &zero, nil, nil},
-					Unallocated: []int{0, 2, 3},
+					CIDR:                        *cidr,
+					Affinity:                    &affinity,
+					Allocations:                 []*int{nil, &zero, nil, nil},
+					Unallocated:                 []int{0, 2, 3},
+					SequenceNumber:              uint64(1),
+					SequenceNumberForAllocation: map[string]uint64{"1": uint64(0)},
 					Attributes: []model.AllocationAttribute{
 						{},
 					},

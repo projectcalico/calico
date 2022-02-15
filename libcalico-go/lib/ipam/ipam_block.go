@@ -20,6 +20,7 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -48,6 +49,12 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 	b.Unallocated = make([]int, numAddresses)
 	b.CIDR = cidr
 	b.SequenceNumberForAllocation = make(map[string]uint64, 0)
+
+	// When creating a new block, initialize its sequence number based on the timestamp.
+	// If a block is deleted / recreated, allocations will get different sequence numbers.
+	// This protects against a scenario where IP A is given seq# 0, the block is deleted and recreated,
+	// and then the same IP is given seq# 0 again, fooling clients into thinking the address hasn't changed.
+	b.SequenceNumber = uint64(time.Now().UnixNano())
 
 	// Initialize unallocated ordinals.
 	for i := 0; i < numAddresses; i++ {
