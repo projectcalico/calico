@@ -375,7 +375,9 @@ type FelixConfigurationSpec struct {
 	// BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold
 	// and entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
-	// BPFMapSizeIPSets sets the size for ipsets map
+	// BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry
+	// for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors
+	// such as "all()" can result in large numbers of entries (one entry per endpoint in that case).
 	BPFMapSizeIPSets *int `json:"bpfMapSizeIPSets,omitempty"`
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
