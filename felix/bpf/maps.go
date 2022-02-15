@@ -337,10 +337,12 @@ func (b *PinnedMap) Open() error {
 	return err
 }
 
+// nolint
 func (b *PinnedMap) pinnedMapMatchesConfiguration(maxEntries int) bool {
 	return maxEntries == b.MaxEntries
 }
 
+// nolint
 func (b *PinnedMap) migratePinnedMap() error {
 	err := RepinMap(b.versionedName(), b.Path()+"_old")
 	if err != nil {
