@@ -129,9 +129,6 @@ func (b *allocationBlock) autoAssign(num int, handleID *string, host string, att
 		ips = append(ips, ipNet)
 
 		// Set the sequence number for this allocation.
-		if b.SequenceNumberForAllocation == nil {
-			b.SequenceNumberForAllocation = map[string]uint64{}
-		}
 		b.SetSequenceNumberForOrdinal(ordinal)
 		continue
 	}
@@ -160,9 +157,6 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 	}
 
 	// Set the sequence number for this allocation.
-	if b.SequenceNumberForAllocation == nil {
-		b.SequenceNumberForAllocation = map[string]uint64{}
-	}
 	b.SetSequenceNumberForOrdinal(ordinal)
 
 	// Check if already allocated.

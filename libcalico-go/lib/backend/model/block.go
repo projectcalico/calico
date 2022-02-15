@@ -145,6 +145,9 @@ type AllocationBlock struct {
 }
 
 func (b *AllocationBlock) SetSequenceNumberForOrdinal(ordinal int) {
+	if b.SequenceNumberForAllocation == nil {
+		b.SequenceNumberForAllocation = map[string]uint64{}
+	}
 	b.SequenceNumberForAllocation[fmt.Sprintf("%d", ordinal)] = b.SequenceNumber
 }
 
