@@ -179,6 +179,12 @@ type Config struct {
 	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
 	BPFPSNATPorts                      numorstring.Port
+	BPFMapSizeRoute                    int
+	BPFMapSizeConntrack                int
+	BPFMapSizeNATFrontend              int
+	BPFMapSizeNATBackend               int
+	BPFMapSizeNATAffinity              int
+	BPFMapSizeIPSets                   int
 	KubeProxyMinSyncPeriod             time.Duration
 	KubeProxyEndpointSlicesEnabled     bool
 
@@ -552,20 +558,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var (
+		maxEntriesMap      map[string]uint32
 		bpfEndpointManager *bpfEndpointManager
 	)
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
+		maxEntriesMap = make(map[string]uint32)
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
 		ipSetsMap := bpfipsets.Map(bpfMapContext)
+		ipSetsMap.SetMaxEntries(config.BPFMapSizeIPSets)
 		err := ipSetsMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create ipsets BPF map.")
 		}
+		maxEntriesMap[ipSetsMap.GetName()] = uint32(config.BPFMapSizeIPSets)
 		ipSetsV4 := bpfipsets.NewBPFIPSets(
 			ipSetsConfigV4,
 			ipSetIDAllocator,
@@ -574,7 +584,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
 		ipsetsManager.AddDataplane(ipSetsV4)
-		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer)
+		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer, config.BPFMapSizeRoute)
 		dp.RegisterManager(bpfRTMgr)
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
@@ -607,49 +617,46 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.RegisterManager(failsafeMgr)
 
-		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
-		bpfEndpointManager = newBPFEndpointManager(
-			&config,
-			fibLookupEnabled,
-			workloadIfaceRegex,
-			ipSetIDAllocator,
-			ipSetsMap,
-			stateMap,
-			ruleRenderer,
-			filterTableV4,
-			dp.reportHealth,
-			dp.loopSummarizer,
-		)
-		dp.RegisterManager(bpfEndpointManager)
-
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap(bpfMapContext)
+		frontendMap.SetMaxEntries(config.BPFMapSizeNATFrontend)
 		err = frontendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT frontend BPF map.")
 		}
+		maxEntriesMap[frontendMap.GetName()] = uint32(config.BPFMapSizeNATFrontend)
+
 		backendMap := nat.BackendMap(bpfMapContext)
+		backendMap.SetMaxEntries(config.BPFMapSizeNATBackend)
 		err = backendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend BPF map.")
 		}
+		maxEntriesMap[backendMap.GetName()] = uint32(config.BPFMapSizeNATBackend)
+
 		backendAffinityMap := nat.AffinityMap(bpfMapContext)
+		backendAffinityMap.SetMaxEntries(config.BPFMapSizeNATAffinity)
 		err = backendAffinityMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend affinity BPF map.")
 		}
+		maxEntriesMap[backendAffinityMap.GetName()] = uint32(config.BPFMapSizeNATAffinity)
 
 		routeMap := routes.Map(bpfMapContext)
+		routeMap.SetMaxEntries(config.BPFMapSizeRoute)
 		err = routeMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create routes BPF map.")
 		}
+		maxEntriesMap[routeMap.GetName()] = uint32(config.BPFMapSizeRoute)
 
 		ctMap := conntrack.Map(bpfMapContext)
+		ctMap.SetMaxEntries(config.BPFMapSizeConntrack)
 		err = ctMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create conntrack BPF map.")
 		}
+		maxEntriesMap[ctMap.GetName()] = uint32(config.BPFMapSizeConntrack)
 
 		srMsgMap := nat.SendRecvMsgMap(bpfMapContext)
 		err = srMsgMap.EnsureExists()
@@ -662,6 +669,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err != nil {
 			log.WithError(err).Panic("Failed to create ct nats map.")
 		}
+
+		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
+		bpfEndpointManager = newBPFEndpointManager(
+			&config,
+			fibLookupEnabled,
+			workloadIfaceRegex,
+			ipSetIDAllocator,
+			ipSetsMap,
+			stateMap,
+			ruleRenderer,
+			filterTableV4,
+			dp.reportHealth,
+			dp.loopSummarizer,
+			maxEntriesMap,
+		)
+		dp.RegisterManager(bpfEndpointManager)
 
 		conntrackScanner := conntrack.NewScanner(ctMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
@@ -708,7 +731,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFConnTimeLBEnabled {
 			// Activate the connect-time load balancer.
 			err = nat.InstallConnectTimeLoadBalancer(
-				config.BPFCgroupV2, config.BPFLogLevel, config.BPFConntrackTimeouts.UDPLastSeen)
+				config.BPFCgroupV2, config.BPFLogLevel, config.BPFConntrackTimeouts.UDPLastSeen, maxEntriesMap)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
