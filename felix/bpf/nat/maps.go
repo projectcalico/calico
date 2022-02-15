@@ -416,6 +416,10 @@ type AffinityKey [affinityKeySize]byte
 
 type FrontEndAffinityKey [frontendAffKeySize]byte
 
+func (k FrontEndAffinityKey) AsBytes() []byte {
+	return k[:]
+}
+
 // NewAffinityKey create a new AffinityKey from a clientIP and FrontendKey
 func NewAffinityKey(clientIP net.IP, fEndKey FrontendKey) AffinityKey {
 	var k AffinityKey
