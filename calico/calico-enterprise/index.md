@@ -26,7 +26,7 @@ canonical_url: '/calico-enterprise/index'
 
 #### Already have a {{site.prodname}} cluster? You are **5 minutes** away from connecting to Calico Cloud. 
 
-What happens when you connect/disconnect your cluster to Calico Cloud? See {% include open-new-window.html text='Connect your cluster to Calico Cloud' url='https://docs.calicocloud.io/operations/connect/connect-cluster' %}.
+1. Verify that your {% include open-new-window.html text='cluster is compatible' url='https://docs.calicocloud.io/get-started/connect/system-requirements' %}. Want to know what happens when you connect/disconnect your cluster to Calico Cloud? See {% include open-new-window.html text='Connect your cluster to Calico Cloud' url='https://docs.calicocloud.io/get-started/connect/connect-cluster' %}.
 
 1. Identify the cluster you want to use and apply the following manifest.
 
