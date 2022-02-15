@@ -103,12 +103,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		ctMap := conntrack.Map(&bpf.MapContext{})
 
 		felix := felixes[0]
-		Expect(getMapSize(felix, rtMap)).To(Equal(rtMap.GetMaxEntries()))
-		Expect(getMapSize(felix, feMap)).To(Equal(feMap.GetMaxEntries()))
-		Expect(getMapSize(felix, beMap)).To(Equal(beMap.GetMaxEntries()))
-		Expect(getMapSize(felix, affMap)).To(Equal(affMap.GetMaxEntries()))
-		Expect(getMapSize(felix, ipsMap)).To(Equal(ipsMap.GetMaxEntries()))
-		Expect(getMapSize(felix, ctMap)).To(Equal(ctMap.GetMaxEntries()))
+		Expect(getMapSize(felix, rtMap)).To(Equal((rtMap.(*bpf.PinnedMap)).MaxEntries))
+		Expect(getMapSize(felix, feMap)).To(Equal((feMap.(*bpf.PinnedMap)).MaxEntries))
+		Expect(getMapSize(felix, beMap)).To(Equal((beMap.(*bpf.PinnedMap)).MaxEntries))
+		Expect(getMapSize(felix, affMap)).To(Equal((affMap.(*bpf.PinnedMap)).MaxEntries))
+		Expect(getMapSize(felix, ipsMap)).To(Equal((ipsMap.(*bpf.PinnedMap)).MaxEntries))
+		Expect(getMapSize(felix, ctMap)).To(Equal((ctMap.(*bpf.PinnedMap)).MaxEntries))
 
 		By("configuring route map size = 1000, nat fe size = 2000, nat be size = 3000, nat affinity size = 4000")
 		updateFelixConfig(func(cfg *api.FelixConfiguration) {

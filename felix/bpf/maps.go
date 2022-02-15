@@ -47,8 +47,6 @@ type Map interface {
 	// Path returns the path that the map is (to be) pinned to.
 	Path() string
 
-	// GetMaxEntries returns the size of the map
-	GetMaxEntries() int
 	// SetMaxEntries sets the max entries of the pinned map
 	SetMaxEntries(maxEntries int)
 
@@ -127,10 +125,6 @@ func (b *PinnedMap) Path() string {
 
 func (b *PinnedMap) SetMaxEntries(maxEntries int) {
 	b.MaxEntries = maxEntries
-}
-
-func (b *PinnedMap) GetMaxEntries() int {
-	return b.MaxEntries
 }
 
 func (b *PinnedMap) Close() error {
@@ -369,18 +363,16 @@ func (b *PinnedMap) compareSize() (bool, error) {
 
 func (b *PinnedMap) EnsureExists() error {
 	var oldfd MapFD
-	sameSize := true
 	if b.fdLoaded {
 		return nil
 	}
 
 	if err := b.Open(); err == nil {
 		// store the old fd
-		// nolint
 		oldfd = b.MapFD()
 		// Check if the existing map size and the configured
 		// map is the same.
-		sameSize, err = b.compareSize()
+		sameSize, err := b.compareSize()
 		if err != nil {
 			return err
 		}
@@ -388,6 +380,14 @@ func (b *PinnedMap) EnsureExists() error {
 			return nil
 		}
 	}
+	// Close the oldfd for the maps to be removed from the kernel.
+	// Delete the repinned path.
+	defer func() {
+		if oldfd != 0 {
+			oldfd.Close()
+			os.Remove(b.Path() + "_old")
+		}
+	}()
 
 	logrus.Debug("Map didn't exist, creating it")
 	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),
@@ -408,10 +408,6 @@ func (b *PinnedMap) EnsureExists() error {
 		b.fdLoaded = true
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
-		if !sameSize {
-			os.Remove(b.Path() + "_old")
-			oldfd.Close()
-		}
 	}
 	return err
 }

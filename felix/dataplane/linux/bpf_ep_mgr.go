@@ -1005,7 +1005,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.VXLANPort = m.vxlanPort
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
-	ap.MaxEntriesMap = m.maxEntries
+	ap.MapSizes = m.maxEntries
 
 	return ap
 }

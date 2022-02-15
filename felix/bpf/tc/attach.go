@@ -57,7 +57,7 @@ type AttachPoint struct {
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
-	MaxEntriesMap        map[string]uint32
+	MapSizes             map[string]uint32
 }
 
 var tcLock sync.RWMutex
@@ -621,7 +621,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 // nolint
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
-	if size, ok := ap.MaxEntriesMap[m.Name()]; ok {
+	if size, ok := ap.MapSizes[m.Name()]; ok {
 		return m.SetMapSize(size)
 	}
 	return nil
