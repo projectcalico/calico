@@ -47,6 +47,9 @@ type Map interface {
 	// Path returns the path that the map is (to be) pinned to.
 	Path() string
 
+	// SetMaxEntries sets the max entries of the pinned map
+	SetMaxEntries(maxEntries int)
+
 	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
@@ -120,6 +123,10 @@ func (b *PinnedMap) Path() string {
 	return b.versionedFilename()
 }
 
+func (b *PinnedMap) SetMaxEntries(maxEntries int) {
+	b.MaxEntries = maxEntries
+}
+
 func (b *PinnedMap) Close() error {
 	err := b.fd.Close()
 	b.fdLoaded = false
@@ -132,6 +139,22 @@ func (b *PinnedMap) RepinningEnabled() bool {
 		return false
 	}
 	return b.context.RepinningEnabled
+}
+
+func ShowMapCmd(m Map) ([]string, error) {
+	if pm, ok := m.(*PinnedMap); ok {
+		return []string{
+			"bpftool",
+			"--json",
+			"--pretty",
+			"map",
+			"show",
+			"pinned",
+			pm.versionedFilename(),
+		}, nil
+	}
+
+	return nil, errors.Errorf("unrecognized map type %T", m)
 }
 
 // DumpMapCmd returns the command that can be used to dump a map or an error
@@ -314,14 +337,57 @@ func (b *PinnedMap) Open() error {
 	return err
 }
 
+func (b *PinnedMap) compareSize() (bool, error) {
+	// Get current map info
+	mapInfo, err := GetMapInfo(b.fd)
+	if err != nil {
+		return false, fmt.Errorf("error getting map info %s", b.versionedName())
+	}
+	// If the current map size and the configured size are the same, nothing needs to
+	// be done.
+	if mapInfo.MaxEntries == b.MaxEntries {
+		return true, nil
+	}
+	// If the config is different, repin the existing map "path_old" and remove
+	// the current pinned path.
+	err = RepinMap(b.versionedName(), b.Path()+"_old")
+	if err != nil {
+		return false, fmt.Errorf("error repinning %s to %s: %w", b.Path(), b.Path()+"_old", err)
+	}
+	err = os.Remove(b.Path())
+	if err != nil {
+		return false, fmt.Errorf("error removing the pin %s", b.versionedName())
+	}
+	return false, nil
+}
+
 func (b *PinnedMap) EnsureExists() error {
+	var oldfd MapFD
 	if b.fdLoaded {
 		return nil
 	}
 
 	if err := b.Open(); err == nil {
-		return nil
+		// store the old fd
+		oldfd = b.MapFD()
+		// Check if the existing map size and the configured
+		// map is the same.
+		sameSize, err := b.compareSize()
+		if err != nil {
+			return err
+		}
+		if sameSize {
+			return nil
+		}
 	}
+	// Close the oldfd for the maps to be removed from the kernel.
+	// Delete the repinned path.
+	defer func() {
+		if oldfd != 0 {
+			oldfd.Close()
+			os.Remove(b.Path() + "_old")
+		}
+	}()
 
 	logrus.Debug("Map didn't exist, creating it")
 	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),

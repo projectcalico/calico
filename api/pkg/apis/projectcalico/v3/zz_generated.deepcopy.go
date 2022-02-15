@@ -1072,6 +1072,36 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(numorstring.Port)
 		**out = **in
 	}
+	if in.BPFMapSizeNATFE != nil {
+		in, out := &in.BPFMapSizeNATFE, &out.BPFMapSizeNATFE
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMapSizeNATBE != nil {
+		in, out := &in.BPFMapSizeNATBE, &out.BPFMapSizeNATBE
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMapSizeNATAFF != nil {
+		in, out := &in.BPFMapSizeNATAFF, &out.BPFMapSizeNATAFF
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMapSizeRoute != nil {
+		in, out := &in.BPFMapSizeRoute, &out.BPFMapSizeRoute
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMapSizeConntrack != nil {
+		in, out := &in.BPFMapSizeConntrack, &out.BPFMapSizeConntrack
+		*out = new(int)
+		**out = **in
+	}
+	if in.BPFMapSizeIPSets != nil {
+		in, out := &in.BPFMapSizeIPSets, &out.BPFMapSizeIPSets
+		*out = new(int)
+		**out = **in
+	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges
 		*out = new(RouteTableRanges)
