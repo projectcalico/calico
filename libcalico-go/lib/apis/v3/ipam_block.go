@@ -71,10 +71,13 @@ type IPAMBlockSpec struct {
 	// the key is cast to a string.
 	SequenceNumberForAllocation map[string]uint64 `json:"sequenceNumberForAllocation"`
 
-	StrictAffinity bool `json:"strictAffinity"`
-
+	// Deleted is an internal boolean used to workaround a limitation in the Kubernetes API whereby
+	// deletion will not return a conflict error if the block has been updated. It should not be set manually.
 	// +optional
 	Deleted bool `json:"deleted"`
+
+	// StrictAffinity on the IPAMBlock is deprecated and no longer used by the code. Use IPAMConfig StrictAffinity instead.
+	DeprecatedStrictAffinity bool `json:"strictAffinity"`
 }
 
 type AllocationAttribute struct {
