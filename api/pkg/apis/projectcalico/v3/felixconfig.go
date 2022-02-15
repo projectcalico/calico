@@ -368,7 +368,9 @@ type FelixConfigurationSpec struct {
 	// more than the size of the number of services.
 	BPFMapSizeNATBE  *int `json:"bpfMapSizeNATBE,omitempty"`
 	BPFMapSizeNATAFF *int `json:"bpfMapSizeNATAFF,omitempty"`
-	// BPFMapSizeRoute sets the size for route map
+	// BPFMapSizeRoute sets the size for the routes map.  The routes map should be large enough
+	// to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
+	// tunnel IPs).
 	BPFMapSizeRoute *int `json:"bpfMapSizeRoute,omitempty"`
 	// BPFMapSizeConntrack sets the size for conntrack map
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
