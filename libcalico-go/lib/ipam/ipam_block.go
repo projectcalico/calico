@@ -440,7 +440,7 @@ func (b *allocationBlock) releaseByHandle(handleID string, opts ReleaseOptions) 
 	for o = 0; o < b.NumAddresses(); o++ {
 		// Only check allocated ordinals.
 		if b.Allocations[o] != nil && intInSlice(*b.Allocations[o], attrIndexes) {
-			if opts.SequenceNumber != nil && *opts.SequenceNumber != b.SequenceNumberForAllocation[o] {
+			if opts.SequenceNumber != nil && *opts.SequenceNumber != b.GetSequenceNumberForOrdinal(o) {
 				// TODO: Add context to log, should we return an error instead?
 				log.Warnf("Skipping release of IP with mismatched sequence number")
 				continue
