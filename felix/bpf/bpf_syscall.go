@@ -292,9 +292,10 @@ func GetMapInfo(fd MapFD) (*MapInfo, error) {
 		return nil, errno
 	}
 	return &MapInfo{
-		Type:      int(bpfMapInfo._type),
-		KeySize:   int(bpfMapInfo.key_size),
-		ValueSize: int(bpfMapInfo.value_size),
+		Type:       int(bpfMapInfo._type),
+		KeySize:    int(bpfMapInfo.key_size),
+		ValueSize:  int(bpfMapInfo.value_size),
+		MaxEntries: int(bpfMapInfo.max_entries),
 	}, nil
 }
 
