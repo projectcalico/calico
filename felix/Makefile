@@ -67,7 +67,7 @@ endif
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
 FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
-FV_FELIXIMAGE?=$(FELIX_IMAGE)-test:latest-$(BUILDARCH)
+FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,
 # and run a single batch on each test VM.
@@ -224,6 +224,9 @@ image: $(FELIX_IMAGE)
 $(FELIX_IMAGE): $(FELIX_IMAGE)-$(ARCH)
 $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
                         bin/calico-bpf \
+			bin/pktgen \
+			bin/test-connection \
+			bin/test-workload \
                         build-bpf \
                         docker-image/calico-felix-wrapper \
                         docker-image/felix.cfg \
@@ -235,6 +238,9 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	mkdir -p docker-image/bin
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
 	cp bin/calico-bpf docker-image/bin/
+	cp bin/pktgen docker-image/bin/
+	cp bin/test-connection docker-image/bin/
+	cp bin/test-workload docker-image/bin/
 	rm -rf docker-image/bpf
 	mkdir -p docker-image/bpf/bin
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
@@ -247,10 +253,6 @@ FV_BINARY=calico-felix-race-amd64
 else
 FV_BINARY=calico-felix-amd64
 endif
-
-image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/$(FV_BINARY)
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE)-test:latest-$(ARCH) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin --load;
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FELIX_IMAGE)-test
 
 ###############################################################################
 # Unit Tests
@@ -290,7 +292,7 @@ build-typha:
 #	 ...
 #	 $(MAKE) fv FV_BATCHES_TO_RUN="10" FV_NUM_BATCHES=10    # the tenth 1/10
 #	 etc.
-fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) image-test bin/iptables-locker bin/test-workload bin/test-connection bin/calico-bpf fv/fv.test
+fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) image bin/iptables-locker bin/test-workload bin/test-connection bin/calico-bpf fv/fv.test
 	rm -f fv/data-races.log fv/latency.log
 	cd fv && \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
@@ -350,7 +352,7 @@ K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -
 # e.g.
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-k8sfv-test: image-test k8sfv-test-existing-felix
+k8sfv-test: image k8sfv-test-existing-felix
 # Run k8sfv test with whatever is the existing 'calico/felix:latest'
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.
