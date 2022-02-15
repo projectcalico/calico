@@ -179,9 +179,9 @@ type Config struct {
 	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;false"`
 	BPFExtToServiceConnmark            int              `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port `config:"portrange;20000:29999"`
-	BPFMapSizeNATFE                    int              `config:"int;511000;non-zero"`
-	BPFMapSizeNATBE                    int              `config:"int;510000;non-zero"`
-	BPFMapSizeNATAFF                   int              `config:"int;510000;non-zero"`
+	BPFMapSizeNATFrontend              int              `config:"int;511000;non-zero"`
+	BPFMapSizeNATBackend               int              `config:"int;510000;non-zero"`
+	BPFMapSizeNATAffinity              int              `config:"int;510000;non-zero"`
 	BPFMapSizeRoute                    int              `config:"int;1048576;non-zero"`
 	BPFMapSizeConntrack                int              `config:"int;512000;non-zero"`
 	BPFMapSizeIPSets                   int              `config:"int;1048576;non-zero"`

@@ -181,9 +181,9 @@ type Config struct {
 	BPFPSNATPorts                      numorstring.Port
 	BPFMapSizeRoute                    int
 	BPFMapSizeConntrack                int
-	BPFMapSizeNATFE                    int
-	BPFMapSizeNATBE                    int
-	BPFMapSizeNATAFF                   int
+	BPFMapSizeNATFrontend              int
+	BPFMapSizeNATBackend               int
+	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
 	KubeProxyMinSyncPeriod             time.Duration
 	KubeProxyEndpointSlicesEnabled     bool
@@ -619,28 +619,28 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap(bpfMapContext)
-		frontendMap.SetMaxEntries(config.BPFMapSizeNATFE)
+		frontendMap.SetMaxEntries(config.BPFMapSizeNATFrontend)
 		err = frontendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT frontend BPF map.")
 		}
-		maxEntriesMap[frontendMap.GetName()] = uint32(config.BPFMapSizeNATFE)
+		maxEntriesMap[frontendMap.GetName()] = uint32(config.BPFMapSizeNATFrontend)
 
 		backendMap := nat.BackendMap(bpfMapContext)
-		backendMap.SetMaxEntries(config.BPFMapSizeNATBE)
+		backendMap.SetMaxEntries(config.BPFMapSizeNATBackend)
 		err = backendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend BPF map.")
 		}
-		maxEntriesMap[backendMap.GetName()] = uint32(config.BPFMapSizeNATBE)
+		maxEntriesMap[backendMap.GetName()] = uint32(config.BPFMapSizeNATBackend)
 
 		backendAffinityMap := nat.AffinityMap(bpfMapContext)
-		backendAffinityMap.SetMaxEntries(config.BPFMapSizeNATAFF)
+		backendAffinityMap.SetMaxEntries(config.BPFMapSizeNATAffinity)
 		err = backendAffinityMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend affinity BPF map.")
 		}
-		maxEntriesMap[backendAffinityMap.GetName()] = uint32(config.BPFMapSizeNATAFF)
+		maxEntriesMap[backendAffinityMap.GetName()] = uint32(config.BPFMapSizeNATAffinity)
 
 		routeMap := routes.Map(bpfMapContext)
 		routeMap.SetMaxEntries(config.BPFMapSizeRoute)

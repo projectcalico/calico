@@ -113,9 +113,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		By("configuring route map size = 1000, nat fe size = 2000, nat be size = 3000, nat affinity size = 4000")
 		updateFelixConfig(func(cfg *api.FelixConfiguration) {
 			cfg.Spec.BPFMapSizeRoute = &newRtSize
-			cfg.Spec.BPFMapSizeNATFE = &newNATFeSize
-			cfg.Spec.BPFMapSizeNATBE = &newNATBeSize
-			cfg.Spec.BPFMapSizeNATAFF = &newNATAffSize
+			cfg.Spec.BPFMapSizeNATFrontend = &newNATFeSize
+			cfg.Spec.BPFMapSizeNATBackend = &newNATBeSize
+			cfg.Spec.BPFMapSizeNATAffinity = &newNATAffSize
 			cfg.Spec.BPFMapSizeIPSets = &newIpSetMapSize
 			cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
 		})

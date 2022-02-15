@@ -124,16 +124,16 @@ spec:
               bpfMapSizeIPSets:
                 description: BPFMapSizeIPSets sets the size for ipsets map
                 type: integer
-              bpfMapSizeNATAFF:
+              bpfMapSizeNATAffinity:
                 type: integer
-              bpfMapSizeNATBE:
-                description: BPFMapSizeNatBE sets the size for nat back end map. This
-                  is the total number of endpoints. This is mostly more than the size
-                  of the number of services.
+              bpfMapSizeNATBackend:
+                description: BPFMapSizeNATBackend sets the size for nat back end map.
+                  This is the total number of endpoints. This is mostly more than
+                  the size of the number of services.
                 type: integer
-              bpfMapSizeNATFE:
-                description: BPFMapSizeNatFE sets the size for nat front end map.
-                  This is equal to the number of kubernetes services.
+              bpfMapSizeNATFrontend:
+                description: BPFMapSizeNATFrontend sets the size for nat front end
+                  map. This is equal to the number of kubernetes services.
                 type: integer
               bpfMapSizeRoute:
                 description: BPFMapSizeRoute sets the size for route map
