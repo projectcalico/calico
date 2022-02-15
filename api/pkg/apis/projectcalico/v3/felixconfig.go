@@ -372,7 +372,8 @@ type FelixConfigurationSpec struct {
 	// to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
 	// tunnel IPs).
 	BPFMapSizeRoute *int `json:"bpfMapSizeRoute,omitempty"`
-	// BPFMapSizeConntrack sets the size for conntrack map
+	// BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold
+	// and entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
 	// BPFMapSizeIPSets sets the size for ipsets map
 	BPFMapSizeIPSets *int `json:"bpfMapSizeIPSets,omitempty"`
