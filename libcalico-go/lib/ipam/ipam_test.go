@@ -318,6 +318,70 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	})
 
 	Describe("ReleaseIPs test", func() {
+		It("should handle when an IP is released and reallocated with the same handle", func() {
+			// This test simulates a scenario where client A queries the allocation and determines that the
+			// IP should be released. In the meantime, client B releases and re-allocates the address with the same IP and handle, thus
+			// invalidating client A's decision. Client A should receive an error indicating as much.
+			//
+			// This condition can happen in real clusters between kube-controllers and the tunnel IP allocation process in calico/node.
+
+			// Set up a node and pool for the test.
+			handle := "testnode-ipip-tunnel-address"
+			hostname := "testnode"
+			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
+			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+
+			// Allocate an IP address.
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 0, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseTunnel})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4.IPs)).To(Equal(1))
+
+			// Get the specific IP that was allocated.
+			ip := v4.IPs[0]
+
+			// Query the block in order to get information about the allocation necessary to safely release.
+			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
+			block := blocks.KVPairs[0].Value.(*model.AllocationBlock)
+			ordinal, err := block.IPToOrdinal(cnet.MustParseIP(ip.IP.String()))
+			Expect(err).NotTo(HaveOccurred())
+			seq := blocks.KVPairs[0].Value.(*model.AllocationBlock).SequenceNumberForAllocation[ordinal]
+			Expect(seq).To(Equal(uint64(0)))
+
+			// Simulate calico/node releasing and then re-allocating the tunnel address - same IP, same handle.
+			err = ic.ReleaseByHandle(context.TODO(), handle)
+			Expect(err).NotTo(HaveOccurred())
+			args := AssignIPArgs{
+				IP:       cnet.MustParseIP(ip.IP.String()),
+				Hostname: hostname,
+				HandleID: &handle,
+			}
+			err = ic.AssignIP(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Release the IP address using the sequence number and handle. This simulates what kube-controllers will do, and
+			// should result in a conflict error being returned.
+			u, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+			Expect(err).To(HaveOccurred())
+			Expect(len(u)).To(Equal(0))
+
+			// Requery the block in order to get information about the allocation necessary to safely release. This time,
+			// we won't race and will successfully release.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
+			block = blocks.KVPairs[0].Value.(*model.AllocationBlock)
+			Expect(err).NotTo(HaveOccurred())
+			seq = blocks.KVPairs[0].Value.(*model.AllocationBlock).SequenceNumberForAllocation[ordinal]
+			Expect(seq).To(Equal(uint64(2)))
+
+			// Release the IP using the correct sequence number.
+			u, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(u)).To(Equal(0))
+		})
+
 		It("should release a multitude of IPs in different blocks", func() {
 			// Create an IP pool with a blocksize such that we'll get multiple blocks per-node.
 			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
