@@ -337,28 +337,20 @@ func (b *PinnedMap) Open() error {
 	return err
 }
 
-func (b *PinnedMap) compareSize() (bool, error) {
-	// Get current map info
-	mapInfo, err := GetMapInfo(b.fd)
+func (b *PinnedMap) pinnedMapMatchesConfiguration(maxEntries int) bool {
+	return maxEntries == b.MaxEntries
+}
+
+func (b *PinnedMap) migratePinnedMap() error {
+	err := RepinMap(b.versionedName(), b.Path()+"_old")
 	if err != nil {
-		return false, fmt.Errorf("error getting map info %s", b.versionedName())
-	}
-	// If the current map size and the configured size are the same, nothing needs to
-	// be done.
-	if mapInfo.MaxEntries == b.MaxEntries {
-		return true, nil
-	}
-	// If the config is different, repin the existing map "path_old" and remove
-	// the current pinned path.
-	err = RepinMap(b.versionedName(), b.Path()+"_old")
-	if err != nil {
-		return false, fmt.Errorf("error repinning %s to %s: %w", b.Path(), b.Path()+"_old", err)
+		return fmt.Errorf("error repinning %s to %s: %w", b.Path(), b.Path()+"_old", err)
 	}
 	err = os.Remove(b.Path())
 	if err != nil {
-		return false, fmt.Errorf("error removing the pin %s", b.versionedName())
+		return fmt.Errorf("error removing the pin %s", b.versionedName())
 	}
-	return false, nil
+	return nil
 }
 
 func (b *PinnedMap) EnsureExists() error {
@@ -370,13 +362,19 @@ func (b *PinnedMap) EnsureExists() error {
 	if err := b.Open(); err == nil {
 		// store the old fd
 		oldfd = b.MapFD()
-		// Check if the existing map size and the configured
-		// map is the same.
-		sameSize, err := b.compareSize()
+
+		// Get the existing map info
+		mapInfo, err := GetMapInfo(b.fd)
 		if err != nil {
-			return err
+			return fmt.Errorf("error getting map info of the pinned map %w", err)
 		}
-		if sameSize {
+
+		if !b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
+			err := b.migratePinnedMap()
+			if err != nil {
+				return err
+			}
+		} else {
 			return nil
 		}
 	}
