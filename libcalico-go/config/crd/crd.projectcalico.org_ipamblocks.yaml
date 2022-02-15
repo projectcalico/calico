@@ -69,6 +69,9 @@ spec:
                 description: The block's CIDR.
                 type: string
               deleted:
+                description: Deleted is an internal boolean used to workaround a limitation
+                  in the Kubernetes API whereby deletion will not return a conflict
+                  error if the block has been updated. It should not be set manually.
                 type: boolean
               sequenceNumber:
                 description: We store a sequence number that is updated each time
@@ -88,6 +91,8 @@ spec:
                   not allow numerical keys for maps, so the key is cast to a string.
                 type: object
               strictAffinity:
+                description: StrictAffinity on the IPAMBlock is deprecated and no
+                  longer used by the code. Use IPAMConfig StrictAffinity instead.
                 type: boolean
               unallocated:
                 description: Unallocated is an ordered list of allocations which are
@@ -100,7 +105,6 @@ spec:
             - attributes
             - cidr
             - sequenceNumber
-            - sequenceNumberForAllocation
             - strictAffinity
             - unallocated
             type: object

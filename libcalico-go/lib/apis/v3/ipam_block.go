@@ -69,6 +69,7 @@ type IPAMBlockSpec struct {
 	// Map of allocated ordinal within the block to sequence number of the block at
 	// the time of allocation. Kubenrnetes does not allow numerical keys for maps, so
 	// the key is cast to a string.
+	// +optional
 	SequenceNumberForAllocation map[string]uint64 `json:"sequenceNumberForAllocation"`
 
 	// Deleted is an internal boolean used to workaround a limitation in the Kubernetes API whereby

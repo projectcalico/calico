@@ -2285,22 +2285,24 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 							},
 						},
 					},
-					"strictAffinity": {
-						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
-						},
-					},
 					"deleted": {
 						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
+							Description: "Deleted is an internal boolean used to workaround a limitation in the Kubernetes API whereby deletion will not return a conflict error if the block has been updated. It should not be set manually.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"strictAffinity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "StrictAffinity on the IPAMBlock is deprecated and no longer used by the code. Use IPAMConfig StrictAffinity instead.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},
-				Required: []string{"cidr", "allocations", "unallocated", "attributes", "sequenceNumber", "sequenceNumberForAllocation", "strictAffinity"},
+				Required: []string{"cidr", "allocations", "unallocated", "attributes", "sequenceNumber", "strictAffinity"},
 			},
 		},
 		Dependencies: []string{
