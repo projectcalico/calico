@@ -57,6 +57,7 @@ type AttachPoint struct {
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
+	MapSizes             map[string]uint32
 }
 
 var tcLock sync.RWMutex
@@ -158,6 +159,9 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 			} else {
 				subDir = ifName + "_egr/"
 			}
+		}
+		if err := ap.setMapSize(m); err != nil {
+			return "", fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
 		pinPath := path.Join(baseDir, subDir, m.Name())
 		if err := m.SetPinPath(pinPath); err != nil {
@@ -613,6 +617,14 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
 		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
+}
+
+// nolint
+func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
+	if size, ok := ap.MapSizes[m.Name()]; ok {
+		return m.SetMapSize(size)
+	}
+	return nil
 }
 
 // nolint

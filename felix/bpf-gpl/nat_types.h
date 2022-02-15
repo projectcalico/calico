@@ -62,7 +62,7 @@ struct calico_nat_v4_value {
 CALI_MAP(cali_v4_nat_fe, 3,
 		BPF_MAP_TYPE_LPM_TRIE,
 		union calico_nat_v4_lpm_key, struct calico_nat_v4_value,
-		511000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
+		64*1024, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 
 // Map: NAT level two.  ID and ordinal -> new dest and port.
@@ -81,7 +81,7 @@ struct calico_nat_dest {
 CALI_MAP_V1(cali_v4_nat_be,
 		BPF_MAP_TYPE_HASH,
 		struct calico_nat_secondary_v4_key, struct calico_nat_dest,
-		510000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
+		256*1024, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 struct calico_nat_v4_affinity_key {
 	struct calico_nat_v4 nat_key;
@@ -98,7 +98,7 @@ struct calico_nat_v4_affinity_val {
 CALI_MAP_V1(cali_v4_nat_aff,
 		BPF_MAP_TYPE_LRU_HASH,
 		struct calico_nat_v4_affinity_key, struct calico_nat_v4_affinity_val,
-		510000, 0, MAP_PIN_GLOBAL)
+		64*1024, 0, MAP_PIN_GLOBAL)
 
 struct vxlanhdr {
 	__be32 flags;
