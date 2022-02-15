@@ -47,7 +47,7 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 	b.Allocations = make([]*int, numAddresses)
 	b.Unallocated = make([]int, numAddresses)
 	b.CIDR = cidr
-	b.SequenceNumberForAllocation = make(map[int]uint64, 0)
+	b.SequenceNumberForAllocation = make(map[string]uint64, 0)
 
 	// Initialize unallocated ordinals.
 	for i := 0; i < numAddresses; i++ {
@@ -130,9 +130,9 @@ func (b *allocationBlock) autoAssign(num int, handleID *string, host string, att
 
 		// Set the sequence number for this allocation.
 		if b.SequenceNumberForAllocation == nil {
-			b.SequenceNumberForAllocation = map[int]uint64{}
+			b.SequenceNumberForAllocation = map[string]uint64{}
 		}
-		b.SequenceNumberForAllocation[ordinal] = b.SequenceNumber
+		b.SetSequenceNumberForOrdinal(ordinal)
 		continue
 	}
 	b.Unallocated = updatedUnallocated
@@ -161,9 +161,9 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 
 	// Set the sequence number for this allocation.
 	if b.SequenceNumberForAllocation == nil {
-		b.SequenceNumberForAllocation = map[int]uint64{}
+		b.SequenceNumberForAllocation = map[string]uint64{}
 	}
-	b.SequenceNumberForAllocation[ordinal] = b.SequenceNumber
+	b.SetSequenceNumberForOrdinal(ordinal)
 
 	// Check if already allocated.
 	if b.Allocations[ordinal] != nil {
@@ -267,7 +267,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		log.Debugf("Address %s is ordinal %d", ip, ordinal)
 
 		// Compare sequence numbers if one was given.
-		if opts.SequenceNumber != nil && *opts.SequenceNumber != b.SequenceNumberForAllocation[ordinal] {
+		if opts.SequenceNumber != nil && *opts.SequenceNumber != b.GetSequenceNumberForOrdinal(ordinal) {
 			// Mismatched sequence number on the request and the stored allocation.
 			// This means that whoever is requesting release of this IP address is doing so
 			// based on out-of-date information. Fail the request wholesale.
@@ -275,7 +275,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 				Identifier: opts.Address,
 				Err: cerrors.ErrorBadSequenceNumber{
 					Requested: *opts.SequenceNumber,
-					Expected:  b.SequenceNumberForAllocation[ordinal],
+					Expected:  b.GetSequenceNumberForOrdinal(ordinal),
 				},
 			}
 		}
@@ -358,7 +358,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		log.Debugf("Releasing ordinal %d", ordinal)
 		b.Allocations[ordinal] = nil
 		b.Unallocated = append(b.Unallocated, ordinal)
-		delete(b.SequenceNumberForAllocation, ordinal)
+		b.ClearSequenceNumberForOrdinal(ordinal)
 	}
 	return unallocated, countByHandle, nil
 }

@@ -402,7 +402,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			ip:             ordinalToIP(b, ord).String(),
 			handle:         handle,
 			attrs:          attr.AttrSecondary,
-			sequenceNumber: b.SequenceNumberForAllocation[ord],
+			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
 		}
 
 		currentAllocations[alloc.id()] = true

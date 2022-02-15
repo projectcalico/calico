@@ -346,7 +346,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			block := blocks.KVPairs[0].Value.(*model.AllocationBlock)
 			ordinal, err := block.IPToOrdinal(cnet.MustParseIP(ip.IP.String()))
 			Expect(err).NotTo(HaveOccurred())
-			seq := blocks.KVPairs[0].Value.(*model.AllocationBlock).SequenceNumberForAllocation[ordinal]
+			seq := blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
 			Expect(seq).To(Equal(uint64(0)))
 
 			// Simulate calico/node releasing and then re-allocating the tunnel address - same IP, same handle.
@@ -373,7 +373,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(blocks.KVPairs)).To(Equal(1))
 			block = blocks.KVPairs[0].Value.(*model.AllocationBlock)
 			Expect(err).NotTo(HaveOccurred())
-			seq = blocks.KVPairs[0].Value.(*model.AllocationBlock).SequenceNumberForAllocation[ordinal]
+			seq = blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
 			Expect(seq).To(Equal(uint64(2)))
 
 			// Release the IP using the correct sequence number.

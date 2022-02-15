@@ -130,8 +130,9 @@ type AllocationBlock struct {
 	SequenceNumber uint64 `json:"sequenceNumber"`
 
 	// Map of allocated ordinal within the block to sequence number of the block at
-	// the time of allocation.
-	SequenceNumberForAllocation map[int]uint64 `json:"sequenceNumberForAllocation"`
+	// the time of allocation. Kubenrnetes does not allow numerical keys for maps, so
+	// the key is cast to a string.
+	SequenceNumberForAllocation map[string]uint64 `json:"sequenceNumberForAllocation"`
 
 	// Deleted is an internal boolean used to workaround a limitation in the Kubernetes API whereby
 	// deletion will not return a conflict error if the block has been updated.
@@ -141,6 +142,18 @@ type AllocationBlock struct {
 	// This is only to keep compatibility with existing deployments.
 	// The data format should be `Affinity: host:hostname` (not `hostAffinity: hostname`).
 	HostAffinity *string `json:"hostAffinity,omitempty"`
+}
+
+func (b *AllocationBlock) SetSequenceNumberForOrdinal(ordinal int) {
+	b.SequenceNumberForAllocation[fmt.Sprintf("%d", ordinal)] = b.SequenceNumber
+}
+
+func (b *AllocationBlock) GetSequenceNumberForOrdinal(ordinal int) uint64 {
+	return b.SequenceNumberForAllocation[fmt.Sprintf("%d", ordinal)]
+}
+
+func (b *AllocationBlock) ClearSequenceNumberForOrdinal(ordinal int) {
+	delete(b.SequenceNumberForAllocation, fmt.Sprintf("%d", ordinal))
 }
 
 func (b *AllocationBlock) MarkDeleted() {

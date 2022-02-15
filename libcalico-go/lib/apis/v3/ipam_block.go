@@ -67,8 +67,9 @@ type IPAMBlockSpec struct {
 	SequenceNumber uint64 `json:"sequenceNumber"`
 
 	// Map of allocated ordinal within the block to sequence number of the block at
-	// the time of allocation.
-	SequenceNumberForAllocation map[int]uint64 `json:"sequenceNumberForAllocation"`
+	// the time of allocation. Kubenrnetes does not allow numerical keys for maps, so
+	// the key is cast to a string.
+	SequenceNumberForAllocation map[string]uint64 `json:"sequenceNumberForAllocation"`
 
 	StrictAffinity bool `json:"strictAffinity"`
 
