@@ -377,8 +377,7 @@ func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, 
 	}
 
 	// Release the old allocation.
-	ipsToRelease := []net.IP{*ipAddr}
-	_, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease)
+	_, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()})
 	if err != nil {
 		// If we fail to release the old allocation, we shouldn't continue any further. Just exit.
 		log.WithField("IP", ipAddr.String()).WithError(err).Fatal("Error releasing address")
@@ -565,7 +564,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 					// No allocation exists, we don't have anything to do.
 				} else if len(attr) == 0 && handle == nil {
 					// The IP is ours. Release it by passing the exact IP.
-					if _, err := c.IPAM().ReleaseIPs(ctx, []net.IP{*ipAddr}); err != nil {
+					if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
 						logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
 					}
 				}
