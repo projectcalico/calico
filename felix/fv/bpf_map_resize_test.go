@@ -62,10 +62,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 			infra.DumpErrorData()
 		}
 
-		for _, felix := range felixes {
-			felix.Stop()
-		}
-
+		felixes[0].Stop()
 		infra.Stop()
 	})
 
