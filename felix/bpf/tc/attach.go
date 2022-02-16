@@ -631,6 +631,25 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool) error {
 	if err != nil {
 		return fmt.Errorf("error updating icmp program %v", err)
 	}
+	// Jump map updates related to IPv6 programs
+	err = obj.UpdateJumpMap("cali_jump", string(prologueV6Program), PrologueV6ProgramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating IPv6 proglogue program %v", err)
+	}
+	if !isHost {
+		err = obj.UpdateJumpMap("cali_jump", string(policyV6Program), PolicyV6ProgramIndex)
+		if err != nil {
+			return fmt.Errorf("error updating IPv6 policy program %v", err)
+		}
+	}
+	err = obj.UpdateJumpMap("cali_jump", string(allowedV6Program), AllowedV6ProgramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating IPv6 epilogue program %v", err)
+	}
+	err = obj.UpdateJumpMap("cali_jump", string(icmpV6Program), ICMPV6PRogramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating IPv6 icmp program %v", err)
+	}
 	return nil
 }
 
