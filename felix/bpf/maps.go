@@ -47,6 +47,9 @@ type Map interface {
 	// Path returns the path that the map is (to be) pinned to.
 	Path() string
 
+	// SetMaxEntries sets the max entries of the pinned map
+	SetMaxEntries(maxEntries int)
+
 	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
@@ -120,6 +123,10 @@ func (b *PinnedMap) Path() string {
 	return b.versionedFilename()
 }
 
+func (b *PinnedMap) SetMaxEntries(maxEntries int) {
+	b.MaxEntries = maxEntries
+}
+
 func (b *PinnedMap) Close() error {
 	err := b.fd.Close()
 	b.fdLoaded = false
@@ -132,6 +139,22 @@ func (b *PinnedMap) RepinningEnabled() bool {
 		return false
 	}
 	return b.context.RepinningEnabled
+}
+
+func ShowMapCmd(m Map) ([]string, error) {
+	if pm, ok := m.(*PinnedMap); ok {
+		return []string{
+			"bpftool",
+			"--json",
+			"--pretty",
+			"map",
+			"show",
+			"pinned",
+			pm.versionedFilename(),
+		}, nil
+	}
+
+	return nil, errors.Errorf("unrecognized map type %T", m)
 }
 
 // DumpMapCmd returns the command that can be used to dump a map or an error
@@ -314,14 +337,98 @@ func (b *PinnedMap) Open() error {
 	return err
 }
 
+// nolint
+func (b *PinnedMap) pinnedMapMatchesConfiguration(maxEntries int) bool {
+	return maxEntries == b.MaxEntries
+}
+
+// nolint
+func (b *PinnedMap) migratePinnedMap(from, to string) error {
+	err := RepinMap(b.versionedName(), to)
+	if err != nil {
+		return fmt.Errorf("error repinning %s to %s: %w", from, to, err)
+	}
+	err = os.Remove(from)
+	if err != nil {
+		return fmt.Errorf("error removing the pin %s", from)
+	}
+	return nil
+}
+
+func (b *PinnedMap) oldMapExists() bool {
+	_, err := os.Stat(b.Path() + "_old")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
+}
+
 func (b *PinnedMap) EnsureExists() error {
+	var oldfd MapFD
 	if b.fdLoaded {
 		return nil
 	}
 
-	if err := b.Open(); err == nil {
-		return nil
+	// In case felix restarts in the middle of migration, we might end up with
+	// old map. If the old map size and config matches, pin the old map back.
+	// open the fd and return
+	if b.oldMapExists() {
+		// try to open the old map
+		fd, err := GetMapFDByPin(b.versionedFilename() + "_old")
+		if err != nil {
+			return fmt.Errorf("error opening old map %s, err = %w", b.versionedFilename()+"_old", err)
+		}
+
+		defer fd.Close()
+		// Get the old map info
+		mapInfo, err := GetMapInfo(fd)
+		if err != nil {
+			return fmt.Errorf("error getting map info of the old map %w", err)
+		}
+
+		// If the old map's size matches the config, repin old to
+		// the actual path, try to open.
+		if b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
+			err = b.migratePinnedMap(b.Path()+"_old", b.Path())
+			if err != nil {
+				return fmt.Errorf("error pinning old map %w", err)
+			}
+		} else {
+			return fmt.Errorf("config does not match old map size, adjust the config")
+		}
+		if err = b.Open(); err == nil {
+			return nil
+		}
+		return fmt.Errorf("error opening pinned map %w", err)
 	}
+
+	if err := b.Open(); err == nil {
+		// store the old fd
+		oldfd = b.MapFD()
+
+		// Get the existing map info
+		mapInfo, err := GetMapInfo(b.fd)
+		if err != nil {
+			return fmt.Errorf("error getting map info of the pinned map %w", err)
+		}
+
+		if b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
+			return nil
+		}
+		err = b.migratePinnedMap(b.Path(), b.Path()+"_old")
+		if err != nil {
+			return fmt.Errorf("error migrating the old map %w", err)
+		}
+	}
+
+	// Close the oldfd for the maps to be removed from the kernel.
+	defer func() {
+		if oldfd != 0 {
+			oldfd.Close()
+		}
+	}()
 
 	logrus.Debug("Map didn't exist, creating it")
 	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),
@@ -340,6 +447,10 @@ func (b *PinnedMap) EnsureExists() error {
 	b.fd, err = GetMapFDByPin(b.versionedFilename())
 	if err == nil {
 		b.fdLoaded = true
+		// Delete the old pin if migration had happened and migration was successful.
+		if _, err := os.Stat(b.Path() + "_old"); err == nil {
+			os.Remove(b.Path() + "_old")
+		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
