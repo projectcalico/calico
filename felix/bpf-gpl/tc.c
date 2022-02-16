@@ -437,10 +437,7 @@ icmp_send_reply:
 
 skip_policy:
 	ctx.state->pol_rc = CALI_POL_ALLOW;
-	// We are going to skip policy program, and allow the packet. For that, we should
-	// clear CALI_ST_SUPPRESS_CT_STATE, to prevent packet drop at the begining of
-	// accepted entrypoint
-	ctx.state->flags &= (~CALI_ST_SUPPRESS_CT_STATE);
+	ctx.state->flags |= CALI_ST_SKIP_POLICY;
 	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	goto deny;
@@ -471,7 +468,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	if (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE) {
+	if (!(ctx.state->flags & CALI_ST_SKIP_POLICY) && (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 		// See comment above where CALI_ST_SUPPRESS_CT_STATE is set.
 		CALI_DEBUG("Egress HEP should drop packet with no CT state\n");
 		return TC_ACT_SHOT;
