@@ -16,6 +16,8 @@ package serviceaccounttoken
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -44,7 +46,7 @@ func CalicoNamespace(ctx context.Context, f *framework.Framework) (string, error
 	return "kube-system", nil
 }
 
-var _ = CalicoDescribe("ServiceAccount token rotation [Disruptive] [LinuxOnly]", func() {
+var _ = CalicoDescribe("ServiceAccount tests [Disruptive] [LinuxOnly]", func() {
 	var f = framework.NewDefaultFramework("calico-policy")
 	var calicoNamespace string
 	var err error
@@ -68,25 +70,34 @@ var _ = CalicoDescribe("ServiceAccount token rotation [Disruptive] [LinuxOnly]",
 
 		// Delete the serviceaccount token used for Calico. We expect the controller manager will provision a new one,
 		// and that when it does Calico will detect it and start to use the new credentials.
-		out, err := f.ClientSet.CoreV1().ServiceAccounts(calicoNamespace).Get(ctx, "calico-node", metav1.GetOptions{})
+		sa, err := f.ClientSet.CoreV1().ServiceAccounts(calicoNamespace).Get(ctx, "calico-node", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-
-		secrets := []string{}
-		for _, sa := range out.Items {
-			if sa.GetName() == "calico-node" {
-				secrets = sa.Secrets
-				break
-			}
-		}
-		Expect(len(secrets)).To(BeNumerically(">=", 1))
+		Expect(len(sa.Secrets)).To(BeNumerically(">=", 1), "calico-node ServiceAccount has no secrets")
 
 		// Delete the secrets referenced by the serviceaccount. This will invalidate the secret currently in-use by calico/node,
 		// and will also trigger recreattion of a new token.
-		for _, s := range secrets {
-			_, err := f.ClientSet.CoreV1().Secrets(calicoNamespace).Delete(ctx, s, metav1.DeleteOptions{})
+		for _, s := range sa.Secrets {
+			err = f.ClientSet.CoreV1().Secrets(calicoNamespace).Delete(ctx, s.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		// Verify that pods can still be launched in the cluster.
+		// Get the ServiceAccount again, and assert that the service account token secrets have changed.
+		// We need to wait for the controller manager to asynchronously generate a new token and update the serviceaccount.
+		Eventually(func() error {
+			saNew, err := f.ClientSet.CoreV1().ServiceAccounts(calicoNamespace).Get(ctx, "calico-node", metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			if len(saNew.Secrets) == 0 {
+				return fmt.Errorf("Waiting for new service account token secret")
+			}
+			if saNew.Secrets[0].Name == sa.Secrets[0].Name {
+				return fmt.Errorf("Sercret name was not upated")
+			}
+			return nil
+		}, 5*time.Second).ShouldNot(HaveOccurred())
+
+		// Verify that pods can still be launched in the cluster. This confirms that the CNI plugin has been updated
+		// with the new credentials.
 	})
 })
