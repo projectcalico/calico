@@ -82,7 +82,6 @@ FV_NUM_BATCHES?=1
 # (with FV_NUM_BATCHES=1) to check that it's not a flake.
 FV_BATCHES_TO_RUN?=$(shell seq $(FV_NUM_BATCHES))
 FV_SLOW_SPEC_THRESH=90
-FV_RACE_DETECTOR_ENABLED?=true
 
 # Linker flags for building Felix.
 #
@@ -146,9 +145,12 @@ ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+FV_RACE_DETECTOR_ENABLED?=true
 else
 CGO_ENABLED=0
 CGO_LDFLAGS=""
+# Race detection requires CGO enabled.
+FV_RACE_DETECTOR_ENABLED?=false
 endif
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
@@ -214,6 +216,13 @@ bpf/asm/opcode_string.go: bpf/asm/asm.go
 # Build the calico/felix docker image, which contains only Felix.
 .PHONY: $(FELIX_IMAGE) $(FELIX_IMAGE)-$(ARCH)
 
+# Whether or not to use race-detector in the produced image.
+ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
+FV_BINARY=bin/calico-felix-race-$(ARCH)
+else
+FV_BINARY=bin/calico-felix-$(ARCH)
+endif
+
 # by default, build the image for the target architecture
 .PHONY: image-all
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
@@ -222,12 +231,11 @@ sub-image-%:
 
 image: $(FELIX_IMAGE)
 $(FELIX_IMAGE): $(FELIX_IMAGE)-$(ARCH)
-$(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
+$(FELIX_IMAGE)-$(ARCH): $(FV_BINARY) \
                         bin/calico-bpf \
 			bin/pktgen \
 			bin/test-connection \
 			bin/test-workload \
-			bin/calico-felix-race-$(ARCH) \
                         build-bpf \
                         docker-image/calico-felix-wrapper \
                         docker-image/felix.cfg \
@@ -237,8 +245,7 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	# leftover files (say from a build on another branch) into the docker image.
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
-	cp bin/calico-felix-$(ARCH) docker-image/bin/
-	cp bin/calico-felix-race-$(ARCH) docker-image/bin/
+	cp $(FV_BINARY) docker-image/bin/
 	cp bin/calico-bpf docker-image/bin/
 	cp bin/pktgen docker-image/bin/
 	cp bin/test-connection docker-image/bin/
@@ -249,12 +256,6 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
 	$(DOCKER_BUILD) --build-arg FV_BINARY=$(FV_BINARY) -t $(FELIX_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-
-ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
-FV_BINARY=bin/calico-felix-race-amd64
-else
-FV_BINARY=bin/calico-felix-amd64
-endif
 
 ###############################################################################
 # Unit Tests
