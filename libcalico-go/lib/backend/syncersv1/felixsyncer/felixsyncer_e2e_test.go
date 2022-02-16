@@ -593,12 +593,10 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectData(model.KVPair{
 				Key: model.BlockKey{CIDR: *cidr},
 				Value: &model.AllocationBlock{
-					CIDR:                        *cidr,
-					Affinity:                    &affinity,
-					Allocations:                 []*int{nil, &zero, nil, nil},
-					Unallocated:                 []int{0, 2, 3},
-					SequenceNumber:              uint64(1),
-					SequenceNumberForAllocation: map[string]uint64{"1": uint64(0)},
+					CIDR:        *cidr,
+					Affinity:    &affinity,
+					Allocations: []*int{nil, &zero, nil, nil},
+					Unallocated: []int{0, 2, 3},
 					Attributes: []model.AllocationAttribute{
 						{},
 					},
