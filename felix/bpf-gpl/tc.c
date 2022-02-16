@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include <linux/types.h>
@@ -226,20 +226,20 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				// HEP present (regardless of the policy configured on it, for
 				// consistency with the iptables dataplane's invalid CT state
 				// check), but allowed if there is no HEP, i.e. the egress interface
-				// is a plain data interface.  Unfortunately we have no simple check
-				// for "is there a HEP here?"  All we can do - below - is try to
+				// is a plain data interface. Unfortunately we have no simple check
+				// for "is there a HEP here?" All we can do - below - is try to
 				// tail call the policy program; if that attempt returns, it means
-				// there is no HEP.  So what we can do is set a state flag to record
-				// the situation that we are in, then let the packet continue.  If
+				// there is no HEP. So what we can do is set a state flag to record
+				// the situation that we are in, then let the packet continue. If
 				// we find that there is no policy program - i.e. no HEP - the
 				// packet is correctly allowed.  If there is a policy program and it
-				// denies, fine.  If there is a policy program and it allows, but
+				// denies, fine. If there is a policy program and it allows, but
 				// the state flag is set, we drop the packet at the start of
 				// calico_tc_skb_accepted_entrypoint.
 				//
 				// Also we are mid-flow and so it's important to suppress any CT
 				// state creation - which normally follows when a packet is allowed
-				// through - because that CT state would not be correct.  Basically,
+				// through - because that CT state would not be correct. Basically,
 				// unless we see the SYN packet that starts a flow, we should never
 				// have CT state for that flow.
 				//
@@ -440,15 +440,10 @@ icmp_send_reply:
 	goto deny;
 
 skip_policy:
-	/* FIXME: only need to revalidate here on the conntrack related code path because the skb_refresh_validate_ptrs
-	 * call that it uses can fail to pull data, leaving the packet invalid. */
-	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		ctx.fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("Too short\n");
-		goto deny;
-	}
-
-	ctx.fwd = calico_tc_skb_accepted(&ctx, ctx.nat_dest);
+	//ctx.state->pol_rc = CALI_POL_ALLOW;
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ALLOWED);
+	/* should not reach here */
+	goto deny;
 
 allow:
 finalize:
@@ -476,7 +471,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	if (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE) {
+	if (CALI_F_HEP && (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 		// See comment above where CALI_ST_SUPPRESS_CT_STATE is set.
 		CALI_DEBUG("Egress HEP should drop packet with no CT state\n");
 		return TC_ACT_SHOT;
