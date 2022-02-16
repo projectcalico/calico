@@ -60,7 +60,6 @@ func Main(version string) {
 	versionFlag := flagSet.Bool("v", false, "Display version")
 	upgradeFlag := flagSet.Bool("upgrade", false, "Upgrade from host-local")
 	err := flagSet.Parse(os.Args[1:])
-
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -292,11 +291,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) > 0 {
 				logger.Infof("Assigned IPv6 addresses but failed to assign IPv4 addresses. Releasing %d IPv6 addresses", len(v6Assignments.IPs))
 				// Free the assigned IPv6 addresses when v4 address assignment fails.
-				v6IPs := []cnet.IP{}
+				v6IPs := []ipam.ReleaseOptions{}
 				for _, v6 := range v6Assignments.IPs {
-					v6IPs = append(v6IPs, *cnet.ParseIP(v6.IP.String()))
+					v6IPs = append(v6IPs, ipam.ReleaseOptions{Address: v6.IP.String()})
 				}
-				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs)
+				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs...)
 				if err != nil {
 					log.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
 				}
@@ -308,11 +307,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) > 0 {
 				logger.Infof("Assigned IPv4 addresses but failed to assign IPv6 addresses. Releasing %d IPv4 addresses", len(v4Assignments.IPs))
 				// Free the assigned IPv4 addresses when v4 address assignment fails.
-				v4IPs := []cnet.IP{}
+				v4IPs := []ipam.ReleaseOptions{}
 				for _, v4 := range v4Assignments.IPs {
-					v4IPs = append(v4IPs, *cnet.ParseIP(v4.IP.String()))
+					v4IPs = append(v4IPs, ipam.ReleaseOptions{Address: v4.IP.String()})
 				}
-				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs)
+				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs...)
 				if err != nil {
 					log.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
 				}
