@@ -219,6 +219,13 @@ func (in *IPAMBlockSpec) DeepCopyInto(out *IPAMBlockSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.SequenceNumberForAllocation != nil {
+		in, out := &in.SequenceNumberForAllocation, &out.SequenceNumberForAllocation
+		*out = make(map[string]uint64, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 
