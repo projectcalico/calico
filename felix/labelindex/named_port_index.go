@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019,2021-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -170,7 +170,8 @@ func (d *endpointData) Equals(other *endpointData) bool {
 	}
 
 	for k, v := range d.labels {
-		if other.labels[k] != v {
+		otherLabel, exists := other.labels[k]
+		if !exists || otherLabel != v {
 			return false
 		}
 	}
