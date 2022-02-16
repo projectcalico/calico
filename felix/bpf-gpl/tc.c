@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include <linux/types.h>
@@ -320,6 +320,7 @@ syn_force_policy:
 		 * seen by another program since it must have come in via another interface.
 		 */
 		CALI_DEBUG("Packet is from the host: ACCEPT\n");
+		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto skip_policy;
 	}
 
@@ -406,6 +407,7 @@ syn_force_policy:
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
 		if (CALI_F_FROM_HEP && is_failsafe_in(ctx.state->ip_proto, ctx.state->post_nat_dport, ctx.state->ip_src)) {
 			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+			ctx.state->pol_rc = CALI_POL_ALLOW;
 			goto skip_policy;
 		}
 		ctx.state->flags |= CALI_ST_DEST_IS_HOST;
@@ -414,6 +416,7 @@ syn_force_policy:
 		CALI_DEBUG("Source IP is local host.\n");
 		if (CALI_F_TO_HEP && is_failsafe_out(ctx.state->ip_proto, ctx.state->post_nat_dport, ctx.state->post_nat_ip_dst)) {
 			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+			ctx.state->pol_rc = CALI_POL_ALLOW;
 			goto skip_policy;
 		}
 		ctx.state->flags |= CALI_ST_SRC_IS_HOST;
@@ -423,6 +426,7 @@ syn_force_policy:
 	bpf_tail_call(skb, &cali_jump, PROG_INDEX_POLICY);
 	if (CALI_F_HEP) {
 		CALI_DEBUG("HEP with no policy, allow.\n");
+		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto skip_policy;
 	} else {
 		/* should not reach here */
@@ -436,7 +440,7 @@ icmp_send_reply:
 	goto deny;
 
 skip_policy:
-	ctx.state->pol_rc = CALI_POL_ALLOW;
+	//ctx.state->pol_rc = CALI_POL_ALLOW;
 	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	goto deny;
