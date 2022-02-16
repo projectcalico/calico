@@ -15,12 +15,9 @@ include ../lib.Makefile
 
 ###############################################################################
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
+# We need CGO to leverage Boring SSL.  However, pod2daemon doesn't perform any crypto,
+# so we can disable it across the board.
 CGO_ENABLED=0
-endif
 
 SRC_FILES=$(shell find -name '*.go')
 
