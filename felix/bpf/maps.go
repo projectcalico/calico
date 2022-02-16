@@ -343,22 +343,65 @@ func (b *PinnedMap) pinnedMapMatchesConfiguration(maxEntries int) bool {
 }
 
 // nolint
-func (b *PinnedMap) migratePinnedMap() error {
-	err := RepinMap(b.versionedName(), b.Path()+"_old")
+func (b *PinnedMap) migratePinnedMap(from, to string) error {
+	err := RepinMap(b.versionedName(), to)
 	if err != nil {
-		return fmt.Errorf("error repinning %s to %s: %w", b.Path(), b.Path()+"_old", err)
+		return fmt.Errorf("error repinning %s to %s: %w", from, to, err)
 	}
-	err = os.Remove(b.Path())
+	err = os.Remove(from)
 	if err != nil {
-		return fmt.Errorf("error removing the pin %s", b.versionedName())
+		return fmt.Errorf("error removing the pin %s", from)
 	}
 	return nil
+}
+
+func (b *PinnedMap) oldMapExists() bool {
+	_, err := os.Stat(b.Path() + "_old")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
 }
 
 func (b *PinnedMap) EnsureExists() error {
 	var oldfd MapFD
 	if b.fdLoaded {
 		return nil
+	}
+
+	// In case felix restarts in the middle of migration, we might end up with
+	// old map. If the old map size and config matches, pin the old map back.
+	// open the fd and return
+	if b.oldMapExists() {
+		// try to open the old map
+		fd, err := GetMapFDByPin(b.versionedFilename() + "_old")
+		if err != nil {
+			return fmt.Errorf("error opening old map %s, err = %w", b.versionedFilename()+"_old", err)
+		}
+
+		defer fd.Close()
+		// Get the old map info
+		mapInfo, err := GetMapInfo(fd)
+		if err != nil {
+			return fmt.Errorf("error getting map info of the old map %w", err)
+		}
+
+		// If the old map's size matches the config, repin old to
+		// the actual path, try to open.
+		if b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
+			err = b.migratePinnedMap(b.Path()+"_old", b.Path())
+			if err != nil {
+				return fmt.Errorf("error pinning old map %w", err)
+			}
+		} else {
+			return fmt.Errorf("config does not match old map size, adjust the config")
+		}
+		if err = b.Open(); err == nil {
+			return nil
+		}
+		return fmt.Errorf("error opening pinned map %w", err)
 	}
 
 	if err := b.Open(); err == nil {
@@ -371,21 +414,19 @@ func (b *PinnedMap) EnsureExists() error {
 			return fmt.Errorf("error getting map info of the pinned map %w", err)
 		}
 
-		if !b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
-			err := b.migratePinnedMap()
-			if err != nil {
-				return err
-			}
-		} else {
+		if b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
 			return nil
 		}
+		err = b.migratePinnedMap(b.Path(), b.Path()+"_old")
+		if err != nil {
+			return fmt.Errorf("error migrating the old map %w", err)
+		}
 	}
+
 	// Close the oldfd for the maps to be removed from the kernel.
-	// Delete the repinned path.
 	defer func() {
 		if oldfd != 0 {
 			oldfd.Close()
-			os.Remove(b.Path() + "_old")
 		}
 	}()
 
@@ -406,6 +447,10 @@ func (b *PinnedMap) EnsureExists() error {
 	b.fd, err = GetMapFDByPin(b.versionedFilename())
 	if err == nil {
 		b.fdLoaded = true
+		// Delete the old pin if migration had happened and migration was successful.
+		if _, err := os.Stat(b.Path() + "_old"); err == nil {
+			os.Remove(b.Path() + "_old")
+		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
