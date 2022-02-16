@@ -227,6 +227,7 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 			bin/pktgen \
 			bin/test-connection \
 			bin/test-workload \
+			bin/calico-felix-race-$(ARCH) \
                         build-bpf \
                         docker-image/calico-felix-wrapper \
                         docker-image/felix.cfg \
@@ -237,6 +238,7 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
+	cp bin/calico-felix-race-$(ARCH) docker-image/bin/
 	cp bin/calico-bpf docker-image/bin/
 	cp bin/pktgen docker-image/bin/
 	cp bin/test-connection docker-image/bin/
@@ -245,13 +247,13 @@ $(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	mkdir -p docker-image/bpf/bin
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
+	$(DOCKER_BUILD) --build-arg FV_BINARY=$(FV_BINARY) -t $(FELIX_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
-FV_BINARY=calico-felix-race-amd64
+FV_BINARY=bin/calico-felix-race-amd64
 else
-FV_BINARY=calico-felix-amd64
+FV_BINARY=bin/calico-felix-amd64
 endif
 
 ###############################################################################
