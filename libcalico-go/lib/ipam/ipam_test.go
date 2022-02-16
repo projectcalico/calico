@@ -326,6 +326,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// This condition can happen in real clusters between kube-controllers and the tunnel IP allocation process in calico/node.
 
 			// Set up a node and pool for the test.
+			bc.Clean()
 			handle := "testnode-ipip-tunnel-address"
 			hostname := "testnode"
 			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
