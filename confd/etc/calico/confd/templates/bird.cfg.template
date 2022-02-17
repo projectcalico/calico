@@ -196,7 +196,7 @@ protocol bgp Global_{{$id}} from bgp_template {
   source address {{$node_ip}};  # The local address we use for the TCP connection
 {{- end}}
 {{- if and ($data.calico_node) (gt $data.ip $node_ip)}}
-  passive on; # Mesh is unidirectional, peer will connect to us.
+  passive on; # Peering is unidirectional, peer will connect to us.
 {{- end}}
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
