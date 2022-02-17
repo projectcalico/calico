@@ -2998,6 +2998,17 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			defer deleteNode(bc, kc, hostname)
 			applyPool("192.168.0.0/16", true, "")
 
+			// Create a block by hand - this allows us to assert we always start with
+			// the same sequence number, for easier test assertions.
+			b := newBlock(cnet.MustParseCIDR("192.168.0.0/26"), nil)
+			b.SequenceNumber = 0
+			kvp := &model.KVPair{
+				Key:   model.BlockKey{CIDR: b.CIDR},
+				Value: b.AllocationBlock,
+			}
+			_, err := bc.Create(context.TODO(), kvp)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Allocate the IPs given.
 			for _, ip := range ipsToAllocate {
 				err := ic.AssignIP(context.Background(), AssignIPArgs{
