@@ -28,6 +28,7 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
+
 	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
 
 	"github.com/sirupsen/logrus"
