@@ -468,10 +468,12 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	if (!(ctx.state->flags & CALI_ST_SKIP_POLICY) && (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
-		// See comment above where CALI_ST_SUPPRESS_CT_STATE is set.
-		CALI_DEBUG("Egress HEP should drop packet with no CT state\n");
-		return TC_ACT_SHOT;
+	if (CALI_F_HEP) {
+		if (!(ctx.state->flags & CALI_ST_SKIP_POLICY) && (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
+			// See comment above where CALI_ST_SUPPRESS_CT_STATE is set.
+			CALI_DEBUG("Egress HEP should drop packet with no CT state\n");
+			return TC_ACT_SHOT;
+		}
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
