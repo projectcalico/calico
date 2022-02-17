@@ -578,8 +578,8 @@ execute_tests_daemon() {
     # Run the explicit peering tests.
     for i in $(seq 1 2); do
         run_individual_test 'explicit_peering/global'
-	run_individual_test 'explicit_peering/global-external'
-	run_individual_test 'explicit_peering/global-ipv6'
+        run_individual_test 'explicit_peering/global-external'
+        run_individual_test 'explicit_peering/global-ipv6'
         run_individual_test 'explicit_peering/specific_node'
         run_individual_test 'explicit_peering/selectors'
         run_individual_test 'explicit_peering/route_reflector'
