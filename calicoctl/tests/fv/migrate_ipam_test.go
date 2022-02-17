@@ -209,15 +209,15 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	cidrs := append(v4, v4More...)
 	cidrs = append(cidrs, v6...)
 	cidrs = append(cidrs, v6More...)
-	var ips []cnet.IP
+	var ips []ipam.ReleaseOptions
 	for _, cidr := range cidrs {
 		err = client.IPAM().ReleaseAffinity(ctx, cidr, "node4", false)
 		Expect(err).NotTo(HaveOccurred())
 		ip := cnet.ParseIP(cidr.IP.String())
-		ips = append(ips, *ip)
+		ips = append(ips, ipam.ReleaseOptions{Address: ip.IP.String()})
 	}
 	// Release the IPs
-	_, err = client.IPAM().ReleaseIPs(ctx, ips)
+	_, err = client.IPAM().ReleaseIPs(ctx, ips...)
 	Expect(err).NotTo(HaveOccurred())
 
 	_, err = client.IPPools().Delete(ctx, "ipam-test-v4", options.DeleteOptions{})
