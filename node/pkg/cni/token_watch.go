@@ -12,8 +12,37 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var serviceaccountDirectory string = "/var/run/secrets/kubernetes.io/serviceaccount/"
-var kubeconfigPath string = "/host/etc/cni/net.d/calico-kubeconfig"
+const (
+	serviceaccountDirectory = "/var/run/secrets/kubernetes.io/serviceaccount/"
+	tokenFile               = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	rootCAFile              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	kubeconfigPath          = "/host/etc/cni/net.d/calico-kubeconfig"
+)
+
+// Track which files we've successfully started watching.
+var filesToWatch = map[string]bool{
+	tokenFile:               false,
+	rootCAFile:              false,
+	serviceaccountDirectory: false,
+}
+
+func watchFiles(watcher *fsnotify.Watcher) error {
+	for file, watched := range filesToWatch {
+		if watched {
+			continue
+		}
+		if err := watcher.Add(file); err != nil {
+			// Error watching the file - retry
+			logrus.WithError(err).Errorf("Failed to watch %s", file)
+			return err
+		}
+
+		// Mark the file as watched.
+		filesToWatch[file] = true
+		logrus.WithField("file", file).Info("Watching contents for changes")
+	}
+	return nil
+}
 
 func Run() {
 	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
@@ -27,19 +56,17 @@ func Run() {
 	}
 	defer watcher.Close()
 
-	// Watch for changes to the serviceaccount directory. Rety if necessary.
+	// Watch for changes to the serviceaccount directory, token file, and crt. Rety if necessary.
 	for {
-		if err := watcher.Add(serviceaccountDirectory); err != nil {
-			// Error watching the file - retry
-			logrus.WithError(err).Error("Failed to watch Kubernetes serviceaccount files.")
+		if err := watchFiles(watcher); err != nil {
+			// Error watching one or more files, retry.
 			time.Sleep(5 * time.Second)
 			continue
 		}
-
-		// Successfully watched the file. Break from the retry loop.
-		logrus.WithField("directory", serviceaccountDirectory).Info("Watching contents for changes.")
 		break
 	}
+
+	configWriter := cniConfigWriter{}
 
 	// Handle events from the watcher.
 	for {
@@ -47,22 +74,21 @@ func Run() {
 		time.Sleep(1 * time.Second)
 
 		select {
+		case <-time.After(5 * time.Minute):
+			// Periodic token refresh.
+			logrus.Debug("Triggering periodic CNI config refresh")
+			err := configWriter.handleEvent()
+			if err != nil {
+				logrus.WithError(err).Error("Periodic CNI config refresh failed")
+			}
 		case event := <-watcher.Events:
 			// We've received a notification that the Kubernetes secrets files have changed.
 			// Update the kubeconfig file on disk to match.
 			logrus.WithField("event", event).Info("Notified of change to serviceaccount files.")
-			cfg, err := rest.InClusterConfig()
+			err := configWriter.handleEvent()
 			if err != nil {
-				logrus.WithError(err).Error("Error generating kube config.")
-				continue
+				logrus.WithError(err).Error("Failed to handle fsnotify event")
 			}
-			err = rest.LoadTLSFiles(cfg)
-			if err != nil {
-				logrus.WithError(err).Error("Error loading TLS files.")
-				continue
-			}
-			writeKubeconfig(cfg)
-
 		case err := <-watcher.Errors:
 			// We've received an error - log it out but don't exit.
 			logrus.WithError(err).Error("Error watching serviceaccount files.")
@@ -70,8 +96,26 @@ func Run() {
 	}
 }
 
+type cniConfigWriter struct {
+	previousConfig string
+}
+
+func (w *cniConfigWriter) handleEvent() error {
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		logrus.WithError(err).Error("Error generating kube config.")
+		return err
+	}
+	err = rest.LoadTLSFiles(cfg)
+	if err != nil {
+		logrus.WithError(err).Error("Error loading TLS files.")
+		return err
+	}
+	return w.writeKubeconfig(cfg)
+}
+
 // writeKubeconfig writes an updated kubeconfig file to disk that the CNI plugin can use to access the Kubernetes API.
-func writeKubeconfig(cfg *rest.Config) {
+func (w *cniConfigWriter) writeKubeconfig(cfg *rest.Config) error {
 	template := `# Kubeconfig file for Calico CNI plugin. Installed by calico/node.
 apiVersion: v1
 kind: Config
@@ -94,10 +138,18 @@ current-context: calico-context`
 	// Replace the placeholders.
 	data := fmt.Sprintf(template, cfg.Host, base64.StdEncoding.EncodeToString(cfg.CAData), cfg.BearerToken)
 
+	// No need to write the kubeconfig if it hasn't changed.
+	if data == w.previousConfig {
+		logrus.Debug("CNI config on disk is still valid")
+		return nil
+	}
+
 	// Write the filled out config to disk.
 	if err := ioutil.WriteFile(kubeconfigPath, []byte(data), 0600); err != nil {
 		logrus.WithError(err).Error("Failed to write CNI plugin kubeconfig file")
-		return
+		return err
 	}
 	logrus.WithField("path", kubeconfigPath).Info("Wrote updated CNI kubeconfig file.")
+	w.previousConfig = data
+	return nil
 }

@@ -25,6 +25,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework/config"
 
 	// Import tests.
+	_ "github.com/projectcalico/calico/e2e/pkg/serviceaccounttoken"
 	_ "k8s.io/kubernetes/test/e2e/network"
 )
 
