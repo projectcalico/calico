@@ -367,41 +367,18 @@ func (b *PinnedMap) oldMapExists() bool {
 
 func (b *PinnedMap) EnsureExists() error {
 	var oldfd MapFD
+	oldMapPath := b.Path() + "_old"
 	if b.fdLoaded {
 		return nil
 	}
 
 	// In case felix restarts in the middle of migration, we might end up with
-	// old map. If the old map size and config matches, pin the old map back.
-	// open the fd and return
+	// old map. Repin the old map and let the map creation continue.
 	if b.oldMapExists() {
-		// try to open the old map
-		fd, err := GetMapFDByPin(b.versionedFilename() + "_old")
+		err := b.migratePinnedMap(oldMapPath, b.Path())
 		if err != nil {
-			return fmt.Errorf("error opening old map %s, err = %w", b.versionedFilename()+"_old", err)
+			return fmt.Errorf("error repinning old map %s to %s, err=%w", oldMapPath, b.Path(), err)
 		}
-
-		defer fd.Close()
-		// Get the old map info
-		mapInfo, err := GetMapInfo(fd)
-		if err != nil {
-			return fmt.Errorf("error getting map info of the old map %w", err)
-		}
-
-		// If the old map's size matches the config, repin old to
-		// the actual path, try to open.
-		if b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
-			err = b.migratePinnedMap(b.Path()+"_old", b.Path())
-			if err != nil {
-				return fmt.Errorf("error pinning old map %w", err)
-			}
-		} else {
-			return fmt.Errorf("config does not match old map size, adjust the config")
-		}
-		if err = b.Open(); err == nil {
-			return nil
-		}
-		return fmt.Errorf("error opening pinned map %w", err)
 	}
 
 	if err := b.Open(); err == nil {
@@ -417,7 +394,7 @@ func (b *PinnedMap) EnsureExists() error {
 		if b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
 			return nil
 		}
-		err = b.migratePinnedMap(b.Path(), b.Path()+"_old")
+		err = b.migratePinnedMap(b.Path(), oldMapPath)
 		if err != nil {
 			return fmt.Errorf("error migrating the old map %w", err)
 		}
@@ -448,7 +425,7 @@ func (b *PinnedMap) EnsureExists() error {
 	if err == nil {
 		b.fdLoaded = true
 		// Delete the old pin if migration had happened and migration was successful.
-		if _, err := os.Stat(b.Path() + "_old"); err == nil {
+		if _, err := os.Stat(oldMapPath); err == nil {
 			os.Remove(b.Path() + "_old")
 		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
