@@ -15,6 +15,8 @@ include ../lib.Makefile
 
 BINDIR?=bin
 
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+
 # Create a list of files upon which the generated file depends, skip the generated file itself
 UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go, \
                              $(wildcard ./lib/upgrade/migrator/clients/v1/k8s/custom/*.go))
