@@ -85,6 +85,18 @@ func (mp *MapParameters) versionedFilename() string {
 
 type MapContext struct {
 	RepinningEnabled bool
+	IpsetsMap        Map
+	StateMap         Map
+	ArpMap           Map
+	FailsafesMap     Map
+	FrontendMap      Map
+	BackendMap       Map
+	AffinityMap      Map
+	RouteMap         Map
+	CtMap            Map
+	SrMsgMap         Map
+	CtNatsMap        Map
+	MapSizes         map[string]uint32
 }
 
 func (c *MapContext) NewPinnedMap(params MapParameters) Map {

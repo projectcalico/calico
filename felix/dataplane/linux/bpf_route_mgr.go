@@ -35,7 +35,6 @@ type bpfRouteManager struct {
 	myNodename      string
 	resyncScheduled bool
 	routeMap        bpf.Map
-	routeMapSize    int
 
 	// These fields contain our cache of the input data, indexed for efficient updates
 	// and lookups:
@@ -85,7 +84,7 @@ type bpfRouteManager struct {
 }
 
 func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapContext,
-	opReporter logutils.OpRecorder, routeMapSize int) *bpfRouteManager {
+	opReporter logutils.OpRecorder) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New()
@@ -117,8 +116,7 @@ func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapCo
 		dirtyCIDRs:        dirtyCIDRs,
 
 		desiredRoutes: map[routes.Key]routes.Value{},
-		routeMap:      routes.Map(mc),
-		routeMapSize:  routeMapSize,
+		routeMap:      mc.RouteMap,
 
 		dirtyRoutes:     set.New(),
 		resyncScheduled: true,
@@ -151,8 +149,6 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfRouteManager) CompleteDeferredWork() error {
-	m.ensureDataplaneInitialised()
-
 	startTime := time.Now()
 
 	// Step 1: calculate any updates to the _desired_ state of the BPF map.
@@ -179,14 +175,6 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 	}
 
 	return nil
-}
-
-func (m *bpfRouteManager) ensureDataplaneInitialised() {
-	m.routeMap.SetMaxEntries(m.routeMapSize)
-	err := m.routeMap.EnsureExists()
-	if err != nil {
-		log.WithError(err).Panic("Failed to create route map")
-	}
 }
 
 func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {

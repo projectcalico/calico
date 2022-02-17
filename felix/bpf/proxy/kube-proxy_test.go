@@ -23,6 +23,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
@@ -31,10 +32,15 @@ import (
 var _ = Describe("BPF kube-proxy", func() {
 	initIP := net.IPv4(1, 1, 1, 1)
 
+	bpfMc := &bpf.MapContext{}
 	front := newMockNATMap()
 	back := newMockNATBackendMap()
 	aff := newMockAffinityMap()
 	ct := mock.NewMockMap(conntrack.MapParams)
+	bpfMc.FrontendMap = front
+	bpfMc.BackendMap = back
+	bpfMc.AffinityMap = aff
+	bpfMc.CtMap = ct
 
 	var p *proxy.KubeProxy
 
@@ -78,7 +84,7 @@ var _ = Describe("BPF kube-proxy", func() {
 		}
 
 		k8s := fake.NewSimpleClientset(testSvc, testSvcEps)
-		p, _ = proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMc, proxy.WithImmediateSync())
 	})
 
 	AfterEach(func() {

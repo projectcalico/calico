@@ -148,7 +148,7 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen time.Duration, maxEntries map[string]uint32) error {
+func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen time.Duration, mapSizes map[string]uint32) error {
 	bpfMount, err := bpf.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
@@ -160,27 +160,27 @@ func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen
 		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
-	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, maxEntries)
+	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, mapSizes)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, maxEntries)
+	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, mapSizes)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, maxEntries)
+	err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, mapSizes)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, maxEntries)
+	err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, mapSizes)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, maxEntries)
+	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, mapSizes)
 	if err != nil {
 		return err
 	}
