@@ -425,6 +425,7 @@ type bgpPeer struct {
 	Port        uint16               `json:"port"`
 	KeepNextHop bool                 `json:"keep_next_hop"`
 	RestartTime string               `json:"restart_time"`
+	CalicoNode  bool                 `json:"calico_node"`
 }
 
 type bgpPrefix struct {
@@ -540,12 +541,23 @@ func (c *client) updatePeersV1() {
 					}
 				}
 
+				// Check if the peer represents a node Calico is running on.
+				var isCalicoNode bool
+				for _, nodeName := range c.nodeLabelManager.listNodes() {
+					nodeIPv4, nodeIPv6, _, _ := c.nodeToBGPFields(nodeName)
+					if (nodeIPv4 == host) || (nodeIPv6 == host) {
+						isCalicoNode = true
+						break
+					}
+				}
+
 				peers = append(peers, &bgpPeer{
 					PeerIP:      *ip,
 					ASNum:       v3res.Spec.ASNumber,
 					SourceAddr:  string(v3res.Spec.SourceAddress),
 					Port:        port,
 					KeepNextHop: v3res.Spec.KeepOriginalNextHop,
+					CalicoNode:  isCalicoNode,
 				})
 			}
 			log.Debugf("Peers %#v", peers)
