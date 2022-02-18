@@ -1192,7 +1192,7 @@ func (m *endpointManager) configureInterface(name string) error {
 		// that's not needed in a Calico network so we disable it.
 		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
 		if err != nil {
-			return err
+			log.Warnf("failed to set net.ipv4.neigh.%s.proxy_delay=0: %s", name, err)
 		}
 		// Enable proxy ARP, this makes the host respond to all ARP requests with its own
 		// MAC.  This has a couple of advantages:
