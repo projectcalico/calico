@@ -364,19 +364,24 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 // If migrating from Canal, set vxlan enabled.
 // Do nothing if correct values already been set.
 func updateOrCreateDefaultFelixConfiguration(ctx context.Context, client client.Interface, vni, port, mtu int, checkVxlan bool) error {
-	// Get default Felix configuration. Return error if not exists.
+	// Get default Felix configuration. Return error if not exists. //TODO: is it necessary to create the default FelixConfiguration?
 	defaultConfig, err := client.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
-	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-		// Create the default config if it doesn't already exist.
-		defaultConfig = api.NewFelixConfiguration()
-		defaultConfig.Name = defaultFelixConfigurationName
-		t := true
-		defaultConfig.Spec.VXLANEnabled = &t
-		defaultConfig, err = client.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
-	}
 	if err != nil {
-		log.WithError(err).Errorf("Error creating default FelixConfiguration resource")
-		return err
+		// Create the default config if it doesn't already exist.
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			defaultConfig = api.NewFelixConfiguration()
+			defaultConfig.Name = defaultFelixConfigurationName
+			t := true
+			defaultConfig.Spec.VXLANEnabled = &t
+			defaultConfig, err = client.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
+			if err != nil {
+				log.WithError(err).Errorf("Error creating default FelixConfiguration resource")
+				return err
+			}
+		} else {
+			log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
+			return err
+		}
 	}
 
 	if checkVxlan {
