@@ -149,7 +149,6 @@ fv: bin/calicoctl-linux-amd64 version-helper
 ###############################################################################
 # STs
 ###############################################################################
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 # To run a specific test, set ST_TO_RUN to testfile.py:class.method
 # e.g. ST_TO_RUN="tests/st/calicoctl/test_crud.py:TestCalicoctlCommands.test_get_delete_multiple_names"
 ST_TO_RUN?=tests/st/calicoctl/
