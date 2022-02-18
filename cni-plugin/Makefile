@@ -22,7 +22,6 @@ BIN=bin/$(ARCH)
 SRC_FILES=$(shell find pkg cmd internal -name '*.go')
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 # fail if unable to download
 CURL=curl -C - -sSf
