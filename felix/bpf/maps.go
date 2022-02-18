@@ -387,6 +387,9 @@ func (b *PinnedMap) EnsureExists() error {
 	// In case felix restarts in the middle of migration, we might end up with
 	// old map. Repin the old map and let the map creation continue.
 	if b.oldMapExists() {
+		if _, err := os.Stat(b.Path()); err == nil {
+			os.Remove(oldMapPath)
+		}
 		err := b.migratePinnedMap(oldMapPath, b.Path())
 		if err != nil {
 			return fmt.Errorf("error repinning old map %s to %s, err=%w", oldMapPath, b.Path(), err)
