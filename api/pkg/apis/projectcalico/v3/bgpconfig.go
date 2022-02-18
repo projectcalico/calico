@@ -82,10 +82,14 @@ type BGPConfigurationSpec struct {
 	ListenPort uint16 `json:"listenPort,omitempty" validate:"omitempty,gt=0" confignamev1:"listen_port"`
 
 	// Optional BGP password for full node-to-mesh peerings.
+	// This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled
+	// +optional
 	NodeMeshPassword *BGPPassword `json:"nodeMeshPassword,omitempty" validate:"omitempty" confignamev1:"node_mesh_password"`
 
 	// Time to allow for software restart for node-to-mesh peerings.  When specified, this is configured
 	// as the graceful restart timeout.  When not specified, the BIRD default of 120s is used.
+	// This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled
+	// +optional
 	NodeMeshMaxRestartTime *metav1.Duration `json:"nodeMeshMaxRestartTime,omitempty" confignamev1:"node_mesh_restart_time"`
 }
 

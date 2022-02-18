@@ -601,13 +601,13 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					},
 					"nodeMeshPassword": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Optional BGP password for full node-to-mesh peerings.",
+							Description: "Optional BGP password for full node-to-mesh peerings. This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword"),
 						},
 					},
 					"nodeMeshMaxRestartTime": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Time to allow for software restart for node-to-mesh peerings.  When specified, this is configured as the graceful restart timeout.  When not specified, the BIRD default of 120s is used.",
+							Description: "Time to allow for software restart for node-to-mesh peerings.  When specified, this is configured as the graceful restart timeout.  When not specified, the BIRD default of 120s is used. This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},

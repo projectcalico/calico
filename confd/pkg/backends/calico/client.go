@@ -1626,7 +1626,7 @@ func (c *client) updateNodeMeshPassword() {
 	if _, ok := err.(lerr.ErrorResourceDoesNotExist); err != nil && !ok {
 		// Failed to get the BGP configuration (and not because it doesn't exist).
 		// Exit.
-		log.Errorf("Failed to query current BGP settings for node mesh password update: %v", err)
+		log.WithError(err).Error("Failed to query current BGP settings for node mesh password update")
 		return
 	}
 
