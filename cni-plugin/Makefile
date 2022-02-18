@@ -22,7 +22,6 @@ BIN=bin/$(ARCH)
 SRC_FILES=$(shell find pkg cmd internal -name '*.go')
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 # fail if unable to download
 CURL=curl -C - -sSf
@@ -50,7 +49,6 @@ clean:
 	find . -name '.*.published*' -type f -delete
 	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test 
 	rm -f *.created
-	rm -f crds.yaml
 	rm -rf config/
 
 ###############################################################################
@@ -104,7 +102,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
-	docker build -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -180,17 +178,11 @@ test-cni-versions:
 		fi; \
 	done
 
-config/crd: mod-download
-	mkdir -p config/crd
-	$(DOCKER_GO_BUILD) sh -c ' \
-		cp -r ../libcalico-go/config/crd/* config/crd; \
-		chmod +w config/crd/*'
-
 ## Kubernetes apiserver used for tests
-run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
+run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-	  -v $(CURDIR)/config:/config \
+	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
 	  -v $(CURDIR)/tests/certs:/home/user/certs \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
@@ -210,7 +202,7 @@ run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
 
 	# Wait until the apiserver is accepting requests.
 	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-	while ! docker exec calico-k8s-apiserver kubectl apply -f /config/crd; do echo "Waiting for CRDs..."; sleep 2; done
+	while ! docker exec calico-k8s-apiserver kubectl apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; do echo "Waiting for CRDs..."; sleep 2; done
 
 ## Kubernetes controller manager used for tests
 run-k8s-controller: stop-k8s-controller run-k8s-apiserver
