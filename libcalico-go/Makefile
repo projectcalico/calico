@@ -133,11 +133,14 @@ fv: fv-setup
 		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
-	$(MAKE) stop-etcd-tls
+	$(MAKE) fv-teardown
 
 ## Run the setup required to run the FVs, but don't run any FVs.
 .PHONY:fv-setup
 fv-setup: run-etcd run-etcd-tls cluster-create run-coredns
+
+## Teardown the FVs resources.
+fv-teardown: stop-etcd stop-etcd-tls cluster-destroy stop-coredns
 
 ## Run the FVs without any setup or teardown. Useful when writing FVs.
 .PHONY:fv-fast
