@@ -73,7 +73,7 @@ var _ = Describe("Constructor test", func() {
 				IptablesMarkScratch1: 0x8000000,
 				IptablesMarkEndpoint: 0x000ff00,
 
-				IPIPEnabled:       configParams.IpInIpEnabled,
+				IPIPEnabled:       configParams.Encapsulation.IPIPEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
 				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
