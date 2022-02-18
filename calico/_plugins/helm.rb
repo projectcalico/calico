@@ -87,7 +87,7 @@ module Jekyll
           -f #{tv.path} \
           -f #{t.path}"""
       else
-        cmd = """bin/helm template _includes/charts/#{@chart} \
+        cmd = """bin/helm3 template _includes/charts/#{@chart} \
         -f #{tv.path} \
         -f #{t.path} \
         --set etcd.endpoints='http://<ETCD_IP>:<ETCD_PORT>'"""
