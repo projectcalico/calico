@@ -43,14 +43,14 @@ CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].title')
 include ../lib.Makefile
 
 ##############################################################################
-serve: bin/helm
+serve: bin/helm3
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
 	# When set to 'pages', jekyll starts in safe mode which means it will not
 	# load any plugins. Since we're no longer running in github-pages, but would
 	# like to use a docker image that comes preloaded with all the github-pages plugins,
 	# its ok to override this variable.
 	docker run --rm -it \
-	  -v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
+	  -v $(CURDIR)/bin/helm3:/usr/local/bin/helm:ro \
 	  -v $(CURDIR):/srv/jekyll \
 	  -v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	  -e JEKYLL_DOCKER_TAG="" \
@@ -59,11 +59,11 @@ serve: bin/helm
 	  jekyll/jekyll:$(JEKYLL_VERSION) jekyll serve --incremental $(CONFIG)
 
 .PHONY: build
-_site build: bin/helm
+_site build: bin/helm3
 	docker run --rm \
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
-	-v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
+	-v $(CURDIR)/bin/helm3:/usr/local/bin/helm:ro \
 	-v $(CURDIR)/:/srv/jekyll \
 	-v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
@@ -100,7 +100,7 @@ kubeval: _site
 	! grep -C3 -P "invalid|\t\*" filtered.out
 	rm filtered.out
 
-helm-tests: bin/helm values.yaml
+helm-tests: bin/helm3 values.yaml
 	$(DOCKER_RUN) \
 		-v $(CURDIR)/bin/helm3:/usr/local/bin/helm \
 		$(CALICO_BUILD) \
@@ -188,19 +188,13 @@ endif
 ###############################################################################
 # Utilities
 ###############################################################################
-# TODO: stop using bin/helm as an entrypoint in build scripts.
-bin/helm: bin/helm3
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	wget -q https://get.helm.sh/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
-	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
-	mv $(TMP)/linux-amd64/helm bin/helm
+HELM3_RELEASE=helm-v3.3.1-linux-amd64.tar.gz 
 
-helm-deps: bin/helm3 bin/helm
+helm-deps: bin/helm3
 bin/helm3:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget -q https://get.helm.sh/helm-v3.3.1-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
+	wget -q https://get.helm.sh/$(HELM3_RELEASE) -O $(TMP)/helm3.tar.gz
 	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm3
 
