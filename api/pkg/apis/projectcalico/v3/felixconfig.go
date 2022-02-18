@@ -361,7 +361,8 @@ type FelixConfigurationSpec struct {
 	// inclusive. [Default: 20000:29999]
 	BPFPSNATPorts *numorstring.Port `json:"bpfPSNATPorts,omitempty"`
 	// BPFMapSizeNATFrontend sets the size for nat front end map.
-	// This is equal to the number of kubernetes services.
+	// FrontendMap should be large enough to hold an entry for each nodeport,
+	// external IP and each port in each service.
 	BPFMapSizeNATFrontend *int `json:"bpfMapSizeNATFrontend,omitempty"`
 	// BPFMapSizeNATBackend sets the size for nat back end map.
 	// This is the total number of endpoints. This is mostly
@@ -373,7 +374,7 @@ type FelixConfigurationSpec struct {
 	// tunnel IPs).
 	BPFMapSizeRoute *int `json:"bpfMapSizeRoute,omitempty"`
 	// BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold
-	// and entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
+	// an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
 	// BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry
 	// for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors

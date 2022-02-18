@@ -2326,7 +2326,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfMapSizeNATFrontend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeNATFrontend sets the size for nat front end map. This is equal to the number of kubernetes services.",
+							Description: "BPFMapSizeNATFrontend sets the size for nat front end map. FrontendMap should be large enough to hold an entry for each nodeport, external IP and each port in each service.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -2353,7 +2353,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfMapSizeConntrack": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold and entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.",
+							Description: "BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

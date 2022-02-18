@@ -388,7 +388,7 @@ func (b *PinnedMap) EnsureExists() error {
 	// old map. Repin the old map and let the map creation continue.
 	if b.oldMapExists() {
 		if _, err := os.Stat(b.Path()); err == nil {
-			os.Remove(oldMapPath)
+			os.Remove(b.Path())
 		}
 		err := b.migratePinnedMap(oldMapPath, b.Path())
 		if err != nil {
