@@ -389,8 +389,16 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 stop-k8s-apiserver:
 	@-docker rm -f st-apiserver
 
+GINKGO = ginkgo
+
+.PHONY: ut
+ut: CMD = go mod download && $(GINKGO) -r
 ut:
-	@echo "No UTs available"
+ifdef LOCAL
+	(CMD)
+else
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CMD) -skipPackage=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
+endif
 
 ###############################################################################
 # System tests
@@ -529,7 +537,7 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks fv image build-windows-archive st
+ci: static-checks ut fv image build-windows-archive st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-upgrade
