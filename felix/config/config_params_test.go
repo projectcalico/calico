@@ -64,7 +64,8 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"BpfIpv6Support",
 	}
 	cpFieldNameToFC := map[string]string{
-		"IpInIpEnabled":                      "IPIPEnabled",
+		"DeprecatedIpInIpEnabled":            "IPIPEnabled",
+		"DeprecatedVXLANEnabled":             "VXLANEnabled",
 		"IpInIpMtu":                          "IPIPMTU",
 		"Ipv6Support":                        "IPv6Support",
 		"IptablesLockTimeoutSecs":            "IptablesLockTimeout",
@@ -101,6 +102,9 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 				continue
 			}
 			if strings.Contains(string(f.Tag), "local") {
+				continue
+			}
+			if n == "Encapsulation" {
 				continue
 			}
 			Expect(fcFields).To(HaveKey(n))
@@ -306,9 +310,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", "", (*regexp.Regexp)(nil)),
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", ".*", regexp.MustCompile(".*")),
 
-	Entry("IpInIpEnabled", "IpInIpEnabled", "true", &t),
-	Entry("IpInIpEnabled", "IpInIpEnabled", "y", &t),
-	Entry("IpInIpEnabled", "IpInIpEnabled", "True", &t),
+	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "true", &t),
+	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "y", &t),
+	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "True", &t),
 
 	Entry("IpInIpMtu", "IpInIpMtu", "1234", int(1234)),
 	Entry("IpInIpTunnelAddr", "IpInIpTunnelAddr",
@@ -539,18 +543,16 @@ var _ = DescribeTable("Kubernetes Provider tests",
 
 var _ = Describe("DatastoreConfig tests", func() {
 	var c *config.Config
-	var e *config.EncapInfo
 	Describe("with IPIP enabled", func() {
 		BeforeEach(func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
 			t := true
-			c.IpInIpEnabled = &t
-			e = config.NewEncapInfo()
-			e.UseIPIPEncap = true
+			c.DeprecatedIpInIpEnabled = &t
+			c.Encapsulation.IPIPEnabled = true
 		})
 		It("should leave node polling enabled", func() {
-			Expect(c.DatastoreConfig(*e).Spec.K8sDisableNodePoll).To(BeFalse())
+			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeFalse())
 		})
 	})
 	Describe("with IPIP disabled", func() {
@@ -558,12 +560,11 @@ var _ = Describe("DatastoreConfig tests", func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
 			f := false
-			c.IpInIpEnabled = &f
-			e = config.NewEncapInfo()
-			e.UseIPIPEncap = false
+			c.DeprecatedIpInIpEnabled = &f
+			c.Encapsulation.IPIPEnabled = false
 		})
 		It("should leave node polling enabled", func() {
-			Expect(c.DatastoreConfig(*e).Spec.K8sDisableNodePoll).To(BeTrue())
+			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeTrue())
 		})
 	})
 
@@ -585,7 +586,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 			})
 		})
 		It("sets the configuration options", func() {
-			spec := c.DatastoreConfig(*e).Spec
+			spec := c.DatastoreConfig().Spec
 			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
 			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234"))
 			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))
@@ -605,7 +606,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 		It("sets the etcd suboptions", func() {
-			spec := c.DatastoreConfig(*e).Spec
+			spec := c.DatastoreConfig().Spec
 			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
 			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234/"))
 			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))
@@ -641,7 +642,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 		It("sets the configuration to what the felix configuration is", func() {
-			spec := c.DatastoreConfig(*e).Spec
+			spec := c.DatastoreConfig().Spec
 			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
 			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234/"))
 			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))
