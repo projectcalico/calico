@@ -77,7 +77,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		"RouteRefreshInterval":               nil,
 		"IptablesRefreshInterval":            nil,
 		"IpsetsRefreshInterval":              nil,
-		"IpInIpEnabled":                      nil,
+		"DeprecatedIpInIpEnabled":            nil,
 		"IpInIpMtu":                          nil,
 		"IptablesNATOutgoingInterfaceFilter": nil,
 	}
@@ -225,7 +225,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			"EndpointReportingDelaySecs":         "0",
 			"IpsetsRefreshInterval":              "0.1",
 			"InterfacePrefix":                    "califoobar",
-			"IpInIpEnabled":                      "false",
+			"DeprecatedIpInIpEnabled":            "false",
 			"IptablesMarkMask":                   "1313",
 			"FailsafeInboundHostPorts":           "none",
 			"FailsafeOutboundHostPorts":          "tcp:0.0.0.0/0:1234,udp:0.0.0.0/0:22,tcp:0.0.0.0/0:65535",

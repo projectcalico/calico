@@ -248,7 +248,7 @@ func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c cli
 
 func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, attrType string) {
 	logCtx := getLogger(attrType)
-	logCtx.WithField("Node", nodename).Debug("Ensure tunnel address is set")
+	logCtx.WithField("node", nodename).Debug("Ensure tunnel address is set")
 
 	// Get the currently configured address.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -497,7 +497,7 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, attrType string) {
 	var updateError error
 	logCtx := getLogger(attrType)
-	logCtx.WithField("Node", nodename).Debug("Remove tunnel addresses")
+	logCtx.WithField("node", nodename).Debug("Remove tunnel addresses")
 
 	// If the update fails with ResourceConflict error then retry 5 times with 1 second delay before failing.
 	for i := 0; i < 5; i++ {

@@ -174,7 +174,6 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var numClientsCreated int
 	var k8sClientSet *kubernetes.Clientset
 	var kubernetesVersion string
-	var encapInfo *config.EncapInfo
 configRetry:
 	for {
 		if numClientsCreated > 60 {
@@ -190,7 +189,6 @@ configRetry:
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
 		configParams = config.New()
-		encapInfo = config.NewEncapInfo()
 		envConfig := config.LoadConfigFromEnvironment(os.Environ())
 		// Then, the config file.
 		log.Infof("Loading config file: %v", configFile)
@@ -223,7 +221,7 @@ configRetry:
 
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
-		datastoreConfig = configParams.DatastoreConfig(*encapInfo)
+		datastoreConfig = configParams.DatastoreConfig()
 		// Can't dump the whole config because it may have sensitive information...
 		log.WithField("datastore", datastoreConfig.Spec.DatastoreType).Info("Connecting to datastore")
 		v3Client, err = client.New(datastoreConfig)
@@ -269,35 +267,21 @@ configRetry:
 			continue configRetry
 		}
 
-		// Get all IP Pools to populate encapInfo.IPIPPools and encapInfo.VXLANPools
-		// and calculate encapInfo.UseIPIPEncap and encapInfo.UseVXLANEncap
 		ippoolKVList, err := backendClient.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
 		if err != nil {
 			log.WithError(err).Error("Failed to list IP Pools")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		for _, kvp := range ippoolKVList.KVPairs {
-			pool := kvp.Value.(*apiv3.IPPool)
-			poolKey := pool.Spec.CIDR
-			if pool.Spec.IPIPMode != apiv3.IPIPModeNever {
-				encapInfo.IPIPPools[poolKey] = struct{}{}
-			}
-			if pool.Spec.VXLANMode != apiv3.VXLANModeNever {
-				encapInfo.VXLANPools[poolKey] = struct{}{}
-			}
-		}
-		encapInfo.UseIPIPEncap, encapInfo.UseVXLANEncap = calc.CalcIPIPVXLANEncaps(configParams.IpInIpEnabled, configParams.VXLANEnabled, encapInfo.IPIPPools, encapInfo.VXLANPools)
-		log.WithFields(log.Fields{
-			"UseIPIPEncap":  encapInfo.UseIPIPEncap,
-			"UseVXLANEncap": encapInfo.UseVXLANEncap,
-		}).Info("Encap determined from FelixConfig and/or IP Pools.")
+		encapCalculator := calc.NewEncapsulationCalculator(configParams, ippoolKVList)
+		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
+		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
 		// config.  We don't need to re-load the configuration _again_ because the
 		// calculation graph will spot if the config has changed since we were initialised.
-		datastoreConfig = configParams.DatastoreConfig(*encapInfo)
+		datastoreConfig = configParams.DatastoreConfig()
 		backendClient, err = backend.NewClient(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to (re)connect to datastore")
@@ -414,7 +398,6 @@ configRetry:
 		time.Sleep(gracefulShutdownTimeout)
 		log.Panic("Graceful shutdown took too long")
 	}
-	encapInfo.ConfigChangedRestartCallback = configChangedRestartCallback
 	fatalErrorCallback := func(err error) {
 		log.WithError(err).Error("Shutting down due to fatal error")
 		failureReportChan <- reasonFatalError
@@ -427,8 +410,7 @@ configRetry:
 		healthAggregator,
 		configChangedRestartCallback,
 		fatalErrorCallback,
-		k8sClientSet,
-		encapInfo) //TODO: .Copy()?
+		k8sClientSet)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
@@ -563,8 +545,7 @@ configRetry:
 		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
 		healthAggregator,
-		encapInfo, //TODO: .Copy()?
-	)
+		configChangedRestartCallback)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update

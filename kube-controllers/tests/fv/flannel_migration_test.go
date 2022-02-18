@@ -345,7 +345,6 @@ func validateCalicoIPAM(fc *testutils.FlannelCluster, client client.Interface, b
 	// Check felix configuration.
 	defaultConfig, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
 	Expect(err).ShouldNot(HaveOccurred())
-	Expect(*defaultConfig.Spec.VXLANEnabled).To(Equal(true))
 	Expect(*defaultConfig.Spec.VXLANVNI).To(Equal(1))
 	Expect(*defaultConfig.Spec.VXLANPort).To(Equal(8472))
 	Expect(*defaultConfig.Spec.VXLANMTU).To(Equal(8951))

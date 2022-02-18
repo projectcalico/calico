@@ -488,9 +488,8 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan interface{})
-					encapInfo := config.NewEncapInfo()
-					encapInfo.UseVXLANEncap = true
-					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil, encapInfo)
+					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
+					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil, func() {})
 					// And a validation filter, with a channel between it
 					// and the async graph.
 					validator := NewValidationFilter(asyncGraph)
@@ -631,9 +630,8 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
-		encapInfo := config.NewEncapInfo()
-		encapInfo.UseVXLANEncap = true
-		calcGraph = NewCalculationGraph(eventBuf, conf, encapInfo)
+		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
+		calcGraph = NewCalculationGraph(eventBuf, conf, func() {})
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			lastStats = stats
@@ -721,8 +719,8 @@ var _ = Describe("calc graph with health state", func() {
 		conf.FelixHostname = localHostname
 		outputChan := make(chan interface{})
 		healthAggregator := health.NewHealthAggregator()
-		encapInfo := config.NewEncapInfo()
-		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator, encapInfo)
+		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
+		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator, func() {})
 		Expect(asyncGraph).NotTo(BeNil())
 	})
 })

@@ -921,7 +921,7 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 }
 
 func cleanUpIPIPAddrs() {
-	// If IPIP is not enabled, check to see if there is a VXLAN device and delete it if there is.
+	// If IPIP is not enabled, check to see if there is are addreses in the IPIP device and delete them if there are.
 	log.Debug("Checking if we need to clean up the IPIP device")
 	link, err := netlink.LinkByName("tunl0")
 	if err != nil {
@@ -934,7 +934,7 @@ func cleanUpIPIPAddrs() {
 	}
 	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 	if err != nil {
-		log.WithError(err).Warn("IPIP disabled and failed to list addresses. Ignoring.")
+		log.WithError(err).Warn("IPIP disabled and failed to list addresses, will be unable to remove any old addresses from the device should they exist. Ignoring.")
 		return
 	}
 	for _, oldAddr := range addrs {

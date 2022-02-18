@@ -97,10 +97,10 @@ func NewAsyncCalcGraph(
 	conf *config.Config,
 	outputChannels []chan<- interface{},
 	healthAggregator *health.HealthAggregator,
-	encapInfo *config.EncapInfo,
+	configChangedRestartCallback func(),
 ) *AsyncCalcGraph {
 	eventSequencer := NewEventSequencer(conf)
-	calcGraph := NewCalculationGraph(eventSequencer, conf, encapInfo)
+	calcGraph := NewCalculationGraph(eventSequencer, conf, configChangedRestartCallback)
 	g := &AsyncCalcGraph{
 		CalcGraph:        calcGraph,
 		inputEvents:      make(chan interface{}, 10),
