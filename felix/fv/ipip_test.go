@@ -416,7 +416,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 						Expect(err).NotTo(HaveOccurred())
 					}
 				}
-				Expect(err).NotTo(HaveOccurred())
 				c.Spec.ExternalNodesCIDRList = &[]string{addr, "1.1.1.1"}
 				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
 				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
