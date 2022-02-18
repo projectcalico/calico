@@ -86,14 +86,11 @@ var _ = Describe("BPF service type change", func() {
 	initIP := net.IPv4(1, 1, 1, 1)
 
 	bpfMc := &bpf.MapContext{}
-	front := newMockNATMap()
-	back := newMockNATBackendMap()
-	aff := newMockAffinityMap()
-	ct := mock.NewMockMap(conntrack.MapParams)
-	bpfMc.FrontendMap = front
-	bpfMc.BackendMap = back
-	bpfMc.AffinityMap = aff
-	bpfMc.CtMap = ct
+	bpfMc.FrontendMap = newMockNATMap()
+	bpfMc.BackendMap = newMockNATBackendMap()
+	bpfMc.AffinityMap = newMockAffinityMap()
+	bpfMc.CtMap = mock.NewMockMap(conntrack.MapParams)
+	front := bpfMc.FrontendMap.(*mockNATMap)
 
 	keyClusterIP := nat.NewNATKey(clusterIP, port, proxy.ProtoV1ToIntPanic(proto))
 	keyExtIP := nat.NewNATKey(extIP, port, proxy.ProtoV1ToIntPanic(proto))
@@ -115,6 +112,7 @@ var _ = Describe("BPF service type change", func() {
 		By("check if nat map has the cluster IP", func() {
 
 			Eventually(func() bool {
+
 				front.Lock()
 				defer front.Unlock()
 				_, keyClusterIPExists := front.m[keyClusterIP]
