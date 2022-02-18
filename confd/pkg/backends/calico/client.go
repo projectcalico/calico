@@ -131,6 +131,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		bgpPeers:          make(map[string]*apiv3.BGPPeer),
 		sourceReady:       make(map[string]bool),
 		nodeListenPorts:   make(map[string]uint16),
+		globalBGPConfig:   cfg,
 
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
@@ -318,6 +319,9 @@ type client struct {
 	// Channels used to decouple update and status processing.
 	syncerC  chan interface{}
 	recheckC chan struct{}
+
+	// Cached value of the default BGP configuration for node to node mesh BGP password lookup.
+	globalBGPConfig *apiv3.BGPConfiguration
 }
 
 // SetPrefixes is called from confd to notify this client of the full set of prefixes that will
@@ -902,7 +906,7 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 		c.updatePeersV1()
 
 		// Also update BGP config passwords before removing old watched secrets
-		c.updateNodeMeshPassword()
+		c.getNodeMeshPasswordKVPair(c.globalBGPConfig, model.GlobalBGPConfigKey{})
 
 		// Clean up any secrets that are no longer of interest.
 		if c.secretWatcher != nil {
@@ -974,6 +978,9 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getLogSeverityKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
+
+		// Cache the updated BGP configuration
+		c.globalBGPConfig = v3res
 	} else if strings.HasPrefix(resName, perNodeConfigNamePrefix) {
 		// The name of a configuration resource has a strict format.  It is either "default"
 		// for the global default values, or "node.<nodename>" for the node specific vales.
@@ -1612,28 +1619,6 @@ func withDefault(val, dflt string) string {
 		return val
 	}
 	return dflt
-}
-
-func (c *client) updateNodeMeshPassword() {
-	// Retrieve the default BGPConfig for the password secret information
-	key := model.ResourceKey{
-		Kind:      apiv3.KindBGPConfiguration,
-		Name:      globalConfigName,
-		Namespace: "",
-	}
-
-	cfgKVPair, err := c.client.Get(context.Background(), key, "")
-	if _, ok := err.(lerr.ErrorResourceDoesNotExist); err != nil && !ok {
-		// Failed to get the BGP configuration (and not because it doesn't exist).
-		// Exit.
-		log.WithError(err).Error("Failed to query current BGP settings for node mesh password update")
-		return
-	}
-
-	cfg, _ := cfgKVPair.Value.(*apiv3.BGPConfiguration)
-
-	// Only call the update on the password
-	c.getNodeMeshPasswordKVPair(cfg, model.GlobalBGPConfigKey{})
 }
 
 // Checks whether or not a key references sensitive information (like a BGP password) so that
