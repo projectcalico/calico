@@ -112,7 +112,7 @@ type CalcGraph struct {
 	activeRulesCalculator *ActiveRulesCalculator
 }
 
-func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, encapInfo *config.EncapInfo) *CalcGraph {
+func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, configChangedRestartCallback func()) *CalcGraph {
 	hostname := conf.FelixHostname
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
 
@@ -335,7 +335,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, encap
 	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
-	if conf.BPFEnabled || encapInfo.UseVXLANEncap || conf.WireguardEnabled {
+	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.WireguardEnabled {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)
@@ -364,7 +364,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, encap
 	//         |
 	//      <dataplane>
 	//
-	if encapInfo.UseVXLANEncap {
+	if conf.Encapsulation.VXLANEnabled {
 		vxlanResolver := NewVXLANResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
 		vxlanResolver.RegisterWith(allUpdDispatcher)
 	}
@@ -402,23 +402,19 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, encap
 	profileDecoder := NewProfileDecoder(callbacks)
 	profileDecoder.RegisterWith(allUpdDispatcher)
 
-	// Register for IP Pool updates. PoolEncapManager will call ConfigChangedRestartCallback()
-	// if IPIP and/or VXLAN encap use changes due to IP pool changes, so that it is
-	// recalculated at Felix startup.
+	// Register for IP Pool updates. EncapsulationResolver will call
+	// configChangedRestartCallback() if IPIP and/or VXLAN encapsulation changes due to IP
+	// pool changes, so that it is recalculated at Felix startup.
 	//
 	//        ...
 	//     Dispatcher (all updates)
 	//         |
 	//         | IP pools
 	//         |
-	//       pool encap manager
-	//         |
-	//         |
-	//         |
-	//      <dataplane>
+	//       encapsulation resolver
 	//
-	poolEncapManager := NewPoolEncapManager(callbacks, conf, encapInfo)
-	poolEncapManager.RegisterWith(allUpdDispatcher)
+	encapsulationResolver := NewEncapsulationResolver(conf, configChangedRestartCallback)
+	encapsulationResolver.RegisterWith(allUpdDispatcher)
 
 	return &CalcGraph{
 		AllUpdDispatcher:      allUpdDispatcher,
