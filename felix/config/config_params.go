@@ -262,16 +262,16 @@ type Config struct {
 	// to Debug level logs.
 	LogDebugFilenameRegex *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
-	VXLANEnabled        *bool  `config:"*bool;"`
-	VXLANPort           int    `config:"int;4789"`
-	VXLANVNI            int    `config:"int;4096"`
-	VXLANMTU            int    `config:"int;0"`
-	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
-	VXLANTunnelMACAddr  string `config:"string;"`
+	DeprecatedVXLANEnabled *bool  `config:"*bool;"`
+	VXLANPort              int    `config:"int;4789"`
+	VXLANVNI               int    `config:"int;4096"`
+	VXLANMTU               int    `config:"int;0"`
+	IPv4VXLANTunnelAddr    net.IP `config:"ipv4;"`
+	VXLANTunnelMACAddr     string `config:"string;"`
 
-	IpInIpEnabled    *bool  `config:"*bool;"`
-	IpInIpMtu        int    `config:"int;0"`
-	IpInIpTunnelAddr net.IP `config:"ipv4;"`
+	DeprecatedIpInIpEnabled *bool  `config:"*bool;"`
+	IpInIpMtu               int    `config:"int;0"`
+	IpInIpTunnelAddr        net.IP `config:"ipv4;"`
 
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
 	// from workloads. We always add them unless explicitly requested not to add them.
@@ -345,6 +345,9 @@ type Config struct {
 
 	// Configures MTU auto-detection.
 	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)"`
+
+	// Encapsulation information calculated from IP Pools
+	Encapsulation Encapsulation
 
 	// State tracking.
 
@@ -572,7 +575,7 @@ func (config *Config) setByConfigFileOrEnvironment(name string) bool {
 	return config.setBy(name, ConfigFile) || config.setBy(name, EnvironmentVariable)
 }
 
-func (config *Config) DatastoreConfig(encapInfo EncapInfo) apiconfig.CalicoAPIConfig {
+func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	// We want Felix's datastore connection to be fully configurable using the same
 	// CALICO_XXX_YYY (or just XXX_YYY) environment variables that work for any libcalico-go
 	// client - for both the etcdv3 and KDD cases.  However, for the etcd case, Felix has for a
@@ -628,7 +631,7 @@ func (config *Config) DatastoreConfig(encapInfo EncapInfo) apiconfig.CalicoAPICo
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
-	if !(encapInfo.UseIPIPEncap || encapInfo.UseVXLANEncap || config.BPFEnabled) {
+	if !(config.Encapsulation.IPIPEnabled || config.Encapsulation.VXLANEnabled || config.BPFEnabled) {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
@@ -912,20 +915,7 @@ type param interface {
 	setDefault(*Config)
 }
 
-type EncapInfo struct {
-	UseIPIPEncap                 bool
-	IPIPPools                    map[string]struct{}
-	UseVXLANEncap                bool
-	VXLANPools                   map[string]struct{}
-	ConfigChangedRestartCallback func()
-}
-
-func NewEncapInfo() *EncapInfo {
-	return &EncapInfo{
-		UseIPIPEncap:                 false,
-		IPIPPools:                    map[string]struct{}{},
-		UseVXLANEncap:                false,
-		VXLANPools:                   map[string]struct{}{},
-		ConfigChangedRestartCallback: func() {},
-	}
+type Encapsulation struct {
+	IPIPEnabled  bool
+	VXLANEnabled bool
 }
