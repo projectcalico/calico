@@ -37,11 +37,9 @@ var _ = Describe("Constructor test", func() {
 	var kubernetesProvider = config.ProviderNone
 	var routeSource = "CalicoIPAM"
 	var wireguardEncryptHostTraffic bool
-	var encapInfo *config.EncapInfo
 
 	JustBeforeEach(func() {
 		configParams = config.New()
-		encapInfo = config.NewEncapInfo()
 		_, err := configParams.UpdateFrom(map[string]string{"InterfaceExclude": "/^kube.*/,/veth/,eth2"}, config.EnvironmentVariable)
 		Expect(err).NotTo(HaveOccurred())
 		dpConfig = intdataplane.Config{
@@ -75,7 +73,7 @@ var _ = Describe("Constructor test", func() {
 				IptablesMarkScratch1: 0x8000000,
 				IptablesMarkEndpoint: 0x000ff00,
 
-				IPIPEnabled:       encapInfo.UseIPIPEncap,
+				IPIPEnabled:       configParams.Encapsulation.IPIPEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
 				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
