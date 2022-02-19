@@ -391,6 +391,7 @@ stop-k8s-apiserver:
 
 GINKGO = ginkgo
 
+UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
 .PHONY: ut
 ut: CMD = go mod download && $(GINKGO) -r
 ut:
