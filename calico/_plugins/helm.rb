@@ -47,13 +47,11 @@ module Jekyll
       end
 
       # substitute --execute with --show-only for helm v3 compatibility.
-      if @chart == "tigera-operator" then
-        extra_args.gsub!(/--execute (\S*)/) do |f|
-          # operator CRDs have moved to root
-          if $1.start_with? "templates/crds/" then f.sub('--execute templates/crds/', '--show-only ')
-          # all other requests need to use --show-only instead of --execute for helm v3
-          else f.sub('--execute', '--show-only')
-          end
+      extra_args.gsub!(/--execute (\S*)/) do |f|
+        # operator CRDs have moved to root
+        if $1.start_with? "templates/crds/" then f.sub('--execute templates/crds/', '--show-only ')
+        # all other requests need to use --show-only instead of --execute for helm v3
+        else f.sub('--execute', '--show-only')
         end
       end
 
@@ -87,7 +85,7 @@ module Jekyll
           -f #{tv.path} \
           -f #{t.path}"""
       else
-        cmd = """bin/helm3 template _includes/charts/#{@chart} \
+        cmd = """bin/helm3 template  _includes/charts/#{@chart} \
         -f #{tv.path} \
         -f #{t.path} \
         --set etcd.endpoints='http://<ETCD_IP>:<ETCD_PORT>'"""
@@ -95,8 +93,11 @@ module Jekyll
 
       cmd += " " + @extra_args.to_s
 
+      print("#{cmd} \n")
+      print("#{versionsYml} \n")
       out, stderr, status = Open3.capture3(cmd)
       if status != 0
+        print("out: #{status} \n")
         raise "failed to execute helm for '#{context.registers[:page]["path"]}': #{stderr}"
       end
 

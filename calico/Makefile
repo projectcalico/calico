@@ -64,7 +64,7 @@ _site build: bin/helm3
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
 	-v $(CURDIR)/bin/helm3:/usr/local/bin/helm:ro \
-	-v $(CURDIR)/:/srv/jekyll \
+	-v $(CURDIR):/srv/jekyll \
 	-v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
 	jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
@@ -147,7 +147,7 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean chart _site
 	touch $@
 
-chart: clean _includes/charts/tigera-operator/values.yaml bin/helm3
+chart: clean values.yaml bin/helm3
 	bin/helm3 package ./_includes/charts/tigera-operator \
 	--destination ./bin/ \
 	--version $(GIT_VERSION) \
