@@ -1,9 +1,9 @@
 ---
 layout: null
 ---
-{% helm --execute templates/kdd-crds.yaml %}
-datastore: kubernetes
-network: calico
-typha:
-  enabled: true
+{% helm tigera-operator --execute-dir crds/calico %}
+installation:
+  enabled: false
+apiServer:
+  enabled: false
 {% endhelm %}
