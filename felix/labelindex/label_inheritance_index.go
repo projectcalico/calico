@@ -48,6 +48,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -148,10 +150,13 @@ func (l *InheritIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Deleting host endpoint %v from InheritIndex", key)
 			l.DeleteLabels(key)
 		}
-	case model.ProfileLabelsKey:
+	case model.ResourceKey:
+		if key.Kind != v3.KindProfile {
+			return
+		}
 		if update.Value != nil {
 			log.Debugf("Updating InheritIndex for profile labels %v", key)
-			labels := update.Value.(map[string]string)
+			labels := update.Value.(*v3.Profile).Spec.LabelsToApply
 			l.UpdateParentLabels(key.Name, labels)
 		} else {
 			log.Debugf("Removing profile labels %v from InheritIndex", key)
