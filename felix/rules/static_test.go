@@ -115,6 +115,8 @@ var _ = Describe("Static", func() {
 							{Action: ClearMarkAction{Mark: 0xf0}},
 							{Match: Match().InInterface("cali+"),
 								Action: SetMarkAction{Mark: 0x40}},
+							{Match: Match().MarkMatchesWithMask(0x40, 0x40),
+								Action: JumpAction{Target: ChainRpfSkip}},
 							{Match: Match().Protocol("udp").SourceNet("0.0.0.0").SourcePorts(68).DestPorts(67),
 								Action: AcceptAction{}},
 							{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
@@ -134,6 +136,8 @@ var _ = Describe("Static", func() {
 							{Action: ClearMarkAction{Mark: 0xf0}},
 							{Match: Match().InInterface("cali+"),
 								Action: SetMarkAction{Mark: 0x40}},
+							{Match: Match().MarkMatchesWithMask(0x40, 0x40),
+								Action: JumpAction{Target: ChainRpfSkip}},
 							{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
 								Action: DropAction{}},
 							{Match: Match().MarkClear(0x40),
@@ -473,8 +477,12 @@ var _ = Describe("Static", func() {
 					It("Should return expected raw failsafe out chain", func() {
 						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-out")).To(Equal(expRawFailsafeOut))
 					})
+					It("Should initialize raw rpf skip chain with no rules", func() {
+						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-rpf-skip")).To(Equal(&Chain{
+							Name: ChainRpfSkip, Rules: []Rule{}}))
+					})
 					It("should return only the expected raw chains", func() {
-						Expect(len(rr.StaticRawTableChains(ipVersion))).To(Equal(5))
+						Expect(len(rr.StaticRawTableChains(ipVersion))).To(Equal(6))
 					})
 				})
 			}
@@ -486,6 +494,8 @@ var _ = Describe("Static", func() {
 						{Action: ClearMarkAction{Mark: 0xf0}},
 						{Match: Match().InInterface("cali+"),
 							Action: SetMarkAction{Mark: 0x40}},
+						{Match: Match().MarkMatchesWithMask(0x40, 0x40),
+							Action: JumpAction{Target: ChainRpfSkip}},
 						{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
 							Action: DropAction{}},
 						{Match: Match().MarkClear(0x40),
@@ -502,6 +512,8 @@ var _ = Describe("Static", func() {
 						{Action: ClearMarkAction{Mark: 0xf0}},
 						{Match: Match().InInterface("cali+"),
 							Action: SetMarkAction{Mark: 0x40}},
+						{Match: Match().MarkMatchesWithMask(0x40, 0x40),
+							Action: JumpAction{Target: ChainRpfSkip}},
 						{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
 							Action: DropAction{}},
 						{Match: Match().MarkClear(0x40),
@@ -1391,6 +1403,8 @@ var _ = Describe("Static", func() {
 						Action: JumpAction{Target: "cali-wireguard-incoming-mark"}},
 					{Match: Match().InInterface("cali+"),
 						Action: SetMarkAction{Mark: 0x40}},
+					{Match: Match().MarkMatchesWithMask(0x40, 0x40),
+						Action: JumpAction{Target: ChainRpfSkip}},
 					{Match: Match().MarkMatchesWithMask(0x40, 0x40).RPFCheckFailed(false),
 						Action: DropAction{}},
 					{Match: Match().MarkClear(0x40),

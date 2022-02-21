@@ -375,15 +375,16 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 		mac = ep.Mac.String()
 	}
 	return &proto.WorkloadEndpoint{
-		State:      ep.State,
-		Name:       ep.Name,
-		Mac:        mac,
-		ProfileIds: ep.ProfileIDs,
-		Ipv4Nets:   netsToStrings(ep.IPv4Nets),
-		Ipv6Nets:   netsToStrings(ep.IPv6Nets),
-		Tiers:      tiers,
-		Ipv4Nat:    natsToProtoNatInfo(ep.IPv4NAT),
-		Ipv6Nat:    natsToProtoNatInfo(ep.IPv6NAT),
+		State:                      ep.State,
+		Name:                       ep.Name,
+		Mac:                        mac,
+		ProfileIds:                 ep.ProfileIDs,
+		Ipv4Nets:                   netsToStrings(ep.IPv4Nets),
+		Ipv6Nets:                   netsToStrings(ep.IPv6Nets),
+		Tiers:                      tiers,
+		Ipv4Nat:                    natsToProtoNatInfo(ep.IPv4NAT),
+		Ipv6Nat:                    natsToProtoNatInfo(ep.IPv6NAT),
+		AllowSpoofedSourcePrefixes: netsToStrings(ep.AllowSpoofedSourcePrefixes),
 	}
 }
 

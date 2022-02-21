@@ -992,6 +992,7 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	return []*Chain{
 		r.failsafeInChain("raw", ipVersion),
 		r.failsafeOutChain("raw", ipVersion),
+		r.rpfSkipChainInit(),
 		r.StaticRawPreroutingChain(ipVersion),
 		r.WireguardIncomingMarkChain(),
 		r.StaticRawOutputChain(0),
@@ -1163,6 +1164,13 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		})
 	}
 
+	// Send workload traffic to a specific chain to skip the rpf check for some workloads
+	rules = append(rules,
+		Rule{
+			Match:  Match().MarkMatchesWithMask(markFromWorkload, markFromWorkload),
+			Action: JumpAction{Target: ChainRpfSkip},
+		})
+
 	// Apply strict RPF check to packets from workload interfaces.  This prevents
 	// workloads from spoofing their IPs.  Note: non-privileged containers can't
 	// usually spoof but privileged containers and VMs can.
@@ -1262,6 +1270,13 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *Chain {
 	return &Chain{
 		Name:  ChainSetWireguardIncomingMark,
 		Rules: rules,
+	}
+}
+
+func (r *DefaultRuleRenderer) rpfSkipChainInit() *Chain {
+	return &Chain{
+		Name:  ChainRpfSkip,
+		Rules: []Rule{},
 	}
 }
 
