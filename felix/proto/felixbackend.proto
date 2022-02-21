@@ -372,6 +372,7 @@ message WorkloadEndpoint {
   repeated TierInfo tiers = 7;
   repeated NatInfo ipv4_nat = 8;
   repeated NatInfo ipv6_nat = 9;
+  repeated string allow_spoofed_source_prefixes = 10;
 }
 
 message WorkloadEndpointRemove {
