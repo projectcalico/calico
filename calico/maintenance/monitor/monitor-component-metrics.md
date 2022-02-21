@@ -217,12 +217,15 @@ EOF
 {% endtabs %}
 
 ##### **kube-controllers configuration**
+
+Prometheus metrics are **enabled** by default on [TCP port 9094]({{ site.baseurl }}/reference/resources/kubecontrollersconfig) for `calico-kube-controllers`.
+
 {% tabs %}
 <label:Operator,active:true>
 <%
-By default `tigera-operator` creates a service.
+The operator automatically creates a service that exposes these metrics.
 
-You can use the following command to view it.
+You can use the following command to verify it.
 ```bash
 kubectl get svc -n calico-system
 ```
@@ -234,17 +237,9 @@ calico-kube-controllers-metrics   ClusterIP   10.43.77.57     <none>        9094
 %>
 <label:Manifest>
 <%
-kube-controllers prometheus metrics are **enabled** by default on TCP port 9094. You can adjust the port by modifying the KubeControllersConfiguration resource.
-
-```bash
-calicoctl patch kubecontrollersconfiguration default  --patch '{"spec":{"prometheusMetricsPort": 9095}}'
-```
-
-Setting this value to zero will disable metrics in the kube-controllers pod.
-
 ##### **Creating a service to expose kube-controllers metrics**
 
-Prometheus uses Kubernetes services to dynamically discover endpoints. Here you will create a service named `kube-controllers-metrics-svc` which Prometheus will use to discover all metrics endpoint.
+Create a service to expose `calico-kube-controllers` metrics to Prometheus.
 
 ``` bash
 kubectl apply -f - <<EOF
@@ -264,6 +259,27 @@ EOF
 ```
 %>
 {% endtabs %}
+
+**Optionally**, you can use the following command to modify the port by changing the `KubeControllersConfiguration` resource if desired.
+
+> **Note**: Setting this value to zero will disable metrics in the kube-controllers pod.
+{: .alert .alert-info}
+
+{% tabs %}
+<label:apiserver,active:true>
+<%
+```bash
+kubectl patch kubecontrollersconfiguration default --type=merge  --patch '{"spec":{"prometheusMetricsPort": 9095}}'
+```
+%>
+<label:calicoctl>
+<%
+```bash
+calicoctl patch kubecontrollersconfiguration default  --patch '{"spec":{"prometheusMetricsPort": 9095}}'
+```
+%>
+{% endtabs %}
+
 #### 2. Cluster preparation
 
 ##### **Namespace creation**
