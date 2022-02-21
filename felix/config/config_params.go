@@ -297,6 +297,8 @@ type Config struct {
 
 	ServiceLoopPrevention string `config:"oneof(Drop,Reject,Disabled);Drop"`
 
+	WorkloadSourceSpoofing string `config:"oneof(Disabled,Any);Disabled"`
+
 	ReportingIntervalSecs time.Duration `config:"seconds;30"`
 	ReportingTTLSecs      time.Duration `config:"seconds;90"`
 
