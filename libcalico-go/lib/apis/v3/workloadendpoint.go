@@ -79,6 +79,9 @@ type WorkloadEndpointSpec struct {
 	MAC string `json:"mac,omitempty" validate:"omitempty,mac"`
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
 	Ports []WorkloadEndpointPort `json:"ports,omitempty" validate:"dive,omitempty"`
+	// AllowSpoofedSourceIPs is a list of IP addresses that the endpoint should be able to send traffic from,
+	// bypassing the RPF check.
+	AllowSpoofedSourceIPs []string `json:"allow_spoofed_source_ips,omitempty" validate:"omitempty,dive,ip"`
 }
 
 // WorkloadEndpointPort represents one endpoint's named or mapped port

@@ -64,6 +64,20 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		},
 		Ipv6Nat: []*proto.NatInfo{},
 	}),
+	Entry("workload endpoint with source IP spoofing configured", model.WorkloadEndpoint{
+		State:                 "up",
+		Name:                  "bill",
+		AllowSpoofedSourceIPs: []string{"8.8.8.8"},
+	}, proto.WorkloadEndpoint{
+		State:                 "up",
+		Name:                  "bill",
+		Ipv4Nets:              []string{},
+		Ipv6Nets:              []string{},
+		Tiers:                 []*proto.TierInfo{},
+		Ipv4Nat:               []*proto.NatInfo{},
+		Ipv6Nat:               []*proto.NatInfo{},
+		AllowSpoofedSourceIps: []string{"8.8.8.8"},
+	}),
 )
 
 var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {

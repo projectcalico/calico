@@ -172,6 +172,10 @@ type endpointManager struct {
 	// Mix of host and workload endpoint IDs.
 	epIDsToUpdateStatus set.Set
 
+	// sourceSpoofingConfig maps interface names to lists of source IPs that we accept from these interfaces
+	// these interfaces (in addition to the pod IPs)
+	sourceSpoofingConfig map[string][]string
+
 	// hostIfaceToAddrs maps host interface name to the set of IPs on that interface (reported
 	// fro the dataplane).
 	hostIfaceToAddrs map[string]set.Set
@@ -294,6 +298,8 @@ func newEndpointManagerWithShims(
 		wlIfaceNamesToReconfigure: set.New(),
 
 		epIDsToUpdateStatus: set.New(),
+
+		sourceSpoofingConfig: map[string][]string{},
 
 		hostIfaceToAddrs:   map[string]set.Set{},
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
@@ -546,6 +552,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 			delete(m.activeWlIfaceNameToID, oldWorkload.Name)
+			if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
+				delete(m.sourceSpoofingConfig, oldWorkload.Name)
+				m.updateRPFSkipChain()
+			}
 		}
 		delete(m.activeWlEndpoints, id)
 	}
@@ -587,6 +597,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 					if !m.bpfEnabled {
 						m.filterTable.RemoveChains(m.activeWlIDToChains[id])
+						if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
+							delete(m.sourceSpoofingConfig, workload.Name)
+							m.updateRPFSkipChain()
+						}
 					}
 					m.routeTable.SetRoutes(oldWorkload.Name, nil)
 					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
@@ -609,6 +623,16 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					)
 					m.filterTable.UpdateChains(chains)
 					m.activeWlIDToChains[id] = chains
+
+					if len(workload.AllowSpoofedSourceIps) > 0 && !m.hasSourceSpoofingConfiguration(workload.Name) {
+						logCxt.Info("Disabling RPF check for workload")
+						m.sourceSpoofingConfig[workload.Name] = workload.AllowSpoofedSourceIps
+						m.updateRPFSkipChain()
+					} else if m.hasSourceSpoofingConfiguration(workload.Name) && len(workload.AllowSpoofedSourceIps) == 0 {
+						logCxt.Info("Enabling RPF check for workload (previously disabled)")
+						delete(m.sourceSpoofingConfig, workload.Name)
+						m.updateRPFSkipChain()
+					}
 				}
 
 				// Collect the IP prefixes that we want to route locally to this endpoint:
@@ -731,6 +755,28 @@ func wlIdsAscending(id1, id2 *proto.WorkloadEndpointID) bool {
 		return id1.WorkloadId < id2.WorkloadId
 	}
 	return id1.OrchestratorId < id2.OrchestratorId
+}
+
+func (m *endpointManager) hasSourceSpoofingConfiguration(interfaceName string) bool {
+	_, ok := m.sourceSpoofingConfig[interfaceName]
+	return ok
+}
+
+func (m *endpointManager) updateRPFSkipChain() {
+	log.Debug("Updating RPF skip chain")
+	chain := &iptables.Chain{
+		Name:  rules.ChainRpfSkip,
+		Rules: make([]iptables.Rule, 0),
+	}
+	for interfaceName, addresses := range m.sourceSpoofingConfig {
+		for _, addr := range addresses {
+			chain.Rules = append(chain.Rules, iptables.Rule{
+				Match:  iptables.Match().InInterface(interfaceName).SourceNet(addr),
+				Action: iptables.AcceptAction{},
+			})
+		}
+	}
+	m.rawTable.UpdateChain(chain)
 }
 
 func (m *endpointManager) resolveEndpointMarks() {
@@ -1220,6 +1266,14 @@ func (m *endpointManager) configureInterface(name string) error {
 		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name), "1")
 		if err != nil {
 			return err
+		}
+		// Disable kernel rpf for interfaces that have rpf filtering explicitely disabled
+		// This is set only in IPv4 mode as there's no equivalent sysctl in IPv6
+		if m.hasSourceSpoofingConfiguration(name) {
+			err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "0")
+			if err != nil {
+				return err
+			}
 		}
 	} else {
 		// Enable proxy NDP, similarly to proxy ARP, described above.

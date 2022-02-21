@@ -591,7 +591,7 @@ configRetry:
 
 	// Create the validator, which sits between the syncer and the
 	// calculation graph.
-	validator := calc.NewValidationFilter(asyncCalcGraph)
+	validator := calc.NewValidationFilter(asyncCalcGraph, configParams)
 
 	go syncerToValidator.SendTo(validator)
 	asyncCalcGraph.Start()
