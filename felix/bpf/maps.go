@@ -47,9 +47,6 @@ type Map interface {
 	// Path returns the path that the map is (to be) pinned to.
 	Path() string
 
-	// SetMaxEntries sets the max entries of the pinned map
-	SetMaxEntries(maxEntries int)
-
 	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
@@ -75,7 +72,7 @@ func versionedStr(ver int, str string) string {
 	return fmt.Sprintf("%s%d", str, ver)
 }
 
-func (mp *MapParameters) versionedName() string {
+func (mp *MapParameters) VersionedName() string {
 	return versionedStr(mp.Version, mp.Name)
 }
 
@@ -100,9 +97,13 @@ type MapContext struct {
 }
 
 func (c *MapContext) NewPinnedMap(params MapParameters) Map {
-	if len(params.versionedName()) >= unix.BPF_OBJ_NAME_LEN {
+	if len(params.VersionedName()) >= unix.BPF_OBJ_NAME_LEN {
 		logrus.WithField("name", params.Name).Panic("Bug: BPF map name too long")
 	}
+	if val, ok := c.MapSizes[params.VersionedName()]; ok {
+		params.MaxEntries = int(val)
+	}
+
 	m := &PinnedMap{
 		context:       c,
 		MapParameters: params,
@@ -121,7 +122,7 @@ type PinnedMap struct {
 }
 
 func (b *PinnedMap) GetName() string {
-	return b.versionedName()
+	return b.VersionedName()
 }
 
 func (b *PinnedMap) MapFD() MapFD {
@@ -133,10 +134,6 @@ func (b *PinnedMap) MapFD() MapFD {
 
 func (b *PinnedMap) Path() string {
 	return b.versionedFilename()
-}
-
-func (b *PinnedMap) SetMaxEntries(maxEntries int) {
-	b.MaxEntries = maxEntries
 }
 
 func (b *PinnedMap) Close() error {
@@ -327,7 +324,7 @@ func (b *PinnedMap) Open() error {
 		logrus.Debug("Map file didn't exist")
 		if b.context.RepinningEnabled {
 			logrus.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
-			err = RepinMap(b.versionedName(), b.versionedFilename())
+			err = RepinMap(b.VersionedName(), b.versionedFilename())
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
@@ -356,7 +353,7 @@ func (b *PinnedMap) pinnedMapMatchesConfiguration(maxEntries int) bool {
 
 // nolint
 func (b *PinnedMap) migratePinnedMap(from, to string) error {
-	err := RepinMap(b.versionedName(), to)
+	err := RepinMap(b.VersionedName(), to)
 	if err != nil {
 		return fmt.Errorf("error repinning %s to %s: %w", from, to, err)
 	}
@@ -428,7 +425,7 @@ func (b *PinnedMap) EnsureExists() error {
 		"key", fmt.Sprint(b.KeySize),
 		"value", fmt.Sprint(b.ValueSize),
 		"entries", fmt.Sprint(b.MaxEntries),
-		"name", b.versionedName(),
+		"name", b.VersionedName(),
 		"flags", fmt.Sprint(b.Flags),
 	)
 	out, err := cmd.CombinedOutput()

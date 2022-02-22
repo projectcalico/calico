@@ -29,11 +29,31 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
 
-func CreateBPFMaps(mc *bpf.MapContext, config *Config) {
+func createBPFMapContext(config *Config) *bpf.MapContext {
+	bpfMapContext := &bpf.MapContext{
+		RepinningEnabled: config.BPFMapRepin,
+		MapSizes:         map[string]uint32{},
+	}
+	bpfMapContext.MapSizes[ipsets.MapParameters.VersionedName()] = uint32(config.BPFMapSizeIPSets)
+	bpfMapContext.MapSizes[nat.FrontendMapParameters.VersionedName()] = uint32(config.BPFMapSizeNATFrontend)
+	bpfMapContext.MapSizes[nat.BackendMapParameters.VersionedName()] = uint32(config.BPFMapSizeNATBackend)
+	bpfMapContext.MapSizes[nat.AffinityMapParameters.VersionedName()] = uint32(config.BPFMapSizeNATAffinity)
+	bpfMapContext.MapSizes[routes.MapParameters.VersionedName()] = uint32(config.BPFMapSizeRoute)
+	bpfMapContext.MapSizes[conntrack.MapParams.VersionedName()] = uint32(config.BPFMapSizeConntrack)
+
+	bpfMapContext.MapSizes[state.MapParameters.VersionedName()] = uint32(state.MapParameters.MaxEntries)
+	bpfMapContext.MapSizes[arp.MapParams.VersionedName()] = uint32(arp.MapParams.MaxEntries)
+	bpfMapContext.MapSizes[failsafes.MapParams.VersionedName()] = uint32(failsafes.MapParams.MaxEntries)
+	bpfMapContext.MapSizes[nat.SendRecvMsgMapParameters.VersionedName()] = uint32(nat.SendRecvMsgMapParameters.MaxEntries)
+	bpfMapContext.MapSizes[nat.CTNATsMapParameters.VersionedName()] = uint32(nat.CTNATsMapParameters.MaxEntries)
+
+	return bpfMapContext
+}
+
+func createBPFMaps(mc *bpf.MapContext) {
 	maps := []bpf.Map{}
 
 	mc.IpsetsMap = ipsets.Map(mc)
-	mc.IpsetsMap.SetMaxEntries(config.BPFMapSizeIPSets)
 	maps = append(maps, mc.IpsetsMap)
 
 	mc.StateMap = state.Map(mc)
@@ -46,23 +66,18 @@ func CreateBPFMaps(mc *bpf.MapContext, config *Config) {
 	maps = append(maps, mc.FailsafesMap)
 
 	mc.FrontendMap = nat.FrontendMap(mc)
-	mc.FrontendMap.SetMaxEntries(config.BPFMapSizeNATFrontend)
 	maps = append(maps, mc.FrontendMap)
 
 	mc.BackendMap = nat.BackendMap(mc)
-	mc.BackendMap.SetMaxEntries(config.BPFMapSizeNATBackend)
 	maps = append(maps, mc.BackendMap)
 
 	mc.AffinityMap = nat.AffinityMap(mc)
-	mc.AffinityMap.SetMaxEntries(config.BPFMapSizeNATAffinity)
 	maps = append(maps, mc.AffinityMap)
 
 	mc.RouteMap = routes.Map(mc)
-	mc.RouteMap.SetMaxEntries(config.BPFMapSizeRoute)
 	maps = append(maps, mc.RouteMap)
 
 	mc.CtMap = conntrack.Map(mc)
-	mc.CtMap.SetMaxEntries(config.BPFMapSizeConntrack)
 	maps = append(maps, mc.CtMap)
 
 	mc.SrMsgMap = nat.SendRecvMsgMap(mc)
@@ -76,6 +91,5 @@ func CreateBPFMaps(mc *bpf.MapContext, config *Config) {
 		if err != nil {
 			log.WithError(err).Panicf("Failed to create %s map %s", bpfMap.GetName(), err)
 		}
-		mc.MapSizes[bpfMap.GetName()] = uint32((bpfMap.(*bpf.PinnedMap)).MaxEntries)
 	}
 }
