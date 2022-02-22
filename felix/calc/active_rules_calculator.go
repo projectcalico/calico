@@ -113,7 +113,7 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	// ...as well as all the policies and profiles.
 	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileRulesKey{}, arc.OnUpdate)
-	allUpdDispatcher.Register(model.ProfileLabelsKey{}, arc.OnUpdate)
+	allUpdDispatcher.Register(model.ResourceKey{}, arc.OnUpdate)
 	allUpdDispatcher.RegisterStatusHandler(arc.OnStatusUpdate)
 }
 
@@ -142,7 +142,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			arc.updateEndpointProfileIDs(key, []string{})
 		}
 		arc.labelIndex.OnUpdate(update)
-	case model.ProfileLabelsKey:
+	case model.ResourceKey:
 		arc.labelIndex.OnUpdate(update)
 	case model.ProfileRulesKey:
 		if update.Value != nil {

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019,2021-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -170,7 +171,8 @@ func (d *endpointData) Equals(other *endpointData) bool {
 	}
 
 	for k, v := range d.labels {
-		if other.labels[k] != v {
+		otherLabel, exists := other.labels[k]
+		if !exists || otherLabel != v {
 			return false
 		}
 	}
@@ -252,7 +254,7 @@ func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 }
 
 func (idx *SelectorAndNamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
-	allUpdDispatcher.Register(model.ProfileLabelsKey{}, idx.OnUpdate)
+	allUpdDispatcher.Register(model.ResourceKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.HostEndpointKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.NetworkSetKey{}, idx.OnUpdate)
@@ -309,10 +311,13 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Deleting network set %v from NamedPortIndex", key)
 			idx.DeleteEndpoint(key)
 		}
-	case model.ProfileLabelsKey:
+	case model.ResourceKey:
+		if key.Kind != v3.KindProfile {
+			return
+		}
 		if update.Value != nil {
 			log.Debugf("Updating NamedPortIndex for profile labels %v", key)
-			labels := update.Value.(map[string]string)
+			labels := update.Value.(*v3.Profile).Spec.LabelsToApply
 			idx.UpdateParentLabels(key.Name, labels)
 		} else {
 			log.Debugf("Removing profile labels %v from NamedPortIndex", key)
