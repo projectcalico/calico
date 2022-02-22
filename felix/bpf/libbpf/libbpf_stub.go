@@ -94,3 +94,7 @@ func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16) error {
 func CTLBSetGlobals(_ *Map, _ time.Duration) error {
 	panic("LIBBPF syscall stub")
 }
+
+func (m *Map) SetMapSize(size uint32) error {
+	panic("LIBBPF syscall stub")
+}

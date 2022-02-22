@@ -185,6 +185,10 @@ void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo)
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
+void bpf_map_set_max_entries(struct bpf_map *map, uint max_entries) {
+	set_errno(bpf_map__resize(map, max_entries));
+}
+
 int num_possible_cpu()
 {
     return libbpf_num_possible_cpus();
