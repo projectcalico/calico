@@ -144,15 +144,25 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* Parse the packet as far as the IP header; as a side-effect this validates the packet size
 	 * is large enough for UDP. */
 	switch (parse_packet_ip(&ctx)) {
-	case PARSING_ERROR:
-		// A malformed packet or a packet we don't support
-		CALI_DEBUG("Drop malformed or unsupported packet\n");
-		ctx.fwd.res = TC_ACT_SHOT;
-		goto finalize;
+	case PARSING_OK:
+		// IPv4 Packet.
+		break;
+	case PARSING_OK_V6:
+		// An IPv6 packet, so we should jump to the relevant IPv6 programs
+		CALI_DEBUG("About to jump to IPv6 prologue program");
+		bpf_tail_call(skb, &cali_jump, PROG_INDEX_V6_PROLOGUE);
+		CALI_DEBUG("Tail call to ipv6 prologue program failed: DROP");
+		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		// A packet that we automatically let through
 		fwd_fib_set(&ctx.fwd, false);
 		ctx.fwd.res = TC_ACT_UNSPEC;
+		goto finalize;
+	case PARSING_ERROR:
+	default:
+		// A malformed packet or a packet we don't support
+		CALI_DEBUG("Drop malformed or unsupported packet");
+		ctx.fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
 
@@ -1159,6 +1169,45 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	tc_state_fill_from_iphdr(&ctx);
 	ctx.state->sport = ctx.state->dport = 0;
 	return forward_or_drop(&ctx);
+deny:
+	return TC_ACT_SHOT;
+}
+
+SEC("classifier/tc/prologue_v6")
+int calico_tc_v6(struct __sk_buff *skb)
+{
+	CALI_DEBUG("Entering IPv6 prologue program");
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_V6_POLICY);
+	CALI_DEBUG("Tail call to policy program failed: DROP");
+	return TC_ACT_SHOT;
+}
+
+SEC("classifier/tc/accept_v6")
+int calico_tc_v6_skb_accepted_entrypoint(struct __sk_buff *skb)
+{
+	CALI_DEBUG("Entering IPv6 accepted program");
+	if (CALI_F_WEP) {
+		CALI_DEBUG("IPv6 from workload: drop");
+		goto deny;
+	}
+	CALI_DEBUG("IPv6 on host interface: allow");
+	return TC_ACT_UNSPEC;
+
+deny:
+	return TC_ACT_SHOT;
+}
+
+SEC("classifier/tc/icmp_v6")
+int calico_tc_v6_skb_send_icmp_replies(struct __sk_buff *skb)
+{
+	CALI_DEBUG("Entering IPv6 icmp program");
+	if (CALI_F_WEP) {
+		CALI_DEBUG("IPv6 from workload: drop");
+		goto deny;
+	}
+	CALI_DEBUG("IPv6 on host interface: allow");
+	return TC_ACT_UNSPEC;
+
 deny:
 	return TC_ACT_SHOT;
 }
