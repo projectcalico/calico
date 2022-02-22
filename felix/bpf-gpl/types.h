@@ -90,6 +90,8 @@ enum cali_state_flags {
 	CALI_ST_SRC_IS_HOST	  = 0x08,
 	/* CALI_ST_SUPPRESS_CT_STATE prevents the creation of any new CT state. */
 	CALI_ST_SUPPRESS_CT_STATE = 0x10,
+	/* CALI_ST_SKIP_POLICY is set when the policy program is skipped. */
+	CALI_ST_SKIP_POLICY = 0x20,
 };
 
 struct fwd {
