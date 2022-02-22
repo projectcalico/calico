@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
@@ -551,7 +552,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
 		interfaceRegexes[i] = "^" + r + ".*"
 	}
-	bpfMapContext := createBPFMapContext(&config)
+	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
+		config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeRoute, config.BPFMapSizeConntrack, config.BPFMapRepin)
 
 	var (
 		bpfEndpointManager *bpfEndpointManager
@@ -559,7 +561,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
-		createBPFMaps(bpfMapContext)
+		bpfmap.CreateBPFMaps(bpfMapContext)
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.

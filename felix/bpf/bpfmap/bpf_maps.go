@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package bpfmap
 
 import (
 	log "github.com/sirupsen/logrus"
@@ -29,17 +29,17 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
 
-func createBPFMapContext(config *Config) *bpf.MapContext {
+func CreateBPFMapContext(ipsetsMapSize, natFEMapSize, natBEMapSize, natAffMapSize, routeMapSize, ctMapSize int, repinEnabled bool) *bpf.MapContext {
 	bpfMapContext := &bpf.MapContext{
-		RepinningEnabled: config.BPFMapRepin,
+		RepinningEnabled: repinEnabled,
 		MapSizes:         map[string]uint32{},
 	}
-	bpfMapContext.MapSizes[ipsets.MapParameters.VersionedName()] = uint32(config.BPFMapSizeIPSets)
-	bpfMapContext.MapSizes[nat.FrontendMapParameters.VersionedName()] = uint32(config.BPFMapSizeNATFrontend)
-	bpfMapContext.MapSizes[nat.BackendMapParameters.VersionedName()] = uint32(config.BPFMapSizeNATBackend)
-	bpfMapContext.MapSizes[nat.AffinityMapParameters.VersionedName()] = uint32(config.BPFMapSizeNATAffinity)
-	bpfMapContext.MapSizes[routes.MapParameters.VersionedName()] = uint32(config.BPFMapSizeRoute)
-	bpfMapContext.MapSizes[conntrack.MapParams.VersionedName()] = uint32(config.BPFMapSizeConntrack)
+	bpfMapContext.MapSizes[ipsets.MapParameters.VersionedName()] = uint32(ipsetsMapSize)
+	bpfMapContext.MapSizes[nat.FrontendMapParameters.VersionedName()] = uint32(natFEMapSize)
+	bpfMapContext.MapSizes[nat.BackendMapParameters.VersionedName()] = uint32(natBEMapSize)
+	bpfMapContext.MapSizes[nat.AffinityMapParameters.VersionedName()] = uint32(natAffMapSize)
+	bpfMapContext.MapSizes[routes.MapParameters.VersionedName()] = uint32(routeMapSize)
+	bpfMapContext.MapSizes[conntrack.MapParams.VersionedName()] = uint32(ctMapSize)
 
 	bpfMapContext.MapSizes[state.MapParameters.VersionedName()] = uint32(state.MapParameters.MaxEntries)
 	bpfMapContext.MapSizes[arp.MapParams.VersionedName()] = uint32(arp.MapParams.MaxEntries)
@@ -50,7 +50,7 @@ func createBPFMapContext(config *Config) *bpf.MapContext {
 	return bpfMapContext
 }
 
-func createBPFMaps(mc *bpf.MapContext) {
+func CreateBPFMaps(mc *bpf.MapContext) {
 	maps := []bpf.Map{}
 
 	mc.IpsetsMap = ipsets.Map(mc)
