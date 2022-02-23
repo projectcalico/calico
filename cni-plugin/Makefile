@@ -150,7 +150,7 @@ ut-datastore:
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e KUBECONFIG=/home/user/certs/kubeconfig \
 	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	-v $(CURDIR)/tests/certs:/home/user/certs \
+	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
@@ -183,7 +183,7 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
 	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
+	  -v $(CERTS_PATH):/home/user/certs \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
 	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
@@ -208,7 +208,7 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 run-k8s-controller: stop-k8s-controller run-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-controller \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
+	  -v $(CERTS_PATH):/home/user/certs \
 	  $(CALICO_BUILD) kube-controller-manager \
             --master=https://127.0.0.1:6443 \
             --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
