@@ -74,12 +74,17 @@ var routeTableRangesToString = func(value interface{}) interface{} {
 	ranges := value.(apiv3.RouteTableRanges)
 	rangesStr := make([]string, 0)
 	for _, r := range ranges {
-		rangesStr = append(rangesStr, routeTableRangeToString(r).(string))
+		rangesStr = append(rangesStr, routeTableIDRangeToString(r).(string))
 	}
 	return strings.Join(rangesStr, ",")
 }
 
-var routeTableRangeToString = func(value interface{}) interface{} {
+var routeTableIDRangeToString = func(value interface{}) interface{} {
 	r := value.(apiv3.RouteTableIDRange)
+	return fmt.Sprintf("%d-%d", r.Min, r.Max)
+}
+
+var routeTableRangeToString = func(value interface{}) interface{} {
+	r := value.(apiv3.RouteTableRange)
 	return fmt.Sprintf("%d-%d", r.Min, r.Max)
 }
