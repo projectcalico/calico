@@ -262,16 +262,16 @@ type Config struct {
 	// to Debug level logs.
 	LogDebugFilenameRegex *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
-	VXLANEnabled        bool   `config:"bool;false"`
-	VXLANPort           int    `config:"int;4789"`
-	VXLANVNI            int    `config:"int;4096"`
-	VXLANMTU            int    `config:"int;0"`
-	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
-	VXLANTunnelMACAddr  string `config:"string;"`
+	DeprecatedVXLANEnabled *bool  `config:"*bool;"`
+	VXLANPort              int    `config:"int;4789"`
+	VXLANVNI               int    `config:"int;4096"`
+	VXLANMTU               int    `config:"int;0"`
+	IPv4VXLANTunnelAddr    net.IP `config:"ipv4;"`
+	VXLANTunnelMACAddr     string `config:"string;"`
 
-	IpInIpEnabled    bool   `config:"bool;false"`
-	IpInIpMtu        int    `config:"int;0"`
-	IpInIpTunnelAddr net.IP `config:"ipv4;"`
+	DeprecatedIpInIpEnabled *bool  `config:"*bool;"`
+	IpInIpMtu               int    `config:"int;0"`
+	IpInIpTunnelAddr        net.IP `config:"ipv4;"`
 
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
 	// from workloads. We always add them unless explicitly requested not to add them.
@@ -345,6 +345,9 @@ type Config struct {
 
 	// Configures MTU auto-detection.
 	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)"`
+
+	// Encapsulation information calculated from IP Pools
+	Encapsulation Encapsulation
 
 	// State tracking.
 
@@ -628,7 +631,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
-	if !(config.IpInIpEnabled || config.VXLANEnabled || config.BPFEnabled) {
+	if !(config.Encapsulation.IPIPEnabled || config.Encapsulation.VXLANEnabled || config.BPFEnabled) {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
@@ -705,6 +708,8 @@ func loadParams() {
 		switch kind {
 		case "bool":
 			param = &BoolParam{}
+		case "*bool":
+			param = &BoolPtrParam{}
 		case "int":
 			min := minInt
 			max := maxInt
@@ -908,4 +913,9 @@ type param interface {
 	GetMetadata() *Metadata
 	Parse(raw string) (result interface{}, err error)
 	setDefault(*Config)
+}
+
+type Encapsulation struct {
+	IPIPEnabled  bool
+	VXLANEnabled bool
 }
