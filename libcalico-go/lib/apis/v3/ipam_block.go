@@ -43,7 +43,7 @@ type IPAMBlockSpec struct {
 	CIDR string `json:"cidr"`
 
 	// Affinity of the block, if this block has one. If set, it will be of the form
-	// "host:<hostname>". If not set, this block it not affine to a host.
+	// "host:<hostname>". If not set, this block is not affine to a host.
 	Affinity *string `json:"affinity,omitempty"`
 
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.
@@ -67,7 +67,7 @@ type IPAMBlockSpec struct {
 	SequenceNumber uint64 `json:"sequenceNumber"`
 
 	// Map of allocated ordinal within the block to sequence number of the block at
-	// the time of allocation. Kubenrnetes does not allow numerical keys for maps, so
+	// the time of allocation. Kubernetes does not allow numerical keys for maps, so
 	// the key is cast to a string.
 	// +optional
 	SequenceNumberForAllocation map[string]uint64 `json:"sequenceNumberForAllocation"`

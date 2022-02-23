@@ -426,7 +426,8 @@ func sanitizeHandle(handleID string) string {
 	return strings.Split(handleID, "\r")[0]
 }
 
-func (b *allocationBlock) releaseByHandle(handleID string, opts ReleaseOptions) int {
+func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
+	handleID := opts.Handle
 	attrIndexes := b.attributeIndexesByHandle(handleID)
 	log.Debugf("Attribute indexes to release: %v", attrIndexes)
 	if len(attrIndexes) == 0 {
