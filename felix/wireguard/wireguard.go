@@ -198,7 +198,7 @@ func NewWithShims(
 
 	var rt routeTable
 	if !config.RouteSyncDisabled {
-		log.Info("RouteSyncDisabled is false.")
+		log.Debug("RouteSyncDisabled is false.")
 		rt = routetable.NewWithShims(
 			[]string{"^" + config.InterfaceName + "$", routetable.InterfaceNone},
 			ipVersion,

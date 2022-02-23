@@ -109,7 +109,7 @@ func newVXLANManager(
 		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable
 	var brt routeTable
 	if !dpConfig.RouteSyncDisabled {
-		log.Info("RouteSyncDisabled is false.")
+		log.Debug("RouteSyncDisabled is false.")
 		brt = routetable.New(
 			[]string{routetable.InterfaceNone},
 			4,

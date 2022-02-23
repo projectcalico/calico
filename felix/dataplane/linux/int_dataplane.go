@@ -437,7 +437,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.VXLANEnabled {
 		var routeTableVXLAN routeTable
 		if !config.RouteSyncDisabled {
-			log.Info("RouteSyncDisabled is false.")
+			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
 				dp.loopSummarizer)
@@ -720,7 +720,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var routeTableV4 routeTable
 
 	if !config.RouteSyncDisabled {
-		log.Info("RouteSyncDisabled is false.")
+		log.Debug("RouteSyncDisabled is false.")
 		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
 			dp.loopSummarizer)
@@ -814,13 +814,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		var routeTableV6 routeTable
 		if !config.RouteSyncDisabled {
-			log.Info("RouteSyncDisabled is false.")
+			log.Debug("RouteSyncDisabled is false.")
 			routeTableV6 = routetable.New(
 				interfaceRegexes, 6, false, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
 				dp.loopSummarizer)
 		} else {
-			log.Info("RouteSyncDisabled is true, using DummyTable.")
+			log.Debug("RouteSyncDisabled is true, using DummyTable.")
 			routeTableV6 = &routetable.DummyTable{}
 		}
 
