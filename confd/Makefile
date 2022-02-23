@@ -53,11 +53,6 @@ endif
 # checking them.
 UPDATE_EXPECTED_DATA?=false
 
-# Location of the certs directory. 
-# TODO: Centralize this instead of just using cni-plugins certs. Right now each
-# directory has an exact copy of these files!
-CERTS_PATH=$(CURDIR)/../cni-plugin/tests/certs
-
 .PHONY: test-kdd
 ## Run template tests against KDD
 test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
