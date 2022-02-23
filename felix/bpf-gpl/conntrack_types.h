@@ -31,7 +31,8 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_RES_0x20	0x20 /* reserved */
 #define CALI_CT_FLAG_EXT_LOCAL	0x40 /* marks traffic from external client to a local serice */
 #define CALI_CT_FLAG_VIA_NAT_IF	0x80 /* marks connection first seen on the service veth */
-#define CALI_CT_FLAG_BA		0x100 /* masks that src->dst is the B->A leg */
+#define CALI_CT_FLAG_BA		0x100 /* marks that src->dst is the B->A leg */
+#define CALI_CT_FLAG_HOST_PSNAT 0x200 /* marks that this is from host port collision resolution */
 
 struct calico_ct_leg {
 	__u32 seqno;
