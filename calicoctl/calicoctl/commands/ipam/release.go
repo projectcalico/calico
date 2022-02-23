@@ -199,9 +199,9 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 	}
 
 	// For each address that needs to be released, do so.
-	var notInUse map[string]string
+	var notInUse map[string]libipam.ReleaseOptions
 	for _, report := range reports {
-		merged := make(map[string]string)
+		merged := make(map[string]libipam.ReleaseOptions)
 		for _, allocations := range report.Allocations {
 			for _, a := range allocations {
 				if a.InUse {
@@ -210,20 +210,19 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 				if _, ok := notInUse[a.IP]; notInUse != nil && !ok {
 					continue
 				}
-				merged[a.IP] = a.Handle
+				merged[a.IP] = libipam.ReleaseOptions{
+					Handle:         a.Handle,
+					Address:        a.IP,
+					SequenceNumber: a.SequenceNumber,
+				}
 			}
 		}
 		notInUse = merged
 	}
 
 	ipsToRelease := []libipam.ReleaseOptions{}
-	for ip, handle := range notInUse {
-		// TODO: Should pass sequence number here as well.
-		o := libipam.ReleaseOptions{
-			Address: argutils.ValidateIP(ip).String(),
-			Handle:  handle,
-		}
-		ipsToRelease = append(ipsToRelease, o)
+	for _, opts := range notInUse {
+		ipsToRelease = append(ipsToRelease, opts)
 	}
 	if len(ipsToRelease) == 0 {
 		fmt.Println("No addresses need to be released.")
