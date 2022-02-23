@@ -31,7 +31,26 @@ You can configure Felix, Typha, and/or kube-controllers to provide metrics to Pr
 
 ### Before you begin...
 
-In this tutorial we assume that you have completed all other introductory tutorials and possess a running Kubernetes cluster with {{site.prodname}}, calicoctl or apiserver and kubectl installed.
+In this tutorial we assume that you have completed all other introductory tutorials and possess a running Kubernetes cluster with {{site.prodname}}. You can either use `kubectl` or `calicoctl` to perform the following steps. Depending on which tool you would like to use, make sure you have the necessary prerequisites as shown below.
+
+
+{% tabs %}
+<label:kubectl,active:true>
+<%
+If you wish to modify {{site.prodname}} configurations with `kubectl` binary you need to make sure you have the {{site.prodname}} API server in your cluster. API Server allows you to manage {{site.prodname}} spesific resources that exists within the `projectcalico.org/v3` api group.
+
+> **Note**: Tigera-operator installs the API server by default in the recent versions of {{site.prodname}} `(v3.20+)`.
+   {: .alert .alert-info}
+
+For more information about API server please use [this link]({{ site.baseurl }}/maintenance/install-apiserver).
+%>
+<label:calicoctl>
+<%
+You can run `calicoctl` on any host with network access to the Calico datastore as either a binary or a container to manage Calico APIs in the `projectcalico.org/v3` API group.
+
+For more information about calicoctl please use [this link]({{ site.baseurl }}/maintenance/clis/calicoctl/install).
+%>
+{% endtabs %}
 
 ### How to
 
@@ -41,27 +60,24 @@ This tutorial will go through the necessary steps to implement basic monitoring 
 3. Deploy and configure Prometheus.
 4. View the metrics in the Prometheus dashboard and create a simple graph.
 
-> **Note**: This guide assumes {{site.prodname}} was installed in the kube-system namespace. If using the Operator, you should replace instances of kube-system with calico-system instead.
-   {: .alert .alert-info}
-
 #### 1. Configure {{site.prodname}} to enable metrics reporting
 
 ##### **Felix configuration**
-Felix prometheus metrics are **disabled** by default. You have to manually change your Felix configuration (**prometheusMetricsEnabled**) via calicoctl or [Calico API server (Calico 3.20+)]({{ site.baseurl }}/maintenance/install-apiserver) in order to use this feature.
-
+Felix prometheus metrics are **disabled** by default.
 > **Note**: A comprehensive list of configuration values can be [found at this link]({{ site.baseurl }}/reference/felix/configuration).
    {: .alert .alert-info}
 
+Use the following command to enable Felix metrics.
 {% tabs %}
-<label:apiserver,active:true>
+<label:kubectl,active:true>
 <% 
 ```bash
-kubectl patch felixConfiguration default --type merge --patch '{"spec":{"prometheusMetricsEnabled": true}}'
+kubectl patch felixconfiguration default --type merge --patch '{"spec":{"prometheusMetricsEnabled": true}}'
 ```
 
 You should see an output like below:
 ```
-felixconfiguration.crd.projectcalico.org/default patched
+felixconfiguration.projectcalico.org/default patched (no change)
 ```
 %>
 
@@ -69,7 +85,7 @@ felixconfiguration.crd.projectcalico.org/default patched
 <%
 
 ```bash
-calicoctl patch felixConfiguration default  --patch '{"spec":{"prometheusMetricsEnabled": true}}'
+calicoctl patch felixconfiguration default  --patch '{"spec":{"prometheusMetricsEnabled": true}}'
 ```
 
 You should see an output like below:
@@ -266,7 +282,7 @@ EOF
 {: .alert .alert-info}
 
 {% tabs %}
-<label:apiserver,active:true>
+<label:kubectl,active:true>
 <%
 ```bash
 kubectl patch kubecontrollersconfiguration default --type=merge  --patch '{"spec":{"prometheusMetricsPort": 9095}}'
@@ -555,7 +571,7 @@ kubectl delete service kube-controllers-metrics-svc -n kube-system
 
 Return {{site.prodname}} configurations to their default state.
 {% tabs %}
-<label:apiserver,active:true>
+<label:kubectl,active:true>
 <% 
 ```bash
 kubectl patch felixConfiguration default --type merge --patch '{"spec":{"prometheusMetricsEnabled": false}}'
