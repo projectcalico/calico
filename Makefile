@@ -58,13 +58,14 @@ image:
 # using a local kind cluster.
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance"
+E2E_ARGS ?=
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	$(MAKE) run-e2e
 
 run-e2e:
-	KUBECONFIG=./node/kubeconfig.yaml ./e2e/bin/e2e.test -ginkgo.focus=$(E2E_FOCUS)
+	KUBECONFIG=./node/kubeconfig.yaml ./e2e/bin/e2e.test -ginkgo.focus=$(E2E_FOCUS) $(E2E_ARGS)
 
 ###############################################################################
 # Release logic below
