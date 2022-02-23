@@ -220,7 +220,11 @@ ifdef ARM_VERSION
 GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
 endif
 
-# Set the platform correctly for building docker images so that
+# Location of certificates used in UTs.
+REPO_ROOT := $(shell git rev-parse --show-toplevel)
+CERTS_PATH := $(REPO_ROOT)/hack/test/certs
+
+# Set the platform correctly for building docker images so that 
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
 TARGET_PLATFORM=--platform=linux/arm64/v8

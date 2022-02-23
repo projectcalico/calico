@@ -168,7 +168,7 @@ run-kubernetes-server: run-etcd stop-kubernetes-server
 	# Run a Kubernetes apiserver using Docker.
 	docker run --detach --net=host \
 	  --name st-apiserver \
-	  -v $(CURDIR)/test/certs:/home/user/certs \
+	  -v $(CERTS_PATH):/home/user/certs \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
 	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
@@ -191,7 +191,7 @@ run-kubernetes-server: run-etcd stop-kubernetes-server
 	# And run the controller manager.
 	docker run --detach --net=host \
 	  --name st-controller-manager \
-	  -v $(CURDIR)/test/certs:/home/user/certs \
+	  -v $(CERTS_PATH):/home/user/certs \
 	  $(CALICO_BUILD) kube-controller-manager \
             --master=https://127.0.0.1:6443 \
             --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
@@ -208,7 +208,7 @@ run-kubernetes-server: run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/test/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/
@@ -218,7 +218,7 @@ run-kubernetes-server: run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
-		-v $(CURDIR)/test/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/mock-node.yaml
@@ -229,7 +229,7 @@ run-kubernetes-server: run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
-		-v $(CURDIR)/test/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/namespaces.yaml
@@ -253,7 +253,7 @@ fv: fv-kdd
 .PHONY: fv-etcd
 fv-etcd: run-kubernetes-server hack-lib
 	$(DOCKER_RUN) \
-		-v $(CURDIR)/test/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) \
 		sh -c 'ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" test/integration.sh'
@@ -261,7 +261,7 @@ fv-etcd: run-kubernetes-server hack-lib
 .PHONY: fv-kdd
 fv-kdd: run-kubernetes-server hack-lib
 	$(DOCKER_RUN) \
-		-v $(CURDIR)/test/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) \
 		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'
