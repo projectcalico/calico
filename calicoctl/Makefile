@@ -168,7 +168,7 @@ st: bin/calicoctl-linux-amd64 version-helper
 	docker run --net=host --privileged \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
 		   --rm -t \
-		   -v $(CURDIR)/tests/certs:/home/user/certs \
+		   -v $(CERTS_PATH):/home/user/certs \
 		   -v $(CURDIR):/code \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
@@ -183,7 +183,7 @@ run-kubernetes-master: stop-kubernetes-master
 		--name st-apiserver-${KUBE_APISERVER_PORT} \
 		-v $(CURDIR):/code \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
-		-v $(CURDIR)/tests/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		${CALICO_BUILD} kube-apiserver \
 			--secure-port=${KUBE_APISERVER_PORT} \
@@ -209,7 +209,7 @@ run-kubernetes-master: stop-kubernetes-master
 	# And run the controller manager.
 	docker run --detach --net=host \
 	  --name st-controller-manager-${KUBE_APISERVER_PORT} \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
+	  -v $(CERTS_PATH):/home/user/certs \
 	  $(CALICO_BUILD) kube-controller-manager \
 	    --master=https://127.0.0.1:${KUBE_APISERVER_PORT} \
             --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \

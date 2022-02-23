@@ -61,11 +61,11 @@ current-context: test-context`
 
 func BuildKubeconfig(apiserverIP string) string {
 	// Load contents of test cert / key and fill them into the kubeconfig.
-	adminCertBytes, err := os.ReadFile(os.Getenv("CERTS") + "/admin.pem")
+	adminCertBytes, err := os.ReadFile(os.Getenv("CERTS_PATH") + "/admin.pem")
 	Expect(err).NotTo(HaveOccurred())
 	encodedAdminCert := base64.StdEncoding.EncodeToString(adminCertBytes)
 
-	adminKeyBytes, err := os.ReadFile(os.Getenv("CERTS") + "/admin-key.pem")
+	adminKeyBytes, err := os.ReadFile(os.Getenv("CERTS_PATH") + "/admin-key.pem")
 	Expect(err).NotTo(HaveOccurred())
 	encodedAdminKey := base64.StdEncoding.EncodeToString(adminKeyBytes)
 
@@ -76,7 +76,7 @@ func BuildKubeconfig(apiserverIP string) string {
 func RunK8sApiserver(etcdIp string) *containers.Container {
 	return containers.Run("st-apiserver",
 		containers.RunOpts{AutoRemove: true},
-		"-v", os.Getenv("CERTS")+":/home/user/certs", // Mount in location of certificates.
+		"-v", os.Getenv("CERTS_PATH")+":/home/user/certs", // Mount in location of certificates.
 		"-v", os.Getenv("CRDS")+":/crds",
 		"-e", "KUBECONFIG=/home/user/certs/kubeconfig", // We run kubectl from within this container.
 		os.Getenv("KUBE_IMAGE"),
@@ -101,7 +101,7 @@ func RunK8sApiserver(etcdIp string) *containers.Container {
 func RunK8sControllerManager(apiserverIp string) *containers.Container {
 	c := containers.Run("st-controller-manager",
 		containers.RunOpts{AutoRemove: true},
-		"-v", os.Getenv("CERTS")+":/home/user/certs", // Mount in location of certificates.
+		"-v", os.Getenv("CERTS_PATH")+":/home/user/certs", // Mount in location of certificates.
 		os.Getenv("KUBE_IMAGE"),
 		"kube-controller-manager",
 		fmt.Sprintf("--master=https://%v:6443", apiserverIp),
