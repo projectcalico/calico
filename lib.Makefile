@@ -216,6 +216,9 @@ ifdef ARM_VERSION
 GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
 endif
 
+# Location of certificates used in UTs.
+REPO_ROOT := $(shell git rev-parse --show-toplevel)
+CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
