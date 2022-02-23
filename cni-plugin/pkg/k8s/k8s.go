@@ -621,7 +621,9 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 		return nil, err
 	}
 
-	result := cniv1.Result{}
+	result := cniv1.Result{
+		CNIVersion: cniv1.ImplementedSpecVersion,
+	}
 
 	// Go through all the IPs passed in as annotation value and call IPAM plugin
 	// for each, and populate the result variable with IP4 and/or IP6 IPs returned
@@ -728,7 +730,9 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*cniv1.Resu
 		return nil, err
 	}
 
-	result := cniv1.Result{}
+	result := cniv1.Result{
+		CNIVersion: cniv1.ImplementedSpecVersion,
+	}
 
 	// Go through all the IPs passed in as annotation value and populate
 	// the result variable with IP4 and/or IP6 IPs.
