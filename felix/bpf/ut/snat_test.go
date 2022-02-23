@@ -179,11 +179,15 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut | tcdefs.MarkSeenBypassSkipRPF
 
+	var hostConflictPkt []byte
+
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 		Expect(res.dataOut).To(Equal(pktBytes))
+
+		hostConflictPkt = res.dataOut
 	})
 
 	// Return path
@@ -215,4 +219,65 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		// expect them to be the same
 		Expect(res.dataOut).To(Equal(resPktBytes))
 	})
+
+	dumpCTMap(ctMap)
+
+	// A packet from host that conflicts with the SNATed connection via service.
+
+	var hostConflictPktAfterSNAT []byte
+
+	skbMark = 0
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(hostConflictPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		udpL := pktR.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+
+		Expect(udpR.SrcPort).To(Equal(layers.UDPPort(22222)))
+
+		hostConflictPktAfterSNAT = res.dataOut
+	}, withPSNATPorts(22222, 22222))
+
+	dumpCTMap(ctMap)
+
+	// A follow up packet
+
+	skbMark = 0
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(hostConflictPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		Expect(res.dataOut).To(Equal(hostConflictPktAfterSNAT))
+	}, withPSNATPorts(22222, 22222))
+
+	// Return path
+
+	skbMark = 0
+
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		respPkt := udpResponseRaw(hostConflictPktAfterSNAT)
+		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		udpL := pktR.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+
+		Expect(udpR.SrcPort).To(Equal(layers.UDPPort(natPort)))
+		Expect(udpR.DstPort).To(Equal(layers.UDPPort(10101)))
+	}, withPSNATPorts(22222, 22222))
 }
