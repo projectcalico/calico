@@ -146,6 +146,8 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 #define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))
 #define skb_seen(skb) (((skb)->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN)
 
+#define skb_from_host(skb) (CALI_F_TO_HEP && !skb_seen(skb))
+
 static CALI_BPF_INLINE long skb_l4hdr_offset(struct __sk_buff *skb, __u8 ihl)
 {
 	return skb_iphdr_offset() + ihl;
