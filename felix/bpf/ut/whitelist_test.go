@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 // Usually a packet passes through 2 programs, HEP->WEP, WEP->HEP or WEP->WEP. These test
@@ -225,5 +226,85 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 		// Whitelisted by both WEPs
 		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
 		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+	})
+}
+
+func TestWhitelistFromHostExitHost(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "WHhs"
+	defer func() { bpfIfaceName = "" }()
+	defer cleanUpMaps()
+
+	ipHdr := ipv4Default
+	ipHdr.Id = 1
+	ipHdr.SrcIP = node1ip
+	ipHdr.DstIP = node2ip
+
+	_, ipv4, l4, _, pktBytes, err := testPacket(nil, ipHdr, nil, nil)
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	resetCTMap(ctMap) // ensure it is clean
+
+	hostIP = node1ip
+
+	// Insert routes for both hosts.
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValue(routes.FlagsLocalHost).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node2CIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValue(routes.FlagsRemoteHost).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
+		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+
+	// Leaving node 1
+	skbMark = 0
+
+	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		dumpCTMap(ctMap)
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ct).Should(HaveKey(ctKey))
+
+		ctr := ct[ctKey]
+
+		// Whitelisted by HEP
+		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
+		Expect(ctr.Data().B2A.Whitelisted).To(BeFalse())
+	})
+
+	// Return
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		respPkt := udpResponseRaw(pktBytes)
+		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		dumpCTMap(ctMap)
+
+		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
+			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ct).Should(HaveKey(ctKey))
+
+		ctr := ct[ctKey]
+
+		// Whitelisted by HEP
+		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
+		Expect(ctr.Data().B2A.Whitelisted).To(BeFalse())
 	})
 }
