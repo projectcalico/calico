@@ -98,8 +98,7 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 
 	// Update or create default Felix configuration with Flannel VNI and vxlan port.
 	err = updateOrCreateDefaultFelixConfiguration(m.ctx, m.calicoClient,
-		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU,
-		checkVxlan)
+		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU)
 	if err != nil {
 		return fmt.Errorf("Failed to create default ippool")
 	}
@@ -366,20 +365,18 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 func updateOrCreateDefaultFelixConfiguration(ctx context.Context, client client.Interface, vni, port, mtu int) error {
 	// Get default Felix configuration. Return error if not exists.
 	defaultConfig, err := client.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
-	if err != nil {
+	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 		// Create the default config if it doesn't already exist.
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			defaultConfig = api.NewFelixConfiguration()
-			defaultConfig.Name = defaultFelixConfigurationName
-			defaultConfig, err = client.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
-			if err != nil {
-				log.WithError(err).Errorf("Error creating default FelixConfiguration resource")
-				return err
-			}
-		} else {
-			log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
+		defaultConfig = api.NewFelixConfiguration()
+		defaultConfig.Name = defaultFelixConfigurationName
+		defaultConfig, err = client.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Error creating default FelixConfiguration resource")
 			return err
 		}
+	} else if err != nil {
+		log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
+		return err
 	}
 
 	// Get current value for VNI , Port and MTU.

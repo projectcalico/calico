@@ -30,7 +30,9 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	. "github.com/projectcalico/calico/felix/calc"
@@ -722,5 +724,32 @@ var _ = Describe("calc graph with health state", func() {
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
 		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator, func() {})
 		Expect(asyncGraph).NotTo(BeNil())
+	})
+})
+
+var _ = Describe("calc graph encap resolver", func() {
+	var calcGraph *CalcGraph
+	var mockDataplane *mock.MockDataplane
+	var eventBuf *EventSequencer
+	var restartTriggered bool
+	configChangedRestartCallback := func() {
+		restartTriggered = true
+	}
+
+	BeforeEach(func() {
+		conf := config.New()
+		mockDataplane = mock.NewMockDataplane()
+		eventBuf = NewEventSequencer(mockDataplane)
+		eventBuf.Callback = mockDataplane.OnEvent
+		calcGraph = NewCalculationGraph(eventBuf, conf, configChangedRestartCallback)
+		restartTriggered = false
+	})
+
+	It("should trigger configChangedRestartCallback when changing IP pool encaps", func() {
+		calcGraph.AllUpdDispatcher.OnStatusUpdated(api.InSync)
+		_, cidr, err := net.ParseCIDR("192.168.1.0/24")
+		Expect(err).To(Not(HaveOccurred()))
+		calcGraph.AllUpdDispatcher.OnUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+		Expect(restartTriggered).To(BeTrue())
 	})
 })
