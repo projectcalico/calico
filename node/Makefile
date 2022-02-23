@@ -283,11 +283,6 @@ $(FELIX_GPL_SOURCE):
 ###############################################################################
 K8ST_IMAGE_TARS=calico-node.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
 
-# Location of the certs directory. 
-# TODO: Centralize this instead of just using cni-plugins certs. Right now each
-# directory has an exact copy of these files!
-CERTS_PATH=$(CURDIR)/../cni-plugin/tests/certs
-
 ## Run the ginkgo FVs
 fv: run-k8s-apiserver
 	$(DOCKER_RUN) \
