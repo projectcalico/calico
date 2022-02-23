@@ -100,7 +100,6 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct
 			} else {
 				ct_value->a_to_b.whitelisted = 1;
 			}
-			ct_ctx->flags = CALI_CT_FLAG_BA;
 		}
 
 		return 0;
@@ -162,6 +161,7 @@ create:
 		CALI_VERB("CT-ALL src_to_dst B->A\n");
 		src_to_dst = &ct_value.b_to_a;
 		dst_to_src = &ct_value.a_to_b;
+		ct_value.flags |= CALI_CT_FLAG_BA;
 	}
 
 	dump_ct_key(k);
@@ -181,7 +181,7 @@ create:
 		/* src is the from the WEP, policy whitelisted this side */
 		src_to_dst->whitelisted = 1;
 		CALI_DEBUG("CT-ALL Whitelisted source side - from WEP\n");
-	} else if (CALI_F_FROM_HEP) {
+	} else if (CALI_F_FROM_HEP || (CALI_F_TO_HEP && !skb_seen(ct_ctx->skb))) {
 		/* src is the from the HEP, policy whitelisted this side */
 		src_to_dst->whitelisted = 1;
 
@@ -189,6 +189,8 @@ create:
 			/* When we do NAT and forward through the tunnel, we go through
 			 * a single policy, what we forward we also accept back,
 			 * whitelist both sides.
+			 *
+			 * Also when we resolve source port conflict on host traffic.
 			 */
 			dst_to_src->whitelisted = 1;
 		}
@@ -202,7 +204,7 @@ create:
 
 	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
-	if (CALI_F_FROM_HEP && !CALI_F_NAT_IF && err == -17 /* EEXIST */) {
+	if (CALI_F_HEP && !CALI_F_NAT_IF && err == -17 /* EEXIST */) {
 		int i;
 
 		CALI_DEBUG("Source collision for 0x%x:%d\n", bpf_htonl(ip_src), sport);
@@ -242,6 +244,16 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	__be32 ip_dst = ct_ctx->orig_dst;
 	__u16 sport = ct_ctx->orig_sport;
 	__u16 dport = ct_ctx->orig_dport;
+
+	if (CALI_F_TO_HEP && !CALI_F_NAT_IF && sport != ct_ctx->sport &&
+			!(ct_ctx->skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
+		/* This entry is being created because we have a source port
+		 * conflict on a connection from host. We did psnat so we mak
+		 * such an entry with a 0 sport.
+		 */
+		sport = 0;
+		CALI_DEBUG("FWD for psnat host conflict\n");
+	}
 
 	__u64 now = bpf_ktime_get_ns();
 
@@ -683,6 +695,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		/* if returning packet into a tunnel */
 		snat |= (dnat_return_should_encap() && v->tun_ip);
 		snat |= result.flags & CALI_CT_FLAG_VIA_NAT_IF;
+		snat |= result.flags & CALI_CT_FLAG_HOST_PSNAT;
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
@@ -765,7 +778,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 	if (ret_from_tun) {
 		CALI_DEBUG("Packet returned from tunnel %x\n", bpf_ntohl(tc_ctx->state->tun_ip));
-	} else if (CALI_F_TO_HOST) {
+	} else if (CALI_F_TO_HOST || (skb_from_host(tc_ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
 		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {
 			CALI_CT_VERB("Packet whitelisted by this workload's policy.\n");
@@ -778,8 +791,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (TH).\n");
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
-	}
-	if (CALI_F_FROM_HOST) {
+	} else if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest whitelist. */
 		if (dst_to_src->whitelisted) {
 			// Packet was whitelisted by the policy attached to this endpoint.

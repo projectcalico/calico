@@ -253,6 +253,14 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
 
+	if (CALI_F_TO_HEP &&
+			(ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) &&
+			!(ctx->skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
+		CALI_DEBUG("Host source SNAT conflict\n");
+		CALI_JUMP_TO(ctx->skb, PROG_INDEX_HOST_CT_CONFLICT);
+		goto deny;
+	}
+
 	/* Check if someone is trying to spoof a tunnel packet */
 	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(ctx->state->ct_result.rc)) {
 		CALI_DEBUG("dropping tunnel pkt with changed source node\n");
@@ -775,6 +783,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
 		}
+		if (state->flags & CALI_ST_HOST_PSNAT) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_HOST_PSNAT;
+			ct_ctx_nat.allow_return = true;
+		}
 		/* Mark connections that were routed via bpfnatout, but had CT miss at
 		 * HEP. That is because of SNAT happened between bpfnatout and here.
 		 * Returning packets on such a connection must go back via natbpfout
@@ -1279,6 +1291,73 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	tc_state_fill_from_iphdr(&ctx);
 	ctx.state->sport = ctx.state->dport = 0;
 	return forward_or_drop(&ctx);
+deny:
+	return TC_ACT_SHOT;
+}
+
+SEC("classifier/tc/host_ct_conflict")
+int calico_tc_host_ct_conflict_entrypoint(struct __sk_buff *skb)
+{
+	CALI_DEBUG("Entering calico_tc_host_ct_conflict_entrypoint\n");
+	/* Initialise the context, which is stored on the stack, and the state, which
+	 * we use to pass data from one program to the next via tail calls. */
+	struct cali_tc_ctx ctx = {
+		.state = state_get(),
+		.skb = skb,
+		.fwd = {
+			.res = TC_ACT_UNSPEC,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+	};
+
+	struct calico_nat_dest nat_dest_ident;
+
+	if (!ctx.state) {
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		goto deny;
+	}
+
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
+		ctx.fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+
+	__u16 sport = ctx.state->sport;
+	ctx.state->sport = 0;
+	ctx.state->ct_result = calico_ct_v4_lookup(&ctx);
+	ctx.state->sport = sport;
+	ctx.state->flags |= CALI_ST_HOST_PSNAT;
+
+	switch (ct_result_rc(ctx.state->ct_result.rc)) {
+	case CALI_CT_ESTABLISHED:
+		/* Because we are on the "from host" patch, conntrack gives us
+		 * CALI_CT_ESTABLISHED only. Better to fix the corner case here than on
+		 * the generic path.
+		 */
+		ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_ESTABLISHED_DNAT);
+		/* fallthrough */
+	case CALI_CT_NEW:
+		/* There is a conflict, this is the first packet that conflictis. By
+		 * setting a NAT destination being the same as the original destination,
+		 * we trigger DNAT (void) which will conflict on the source port and will
+		 * trigger psnat.
+		 */
+		nat_dest_ident.addr = ctx.state->ip_dst;
+		nat_dest_ident.port = ctx.state->dport;
+
+		ctx.nat_dest = &nat_dest_ident;
+		break;
+	default:
+		CALI_INFO("Unexpected CT result %d after host source port collision DENY.\n",
+			  ct_result_rc(ctx.state->ct_result.rc));
+		goto deny;
+	}
+
+	calico_tc_process_ct_lookup(&ctx);
+
+	return forward_or_drop(&ctx);
+
 deny:
 	return TC_ACT_SHOT;
 }
