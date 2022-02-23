@@ -757,6 +757,25 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		v2pols = append(v2pols, hcnPol)
 	}
 
+	// if supported add loopback DSR
+	if d.conf.WindowsLoopbackDSR {
+		// v1
+		v1pols = append(v1pols, []json.RawMessage{
+			[]byte(fmt.Sprintf(`{"Type":"OutBoundNAT","Destinations":["%s"]}`, epIP.String())),
+		}...)
+
+		// v2
+		loopBackPol := hcn.EndpointPolicy{
+			Type: hcn.OutBoundNAT,
+			Settings: json.RawMessage(
+				fmt.Sprintf(`{"Destinations":["%s"]}`, epIP.String()),
+			),
+		}
+		v2pols = append(v2pols, loopBackPol)
+	} else {
+		d.logger.Info("DSR not supported")
+	}
+
 	isDockerV1 := cri.IsDockershimV1(args.Netns)
 	attempts := 3
 	for {
