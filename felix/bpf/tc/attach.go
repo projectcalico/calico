@@ -57,6 +57,7 @@ type AttachPoint struct {
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
+	IPv6Enabled          bool
 }
 
 var tcLock sync.RWMutex
@@ -183,7 +184,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		isHost = true
 	}
 
-	err = updateJumpMap(obj, isHost)
+	err = updateJumpMap(obj, isHost, ap.IPv6Enabled)
 	if err != nil {
 		return "", fmt.Errorf("error updating jump map %v", err)
 	}
@@ -616,7 +617,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 }
 
 // nolint
-func updateJumpMap(obj *libbpf.Obj, isHost bool) error {
+func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 	if !isHost {
 		err := obj.UpdateJumpMap("cali_jump", string(policyProgram), PolicyProgramIndex)
 		if err != nil {
@@ -631,7 +632,11 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool) error {
 	if err != nil {
 		return fmt.Errorf("error updating icmp program %v", err)
 	}
-	// Jump map updates related to IPv6 programs
+
+	// Jump map updates related to IPv6 programs if IPv6 is enabled
+	if !ipv6Enabled {
+		return nil
+	}
 	err = obj.UpdateJumpMap("cali_jump", string(prologueV6Program), PrologueV6ProgramIndex)
 	if err != nil {
 		return fmt.Errorf("error updating IPv6 proglogue program %v", err)
