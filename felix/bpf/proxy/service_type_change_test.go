@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/nat"
@@ -84,10 +85,12 @@ var _ = Describe("BPF service type change", func() {
 
 	initIP := net.IPv4(1, 1, 1, 1)
 
-	front := newMockNATMap()
-	back := newMockNATBackendMap()
-	aff := newMockAffinityMap()
-	ct := mock.NewMockMap(conntrack.MapParams)
+	bpfMc := &bpf.MapContext{}
+	bpfMc.FrontendMap = newMockNATMap()
+	bpfMc.BackendMap = newMockNATBackendMap()
+	bpfMc.AffinityMap = newMockAffinityMap()
+	bpfMc.CtMap = mock.NewMockMap(conntrack.MapParams)
+	front := bpfMc.FrontendMap.(*mockNATMap)
 
 	keyClusterIP := nat.NewNATKey(clusterIP, port, proxy.ProtoV1ToIntPanic(proto))
 	keyExtIP := nat.NewNATKey(extIP, port, proxy.ProtoV1ToIntPanic(proto))
@@ -97,7 +100,7 @@ var _ = Describe("BPF service type change", func() {
 	var p *proxy.KubeProxy
 
 	BeforeEach(func() {
-		p, _ = proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMc, proxy.WithImmediateSync())
 		p.OnHostIPsUpdate([]net.IP{initIP})
 	})
 
@@ -109,6 +112,7 @@ var _ = Describe("BPF service type change", func() {
 		By("check if nat map has the cluster IP", func() {
 
 			Eventually(func() bool {
+
 				front.Lock()
 				defer front.Unlock()
 				_, keyClusterIPExists := front.m[keyClusterIP]
