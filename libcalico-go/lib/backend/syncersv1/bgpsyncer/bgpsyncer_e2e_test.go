@@ -43,7 +43,6 @@ import (
 // each of update handlers that are invoked, since these are tested more thoroughly
 // elsewhere.
 var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 
 	Describe("BGP syncer functionality", func() {
@@ -219,9 +218,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				Expect(v4ia1).ToNot(BeNil())
 				Expect(err).NotTo(HaveOccurred())
 
-				var ips1 []net.IP
+				var ips1 []ipam.ReleaseOptions
 				for _, ipnet := range v4ia1.IPs {
-					ips1 = append(ips1, net.IP{ipnet.IP})
+					ips1 = append(ips1, ipam.ReleaseOptions{Address: ipnet.IP.String()})
 				}
 
 				// Allocating an IP will create an affinity block that we should be notified of.  Not sure
@@ -256,9 +255,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				Expect(v4ia2).ToNot(BeNil())
 				Expect(err).NotTo(HaveOccurred())
 
-				var ips2 []net.IP
+				var ips2 []ipam.ReleaseOptions
 				for _, ipnet := range v4ia2.IPs {
-					ips2 = append(ips2, net.IP{ipnet.IP})
+					ips2 = append(ips2, ipam.ReleaseOptions{Address: ipnet.IP.String()})
 				}
 
 				syncTester.ExpectCacheSize(expectedCacheSize)
@@ -266,9 +265,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				By("Releasing the IP addresses and checking for no updates")
 				// Releasing IPs should leave the affine blocks assigned, so releasing the IPs
 				// should result in no updates.
-				_, err = c.IPAM().ReleaseIPs(ctx, ips1)
+				_, err = c.IPAM().ReleaseIPs(ctx, ips1...)
 				Expect(err).NotTo(HaveOccurred())
-				_, err = c.IPAM().ReleaseIPs(ctx, ips2)
+				_, err = c.IPAM().ReleaseIPs(ctx, ips2...)
 				Expect(err).NotTo(HaveOccurred())
 				syncTester.ExpectCacheSize(expectedCacheSize)
 
