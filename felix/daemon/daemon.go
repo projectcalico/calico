@@ -267,6 +267,16 @@ configRetry:
 			continue configRetry
 		}
 
+		ippoolKVList, err := backendClient.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
+		if err != nil {
+			log.WithError(err).Error("Failed to list IP Pools")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
+		encapCalculator := calc.NewEncapsulationCalculator(configParams, ippoolKVList)
+		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
+		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
+
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
 		// config.  We don't need to re-load the configuration _again_ because the
@@ -535,7 +545,7 @@ configRetry:
 		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
 		healthAggregator,
-	)
+		configChangedRestartCallback)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update
