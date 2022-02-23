@@ -118,10 +118,11 @@ type PinnedMap struct {
 
 	fdLoaded bool
 	fd       MapFD
+	oldfd    MapFD
 	perCPU   bool
-	oldSize int
+	// nolint
+	oldSize  int
 	copyData bool
-	perCPU      bool
 }
 
 func (b *PinnedMap) GetName() string {
@@ -304,6 +305,7 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k, b.ValueSize)
 }
 
+// nolint
 func (b *PinnedMap) copyFromOldMap() error {
 	numEntriesCopied := 0
 	it, err := NewMapIterator(b.oldfd, b.KeySize, b.ValueSize, b.oldSize)
@@ -438,10 +440,10 @@ func (b *PinnedMap) EnsureExists() error {
 			return fmt.Errorf("error getting map info of the pinned map %w", err)
 		}
 
-		b.oldSize = mapInfo.MaxEntries
 		if b.MaxEntries == mapInfo.MaxEntries {
 			return nil
 		}
+		b.oldSize = mapInfo.MaxEntries
 
 		err = b.migratePinnedMap(b.Path(), oldMapPath)
 		if err != nil {
