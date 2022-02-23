@@ -85,7 +85,7 @@ func (c *FakeIPReservations) Update(ctx context.Context, iPReservation *v3.IPRes
 // Delete takes name of the iPReservation and deletes it. Returns an error if one occurs.
 func (c *FakeIPReservations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(ipreservationsResource, name), &v3.IPReservation{})
+		Invokes(testing.NewRootDeleteActionWithOptions(ipreservationsResource, name, opts), &v3.IPReservation{})
 	return err
 }
 
