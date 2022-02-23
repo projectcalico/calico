@@ -820,7 +820,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			if (r && cali_rt_flags_remote_workload(r->flags) && r->flags & CALI_RT_TUNNELED) {
 				CALI_DEBUG("remote wl %x tunneled\n", bpf_htonl(state->post_nat_ip_dst));
 				ct_ctx_nat.src = HOST_TUNNEL_IP;
-				ct_ctx_nat.sport = 10101;
+				/* This would be the place to set a new source port like
+				 * ct_ctx_nat.sport = 10101;
+				 */
 				state->ct_result.nat_sip = ct_ctx_nat.src;
 				state->ct_result.nat_sport = ct_ctx_nat.sport;
 			}
