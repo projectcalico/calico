@@ -178,6 +178,7 @@ type bpfAllowChainRenderer interface {
 
 func newBPFEndpointManager(
 	config *Config,
+	bpfMapContext *bpf.MapContext,
 	fibLookupEnabled bool,
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
@@ -185,7 +186,6 @@ func newBPFEndpointManager(
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
-	bpfMapContext *bpf.MapContext,
 ) *bpfEndpointManager {
 	if livenessCallback == nil {
 		livenessCallback = func() {}

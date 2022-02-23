@@ -591,6 +591,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		bpfEndpointManager = newBPFEndpointManager(
 			&config,
+			bpfMapContext,
 			fibLookupEnabled,
 			workloadIfaceRegex,
 			ipSetIDAllocator,
@@ -598,7 +599,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterTableV4,
 			dp.reportHealth,
 			dp.loopSummarizer,
-			bpfMapContext,
 		)
 		dp.RegisterManager(bpfEndpointManager)
 

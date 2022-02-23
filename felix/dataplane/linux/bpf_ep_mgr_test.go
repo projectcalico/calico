@@ -186,6 +186,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				},
 				BPFExtToServiceConnmark: 0,
 			},
+			bpfMapContext,
 			fibLookupEnabled,
 			regexp.MustCompile(workloadIfaceRegex),
 			ipSetIDAllocator,
@@ -193,7 +194,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			filterTableV4,
 			nil,
 			logutils.NewSummarizer("test"),
-			bpfMapContext,
 		)
 		bpfEpMgr.dp = dp
 	})

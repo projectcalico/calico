@@ -347,11 +347,6 @@ func (b *PinnedMap) Open() error {
 }
 
 // nolint
-func (b *PinnedMap) pinnedMapMatchesConfiguration(maxEntries int) bool {
-	return maxEntries == b.MaxEntries
-}
-
-// nolint
 func (b *PinnedMap) migratePinnedMap(from, to string) error {
 	err := RepinMap(b.VersionedName(), to)
 	if err != nil {
@@ -375,7 +370,6 @@ func (b *PinnedMap) oldMapExists() bool {
 }
 
 func (b *PinnedMap) EnsureExists() error {
-	var oldfd MapFD
 	oldMapPath := b.Path() + "_old"
 	if b.fdLoaded {
 		return nil
@@ -394,30 +388,22 @@ func (b *PinnedMap) EnsureExists() error {
 	}
 
 	if err := b.Open(); err == nil {
-		// store the old fd
-		oldfd = b.MapFD()
-
 		// Get the existing map info
 		mapInfo, err := GetMapInfo(b.fd)
 		if err != nil {
 			return fmt.Errorf("error getting map info of the pinned map %w", err)
 		}
 
-		if b.pinnedMapMatchesConfiguration(mapInfo.MaxEntries) {
+		if b.MaxEntries == mapInfo.MaxEntries {
 			return nil
 		}
+		// close the map fd to remove the map from the kernel
+		b.MapFD().Close()
 		err = b.migratePinnedMap(b.Path(), oldMapPath)
 		if err != nil {
 			return fmt.Errorf("error migrating the old map %w", err)
 		}
 	}
-
-	// Close the oldfd for the maps to be removed from the kernel.
-	defer func() {
-		if oldfd != 0 {
-			oldfd.Close()
-		}
-	}()
 
 	logrus.Debug("Map didn't exist, creating it")
 	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),
