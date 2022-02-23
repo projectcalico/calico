@@ -372,7 +372,7 @@ type FelixConfigurationSpec struct {
 
 	// RouteSyncDisabled will disable all operations performed on the route table. Set to true to
 	// run in network-policy mode only.
-	RouteSyncDisabled *bool `json:"routeSuncDisabled,omitempty"`
+	RouteSyncDisabled *bool `json:"routeSyncDisabled,omitempty"`
 
 	// WireguardEnabled controls whether Wireguard is enabled. [Default: false]
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`

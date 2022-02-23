@@ -496,7 +496,7 @@ spec:
                   information. - WorkloadIPs: use workload endpoints to construct
                   routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
                 type: string
-              routeSuncDisabled:
+              routeSyncDisabled:
                 description: RouteSyncDisabled will disable all operations performed
                   on the route table. Set to true to run in network-policy mode only.
                 type: boolean
