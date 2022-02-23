@@ -61,7 +61,8 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"internalOverrides",
 	}
 	cpFieldNameToFC := map[string]string{
-		"IpInIpEnabled":                      "IPIPEnabled",
+		"DeprecatedIpInIpEnabled":            "IPIPEnabled",
+		"DeprecatedVXLANEnabled":             "VXLANEnabled",
 		"IpInIpMtu":                          "IPIPMTU",
 		"Ipv6Support":                        "IPv6Support",
 		"IptablesLockTimeoutSecs":            "IptablesLockTimeout",
@@ -98,6 +99,9 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 				continue
 			}
 			if strings.Contains(string(f.Tag), "local") {
+				continue
+			}
+			if n == "Encapsulation" {
 				continue
 			}
 			Expect(fcFields).To(HaveKey(n))
@@ -179,6 +183,8 @@ var _ = Describe("Config override empty", func() {
 		})
 	})
 })
+
+var t bool = true
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
@@ -301,9 +307,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", "", (*regexp.Regexp)(nil)),
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", ".*", regexp.MustCompile(".*")),
 
-	Entry("IpInIpEnabled", "IpInIpEnabled", "true", true),
-	Entry("IpInIpEnabled", "IpInIpEnabled", "y", true),
-	Entry("IpInIpEnabled", "IpInIpEnabled", "True", true),
+	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "true", &t),
+	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "y", &t),
+	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "True", &t),
 
 	Entry("IpInIpMtu", "IpInIpMtu", "1234", int(1234)),
 	Entry("IpInIpTunnelAddr", "IpInIpTunnelAddr",
@@ -538,7 +544,9 @@ var _ = Describe("DatastoreConfig tests", func() {
 		BeforeEach(func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
-			c.IpInIpEnabled = true
+			t := true
+			c.DeprecatedIpInIpEnabled = &t
+			c.Encapsulation.IPIPEnabled = true
 		})
 		It("should leave node polling enabled", func() {
 			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeFalse())
@@ -548,7 +556,9 @@ var _ = Describe("DatastoreConfig tests", func() {
 		BeforeEach(func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
-			c.IpInIpEnabled = false
+			f := false
+			c.DeprecatedIpInIpEnabled = &f
+			c.Encapsulation.IPIPEnabled = false
 		})
 		It("should leave node polling enabled", func() {
 			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeTrue())
