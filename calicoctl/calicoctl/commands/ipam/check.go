@@ -449,6 +449,10 @@ func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
 		}
 	}
 
+	// Fill in the sequence number for the allocation.
+	s := b.GetSequenceNumberForOrdinal(ord)
+	alloc.SequenceNumber = &s
+
 	// Fill in the node for the allocation.
 	alloc.Node = node
 
@@ -535,7 +539,8 @@ type Allocation struct {
 	Block   *model.AllocationBlock `json:"-"`
 	Ordinal int                    `json:"-"`
 
-	Handle string `json:"handle,omitempty"`
+	Handle         string  `json:"handle,omitempty"`
+	SequenceNumber *uint64 `json:"sequenceNumber,omitempty"`
 
 	// Metadata for the Allocation.
 	Pod               string `json:"pod,omitempty"`

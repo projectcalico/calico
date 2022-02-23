@@ -1586,15 +1586,15 @@ func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error 
 
 	for blockStr := range handle.Block {
 		_, blockCIDR, _ := net.ParseCIDR(blockStr)
-		if err := c.releaseByHandle(ctx, handleID, *blockCIDR, ReleaseOptions{Handle: handleID}); err != nil {
+		if err := c.releaseByHandle(ctx, *blockCIDR, ReleaseOptions{Handle: handleID}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, opts ReleaseOptions) error {
-	logCtx := log.WithFields(log.Fields{"handle": handleID, "cidr": blockCIDR})
+func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, opts ReleaseOptions) error {
+	logCtx := log.WithFields(log.Fields{"handle": opts.Handle, "cidr": blockCIDR})
 	for i := 0; i < datastoreRetries; i++ {
 		logCtx.Debug("Querying block so we can release IPs by handle")
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
@@ -1611,7 +1611,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 
 		// Release the IP by handle.
 		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
-		num := block.releaseByHandle(handleID, opts)
+		num := block.releaseByHandle(opts)
 		if num == 0 {
 			// Block has no addresses with this handle, so
 			// all addresses are already unallocated.
@@ -1655,7 +1655,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 			}
 			logCtx.Debug("Successfully released IPs from block")
 		}
-		if err = c.decrementHandle(ctx, handleID, blockCIDR, num, nil); err != nil {
+		if err = c.decrementHandle(ctx, opts.Handle, blockCIDR, num, nil); err != nil {
 			logCtx.WithError(err).Warn("Failed to decrement handle")
 		}
 
