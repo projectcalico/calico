@@ -2213,7 +2213,7 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 					},
 					"affinity": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Affinity of the block, if this block has one. If set, it will be of the form \"host:<hostname>\". If not set, this block it not affine to a host.",
+							Description: "Affinity of the block, if this block has one. If set, it will be of the form \"host:<hostname>\". If not set, this block is not affine to a host.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2271,7 +2271,7 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 					},
 					"sequenceNumberForAllocation": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Map of allocated ordinal within the block to sequence number of the block at the time of allocation. Kubenrnetes does not allow numerical keys for maps, so the key is cast to a string.",
+							Description: "Map of allocated ordinal within the block to sequence number of the block at the time of allocation. Kubernetes does not allow numerical keys for maps, so the key is cast to a string.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
