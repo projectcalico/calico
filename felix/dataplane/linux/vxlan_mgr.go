@@ -105,6 +105,8 @@ func newVXLANManager(
 		blackHoleProto = dpConfig.DeviceRouteProtocol
 	}
 
+	var noEncapRTConstruct func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable
 	var brt routeTable
 	if !dpConfig.RouteSyncDisabled {
 		log.Info("RouteSyncDisabled is false.")
@@ -119,23 +121,19 @@ func newVXLANManager(
 			0,
 			opRecorder,
 		)
-	} else {
-		log.Info("RouteSyncDisabled is true, using DummyTable.")
-		brt = &routetable.DummyTable{}
-	}
-
-	noEncapRTConstruct := func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
-		return &routetable.DummyTable{}
-	}
-
-	if !dpConfig.RouteSyncDisabled {
 		noEncapRTConstruct = func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
 			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
 			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
 				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, 0,
 				opRecorder,
 			)
+		}
+	} else {
+		log.Info("RouteSyncDisabled is true, using DummyTable.")
+		brt = &routetable.DummyTable{}
+		noEncapRTConstruct = func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
+			return &routetable.DummyTable{}
 		}
 	}
 
