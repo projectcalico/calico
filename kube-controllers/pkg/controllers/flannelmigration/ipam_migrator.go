@@ -98,8 +98,7 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 
 	// Update or create default Felix configuration with Flannel VNI and vxlan port.
 	err = updateOrCreateDefaultFelixConfiguration(m.ctx, m.calicoClient,
-		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU,
-		checkVxlan)
+		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU)
 	if err != nil {
 		return fmt.Errorf("Failed to create default ippool")
 	}
