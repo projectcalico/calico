@@ -2333,6 +2333,47 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
 						},
 					},
+					"bpfMapSizeNATFrontend": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeNATFrontend sets the size for nat front end map. FrontendMap should be large enough to hold an entry for each nodeport, external IP and each port in each service.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeNATBackend": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeNATBackend sets the size for nat back end map. This is the total number of endpoints. This is mostly more than the size of the number of services.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeNATAffinity": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"bpfMapSizeRoute": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeRoute sets the size for the routes map.  The routes map should be large enough to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and tunnel IPs).",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeConntrack": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeIPSets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors such as \"all()\" can result in large numbers of entries (one entry per endpoint in that case).",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",

@@ -103,7 +103,7 @@ $(TYPHA_IMAGE): bin/calico-typha-$(ARCH) register
 	mkdir -p docker-image/bin
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	docker buildx build --platform linux/$(ARCH) -t $(TYPHA_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ###############################################################################

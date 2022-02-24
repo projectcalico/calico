@@ -96,7 +96,7 @@ gen-crds:
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
 $(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH) register
-	docker buildx build --pull -t $(CALICOCTL_IMAGE):latest-$(ARCH) --platform=linux/$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) -t $(CALICOCTL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -149,7 +149,6 @@ fv: bin/calicoctl-linux-amd64 version-helper
 ###############################################################################
 # STs
 ###############################################################################
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 # To run a specific test, set ST_TO_RUN to testfile.py:class.method
 # e.g. ST_TO_RUN="tests/st/calicoctl/test_crud.py:TestCalicoctlCommands.test_get_delete_multiple_names"
 ST_TO_RUN?=tests/st/calicoctl/

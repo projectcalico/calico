@@ -37,17 +37,10 @@ REMOTE_DEPS = $(LIBBPF_A) \
 include ../lib.Makefile
 
 # Set the platform correctly for building docker images.
-TARGET_PLATFORM=--platform=linux/$(ARCH)
 ifeq ($(ARCH),arm64)
 # Required for eBPF support in ARM64.
 # We need to force ARM64 build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-# Prevents docker from tagging the output image incorrectly as amd64.
-TARGET_PLATFORM=--platform=linux/arm64/v8
-endif
-
-ifeq ($(ARCH),armv7)
-TARGET_PLATFORM=--platform=linux/arm/v7
 endif
 
 ###############################################################################
@@ -140,7 +133,6 @@ WINDOWS_UPGRADE_BUILD        ?= $(WINDOWS_UPGRADE_ROOT)/build
 WINDOWS_UPGRADE_ARCHIVE      ?= $(WINDOWS_UPGRADE_BUILD)/calico-windows-upgrade.zip
 
 # Variables used by the tests
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 ST_TO_RUN?=tests/st/
 K8ST_TO_RUN?=tests/
 # Can exclude the slower tests with "-a '!slow'"
@@ -266,12 +258,7 @@ sub-image-%:
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) 
-	docker buildx build $(TARGET_PLATFORM) -t $(NODE_IMAGE):latest-$(ARCH) \
-		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
-		--build-arg QEMU_IMAGE=$(CALICO_BUILD) \
-		--build-arg UBI_IMAGE=$(UBI_IMAGE) \
-		--build-arg GIT_VERSION=$(GIT_VERSION) \
-		-f ./Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -425,7 +412,7 @@ busybox.tar:
 	docker save --output busybox.tar $(ARCH)/busybox:latest
 
 workload.tar:
-	cd workload && docker build -t workload --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) -f Dockerfile.$(ARCH) .
+	cd workload && $(DOCKER_BUILD) -t workload -f Dockerfile.$(ARCH) . --load
 	docker save --output workload.tar workload
 
 stop-etcd:
@@ -436,7 +423,7 @@ IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "ca
 # Create the calico/test image
 test_image: calico_test.created
 calico_test.created: $(TEST_CONTAINER_FILES)
-	cd calico_test && docker build --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) .
+	cd calico_test && $(DOCKER_BUILD) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) . --load
 	touch calico_test.created
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)

@@ -16,8 +16,6 @@ K8S_VERSION=v1.17.0
 
 test: ut test-kdd test-etcd
 
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
-
 LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)"
 
 # All go files.

@@ -2131,8 +2131,35 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// single node for the experiments.
 						It("should have connectivity from a workload to a service with multiple backends", func() {
 
+							affKV := func() (nat.AffinityKey, nat.AffinityValue) {
+								aff := dumpAffMap(felixes[0])
+								Expect(aff).To(HaveLen(1))
+
+								// get the only key
+								for k, v := range aff {
+									return k, v
+								}
+
+								Fail("no value in aff map")
+								return nat.AffinityKey{}, nat.AffinityValue{}
+							}
+
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
+
+							cc.ExpectSome(w[0][1], TargetIP(ip), port)
+							cc.CheckConnectivity()
+
+							_, v1 := affKV()
+
+							cc.CheckConnectivity()
+
+							_, v2 := affKV()
+
+							// This should happen consistently, but that may take quite some time.
+							Expect(v1.Backend()).To(Equal(v2.Backend()))
+
+							cc.ResetExpectations()
 
 							// N.B. Client must be on felix-0 to be subject to ctlb!
 							cc.ExpectSome(w[0][1], TargetIP(ip), port)
@@ -2140,18 +2167,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.ExpectSome(w[0][1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 
-							aff := dumpAffMap(felixes[0])
-							Expect(aff).To(HaveLen(1))
+							mkey, mVal := affKV()
+							Expect(v1.Backend()).To(Equal(mVal.Backend()))
 
-							var mkey nat.AffinityKey
-							var mVal nat.AffinityValue
-							// get the only key
-							for k, v := range aff {
-								mkey = k
-								mVal = v
-							}
+							netIP := net.ParseIP(ip)
+							Expect(mkey.FrontendAffinityKey().AsBytes()).
+								To(Equal(nat.NewNATKey(netIP, port, numericProto).AsBytes()[4:12]))
 
-							Eventually(func() nat.AffinityValue {
+							Eventually(func() nat.BackendValue {
 								// Remove the affinity entry to emulate timer
 								// expiring / no prior affinity.
 								m := nat.AffinityMap(&bpf.MapContext{})
@@ -2160,16 +2183,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								err = felixes[0].ExecMayFail(cmd...)
 								Expect(err).NotTo(HaveOccurred())
 
-								aff = dumpAffMap(felixes[0])
+								aff := dumpAffMap(felixes[0])
 								Expect(aff).To(HaveLen(0))
 
 								cc.CheckConnectivity()
 
-								aff := dumpAffMap(felixes[0])
+								aff = dumpAffMap(felixes[0])
 								Expect(aff).To(HaveLen(1))
+								Expect(aff).To(HaveKey(mkey))
 
-								return aff[mkey]
-							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal))
+								return aff[mkey].Backend()
+							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
 						})
 					}
 

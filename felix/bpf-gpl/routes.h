@@ -43,7 +43,7 @@ struct cali_rt {
 CALI_MAP_V1(cali_v4_routes,
 		BPF_MAP_TYPE_LPM_TRIE,
 		union cali_rt_lpm_key, struct cali_rt,
-		1024*1024, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
+		256*1024, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 static CALI_BPF_INLINE struct cali_rt *cali_rt_lookup(__be32 addr)
 {
