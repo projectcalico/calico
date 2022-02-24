@@ -906,7 +906,9 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 		c.updatePeersV1()
 
 		// Also update BGP config passwords before removing old watched secrets
-		c.getNodeMeshPasswordKVPair(c.globalBGPConfig, model.GlobalBGPConfigKey{})
+		if c.globalBGPConfig != nil {
+			c.getNodeMeshPasswordKVPair(c.globalBGPConfig, model.GlobalBGPConfigKey{})
+		}
 
 		// Clean up any secrets that are no longer of interest.
 		if c.secretWatcher != nil {
@@ -1223,7 +1225,7 @@ func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key in
 			v3res.Spec.NodeMeshPassword.SecretKeyRef.Key,
 		)
 		if err != nil {
-			log.WithError(err).Warningf("Can't read node mesh password in BGP Configuration %v", v3res.Name)
+			log.WithError(err).Warningf("Can't read password referenced by BGP Configuration %v in secret %s:%s", v3res.Name, v3res.Spec.NodeMeshPassword.SecretKeyRef.Name, v3res.Spec.NodeMeshPassword.SecretKeyRef.Key)
 			// Skip updating the password if it is unreadable
 			return
 		}
