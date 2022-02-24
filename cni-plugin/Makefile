@@ -225,19 +225,6 @@ stop-k8s-apiserver:
 stop-k8s-controller:
 	@-docker rm -f calico-k8s-controller
 
-## Etcd is used by the tests
-run-etcd: stop-etcd
-	docker run --detach \
-	  -p 2379:2379 \
-	  --name calico-etcd $(ETCD_IMAGE) \
-	  etcd \
-	  --advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	  --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-## Stops calico-etcd containers
-stop-etcd:
-	@-docker rm -f calico-etcd
-
 ###############################################################################
 # Install test
 ###############################################################################

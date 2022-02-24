@@ -22,9 +22,6 @@ UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_gen
 # Create a list of files upon which the generated file depends, skip the generated file itself
 APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
 
-# The path, inside libcalico-go, to the cert files required for etcdv3 fv test
-TEST_CERT_PATH := test/etcd-ut-certs/
-
 .PHONY: clean
 clean:
 	rm -rf .go-pkg-cache $(BINDIR) checkouts
@@ -151,12 +148,12 @@ fv-fast:
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 
-## Run etcd, with tls enabled, as a container (calico-etcd-tls)
+## Run an etcd with TLS enabled, needed for some libcalico-go UTs.
 run-etcd-tls: stop-etcd-tls
 	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
 	# still relies on it. 
 	docker run --detach \
-		-v `pwd`/$(TEST_CERT_PATH):/root/etcd-certificates/ \
+		-v $(CURDIR)/test/etcd-ut-certs:/root/etcd-certificates/ \
 		--net=host \
 		--entrypoint=/usr/local/bin/etcd \
 		--name calico-etcd-tls $(ETCD_IMAGE)  \
@@ -175,18 +172,6 @@ run-etcd-tls: stop-etcd-tls
 ## Stop etcd with name calico-etcd-tls
 stop-etcd-tls:
 	-docker rm -f calico-etcd-tls
-
-## Run etcd as a container (calico-etcd)
-run-etcd: stop-etcd
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
-	docker run --detach \
-	--net=host \
-	--entrypoint=/usr/local/bin/etcd \
-	--name calico-etcd $(ETCD_IMAGE) \
-	--enable-v2 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
 ## Create a local kind dual stack cluster.
 KUBECONFIG?=kubeconfig.yaml
@@ -226,10 +211,6 @@ $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/amd64/kubectl -o $@
 	chmod +x $(BINDIR)/kubectl
-
-## Stop the etcd container (calico-etcd)
-stop-etcd:
-	-docker rm -f calico-etcd
 
 run-coredns: stop-coredns
 	docker run \

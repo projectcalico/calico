@@ -334,20 +334,6 @@ $(BINDIR)/kubectl:
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $(BINDIR)/kubectl
 
-# etcd is used by the STs
-.PHONY: run-etcd
-run-etcd:
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code
-	# still relies on it.
-	@-docker rm -f calico-etcd
-	docker run --detach \
-	--net=host \
-	--name calico-etcd $(ETCD_IMAGE) \
-	etcd \
-	--enable-v2 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
-
 # Kubernetes apiserver used for tests
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
@@ -418,9 +404,6 @@ busybox.tar:
 workload.tar:
 	cd workload && $(DOCKER_BUILD) -t workload -f Dockerfile.$(ARCH) . --load
 	docker save --output workload.tar workload
-
-stop-etcd:
-	@-docker rm -f calico-etcd
 
 IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "calico-st-allow-etcd" -j ACCEPT
 
