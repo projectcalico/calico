@@ -192,6 +192,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/testing v0.0.0-20200608005635-e4eedbc6f7aa // indirect
 	github.com/karrick/godirwalk v1.16.1 // indirect
+	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af // indirect
 	github.com/libopenstorage/openstorage v1.0.0 // indirect
 	github.com/lithammer/dedent v1.1.0 // indirect
@@ -304,7 +305,6 @@ replace (
 	github.com/projectcalico/api => ./api
 	github.com/prometheus/common => github.com/prometheus/common v0.26.0
 
-	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 	google.golang.org/grpc => google.golang.org/grpc v1.40.0
 	k8s.io/api => k8s.io/api v0.23.3
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.23.3
