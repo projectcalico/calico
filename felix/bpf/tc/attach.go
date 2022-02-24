@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,6 +57,7 @@ type AttachPoint struct {
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
+	IPv6Enabled          bool
 	MapSizes             map[string]uint32
 }
 
@@ -187,7 +188,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		isHost = true
 	}
 
-	err = updateJumpMap(obj, isHost)
+	err = updateJumpMap(obj, isHost, ap.IPv6Enabled)
 	if err != nil {
 		return "", fmt.Errorf("error updating jump map %v", err)
 	}
@@ -615,8 +616,13 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		return err
 	}
 
+	var flags uint32
+	if ap.IPv6Enabled {
+		flags |= libbpf.GlobalsIPv6Enabled
+	}
+
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, flags)
 }
 
 // nolint
@@ -628,7 +634,7 @@ func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
 }
 
 // nolint
-func updateJumpMap(obj *libbpf.Obj, isHost bool) error {
+func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 	if !isHost {
 		err := obj.UpdateJumpMap("cali_jump", string(policyProgram), PolicyProgramIndex)
 		if err != nil {
@@ -642,6 +648,29 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool) error {
 	err = obj.UpdateJumpMap("cali_jump", string(icmpProgram), IcmpProgramIndex)
 	if err != nil {
 		return fmt.Errorf("error updating icmp program %v", err)
+	}
+
+	// Jump map updates related to IPv6 programs if IPv6 is enabled
+	if !ipv6Enabled {
+		return nil
+	}
+	err = obj.UpdateJumpMap("cali_jump", string(prologueV6Program), PrologueV6ProgramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating IPv6 proglogue program %v", err)
+	}
+	if !isHost {
+		err = obj.UpdateJumpMap("cali_jump", string(policyV6Program), PolicyV6ProgramIndex)
+		if err != nil {
+			return fmt.Errorf("error updating IPv6 policy program %v", err)
+		}
+	}
+	err = obj.UpdateJumpMap("cali_jump", string(allowedV6Program), AllowedV6ProgramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating IPv6 epilogue program %v", err)
+	}
+	err = obj.UpdateJumpMap("cali_jump", string(icmpV6Program), ICMPV6PRogramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating IPv6 icmp program %v", err)
 	}
 	return nil
 }
