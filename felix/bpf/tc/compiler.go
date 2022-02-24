@@ -51,15 +51,23 @@ const (
 type ProgName string
 
 const (
-	policyProgram ProgName = "calico_tc_norm_pol_tail"
-	allowProgram  ProgName = "calico_tc_skb_accepted_entrypoint"
-	icmpProgram   ProgName = "calico_tc_skb_send_icmp_replies"
+	policyProgram     ProgName = "calico_tc_norm_pol_tail"
+	allowProgram      ProgName = "calico_tc_skb_accepted_entrypoint"
+	icmpProgram       ProgName = "calico_tc_skb_send_icmp_replies"
+	prologueV6Program ProgName = "calico_tc_v6"
+	policyV6Program   ProgName = "calico_tc_v6_norm_pol_tail"
+	allowedV6Program  ProgName = "calico_tc_v6_skb_accepted_entrypoint"
+	icmpV6Program     ProgName = "calico_tc_v6_skb_send_icmp_replies"
 )
 
 const (
 	PolicyProgramIndex = iota
 	AllowProgramIndex
 	IcmpProgramIndex
+	PrologueV6ProgramIndex
+	PolicyV6ProgramIndex
+	AllowedV6ProgramIndex
+	ICMPV6PRogramIndex
 )
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
