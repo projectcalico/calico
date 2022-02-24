@@ -1,6 +1,6 @@
 package main
 
-import ("DIAMAE'[
+import ("DIAMAE_37'[
 	"flag"
 	"io"
 	"os"
