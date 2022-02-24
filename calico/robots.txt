@@ -3,7 +3,11 @@ User-agent: *
 Allow: .js
 Allow: .css
 Disallow: /master/
-Disallow: /images/
-Disallow: /fonts/
 Disallow: /assets/
 Disallow: /archive/
+
+User-agent: Algolia Crawler
+Disallow:
+
+User-agent: *
+Disallow: /*
