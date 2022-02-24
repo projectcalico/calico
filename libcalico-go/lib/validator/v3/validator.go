@@ -1673,6 +1673,16 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 			}
 		}
 	}
+
+	// Check that node mesh password cannot be set if node to node mesh is disabled.
+	if spec.NodeMeshPassword != nil && spec.NodeToNodeMeshEnabled != nil && !*spec.NodeToNodeMeshEnabled {
+		structLevel.ReportError(reflect.ValueOf(spec), "Spec.NodeMeshPassword", "", reason("spec.NodeMeshPassword cannot be set if spec.NodeToNodeMesh is disabled"), "")
+	}
+
+	// Check that node mesh max restart time cannot be set if node to node mesh is disabled.
+	if spec.NodeMeshMaxRestartTime != nil && spec.NodeToNodeMeshEnabled != nil && !*spec.NodeToNodeMeshEnabled {
+		structLevel.ReportError(reflect.ValueOf(spec), "Spec.NodeMeshMaxRestartTime", "", reason("spec.NodeMeshMaxRestartTime cannot be set if spec.NodeToNodeMesh is disabled"), "")
+	}
 }
 
 func isCommunityDefined(community string, communityKVPairs []api.Community) bool {

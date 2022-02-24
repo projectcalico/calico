@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"context"
@@ -45,9 +46,11 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 	ptrFalse := false
 	nodeASNumber1 := numorstring.ASNumber(6512)
 	nodeASNumber2 := numorstring.ASNumber(6511)
+	nodeASNumber3 := numorstring.ASNumber(6510)
 	ipCidr1 := "104.244.42.129/32"
 	ipCidr2 := "172.217.3.0/24"
 	clusterCIDR := "10.155.0.0/16"
+	restartTime := metav1.Duration{Duration: 200 * time.Second}
 	specDefault1 := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:      "Info",
 		NodeToNodeMeshEnabled:  &ptrTrue,
@@ -60,6 +63,15 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 		ServiceClusterIPs: []apiv3.ServiceClusterIPBlock{
 			{CIDR: clusterCIDR},
 		},
+		NodeMeshPassword: &apiv3.BGPPassword{
+			SecretKeyRef: &k8sv1.SecretKeySelector{
+				LocalObjectReference: k8sv1.LocalObjectReference{
+					Name: "test-secret",
+				},
+				Key: "bgp-password",
+			},
+		},
+		NodeMeshMaxRestartTime: &restartTime,
 	}
 	specDefault2 := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:     "Warning",
@@ -68,6 +80,33 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 		ServiceExternalIPs: []apiv3.ServiceExternalIPBlock{
 			{CIDR: ipCidr1},
 		},
+	}
+	specDefault3 := apiv3.BGPConfigurationSpec{
+		LogSeverityScreen:     "Info",
+		NodeToNodeMeshEnabled: &ptrTrue,
+		ASNumber:              &nodeASNumber3,
+		ServiceExternalIPs: []apiv3.ServiceExternalIPBlock{
+			{CIDR: ipCidr1},
+			{CIDR: ipCidr2},
+		},
+		NodeMeshPassword: &apiv3.BGPPassword{
+			SecretKeyRef: &k8sv1.SecretKeySelector{
+				LocalObjectReference: k8sv1.LocalObjectReference{
+					Name: "test-secret",
+				},
+				Key: "bgp-password",
+			},
+		},
+	}
+	specDefault4 := apiv3.BGPConfigurationSpec{
+		LogSeverityScreen:     "Info",
+		NodeToNodeMeshEnabled: &ptrTrue,
+		ASNumber:              &nodeASNumber3,
+		ServiceExternalIPs: []apiv3.ServiceExternalIPBlock{
+			{CIDR: ipCidr1},
+			{CIDR: ipCidr2},
+		},
+		NodeMeshMaxRestartTime: &restartTime,
 	}
 	specInfo := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen: "Info",
@@ -319,6 +358,34 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			_, outError = c.BGPConfigurations().Update(ctx, &apiv3.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       specDefault1,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+
+			By("Attempting to create a non-default BGP Configuration with node to node mesh enabled and a node mesh password")
+			_, outError = c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "not-default"},
+				Spec:       specDefault3,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+
+			By("Attempting to update BGPConfiguration name1 with node to node mesh enabled and a node mesh password")
+			_, outError = c.BGPConfigurations().Update(ctx, &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: name1},
+				Spec:       specDefault3,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+
+			By("Attempting to create a non-default BGP Configuration with node to node mesh enabled and a node mesh max restart time")
+			_, outError = c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "not-default"},
+				Spec:       specDefault4,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+
+			By("Attempting to update BGPConfiguration name1 with node to node mesh enabled and a node mesh max restart time")
+			_, outError = c.BGPConfigurations().Update(ctx, &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: name1},
+				Spec:       specDefault4,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 		},
