@@ -443,8 +443,8 @@ func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 		// Only check allocated ordinals.
 		if b.Allocations[o] != nil && intInSlice(*b.Allocations[o], attrIndexes) {
 			if opts.SequenceNumber != nil && *opts.SequenceNumber != b.GetSequenceNumberForOrdinal(o) {
-				// TODO: Add context to log, should we return an error instead?
-				log.Warnf("Skipping release of IP with mismatched sequence number")
+				f := log.Fields{"opts": opts, "ip": b.OrdinalToIP(o).String()}
+				log.WithFields(f).Warnf("Skipping release of IP with mismatched sequence number")
 				continue
 			}
 
