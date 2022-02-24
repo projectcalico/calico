@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -616,7 +616,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		return err
 	}
 
-	var flags uint16
+	var flags uint32
 	if ap.IPv6Enabled {
 		flags |= libbpf.GlobalsIPv6Enabled
 	}

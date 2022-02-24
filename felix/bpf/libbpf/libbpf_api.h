@@ -114,7 +114,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			ushort vxlanPort,
 			ushort psnat_start,
 			ushort psnat_len,
-			ushort flags)
+			uint flags)
 {
 	struct cali_tc_globals data = {
 	    .host_ip = host_ip,
