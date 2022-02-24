@@ -50,25 +50,15 @@ const (
 
 type ProgName string
 
-const (
-	policyProgram     ProgName = "calico_tc_norm_pol_tail"
-	allowProgram      ProgName = "calico_tc_skb_accepted_entrypoint"
-	icmpProgram       ProgName = "calico_tc_skb_send_icmp_replies"
-	prologueV6Program ProgName = "calico_tc_v6"
-	policyV6Program   ProgName = "calico_tc_v6_norm_pol_tail"
-	allowedV6Program  ProgName = "calico_tc_v6_skb_accepted_entrypoint"
-	icmpV6Program     ProgName = "calico_tc_v6_skb_send_icmp_replies"
-)
-
-const (
-	PolicyProgramIndex = iota
-	AllowProgramIndex
-	IcmpProgramIndex
-	PrologueV6ProgramIndex
-	PolicyV6ProgramIndex
-	AllowedV6ProgramIndex
-	ICMPV6PRogramIndex
-)
+var programNames = []ProgName{
+	"calico_tc_norm_pol_tail",
+	"calico_tc_skb_accepted_entrypoint",
+	"calico_tc_skb_send_icmp_replies",
+	"calico_tc_v6",
+	"calico_tc_v6_norm_pol_tail",
+	"calico_tc_v6_skb_accepted_entrypoint",
+	"calico_tc_v6_skb_send_icmp_replies",
+}
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)

@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -618,7 +619,8 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	var flags uint32
 	if ap.IPv6Enabled {
-		flags |= libbpf.GlobalsIPv6Enabled
+		//flags |= libbpf.GlobalsIPv6Enabled
+		flags |= 0x00000001
 	}
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
@@ -635,43 +637,53 @@ func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
 
 // nolint
 func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
-	if !isHost {
-		err := obj.UpdateJumpMap("cali_jump", string(policyProgram), PolicyProgramIndex)
-		if err != nil {
-			return fmt.Errorf("error updating policy program %v", err)
-		}
-	}
-	err := obj.UpdateJumpMap("cali_jump", string(allowProgram), AllowProgramIndex)
-	if err != nil {
-		return fmt.Errorf("error updating epilogue program %v", err)
-	}
-	err = obj.UpdateJumpMap("cali_jump", string(icmpProgram), IcmpProgramIndex)
-	if err != nil {
-		return fmt.Errorf("error updating icmp program %v", err)
+	ipVersions := set.New()
+	ipVersions.Add("IPv4")
+	if ipv6Enabled {
+		ipVersions.Add("IPv6")
 	}
 
-	// Jump map updates related to IPv6 programs if IPv6 is enabled
-	if !ipv6Enabled {
-		return nil
-	}
-	err = obj.UpdateJumpMap("cali_jump", string(prologueV6Program), PrologueV6ProgramIndex)
-	if err != nil {
-		return fmt.Errorf("error updating IPv6 proglogue program %v", err)
-	}
-	if !isHost {
-		err = obj.UpdateJumpMap("cali_jump", string(policyV6Program), PolicyV6ProgramIndex)
-		if err != nil {
-			return fmt.Errorf("error updating IPv6 policy program %v", err)
+	ipVersions.Iter(func(ipFamily interface{}) error {
+		// Since in IPv4, we don't add prologue to the jump map, and hence the first
+		// program is policy, the base index should be set to -1 to properly offset the
+		// policy program (base+1) to the first entry in the jump map, i.e. 0. However,
+		// in IPv6, we add the prologue program to the jump map, and the first entry is 3.
+		base := -1
+		if ipFamily == "IPv6" {
+			base = 3
 		}
-	}
-	err = obj.UpdateJumpMap("cali_jump", string(allowedV6Program), AllowedV6ProgramIndex)
-	if err != nil {
-		return fmt.Errorf("error updating IPv6 epilogue program %v", err)
-	}
-	err = obj.UpdateJumpMap("cali_jump", string(icmpV6Program), ICMPV6PRogramIndex)
-	if err != nil {
-		return fmt.Errorf("error updating IPv6 icmp program %v", err)
-	}
+
+		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
+		// of execution, and we don't need to add it into the jump map
+		if ipFamily == "IPv6" {
+			err := obj.UpdateJumpMap("cali_jump", string(programNames[base]), base)
+			if err != nil {
+				return fmt.Errorf("error updating %v proglogue program: %v", ipFamily, err)
+			}
+		}
+		pIndex := base + 1
+		if !isHost {
+			err := obj.UpdateJumpMap("cali_jump", string(programNames[pIndex]), pIndex)
+			if err != nil {
+				return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
+			}
+		}
+		eIndex := base + 2
+		err := obj.UpdateJumpMap("cali_jump", string(programNames[eIndex]), eIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
+		}
+		iIndex := base + 3
+		err = obj.UpdateJumpMap("cali_jump", string(programNames[iIndex]), iIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
+		}
+		if err != nil {
+			logrus.Infof("Err: %w", err)
+		}
+		return nil
+	})
+
 	return nil
 }
 
