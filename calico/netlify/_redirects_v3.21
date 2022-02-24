@@ -20,6 +20,9 @@
 # (These are not needed for others as those paths won't match with any static files, it only does for root site).
 # https://docs.netlify.com/routing/redirects/rewrites-proxies/#shadowing
 
+# This rule is to make sure the robots.txt doesn't redirect to new domain as per SEO advice.
+/robots.txt                                                       /robots.txt                                                                                200
+
 /manifests/*                                                      https://calico-tigera.netlify.app/manifests/:splat                                         200!
 /security/tutorials/*                                             https://calico-tigera.netlify.app/security/tutorials/:splat                                200!
 /getting-started/kubernetes/installation/*                        https://calico-tigera.netlify.app/getting-started/kubernetes/installation/:splat           200!
