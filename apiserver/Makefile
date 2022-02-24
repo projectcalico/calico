@@ -152,19 +152,6 @@ st:
 check-copyright:
 	@hack/check-copyright.sh
 
-## Run etcd as a container (calico-etcd)
-run-etcd: stop-etcd
-	docker run --detach \
-	--net=host \
-	--entrypoint=/usr/local/bin/etcd \
-	--name calico-etcd quay.io/coreos/etcd:v3.1.7 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-## Stop the etcd container (calico-etcd)
-stop-etcd:
-	-docker rm -f calico-etcd
-
 GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/v1.16.4/hack/lib
 
 hack-lib:
