@@ -31,23 +31,44 @@ IP pools are ranges of IP addresses from which Calico assigns pod IPs. Static IP
 
 ### Before you begin...
 
-You must be using Calico IPAM.
+You must be using Calico IPAM. If you are not sure which IPAM your cluster is using, the way to tell depends on install method.
 
-If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration.
+{% tabs %}
+  <label:Operator,active:true>
+<%
 
-<pre>
+The IPAM plugin can be queried on the default Installation resource.
+
+{% raw %}
+```
+kubectl get installation default -o go-template --template {{.spec.cni.ipam.type}}
+```
+{% endraw %}
+
+If your cluster is using Calico IPAM, the above command should return a result of `Calico`.
+
+%>
+  <label:Manifest>
+<%
+
+SSH to one of your Kubernetes nodes and examine the CNI configuration.
+
+```
 cat /etc/cni/net.d/10-calico.conflist
-</pre>
+```
 
 Look for the entry:
 
-<pre>
+```
          "ipam": {
               "type": "calico-ipam"
           },
-</pre>
+```
 
-If it is present, you are using Calico IPAM. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
+If it is present, you are using the {{site.prodname}} IPAM. If the IPAM is not {{site.prodname}}, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
+
+%>
+{% endtabs %}
 
 ### How to
 
