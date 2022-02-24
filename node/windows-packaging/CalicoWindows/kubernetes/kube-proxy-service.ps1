@@ -75,10 +75,6 @@ if ($network.Type -EQ "Overlay") {
     $sourceVip = (Get-HnsEndpoint | ? Name -EQ "Calico_ep").IpAddress
     $argList += "--source-vip=$sourceVip"
     $extraFeatures += "WinOverlay=true"
-
-    # VXLAN on Windows doesn't support dualstack so disable explicitly. From k8s
-    # 1.21 onwards IPv6DualStack defaults to true
-    $extraFeatures += "IPv6DualStack=false"
 }
 
 if ($extraFeatures.Length -GT 0) {
