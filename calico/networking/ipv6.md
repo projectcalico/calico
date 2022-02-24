@@ -133,6 +133,7 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
      This configures {{site.prodname}} to calculate the router ID based on the hostname.
    - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
 
+%>
 {% endtabs %}
 
 #### Enable dual stack
@@ -203,6 +204,7 @@ metadata:
 
    New pods will get both IPv4 and IPv6 addresses, and can communicate with each other and the outside world over IPv4 or IPv6.
 
+%>
 {% endtabs %}
 
 ### Above and beyond

@@ -81,6 +81,7 @@ spec:
 
 For manifest installations of Calico, you can control the deafult IP pool encapsualtion mode using the `CALICO_IPV4POOL_VXLAN` and `CALICO_IPV4POOL_IPIP` environment variables in the environment of the `calico-node` daemon set.
 
+%>
 {% endtabs %}
 
 #### Configure IP in IP encapsulation for only cross-subnet traffic

@@ -61,6 +61,7 @@ Look for the entry:
 
 If it is present, you are using the {{site.prodname}} IPAM. If the IPAM is not {{site.prodname}}, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
 
+%>
 {% endtabs %}
 
 **Verify orchestrator support for changing the pod network CIDR**.

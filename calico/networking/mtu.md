@@ -125,6 +125,7 @@ After updating the ConfigMap, perform a rolling restart of all calico/node pods.
 kubectl rollout restart daemonset calico-node -n kube-system
 ```
 
+%>
 {% endtabs %}
 
 #### View current tunnel MTU values

@@ -94,6 +94,7 @@ For example, your `cni_network_config` will look similar to the following after 
     }
 ```
 
+%>
 {% endtabs %}
 
 #### Configure a pod to use a floating IP
@@ -118,4 +119,5 @@ For example:
 
 Note the use of the escaped `\"` for the inner double quotes around the addresses.
 
+%>
 {% endtabs %}
