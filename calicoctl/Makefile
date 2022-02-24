@@ -130,7 +130,7 @@ ut: bin/calicoctl-linux-amd64
 .PHONY: fv
 ## Run the tests in a container. Useful for CI, Mac dev.
 fv: bin/calicoctl-linux-amd64 version-helper
-	$(MAKE) run-etcd-host
+	$(MAKE) run-etcd
 
 	# We start two API servers in order to test multiple kubeconfig support
 	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6443 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
@@ -158,7 +158,7 @@ ST_OPTIONS?=
 .PHONY: st
 ## Run the STs in a container
 st: bin/calicoctl-linux-amd64 version-helper
-	$(MAKE) run-etcd-host
+	$(MAKE) run-etcd
 	$(MAKE) run-kubernetes-master
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
@@ -175,24 +175,6 @@ st: bin/calicoctl-linux-amd64 version-helper
 		   sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 	$(MAKE) stop-kubernetes-master
-
-.PHONY: run-etcd-host
-run-etcd-host:
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
-	@-docker rm -f calico-etcd
-	docker run --detach \
-	--net=host \
-	--name calico-etcd \
-	$(ETCD_IMAGE) \
-	etcd \
-	--enable-v2 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
-
-.PHONY: stop-etcd
-stop-etcd:
-	@-docker rm -f calico-etcd
 
 ## Run a local kubernetes master with API
 run-kubernetes-master: stop-kubernetes-master

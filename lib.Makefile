@@ -220,7 +220,7 @@ ifdef ARM_VERSION
 GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
 endif
 
-# Set the platform correctly for building docker images so that 
+# Set the platform correctly for building docker images so that
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
 TARGET_PLATFORM=--platform=linux/arm64/v8
@@ -1102,6 +1102,29 @@ release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
+
+###############################################################################
+# Common functions for launching a local etcd instance.
+###############################################################################
+## Run etcd as a container (calico-etcd)
+# TODO: We shouldn't need to tear this down every time it is called.
+# TODO: We shouldn't need to enable the v2 API, but some of our test code still relies on it.
+run-etcd: stop-etcd
+	docker run --detach \
+		--net=host \
+		--entrypoint=/usr/local/bin/etcd \
+		--name calico-etcd $(ETCD_IMAGE) \
+		--enable-v2 \
+		--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+		--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
+.PHONY: stop-etcd
+stop-etcd:
+	@-docker rm -f calico-etcd
+
+## Stop the etcd container (calico-etcd)
+stop-etcd:
+	-docker rm -f calico-etcd
 
 ###############################################################################
 # Helpers

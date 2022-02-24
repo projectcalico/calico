@@ -110,19 +110,6 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 ut:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r .'
 
-
-run-etcd: stop-etcd
-	docker run --detach \
-	--net=host \
-	--name calico-etcd $(ETCD_IMAGE) \
-	etcd \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-## Stops calico-etcd containers
-stop-etcd:
-	@-docker rm -f calico-etcd
-
 ## Kubernetes apiserver used for tests
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
