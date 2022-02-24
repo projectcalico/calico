@@ -37,6 +37,11 @@ type Map struct {
 
 const MapTypeProgrArray = C.BPF_MAP_TYPE_PROG_ARRAY
 
+const (
+	// Set when IPv6 is enabled to configure bpf dataplane accordingly
+	GIPv6Enabled uint8 = 1
+)
+
 type QdiskHook string
 
 const (
@@ -237,6 +242,10 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 	return &Link{link: link}, nil
 }
 
+const (
+	GlobalsIPv6Enabled uint8 = C.CALI_GLOBALS_IPV6_ENABLED
+)
+
 func TcSetGlobals(
 	m *Map,
 	hostIP uint32,
@@ -246,6 +255,7 @@ func TcSetGlobals(
 	vxlanPort uint16,
 	psNatStart uint16,
 	psNatLen uint16,
+	flags uint8,
 ) error {
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
 		C.uint(hostIP),
@@ -254,7 +264,8 @@ func TcSetGlobals(
 		C.ushort(tmtu),
 		C.ushort(vxlanPort),
 		C.ushort(psNatStart),
-		C.ushort(psNatLen))
+		C.ushort(psNatLen),
+		C.uchar(flags))
 
 	return err
 }
