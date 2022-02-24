@@ -283,11 +283,6 @@ $(FELIX_GPL_SOURCE):
 ###############################################################################
 K8ST_IMAGE_TARS=calico-node.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
 
-# Location of the certs directory. 
-# TODO: Centralize this instead of just using cni-plugins certs. Right now each
-# directory has an exact copy of these files!
-CERTS_PATH=$(CURDIR)/../cni-plugin/tests/certs
-
 ## Run the ginkgo FVs
 fv: run-k8s-apiserver
 	$(DOCKER_RUN) \
@@ -332,20 +327,6 @@ $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
 	curl -L https://storage.googleapis.com/kubernetes-release/release/v1.22.0/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $(BINDIR)/kubectl
-
-# etcd is used by the STs
-.PHONY: run-etcd
-run-etcd:
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code
-	# still relies on it.
-	@-docker rm -f calico-etcd
-	docker run --detach \
-	--net=host \
-	--name calico-etcd $(ETCD_IMAGE) \
-	etcd \
-	--enable-v2 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
 
 # Kubernetes apiserver used for tests
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
@@ -414,9 +395,6 @@ busybox.tar:
 workload.tar:
 	cd workload && $(DOCKER_BUILD) -t workload -f Dockerfile.$(ARCH) . --load
 	docker save --output workload.tar workload
-
-stop-etcd:
-	@-docker rm -f calico-etcd
 
 IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "calico-st-allow-etcd" -j ACCEPT
 
