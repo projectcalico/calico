@@ -37,8 +37,7 @@ Encapsulation of workload traffic is typically required only when traffic crosse
 
 ### How to
 
-You can configure each IP pool with different encapsulation configurations. However, you cannot mix encapsulation types within an IP pool.
-
+- [Configure default IP pools at install time](#configure-default-ip-pools-at-install-time)
 - [Configure IP in IP encapsulation for only cross-subnet traffic](#configure-ip-in-ip-encapsulation-for-only-cross-subnet-traffic)
 - [Configure IP in IP encapsulation for all inter workload traffic](#configure-ip-in-ip-encapsulation-for-all-inter-workload-traffic)
 - [Configure VXLAN encapsulation for only cross-subnet traffic](#configure-vxlan-encapsulation-for-only-cross-subnet-traffic)
@@ -53,6 +52,37 @@ IP in IP and VXLAN support only IPv4 addresses.
 Calico has an option to selectively encapsulate only traffic that crosses subnet boundaries.  We recommend using the **cross-subnet** option with IP in IP or VXLAN to minimize encapsulation overhead. Cross-subnet mode provides better performance in AWS multi-AZ deployments, Azure VNETs, and on networks where routers are used to connect pools of nodes with L2 connectivity.
 
 Be aware that switching encapsulation modes can cause disruption to in-progress connections. Plan accordingly.
+
+#### Configure default IP pools at install time
+
+Default IP pools are configured at install-time automatically by Calico. You can configure these default IP pools based on install method.
+
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+For operator managed clusters, you can configure encapsulation in the IP pools section of the default Installation. For example, the following installation snippet will enable VXLAN across subnets.
+
+```yaml
+kind: Installation
+apiVersion: operator.tigera.io/v1
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+      - cidr: 192.168.0.0/16
+        encapsulation: VXLANCrossSubnet
+```
+
+%>
+  <label:Manifest>
+<%
+
+For manifest installations of Calico, you can control the deafult IP pool encapsualtion mode using the `CALICO_IPV4POOL_VXLAN` and `CALICO_IPV4POOL_IPIP` environment variables in the environment of the `calico-node` daemon set.
+
+%>
+{% endtabs %}
 
 #### Configure IP in IP encapsulation for only cross-subnet traffic
 

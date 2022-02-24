@@ -34,23 +34,46 @@ The features in this How to guide require:
 
 - {{site.prodname}} IPAM
 
-If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration.
+If you are not sure which IPAM your cluster is using, the way to tell depends on install method.
 
-<pre>
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+The IPAM plugin can be queried on the default Installation resource.
+
+{% raw %}
+```
+kubectl get installation default -o go-template --template {{.spec.cni.ipam.type}}
+```
+{% endraw %}
+
+If your cluster is using Calico IPAM, the above command should return a result of `Calico`.
+
+%>
+  <label:Manifest>
+<%
+
+SSH to one of your Kubernetes nodes and examine the CNI configuration.
+
+```
 cat /etc/cni/net.d/10-calico.conflist
-</pre>
+```
 
 Look for the entry:
 
-<pre>
+```
          "ipam": {
               "type": "calico-ipam"
           },
-</pre>
+```
 
 If it is present, you are using the {{site.prodname}} IPAM. If the IPAM is not {{site.prodname}}, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
 
-Also, cluster administrators must have [configured IP pools]({{ site.baseurl }}/reference/resources/ippool) to define the valid IP ranges to use for allocating pod IP addresses.
+%>
+{% endtabs %}
+
+Additionally, cluster administrators must have [configured IP pools]({{ site.baseurl }}/reference/resources/ippool) to define the valid IP ranges to use for allocating pod IP addresses.
 
 ### How to
 
@@ -58,15 +81,20 @@ Also, cluster administrators must have [configured IP pools]({{ site.baseurl }}/
 
 Annotate the pod with key `cni.projectcalico.org/ipv4pools` and/or `cni.projectcalico.org/ipv6pools` and value set to a list of IP pool names, enclosed in brackets.  For example:
 
-`cni.projectcalico.org/ipv4pools: '["pool-1", "pool-2"]'`
+```
+cni.projectcalico.org/ipv4pools: '["pool-1", "pool-2"]'
+```
 
 Note the use of the escaped \" for the inner double quotes around the pool names.
 
 #### Restrict all pods within a namespace to use an IP address range
 
- Annotate the namespace with key `cni.projectcalico.org/ipv4pools` and/or `cni.projectcalico.org/ipv6pools` and value set to a list of IP pool names, enclosed in brackets.  For example:
+Annotate the namespace with key `cni.projectcalico.org/ipv4pools` and/or `cni.projectcalico.org/ipv6pools` and value set to a list of IP pool names, enclosed in brackets.  For example:
 
-`cni.projectcalico.org/ipv4pools: '["pool-1", "pool-2"]'`
+```
+cni.projectcalico.org/ipv4pools: '["pool-1", "pool-2"]'
+
+```
 
 Note the use of the escaped `\"` for the inner double quotes around the pool names.
 
