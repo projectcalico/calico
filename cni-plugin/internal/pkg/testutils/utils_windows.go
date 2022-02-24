@@ -327,13 +327,13 @@ func RunCNIPluginWithId(
 			return
 		}
 
-		result, err = current.NewResultFromResult(&r020)
+		result, err = cniv1.NewResultFromResult(&r020)
 		if err != nil {
 			return
 		}
 
 	} else {
-		result, err = current.GetResult(r)
+		result, err = cniv1.GetResult(r)
 		if err != nil {
 			return
 		}
