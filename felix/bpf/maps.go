@@ -121,8 +121,7 @@ type PinnedMap struct {
 	oldfd    MapFD
 	perCPU   bool
 	// nolint
-	oldSize  int
-	copyData bool
+	oldSize int
 }
 
 func (b *PinnedMap) GetName() string {
@@ -143,7 +142,6 @@ func (b *PinnedMap) Path() string {
 func (b *PinnedMap) Close() error {
 	err := b.fd.Close()
 	b.fdLoaded = false
-	b.copyData = false
 	b.oldfd = 0
 	b.fd = 0
 	return err
@@ -308,6 +306,7 @@ func (b *PinnedMap) Delete(k []byte) error {
 // nolint
 func (b *PinnedMap) copyFromOldMap() error {
 	numEntriesCopied := 0
+	mapMem := make(map[string]struct{})
 	it, err := NewMapIterator(b.oldfd, b.KeySize, b.ValueSize, b.oldSize)
 	if err != nil {
 		return fmt.Errorf("failed to create BPF map iterator: %w", err)
@@ -332,12 +331,16 @@ func (b *PinnedMap) copyFromOldMap() error {
 		if numEntriesCopied == b.MaxEntries {
 			return fmt.Errorf("new map cannot hold all the data from the old map.")
 		}
+		if _, ok := mapMem[string(k)]; ok {
+			continue
+		}
 
 		err = b.Update(k, v)
 		if err != nil {
 			return fmt.Errorf("error copying data from the old map")
 		}
 		logrus.Debugf("copied data from old map to new map key=%v, value=%v", k, v)
+		mapMem[string(k)] = struct{}{}
 		numEntriesCopied++
 	}
 }
@@ -390,7 +393,7 @@ func (b *PinnedMap) Open() error {
 }
 
 // nolint
-func (b *PinnedMap) migratePinnedMap(from, to string) error {
+func (b *PinnedMap) repinAt(from, to string) error {
 	err := RepinMap(b.VersionedName(), to)
 	if err != nil {
 		return fmt.Errorf("error repinning %s to %s: %w", from, to, err)
@@ -414,6 +417,7 @@ func (b *PinnedMap) oldMapExists() bool {
 
 func (b *PinnedMap) EnsureExists() error {
 	oldMapPath := b.Path() + "_old"
+	copyData := false
 	if b.fdLoaded {
 		return nil
 	}
@@ -424,7 +428,7 @@ func (b *PinnedMap) EnsureExists() error {
 		if _, err := os.Stat(b.Path()); err == nil {
 			os.Remove(b.Path())
 		}
-		err := b.migratePinnedMap(oldMapPath, b.Path())
+		err := b.repinAt(oldMapPath, b.Path())
 		if err != nil {
 			return fmt.Errorf("error repinning old map %s to %s, err=%w", oldMapPath, b.Path(), err)
 		}
@@ -445,11 +449,11 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 		b.oldSize = mapInfo.MaxEntries
 
-		err = b.migratePinnedMap(b.Path(), oldMapPath)
+		err = b.repinAt(b.Path(), oldMapPath)
 		if err != nil {
 			return fmt.Errorf("error migrating the old map %w", err)
 		}
-		b.copyData = true
+		copyData = true
 		defer func() {
 			b.oldfd.Close()
 			b.oldfd = 0
@@ -474,7 +478,7 @@ func (b *PinnedMap) EnsureExists() error {
 	if err == nil {
 		b.fdLoaded = true
 		// Copy data from old map to the new map
-		if b.copyData {
+		if copyData {
 			err := b.copyFromOldMap()
 			if err != nil {
 				logrus.WithError(err).Error("error copying data from old map")
@@ -482,7 +486,6 @@ func (b *PinnedMap) EnsureExists() error {
 			}
 			// Delete the old pin.
 			os.Remove(b.Path() + "_old")
-			b.copyData = false
 
 		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
