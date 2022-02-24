@@ -953,7 +953,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	for i := 0; i < len(ips); i++ {
 		// Validate the input.
 		if ips[i].Address == "" {
-			return nil, fmt.Errorf("No IP address specified")
+			return nil, fmt.Errorf("No IP address specified in options: %+v", ips[i])
 		}
 
 		// Sanitize any handles.
