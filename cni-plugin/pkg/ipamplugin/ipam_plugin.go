@@ -27,7 +27,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/gofrs/flock"
 	"github.com/prometheus/common/log"
@@ -108,7 +108,7 @@ func Main(version string) {
 	}
 
 	skel.PluginMain(cmdAdd, nil, cmdDel,
-		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
+		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
 		"Calico CNI IPAM "+version)
 }
 
@@ -169,7 +169,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
-	r := &current.Result{}
+	r := &cniv1.Result{}
 	if ipamArgs.IP != nil {
 		logger.Infof("Calico CNI IPAM request IP: %v", ipamArgs.IP)
 
@@ -195,8 +195,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if ipamArgs.IP.To4() == nil {
 			// It's an IPv6 address.
 			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(128, 128)}
-			r.IPs = append(r.IPs, &current.IPConfig{
-				Version: "6",
+			r.IPs = append(r.IPs, &cniv1.IPConfig{
 				Address: ipNetwork,
 			})
 
@@ -204,8 +203,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		} else {
 			// It's an IPv4 address.
 			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
-			r.IPs = append(r.IPs, &current.IPConfig{
-				Version: "4",
+			r.IPs = append(r.IPs, &cniv1.IPConfig{
 				Address: ipNetwork,
 			})
 
@@ -324,8 +322,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("failed to request IPv4 addresses: %w", err)
 			}
 			ipV4Network := net.IPNet{IP: v4Assignments.IPs[0].IP, Mask: v4Assignments.IPs[0].Mask}
-			r.IPs = append(r.IPs, &current.IPConfig{
-				Version: "4",
+			r.IPs = append(r.IPs, &cniv1.IPConfig{
 				Address: ipV4Network,
 			})
 		}
@@ -335,8 +332,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("failed to request IPv6 addresses: %w", err)
 			}
 			ipV6Network := net.IPNet{IP: v6Assignments.IPs[0].IP, Mask: v6Assignments.IPs[0].Mask}
-			r.IPs = append(r.IPs, &current.IPConfig{
-				Version: "6",
+			r.IPs = append(r.IPs, &cniv1.IPConfig{
 				Address: ipV6Network,
 			})
 		}
