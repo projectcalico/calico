@@ -279,7 +279,7 @@ CALI_CONFIGURABLE_DEFINE(ext_to_svc_mark, 0x4b52414d) /*be 0x4b52414d = ASCII(MA
 CALI_CONFIGURABLE_DEFINE(psnat_start, 0x53545250) /* be 0x53545250 = ACSII(PRTS) */
 CALI_CONFIGURABLE_DEFINE(psnat_len, 0x4c545250) /* be 0x4c545250 = ACSII(PRTL) */
 CALI_CONFIGURABLE_DEFINE(flags, 0x00000001)
-
+CALI_CONFIGURABLE_DEFINE(host_tunnel_ip, 0x4c4e5554) /* be 0x4c4e5554 = ACSII(TUNL) */
 
 #define HOST_IP		CALI_CONFIGURABLE(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
@@ -295,7 +295,7 @@ CALI_CONFIGURABLE_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) 
 #define SKB_MARK	CALI_CONFIGURABLE(__skb_mark)
 #endif
 
-#define HOST_TUNNEL_IP HOST_IP /* XXX temp must be set propertly XXX */
+#define HOST_TUNNEL_IP CALI_CONFIGURABLE(host_tunnel_ip)
 
 #define MAP_PIN_GLOBAL	2
 
