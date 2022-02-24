@@ -33,7 +33,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -617,10 +616,9 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		return err
 	}
 
-	var flags uint8 = 0
+	var flags uint8
 	if ap.IPv6Enabled {
-		logrus.Info("Flags: %v", libbpf.IPv6Enabled)
-		flags |= 1
+		flags |= libbpf.GlobalsIPv6Enabled
 	}
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
