@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: tigera-operator
-  namespace: tigera-operator
   labels:
     k8s-app: tigera-operator
 spec:
