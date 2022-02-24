@@ -109,7 +109,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 		ipv4Nat := *ipv4
 		ipv4Nat.DstIP = natIP
-		ipv4Nat.SrcIP = hostIP
+		ipv4Nat.SrcIP = node1tunIP
 
 		udpNat := *udp
 		udpNat.DstPort = layers.UDPPort(natPort)
@@ -158,7 +158,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 		ipv4Nat := *ipv4
 		ipv4Nat.DstIP = natIP
-		ipv4Nat.SrcIP = hostIP
+		ipv4Nat.SrcIP = node1tunIP
 
 		udpNat := *udp
 		udpNat.DstPort = layers.UDPPort(natPort)
