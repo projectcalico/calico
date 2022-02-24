@@ -33,7 +33,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -677,9 +676,6 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		err = obj.UpdateJumpMap("cali_jump", string(programNames[iIndex]), iIndex)
 		if err != nil {
 			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
-		}
-		if err != nil {
-			logrus.Infof("Err: %w", err)
 		}
 		return nil
 	})
