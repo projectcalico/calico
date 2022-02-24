@@ -616,7 +616,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		return err
 	}
 
-	var flags uint8
+	var flags uint16
 	if ap.IPv6Enabled {
 		flags |= libbpf.GlobalsIPv6Enabled
 	}
