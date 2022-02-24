@@ -831,12 +831,8 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 				if kvp.Value == nil {
 					// Remove node's IPs from our node IP cache
 					nodeIPv4, nodeIPv6, _, _ := c.nodeToBGPFields(v3key.Name)
-					if _, ok := c.nodeIPs[nodeIPv4]; ok {
-						delete(c.nodeIPs, nodeIPv4)
-					}
-					if _, ok := c.nodeIPs[nodeIPv6]; ok {
-						delete(c.nodeIPs, nodeIPv6)
-					}
+					delete(c.nodeIPs, nodeIPv4)
+					delete(c.nodeIPs, nodeIPv6)
 
 					// Remove the node from our cache
 					if c.updateCache(api.UpdateTypeKVDeleted, kvp) {
