@@ -87,22 +87,43 @@ Because the `blockSize` field cannot be edited directly after {{site.prodname}} 
 
 **Required**
 
-- Verify that you are using {{site.prodname}} IPAM.   
-  This guide is relevant only if you are using Calico IPAM.
+Verify that you are using {{site.prodname}} IPAM.   
 
-  ssh to one of your Kubernetes nodes and view the CNI configuration.  
+If you are not sure which IPAM your cluster is using, the way to tell depends on install method.
 
-    ```bash
-    cat /etc/cni/net.d/10-calico.conflist
-     ```
-  Look for the "type" entry:
-  <pre>
-     "ipam": {
-           "type": "calico-ipam"
-      }, 
-  </pre>
+{% tabs %}
+  <label:Operator,active:true>
+<%
 
-  If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+The IPAM plugin can be queried on the default Installation resource.
+
+```
+kubectl get installation default -o go-template --template {{.spec.cni.ipam.type}}
+```
+
+If your cluster is using Calico IPAM, the above command should return a result of `Calico`.
+
+%>
+  <label:Manifest>
+<%
+
+SSH to one of your Kubernetes nodes and examine the CNI configuration.
+
+```
+cat /etc/cni/net.d/10-calico.conflist
+```
+
+Look for the entry:
+
+```
+         "ipam": {
+              "type": "calico-ipam"
+          },
+```
+
+If it is present, you are using the {{site.prodname}} IPAM. If the IPAM is not {{site.prodname}}, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
+
+{% endtabs %}
 
 ### How to
 
