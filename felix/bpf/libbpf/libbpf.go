@@ -67,6 +67,14 @@ func (m *Map) SetPinPath(path string) error {
 	return nil
 }
 
+func (m *Map) SetMapSize(size uint32) error {
+	_, err := C.bpf_map_set_max_entries(m.bpfMap, C.uint(size))
+	if err != nil {
+		return fmt.Errorf("setting %s map size failed %w", m.Name(), err)
+	}
+	return nil
+}
+
 func (m *Map) IsMapInternal() bool {
 	return bool(C.bpf_map__is_internal(m.bpfMap))
 }

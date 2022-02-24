@@ -146,9 +146,7 @@ type bpfEndpointManager struct {
 	dsrEnabled              bool
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
-
-	ipSetMap bpf.Map
-	stateMap bpf.Map
+	bpfMapContext           *bpf.MapContext
 
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable iptablesTable
@@ -183,11 +181,10 @@ type bpfAllowChainRenderer interface {
 
 func newBPFEndpointManager(
 	config *Config,
+	bpfMapContext *bpf.MapContext,
 	fibLookupEnabled bool,
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
-	ipSetMap bpf.Map,
-	stateMap bpf.Map,
 	iptablesRuleRenderer bpfAllowChainRenderer,
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
@@ -218,8 +215,7 @@ func newBPFEndpointManager(
 		dsrEnabled:              config.BPFNodePortDSREnabled,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
-		ipSetMap:                ipSetMap,
-		stateMap:                stateMap,
+		bpfMapContext:           bpfMapContext,
 		ruleRenderer:            iptablesRuleRenderer,
 		iptablesFilterTable:     iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
@@ -1007,6 +1003,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
+	ap.MapSizes = m.bpfMapContext.MapSizes
 
 	return ap
 }
@@ -1423,7 +1420,7 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 }
 
 func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error {
-	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.ipSetMap.MapFD(), m.stateMap.MapFD(), jumpMapFD)
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD)
 	insns, err := pg.Instructions(rules)
 	if err != nil {
 		return fmt.Errorf("failed to generate policy bytecode: %w", err)

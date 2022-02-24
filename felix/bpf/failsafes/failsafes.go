@@ -68,15 +68,10 @@ func (m *Manager) CompleteDeferredWork() error {
 
 func (m *Manager) ResyncFailsafes() error {
 	m.opReporter.RecordOperation("resync-failsafes")
-	err := m.failsafesMap.EnsureExists()
-	if err != nil {
-		// Shouldn't happen because int_dataplane opens the map already.
-		log.WithError(err).Panic("Failed to open failsafe port map.")
-	}
 
 	syncFailed := false
 	unknownKeys := set.New()
-	err = m.failsafesMap.Iter(func(rawKey, _ []byte) bpf.IteratorAction {
+	err := m.failsafesMap.Iter(func(rawKey, _ []byte) bpf.IteratorAction {
 		key := KeyFromSlice(rawKey)
 		unknownKeys.Add(key)
 		return bpf.IterNone
