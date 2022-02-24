@@ -171,6 +171,15 @@ spec:
                   Calico policy will be bypassed. [Default: insert]'
                 type: string
               dataplaneDriver:
+                description: DataplaneDriver filename of the external dataplane driver
+                  to use.  Only used if UseInternalDataplaneDriver is set to false.
+                type: string
+              dataplaneWatchdogTimeout:
+                description: 'DataplaneWatchdogTimeout is the readiness/liveness timeout
+                  used for Felix''s (internal) dataplane driver. Increase this value
+                  if you experience spurious non-ready or non-live events when Felix
+                  is under heavy load. Decrease the value to get felix to report non-live
+                  or non-ready more quickly. [Default: 90s]'
                 type: string
               debugDisableLogDropping:
                 type: boolean
@@ -378,6 +387,8 @@ spec:
                   usage. [Default: 10s]'
                 type: string
               ipv6Support:
+                description: IPv6Support controls whether Felix enables support for
+                  IPv6 (if supported by the in-use dataplane).
                 type: boolean
               kubeNodePortRanges:
                 description: 'KubeNodePortRanges holds list of port ranges used for
@@ -580,6 +591,9 @@ spec:
                   Felix makes reports. [Default: 86400s]'
                 type: string
               useInternalDataplaneDriver:
+                description: UseInternalDataplaneDriver, if true, Felix will use its
+                  internal dataplane programming logic.  If false, it will launch
+                  an external dataplane driver and communicate with it over protobuf.
                 type: boolean
               vxlanEnabled:
                 type: boolean
