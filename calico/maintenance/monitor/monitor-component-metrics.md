@@ -33,7 +33,6 @@ You can configure Felix, Typha, and/or kube-controllers to provide metrics to Pr
 
 In this tutorial we assume that you have completed all other introductory tutorials and possess a running Kubernetes cluster with {{site.prodname}}. You can either use `kubectl` or `calicoctl` to perform the following steps. Depending on which tool you would like to use, make sure you have the necessary prerequisites as shown below.
 
-
 {% tabs %}
 <label:kubectl,active:true>
 <%
