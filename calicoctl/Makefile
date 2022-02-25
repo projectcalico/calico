@@ -130,7 +130,7 @@ ut: bin/calicoctl-linux-amd64
 .PHONY: fv
 ## Run the tests in a container. Useful for CI, Mac dev.
 fv: bin/calicoctl-linux-amd64 version-helper
-	$(MAKE) run-etcd-host
+	$(MAKE) run-etcd
 
 	# We start two API servers in order to test multiple kubeconfig support
 	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6443 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
@@ -158,7 +158,7 @@ ST_OPTIONS?=
 .PHONY: st
 ## Run the STs in a container
 st: bin/calicoctl-linux-amd64 version-helper
-	$(MAKE) run-etcd-host
+	$(MAKE) run-etcd
 	$(MAKE) run-kubernetes-master
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
@@ -168,7 +168,7 @@ st: bin/calicoctl-linux-amd64 version-helper
 	docker run --net=host --privileged \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
 		   --rm -t \
-		   -v $(CURDIR)/tests/certs:/home/user/certs \
+		   -v $(CERTS_PATH):/home/user/certs \
 		   -v $(CURDIR):/code \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
@@ -176,32 +176,17 @@ st: bin/calicoctl-linux-amd64 version-helper
 	$(MAKE) stop-etcd
 	$(MAKE) stop-kubernetes-master
 
-.PHONY: run-etcd-host
-run-etcd-host:
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
-	@-docker rm -f calico-etcd
-	docker run --detach \
-	--net=host \
-	--name calico-etcd \
-	$(ETCD_IMAGE) \
-	etcd \
-	--enable-v2 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
-
-.PHONY: stop-etcd
-stop-etcd:
-	@-docker rm -f calico-etcd
-
 ## Run a local kubernetes master with API
+# TODO: Commonize this with the functions in lib.Makefile. 
+# For now, these tests do something special and launch two apiserver on different ports, so it makes sense
+# to keep them separate.
 run-kubernetes-master: stop-kubernetes-master
 	# Run a Kubernetes apiserver using Docker.
 	docker run --net=host --detach \
 		--name st-apiserver-${KUBE_APISERVER_PORT} \
 		-v $(CURDIR):/code \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
-		-v $(CURDIR)/tests/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		${CALICO_BUILD} kube-apiserver \
 			--secure-port=${KUBE_APISERVER_PORT} \
@@ -227,7 +212,7 @@ run-kubernetes-master: stop-kubernetes-master
 	# And run the controller manager.
 	docker run --detach --net=host \
 	  --name st-controller-manager-${KUBE_APISERVER_PORT} \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
+	  -v $(CERTS_PATH):/home/user/certs \
 	  $(CALICO_BUILD) kube-controller-manager \
 	    --master=https://127.0.0.1:${KUBE_APISERVER_PORT} \
             --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
