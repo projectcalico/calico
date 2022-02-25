@@ -63,17 +63,31 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Enable IPv6 only
 
-<!--
 {% tabs %}
-   <label:Operator,active:true>
-   <%
-1. TBD.
-1. TBD.
+  <label:Operator,active:true>
+<%
+
+To configure an IPv6-only cluster using the operator, edit your default Installation at install time to include a single IPv6 pool, and no IPv4 pools. For example:
+
+```yaml
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+  pec:
+   calicoNetwork:
+     # Note: The ipPools section cannot be modified post-install.
+    ipPools:
+    - blockSize: 122
+      cidr: 2001::00/64 
+      encapsulation: None 
+      natOutgoing: Enabled 
+      nodeSelector: all()
+```
 
 %>
 <label:Manifest>
 <%
--->
 
 1. Set up a new Kubernetes cluster with an IPv6 pod CIDR and service IP range.
 
@@ -108,11 +122,6 @@ This how-to guide uses the following {{site.prodname}} features:
 
    New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
 
-<!--
-%>
-{% endtabs %}
--->
-
 **(Optional) Update host to not look for IPv4 addresses**
 
 If you want your workloads to have IPv6 addresses only, because you do not have IPv4 addresses or connectivity
@@ -124,21 +133,44 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
      This configures {{site.prodname}} to calculate the router ID based on the hostname.
    - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
 
+%>
+{% endtabs %}
+
 #### Enable dual stack
 
-<!--
-{% tabs id:installation-method-bbb %}
-<id:opbbb,name:Operator,active:true>
+1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
+
+{% tabs %}
+  <label:Operator,active:true>
 <%
-1. TBD.
-1. TBD.
+
+To configure dual-stack cluster using the operator, edit your default Installation at install time to include both an IPv4 and IPv6 pool. For example:
+
+```yaml
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+  pec:
+   # Configures Calico networking.
+   calicoNetwork:
+     # Note: The ipPools section cannot be modified post-install.
+    ipPools:
+    - blockSize: 26
+      cidr: 10.48.0.0/21
+      encapsulation: IPIP
+      natOutgoing: Enabled
+      nodeSelector: all()
+    - blockSize: 122
+      cidr: 2001::00/64 
+      encapsulation: None 
+      natOutgoing: Enabled 
+      nodeSelector: all()
+```
 
 %>
-<id:manbbb,name:Manifest>
+<label:Manifest>
 <%
--->
-
-1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
 1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the correct {{site.prodname}} manifest for the cluster and datastore type.
 
@@ -172,10 +204,8 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
 
    New pods will get both IPv4 and IPv6 addresses, and can communicate with each other and the outside world over IPv4 or IPv6.
 
-<!--
 %>
 {% endtabs %}
--->
 
 ### Above and beyond
 

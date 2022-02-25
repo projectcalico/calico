@@ -27,22 +27,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 **Verify that you are using {{site.prodname}} IPAM**.
 
-To verify, ssh to one of your Kubernetes nodes and view the CNI configuration.
-
-```bash
-cat /etc/cni/net.d/10-calico.conflist
-
-```
-
-Look for the "type" entry:
-
-<pre>
-   "ipam": {
-         "type": "calico-ipam"
-    },
-</pre>
-
-If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster.
+{% include content/determine-ipam.md %}
 
 **Verify orchestrator support for changing the pod network CIDR**.
 
@@ -174,14 +159,12 @@ Remember, disabling a pool only affects new IP allocations; networking for exist
 
 ```bash
 calicoctl apply -f pools.yaml
-
 ```
 
 Verify the changes.
 
 ```bash
 calicoctl get ippool -o wide
-
 ```
 
 <pre>
@@ -196,7 +179,6 @@ Next, we delete all of the existing pods from the old IP pool. (In our example, 
 
 ```bash
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
-
 ```
 
 #### Step 4: Verify that new pods get an address from the new IP pool
@@ -205,28 +187,24 @@ kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 
    ```bash
    kubectl create ns ippool-test
-
    ```
 
 1. Create an nginx pod.
  
    ```bash
    kubectl -n ippool-test create deployment nginx --image nginx
-
    ```
 
 1. Verify that the new pod gets an IP address from the new range.
    
    ```bash
    kubectl -n ippool-test get pods -l app=nginx -o wide
-
    ```
 
 1. Clean up the ippool-test namespace. 
 
    ```bash
    kubectl delete ns ippool-test
-
    ```
 
 #### Step 5: Delete the old IP pool
@@ -235,7 +213,6 @@ Now that you've verified that pods are getting IPs from the new range, you can s
 
 ```bash
 calicoctl delete pool default-ipv4-ippool
-
 ```
 
 ### Above and beyond

@@ -315,4 +315,5 @@ Refer to the
 [Calico ConfigMap manifest](/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
 example with the above changes.
 
+%>
 {% endtabs %}
