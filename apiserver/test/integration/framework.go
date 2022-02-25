@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -80,7 +81,7 @@ func withConfigGetFreshApiserverServerAndClient(
 		StopCh:             stopCh,
 	}
 	options.RecommendedOptions.SecureServing.BindPort = securePort
-	options.RecommendedOptions.CoreAPI.CoreAPIKubeconfigPath = "../certs/kubeconfig"
+	options.RecommendedOptions.CoreAPI.CoreAPIKubeconfigPath = os.Getenv("KUBECONFIG")
 
 	var err error
 	pcs, err := server.PrepareServer(options)
@@ -94,7 +95,6 @@ func withConfigGetFreshApiserverServerAndClient(
 		err := server.RunServer(options, pcs)
 		if err != nil {
 			close(serverFailed)
-			t.Fatalf("Error running the server: %v", err)
 		}
 	}()
 

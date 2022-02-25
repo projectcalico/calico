@@ -4,7 +4,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
 
 LOCAL_CHECKS = goimports check-gen-files
 
-KIND_CONFIG = $(KIND_DIR)/control-plane-only.yaml
+KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -129,7 +129,7 @@ ut:
 fv: fv-setup
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 	$(MAKE) fv-teardown
@@ -146,21 +146,20 @@ fv-teardown: stop-etcd stop-etcd-tls cluster-destroy stop-coredns
 fv-fast:
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 
 # Create a kind cluster, and deploy some resources required for the libcalico-go tests.
-# TODO: Remove the need for this extra target, should all be in lib.Makefile.
+# TODO: Remove the need for this extra target, these should be created by the tests that need them.
 cluster-create: kind-cluster-create
-	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
-		$(KUBECTL) create -f test/mock-node.yaml && \
-		$(KUBECTL) create -f test/namespaces.yaml
+	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f test/mock-node.yaml
+	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f test/namespaces.yaml
 
 ## Run an etcd with TLS enabled, needed for some libcalico-go UTs.
 run-etcd-tls: stop-etcd-tls
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
+	# TODO: We shouldn't need to enable the v2 API, but some of our test code
+	# still relies on it.
 	docker run --detach \
 		-v $(CURDIR)/test/etcd-ut-certs:/root/etcd-certificates/ \
 		--net=host \
