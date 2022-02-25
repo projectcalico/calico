@@ -1108,6 +1108,75 @@ ifndef VERSION
 endif
 
 ###############################################################################
+# Common functions for launching a local Kubernetes control plane.
+###############################################################################
+## Kubernetes apiserver used for tests
+APISERVER_NAME := calico-local-apiserver
+run-k8s-apiserver: stop-k8s-apiserver run-etcd
+	docker run --detach --net=host \
+		--name $(APISERVER_NAME) \
+		-v $(CERTS_PATH):/home/user/certs \
+		-v $(CURDIR)/config:/config \
+		-e KUBECONFIG=/home/user/certs/kubeconfig \
+		$(CALICO_BUILD) kube-apiserver \
+		--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+		--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
+		--authorization-mode=RBAC \
+		--service-account-key-file=/home/user/certs/service-account.pem \
+		--service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+		--service-account-issuer=https://localhost:443 \
+		--api-audiences=kubernetes.default \
+		--client-ca-file=/home/user/certs/ca.pem \
+		--tls-cert-file=/home/user/certs/kubernetes.pem \
+		--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+		--enable-priority-and-fairness=false \
+		--max-mutating-requests-inflight=0 \
+		--max-requests-inflight=0
+
+	# Wait until the apiserver is accepting requests.
+	while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+
+	# Wait until we can configure a cluster role binding which allows anonymous auth.
+	while ! docker exec $(APISERVER_NAME) kubectl create \
+		clusterrolebinding anonymous-admin \
+		--clusterrole=cluster-admin \
+		--user=system:anonymous 2>/dev/null ; \
+		do echo "Waiting for $(APISERVER_NAME) to come up"; \
+		sleep 1; \
+		done
+
+	# Create CustomResourceDefinition (CRD) for Calico resources
+	while ! docker exec $(APISERVER_NAME) kubectl \
+		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
+		do echo "Trying to create CRDs"; \
+		sleep 1; \
+		done
+
+# Stop Kubernetes apiserver
+stop-k8s-apiserver:
+	@-docker rm -f $(APISERVER_NAME)
+
+# Run a local Kubernetes controller-manager in a docker container, useful for tests.
+CONTROLLER_MANAGER_NAME := calico-local-controller-manager
+run-k8s-controller-manager: stop-k8s-controller-manager run-k8s-apiserver
+	docker run --detach --net=host \
+		--name $(CONTROLLER_MANAGER_NAME) \
+		-v $(CERTS_PATH):/home/user/certs \
+		$(CALICO_BUILD) kube-controller-manager \
+		--master=https://127.0.0.1:6443 \
+		--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+		--min-resync-period=3m \
+		--allocate-node-cidrs=true \
+		--cluster-cidr=192.168.0.0/16 \
+		--v=5 \
+		--service-account-private-key-file=/home/user/certs/service-account-key.pem \
+		--root-ca-file=/home/user/certs/ca.pem
+
+## Stop Kubernetes controller manager
+stop-k8s-controller-manager:
+	@-docker rm -f $(CONTROLLER_MANAGER_NAME)
+
+###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
