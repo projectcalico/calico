@@ -379,7 +379,7 @@ func updateOrCreateDefaultFelixConfiguration(ctx context.Context, client client.
 		return err
 	}
 
-	// Get current value for VNI , Port and MTU.
+	// Get current value for VNI, Port and MTU.
 	currentVNI := 0
 	if defaultConfig.Spec.VXLANVNI != nil {
 		currentVNI = *defaultConfig.Spec.VXLANVNI

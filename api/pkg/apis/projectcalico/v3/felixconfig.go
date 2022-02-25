@@ -194,12 +194,12 @@ type FelixConfigurationSpec struct {
 	// to Debug level logs.
 	LogDebugFilenameRegex string `json:"logDebugFilenameRegex,omitempty" validate:"omitempty,regexp"`
 
-	// IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Deprecated as Felix now determines this based on the existing IP pools. [Default: nil (unset)]
+	// IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]
 	IPIPEnabled *bool `json:"ipipEnabled,omitempty" confignamev1:"DeprecatedIpInIpEnabled"`
 	// IPIPMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
 	IPIPMTU *int `json:"ipipMTU,omitempty" confignamev1:"IpInIpMtu"`
 
-	// VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for VXLAN networking. Deprecated as Felix now determines this based on the existing IP pools. [Default: nil (unset)]
+	// VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for VXLAN networking. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]
 	VXLANEnabled *bool `json:"vxlanEnabled,omitempty" confignamev1:"DeprecatedVXLANEnabled"`
 	// VXLANMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
 	VXLANMTU  *int `json:"vxlanMTU,omitempty"`
