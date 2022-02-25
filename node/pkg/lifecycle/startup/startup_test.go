@@ -152,8 +152,10 @@ const (
 	randomULAPool = "<random ULA pool>"
 )
 
-var kubeadmConfig *v1.ConfigMap = &v1.ConfigMap{Data: map[string]string{"ClusterConfiguration": "podSubnet: 192.168.0.0/16"}}
-var rancherState *v1.ConfigMap = nil
+var (
+	kubeadmConfig *v1.ConfigMap = &v1.ConfigMap{Data: map[string]string{"ClusterConfiguration": "podSubnet: 192.168.0.0/16"}}
+	rancherState  *v1.ConfigMap = nil
+)
 
 var _ = Describe("FV tests against a real etcd", func() {
 	RegisterFailHandler(Fail)
@@ -184,7 +186,6 @@ var _ = Describe("FV tests against a real etcd", func() {
 			// Create a new client.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 			Expect(err).NotTo(HaveOccurred())
-			log.Printf("Loaded Config: %+v", cfg.Spec)
 
 			c, err := client.New(*cfg)
 			Expect(err).NotTo(HaveOccurred())
@@ -208,7 +209,6 @@ var _ = Describe("FV tests against a real etcd", func() {
 			// Get the IPPool list.
 			poolList, err = c.IPPools().List(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			log.Println("Get pool list returns: ", poolList.Items)
 
 			// Look through the pool for the expected data.
 			foundv4Expected := false
@@ -302,15 +302,18 @@ var _ = Describe("FV tests against a real etcd", func() {
 			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "Always", true, false, 26, 122, "all()", "all()"),
 		Entry("IPv6 NATOutgoing Set Enabled",
 			[]EnvItem{
-				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"}},
+				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"},
+			},
 			"192.168.0.0/16", randomULAPool, "Off", true, true, 26, 122, "all()", "all()"),
 		Entry("IPv6 NATOutgoing Set Disabled",
 			[]EnvItem{
-				{"CALICO_IPV6POOL_NAT_OUTGOING", "false"}},
+				{"CALICO_IPV6POOL_NAT_OUTGOING", "false"},
+			},
 			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("IPv4 NATOutgoing Set Disabled",
 			[]EnvItem{
-				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"}},
+				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"},
+			},
 			"192.168.0.0/16", randomULAPool, "Off", false, false, 26, 122, "all()", "all()"),
 		Entry("IPv6 NAT OUTGOING and IPV4 NAT OUTGOING SET",
 			[]EnvItem{
@@ -496,7 +499,6 @@ var _ = Describe("FV tests against a real etcd", func() {
 			select {
 			case <-done:
 				// Finished.  Success!
-				log.Println("Connected to datastore")
 				return
 			default:
 				count++
@@ -509,25 +511,25 @@ var _ = Describe("FV tests against a real etcd", func() {
 	})
 
 	Describe("Test CLUSTER_TYPE env variable", func() {
-		Context("With no env var, Cluster Type should be empty string", func() {
+		It("should support an empty env var", func() {
 			// Create a new client.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
-			It("should be able to load Calico client from ENV", func() {
+			By("load Calico client from ENV", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			c, err := client.New(*cfg)
-			It("should be able to create a new Calico client", func() {
+			By("create a new Calico client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			be, err := backend.NewClient(*cfg)
-			It("should be able to create a new backend client", func() {
+			By("create a new backend client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			err = be.Clean()
-			It("should be able to clear the datastore", func() {
+			By("clear the datastore", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -535,39 +537,39 @@ var _ = Describe("FV tests against a real etcd", func() {
 			node := getNode(ctx, c, nodeName)
 
 			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, nil, nil)
-			It("should be able to ensureDefaultConfig", func() {
+			By("ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-			It("should be able to access the ClusterType", func() {
+			By("access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should be empty", func() {
+			By("being empty", func() {
 				Expect(clusterInfo.Spec.ClusterType).To(Equal(""))
 			})
-
 		})
-		Context("With env var set, Cluster Type should have that value", func() {
+
+		It("should respect the env var", func() {
 			// Create a new client.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
-			It("should be able to load Calico client from ENV", func() {
+			By("should be able to load Calico client from ENV", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			c, err := client.New(*cfg)
-			It("should be able to create a new Calico client", func() {
+			By("should be able to create a new Calico client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			be, err := backend.NewClient(*cfg)
-			It("should be able to create a new backend client", func() {
+			By("should be able to create a new backend client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			err = be.Clean()
-			It("should be able to clear the datastore", func() {
+			By("should be able to clear the datastore", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -578,38 +580,39 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 			localRancherState := &v1.ConfigMap{Data: map[string]string{"foo": "bar"}}
 			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeWindows, kubeadmConfig, localRancherState)
-			It("should be able to ensureDefaultConfig", func() {
+			By("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-			It("should be able to access the ClusterType", func() {
+			By("should be able to access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should have the set value", func() {
+			By("should have the set value", func() {
 				Expect(clusterInfo.Spec.ClusterType).To(Equal("theType,kubeadm,rancher,win"))
 			})
 		})
-		Context("With env var and Cluster Type prepopulated, Cluster Type should have both", func() {
+
+		It("should merge existing cluster type with the env var", func() {
 			// Create a new client.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
-			It("should be able to load Calico client from ENV", func() {
+			By("load Calico client from ENV", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			c, err := client.New(*cfg)
-			It("should be able to create a new Calico client", func() {
+			By("create a new Calico client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			be, err := backend.NewClient(*cfg)
-			It("should be able to create a new backend client", func() {
+			By("create a new backend client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			err = be.Clean()
-			It("should be able to clear the datastore", func() {
+			By("clear the datastore", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -625,41 +628,41 @@ var _ = Describe("FV tests against a real etcd", func() {
 			os.Setenv("CLUSTER_TYPE", "theType")
 
 			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, kubeadmConfig, rancherState)
-			It("should be able to ensureDefaultConfig", func() {
+			By("ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			clusterInfo, err = c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-			It("should be able to access the ClusterType", func() {
+			By("access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should have the set value", func() {
+			By("have the set value", func() {
 				Expect(clusterInfo.Spec.ClusterType).To(ContainSubstring("theType"))
 			})
-			It("should have the prepopulated value", func() {
+			By("have the prepopulated value", func() {
 				Expect(clusterInfo.Spec.ClusterType).To(ContainSubstring("prePopulated"))
 			})
 		})
 
-		Context("for KDD backend, with env var and Cluster Type prepopulated, Cluster Type should have 'kdd' appended", func() {
+		It("should append clusterType 'kdd' in KDD mode, with env var also set", func() {
 			// Create Calico client with k8s backend.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 			Expect(err).NotTo(HaveOccurred())
 			cfg.Spec.DatastoreType = apiconfig.Kubernetes
 
 			c, err := client.New(*cfg)
-			It("should be able to create a new Calico client", func() {
+			By("create a new Calico client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			be, err := backend.NewClient(*cfg)
-			It("should be able to create a new backend client", func() {
+			By("create a new backend client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			err = be.Clean()
-			It("should be able to clear the datastore", func() {
+			By("clear the datastore", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -675,44 +678,44 @@ var _ = Describe("FV tests against a real etcd", func() {
 			os.Setenv("CLUSTER_TYPE", "theType")
 
 			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, kubeadmConfig, rancherState)
-			It("should be able to ensureDefaultConfig", func() {
+			By("ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			clusterInfo, err = c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-			It("should be able to access the ClusterType", func() {
+			By("access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should have the set value", func() {
+			By("should have the set value", func() {
 				Expect(clusterInfo.Spec.ClusterType).To(ContainSubstring("theType"))
 			})
-			It("should have the prepopulated value", func() {
+			By("should have the prepopulated value", func() {
 				Expect(clusterInfo.Spec.ClusterType).To(ContainSubstring("prePopulated"))
 			})
-			It("should have 'kdd' appended at the end", func() {
+			By("should have 'kdd' appended at the end", func() {
 				Expect(strings.HasSuffix(clusterInfo.Spec.ClusterType, ",kdd")).To(BeTrue())
 			})
 		})
 
-		Context("for KDD backend, with no env var and Cluster Type not prepopulated, Cluster Type should only have 'kdd'", func() {
+		It("should set clusterType to 'kdd', with no env var", func() {
 			// Create Calico client with k8s backend.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 			Expect(err).NotTo(HaveOccurred())
 			cfg.Spec.DatastoreType = apiconfig.Kubernetes
 
 			c, err := client.New(*cfg)
-			It("should be able to create a new Calico client", func() {
+			By("create a new Calico client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			be, err := backend.NewClient(*cfg)
-			It("should be able to create a new backend client", func() {
+			By("create a new backend client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			err = be.Clean()
-			It("should be able to clear the datastore", func() {
+			By("clear the datastore", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -727,39 +730,39 @@ var _ = Describe("FV tests against a real etcd", func() {
 			os.Setenv("CLUSTER_TYPE", "")
 
 			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, kubeadmConfig, rancherState)
-			It("should be able to ensureDefaultConfig", func() {
+			By("ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			clusterInfo, err = c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-			It("should be able to access the ClusterType", func() {
+			By("access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should only have 'kdd' set", func() {
+			By("having 'kdd' set", func() {
 				Expect(clusterInfo.Spec.ClusterType).Should(Equal("kubeadm,kdd"))
 			})
 		})
 
-		Context("With the same entries in both sources", func() {
+		It("should handle same value in env var and cluster info", func() {
 			// Create a new client.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
-			It("should be able to load Calico client from ENV", func() {
+			By("load Calico client from ENV", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			c, err := client.New(*cfg)
-			It("should be able to create a new Calico client", func() {
+			By("create a new Calico client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			be, err := backend.NewClient(*cfg)
-			It("should be able to create a new backend client", func() {
+			By("create a new backend client", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			err = be.Clean()
-			It("should be able to clear the datastore", func() {
+			By("clear the datastore", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -775,19 +778,19 @@ var _ = Describe("FV tests against a real etcd", func() {
 			os.Setenv("CLUSTER_TYPE", "type1,type1")
 
 			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, kubeadmConfig, rancherState)
-			It("should be able to ensureDefaultConfig", func() {
+			By("ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			clusterInfo, err = c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-			It("should be able to access the ClusterType", func() {
+			By("access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should have only one instance of the expected value", func() {
+			By("having instance of the expected value", func() {
 				Expect(strings.Count(clusterInfo.Spec.ClusterType, "type1")).To(Equal(1), "Should only have one instance of type1, read '%s", clusterInfo.Spec.ClusterType)
 			})
-			It("should have only one instance of the expected value", func() {
+			By("having instance of the expected value", func() {
 				Expect(strings.Count(clusterInfo.Spec.ClusterType, "type2")).To(Equal(1), "Should only have one instance of type1, read '%s", clusterInfo.Spec.ClusterType)
 			})
 		})
@@ -831,15 +834,12 @@ var _ = Describe("FV tests against a real etcd", func() {
 				Expect(node.Spec.OrchRefs).To(HaveLen(1))
 			})
 		})
-
 	})
 })
 
 var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
-
 	DescribeTable("Test variations on how IPs are detected.",
 		func(node *libapi.Node, items []EnvItem, expected bool) {
-
 			for _, item := range items {
 				os.Setenv(item.key, item.value)
 			}
@@ -866,17 +866,16 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 })
 
 var _ = Describe("UT for autodetection method k8s-internal-ip", func() {
-
 	DescribeTable("Test variations on k8s-internal-ip",
 		func(node *libapi.Node, k8sNode *v1.Node, items []EnvItem, expected bool) {
-
 			for _, item := range items {
 				os.Setenv(item.key, item.value)
 			}
 
 			mockGetInterface := func([]string, []string, int) ([]autodetection.Interface, error) {
 				return []autodetection.Interface{
-					{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("192.168.1.10/24"), net.MustParseCIDR("2001:db8:85a3:8d3:1319:8a2e:370:7348/128")}}}, nil
+					{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("192.168.1.10/24"), net.MustParseCIDR("2001:db8:85a3:8d3:1319:8a2e:370:7348/128")}},
+				}, nil
 			}
 
 			check, _ := configureIPsAndSubnets(node, k8sNode, mockGetInterface)
@@ -967,7 +966,6 @@ var _ = Describe("UT for node name determination", func() {
 	hn, _ := names.Hostname()
 	DescribeTable("Test variations on how node names are detected.",
 		func(nodenameEnv, hostnameEnv, expectedNodeName string) {
-
 			if nodenameEnv != "" {
 				os.Setenv("NODENAME", nodenameEnv)
 			} else {
@@ -982,7 +980,6 @@ var _ = Describe("UT for node name determination", func() {
 			os.Unsetenv("NODENAME")
 			os.Unsetenv("HOSTNAME")
 			Expect(nodeName).To(Equal(expectedNodeName))
-
 		},
 
 		Entry("Valid NODENAME and valid HOSTNAME", "abc-def.ghi123", "foo1.bar2-baz3", "abc-def.ghi123"),
@@ -1086,7 +1083,8 @@ var _ = DescribeTable("UT for extractKubeadmCIDRs",
         advertiseAddress: 10.128.0.73
         bindPort: 6443
     apiVersion: kubeadm.k8s.io/v1alpha3
-    kind: ClusterStatus`}}, "192.168.0.0/16", "", false),
+    kind: ClusterStatus`,
+	}}, "192.168.0.0/16", "", false),
 )
 
 var _ = Describe("UTs for monitor-addresses option", func() {
@@ -1104,7 +1102,8 @@ var _ = Describe("UT for IP and IP6", func() {
 	DescribeTable("env IP is defined", func(ipv4Env string, version int, exceptValue string) {
 		ipv4MockInterfaces := func([]string, []string, int) ([]autodetection.Interface, error) {
 			return []autodetection.Interface{
-				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("1.2.3.4/24")}}}, nil
+				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("1.2.3.4/24")}},
+			}, nil
 		}
 		ipv4CIDROrIP, _ := autodetection.GetLocalCIDR(ipv4Env, version, ipv4MockInterfaces)
 		Expect(ipv4CIDROrIP).To(Equal(exceptValue))
@@ -1114,10 +1113,11 @@ var _ = Describe("UT for IP and IP6", func() {
 		Entry("get the original ip(v4)", "1.2.3.5", 4, "1.2.3.5"),
 	)
 
-	var _ = DescribeTable("env IP6 is defined", func(ipv6Env string, version int, exceptValue string) {
+	_ = DescribeTable("env IP6 is defined", func(ipv6Env string, version int, exceptValue string) {
 		ipv6MockInterfaces := func([]string, []string, int) ([]autodetection.Interface, error) {
 			return []autodetection.Interface{
-				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("1:2:3:4::5/120")}}}, nil
+				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("1:2:3:4::5/120")}},
+			}, nil
 		}
 		ipv4CIDROrIP, _ := autodetection.GetLocalCIDR(ipv6Env, version, ipv6MockInterfaces)
 		Expect(ipv4CIDROrIP).To(Equal(exceptValue))
