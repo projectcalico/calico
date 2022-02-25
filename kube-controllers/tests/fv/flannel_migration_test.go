@@ -58,9 +58,7 @@ const (
 	flannelSubnetEnv = "FLANNEL_NETWORK=192.168.0.0/16;FLANNEL_SUBNET=192.168.1.1/24;FLANNEL_MTU=8951;FLANNEL_IPMASQ=true;"
 )
 
-var (
-	emptyLabel = map[string]string{}
-)
+var emptyLabel = map[string]string{}
 
 var _ = Describe("flannel-migration-controller FV test", func() {
 	var (
@@ -178,7 +176,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 			Eventually(func() *api.ClusterInformation {
 				info, _ = calicoClient.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
 				return info
-			}).ShouldNot(BeNil())
+			}, 10*time.Second).ShouldNot(BeNil())
 
 			Expect(info.Spec.ClusterGUID).To(MatchRegexp("^[a-f0-9]{32}$"))
 			Expect(info.Spec.ClusterType).To(Equal("k8s,kdd"))
