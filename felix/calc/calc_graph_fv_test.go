@@ -749,7 +749,7 @@ var _ = Describe("calc graph encap resolver", func() {
 		calcGraph.AllUpdDispatcher.OnStatusUpdated(api.InSync)
 		_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 		Expect(err).To(Not(HaveOccurred()))
-		calcGraph.AllUpdDispatcher.OnUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+		calcGraph.AllUpdDispatcher.OnUpdate(AddPoolUpdate(*cidr, encap.Always, encap.Undefined))
 		Expect(restartTriggered).To(BeTrue())
 	})
 })

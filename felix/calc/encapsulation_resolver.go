@@ -60,23 +60,27 @@ func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool)
 		log.WithField("update", update).Debug("EncapsulationResolver: IPPool deletion")
 
 		k, ok := update.Key.(model.IPPoolKey)
-		if ok {
-			r.encapCalc.RemoveModelPool(k)
-		} else {
+		if !ok {
 			log.Infof("failed to convert %+v to model.IPPoolKey. Ignoring.", update.Key)
+
+			return
 		}
+
+		r.encapCalc.RemoveModelPool(k)
 	} else {
 		log.WithField("update", update).Debug("EncapsulationResolver: IPPool update")
 
 		pool, ok := update.Value.(*model.IPPool)
-		if ok {
-			r.encapCalc.UpdateModelPool(pool)
-		} else {
+		if !ok {
 			log.Infof("failed to convert %+v to *model.IPPool. Ignoring.", update.Value)
+
+			return
 		}
+
+		r.encapCalc.UpdateModelPool(pool)
 	}
 
-	r.TriggerCalculation()
+	r.triggerCalculation()
 
 	return
 }
@@ -86,13 +90,14 @@ func (r *EncapsulationResolver) OnStatusUpdate(status api.SyncStatus) {
 
 	if status == api.InSync {
 		r.inSync = true
-		r.TriggerCalculation()
+		r.triggerCalculation()
 	}
 }
 
-func (r *EncapsulationResolver) TriggerCalculation() {
-	// Do nothing if EncapsulationResolver hasn't sync'ed all updates yet
+func (r *EncapsulationResolver) triggerCalculation() {
 	if !r.inSync {
+		// Do nothing if EncapsulationResolver hasn't sync'ed all updates yet
+		log.Debug("EncapsulationResolver: skip calculation because inSync is false")
 		return
 	}
 
