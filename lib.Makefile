@@ -1183,6 +1183,7 @@ stop-k8s-controller-manager:
 ## Run etcd as a container (calico-etcd)
 # TODO: We shouldn't need to tear this down every time it is called.
 # TODO: We shouldn't need to enable the v2 API, but some of our test code still relies on it.
+.PHONY: run-etcd stop-etcd
 run-etcd: stop-etcd
 	docker run --detach \
 		--net=host \
@@ -1192,13 +1193,8 @@ run-etcd: stop-etcd
 		--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 		--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
-.PHONY: stop-etcd
 stop-etcd:
 	@-docker rm -f calico-etcd
-
-## Stop the etcd container (calico-etcd)
-stop-etcd:
-	-docker rm -f calico-etcd
 
 ###############################################################################
 # Helpers
