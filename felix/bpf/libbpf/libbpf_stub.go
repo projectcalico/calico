@@ -87,6 +87,10 @@ func (m *Map) IsMapInternal() bool {
 	panic("LIBBPF syscall stub")
 }
 
+const (
+	GlobalsIPv6Enabled uint32 = 1
+)
+
 func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16, _ uint32) error {
 	panic("LIBBPF syscall stub")
 }
