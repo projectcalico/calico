@@ -26,3 +26,5 @@ kubeadmConfigPatches:
   metadata:
     name: config
   mode: ipvs
+  conntrack:
+    maxPerCore: 0
