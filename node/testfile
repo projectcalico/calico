@@ -1,0 +1,11 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "IPPool",
+  "metadata": {
+    "name": "test.ippool"
+  },
+  "spec": {
+    "cidr": "10.0.1.0/24",
+    "disabled": false
+  }
+}
