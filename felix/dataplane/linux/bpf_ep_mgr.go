@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -170,6 +170,9 @@ type bpfEndpointManager struct {
 
 	// XDP
 	xdpModes []bpf.XDPMode
+
+	// IPv6 Support
+	ipv6Enabled bool
 }
 
 type bpfAllowChainRenderer interface {
@@ -223,6 +226,9 @@ func newBPFEndpointManager(
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		ifaceToIpMap:     map[string]net.IP{},
 		opReporter:       opReporter,
+		// ipv6Enabled Should be set to config.IPv6Enabled, but for now it is better
+		// to set it to false since IPv6 supoprt is not yet implemented
+		ipv6Enabled: false,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -998,6 +1004,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.VXLANPort = m.vxlanPort
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
+	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
 
 	return ap
