@@ -132,6 +132,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		sourceReady:       make(map[string]bool),
 		nodeListenPorts:   make(map[string]uint16),
 		globalBGPConfig:   cfg,
+		nodeIPs:           make(map[string]struct{}),
 
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
@@ -274,6 +275,7 @@ type client struct {
 	bgpPeers         map[string]*apiv3.BGPPeer
 	globalListenPort uint16
 	nodeListenPorts  map[string]uint16
+	nodeIPs          map[string]struct{}
 
 	// The route generator
 	rg *routeGenerator
@@ -425,6 +427,7 @@ type bgpPeer struct {
 	Port        uint16               `json:"port"`
 	KeepNextHop bool                 `json:"keep_next_hop"`
 	RestartTime string               `json:"restart_time"`
+	CalicoNode  bool                 `json:"calico_node"`
 }
 
 type bgpPrefix struct {
@@ -540,12 +543,16 @@ func (c *client) updatePeersV1() {
 					}
 				}
 
+				// Check if the peer represents a node Calico is running on.
+				_, isCalicoNode := c.nodeIPs[host]
+
 				peers = append(peers, &bgpPeer{
 					PeerIP:      *ip,
 					ASNum:       v3res.Spec.ASNumber,
 					SourceAddr:  string(v3res.Spec.SourceAddress),
 					Port:        port,
 					KeepNextHop: v3res.Spec.KeepOriginalNextHop,
+					CalicoNode:  isCalicoNode,
 				})
 			}
 			log.Debugf("Peers %#v", peers)
@@ -822,14 +829,43 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 			for _, kvp := range kvps {
 				log.Debugf("KVP: %#v", kvp)
 				if kvp.Value == nil {
+					// Remove node's IPs from our node IP cache
+					nodeIPv4, nodeIPv6, _, _ := c.nodeToBGPFields(v3key.Name)
+					delete(c.nodeIPs, nodeIPv4)
+					delete(c.nodeIPs, nodeIPv6)
+
+					// Remove the node from our cache
 					if c.updateCache(api.UpdateTypeKVDeleted, kvp) {
 						needUpdatePeersV1 = true
 						needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("%s deleted", kvp.Key.String()))
 					}
 				} else {
+					// Check if the node already has IPs in our node IP cache.
+					oldNodeIPv4, oldNodeIPv6, _, _ := c.nodeToBGPFields(v3key.Name)
+
+					// Add/update our information on the node in our cache
 					if c.updateCache(u.UpdateType, kvp) {
 						needUpdatePeersV1 = true
 						needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("%s updated", kvp.Key.String()))
+					}
+
+					// Add the node IPs to our node IP cache.
+					nodeIPv4, nodeIPv6, _, _ := c.nodeToBGPFields(v3key.Name)
+					if oldNodeIPv4 != "" && oldNodeIPv4 != nodeIPv4 {
+						// IPv4 address is updated, remove the old IPv4 address.
+						delete(c.nodeIPs, oldNodeIPv4)
+					}
+					if oldNodeIPv6 != "" && oldNodeIPv6 == nodeIPv6 {
+						// IPv6 adress is updated, remove the old IPv6 address.
+						delete(c.nodeIPs, oldNodeIPv6)
+					}
+					if nodeIPv4 != "" {
+						// There is an IPv4 address for this node.
+						c.nodeIPs[nodeIPv4] = struct{}{}
+					}
+					if nodeIPv6 != "" {
+						// There is an IPv6 address for this node.
+						c.nodeIPs[nodeIPv6] = struct{}{}
 					}
 				}
 			}
