@@ -251,8 +251,8 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
-		-v $(CURDIR)/..:/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/../.go-pkg-cache:/go-cache:rw \
+		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
+		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
@@ -267,8 +267,8 @@ DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
-		-v $(CURDIR)/..:/go/src/github.com/projectcalico/calico:ro \
-		-v $(CURDIR)/../.go-pkg-cache:/go-cache:rw \
+		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:ro \
+		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
@@ -1117,7 +1117,6 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 		--name $(APISERVER_NAME) \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
 		-v $(CERTS_PATH):/home/user/certs \
-		-v $(CURDIR)/config:/config \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) kube-apiserver \
 		--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
@@ -1176,6 +1175,50 @@ run-k8s-controller-manager: stop-k8s-controller-manager run-k8s-apiserver
 ## Stop Kubernetes controller manager
 stop-k8s-controller-manager:
 	@-docker rm -f $(CONTROLLER_MANAGER_NAME)
+
+###############################################################################
+# Common functions for create a local kind cluster.
+###############################################################################
+KIND_DIR := $(REPO_ROOT)/hack/test/kind
+KIND_KUBECONFIG?=$(KIND_DIR)/kubeconfig.yaml
+KIND ?= $(KIND_DIR)/kind
+KUBECTL ?= $(KIND_DIR)/kubectl
+
+# Different tests may require different kind configurations.
+KIND_CONFIG ?= $(KIND_DIR)/multinode-kind.yaml
+KIND_NAME = $(basename $(notdir $(KIND_CONFIG)))
+
+kind-cluster-create: $(REPO_ROOT)/.$(KIND_NAME).created
+$(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
+	# First make sure any previous cluster is deleted
+	$(MAKE) kind-cluster-destroy
+
+	# Create a kind cluster.
+	$(KIND) create cluster \
+		--config $(KIND_CONFIG) \
+		--kubeconfig $(KIND_KUBECONFIG) \
+		--name $(KIND_NAME) \
+		--image kindest/node:$(K8S_VERSION)
+
+	# Wait for controller manager to be running and healthy, then create Calico CRDs.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd; do echo "Waiting for CRDs to be created"; sleep 2; done
+	touch $@
+
+kind-cluster-destroy: $(KIND) $(KUBECTL)
+	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
+	-$(KIND) delete cluster --name $(KIND_NAME)
+	rm -f $(KIND_KUBECONFIG)
+	rm -f .kind-cluster.created
+
+kind $(KIND):
+	mkdir -p $(KIND_DIR)
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.11.1"
+
+kubectl $(KUBECTL):
+	mkdir -p $(KIND_DIR)
+	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
+	chmod +x $@
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
