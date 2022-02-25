@@ -49,7 +49,6 @@ VERSION_FLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERS
 
 BUILD_LDFLAGS = -ldflags "$(VERSION_FLAGS)"
 RELEASE_LDFLAGS = -ldflags "$(VERSION_FLAGS) -w"
-KUBECONFIG_DIR? = /etc/kubernetes/admin.conf
 
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -100,7 +99,7 @@ else
 endif
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/apiserver'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/apiserver'
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
 ifndef RELEASE_BUILD
@@ -109,7 +108,7 @@ else
 	$(eval LDFLAGS:=$(BUILD_LDFLAGS))
 endif
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/filecheck'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/filecheck'
 
 ###############################################################################
 # Building the image
@@ -165,27 +164,26 @@ hack-lib:
 
 ## Run a local kubernetes server with API in a container.
 run-kubernetes-server: run-k8s-controller-manager
-	# TODO: Are these actually needed?
-	# Create a Node in the API for the tests to use.
-	# docker run \
-	# 	--net=host \
-	# 	--rm \
-	# 	-v  $(CURDIR):/manifests \
-	# 	-v $(CERTS_PATH):/home/user/certs \
-	# 	lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
-	# 	--kubeconfig=/home/user/certs/kubeconfig \
-	# 	apply -f /manifests/test/mock-node.yaml
+	#Create a Node in the API for the tests to use.
+	docker run \
+		--net=host \
+		--rm \
+		-v  $(CURDIR):/manifests \
+		-v $(CERTS_PATH):/home/user/certs \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+		--kubeconfig=/home/user/certs/kubeconfig \
+		apply -f /manifests/test/mock-node.yaml
 
-	# # Create Namespaces required by namespaced Calico `NetworkPolicy`
-	# # tests from the manifests namespaces.yaml.
-	# docker run \
-	# 	--net=host \
-	# 	--rm \
-	# 	-v  $(CURDIR):/manifests \
-	# 	-v $(CERTS_PATH):/home/user/certs \
-	# 	lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
-	# 	--kubeconfig=/home/user/certs/kubeconfig \
-	# 	apply -f /manifests/test/namespaces.yaml
+	# Create Namespaces required by namespaced Calico `NetworkPolicy`
+	# tests from the manifests namespaces.yaml.
+	docker run \
+		--net=host \
+		--rm \
+		-v  $(CURDIR):/manifests \
+		-v $(CERTS_PATH):/home/user/certs \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+		--kubeconfig=/home/user/certs/kubeconfig \
+		apply -f /manifests/test/namespaces.yaml
 
 ## Stop the local kubernetes server
 stop-kubernetes-server: stop-k8s-controller-manager
