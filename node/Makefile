@@ -329,48 +329,6 @@ $(BINDIR)/kubectl:
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $(BINDIR)/kubectl
 
-# Kubernetes apiserver used for tests
-run-k8s-apiserver: stop-k8s-apiserver run-etcd
-	docker run --detach --net=host \
-	  --name st-apiserver \
-	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	  -v $(CURDIR)/../cni-plugin/tests/certs:/home/user/certs \
-	  -e KUBECONFIG=/home/user/certs/kubeconfig \
-	  $(CALICO_BUILD) kube-apiserver \
-	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-	    --service-cluster-ip-range=10.101.0.0/16 \
-            --authorization-mode=RBAC \
-            --service-account-key-file=/home/user/certs/service-account.pem \
-            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
-            --service-account-issuer=https://localhost:443 \
-            --api-audiences=kubernetes.default \
-            --client-ca-file=/home/user/certs/ca.pem \
-            --tls-cert-file=/home/user/certs/kubernetes.pem \
-            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
-            --enable-priority-and-fairness=false \
-            --max-mutating-requests-inflight=0 \
-            --max-requests-inflight=0
-
-	# Wait until we can configure a cluster role binding which allows anonymous auth.
-	while ! docker exec st-apiserver kubectl create \
-		clusterrolebinding anonymous-admin \
-		--clusterrole=cluster-admin \
-		--user=system:anonymous 2>/dev/null ; \
-		do echo "Waiting for st-apiserver to come up"; \
-		sleep 1; \
-		done
-
-	# Create CustomResourceDefinition (CRD) for Calico resources
-	while ! docker exec st-apiserver kubectl \
-		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
-		do echo "Trying to create CRDs"; \
-		sleep 1; \
-		done
-
-# Stop Kubernetes apiserver
-stop-k8s-apiserver:
-	@-docker rm -f st-apiserver
-
 # Skip packages containing FV tests.
 UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
 .PHONY: ut
