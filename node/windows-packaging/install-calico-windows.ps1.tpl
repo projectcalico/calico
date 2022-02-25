@@ -366,7 +366,7 @@ if (-Not [string]::IsNullOrEmpty($ContainerdCniBinDir)) {
     SetConfigParameters -OldString 'Get-ContainerdDefaultCniBinDir' -NewString "`"$ContainerdCniBinDir`""
 }
 if (-Not [string]::IsNullOrEmpty($ContainerdCniConfDir)) {
-    SetConfigParameters -OldString 'Get-ContainerdDefaultCniBinDir' -NewString "`"$ContainerdCniConfDir`""
+    SetConfigParameters -OldString 'Get-ContainerdDefaultCniConfDir' -NewString "`"$ContainerdCniConfDir`""
 }
 
 if ($platform -EQ "aks") {
