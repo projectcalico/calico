@@ -1115,6 +1115,7 @@ APISERVER_NAME := calico-local-apiserver
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 		--name $(APISERVER_NAME) \
+		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
 		-v $(CERTS_PATH):/home/user/certs \
 		-v $(CURDIR)/config:/config \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
