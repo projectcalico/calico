@@ -152,19 +152,6 @@ st:
 check-copyright:
 	@hack/check-copyright.sh
 
-## Run etcd as a container (calico-etcd)
-run-etcd: stop-etcd
-	docker run --detach \
-	--net=host \
-	--entrypoint=/usr/local/bin/etcd \
-	--name calico-etcd quay.io/coreos/etcd:v3.1.7 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-## Stop the etcd container (calico-etcd)
-stop-etcd:
-	-docker rm -f calico-etcd
-
 GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/v1.16.4/hack/lib
 
 hack-lib:
@@ -177,84 +164,31 @@ hack-lib:
 	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/etcd.sh -o hack/lib/etcd.sh
 
 ## Run a local kubernetes server with API in a container.
-run-kubernetes-server: run-etcd stop-kubernetes-server
-	# Run a Kubernetes apiserver using Docker.
-	docker run --detach --net=host \
-	  --name st-apiserver \
-	  -v $(CURDIR)/test/certs:/home/user/certs \
-	  -e KUBECONFIG=/home/user/certs/kubeconfig \
-	  $(CALICO_BUILD) kube-apiserver \
-	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-	    --service-cluster-ip-range=10.101.0.0/16 \
-            --authorization-mode=RBAC \
-            --service-account-key-file=/home/user/certs/service-account.pem \
-            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
-            --service-account-issuer=https://localhost:443 \
-            --api-audiences=kubernetes.default \
-            --client-ca-file=/home/user/certs/ca.pem \
-            --tls-cert-file=/home/user/certs/kubernetes.pem \
-            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
-            --enable-priority-and-fairness=false \
-            --max-mutating-requests-inflight=0 \
-            --max-requests-inflight=0
-
-	# Wait until we can configure a cluster role binding which allows anonymous auth.
-	while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do echo "Trying to create ClusterRoleBinding"; sleep 2; done
-
-	# And run the controller manager.
-	docker run --detach --net=host \
-	  --name st-controller-manager \
-	  -v $(CURDIR)/test/certs:/home/user/certs \
-	  $(CALICO_BUILD) kube-controller-manager \
-            --master=https://127.0.0.1:6443 \
-            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
-            --min-resync-period=3m \
-            --allocate-node-cidrs=true \
-            --cluster-cidr=192.168.0.0/16 \
-            --v=5 \
-            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
-            --root-ca-file=/home/user/certs/ca.pem
-
-	# Create CustomResourceDefinition (CRD) for Calico resources
-	# from the manifest crds.yaml
-	docker run \
-		--net=host \
-		--rm \
-		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/test/certs:/home/user/certs \
-		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
-		--kubeconfig=/home/user/certs/kubeconfig \
-		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/
-
+run-kubernetes-server: run-k8s-controller-manager
+	# TODO: Are these actually needed?
 	# Create a Node in the API for the tests to use.
-	docker run \
-		--net=host \
-		--rm \
-		-v  $(CURDIR):/manifests \
-		-v $(CURDIR)/test/certs:/home/user/certs \
-		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
-		--kubeconfig=/home/user/certs/kubeconfig \
-		apply -f /manifests/test/mock-node.yaml
+	# docker run \
+	# 	--net=host \
+	# 	--rm \
+	# 	-v  $(CURDIR):/manifests \
+	# 	-v $(CERTS_PATH):/home/user/certs \
+	# 	lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+	# 	--kubeconfig=/home/user/certs/kubeconfig \
+	# 	apply -f /manifests/test/mock-node.yaml
 
-	# Create Namespaces required by namespaced Calico `NetworkPolicy`
-	# tests from the manifests namespaces.yaml.
-	docker run \
-		--net=host \
-		--rm \
-		-v  $(CURDIR):/manifests \
-		-v $(CURDIR)/test/certs:/home/user/certs \
-		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
-		--kubeconfig=/home/user/certs/kubeconfig \
-		apply -f /manifests/test/namespaces.yaml
+	# # Create Namespaces required by namespaced Calico `NetworkPolicy`
+	# # tests from the manifests namespaces.yaml.
+	# docker run \
+	# 	--net=host \
+	# 	--rm \
+	# 	-v  $(CURDIR):/manifests \
+	# 	-v $(CERTS_PATH):/home/user/certs \
+	# 	lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+	# 	--kubeconfig=/home/user/certs/kubeconfig \
+	# 	apply -f /manifests/test/namespaces.yaml
 
 ## Stop the local kubernetes server
-stop-kubernetes-server:
-	# Delete the cluster role binding.
-	-docker exec st-apiserver kubectl delete clusterrolebinding anonymous-admin
-
-	# Stop master components.
-	-docker rm -f st-apiserver st-controller-manager
-
+stop-kubernetes-server: stop-k8s-controller-manager
 
 # TODO(doublek): Add fv-etcd back to fv. It is currently disabled because profiles behavior is broken.
 # Profiles should be disallowed from being created for both etcd and kdd mode. However we are allowing
@@ -266,7 +200,7 @@ fv: fv-kdd
 .PHONY: fv-etcd
 fv-etcd: run-kubernetes-server hack-lib
 	$(DOCKER_RUN) \
-		-v $(CURDIR)/test/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) \
 		sh -c 'ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" test/integration.sh'
@@ -274,7 +208,7 @@ fv-etcd: run-kubernetes-server hack-lib
 .PHONY: fv-kdd
 fv-kdd: run-kubernetes-server hack-lib
 	$(DOCKER_RUN) \
-		-v $(CURDIR)/test/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) \
 		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'
