@@ -1180,13 +1180,13 @@ stop-k8s-controller-manager:
 # Common functions for create a local kind cluster.
 ###############################################################################
 KIND_DIR := $(REPO_ROOT)/hack/test/kind
-KIND_KUBECONFIG?=$(KIND_DIR)/kubeconfig.yaml
 KIND ?= $(KIND_DIR)/kind
 KUBECTL ?= $(KIND_DIR)/kubectl
 
 # Different tests may require different kind configurations.
 KIND_CONFIG ?= $(KIND_DIR)/multinode-kind.yaml
 KIND_NAME = $(basename $(notdir $(KIND_CONFIG)))
+KIND_KUBECONFIG?=$(KIND_DIR)/$(KIND_NAME)-kubeconfig.yaml
 
 kind-cluster-create: $(REPO_ROOT)/.$(KIND_NAME).created
 $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)

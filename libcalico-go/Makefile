@@ -129,7 +129,7 @@ ut:
 fv: fv-setup
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 	$(MAKE) stop-etcd-tls
@@ -143,7 +143,7 @@ fv-setup: run-etcd run-etcd-tls cluster-create run-coredns
 fv-fast:
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 
