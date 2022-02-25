@@ -120,8 +120,7 @@ type PinnedMap struct {
 	fd       MapFD
 	oldfd    MapFD
 	perCPU   bool
-	// nolint
-	oldSize int
+	oldSize  int
 }
 
 func (b *PinnedMap) GetName() string {
@@ -303,7 +302,6 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k, b.ValueSize)
 }
 
-// nolint
 func (b *PinnedMap) copyFromOldMap() error {
 	numEntriesCopied := 0
 	mapMem := make(map[string]struct{})
@@ -392,7 +390,6 @@ func (b *PinnedMap) Open() error {
 	return err
 }
 
-// nolint
 func (b *PinnedMap) repinAt(from, to string) error {
 	err := RepinMap(b.VersionedName(), to)
 	if err != nil {
