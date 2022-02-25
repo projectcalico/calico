@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_PARSING_H__
@@ -93,7 +93,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	return PARSING_OK;
 
 ipv6_packet:
-	// IPv6 has a fixed header format, so we don't need to check the header length here
+	// Parse IPv6 header, and perform necessary checks here
 	return PARSING_OK_V6;
 
 allow_no_fib:

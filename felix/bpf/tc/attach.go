@@ -618,8 +618,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	var flags uint32
 	if ap.IPv6Enabled {
-		//flags |= libbpf.GlobalsIPv6Enabled
-		flags |= 0x00000001
+		flags |= libbpf.GlobalsIPv6Enabled
 	}
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
