@@ -4,6 +4,8 @@ PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
 
 LOCAL_CHECKS = goimports check-gen-files
 
+KIND_CONFIG = $(KIND_DIR)/control-plane-only.yaml
+
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -137,7 +139,7 @@ fv: fv-setup
 fv-setup: run-etcd run-etcd-tls cluster-create run-coredns
 
 ## Teardown the FVs resources.
-fv-teardown: stop-etcd stop-etcd-tls cluster-destroy stop-coredns
+fv-teardown: stop-etcd stop-etcd-tls kind-cluster-destroy stop-coredns
 
 ## Run the FVs without any setup or teardown. Useful when writing FVs.
 .PHONY:fv-fast
@@ -147,6 +149,13 @@ fv-fast:
 		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
+
+# Create a kind cluster, and deploy some resources required for the libcalico-go tests.
+# TODO: Remove the need for this extra target, should all be in lib.Makefile.
+cluster-create: kind-cluster-create
+	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
+		$(KUBECTL) create -f test/mock-node.yaml && \
+		$(KUBECTL) create -f test/namespaces.yaml
 
 ## Run an etcd with TLS enabled, needed for some libcalico-go UTs.
 run-etcd-tls: stop-etcd-tls
@@ -172,45 +181,6 @@ run-etcd-tls: stop-etcd-tls
 ## Stop etcd with name calico-etcd-tls
 stop-etcd-tls:
 	-docker rm -f calico-etcd-tls
-
-## Create a local kind dual stack cluster.
-KUBECONFIG?=kubeconfig.yaml
-cluster-create: $(BINDIR)/kubectl $(BINDIR)/kind
-	# First make sure any previous cluster is deleted
-	make cluster-destroy
-
-	# Create a kind cluster.
-	$(BINDIR)/kind create cluster \
-		--config ./test/kind-config.yaml \
-		--kubeconfig $(KUBECONFIG) \
-		--image kindest/node:$(K8S_VERSION)
-
-	# Deploy resources needed in test env.
-	$(MAKE) deploy-test-resources
-
-	# Wait for controller manager to be running and healthy.
-	while ! KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-
-
-## Deploy resources needed for UTs.
-deploy-test-resources: $(BINDIR)/kubectl
-	@export KUBECONFIG=$(KUBECONFIG) && \
-		./$(BINDIR)/kubectl create -f config/crd && \
-		./$(BINDIR)/kubectl create -f test/mock-node.yaml && \
-		./$(BINDIR)/kubectl create -f test/namespaces.yaml
-
-## Destroy local kind cluster
-cluster-destroy: $(BINDIR)/kind
-	-$(BINDIR)/kind delete cluster
-	rm -f $(KUBECONFIG)
-
-$(BINDIR)/kind:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install sigs.k8s.io/kind"
-
-$(BINDIR)/kubectl:
-	mkdir -p $(BINDIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/amd64/kubectl -o $@
-	chmod +x $(BINDIR)/kubectl
 
 run-coredns: stop-coredns
 	docker run \

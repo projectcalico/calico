@@ -292,43 +292,6 @@ fv: run-k8s-apiserver
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
 
-## Create a local kind dual stack cluster.
-KUBECONFIG?=kubeconfig.yaml
-cluster-create: $(BINDIR)/kubectl $(BINDIR)/kind
-	# First make sure any previous cluster is deleted
-	make cluster-destroy
-
-	# Create a kind cluster.
-	$(BINDIR)/kind create cluster \
-	        --config ./tests/kind-config.yaml \
-	        --kubeconfig $(KUBECONFIG) \
-	        --image kindest/node:$(K8S_VERSION)
-
-	# Deploy resources needed in test env.
-	$(MAKE) deploy-test-resources
-
-	# Wait for controller manager to be running and healthy.
-	while ! KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-
-## Deploy resources on the kind cluster that are needed for tests
-deploy-test-resources: $(BINDIR)/kubectl $(K8ST_IMAGE_TARS)
-	KUBECONFIG=$(KUBECONFIG) ./tests/k8st/deploy_resources_on_kind_cluster.sh
-
-## Destroy local kind cluster
-cluster-destroy: $(BINDIR)/kubectl $(BINDIR)/kind
-	-$(BINDIR)/kubectl --kubeconfig=$(KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
-	-$(BINDIR)/kind delete cluster
-	rm -f ./tests/k8st/infra/calico.yaml.tmp
-	rm -f $(KUBECONFIG)
-
-$(BINDIR)/kind:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install sigs.k8s.io/kind"
-
-$(BINDIR)/kubectl:
-	mkdir -p $(BINDIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
-	chmod +x $(BINDIR)/kubectl
-
 # Skip packages containing FV tests.
 UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
 .PHONY: ut
@@ -389,14 +352,14 @@ kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go')
 	make -C ../kube-controllers image
 	docker save --output $@ calico/kube-controllers:latest-$(ARCH)
 
-load-container-images: $(K8ST_IMAGE_TARS) $(BINDIR)/kubectl
+load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# Load the latest tar files onto the currently running kind cluster.
-	KUBECONFIG=$(KUBECONFIG) ./tests/k8st/load_images_on_kind_cluster.sh
+	KUBECONFIG=$(KIND_KUBECONFIG) ./tests/k8st/load_images_on_kind_cluster.sh
 	# Restart the Calico containers so they launch with the newly loaded code.
 	# TODO: We should be able to do this without restarting everything in kube-system.
-	KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl delete pods -n kube-system --all 
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n kube-system --all 
 	# calicoctl is deployed as a pod on the cluster and needs to be recreated.
-	KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl apply -f tests/k8st/infra/calicoctl.yaml
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f tests/k8st/infra/calicoctl.yaml
 
 .PHONY: st-checks
 st-checks:
@@ -415,15 +378,16 @@ k8s-test:
 	$(MAKE) kind-k8st-cleanup
 
 .PHONY: kind-k8st-setup
-kind-k8st-setup: $(K8ST_IMAGE_TARS) cluster-create
+kind-k8st-setup: $(K8ST_IMAGE_TARS) kind-cluster-create
+	KUBECONFIG=$(KIND_KUBECONFIG) ./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: calico_test.created $(KUBECONFIG)
+kind-k8st-run-test: calico_test.created $(KIND_KUBECONFIG)
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
-	    -v $(CURDIR)/$(KUBECONFIG):/root/.kube/config \
-	    -v $(CURDIR)/$(BINDIR)/kubectl:/bin/kubectl \
+	    -v $(KIND_KUBECONFIG):/root/.kube/config \
+	    -v $(KUBECTL):/bin/kubectl \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
@@ -432,7 +396,7 @@ kind-k8st-run-test: calico_test.created $(KUBECONFIG)
 	     cd /code/tests/k8st && nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
 
 .PHONY: kind-k8st-cleanup
-kind-k8st-cleanup: cluster-destroy
+kind-k8st-cleanup: kind-cluster-destroy
 
 # Needed for Semaphore CI (where disk space is a real issue during k8s-test)
 .PHONY: remove-go-build-image
