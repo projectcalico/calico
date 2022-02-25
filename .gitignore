@@ -15,4 +15,4 @@ hack/release/ghr
 /* Created by local kind cluster */
 hack/test/kind/kind
 hack/test/kind/kubectl
-hack/test/kind/kubeconfig.yaml
+hack/test/kind/*kubeconfig.yaml
