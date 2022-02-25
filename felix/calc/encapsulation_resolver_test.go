@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package calc_test
+package calc
 
 import (
-	"reflect"
-	"unsafe"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	. "github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
 
@@ -232,21 +228,15 @@ var _ = Describe("EncapsulationResolver", func() {
 	Describe("OnStatusUpdate", func() {
 		It("should not touch inSync to true when receiving other status updates", func() {
 			encapsulationResolver.OnStatusUpdate(api.WaitForDatastore)
-			inSync, ok := getUnexportedField(reflect.ValueOf(encapsulationResolver).Elem().FieldByName("inSync")).(bool)
-			Expect(ok).To(BeTrue())
-			Expect(inSync).To(BeFalse())
+			Expect(encapsulationResolver.inSync).To(BeFalse())
 
 			encapsulationResolver.OnStatusUpdate(api.ResyncInProgress)
-			inSync, ok = getUnexportedField(reflect.ValueOf(encapsulationResolver).Elem().FieldByName("inSync")).(bool)
-			Expect(ok).To(BeTrue())
-			Expect(inSync).To(BeFalse())
+			Expect(encapsulationResolver.inSync).To(BeFalse())
 		})
 
 		It("should update inSync to true when receiving InSync status update", func() {
 			encapsulationResolver.OnStatusUpdate(api.InSync)
-			inSync, ok := getUnexportedField(reflect.ValueOf(encapsulationResolver).Elem().FieldByName("inSync")).(bool)
-			Expect(ok).To(BeTrue())
-			Expect(inSync).To(BeTrue())
+			Expect(encapsulationResolver.inSync).To(BeTrue())
 		})
 	})
 
@@ -271,20 +261,20 @@ var _ = Describe("EncapsulationResolver", func() {
 		It("should not trigger restart when adding pools with IPIP encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Always, encap.Undefined))
 			Expect(restartTriggered).To(BeFalse())
 		})
 
 		It("should not trigger restart when adding pools with VXLAN encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
+			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
 			Expect(restartTriggered).To(BeFalse())
 		})
 		It("should not trigger restart when adding and removing pools", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.CrossSubnet))
+			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Always, encap.CrossSubnet))
 			Expect(restartTriggered).To(BeFalse())
 			encapsulationResolver.OnPoolUpdate(removePoolUpdate(*cidr))
 			Expect(restartTriggered).To(BeFalse())
@@ -303,7 +293,7 @@ var _ = Describe("EncapsulationResolver", func() {
 
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Always, encap.Undefined))
 			Expect(restartTriggered).To(BeTrue())
 		})
 		It("should trigger restart when adding pools with VXLAN encap", func() {
@@ -311,17 +301,17 @@ var _ = Describe("EncapsulationResolver", func() {
 
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
+			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
 			Expect(restartTriggered).To(BeTrue())
 		})
 		It("should trigger restart when removing pools", func() {
 			_, cidr1, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr1, encap.Always, encap.CrossSubnet))
+			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr1, encap.Always, encap.CrossSubnet))
 
 			_, cidr2, err := net.ParseCIDR("192.168.2.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr2, encap.Undefined, encap.Always))
+			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr2, encap.Undefined, encap.Always))
 			Expect(restartTriggered).To(BeFalse())
 
 			encapsulationResolver.OnStatusUpdate(api.InSync)
@@ -345,7 +335,7 @@ var _ = Describe("EncapsulationResolver", func() {
 		It("should not trigger restart when adding pools before inSync, but should right after", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Always, encap.Undefined))
 			Expect(restartTriggered).To(BeFalse())
 
 			encapsulationResolver.OnStatusUpdate(api.InSync)
@@ -363,7 +353,7 @@ var _ = Describe("EncapsulationResolver", func() {
 	})
 })
 
-func addPoolUpdate(cidr net.IPNet, ipipMode, vxlanMode encap.Mode) api.Update {
+func AddPoolUpdate(cidr net.IPNet, ipipMode, vxlanMode encap.Mode) api.Update {
 	return api.Update{
 		KVPair: model.KVPair{
 			Key: model.IPPoolKey{
@@ -411,9 +401,4 @@ func getModelPool(cidr string, ipipMode, vxlanMode encap.Mode) *model.IPPool {
 		IPIPMode:  ipipMode,
 		VXLANMode: vxlanMode,
 	}
-}
-
-// getUnexportedField uses reflect+unsafe to access unexported fields in a struct
-func getUnexportedField(field reflect.Value) interface{} {
-	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Interface()
 }

@@ -354,7 +354,7 @@ type Config struct {
 	// Configures MTU auto-detection.
 	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)"`
 
-	// Encapsulation information calculated from IP Pools
+	// Encapsulation information calculated from IP Pools and FelixConfiguration (DeprecatedVXLANEnabled and DeprecatedIpInIpEnabled)
 	Encapsulation Encapsulation
 
 	// State tracking.

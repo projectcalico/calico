@@ -1966,7 +1966,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"ipipEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Deprecated as Felix now determines this based on the existing IP pools. [Default: nil (unset)]",
+							Description: "IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -1980,7 +1980,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"vxlanEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for VXLAN networking. Deprecated as Felix now determines this based on the existing IP pools. [Default: nil (unset)]",
+							Description: "VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for VXLAN networking. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
