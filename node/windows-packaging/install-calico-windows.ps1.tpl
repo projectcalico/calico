@@ -39,6 +39,8 @@ Param(
     [parameter(Mandatory = $false)] $EtcdCaCert="",
     [parameter(Mandatory = $false)] $ServiceCidr="10.96.0.0/12",
     [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10",
+    [parameter(Mandatory = $false)] $ContainerdCniBinDir="",
+    [parameter(Mandatory = $false)] $ContainerdCniConfDir=""
     [parameter(Mandatory = $false)] $CalicoBackend=""
 )
 
@@ -353,11 +355,19 @@ if (-Not [string]::IsNullOrEmpty($EtcdTlsSecretName)) {
     $calicoNs = GetCalicoNamespace
     SetupEtcdTlsFiles -SecretName "$EtcdTlsSecretName" -CalicoNamespace $calicoNs
 }
+
 SetConfigParameters -OldString '<your etcd key>' -NewString "$EtcdKey"
 SetConfigParameters -OldString '<your etcd cert>' -NewString "$EtcdCert"
 SetConfigParameters -OldString '<your etcd ca cert>' -NewString "$EtcdCaCert"
 SetConfigParameters -OldString '<your service cidr>' -NewString $ServiceCidr
 SetConfigParameters -OldString '<your dns server ips>' -NewString $DNSServerIPs
+
+if (-Not [string]::IsNullOrEmpty($ContainerdCniBinDir)) {
+    SetConfigParameters -OldString 'Get-ContainerdDefaultCniBinDir' -NewString "`"$ContainerdCniBinDir`""
+}
+if (-Not [string]::IsNullOrEmpty($ContainerdCniConfDir)) {
+    SetConfigParameters -OldString 'Get-ContainerdDefaultCniBinDir' -NewString "`"$ContainerdCniConfDir`""
+}
 
 if ($platform -EQ "aks") {
     Write-Host "Setup {{.ProductName}} for AKS..."

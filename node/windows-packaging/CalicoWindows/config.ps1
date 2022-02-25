@@ -44,8 +44,9 @@ $env:CNI_CONF_DIR = "c:\k\cni\config"
 
 if (Get-IsContainerdRunning)
 {
-    $env:CNI_BIN_DIR = Get-ContainerdCniBinDir
-    $env:CNI_CONF_DIR = Get-ContainerdCniConfDir
+    # Update the following if containerd is configured differently.
+    $env:CNI_BIN_DIR = Get-ContainerdDefaultCniBinDir
+    $env:CNI_CONF_DIR = Get-ContainerdDefaultCniConfDir
 }
 
 $env:CNI_CONF_FILENAME = "10-calico.conf"

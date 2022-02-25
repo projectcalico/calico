@@ -498,12 +498,12 @@ function Get-UpgradeService()
 # Assume same relative path for containerd CNI bin/conf dir
 # By default, containerd is installed in c:\Program Files\containerd, and CNI bin/conf is in
 # c:\Program Files\containerd\cni\bin and c:\Program Files\containerd\cni\conf.
-function Get-ContainerdCniBinDir()
+function Get-ContainerdDefaultCniBinDir()
 {
     $path = getContainerdPath
     return "$path\cni\bin"
 }
-function Get-ContainerdCniConfDir()
+function Get-ContainerdDefaultCniConfDir()
 {
     $path = getContainerdPath
     return "$path\cni\conf"
