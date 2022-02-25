@@ -177,6 +177,9 @@ st: bin/calicoctl-linux-amd64 version-helper
 	$(MAKE) stop-kubernetes-master
 
 ## Run a local kubernetes master with API
+# TODO: Commonize this with the functions in lib.Makefile. 
+# For now, these tests do something special and launch two apiserver on different ports, so it makes sense
+# to keep them separate.
 run-kubernetes-master: stop-kubernetes-master
 	# Run a Kubernetes apiserver using Docker.
 	docker run --net=host --detach \
