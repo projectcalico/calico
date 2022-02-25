@@ -1189,8 +1189,16 @@ SEC("classifier/tc/prologue_v6")
 int calico_tc_v6(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 prologue program");
-	bpf_tail_call(skb, &cali_jump, PROG_INDEX_V6_POLICY);
-	CALI_DEBUG("Tail call to policy program failed: DROP");
+	// TODO: Replace this logic with the proper implementation, and finally a tail call
+	// to the policy program
+	if (CALI_F_WEP) {
+		CALI_DEBUG("IPv6 from workload: drop");
+		goto deny;
+	}
+	CALI_DEBUG("IPv6 on host interface: allow");
+	return TC_ACT_UNSPEC;
+
+deny:
 	return TC_ACT_SHOT;
 }
 
@@ -1198,30 +1206,18 @@ SEC("classifier/tc/accept_v6")
 int calico_tc_v6_skb_accepted_entrypoint(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 accepted program");
-	if (CALI_F_WEP) {
-		CALI_DEBUG("IPv6 from workload: drop");
-		goto deny;
-	}
-	CALI_DEBUG("IPv6 on host interface: allow");
+	// TODO: Implement the logic for accepted packets by the policy program
+	// We should not reach here since no tail call happens to this program
 	return TC_ACT_UNSPEC;
-
-deny:
-	return TC_ACT_SHOT;
 }
 
 SEC("classifier/tc/icmp_v6")
 int calico_tc_v6_skb_send_icmp_replies(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 icmp program");
-	if (CALI_F_WEP) {
-		CALI_DEBUG("IPv6 from workload: drop");
-		goto deny;
-	}
-	CALI_DEBUG("IPv6 on host interface: allow");
+	// TODO: Implement the logic for accepted icmp packets by the policy program
+	// We should not reach here since no tail call happens to this program
 	return TC_ACT_UNSPEC;
-
-deny:
-	return TC_ACT_SHOT;
 }
 
 #ifndef CALI_ENTRYPOINT_NAME

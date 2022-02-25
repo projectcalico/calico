@@ -39,8 +39,9 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		CALI_DEBUG("ARP: allowing packet\n");
 		goto allow_no_fib;
 	case ETH_P_IPV6:
-		// If IPv6 is supported and enabled, so handle it
+		// If IPv6 is supported and enabled, handle the packet
 		if (GLOBAL_FLAGS & CALI_GLOBALS_IPV6_ENABLED) {
+			CALI_DEBUG("IPv6 packet, continue with parsing it.");
 			goto ipv6_packet;
 		}
 		// otherwise, drop if the packet is from workload
