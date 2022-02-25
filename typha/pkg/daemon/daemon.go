@@ -419,7 +419,7 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 		ticker := jitter.NewTicker(
 			t.ConfigParams.K8sServicePollIntervalSecs,
 			t.ConfigParams.K8sServicePollIntervalSecs/10)
-		go k8s.PollK8sForConnectionLimit(cxt, t.ConfigParams, ticker.C, k8sAPI, t.Server)
+		go k8s.PollK8sForConnectionLimit(cxt, t.ConfigParams, ticker.C, k8sAPI, t.Server, len(t.CachesBySyncerType))
 	}
 	log.Info("Started the datastore Syncer/cache layer/server.")
 
