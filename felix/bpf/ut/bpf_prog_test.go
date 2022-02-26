@@ -74,11 +74,12 @@ var (
 			}},
 		}},
 	}
-	node1ip   = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
-	node2ip   = net.IPv4(10, 10, 0, 2).To4()
-	intfIP    = net.IPv4(10, 10, 0, 3).To4()
-	node1CIDR = net.IPNet{
+	node1ip    = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2   = net.IPv4(10, 10, 2, 1).To4()
+	node1tunIP = net.IPv4(11, 11, 0, 1).To4()
+	node2ip    = net.IPv4(10, 10, 0, 2).To4()
+	intfIP     = net.IPv4(10, 10, 0, 3).To4()
+	node1CIDR  = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
@@ -239,6 +240,7 @@ outter:
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
 	bin.PatchSkbMark(skbMark)
+	bin.PatchHostTunnelIPv4(node1tunIP)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
