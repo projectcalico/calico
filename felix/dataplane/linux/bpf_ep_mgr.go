@@ -187,7 +187,7 @@ type bpfEndpointManager struct {
 	routeTable    *routetable.RouteTable
 	services      map[serviceKey][]string
 	dirtyServices map[serviceKey][]string
-	tunnelIP      ip.Addr
+	tunnelIP      net.IP
 }
 
 type serviceKey struct {
@@ -365,22 +365,21 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		m.onServiceUpdate(msg)
 	case *proto.ServiceRemove:
 		m.onServiceRemove(msg)
-	case *proto.WireguardEndpointUpdate:
-		log.WithField("msg", msg).Debug("WireguardEndpointUpdate update")
-		if msg.Hostname == m.hostname && msg.InterfaceIpv4Addr != "" {
-			addr := ip.FromString(msg.InterfaceIpv4Addr)
-			if addr != nil {
-				m.tunnelIP = addr
-				// Make all services dirty
-				// XXX we need to merge the service if it is already dirty
-				for k, v := range m.services {
-					for _, ip := range v {
-						m.delRoute(ip)
-					}
-					m.dirtyServices[k] = v
-				}
-			}
+	case *proto.RouteUpdate:
+		m.onRouteUpdate(msg)
+	}
+}
+
+func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
+	if update.Type == proto.RouteType_LOCAL_TUNNEL {
+		ip, _, err := net.ParseCIDR(update.Dst)
+		if err != nil {
+			log.WithField("local tunnel cird", update.Dst).WithError(err).Warn("not parsable")
+			return
 		}
+		m.tunnelIP = ip
+		log.WithField("ip", update.Dst).Info("host tunnel")
+		m.dirtyIfaceNames.Add("bpfnatout")
 	}
 }
 
@@ -1024,6 +1023,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tc.EpTypeL3Device
 	} else if ifaceName == "bpfnatin" || ifaceName == "bpfnatout" {
 		endpointType = tc.EpTypeNAT
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
 	} else {
@@ -1745,7 +1746,6 @@ func (m *bpfEndpointManager) setRoute(dst string) error {
 	m.routeTable.RouteUpdate("bpfnatin", routetable.Target{
 		Type: routetable.TargetTypeUnicast,
 		CIDR: cidr,
-		Src:  m.tunnelIP,
 	})
 	log.WithFields(log.Fields{
 		"cidr": dst + "/32",
