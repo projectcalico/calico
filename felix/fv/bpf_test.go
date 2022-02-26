@@ -290,6 +290,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				for i, felix := range felixes {
 					felix.Exec("iptables-save", "-c")
+					felix.Exec("conntrack", "-L")
 					felix.Exec("ip", "link")
 					felix.Exec("ip", "addr")
 					felix.Exec("ip", "rule")
@@ -2442,6 +2443,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}
 
 							It("should have connectivity from all host-networked workloads to workload 0 via clusterIP", func() {
+
+								for i, felix := range felixes {
+									f := felix
+									idx := i
+									Eventually(func() bool {
+										return checkServiceRoute(f, testSvc.Spec.ClusterIP)
+									}, 10*time.Second, 1*time.Second).Should(BeTrue(),
+										fmt.Sprintf("felix %d failed to sync with service", idx))
+
+									felix.Exec("ip", "route")
+								}
+
 								node0IP := felixes[0].IP
 								node1IP := felixes[1].IP
 
@@ -2454,6 +2467,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
 								case "wireguard":
 									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+								case "vxlan":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
 								}
 
 								clusterIP := testSvc.Spec.ClusterIP
@@ -2465,6 +2480,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
 
 								cc.CheckConnectivity()
+								for _, felix := range felixes {
+									felix.Exec("ip", "route")
+								}
 							})
 						})
 					}
@@ -3480,4 +3498,20 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
 		"Service endpoints didn't get created? Is controller-manager happy?")
 	return testSvc
+}
+
+func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
+	out, err := felix.ExecOutput("ip", "route")
+	Expect(err).NotTo(HaveOccurred())
+
+	lines := strings.Split(out, "\n")
+	rtRE := regexp.MustCompile(ip + " dev bpfnatin")
+
+	for _, l := range lines {
+		if rtRE.MatchString(l) {
+			return true
+		}
+	}
+
+	return false
 }
