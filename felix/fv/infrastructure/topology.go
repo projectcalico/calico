@@ -62,7 +62,7 @@ type TopologyOptions struct {
 }
 
 func DefaultTopologyOptions() TopologyOptions {
-	felixLogLevel := "info"
+	felixLogLevel := "Debug"
 	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
 		log.WithField("level", envLogLevel).Info("FV_FELIX_LOG_LEVEL env var set; overriding felix log level")
 		felixLogLevel = envLogLevel
@@ -237,8 +237,8 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		// we get unpredictable behaviour if more than one Felix enables it on the same
 		// host.  So, disable CTLB handling for subsequent Felixes.
 		if i > 0 {
-			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
-			optsPerFelix[i].ExtraEnvVars["FELIX_DebugSkipCTLBCleanup"] = "true"
+			//			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
+			//			optsPerFelix[i].ExtraEnvVars["FELIX_DebugSkipCTLBCleanup"] = "true"
 		}
 	}
 

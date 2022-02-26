@@ -30,6 +30,9 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_RES_0x10	0x10 /* reserved */
 #define CALI_CT_FLAG_RES_0x20	0x20 /* reserved */
 #define CALI_CT_FLAG_EXT_LOCAL	0x40 /* marks traffic from external client to a local serice */
+#define CALI_CT_FLAG_VIA_NAT_IF	0x80 /* marks connection first seen on the service veth */
+#define CALI_CT_FLAG_BA		0x100 /* marks that src->dst is the B->A leg */
+#define CALI_CT_FLAG_HOST_PSNAT 0x200 /* marks that this is from host port collision resolution */
 
 struct calico_ct_leg {
 	__u32 seqno;
@@ -55,13 +58,14 @@ struct calico_ct_value {
 	__u64 created;
 	__u64 last_seen; // 8
 	__u8 type;		 // 16
-	__u8 flags;
+	__u8 pad0;
+	__u16 flags;
 
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
 	// failures when debug logging is compiled out only :-).
-	__u8 pad0[6];
+	__u8 pad1[4];
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
@@ -73,7 +77,7 @@ struct calico_ct_value {
 			__u16 orig_port;                   // 48
 			__u16 orig_sport;                  // 50
 			__u32 tun_ip;                      // 52
-			__u32 pad3;                        // 56
+			__u32 orig_sip;                    // 56
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -97,6 +101,7 @@ struct ct_lookup_ctx {
 struct ct_create_ctx {
 	struct __sk_buff *skb;
 	__u8 proto;
+	__be32 orig_src;
 	__be32 src;
 	__be32 orig_dst;
 	__be32 dst;
@@ -108,12 +113,12 @@ struct ct_create_ctx {
 	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
 			* It is also set on the first node when we create the
 			* initial CT entry for the tunneled traffic. */
-	__u8 flags;
+	__u16 flags;
 	enum cali_ct_type type;
 	bool allow_return;
 };
 
-CALI_MAP(cali_v4_ct, 2,
+CALI_MAP(cali_v4_ct, 3,
 		BPF_MAP_TYPE_HASH,
 		struct calico_ct_key, struct calico_ct_value,
 		512000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
@@ -173,6 +178,7 @@ struct calico_ct_result {
 	__s16 rc;
 	__u16 flags;
 	__be32 nat_ip;
+	__be32 nat_sip;
 	__u16 nat_port;
 	__u16 nat_sport;
 	__be32 tun_ip;
