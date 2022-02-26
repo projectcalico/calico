@@ -1701,7 +1701,7 @@ func (m *bpfEndpointManager) reconcileServices() {
 	for svc, ips := range m.dirtyServices {
 		errored := false
 		for _, ip := range ips {
-			if err := m.setRoute(ip); err != nil {
+			if err := m.dp.setRoute(ip); err != nil {
 				log.WithError(err).Errorf("Failed to set route to %s via bpfnatin.", ip)
 				errored = true
 			}
@@ -1719,7 +1719,7 @@ func (m *bpfEndpointManager) reconcileServices() {
 			}
 
 			if !exist {
-				if err := m.delRoute(old); err != nil {
+				if err := m.dp.delRoute(old); err != nil {
 					log.WithError(err).Errorf("Failed to delete route to %s via bpfnatin.", old)
 					errored = true
 				}
