@@ -114,6 +114,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			ushort vxlanPort,
 			ushort psnat_start,
 			ushort psnat_len,
+			uint host_tunnel_ip,
 			uint flags)
 {
 	struct cali_tc_globals data = {
@@ -124,6 +125,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.ext_to_svc_mark = ext_to_svc_mark,
 		.psnat_start = psnat_start,
 		.psnat_len = psnat_len,
+		.host_tunnel_ip = host_tunnel_ip,
 		.flags = flags,
 	};
 
