@@ -521,7 +521,6 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 		// FIXME IPv6
 		return
 	}
-	log.WithField("route", update).Info("tunnel")
 
 	// For now don't handle the tunnel addresses, which were previously not being included in the route updates.
 	if update.Type == proto.RouteType_REMOTE_TUNNEL || update.Type == proto.RouteType_LOCAL_TUNNEL {

@@ -1029,6 +1029,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tc.EpTypeL3Device
 	} else if ifaceName == "bpfnatin" || ifaceName == "bpfnatout" {
 		endpointType = tc.EpTypeNAT
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
 	} else {
