@@ -161,7 +161,7 @@ create:
 		CALI_VERB("CT-ALL src_to_dst B->A\n");
 		src_to_dst = &ct_value.b_to_a;
 		dst_to_src = &ct_value.a_to_b;
-		ct_value.flags |= CALI_CT_FLAG_BA;
+		ct_value_set_flags(&ct_value, CALI_CT_FLAG_BA);
 	}
 
 	dump_ct_key(k);
@@ -600,7 +600,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		// Record timestamp.
 		tracking_v->last_seen = now;
 
-		if (!(tracking_v->flags & CALI_CT_FLAG_BA)) {
+		if (!(ct_value_get_flags(tracking_v) & CALI_CT_FLAG_BA)) {
 			CALI_VERB("CT-ALL FWD-REV src_to_dst A->B\n");
 			src_to_dst = &tracking_v->a_to_b;
 			dst_to_src = &tracking_v->b_to_a;
