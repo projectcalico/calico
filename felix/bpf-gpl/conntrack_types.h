@@ -58,14 +58,14 @@ struct calico_ct_value {
 	__u64 created;
 	__u64 last_seen; // 8
 	__u8 type;		 // 16
-	__u8 pad0;
-	__u16 flags;
+	__u8 flags;
 
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
 	// failures when debug logging is compiled out only :-).
-	__u8 pad1[4];
+	__u8 pad0[5];
+	__u8 flags2;
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
@@ -88,6 +88,17 @@ struct calico_ct_value {
 		};
 	};
 };
+
+#define ct_value_set_flags(v, f) do {		\
+	(v)->flags |= ((f) & 0xff);		\
+	(v)->flags2 |= (((f) >> 8) & 0xff);	\
+} while(0)
+
+#define ct_value_get_flags(v) ({			\
+	__u16 ret = (v)->flags | ((v)->flags2 << 8);	\
+							\
+	ret;						\
+})
 
 struct ct_lookup_ctx {
 	__u8 proto;
@@ -118,7 +129,7 @@ struct ct_create_ctx {
 	bool allow_return;
 };
 
-CALI_MAP(cali_v4_ct, 3,
+CALI_MAP(cali_v4_ct, 2,
 		BPF_MAP_TYPE_HASH,
 		struct calico_ct_key, struct calico_ct_value,
 		512000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
