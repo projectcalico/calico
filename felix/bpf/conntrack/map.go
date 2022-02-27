@@ -80,14 +80,14 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 //  __u64 created;
 //  __u64 last_seen; // 8
 //  __u8 type;     // 16
-//  __u8 pad;     // 17
-//  __u16 flags; // 18
+//  __u8 flags;     // 17
 //
 //  // Important to use explicit padding, otherwise the compiler can decide
 //  // not to zero the padding bytes, which upsets the verifier.  Worse than
 //  // that, debug logging often prevents such optimisation resulting in
 //  // failures when debug logging is compiled out only :-).
-//  __u8 pad0[4];
+//  __u8 pad0[5];
+//  __u8 flags2;
 //  union {
 //    // CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 //    struct {
@@ -124,7 +124,7 @@ func (e Value) Type() uint8 {
 }
 
 func (e Value) Flags() uint16 {
-	return binary.LittleEndian.Uint16(e[18:20])
+	return uint16(e[17]) | (uint16(e[23]) << 8)
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
@@ -195,7 +195,8 @@ func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint1
 	binary.LittleEndian.PutUint64(v[:8], uint64(created))
 	binary.LittleEndian.PutUint64(v[8:16], uint64(lastSeen))
 	v[16] = typ
-	binary.LittleEndian.PutUint16(v[18:20], uint16(flags))
+	v[17] = byte(flags & 0xff)
+	v[23] = byte((flags >> 8) & 0xff)
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
@@ -376,6 +377,7 @@ func (e Value) String() string {
 	if flags == 0 {
 		flagsStr = " <none>"
 	} else {
+		flagsStr = fmt.Sprintf(" 0x%x", flags)
 		if flags&FlagNATOut != 0 {
 			flagsStr += " nat-out"
 		}
