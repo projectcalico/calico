@@ -117,8 +117,8 @@ create:
 		.orig_port = orig_dport,
 	};
 
-	ct_value.flags = ct_ctx->flags;
-	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
+	ct_value_set_flags(&ct_value, ct_ctx->flags);
+	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value_get_flags(&ct_value));
 
 	ct_value.orig_sip = ct_ctx->orig_src;
 	ct_value.orig_sport = ct_ctx->orig_sport;
@@ -161,7 +161,7 @@ create:
 		CALI_VERB("CT-ALL src_to_dst B->A\n");
 		src_to_dst = &ct_value.b_to_a;
 		dst_to_src = &ct_value.a_to_b;
-		ct_value.flags |= CALI_CT_FLAG_BA;
+		ct_value_set_flags(&ct_value, CALI_CT_FLAG_BA);
 	}
 
 	dump_ct_key(k);
@@ -568,7 +568,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	__u64 now = bpf_ktime_get_ns();
 	v->last_seen = now;
 
-	result.flags = v->flags;
+	result.flags = ct_value_get_flags(v);
 
 	// Return the if_index where the CT state was created.
 	if (v->a_to_b.opener) {
@@ -598,7 +598,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		// Record timestamp.
 		tracking_v->last_seen = now;
 
-		if (!(tracking_v->flags & CALI_CT_FLAG_BA)) {
+		if (!(ct_value_get_flags(tracking_v) & CALI_CT_FLAG_BA)) {
 			CALI_VERB("CT-ALL FWD-REV src_to_dst A->B\n");
 			src_to_dst = &tracking_v->a_to_b;
 			dst_to_src = &tracking_v->b_to_a;
@@ -627,7 +627,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.tun_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
-		result.flags = tracking_v->flags;
+		result.flags = ct_value_get_flags(tracking_v);
 
 		if (ct_ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -668,7 +668,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.tun_ip = v->tun_ip;
 		CALI_CT_DEBUG("tun_ip:%x\n", bpf_ntohl(v->tun_ip));
 
-		result.flags = v->flags;
+		result.flags = ct_value_get_flags(v);
 
 		if (ct_ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
