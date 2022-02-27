@@ -49,12 +49,11 @@ const volatile struct cali_tc_globals __globals;
  */
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 {
-	__u64 cookie;
-#ifdef CALI_SET_SKB_MARK
+#ifdef UNITTEST
 	/* UT-only workaround to allow us to run the program with BPF_TEST_PROG_RUN
 	 * and simulate a specific mark
 	 */
-	skb->mark = CALI_SET_SKB_MARK;
+	skb->mark = SKB_MARK;
 #endif
 	CALI_DEBUG("New packet at ifindex=%d; mark=%x\n", skb->ifindex, skb->mark);
 
@@ -188,26 +187,60 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* Do conntrack lookup before anything else */
 	ctx.state->ct_result = calico_ct_v4_lookup(&ctx);
-	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx.state->ct_result.flags);
+
+	calico_tc_process_ct_lookup(&ctx);
+
+allow:
+finalize:
+	return forward_or_drop(&ctx);
+deny:
+	ctx.fwd.res = TC_ACT_SHOT;
+	goto finalize;
+}
+
+
+static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
+{
+	struct __sk_buff *skb = ctx->skb;
+
+	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
+
+	if (CALI_F_TO_HEP &&
+			(ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) &&
+			!(skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
+		CALI_DEBUG("Host source SNAT conflict\n");
+		bpf_tail_call(skb, &cali_jump, PROG_INDEX_HOST_CT_CONFLICT);
+		goto deny;
+	}
 
 	/* Check if someone is trying to spoof a tunnel packet */
-	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(ctx.state->ct_result.rc)) {
+	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(ctx->state->ct_result.rc)) {
 		CALI_DEBUG("dropping tunnel pkt with changed source node\n");
 		goto deny;
 	}
 
-	if (ctx.state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
-		ctx.state->flags |= CALI_ST_NAT_OUTGOING;
+	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
+		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
+
+       if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
+		       (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED ||
+		       ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS) &&
+		       ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
+               CALI_DEBUG("should route via bpfnatout\n");
+               ctx->fwd.mark |= CALI_SKB_MARK_TO_NAT_IFACE_OUT;
+	       /* bpfnatout need to process the packet */
+	       ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_ESTABLISHED);
+       }
 
 	/* We are possibly past (D)NAT, but that is ok, we need to let the IP
 	 * stack do the RPF check on the source, dest is not important.
 	 */
-	if (ct_result_rpf_failed(ctx.state->ct_result.rc)) {
-		fwd_fib_set(&ctx.fwd, false);
+	if (ct_result_rpf_failed(ctx->state->ct_result.rc)) {
+		fwd_fib_set(&ctx->fwd, false);
 	}
 
-	if (ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
+	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
 		if (CALI_F_TO_HOST) {
 			/* Mid-flow miss: let iptables handle it in case it's an existing flow
 			 * in the Linux conntrack table. We can't apply policy or DNAT because
@@ -215,8 +248,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			 * known.
 			 */
 			CALI_DEBUG("CT mid-flow miss; fall through to iptables.\n");
-			ctx.fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
-			fwd_fib_set(&ctx.fwd, false);
+			ctx->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
+			fwd_fib_set(&ctx->fwd, false);
 			goto finalize;
 		} else {
 			if (CALI_F_HEP) {
@@ -248,8 +281,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				// there is a HEP present.
 				CALI_DEBUG("CT mid-flow miss to HEP with no Linux conntrack entry: "
 						"continue but suppressing CT state creation.\n");
-				ctx.state->flags |= CALI_ST_SUPPRESS_CT_STATE;
-				ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_NEW);
+				ctx->state->flags |= CALI_ST_SUPPRESS_CT_STATE;
+				ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_NEW);
 			} else {
 				CALI_DEBUG("CT mid-flow miss away from host with no Linux "
 						"conntrack entry, drop.\n");
@@ -259,18 +292,18 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	/* Skip policy if we get conntrack hit */
-	if (ct_result_rc(ctx.state->ct_result.rc) != CALI_CT_NEW) {
-		if (ctx.state->ct_result.flags & CALI_CT_FLAG_SKIP_FIB) {
-			ctx.state->flags |= CALI_ST_SKIP_FIB;
+	if (ct_result_rc(ctx->state->ct_result.rc) != CALI_CT_NEW) {
+		if (ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_FIB) {
+			ctx->state->flags |= CALI_ST_SKIP_FIB;
 		}
 		CALI_DEBUG("CT Hit\n");
 
-		if (ctx.state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx.state->ct_result.rc)) {
+		if (ctx->state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx->state->ct_result.rc)) {
 			CALI_DEBUG("Forcing policy on SYN\n");
-			if (ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_ESTABLISHED_DNAT) {
+			if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_DNAT) {
 				/* Set DNAT info for policy */
-				ctx.state->post_nat_ip_dst = ctx.state->ct_result.nat_ip;
-				ctx.state->post_nat_dport = ctx.state->ct_result.nat_port;
+				ctx->state->post_nat_ip_dst = ctx->state->ct_result.nat_ip;
+				ctx->state->post_nat_dport = ctx->state->ct_result.nat_port;
 			}
 			goto syn_force_policy;
 		}
@@ -279,27 +312,31 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* No conntrack entry, check if we should do NAT */
 	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
-	ctx.nat_dest = calico_v4_nat_lookup2(ctx.state->ip_src, ctx.state->ip_dst,
-					     ctx.state->ip_proto, ctx.state->dport,
-					     ctx.state->tun_ip != 0, &nat_res);
+
+	/* Skip NAT lookup for traffic leaving the host namespace */
+	if (CALI_F_TO_HOST) {
+		ctx->nat_dest = calico_v4_nat_lookup2(ctx->state->ip_src, ctx->state->ip_dst,
+						     ctx->state->ip_proto, ctx->state->dport,
+						     ctx->state->tun_ip != 0, &nat_res);
+	}
 
 	if (nat_res == NAT_FE_LOOKUP_DROP) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
-		ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 		goto deny;
 	}
-	if (ctx.nat_dest != NULL) {
-		ctx.state->post_nat_ip_dst = ctx.nat_dest->addr;
-		ctx.state->post_nat_dport = ctx.nat_dest->port;
+	if (ctx->nat_dest != NULL) {
+		ctx->state->post_nat_ip_dst = ctx->nat_dest->addr;
+		ctx->state->post_nat_dport = ctx->nat_dest->port;
 	} else if (nat_res == NAT_NO_BACKEND) {
 		/* send icmp port unreachable if there is no backend for a service */
-		ctx.state->icmp_type = ICMP_DEST_UNREACH;
-		ctx.state->icmp_code = ICMP_PORT_UNREACH;
-		ctx.state->tun_ip = 0;
+		ctx->state->icmp_type = ICMP_DEST_UNREACH;
+		ctx->state->icmp_code = ICMP_PORT_UNREACH;
+		ctx->state->tun_ip = 0;
 		goto icmp_send_reply;
 	} else {
-		ctx.state->post_nat_ip_dst = ctx.state->ip_dst;
-		ctx.state->post_nat_dport = ctx.state->dport;
+		ctx->state->post_nat_ip_dst = ctx->state->ip_dst;
+		ctx->state->post_nat_dport = ctx->state->dport;
 	}
 
 syn_force_policy:
@@ -311,11 +348,11 @@ syn_force_policy:
 	 * This will make it to skip fib in calico_tc_skb_accepted()
 	 */
 	if (CALI_F_FROM_HEP) {
-		ct_result_set_flag(ctx.state->ct_result.rc, CALI_CT_RPF_FAILED);
+		ct_result_set_flag(ctx->state->ct_result.rc, CALI_CT_RPF_FAILED);
 	}
 
 	if (CALI_F_TO_WEP && !skb_seen(skb) &&
-			cali_rt_flags_local_host(cali_rt_lookup_flags(ctx.state->ip_src))) {
+			cali_rt_flags_local_host(cali_rt_lookup_flags(ctx->state->ip_src))) {
 		/* Host to workload traffic always allowed.  We discount traffic that was
 		 * seen by another program since it must have come in via another interface.
 		 */
@@ -326,8 +363,8 @@ syn_force_policy:
 	if (CALI_F_FROM_WEP) {
 		/* Do RPF check since it's our responsibility to police that. */
 		CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n",
-				bpf_ntohl(ctx.state->ip_src), skb->ifindex);
-		struct cali_rt *r = cali_rt_lookup(ctx.state->ip_src);
+				bpf_ntohl(ctx->state->ip_src), skb->ifindex);
+		struct cali_rt *r = cali_rt_lookup(ctx->state->ip_src);
 		if (!r) {
 			CALI_INFO("Workload RPF fail: missing route.\n");
 			goto deny;
@@ -344,18 +381,18 @@ syn_force_policy:
 
 		// Check whether the workload needs outgoing NAT to this address.
 		if (r->flags & CALI_RT_NAT_OUT) {
-			if (!(cali_rt_lookup_flags(ctx.state->post_nat_ip_dst) & CALI_RT_IN_POOL)) {
+			if (!(cali_rt_lookup_flags(ctx->state->post_nat_ip_dst) & CALI_RT_IN_POOL)) {
 				CALI_DEBUG("Source is in NAT-outgoing pool "
 					   "but dest is not, need to SNAT.\n");
-				ctx.state->flags |= CALI_ST_NAT_OUTGOING;
+				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
 		if (!(r->flags & CALI_RT_IN_POOL)) {
-			CALI_DEBUG("Source %x not in IP pool\n", bpf_ntohl(ctx.state->ip_src));
-			r = cali_rt_lookup(ctx.state->post_nat_ip_dst);
+			CALI_DEBUG("Source %x not in IP pool\n", bpf_ntohl(ctx->state->ip_src));
+			r = cali_rt_lookup(ctx->state->post_nat_ip_dst);
 			if (!r || !(r->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
-				CALI_DEBUG("Outside cluster dest %x\n", bpf_ntohl(ctx.state->post_nat_ip_dst));
-				ctx.state->flags |= CALI_ST_SKIP_FIB;
+				CALI_DEBUG("Outside cluster dest %x\n", bpf_ntohl(ctx->state->post_nat_ip_dst));
+				ctx->state->flags |= CALI_ST_SKIP_FIB;
 			}
 		}
 	}
@@ -363,33 +400,33 @@ syn_force_policy:
 	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
 	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
-	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		ctx.fwd.reason = CALI_REASON_SHORT;
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
 
-	ctx.state->pol_rc = CALI_POL_NO_MATCH;
-	if (ctx.nat_dest) {
-		ctx.state->nat_dest.addr = ctx.nat_dest->addr;
-		ctx.state->nat_dest.port = ctx.nat_dest->port;
+	ctx->state->pol_rc = CALI_POL_NO_MATCH;
+	if (ctx->nat_dest) {
+		ctx->state->nat_dest.addr = ctx->nat_dest->addr;
+		ctx->state->nat_dest.port = ctx->nat_dest->port;
 	} else {
-		ctx.state->nat_dest.addr = 0;
-		ctx.state->nat_dest.port = 0;
+		ctx->state->nat_dest.addr = 0;
+		ctx->state->nat_dest.port = 0;
 	}
 
 	// For the case where the packet was sent from a socket on this host, get the
 	// sending socket's cookie, so we can reverse a DNAT that the CTLB may have done.
 	// This allows us to give the policy program the pre-DNAT destination as well as
 	// the post-DNAT destination in all cases.
-	cookie = bpf_get_socket_cookie(ctx.skb);
+	__u64 cookie = bpf_get_socket_cookie(ctx->skb);
 	if (cookie) {
 		CALI_DEBUG("Socket cookie: %x\n", cookie);
 		struct ct_nats_key ct_nkey = {
 			.cookie	= cookie,
-			.proto = ctx.state->ip_proto,
-			.ip	= ctx.state->ip_dst,
-			.port	= host_to_ctx_port(ctx.state->dport),
+			.proto = ctx->state->ip_proto,
+			.ip	= ctx->state->ip_dst,
+			.port	= host_to_ctx_port(ctx->state->dport),
 		};
 		// If we didn't find a CTLB NAT entry then use the packet's own IP/port for the
 		// pre-DNAT values that's set by tc_state_fill_from_iphdr() and
@@ -397,26 +434,26 @@ syn_force_policy:
 		struct sendrecv4_val *revnat = cali_v4_ct_nats_lookup_elem(&ct_nkey);
 		if (revnat) {
 			CALI_DEBUG("Got cali_v4_ct_nats entry; flow was NATted by CTLB.\n");
-			ctx.state->pre_nat_ip_dst = revnat->ip;
-			ctx.state->pre_nat_dport = ctx_port_to_host(revnat->port);
+			ctx->state->pre_nat_ip_dst = revnat->ip;
+			ctx->state->pre_nat_dport = ctx_port_to_host(revnat->port);
 		}
 	}
 
-	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
+	if (rt_addr_is_local_host(ctx->state->post_nat_ip_dst)) {
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
-		if (CALI_F_FROM_HEP && is_failsafe_in(ctx.state->ip_proto, ctx.state->post_nat_dport, ctx.state->ip_src)) {
-			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+		if (CALI_F_FROM_HEP && is_failsafe_in(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->ip_src)) {
+			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
 			goto skip_policy;
 		}
-		ctx.state->flags |= CALI_ST_DEST_IS_HOST;
+		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
 	}
-	if (rt_addr_is_local_host(ctx.state->ip_src)) {
+	if (rt_addr_is_local_host(ctx->state->ip_src)) {
 		CALI_DEBUG("Source IP is local host.\n");
-		if (CALI_F_TO_HEP && is_failsafe_out(ctx.state->ip_proto, ctx.state->post_nat_dport, ctx.state->post_nat_ip_dst)) {
-			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+		if (CALI_F_TO_HEP && is_failsafe_out(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->post_nat_ip_dst)) {
+			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
 			goto skip_policy;
 		}
-		ctx.state->flags |= CALI_ST_SRC_IS_HOST;
+		ctx->state->flags |= CALI_ST_SRC_IS_HOST;
 	}
 
 	CALI_DEBUG("About to jump to policy program.\n");
@@ -436,18 +473,17 @@ icmp_send_reply:
 	goto deny;
 
 skip_policy:
-	ctx.state->pol_rc = CALI_POL_ALLOW;
-	ctx.state->flags |= CALI_ST_SKIP_POLICY;
+	ctx->state->pol_rc = CALI_POL_ALLOW;
+	ctx->state->flags |= CALI_ST_SKIP_POLICY;
 	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	goto deny;
 
-allow:
 finalize:
-	return forward_or_drop(&ctx);
+	return;
+
 deny:
-	ctx.fwd.res = TC_ACT_SHOT;
-	goto finalize;
+	ctx->fwd.res = TC_ACT_SHOT;
 }
 
 SEC("classifier/tc/accept")
@@ -511,7 +547,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	struct ct_create_ctx ct_ctx_nat = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
-	__u32 seen_mark;
+	__u32 seen_mark = ctx->fwd.mark;
 	size_t l4_csum_off = 0, l3_csum_off;
 
 	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
@@ -522,6 +558,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	CALI_DEBUG("flags=%x\n", state->flags);
 	CALI_DEBUG("ct_rc=%d\n", ct_rc);
 	CALI_DEBUG("ct_related=%d\n", ct_related);
+	CALI_DEBUG("mark=0x%x\n", seen_mark);
 
 	// Set the dport to 0, to make sure conntrack entries for icmp is proper as we use
 	// dport to hold icmp type and code
@@ -543,7 +580,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			// hit verifier issues so recalculate it here.
 			fib = true;
 		}
-		seen_mark = CALI_SKB_MARK_SEEN;
+		seen_mark |= CALI_SKB_MARK_SEEN;
+		if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
+				state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
+			CALI_DEBUG("should skip rpf as the source IP is a service IP\n");
+			seen_mark |= CALI_SKB_MARK_SKIP_RPF;
+		}
 	}
 
 	/* We check the ttl here to avoid needing complicated handling of
@@ -694,6 +736,22 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
 		}
+		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
+		}
+		if (state->flags & CALI_ST_HOST_PSNAT) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_HOST_PSNAT;
+			ct_ctx_nat.allow_return = true;
+		}
+		/* Mark connections that were routed via bpfnatout, but had CT miss at
+		 * HEP. That is because of SNAT happened between bpfnatout and here.
+		 * Returning packets on such a connection must go back via natbpfout
+		 * without a short-circuit to revers the service NAT.
+		 */
+		if (CALI_F_TO_HEP &&
+				((skb->mark & CALI_SKB_MARK_FROM_NAT_IFACE_OUT) == CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
+		}
 
 		if (state->ip_proto == IPPROTO_TCP) {
 			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
@@ -720,10 +778,25 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto allow;
 		}
 
+		ct_ctx_nat.orig_src = state->ip_src;
 		ct_ctx_nat.orig_dst = state->ip_dst;
 		ct_ctx_nat.orig_dport = state->dport;
+		ct_ctx_nat.orig_sport = state->sport;
 		state->ct_result.nat_sport = ct_ctx_nat.sport;
 		/* fall through as DNAT is now established */
+
+		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
+			struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
+			if (r && cali_rt_flags_remote_workload(r->flags) && r->flags & CALI_RT_TUNNELED) {
+				CALI_DEBUG("remote wl %x tunneled\n", bpf_htonl(state->post_nat_ip_dst));
+				ct_ctx_nat.src = HOST_TUNNEL_IP;
+				/* This would be the place to set a new source port like
+				 * ct_ctx_nat.sport = 10101;
+				 */
+				state->ct_result.nat_sip = ct_ctx_nat.src;
+				state->ct_result.nat_sport = ct_ctx_nat.sport;
+			}
+		}
 
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
@@ -776,7 +849,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					ct_ctx_nat.allow_return = true;
 					ct_ctx_nat.tun_ip = rt->next_hop;
 					state->ip_dst = rt->next_hop;
-				} else if (cali_rt_is_workload(rt) && state->ip_dst != state->post_nat_ip_dst) {
+				} else if (cali_rt_is_workload(rt) &&
+						state->ip_dst != state->post_nat_ip_dst &&
+						!CALI_F_NAT_IF) {
 					/* Packet arrived from a HEP for a workload and we're
 					 * about to NAT it.  We can't rely on the kernel's RPF check
 					 * to do the right thing here in the presence of source
@@ -800,6 +875,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Creating NAT conntrack failed with %d\n", err);
 				goto deny;
 			}
+			state->ct_result.nat_sip = ct_ctx_nat.src;
 			state->ct_result.nat_sport = ct_ctx_nat.sport;
 		} else {
 			if (encap_needed && ct_result_np_node(state->ct_result)) {
@@ -824,6 +900,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto nat_encap;
 		}
 
+		ctx->ip_header->saddr = state->ct_result.nat_sip;
 		ctx->ip_header->daddr = state->post_nat_ip_dst;
 
 		switch (ctx->ip_header->protocol) {
@@ -848,7 +925,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
 
 		if (l4_csum_off) {
-			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_dst,
+			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off,
+					state->ip_src,
+					state->ct_result.nat_sip,
+					state->ip_dst,
 					state->post_nat_ip_dst,
 					bpf_htons(state->dport),
 					bpf_htons(state->post_nat_dport),
@@ -857,7 +937,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
+		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_src, state->ct_result.nat_sip, 4);
 		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_dst, state->post_nat_ip_dst, 4);
+		/* From now on, the packet has a new source IP */
+		if (state->ct_result.nat_sip) {
+			state->ip_src = state->ct_result.nat_sip;
+		}
+
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
@@ -921,6 +1007,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		// Actually do the NAT.
 		ctx->ip_header->saddr = state->ct_result.nat_ip;
+		ctx->ip_header->daddr = state->ct_result.nat_sip;
 
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
@@ -946,6 +1033,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (l4_csum_off) {
 			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off,
 				state->ip_src, state->ct_result.nat_ip,
+				state->ip_dst, state->ct_result.nat_sip,
 				bpf_htons(state->dport), bpf_htons(state->ct_result.nat_sport ? : state->dport),
 				bpf_htons(state->sport), bpf_htons(state->ct_result.nat_port),
 				ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
@@ -956,6 +1044,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		int csum_rc = bpf_l3_csum_replace(skb, l3_csum_off,
 						  state->ip_src, state->ct_result.nat_ip, 4);
+		csum_rc |= bpf_l3_csum_replace(skb, l3_csum_off,
+						  state->ip_dst, state->ct_result.nat_sip, 4);
 		CALI_VERB("bpf_l3_csum_replace(IP): %d\n", csum_rc);
 		res |= csum_rc;
 
@@ -1159,6 +1249,73 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	tc_state_fill_from_iphdr(&ctx);
 	ctx.state->sport = ctx.state->dport = 0;
 	return forward_or_drop(&ctx);
+deny:
+	return TC_ACT_SHOT;
+}
+
+SEC("classifier/tc/host_ct_conflict")
+int calico_tc_host_ct_conflict_entrypoint(struct __sk_buff *skb)
+{
+	CALI_DEBUG("Entering calico_tc_host_ct_conflict_entrypoint\n");
+	/* Initialise the context, which is stored on the stack, and the state, which
+	 * we use to pass data from one program to the next via tail calls. */
+	struct cali_tc_ctx ctx = {
+		.state = state_get(),
+		.skb = skb,
+		.fwd = {
+			.res = TC_ACT_UNSPEC,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+	};
+
+	struct calico_nat_dest nat_dest_ident;
+
+	if (!ctx.state) {
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		goto deny;
+	}
+
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
+		ctx.fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+
+	__u16 sport = ctx.state->sport;
+	ctx.state->sport = 0;
+	ctx.state->ct_result = calico_ct_v4_lookup(&ctx);
+	ctx.state->sport = sport;
+	ctx.state->flags |= CALI_ST_HOST_PSNAT;
+
+	switch (ct_result_rc(ctx.state->ct_result.rc)) {
+	case CALI_CT_ESTABLISHED:
+		/* Because we are on the "from host" patch, conntrack gives us
+		 * CALI_CT_ESTABLISHED only. Better to fix the corner case here than on
+		 * the generic path.
+		 */
+		ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_ESTABLISHED_DNAT);
+		/* fallthrough */
+	case CALI_CT_NEW:
+		/* There is a conflict, this is the first packet that conflictis. By
+		 * setting a NAT destination being the same as the original destination,
+		 * we trigger DNAT (void) which will conflict on the source port and will
+		 * trigger psnat.
+		 */
+		nat_dest_ident.addr = ctx.state->ip_dst;
+		nat_dest_ident.port = ctx.state->dport;
+
+		ctx.nat_dest = &nat_dest_ident;
+		break;
+	default:
+		CALI_INFO("Unexpected CT result %d after host source port collision DENY.\n",
+			  ct_result_rc(ctx.state->ct_result.rc));
+		goto deny;
+	}
+
+	calico_tc_process_ct_lookup(&ctx);
+
+	return forward_or_drop(&ctx);
+
 deny:
 	return TC_ACT_SHOT;
 }
