@@ -432,8 +432,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
     --node-vm-size Standard_D2s_v3
    ```
 %>
-
-  {% endtabs %}
+{% endtabs %}
 
 #### Configure installation parameters
 

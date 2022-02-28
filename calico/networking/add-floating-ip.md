@@ -38,19 +38,29 @@ To verify, ssh to one of the Kubernetes nodes and look for at the CNI plugin con
 
 #### Enable floating IPs
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+Floating IPs for Kubernetes pods are not currently supported for operator-managed Calico clusters.
+
+%>
+  <label:Manifest>
+<%
+
 By default, floating IPs are disabled. To enable floating IPs, follow these steps.
 
 Modify the calico-config ConfigMap in the kube-system namespace. In the `cni_network_config` section, add the following stanza to the “calico” plugin config section.
 
-<pre>
+```
     "feature_control": {
          "floating_ips": true
      }
-</pre>
+```
 
 For example, your `cni_network_config` will look similar to the following after the update.
 
-<pre>
+```
  cni_network_config: |-
     {
       "name": "k8s-pod-network",
@@ -82,9 +92,22 @@ For example, your `cni_network_config` will look similar to the following after 
         }
       ]
     }
-</pre>
+```
+
+%>
+{% endtabs %}
 
 #### Configure a pod to use a floating IP
+
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+Floating IPs for Kubernetes pods are not currently supported for operator-managed Calico clusters.
+
+%>
+  <label:Manifest>
+<%
 
 Annotate the pod with the key `cni.projectcalico.org/floatingIPs` and the value set to a list of IP addresses enclosed in square brackets.  For correct advertisement to the rest of the cluster, all floating IPs must be within the range of a configured [IP pool]({{ site.baseurl }}/reference/resources/ippool).
 
@@ -95,3 +118,6 @@ For example:
 </pre>
 
 Note the use of the escaped `\"` for the inner double quotes around the addresses.
+
+%>
+{% endtabs %}

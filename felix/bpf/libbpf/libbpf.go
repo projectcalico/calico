@@ -17,6 +17,7 @@ package libbpf
 import (
 	"fmt"
 	"os"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -60,8 +61,9 @@ func (m *Map) Type() int {
 func (m *Map) SetPinPath(path string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	err := C.bpf_map__set_pin_path(m.bpfMap, cPath)
-	if err != 0 {
+	errno := C.bpf_map__set_pin_path(m.bpfMap, cPath)
+	if errno != 0 {
+		err := syscall.Errno(errno)
 		return fmt.Errorf("pinning map failed %w", err)
 	}
 	return nil
