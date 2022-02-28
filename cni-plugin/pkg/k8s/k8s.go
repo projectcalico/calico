@@ -29,6 +29,8 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ipam"
 
+	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
+
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -594,7 +596,7 @@ func releaseIPAddrs(ipAddrs []string, calico calicoclient.Interface, logger *log
 		if err != nil {
 			return err
 		}
-		unallocated, err := calico.IPAM().ReleaseIPs(context.Background(), []cnet.IP{*cip})
+		unallocated, err := calico.IPAM().ReleaseIPs(context.Background(), libipam.ReleaseOptions{Address: cip.String()})
 		if err != nil {
 			log.WithError(err).Error("Failed to release explicit IP")
 			return err
@@ -837,7 +839,7 @@ func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 	// so split that off to ensure compatibility.
 	conf.Policy.K8sAPIRoot = strings.Split(conf.Policy.K8sAPIRoot, "/api/")[0]
 
-	var overridesMap = []struct {
+	overridesMap := []struct {
 		variable *string
 		value    string
 	}{

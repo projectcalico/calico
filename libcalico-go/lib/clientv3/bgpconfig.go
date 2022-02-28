@@ -151,6 +151,20 @@ func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv3.BGPConfiguration
 				Reason: "Cannot set ServiceClusterIPs on a non default BGP Configuration.",
 			})
 		}
+
+		if res.Spec.NodeMeshPassword != nil {
+			errFields = append(errFields, cerrors.ErroredField{
+				Name:   "BGPConfiguration.Spec.NodeMeshPassword",
+				Reason: "Cannot set nodeMeshPassword on a non default BGP Configuration.",
+			})
+		}
+
+		if res.Spec.NodeMeshMaxRestartTime != nil {
+			errFields = append(errFields, cerrors.ErroredField{
+				Name:   "BGPConfiguration.Spec.NodeMeshMaxRestartTime",
+				Reason: "Cannot set nodeMeshMaxRestartTime on a non default BGP Configuration.",
+			})
+		}
 	}
 
 	if len(errFields) > 0 {
