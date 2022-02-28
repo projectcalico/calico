@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -382,6 +383,52 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			return fakeClient.affinityReleased("cnode")
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+	})
+
+	It("should handle clusterinformation updates and maintain its clusterinformation datastoreReady cache", func() {
+		// Start the controller.
+		c.Start(stopChan)
+
+		calicoNodeName := "cname"
+		isReady := false
+
+		key := model.ResourceKey{Name: calicoNodeName, Kind: v3.KindClusterInformation}
+		ci := v3.ClusterInformation{}
+		ci.Name = calicoNodeName
+		ci.Spec.DatastoreReady = &isReady
+		kvp := model.KVPair{
+			Key:   key,
+			Value: &ci,
+		}
+		update := bapi.Update{
+			KVPair:     kvp,
+			UpdateType: bapi.UpdateTypeKVNew,
+		}
+
+		// Send a new ClusterInformation update.
+		c.onUpdate(update)
+
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(false), "Cache not updated after UPDATE")
+
+		isReady = true
+		c.onUpdate(update)
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(true), "Cache not updated after ADD")
+
+		update.KVPair.Value = nil
+		c.onUpdate(update)
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(false), "Cache not updated after DELETE")
 	})
 
 	It("should clean up leaked IP addresses", func() {
