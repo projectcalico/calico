@@ -35,5 +35,6 @@ enum cali_jump_index {
 	PROG_INDEX_POLICY,
 	PROG_INDEX_ALLOWED,
 	PROG_INDEX_ICMP,
+	PROG_INDEX_HOST_CT_CONFLICT,
 };
 #endif /* __CALI_BPF_JUMP_H__ */
