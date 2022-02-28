@@ -1184,7 +1184,7 @@ KIND ?= $(KIND_DIR)/kind
 KUBECTL ?= $(KIND_DIR)/kubectl
 
 # Different tests may require different kind configurations.
-KIND_CONFIG ?= $(KIND_DIR)/multinode-kind.yaml
+KIND_CONFIG ?= $(KIND_DIR)/kind.config
 KIND_NAME = $(basename $(notdir $(KIND_CONFIG)))
 KIND_KUBECONFIG?=$(KIND_DIR)/$(KIND_NAME)-kubeconfig.yaml
 
