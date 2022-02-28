@@ -40,7 +40,7 @@ Param(
     [parameter(Mandatory = $false)] $ServiceCidr="10.96.0.0/12",
     [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10",
     [parameter(Mandatory = $false)] $ContainerdCniBinDir="",
-    [parameter(Mandatory = $false)] $ContainerdCniConfDir=""
+    [parameter(Mandatory = $false)] $ContainerdCniConfDir="",
     [parameter(Mandatory = $false)] $CalicoBackend=""
 )
 
