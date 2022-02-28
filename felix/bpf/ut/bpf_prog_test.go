@@ -246,7 +246,8 @@ outter:
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
 	bin.PatchSkbMark(skbMark)
-	bin.PatchHostTunnelIPv4(node1tunIP)
+	err = bin.PatchHostTunnelIPv4(node1tunIP)
+	Expect(err).NotTo(HaveOccurred())
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
