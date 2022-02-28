@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -212,7 +212,7 @@ func TestFailsafes(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	for _, test := range failsafeTests {
-		_, _, _, _, pktBytes, err := testPacket(nil, test.IPHeaderIPv4, test.IPHeaderUDP, nil)
+		_, _, _, _, _, pktBytes, err := testPacket(nil, test.IPHeaderIPv4, nil, test.IPHeaderUDP, nil, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		prog := "calico_from_host_ep"

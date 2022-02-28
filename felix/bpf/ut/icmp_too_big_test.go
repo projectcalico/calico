@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 func TestICMPTooBig(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, _, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -58,7 +58,7 @@ func TestICMPTooBigIPOptions(t *testing.T) {
 		Options:  []layers.IPv4Option{{OptionType: 1, OptionLength: 0, OptionData: []byte{0, 0}}},
 	}
 
-	_, _, _, _, pktBytes, err := testPacket(nil, ipv4, nil, nil)
+	_, _, _, _, _, pktBytes, err := testPacket(nil, ipv4, nil, nil, nil, false)
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfUnitTest(t, "icmp_too_big.c", func(bpfrun bpfProgRunFn) {
