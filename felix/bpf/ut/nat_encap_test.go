@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 func TestNatEncap(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, _, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 

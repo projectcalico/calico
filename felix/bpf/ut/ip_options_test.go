@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ func TestMalformedIP(t *testing.T) {
 	iphdr := *ipv4Default
 	iphdr.IHL = 4
 
-	_, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	_, _, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil, nil, false)
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -62,7 +62,7 @@ func TestIPOptions(t *testing.T) {
 	iphdr := *ipv4Default
 	iphdr.IHL = 6
 
-	_, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	_, _, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil, nil, false)
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -97,7 +97,7 @@ func TestIPOptionsWithHostIP(t *testing.T) {
 	iphdr.IHL = 6
 	iphdr.DstIP = hostIP
 
-	_, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	_, _, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil, nil, false)
 	Expect(err).NotTo(HaveOccurred())
 
 	rtKey := routes.NewKey(ip.CIDRFromNetIP(hostIP).(ip.V4CIDR)).AsBytes()
