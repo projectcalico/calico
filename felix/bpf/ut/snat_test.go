@@ -143,7 +143,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	// Second packet - conntrack hit
 
 	ipHdr.Id = 2
-	eth, ipv4, l4, payload, pktBytes, err = testPacket(nil, ipHdr, nil, nil)
+	eth, ipv4, _, payload, pktBytes, err = testPacket(nil, ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	skbMark = 0
