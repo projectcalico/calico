@@ -22,6 +22,7 @@ import (
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
@@ -29,7 +30,7 @@ import (
 
 func Apply(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> apply --filename=<FILENAME> [--recursive] [--skip-empty]
+  <BINARY_NAME> apply --filename=<FILENAME> [--recursive] [--skip-empty] [--list]
                   [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>] [--allow-version-mismatch]
 
 Examples:
@@ -56,6 +57,7 @@ Options:
                                Uses the default namespace if not specified.
      --context=<context>       The name of the kubeconfig context to use.
      --allow-version-mismatch  Allow client and cluster versions mismatch.
+     --list                    Print list of resources processed.
 
 Description:
   The apply command is used to create or replace a set of resources by filename
@@ -131,9 +133,22 @@ Description:
 		}
 	} else if len(results.ResErrs) == 0 {
 		if results.SingleKind != "" {
-			fmt.Printf("Successfully applied %d '%s' resource(s)\n", results.NumHandled, results.SingleKind)
+			fmt.Printf("Successfully applied %d '%s' resource(s)", results.NumHandled, results.SingleKind)
 		} else {
-			fmt.Printf("Successfully applied %d resource(s)\n", results.NumHandled)
+			fmt.Printf("Successfully applied %d resource(s)", results.NumHandled)
+		}
+		longList := argutils.ArgBoolOrFalse(parsedArgs, "--list")
+		if longList {
+			fmt.Printf(":\n")
+			for _, v := range results.Resources {
+				v, ok := v.(interface{ GetName() string })
+				if !ok {
+					continue
+				}
+				fmt.Printf("Resource: %s\n", v.GetName())
+			}
+		} else {
+			fmt.Println()
 		}
 	} else {
 		if results.NumHandled-len(results.ResErrs) > 0 {
