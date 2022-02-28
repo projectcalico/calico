@@ -148,16 +148,15 @@ fv-fast:
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 
 # Create a kind cluster, and deploy some resources required for the libcalico-go tests.
-# TODO: Remove the need for this extra target, should all be in lib.Makefile.
+# TODO: Remove the need for this extra target, these should be created by the tests that need them.
 cluster-create: kind-cluster-create
-	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
-		$(KUBECTL) replace -f test/mock-node.yaml && \
-		$(KUBECTL) replace -f test/namespaces.yaml
+	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f test/mock-node.yaml
+	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f test/namespaces.yaml
 
 ## Run an etcd with TLS enabled, needed for some libcalico-go UTs.
 run-etcd-tls: stop-etcd-tls
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
+	# TODO: We shouldn't need to enable the v2 API, but some of our test code
+	# still relies on it.
 	docker run --detach \
 		-v $(CURDIR)/test/etcd-ut-certs:/root/etcd-certificates/ \
 		--net=host \
