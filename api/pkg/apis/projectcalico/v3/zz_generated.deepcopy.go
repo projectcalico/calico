@@ -773,7 +773,7 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.DataplaneWatchdogTimeout != nil {
 		in, out := &in.DataplaneWatchdogTimeout, &out.DataplaneWatchdogTimeout
-		*out = new(metav1.Duration)
+		*out = new(v1.Duration)
 		**out = **in
 	}
 	if in.IPv6Support != nil {
