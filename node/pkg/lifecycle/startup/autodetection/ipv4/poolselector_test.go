@@ -24,9 +24,15 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
 
 func TestCommands(t *testing.T) {
 	RegisterFailHandler(Fail)
