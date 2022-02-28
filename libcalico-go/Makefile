@@ -4,7 +4,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
 
 LOCAL_CHECKS = goimports check-gen-files
 
-KIND_CONFIG = $(KIND_DIR)/control-plane-only.yaml
+KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -151,8 +151,8 @@ fv-fast:
 # TODO: Remove the need for this extra target, should all be in lib.Makefile.
 cluster-create: kind-cluster-create
 	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
-		$(KUBECTL) create -f test/mock-node.yaml && \
-		$(KUBECTL) create -f test/namespaces.yaml
+		$(KUBECTL) replace -f test/mock-node.yaml && \
+		$(KUBECTL) replace -f test/namespaces.yaml
 
 ## Run an etcd with TLS enabled, needed for some libcalico-go UTs.
 run-etcd-tls: stop-etcd-tls
