@@ -50,6 +50,14 @@ func CreateBPFMapContext(ipsetsMapSize, natFEMapSize, natBEMapSize, natAffMapSiz
 	return bpfMapContext
 }
 
+func MigrateDataFromOldMap(mc *bpf.MapContext) {
+	ctMap := mc.CtMap
+	err := ctMap.CopyDeltaFromOldMap()
+	if err != nil {
+		log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+	}
+}
+
 func CreateBPFMaps(mc *bpf.MapContext) {
 	maps := []bpf.Map{}
 

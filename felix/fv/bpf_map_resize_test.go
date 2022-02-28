@@ -16,9 +16,12 @@ package fv
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -32,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -83,6 +87,35 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
+
+	It("should copy data from old map to new map", func() {
+		srcIP := net.IPv4(123, 123, 123, 123)
+		dstIP := net.IPv4(121, 121, 121, 121)
+
+		now := time.Duration(timeshim.RealTime().KTimeNanos())
+		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+		val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+		val64 := base64.StdEncoding.EncodeToString(val[:])
+
+		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
+		key64 := base64.StdEncoding.EncodeToString(key[:])
+
+		felixes[0].Exec("calico-bpf", "conntrack", "write", key64, val64)
+		out, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Count(out, srcIP.String())).To(Equal(1), "entry not found in conntrack map")
+		newCtMapSize := 6000
+		updateFelixConfig(func(cfg *api.FelixConfiguration) {
+			cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
+		})
+
+		ctMap := conntrack.Map(&bpf.MapContext{})
+		Eventually(func() int { return getMapSize(felixes[0], ctMap) }, "5s", "200ms").Should(Equal(newCtMapSize))
+		out, err = felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Count(out, srcIP.String())).To(Equal(1), "entry not found in conntrack map")
+
+	})
 
 	It("should program new map sizes", func() {
 		affMap := nat.AffinityMap(&bpf.MapContext{})
