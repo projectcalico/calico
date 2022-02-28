@@ -38,6 +38,7 @@ import (
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -476,7 +477,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 
 	// Write the endpoint object (either the newly created one, or the updated one)
-	if _, err := utils.CreateOrUpdate(ctx, calicoClient, endpoint); err != nil {
+	ctxPatchCniOnly := context.WithValue(ctx, k8sresources.PatchMode{}, k8sresources.PatchModeCniOnly)
+	if _, err := utils.CreateOrUpdate(ctxPatchCniOnly, calicoClient, endpoint); err != nil {
 		logger.WithError(err).Error("Error creating/updating endpoint in datastore.")
 		releaseIPAM()
 		return nil, err
