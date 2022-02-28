@@ -56,10 +56,6 @@ Description:
   This is usually used when trying to diagnose an issue that may be related to
   your Calico network.
 
-  The output of the command explains how to automatically upload the
-  diagnostics to http://transfer.sh for easy sharing of the data. Note that the
-  uploaded files will be deleted after 14 days.
-
   This command must be run on the specific Calico node that you are gathering
   diagnostics for.
 `
@@ -176,11 +172,7 @@ func runDiags(logDir string) error {
 	tarFilePath := filepath.Join(tmpDir, tarFile)
 
 	fmt.Printf("\nDiags saved to %s\n", tarFilePath)
-	fmt.Printf(`If required, you can upload the diagnostics bundle to a file sharing service
-such as transfer.sh using curl or similar.  For example:
-
-    curl --upload-file %s https://transfer.sh/%s`, tarFilePath, tarFilePath)
-	fmt.Println()
+	fmt.Println("If required, you can upload the diagnostics bundle to a file sharing service.")
 
 	return nil
 }
