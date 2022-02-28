@@ -305,6 +305,7 @@ fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) image bin/iptables-locker bi
 	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
 	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \
 	  FV_FELIX_LOG_LEVEL="$(FV_FELIX_LOG_LEVEL)" \
+	  CERTS_PATH=$(CERTS_PATH) \
 	  PRIVATE_KEY=`pwd`/private.key \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
@@ -364,6 +365,7 @@ k8sfv-test-existing-felix: $(REMOTE_DEPS) bin/k8sfv.test
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	CERTS_PATH=$(CERTS_PATH) \
 	PRIVATE_KEY=`pwd`/fv/private.key \
 	k8sfv/run-test
 
