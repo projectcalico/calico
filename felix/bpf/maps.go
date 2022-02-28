@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -47,6 +48,9 @@ type Map interface {
 	// Path returns the path that the map is (to be) pinned to.
 	Path() string
 
+	// CopyDeltaFromOldMap() copies data from old map to new map
+	CopyDeltaFromOldMap() error
+
 	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
@@ -54,14 +58,15 @@ type Map interface {
 }
 
 type MapParameters struct {
-	Filename   string
-	Type       string
-	KeySize    int
-	ValueSize  int
-	MaxEntries int
-	Name       string
-	Flags      int
-	Version    int
+	Filename     string
+	Type         string
+	KeySize      int
+	ValueSize    int
+	MaxEntries   int
+	Name         string
+	Flags        int
+	Version      int
+	UpdatedByBPF bool
 }
 
 func versionedStr(ver int, str string) string {
@@ -302,6 +307,50 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k, b.ValueSize)
 }
 
+func (b *PinnedMap) updateDeltaEntries() error {
+	numEntriesCopied := 0
+	mapMem := make(map[string]struct{})
+	it, err := NewMapIterator(b.oldfd, b.KeySize, b.ValueSize, b.oldSize)
+	if err != nil {
+		return fmt.Errorf("failed to create BPF map iterator: %w", err)
+	}
+	defer func() {
+		err := it.Close()
+		if err != nil {
+			logrus.WithError(err).Panic("Unexpected error from map iterator Close().")
+		}
+	}()
+	for {
+		k, v, err := it.Next()
+
+		if err != nil {
+			if err == ErrIterationFinished {
+				return nil
+			}
+			return errors.Errorf("iterating the old map failed: %s", err)
+		}
+		if numEntriesCopied == b.MaxEntries {
+			return fmt.Errorf("new map cannot hold all the data from the old map %s.", b.GetName())
+		}
+
+		if _, ok := mapMem[string(k)]; ok {
+			continue
+		}
+		newValue, err := b.Get(k)
+		if err == nil && reflect.DeepEqual(newValue, v) {
+			numEntriesCopied++
+			continue
+		}
+		err = b.Update(k, v)
+		if err != nil {
+			return fmt.Errorf("error copying data from the old map")
+		}
+		logrus.Debugf("copied data from old map to new map key=%v, value=%v", k, v)
+		mapMem[string(k)] = struct{}{}
+		numEntriesCopied++
+	}
+}
+
 func (b *PinnedMap) copyFromOldMap() error {
 	numEntriesCopied := 0
 	mapMem := make(map[string]struct{})
@@ -327,7 +376,7 @@ func (b *PinnedMap) copyFromOldMap() error {
 		}
 
 		if numEntriesCopied == b.MaxEntries {
-			return fmt.Errorf("new map cannot hold all the data from the old map.")
+			return fmt.Errorf("new map cannot hold all the data from the old map %s", b.GetName())
 		}
 		if _, ok := mapMem[string(k)]; ok {
 			continue
@@ -451,10 +500,13 @@ func (b *PinnedMap) EnsureExists() error {
 			return fmt.Errorf("error migrating the old map %w", err)
 		}
 		copyData = true
-		defer func() {
-			b.oldfd.Close()
-			b.oldfd = 0
-		}()
+		// Do not close the oldfd if the map is updated by the BPF programs.
+		if !b.UpdatedByBPF {
+			defer func() {
+				b.oldfd.Close()
+				b.oldfd = 0
+			}()
+		}
 	}
 
 	logrus.Debug("Map didn't exist, creating it")
@@ -481,8 +533,12 @@ func (b *PinnedMap) EnsureExists() error {
 				logrus.WithError(err).Error("error copying data from old map")
 				return err
 			}
-			// Delete the old pin.
-			os.Remove(b.Path() + "_old")
+			// Delete the old pin if the map is not updated by BPF programs.
+			// Data from old map to new map will be copied once all the bpf
+			// programs are installed with the new map.
+			if !b.UpdatedByBPF {
+				os.Remove(b.Path() + "_old")
+			}
 
 		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
@@ -519,4 +575,22 @@ func RepinMap(name string, filename string) error {
 	}
 
 	return os.ErrNotExist
+}
+
+func (b *PinnedMap) CopyDeltaFromOldMap() error {
+	if b.oldfd == 0 {
+		return nil
+	}
+
+	defer func() {
+		b.oldfd.Close()
+		b.oldfd = 0
+		os.Remove(b.Path() + "_old")
+	}()
+
+	err := b.updateDeltaEntries()
+	if err != nil {
+		return fmt.Errorf("error copying data from old map %s, err=%w", b.GetName(), err)
+	}
+	return nil
 }
