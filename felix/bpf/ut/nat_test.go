@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	bpfIfaceName = "NAT1"
 	defer func() { bpfIfaceName = "" }()
 
-	eth, ipv4, _, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
+	eth, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -101,7 +101,7 @@ func TestNATPodPodXNode(t *testing.T) {
 		udpNat.DstPort = layers.UDPPort(natPort)
 
 		// created the expected packet after NAT, with recalculated csums
-		_, _, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, nil, &udpNat, payload, false)
+		_, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, &udpNat, payload)
 		Expect(err).NotTo(HaveOccurred())
 
 		// expect them to be the same
@@ -265,7 +265,7 @@ func TestNATNodePort(t *testing.T) {
 	bpfIfaceName = "NP-1"
 	defer func() { bpfIfaceName = "" }()
 
-	_, ipv4, _, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 	mc := &bpf.MapContext{}
@@ -857,7 +857,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	bpfIfaceName = "NPlo"
 	defer func() { bpfIfaceName = "" }()
 
-	_, ipv4, _, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 	mc := &bpf.MapContext{}
@@ -1015,7 +1015,7 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 	bpfIfaceName = "NPM1"
 	defer func() { bpfIfaceName = "" }()
 
-	_, ipv4, _, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip2)
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip2)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 	mc := &bpf.MapContext{}
@@ -1286,7 +1286,7 @@ func testUnrelatedVXLAN(t *testing.T, nodeIP net.IP, vni uint32) {
 func TestNATNodePortICMPTooBig(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, ipv4, _, l4, _, pktBytes, err := testPacket(nil, nil, nil, nil, make([]byte, natTunnelMTU), false)
+	_, ipv4, l4, _, pktBytes, err := testPacket(nil, nil, nil, make([]byte, natTunnelMTU))
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -1380,7 +1380,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, ipv4, _, _, _, synPkt, err := testPacket(nil, nil, nil, tcpSyn, nil, false)
+	_, ipv4, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = natMap.Update(
@@ -1429,7 +1429,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 		seenOtherIP := false
 		for attempt := 0; attempt < 100; attempt++ {
 			tcpSyn.SrcPort++
-			_, _, _, _, _, synPkt, err := testPacket(nil, nil, nil, tcpSyn, nil, false)
+			_, _, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
 			Expect(err).NotTo(HaveOccurred())
 			res, err := bpfrun(synPkt)
 			Expect(err).NotTo(HaveOccurred())
@@ -1448,7 +1448,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 	// Change back to the original SYN packet so that we can test the new policy
 	// with an existing CT entry.
 	tcpSyn.SrcPort = origTCPSrcPort
-	_, _, _, _, _, synPkt, err = testPacket(nil, nil, nil, tcpSyn, nil, false)
+	_, _, _, _, synPkt, err = testPacket(nil, nil, tcpSyn, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "SYNP"
@@ -1480,7 +1480,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 func TestNATAffinity(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, ipv4, _, l4, _, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -1648,7 +1648,7 @@ func TestNATNodePortIngressDSR(t *testing.T) {
 	bpfIfaceName = "DSR1"
 	defer func() { bpfIfaceName = "" }()
 
-	_, ipv4, _, l4, payload, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 	mc := &bpf.MapContext{}
@@ -1829,8 +1829,8 @@ func TestNATSourceCollision(t *testing.T) {
 
 	var recvPkt []byte
 
-	_, _, _, _, _, pktBytes, _ := testPacket(nil, pktIPHdr, nil, pktTCPHdr,
-		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0}, false)
+	_, _, _, _, pktBytes, _ := testPacket(nil, pktIPHdr, pktTCPHdr,
+		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0})
 
 	skbMark = 0
 	var newSPort uint16
@@ -1921,8 +1921,8 @@ func TestNATSourceCollision(t *testing.T) {
 	pktTCPHdr.ACK = true
 	pktTCPHdr.Seq = 1
 
-	_, _, _, _, _, pktBytes, _ = testPacket(nil, pktIPHdr, nil, pktTCPHdr,
-		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0}, false)
+	_, _, _, _, pktBytes, _ = testPacket(nil, pktIPHdr, pktTCPHdr,
+		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0})
 
 	dumpCTMap(ctMap)
 
@@ -1978,8 +1978,8 @@ func TestNATSourceCollision(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, _, _, _, _, pktBytes, _ = testPacket(nil, pktIPHdr, nil, pktTCPHdr,
-		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0}, false)
+	_, _, _, _, pktBytes, _ = testPacket(nil, pktIPHdr, pktTCPHdr,
+		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0})
 
 	skbMark = 0
 

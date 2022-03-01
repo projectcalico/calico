@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, ipv4, _, _, _, synPkt, err := testPacket(nil, nil, nil, tcpSyn, nil, false)
+	_, ipv4, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	destCIDR := net.IPNet{
@@ -169,7 +169,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	ipv4Ret := *ipv4
 	ipv4Ret.SrcIP, ipv4Ret.DstIP = ipv4Ret.DstIP, ipv4Ret.SrcIP
 
-	_, _, _, _, _, synAckPkt, err := testPacket(nil, &ipv4Ret, nil, tcpSynAck, nil, false)
+	_, _, _, _, synAckPkt, err := testPacket(nil, &ipv4Ret, tcpSynAck, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -186,7 +186,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, _, _, _, _, ackPkt, err := testPacket(nil, nil, nil, tcpAck, nil, false)
+	_, _, _, _, ackPkt, err := testPacket(nil, nil, tcpAck, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {

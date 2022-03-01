@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 func TestICMPttlExceeded(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, ipv4, _, _, _, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfUnitTest(t, "icmp_ttl_exceeded.c", func(bpfrun bpfProgRunFn) {
@@ -54,7 +54,7 @@ func TestICMPttlExceededFromHEP(t *testing.T) {
 	iphdr := *ipv4Default
 	iphdr.TTL = 1
 
-	_, ipv4, _, l4, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil, nil, false)
+	_, ipv4, l4, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	udp := l4.(*layers.UDP)

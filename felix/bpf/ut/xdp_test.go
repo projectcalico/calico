@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -250,7 +250,7 @@ func TestXDPPrograms(t *testing.T) {
 
 	for _, tc := range xdpTestCases {
 		runBpfTest(t, "calico_entrypoint_xdp", tc.Rules, func(bpfrun bpfProgRunFn) {
-			_, _, _, _, _, pktBytes, err := testPacket(nil, tc.IPv4Header, nil, tc.NextHeader, nil, false)
+			_, _, _, _, pktBytes, err := testPacket(nil, tc.IPv4Header, tc.NextHeader, nil)
 			Expect(err).NotTo(HaveOccurred())
 			res, err := bpfrun(pktBytes)
 			Expect(err).NotTo(HaveOccurred())
