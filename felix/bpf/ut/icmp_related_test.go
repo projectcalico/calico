@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 
 	defer resetBPFMaps()
 
-	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, _, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -95,7 +95,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 
 	defer resetBPFMaps()
 
-	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, _, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -161,7 +161,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 
 	defer resetBPFMaps()
 
-	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, _, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -189,7 +189,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 
 	defer resetBPFMaps()
 
-	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, _, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 

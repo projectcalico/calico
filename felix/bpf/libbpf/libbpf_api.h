@@ -113,16 +113,18 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			ushort tmtu,
 			ushort vxlanPort,
 			ushort psnat_start,
-			ushort psnat_len)
+			ushort psnat_len,
+			uint flags)
 {
 	struct cali_tc_globals data = {
-	    .host_ip = host_ip,
-	    .tunnel_mtu = tmtu,
-	    .vxlan_port = vxlanPort,
-	    .intf_ip = intf_ip,
-	    .ext_to_svc_mark = ext_to_svc_mark,
-	    .psnat_start = psnat_start,
-	    .psnat_len = psnat_len,
+		.host_ip = host_ip,
+		.tunnel_mtu = tmtu,
+		.vxlan_port = vxlanPort,
+		.intf_ip = intf_ip,
+		.ext_to_svc_mark = ext_to_svc_mark,
+		.psnat_start = psnat_start,
+		.psnat_len = psnat_len,
+		.flags = flags,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
