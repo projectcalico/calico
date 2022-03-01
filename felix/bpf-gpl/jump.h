@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_BPF_JUMP_H__
@@ -35,5 +35,9 @@ enum cali_jump_index {
 	PROG_INDEX_POLICY,
 	PROG_INDEX_ALLOWED,
 	PROG_INDEX_ICMP,
+	PROG_INDEX_V6_PROLOGUE,
+	PROG_INDEX_V6_POLICY,
+	PROG_INDEX_V6_ALLOWED,
+	PROG_INDEX_V6_ICMP,
 };
 #endif /* __CALI_BPF_JUMP_H__ */

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ var retvalToStrXDP = map[int]string{
 
 func TestCompileTemplateRun(t *testing.T) {
 	runBpfTest(t, "calico_to_workload_ep", &polprog.Rules{}, func(bpfrun bpfProgRunFn) {
-		_, _, _, _, pktBytes, err := testPacketUDPDefault()
+		_, _, _, _, _, pktBytes, err := testPacketUDPDefault()
 		Expect(err).NotTo(HaveOccurred())
 
 		res, err := bpfrun(pktBytes)
@@ -820,6 +820,12 @@ var ethDefault = &layers.Ethernet{
 	EthernetType: layers.EthernetTypeIPv4,
 }
 
+var ethDefaultIPv6 = &layers.Ethernet{
+	SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
+	DstMAC:       []byte{0, 0, 0, 0, 0, 2},
+	EthernetType: layers.EthernetTypeIPv6,
+}
+
 var payloadDefault = []byte("ABCDEABCDEXXXXXXXXXXXX")
 
 var srcIP = net.IPv4(1, 1, 1, 1)
@@ -836,51 +842,91 @@ var ipv4Default = &layers.IPv4{
 	Protocol: layers.IPProtocolUDP,
 }
 
+var srcIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+var dstIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2})
+
+var ipv6Default = &layers.IPv6{
+	Version:    6,
+	HopLimit:   64,
+	SrcIP:      srcIPv6,
+	DstIP:      dstIPv6,
+	NextHeader: layers.IPProtocolUDP,
+}
+
 var udpDefault = &layers.UDP{
 	SrcPort: 1234,
 	DstPort: 5678,
 }
 
-func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.Layer, payloadAlt []byte) (
-	*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, ipv6Alt *layers.IPv6, l4Alt gopacket.Layer, payloadAlt []byte, ipv6Enabled bool) (
+	*layers.Ethernet, *layers.IPv4, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
 
 	var (
 		eth     *layers.Ethernet
 		ipv4    *layers.IPv4
+		ipv6    *layers.IPv6
 		udp     *layers.UDP
 		tcp     *layers.TCP
 		icmp    *layers.ICMPv4
+		icmpv6  *layers.ICMPv6
 		payload []byte
 	)
 
 	if ethAlt != nil {
 		eth = ethAlt
 	} else {
-		eth = ethDefault
+		if ipv6Enabled {
+			eth = ethDefaultIPv6
+		} else {
+			eth = ethDefault
+		}
 	}
 
-	if ipv4Alt != nil {
-		ipv4 = ipv4Alt
+	if ipv6Enabled {
+		if ipv6Alt != nil {
+			ipv6 = ipv6Alt
+		} else {
+			// Make a copy so that we do not mangle the default if we set the
+			// protocol below.
+			ipv6 = new(layers.IPv6)
+			*ipv6 = *ipv6Default
+		}
 	} else {
-		// Make a copy so that we do not mangle the default if we set the
-		// protocol below.
-		ipv4 = new(layers.IPv4)
-		*ipv4 = *ipv4Default
+		if ipv4Alt != nil {
+			ipv4 = ipv4Alt
+		} else {
+			// Make a copy so that we do not mangle the default if we set the
+			// protocol below.
+			ipv4 = new(layers.IPv4)
+			*ipv4 = *ipv4Default
+		}
 	}
 
 	if l4Alt != nil {
 		switch v := l4Alt.(type) {
 		case *layers.UDP:
 			udp = v
-			ipv4.Protocol = layers.IPProtocolUDP
+			if ipv6Enabled {
+				ipv6.NextHeader = layers.IPProtocolUDP
+			} else {
+				ipv4.Protocol = layers.IPProtocolUDP
+			}
 		case *layers.TCP:
 			tcp = v
-			ipv4.Protocol = layers.IPProtocolTCP
+			if ipv6Enabled {
+				ipv6.NextHeader = layers.IPProtocolTCP
+			} else {
+				ipv4.Protocol = layers.IPProtocolTCP
+			}
 		case *layers.ICMPv4:
 			icmp = v
 			ipv4.Protocol = layers.IPProtocolICMPv4
+		case *layers.ICMPv6:
+			icmpv6 = v
+			ipv6.NextHeader = layers.IPProtocolICMPv6
+
 		default:
-			return nil, nil, nil, nil, nil, errors.Errorf("unrecognized l4 layer type %t", l4Alt)
+			return nil, nil, nil, nil, nil, nil, errors.Errorf("unrecognized l4 layer type %t", l4Alt)
 		}
 	} else {
 		udp = udpDefault
@@ -894,27 +940,49 @@ func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.La
 
 	switch {
 	case udp != nil:
-		ipv4.Length = uint16(5*4 + 8 + len(payload))
-		udp.Length = uint16(8 + len(payload))
-		_ = udp.SetNetworkLayerForChecksum(ipv4)
+		if ipv6Enabled {
+			ipv6.Length = uint16(8 + len(payload))
+			_ = udp.SetNetworkLayerForChecksum(ipv6)
+			udp.Length = uint16(8 + len(payload))
 
-		pkt := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-			eth, ipv4, udp, gopacket.Payload(payload))
+			pkt := gopacket.NewSerializeBuffer()
+			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+				eth, ipv6, udp, gopacket.Payload(payload))
+			return eth, nil, ipv6, udp, payload, pkt.Bytes(), err
+		} else {
+			ipv4.Length = uint16(5*4 + 8 + len(payload))
+			_ = udp.SetNetworkLayerForChecksum(ipv4)
+			udp.Length = uint16(8 + len(payload))
 
-		return eth, ipv4, udp, payload, pkt.Bytes(), err
+			pkt := gopacket.NewSerializeBuffer()
+			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+				eth, ipv4, udp, gopacket.Payload(payload))
+			return eth, ipv4, nil, udp, payload, pkt.Bytes(), err
+		}
 	case tcp != nil:
 		if tcp == nil {
-			return nil, nil, nil, nil, nil, errors.Errorf("tcp default not implemented yet")
+			return nil, nil, nil, nil, nil, nil, errors.Errorf("tcp default not implemented yet")
 		}
-		ipv4.Length = uint16(5*4 + 8 + len(payload))
-		_ = tcp.SetNetworkLayerForChecksum(ipv4)
+		if ipv6Enabled {
+			ipv6.Length = uint16(8 + len(payload))
+			_ = tcp.SetNetworkLayerForChecksum(ipv6)
 
-		pkt := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-			eth, ipv4, tcp, gopacket.Payload(payload))
+			pkt := gopacket.NewSerializeBuffer()
+			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+				eth, ipv6, tcp, gopacket.Payload(payload))
 
-		return eth, ipv4, tcp, payload, pkt.Bytes(), err
+			return eth, nil, ipv6, tcp, payload, pkt.Bytes(), err
+
+		} else {
+			ipv4.Length = uint16(5*4 + 8 + len(payload))
+			_ = tcp.SetNetworkLayerForChecksum(ipv4)
+
+			pkt := gopacket.NewSerializeBuffer()
+			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+				eth, ipv4, tcp, gopacket.Payload(payload))
+
+			return eth, ipv4, nil, tcp, payload, pkt.Bytes(), err
+		}
 	case icmp != nil:
 		ipv4.Length = uint16(5*4 + 8 + len(payload))
 
@@ -922,17 +990,25 @@ func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.La
 		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
 			eth, ipv4, icmp, gopacket.Payload(payload))
 
-		return eth, ipv4, icmp, payload, pkt.Bytes(), err
+		return eth, ipv4, nil, icmp, payload, pkt.Bytes(), err
+	case icmpv6 != nil:
+		ipv6.Length = uint16(8 + len(payload))
+
+		pkt := gopacket.NewSerializeBuffer()
+		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+			eth, ipv6, icmp, gopacket.Payload(payload))
+
+		return eth, nil, ipv6, icmp, payload, pkt.Bytes(), err
 	}
 
 	panic("UNREACHABLE")
 }
 
-func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
-	return testPacket(nil, nil, nil, nil)
+func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
+	return testPacket(nil, nil, nil, nil, nil, false)
 }
 
-func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
 	if destIP == nil {
 		return testPacketUDPDefault()
 	}
@@ -940,7 +1016,7 @@ func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopa
 	ip := *ipv4Default
 	ip.DstIP = destIP
 
-	return testPacket(nil, &ip, nil, nil)
+	return testPacket(nil, &ip, nil, nil, nil, false)
 }
 
 func resetBPFMaps() {
