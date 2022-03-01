@@ -281,8 +281,8 @@ func TestWhitelistFromHostExitHost(t *testing.T) {
 		ctr := ct[ctKey]
 
 		// Whitelisted by HEP
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeFalse())
+		Expect(ctr.Data().A2B.Whitelisted).To(BeFalse())
+		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
 	})
 
 	// Return
@@ -304,7 +304,7 @@ func TestWhitelistFromHostExitHost(t *testing.T) {
 		ctr := ct[ctKey]
 
 		// Whitelisted by HEP
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeFalse())
+		Expect(ctr.Data().A2B.Whitelisted).To(BeFalse())
+		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
 	})
 }
