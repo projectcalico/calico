@@ -17,6 +17,8 @@
 package bpfmap
 
 import (
+	"os"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -55,6 +57,15 @@ func MigrateDataFromOldMap(mc *bpf.MapContext) {
 	err := ctMap.CopyDeltaFromOldMap()
 	if err != nil {
 		log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+	}
+}
+
+func DestroyBPFMaps(mc *bpf.MapContext) {
+	maps := []bpf.Map{mc.IpsetsMap, mc.StateMap, mc.ArpMap, mc.FailsafesMap, mc.FrontendMap,
+		mc.BackendMap, mc.AffinityMap, mc.RouteMap, mc.CtMap, mc.SrMsgMap, mc.CtNatsMap}
+	for _, m := range maps {
+		os.Remove(m.(*bpf.PinnedMap).Path())
+		m.(*bpf.PinnedMap).Close()
 	}
 }
 
