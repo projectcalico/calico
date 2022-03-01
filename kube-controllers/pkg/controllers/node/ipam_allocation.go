@@ -68,9 +68,10 @@ func newHandleTracker() *handleTracker {
 // allocation is an internal structure used by the IPAM garbage collector to track IPAM
 // allocations and their status with respect to garbage collection.
 type allocation struct {
-	ip     string
-	handle string
-	attrs  map[string]string
+	ip             string
+	handle         string
+	attrs          map[string]string
+	sequenceNumber uint64
 
 	// The Kubernetes node name hosting this allocation.
 	knode string
@@ -82,6 +83,15 @@ type allocation struct {
 	// confirmedLeak is set to true when we are confident this allocation
 	// is a leaked IP.
 	confirmedLeak bool
+}
+
+// ReleaseOptions returns the proper arguments to release this allocation.
+func (a *allocation) ReleaseOptions() ipam.ReleaseOptions {
+	return ipam.ReleaseOptions{
+		Address:        a.ip,
+		Handle:         a.handle,
+		SequenceNumber: &a.sequenceNumber,
+	}
 }
 
 // id returns a unique ID for this allocation.

@@ -209,7 +209,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }}/calicoctl-linux-arm64 -o kubectl-calico
+   curl -L {{ url }}/calicoctl-linux-amd64 -o kubectl-calico
    ```
 
 1. Set the file to be executable.
