@@ -117,13 +117,13 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint flags)
 {
 	struct cali_tc_globals data = {
-	    .host_ip = host_ip,
-	    .tunnel_mtu = tmtu,
-	    .vxlan_port = vxlanPort,
-	    .intf_ip = intf_ip,
-	    .ext_to_svc_mark = ext_to_svc_mark,
-	    .psnat_start = psnat_start,
-	    .psnat_len = psnat_len,
+		.host_ip = host_ip,
+		.tunnel_mtu = tmtu,
+		.vxlan_port = vxlanPort,
+		.intf_ip = intf_ip,
+		.ext_to_svc_mark = ext_to_svc_mark,
+		.psnat_start = psnat_start,
+		.psnat_len = psnat_len,
 		.flags = flags,
 	};
 

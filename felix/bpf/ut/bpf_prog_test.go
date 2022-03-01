@@ -820,7 +820,7 @@ var ethDefault = &layers.Ethernet{
 	EthernetType: layers.EthernetTypeIPv4,
 }
 
-var ethDefaultIPv6 = &layers.Ethernet{
+var ethDefaultWithIPv6 = &layers.Ethernet{
 	SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
 	DstMAC:       []byte{0, 0, 0, 0, 0, 2},
 	EthernetType: layers.EthernetTypeIPv6,
@@ -876,7 +876,7 @@ func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, ipv6Alt *layers.I
 		eth = ethAlt
 	} else {
 		if ipv6Enabled {
-			eth = ethDefaultIPv6
+			eth = ethDefaultWithIPv6
 		} else {
 			eth = ethDefault
 		}
