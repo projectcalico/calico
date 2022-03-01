@@ -96,7 +96,7 @@ func (c *FakeCalicoNodeStatuses) UpdateStatus(ctx context.Context, calicoNodeSta
 // Delete takes name of the calicoNodeStatus and deletes it. Returns an error if one occurs.
 func (c *FakeCalicoNodeStatuses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(caliconodestatusesResource, name), &v3.CalicoNodeStatus{})
+		Invokes(testing.NewRootDeleteActionWithOptions(caliconodestatusesResource, name, opts), &v3.CalicoNodeStatus{})
 	return err
 }
 

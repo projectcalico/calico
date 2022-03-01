@@ -119,7 +119,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
 		infra.Stop()

@@ -196,7 +196,7 @@ func (eds *EtcdDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (eds *EtcdDatastoreInfra) DumpErrorData() {
-	eds.etcdContainer.Exec("etcdctl", "ls", "--recursive", "/")
+	eds.etcdContainer.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 }
 
 func (eds *EtcdDatastoreInfra) Stop() {

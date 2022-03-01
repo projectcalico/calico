@@ -69,4 +69,4 @@ spec:
     imagePullPolicy: Always
     name: client
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
