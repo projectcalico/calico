@@ -42,7 +42,7 @@ type TopologyOptions struct {
 	EnableIPv6       bool
 	// Temporary flag to implement and test IPv6 in bpf dataplane.
 	// TODO: Remove it when IPv6 implementation in BPF mode is complete.
-	EnableIPv6InBPF           bool
+	BPFEnableIPv6             bool
 	ExtraEnvVars              map[string]string
 	ExtraVolumes              map[string]string
 	WithTypha                 bool
@@ -73,7 +73,7 @@ func DefaultTopologyOptions() TopologyOptions {
 	return TopologyOptions{
 		FelixLogSeverity:  felixLogLevel,
 		EnableIPv6:        true,
-		EnableIPv6InBPF:   true,
+		BPFEnableIPv6:     true,
 		ExtraEnvVars:      map[string]string{},
 		ExtraVolumes:      map[string]string{},
 		WithTypha:         false,

@@ -78,7 +78,7 @@ func TestIPv6Parsing(t *testing.T) {
 
 	for _, tc := range ipTestCases {
 		runBpfTest(t, tc.Section, tc.Rules, func(bpfrun bpfProgRunFn) {
-			_, _, _, _, _, pktBytes, err := testPacket(nil, nil, tc.IPv6Header, tc.NextHeader, nil, true)
+			_, _, _, _, pktBytes, err := testPacketv6(nil, tc.IPv6Header, tc.NextHeader, nil)
 			Expect(err).NotTo(HaveOccurred())
 			res, err := bpfrun(pktBytes)
 			Expect(err).NotTo(HaveOccurred())
