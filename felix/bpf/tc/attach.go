@@ -48,6 +48,7 @@ type AttachPoint struct {
 	Iface                string
 	LogLevel             string
 	HostIP               net.IP
+	HostTunnelIP         net.IP
 	IntfIP               net.IP
 	FIB                  bool
 	ToHostDrop           bool
@@ -179,21 +180,24 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
 
 	if err := obj.Load(); err != nil {
+		logCxt.Warn("Failed to load program")
 		return "", fmt.Errorf("error loading program: %w", err)
 	}
 
 	isHost := false
-	if ap.Type == "host" {
+	if ap.Type == "host" || ap.Type == "nat" {
 		isHost = true
 	}
 
 	err = updateJumpMap(obj, isHost)
 	if err != nil {
+		logCxt.Warn("Failed to update jump map")
 		return "", fmt.Errorf("error updating jump map %v", err)
 	}
 
 	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, string(ap.Hook))
 	if err != nil {
+		logCxt.Warnf("Failed to attach to TC section %s", SectionName(ap.Type, ap.ToOrFrom))
 		return "", err
 	}
 	logCxt.Info("Program attached to TC.")
@@ -615,8 +619,17 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		return err
 	}
 
+	hostTunnelIP := hostIP
+
+	if ap.HostTunnelIP != nil {
+		hostTunnelIP, err = convertIPToUint32(ap.HostTunnelIP)
+		if err != nil {
+			return err
+		}
+	}
+
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP)
 }
 
 // nolint
