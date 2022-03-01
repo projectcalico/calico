@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"runtime"
 	"testing"
@@ -26,8 +27,166 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 )
+
+func restoreMaps(mc *bpf.MapContext) {
+	//bpfmap.MigrateDataFromOldMap(mc)
+	bpfmap.DestroyBPFMaps(mc)
+	os.Remove(ctMap.Path() + "_old")
+	// close the already created map and recreate them
+	for _, m := range allMaps {
+		os.Remove(m.Path())
+		m.(*bpf.PinnedMap).Close()
+		err := m.EnsureExists()
+		if err != nil {
+			logrus.WithError(err).Panic("Failed to initialise maps")
+		}
+	}
+}
+
+func TestMapResize(t *testing.T) {
+	// Resize the maps.
+	RegisterTestingT(t)
+	ipsetsMapSize := 100
+	natFeMapSize := 200
+	natBeMapSize := 300
+	natAffMapSize := 400
+	rtMapSize := 500
+	ctMapSize := 600
+	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
+	bpfmap.CreateBPFMaps(mc)
+	defer func() {
+		restoreMaps(mc)
+	}()
+	// New CT map should have max_entries as 600
+	ctMapInfo, err := bpf.GetMapInfo(mc.CtMap.MapFD())
+	Expect(err).NotTo(HaveOccurred(), "Failed to get ct map info")
+	Expect(ctMapInfo.MaxEntries).To(Equal(ctMapSize))
+	// Except CT map, other map's old pins should be deleted.
+	_, err = os.Stat(mc.RouteMap.Path() + "_old")
+	Expect(err).To(HaveOccurred(), "old route map present")
+	_, err = os.Stat(mc.CtMap.Path() + "_old")
+	Expect(err).NotTo(HaveOccurred(), "old ct map not present")
+}
+
+func TestMapResizeWithCopy(t *testing.T) {
+	// Add a k,v pair to the old ctmap
+	k, err := setUpMapTestWithSingleKV(t)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create ct entry")
+	ipsetsMapSize := 100
+	natFeMapSize := 200
+	natBeMapSize := 300
+	natAffMapSize := 400
+	rtMapSize := 500
+	ctMapSize := 600
+
+	// Resize the CT map to 600. New map should have the entry in the old map
+	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
+	bpfmap.CreateBPFMaps(mc)
+	defer func() {
+		restoreMaps(mc)
+	}()
+	val, err := mc.CtMap.Get(k.AsBytes())
+	Expect(err).NotTo(HaveOccurred(), "ct entry not present in the new map")
+	v := conntrack.Value{}
+	for i := range v {
+		v[i] = uint8(i)
+	}
+	Expect(reflect.DeepEqual(v.AsBytes(), val)).To(BeTrue())
+	bpfmap.MigrateDataFromOldMap(mc)
+}
+
+func TestMapDownSizePanic(t *testing.T) {
+	RegisterTestingT(t)
+	// Add 10 entries to the old map
+	numEntries := 10
+	for i := 0; i < numEntries; i++ {
+		err := insertNumberedKey(i)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Resize the ct map to 6, which is less than the total number of entries
+	ipsetsMapSize := 100
+	natFeMapSize := 200
+	natBeMapSize := 300
+	natAffMapSize := 400
+	rtMapSize := 500
+	ctMapSize := 6
+
+	// New map creation should panic as the number of entries in old map is more than what the new map can
+	// accommodate
+	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
+	defer func() {
+		restoreMaps(mc)
+		bpfmap.MigrateDataFromOldMap(mc)
+	}()
+	Expect(func() { bpfmap.CreateBPFMaps(mc) }).Should(Panic())
+}
+
+func TestCTDeltaMigration(t *testing.T) {
+	// Add 1 k,v pair in old ctmap
+	k, err := setUpMapTestWithSingleKV(t)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create ct entry")
+
+	// Resize the ctmap to size 600 entries
+	ipsetsMapSize := 100
+	natFeMapSize := 200
+	natBeMapSize := 300
+	natAffMapSize := 400
+	rtMapSize := 500
+	ctMapSize := 600
+	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
+	bpfmap.CreateBPFMaps(mc)
+
+	defer func() {
+		restoreMaps(mc)
+	}()
+	// Check if the inserted k,v pair is copied to the new map
+	val, err := mc.CtMap.Get(k.AsBytes())
+	Expect(err).NotTo(HaveOccurred(), "ct entry not present in the new map")
+	v := conntrack.Value{}
+	for i := range v {
+		v[i] = uint8(i)
+	}
+	Expect(reflect.DeepEqual(v.AsBytes(), val)).To(BeTrue())
+
+	// Total number of k,v in old map should be 1
+	seenKeys := map[conntrack.Key]bool{}
+	err = mc.CtMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		key := conntrack.KeyFromBytes(k)
+		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
+		seenKeys[key] = true
+		return bpf.IterNone
+	})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(seenKeys).To(HaveLen(1), "Should have seen expected num entries on first iteration")
+
+	delete(seenKeys, conntrack.KeyFromBytes(k.AsBytes()))
+
+	// Add 10 more entries to the old map
+	numEntries := 10
+	for i := 0; i < numEntries; i++ {
+		err := insertNumberedKey(i)
+		Expect(err).NotTo(HaveOccurred())
+	}
+	_, err = os.Stat(mc.CtMap.Path() + "_old")
+	Expect(err).NotTo(HaveOccurred(), "old route map present")
+	// Migrate the delta (10 k,v pairs) to the new map
+	bpfmap.MigrateDataFromOldMap(mc)
+	err = mc.CtMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		key := conntrack.KeyFromBytes(k)
+		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
+		seenKeys[key] = true
+		return bpf.IterNone
+	})
+	Expect(err).NotTo(HaveOccurred())
+	// Total number of entries in the new map should be 11 and old map pin path should be deleted.
+	Expect(seenKeys).To(HaveLen(numEntries+1), "Should have seen expected num entries on first iteration")
+	_, err = os.Stat(mc.CtMap.Path() + "_old")
+	Expect(err).To(HaveOccurred(), "old route map present")
+}
 
 func TestMapEntryDeletion(t *testing.T) {
 	k, err1 := setUpMapTestWithSingleKV(t)

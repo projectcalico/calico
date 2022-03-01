@@ -119,6 +119,10 @@ func (m *Map) OpCount() int {
 	return m.UpdateCount + m.IterCount + m.GetCount + m.DeleteCount
 }
 
+func (m *Map) CopyDeltaFromOldMap() error {
+	return nil
+}
+
 func NewMockMap(params bpf.MapParameters) *Map {
 	if params.KeySize <= 0 {
 		logrus.WithField("params", params).Panic("KeySize should be >0")
@@ -176,5 +180,9 @@ func (*DummyMap) Get(k []byte) ([]byte, error) {
 }
 
 func (*DummyMap) Delete(k []byte) error {
+	return nil
+}
+
+func (*DummyMap) CopyDeltaFromOldMap() error {
 	return nil
 }
