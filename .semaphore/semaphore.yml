@@ -2,7 +2,7 @@ version: v1.0
 name: Calico
 
 execution_time_limit:
-  hours: 4
+  hours: 20
 
 agent:
   machine:
@@ -220,7 +220,7 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
+      - git clone -b song-tmp git@github.com:tigera/process.git ~/process
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
     epilogue:
@@ -242,7 +242,7 @@ blocks:
     - name: K8S_VERSION
       value: 1.22.1
     - name: WINDOWS_VERSION
-      value: "20H2"
+      value: "1809"
     jobs:
     - name: VXLAN - Windows FV
       commands:
