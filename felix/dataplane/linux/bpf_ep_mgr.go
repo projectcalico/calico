@@ -226,7 +226,7 @@ func newBPFEndpointManager(
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		ifaceToIpMap:     map[string]net.IP{},
 		opReporter:       opReporter,
-		// ipv6Enabled Should be set to config.IPv6Enabled, but for now it is better
+		// ipv6Enabled Should be set to config.BPFIpv6Enabled, but for now it is better
 		// to set it to false since IPv6 support is not yet implemented
 		ipv6Enabled: false,
 	}
