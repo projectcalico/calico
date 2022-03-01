@@ -226,9 +226,10 @@ func newBPFEndpointManager(
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		ifaceToIpMap:     map[string]net.IP{},
 		opReporter:       opReporter,
-		// ipv6Enabled Should be set to config.BPFIpv6Enabled, but for now it is better
-		// to set it to false since IPv6 support is not yet implemented
-		ipv6Enabled: false,
+		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
+		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
+		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
+		ipv6Enabled: config.BPFIpv6Enabled,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
