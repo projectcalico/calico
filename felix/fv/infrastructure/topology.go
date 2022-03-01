@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,8 +38,11 @@ import (
 )
 
 type TopologyOptions struct {
-	FelixLogSeverity          string
-	EnableIPv6                bool
+	FelixLogSeverity string
+	EnableIPv6       bool
+	// Temporary flag to implement and test IPv6 in bpf dataplane.
+	// TODO: Remove it when IPv6 implementation in BPF mode is complete.
+	BPFEnableIPv6             bool
 	ExtraEnvVars              map[string]string
 	ExtraVolumes              map[string]string
 	WithTypha                 bool
@@ -70,6 +73,7 @@ func DefaultTopologyOptions() TopologyOptions {
 	return TopologyOptions{
 		FelixLogSeverity:  felixLogLevel,
 		EnableIPv6:        true,
+		BPFEnableIPv6:     true,
 		ExtraEnvVars:      map[string]string{},
 		ExtraVolumes:      map[string]string{},
 		WithTypha:         false,
