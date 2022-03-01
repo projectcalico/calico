@@ -22,6 +22,7 @@ $baseDir = "$PSScriptRoot\.."
 ipmo -Force $baseDir\libs\hns\hns.psm1
 
 . $baseDir\config.ps1
+ipmo $baseDir\libs\calico\calico.psm1
 
 Write-Host "Running kub-proxy service."
 
@@ -41,19 +42,7 @@ if ($kubeProxyVer -match "v([0-9])\.([0-9]+)") {
     $minor = $Matches.2 -as [int]
     $kubeProxyGE114 = ($major -GT 1 -OR $major -EQ 1 -AND $minor -GE 14)
 }
-
-# Determine the windows version and build number for DSR support.
-# OsHardwareAbstractionLayer is a version string like 10.0.17763.1432
-$OSInfo = (Get-ComputerInfo  | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer)
-
-# Windows supports DSR if
-# - it is 1809 build 1432
-# - it is 1903 or later
-$min1809BuildSupportingDSR = (($OSInfo.OsHardwareAbstractionLayer.Split(".") | select-object -Last 1) -as [int]) -GE 1432
-$windows1809 = (($OSInfo.WindowsVersion -as [int]) -EQ 1809 -And ($OSInfo.OsBuildNumber -as [int]) -GE 17763)
-$windows1903OrNewer = (($OSInfo.WindowsVersion -as [int]) -GE 1903 -And ($OSInfo.OsBuildNumber -as [int]) -GE 18317)
-
-$PlatformSupportDSR = ($windows1809 -And $min1809BuildSupportingDSR) -Or $windows1903OrNewer
+$PlatformSupportDSR = Get-IsDSRSupported
 
 # Build up the arguments for starting kube-proxy.
 $argList = @(`
