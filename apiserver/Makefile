@@ -69,8 +69,6 @@ endif
 ifeq ($(ARCH),arm64)
 # Forces ARM64 build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-# Prevents docker from tagging the output image incorrectly as amd64.
-TARGET_PLATFORM=--platform=linux/arm64/v8
 endif
 
 ###############################################################################
@@ -127,7 +125,7 @@ sub-image-%:
 
 $(API_SERVER_IMAGE): register $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
-	docker build --no-cache --pull -t $(API_SERVER_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-image/Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
