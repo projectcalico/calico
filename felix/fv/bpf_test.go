@@ -2442,19 +2442,104 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								})
 							}
 
-							It("should have connectivity from all host-networked workloads to workload 0 via clusterIP", func() {
+							Context("with conflict from host-networked workloads via clusterIP and directly", func() {
+								JustBeforeEach(func() {
+									for i, felix := range felixes {
+										f := felix
+										idx := i
+										Eventually(func() bool {
+											return checkServiceRoute(f, testSvc.Spec.ClusterIP)
+										}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(),
+											fmt.Sprintf("felix %d failed to sync with service", idx))
 
-								for i, felix := range felixes {
-									f := felix
-									idx := i
-									Eventually(func() bool {
-										return checkServiceRoute(f, testSvc.Spec.ClusterIP)
-									}, 10*time.Second, 1*time.Second).Should(BeTrue(),
-										fmt.Sprintf("felix %d failed to sync with service", idx))
+										felix.Exec("ip", "route")
+									}
+								})
+								if !testOpts.connTimeEnabled {
+									It("should have connection when via clusterIP starts first", func() {
+										node1IP := felixes[1].IP
 
-									felix.Exec("ip", "route")
+										hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+										switch testOpts.tunnel {
+										case "ipip":
+											hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+										case "wireguard":
+											hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+										case "vxlan":
+											hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+										}
+
+										clusterIP := testSvc.Spec.ClusterIP
+										port := uint16(testSvc.Spec.Ports[0].Port)
+
+										By("syncing with service programming")
+										ports := ExpectWithPorts(port)
+										cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+										cc.CheckConnectivity()
+										cc.ResetExpectations()
+
+										By("starting a persistent connection to cluster IP")
+										pc := hostW[1].StartPersistentConnection(clusterIP, int(port),
+											workload.PersistentConnectionOpts{
+												SourcePort:          12345,
+												MonitorConnectivity: true,
+											},
+										)
+										defer pc.Stop()
+
+										cc.Expect(Some, hostW[1], w[0][0], hostW1SrcIP, ExpectWithSrcPort(12345))
+										cc.CheckConnectivity()
+
+										prevCount := pc.PongCount()
+										Eventually(pc.PongCount, "5s").Should(BeNumerically(">", prevCount),
+											"Expected to see pong responses on the connection but didn't receive any")
+									})
+
+									It("should have connection when direct starts first", func() {
+										node1IP := felixes[1].IP
+
+										hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+										switch testOpts.tunnel {
+										case "ipip":
+											hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+										case "wireguard":
+											hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+										case "vxlan":
+											hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+										}
+
+										clusterIP := testSvc.Spec.ClusterIP
+										port := uint16(testSvc.Spec.Ports[0].Port)
+
+										By("syncing with service programming")
+										ports := ExpectWithPorts(port)
+										cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+										cc.CheckConnectivity()
+										cc.ResetExpectations()
+
+										By("starting a persistent connection directly")
+										pc := hostW[1].StartPersistentConnection(w[0][0].IP, 8055,
+											workload.PersistentConnectionOpts{
+												SourcePort:          12345,
+												MonitorConnectivity: true,
+											},
+										)
+										defer pc.Stop()
+
+										cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports,
+											hostW1SrcIP, ExpectWithSrcPort(12345))
+										cc.CheckConnectivity()
+
+										prevCount := pc.PongCount()
+										Eventually(pc.PongCount, "5s").Should(BeNumerically(">", prevCount),
+											"Expected to see pong responses on the connection but didn't receive any")
+									})
 								}
+							})
 
+							It("should have connectivity from all host-networked workloads to workload 0 via clusterIP", func() {
 								node0IP := felixes[0].IP
 								node1IP := felixes[1].IP
 
@@ -2480,9 +2565,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
 
 								cc.CheckConnectivity()
-								for _, felix := range felixes {
-									felix.Exec("ip", "route")
-								}
 							})
 						})
 					}
