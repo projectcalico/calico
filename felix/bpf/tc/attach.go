@@ -129,7 +129,6 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	defer tcLock.RUnlock()
 	logCxt.Debug("AttachProgram got lock.")
 
-	//nolint
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
 		return "", err
@@ -625,7 +624,6 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, flags)
 }
 
-// nolint
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
 	if size, ok := ap.MapSizes[m.Name()]; ok {
 		return m.SetMapSize(size)
@@ -633,7 +631,6 @@ func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
 	return nil
 }
 
-// nolint
 func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 	ipVersions := set.New()
 	ipVersions.Add("IPv4")
@@ -682,7 +679,6 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 	return nil
 }
 
-// nolint
 func convertIPToUint32(ip net.IP) (uint32, error) {
 	ipv4 := ip.To4()
 	if ipv4 == nil {
