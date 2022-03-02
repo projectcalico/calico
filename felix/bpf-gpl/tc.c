@@ -148,16 +148,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	case PARSING_OK_V6:
 		// An IPv6 packet, so we should jump to the relevant IPv6 programs
-		// TODO: Replace this logic with the proper implementation, and finally a
-		// tail call to the IPv6 prologue program
-		if (CALI_F_WEP) {
-			CALI_DEBUG("IPv6 from workload: drop");
-			goto deny;
-		}
-		CALI_DEBUG("IPv6 on host interface: allow");
-		fwd_fib_set(&ctx.fwd, false);
-		ctx.fwd.res = TC_ACT_UNSPEC;
-		goto finalize;
+		CALI_DEBUG("About to jump to IPv6 prologue program.");
+		bpf_tail_call(ctx.skb, &cali_jump, PROG_INDEX_V6_PROLOGUE);
+		CALI_DEBUG("Failed to jump to IPv6 prologue program.");
+		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		// A packet that we automatically let through
 		fwd_fib_set(&ctx.fwd, false);
@@ -1197,7 +1191,15 @@ int calico_tc_v6(struct __sk_buff *skb)
 	CALI_DEBUG("Entering IPv6 prologue program");
 	// TODO: Replace this logic with the proper implementation, and finally a tail call
 	// to the policy program
+	if (CALI_F_WEP) {
+		CALI_DEBUG("IPv6 from workload: drop");
+		goto deny;
+	}
+	CALI_DEBUG("IPv6 on host interface: allow");
 	return TC_ACT_UNSPEC;
+
+deny:
+	return TC_ACT_SHOT;
 }
 
 SEC("classifier/tc/accept_v6")
