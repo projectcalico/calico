@@ -198,9 +198,9 @@ function GetCalicoKubeConfig()
 function EnableWinDsrForEKS()
 {
     $OSInfo = (Get-ComputerInfo  | select WindowsVersion, OsBuildNumber)
-    $PlatformSupportDSR = (($OSInfo.WindowsVersion -as [int]) -GE 1903 -And ($OSInfo.OsBuildNumber -as [int]) -GE 18317)
+    $supportsDSR = Get-IsDSRSupported
 
-    if (-Not $PlatformSupportDSR) {
+    if (-Not $supportsDSR) {
         Write-Host "WinDsr is not supported ($OSInfo)"
         return
     }
