@@ -23,6 +23,8 @@
 /.glide/
 /vendor/
 /artifacts/
+/bpf-gpl/include/libbpf/src/amd64/
+/bpf-gpl/include/libbpf/src/arm64/
 
 # IDE files.
 /.idea/
