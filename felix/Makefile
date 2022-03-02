@@ -104,7 +104,6 @@ clean:
 	       dist \
 	       build \
 	       fv/fv.test \
-	       $(GENERATED_FILES) \
 	       go/docs/calc.pdf \
 	       release-notes-* \
 	       fv/infrastructure/crds/
@@ -120,6 +119,13 @@ clean:
 	$(DOCKER_GO_BUILD) make -C $(LIBBPF_CONTAINER_PATH) clean
 	-docker rmi $(FELIX_IMAGE)-wgtool:latest-amd64
 	-docker rmi $(FELIX_IMAGE)-wgtool:latest
+
+.PHONY: clean-generated
+# Delete (checked-in) generated files.  Intentionally not part of the main clean target since these files are
+# checked in and deleting them makes the repo "dirty" as far as git is concerned.  It also breaks downstream
+# builds that import these files since they don't know to rebuild felix's generated files.
+clean-generated:
+	rm -rf $(GENERATED_FILES)
 
 ###############################################################################
 # Building the binary
@@ -466,23 +472,8 @@ cd: cd-common
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created 
 .release-$(VERSION).created:
-	$(MAKE) clean image-all
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
+	$(MAKE) clean build bin/calico-bpf
 	touch $@
-
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# Check the reported version is correct for each release artifact.
-	for img in $(FELIX_IMAGE):$(VERSION)-$(ARCH) quay.io/$(FELIX_IMAGE):$(VERSION)-$(ARCH); do \
-	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
-	  then \
-	    echo "Check successful. ($$img)"; \
-	  else \
-	    echo "Incorrect version in docker image $$img!"; \
-	    result=false; \
-	  fi \
-	done; \
 
 ###############################################################################
 # Developer helper scripts (not used by build or test)
