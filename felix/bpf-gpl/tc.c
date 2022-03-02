@@ -258,6 +258,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			!(ctx->skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
 		CALI_DEBUG("Host source SNAT conflict\n");
 		CALI_JUMP_TO(ctx->skb, PROG_INDEX_HOST_CT_CONFLICT);
+		CALI_DEBUG("Failed to call conflict resolution.\n");
 		goto deny;
 	}
 
@@ -1297,7 +1298,7 @@ deny:
 }
 
 SEC("classifier/tc/host_ct_conflict")
-int calico_tc_host_ct_conflict_entrypoint(struct __sk_buff *skb)
+int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_host_ct_conflict_entrypoint\n");
 	/* Initialise the context, which is stored on the stack, and the state, which
