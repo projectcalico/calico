@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,17 +50,15 @@ const (
 
 type ProgName string
 
-const (
-	policyProgram ProgName = "calico_tc_norm_pol_tail"
-	allowProgram  ProgName = "calico_tc_skb_accepted_entrypoint"
-	icmpProgram   ProgName = "calico_tc_skb_send_icmp_replies"
-)
-
-const (
-	PolicyProgramIndex = iota
-	AllowProgramIndex
-	IcmpProgramIndex
-)
+var programNames = []ProgName{
+	"calico_tc_norm_pol_tail",
+	"calico_tc_skb_accepted_entrypoint",
+	"calico_tc_skb_send_icmp_replies",
+	"calico_tc_v6",
+	"calico_tc_v6_norm_pol_tail",
+	"calico_tc_v6_skb_accepted_entrypoint",
+	"calico_tc_v6_skb_send_icmp_replies",
+}
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
