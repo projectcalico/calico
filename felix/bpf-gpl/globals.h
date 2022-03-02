@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_GLOBALS_H__
@@ -13,6 +13,12 @@ struct cali_tc_globals {
 	__be32 ext_to_svc_mark;
 	__be16 psnat_start;
 	__be16 psnat_len;
+	__be32 flags;
+};
+
+enum cali_globals_flags {
+	/* CALI_GLOBALS_IPV6_ENABLED is set when IPv6 is enabled by Felix */
+	CALI_GLOBALS_IPV6_ENABLED = 0x00000001,
 };
 
 struct cali_ctlb_globals {
