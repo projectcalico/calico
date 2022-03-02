@@ -658,7 +658,7 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
 		base := -1
 		if ipFamily == "IPv6" {
-			base = 4
+			base = 5
 		}
 
 		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
@@ -690,6 +690,13 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
 		if err != nil {
 			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
+		}
+		if ipFamily != "IPv6" {
+			iIndex := base + 5
+			err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
+			if err != nil {
+				return fmt.Errorf("error updating %v host CT conflict program: %v", ipFamily, err)
+			}
 		}
 	}
 
