@@ -41,7 +41,7 @@ spec:
 | blockSize | The CIDR size of allocation blocks used by this pool. Blocks are allocated on demand to hosts and are used to aggregate routes. The value can only be set when the pool is created. | 20 to 32 (inclusive) for IPv4 and 116 to 128 (inclusive) for IPv6 | int| `26` for IPv4 pools and `122` for IPv6 pools. |
 | ipipMode | The mode defining when IPIP will be used. Cannot be set at the same time as `vxlanMode`. | Always, CrossSubnet, Never | string| `Never` |
 | vxlanMode | The mode defining when VXLAN will be used. Cannot be set at the same time as `ipipMode`. | Always, CrossSubnet, Never | string| `Never` |
-| natOutgoing | When enabled, packets sent from {{site.prodname}} networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | `false` |
+| natOutgoing | When enabled, packets sent from {{site.prodname}} networked containers in this pool to destinations outside of any Calico IP pools will be masqueraded. | true, false | boolean | `false` |
 | disabled | When set to true, {{site.prodname}} IPAM will not assign addresses from this pool. | true, false | boolean | `false` |
 | disableBGPExport _(since v3.21.0)_ | Disable exporting routes from this IP Pool’s CIDR over BGP. | true, false | boolean | `false` |
 | nodeSelector | Selects the nodes that {{site.prodname}} IPAM should assign addresses from this pool to. | | [selector](#node-selector) | all() |
