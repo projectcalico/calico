@@ -481,9 +481,6 @@ func (b *PinnedMap) EnsureExists() error {
 	}
 
 	if err := b.Open(); err == nil {
-		// store the old fd
-		b.oldfd = b.MapFD()
-
 		// Get the existing map info
 		mapInfo, err := GetMapInfo(b.fd)
 		if err != nil {
@@ -493,6 +490,9 @@ func (b *PinnedMap) EnsureExists() error {
 		if b.MaxEntries == mapInfo.MaxEntries {
 			return nil
 		}
+
+		// store the old fd
+		b.oldfd = b.MapFD()
 		b.oldSize = mapInfo.MaxEntries
 
 		err = b.repinAt(b.Path(), oldMapPath)
