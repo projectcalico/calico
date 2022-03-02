@@ -28,7 +28,7 @@ import (
 )
 
 type PolicyMarshaller interface {
-	MarshalPolicies() []json.RawMessage
+	GetHNSEndpointPolicies() []json.RawMessage
 }
 
 // CalculateEndpointPolicies augments the hns.Netconf policies with NAT exceptions for our IPAM blocks.
@@ -39,7 +39,7 @@ func CalculateEndpointPolicies(
 	mgmtIP net.IP,
 	logger *logrus.Entry,
 ) ([]json.RawMessage, []hcn.EndpointPolicy, error) {
-	inputPols := n.MarshalPolicies()
+	inputPols := n.GetHNSEndpointPolicies()
 	var outputV1Pols []json.RawMessage
 	var outputV2Pols []hcn.EndpointPolicy
 
@@ -49,7 +49,7 @@ func CalculateEndpointPolicies(
 		decoded := map[string]interface{}{}
 		err := json.Unmarshal(inPol, &decoded)
 		if err != nil {
-			logger.WithError(err).Error("MarshalPolicies() returned bad JSON")
+			logger.WithError(err).Error("GetHNSEndpointPolicies() returned bad JSON")
 			return nil, nil, err
 		}
 

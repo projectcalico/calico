@@ -204,7 +204,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
+			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
 		infra.Stop()
@@ -820,7 +820,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
+			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
 		infra.Stop()
@@ -1139,7 +1139,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
+			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
 		infra.Stop()

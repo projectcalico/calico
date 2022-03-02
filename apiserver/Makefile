@@ -157,7 +157,7 @@ run-etcd: stop-etcd
 	docker run --detach \
 	--net=host \
 	--entrypoint=/usr/local/bin/etcd \
-	--name calico-etcd quay.io/coreos/etcd:v3.1.7 \
+	--name calico-etcd quay.io/coreos/etcd:$(ETCD_VERSION) \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 

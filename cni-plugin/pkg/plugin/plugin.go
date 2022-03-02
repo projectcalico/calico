@@ -28,7 +28,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
@@ -330,7 +330,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	// Collect the result in this variable - this is ultimately what gets "returned" by this function by printing
 	// it to stdout.
-	var result *current.Result
+	var result *cniv1.Result
 
 	// If running under Kubernetes then branch off into the kubernetes code, otherwise handle everything in this
 	// function.
@@ -394,7 +394,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// IPAM result has a bunch of fields that are optional for an IPAM plugin
 			// but required for a CNI plugin, so this is to populate those fields.
 			// See CNI Spec doc for more details.
-			result, err = current.NewResultFromResult(ipamResult)
+			result, err = cniv1.NewResultFromResult(ipamResult)
 			if err != nil {
 				utils.ReleaseIPAllocation(logger, conf, args)
 				return
@@ -482,7 +482,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		logger.WithField("endpoint", endpoint).Info("Wrote endpoint to datastore")
 
 		// Add the interface created above to the CNI result.
-		result.Interfaces = append(result.Interfaces, &current.Interface{
+		result.Interfaces = append(result.Interfaces, &cniv1.Interface{
 			Name: endpoint.Spec.InterfaceName},
 		)
 	}
@@ -733,6 +733,6 @@ func Main(version string) {
 	}
 
 	skel.PluginMain(cmdAdd, nil, cmdDel,
-		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
+		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
 		"Calico CNI plugin "+version)
 }
