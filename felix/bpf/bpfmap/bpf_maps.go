@@ -17,6 +17,7 @@
 package bpfmap
 
 import (
+	"fmt"
 	"os"
 
 	log "github.com/sirupsen/logrus"
@@ -69,7 +70,7 @@ func DestroyBPFMaps(mc *bpf.MapContext) {
 	}
 }
 
-func CreateBPFMaps(mc *bpf.MapContext) {
+func CreateBPFMaps(mc *bpf.MapContext) error {
 	maps := []bpf.Map{}
 
 	mc.IpsetsMap = ipsets.Map(mc)
@@ -108,7 +109,8 @@ func CreateBPFMaps(mc *bpf.MapContext) {
 	for _, bpfMap := range maps {
 		err := bpfMap.EnsureExists()
 		if err != nil {
-			log.WithError(err).Panicf("Failed to create %s map %s", bpfMap.GetName(), err)
+			return fmt.Errorf("Failed to create %s map, err=%w", bpfMap.GetName(), err)
 		}
 	}
+	return nil
 }

@@ -32,12 +32,11 @@ import (
 )
 
 func restoreMaps(mc *bpf.MapContext) {
-	//bpfmap.MigrateDataFromOldMap(mc)
 	bpfmap.DestroyBPFMaps(mc)
-	os.Remove(ctMap.Path() + "_old")
 	// close the already created map and recreate them
 	for _, m := range allMaps {
 		os.Remove(m.Path())
+		os.Remove(m.Path() + "_old")
 		m.(*bpf.PinnedMap).Close()
 		err := m.EnsureExists()
 		if err != nil {
@@ -56,10 +55,9 @@ func TestMapResize(t *testing.T) {
 	rtMapSize := 500
 	ctMapSize := 600
 	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
-	bpfmap.CreateBPFMaps(mc)
-	defer func() {
-		restoreMaps(mc)
-	}()
+	err := bpfmap.CreateBPFMaps(mc)
+	Expect(err).NotTo(HaveOccurred())
+	defer restoreMaps(mc)
 	// New CT map should have max_entries as 600
 	ctMapInfo, err := bpf.GetMapInfo(mc.CtMap.MapFD())
 	Expect(err).NotTo(HaveOccurred(), "Failed to get ct map info")
@@ -84,21 +82,20 @@ func TestMapResizeWithCopy(t *testing.T) {
 
 	// Resize the CT map to 600. New map should have the entry in the old map
 	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
-	bpfmap.CreateBPFMaps(mc)
-	defer func() {
-		restoreMaps(mc)
-	}()
+	err = bpfmap.CreateBPFMaps(mc)
+	Expect(err).NotTo(HaveOccurred())
+	defer restoreMaps(mc)
 	val, err := mc.CtMap.Get(k.AsBytes())
 	Expect(err).NotTo(HaveOccurred(), "ct entry not present in the new map")
 	v := conntrack.Value{}
 	for i := range v {
 		v[i] = uint8(i)
 	}
-	Expect(reflect.DeepEqual(v.AsBytes(), val)).To(BeTrue())
+	Expect(v.AsBytes()).To(Equal(val))
 	bpfmap.MigrateDataFromOldMap(mc)
 }
 
-func TestMapDownSizePanic(t *testing.T) {
+func TestMapDownSize(t *testing.T) {
 	RegisterTestingT(t)
 	// Add 10 entries to the old map
 	numEntries := 10
@@ -118,11 +115,10 @@ func TestMapDownSizePanic(t *testing.T) {
 	// New map creation should panic as the number of entries in old map is more than what the new map can
 	// accommodate
 	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
-	defer func() {
-		restoreMaps(mc)
-		bpfmap.MigrateDataFromOldMap(mc)
-	}()
-	Expect(func() { bpfmap.CreateBPFMaps(mc) }).Should(Panic())
+	defer restoreMaps(mc)
+	err := bpfmap.CreateBPFMaps(mc)
+	expectedError := fmt.Sprintf("Failed to create %s map, err=new map cannot hold all the data from the old map %s", ctMap.GetName(), ctMap.GetName())
+	Expect(err.Error()).To(Equal(expectedError))
 }
 
 func TestCTDeltaMigration(t *testing.T) {
@@ -138,32 +134,28 @@ func TestCTDeltaMigration(t *testing.T) {
 	rtMapSize := 500
 	ctMapSize := 600
 	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
-	bpfmap.CreateBPFMaps(mc)
+	err = bpfmap.CreateBPFMaps(mc)
+	Expect(err).NotTo(HaveOccurred())
 
-	defer func() {
-		restoreMaps(mc)
-	}()
-	// Check if the inserted k,v pair is copied to the new map
-	val, err := mc.CtMap.Get(k.AsBytes())
-	Expect(err).NotTo(HaveOccurred(), "ct entry not present in the new map")
+	defer restoreMaps(mc)
 	v := conntrack.Value{}
 	for i := range v {
 		v[i] = uint8(i)
 	}
-	Expect(reflect.DeepEqual(v.AsBytes(), val)).To(BeTrue())
 
 	// Total number of k,v in old map should be 1
-	seenKeys := map[conntrack.Key]bool{}
-	err = mc.CtMap.Iter(func(k, v []byte) bpf.IteratorAction {
-		key := conntrack.KeyFromBytes(k)
-		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
-		seenKeys[key] = true
-		return bpf.IterNone
-	})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(seenKeys).To(HaveLen(1), "Should have seen expected num entries on first iteration")
+	ctSaved := saveCTMap(mc.CtMap)
+	Expect(ctSaved).To(HaveLen(1))
+	Expect(ctSaved).Should(HaveKeyWithValue(k, v))
 
-	delete(seenKeys, conntrack.KeyFromBytes(k.AsBytes()))
+	// update the value for the old key in the old map
+	newVal := conntrack.Value{}
+	for i := range newVal {
+		newVal[i] = uint8(i + 10)
+	}
+
+	err = ctMap.Update(k.AsBytes(), newVal[:])
+	Expect(err).NotTo(HaveOccurred())
 
 	// Add 10 more entries to the old map
 	numEntries := 10
@@ -171,21 +163,31 @@ func TestCTDeltaMigration(t *testing.T) {
 		err := insertNumberedKey(i)
 		Expect(err).NotTo(HaveOccurred())
 	}
+
+	matchKeyVals := func(ctSaved conntrack.MapMem) {
+		Expect(ctSaved).Should(HaveKeyWithValue(k, newVal))
+		Expect(ctSaved).ShouldNot(HaveKeyWithValue(k, v))
+		for i := 0; i < numEntries; i++ {
+			key := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), uint16(i), net.ParseIP("10.0.0.2"), uint16(i>>16))
+			val := conntrack.Value{}
+			for j := range val {
+				val[j] = uint8(j + i)
+			}
+			Expect(ctSaved).Should(HaveKeyWithValue(key, val))
+		}
+	}
+
 	_, err = os.Stat(mc.CtMap.Path() + "_old")
 	Expect(err).NotTo(HaveOccurred(), "old route map present")
 	// Migrate the delta (10 k,v pairs) to the new map
 	bpfmap.MigrateDataFromOldMap(mc)
-	err = mc.CtMap.Iter(func(k, v []byte) bpf.IteratorAction {
-		key := conntrack.KeyFromBytes(k)
-		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
-		seenKeys[key] = true
-		return bpf.IterNone
-	})
+	ctSaved = saveCTMap(mc.CtMap)
+	Expect(ctSaved).To(HaveLen(numEntries + 1))
+	matchKeyVals(ctSaved)
+
 	Expect(err).NotTo(HaveOccurred())
-	// Total number of entries in the new map should be 11 and old map pin path should be deleted.
-	Expect(seenKeys).To(HaveLen(numEntries+1), "Should have seen expected num entries on first iteration")
 	_, err = os.Stat(mc.CtMap.Path() + "_old")
-	Expect(err).To(HaveOccurred(), "old route map present")
+	Expect(err).To(HaveOccurred(), "old conntrack map present")
 }
 
 func TestMapEntryDeletion(t *testing.T) {
