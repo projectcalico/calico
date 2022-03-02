@@ -91,14 +91,10 @@ blocks:
       commands:
       - cd api
     jobs:
-    - name: "make build"
+    - name: "make build / ci / static-checks"
       commands:
       - make build
-    - name: "make ci"
-      commands:
       - make ci
-    - name: "make static-checks"
-      commands:
       - make static-checks
 
 - name: "apiserver"
@@ -141,10 +137,6 @@ blocks:
       commands:
       - cd typha
       - make ci EXCEPT=k8sfv-test
-    - name: "Typha: felix k8s-st tests"
-      commands:
-      - cd felix
-      - JUST_A_MINUTE=true USE_TYPHA=true make k8sfv-test
     epilogue:
       always:
         commands:
@@ -194,6 +186,7 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
+      - make static-checks
       - make image-all
 
 - name: "Felix: Build Windows binaries"
@@ -331,28 +324,6 @@ blocks:
     secrets:
     - name: google-service-account-for-gce
 
-- name: "Felix: Static checks on e1-standard-8"
-  run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
-  task:
-    agent:
-      machine:
-        # Linters use a lot of RAM so use a bigger machine type.
-        type: e1-standard-8
-        os_image: ubuntu1804
-    prologue:
-      commands:
-      - cd felix
-      - cache restore go-pkg-cache
-      - cache restore go-mod-cache
-    jobs:
-    - name: Static checks
-      execution_time_limit:
-        minutes: 15
-      commands:
-      - make static-checks
-
 - name: "confd: tests"
   run:
     when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/confd/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -447,31 +418,16 @@ blocks:
       commands:
       - make ci
 
-- name: "pod2daemon"
-  run:
-    when: "branch =~ '.*' or change_in(['/*', '/pod2daemon/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
-  task:
-    prologue:
-      commands:
-      - cd pod2daemon
-    jobs:
-    - name: "pod2daemon tests"
-      commands:
-      - make ci
-
 - name: "app-policy"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/app-policy/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "branch =~ '.*' or change_in(['/*', '/pod2daemon/', '/app-policy/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
-    prologue:
-      commands:
-      - cd app-policy
     jobs:
-    - name: "app-policy tests"
+    - name: "app-policy, pod2daemon tests"
       commands:
-      - make ci
+      - make -C app-policy ci
+      - make -C pod2daemon ci
 
 - name: "calicoctl"
   run:
