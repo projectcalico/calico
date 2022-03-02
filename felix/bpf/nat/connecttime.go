@@ -98,7 +98,6 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 4))
 	}
 
-	// nolint
 	progName := "calico_" + name + "_v" + ipver
 
 	log.WithField("filename", filename).Debug("Loading object file")
