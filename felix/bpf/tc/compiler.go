@@ -52,15 +52,17 @@ const (
 type ProgName string
 
 const (
-	policyProgram ProgName = "calico_tc_norm_pol_tail"
-	allowProgram  ProgName = "calico_tc_skb_accepted_entrypoint"
-	icmpProgram   ProgName = "calico_tc_skb_send_icmp_replies"
+	policyProgram         ProgName = "calico_tc_norm_pol_tail"
+	allowProgram          ProgName = "calico_tc_skb_accepted_entrypoint"
+	icmpProgram           ProgName = "calico_tc_skb_send_icmp_replies"
+	hostCTConflictProgram ProgName = "calico_tc_host_ct_conflict"
 )
 
 const (
 	PolicyProgramIndex = iota
 	AllowProgramIndex
 	IcmpProgramIndex
+	HostCTConflictProgramIndex
 )
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {

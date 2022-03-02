@@ -656,6 +656,10 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool) error {
 	if err != nil {
 		return fmt.Errorf("error updating icmp program %v", err)
 	}
+	err = obj.UpdateJumpMap("cali_jump", string(hostCTConflictProgram), HostCTConflictProgramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating host CT conflict program %v", err)
+	}
 	return nil
 }
 
