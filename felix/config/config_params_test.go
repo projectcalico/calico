@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,6 +59,9 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"loadClientConfigFromEnvironment",
 		"useNodeResourceUpdates",
 		"internalOverrides",
+
+		// Temoporary field to implement and test IPv6 in BPF dataplane
+		"BpfIpv6Support",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",
