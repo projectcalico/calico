@@ -61,6 +61,7 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		Name: v3key.Name,
 	}
 
+	v1labelsKey := model.ProfileLabelsKey{pk}
 	v1rulesKey := model.ProfileRulesKey{pk}
 	v3kvp := *kvp
 
@@ -76,18 +77,25 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		}
 	}
 
+	labelskvp := &model.KVPair{
+		Key: v1labelsKey,
+	}
 	ruleskvp := &model.KVPair{
 		Key: v1rulesKey,
 	}
 
 	if v1profile != nil {
+		if len(v1profile.Labels) > 0 {
+			labelskvp.Value = v1profile.Labels
+			labelskvp.Revision = kvp.Revision
+		}
 		ruleskvp.Value = &v1profile.Rules
 		ruleskvp.Revision = kvp.Revision
 	}
 
 	// Stream the whole v3 Profile resource, as well as the v1 pieces that legacy Felix code
 	// expects.
-	return []*model.KVPair{ruleskvp, &v3kvp}, nil
+	return []*model.KVPair{labelskvp, ruleskvp, &v3kvp}, nil
 }
 
 func (pup *profileUpdateProcessor) OnSyncerStarting() {
@@ -116,7 +124,8 @@ func convertProfileV2ToV1Value(val interface{}) (*model.Profile, error) {
 	}
 
 	v1value := &model.Profile{
-		Rules: rules,
+		Rules:  rules,
+		Labels: v3res.Spec.LabelsToApply,
 	}
 
 	return v1value, nil
