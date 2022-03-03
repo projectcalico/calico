@@ -10,6 +10,21 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
+/*
+static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
+	if (skb_refresh_validate_ptrs_v6(ctx, UDP_SIZE)) {
+		ctx->fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+	CALI_DEBUG("IPv6 s=%x d=%x\n",
+			bpf_ntohl(ctx->ipv6_header->saddr), bpf_ntohl(ctx->ipv6_header->daddr));
+	return PARSING_OK_V6;
+
+deny:
+	return PARSING_ERROR;
+}*/
+
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
 
@@ -22,7 +37,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	 * for more headers.
 	 */
 	if (CALI_F_XDP) {
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
@@ -66,12 +81,15 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	// In TC programs, parse packet and validate its size. This is
 	// already done for XDP programs at the beginning of the function.
 	if (!CALI_F_XDP) {
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
 	}
+	CALI_DEBUG("IP id=%d s=%x d=%x\n",
+			bpf_ntohs(ctx->ip_header->id), bpf_ntohl(ctx->ip_header->saddr),
+			bpf_ntohl(ctx->ip_header->daddr));
 
 	// Drop malformed IP packets
 	if (ctx->ip_header->ihl < 5) {
@@ -120,7 +138,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 	switch (ctx->state->ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+		if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, TCP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;

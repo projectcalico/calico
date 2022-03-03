@@ -112,7 +112,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			ctx.fwd.reason = CALI_REASON_BYPASS;
 
 			/* we need to fix up the right src host IP */
-			if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
+			if (skb_refresh_validate_ptrs(&ctx, IPv4_SIZE, UDP_SIZE)) {
 				ctx.fwd.reason = CALI_REASON_SHORT;
 				CALI_DEBUG("Too short\n");
 				goto deny;
@@ -128,7 +128,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			/* XXX do a proper CT lookup to find this */
 			ctx.ip_header->saddr = HOST_IP;
-			int l3_csum_off = skb_iphdr_offset() + offsetof(struct iphdr, check);
+			int l3_csum_off = skb_iphdr_offset(IPv4_SIZE) + offsetof(struct iphdr, check);
 
 			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
 			if (res) {
@@ -385,7 +385,7 @@ syn_force_policy:
 	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
 	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
@@ -498,7 +498,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
-	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, IPv4_SIZE, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
@@ -585,7 +585,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	l3_csum_off = skb_iphdr_offset() +  offsetof(struct iphdr, check);
+	l3_csum_off = skb_iphdr_offset(IPv4_SIZE) +  offsetof(struct iphdr, check);
 
 	if (ct_related) {
 		if (ctx->ip_header->protocol == IPPROTO_ICMP) {
@@ -617,7 +617,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 			/* Related ICMP traffic must be an error response so it should include inner IP
 			 * and 8 bytes as payload. */
-			if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+			if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, ICMP_SIZE + IPv4_SIZE + 8)) {
 				CALI_DEBUG("Failed to revalidate packet size\n");
 				goto deny;
 			}
@@ -718,7 +718,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 
 		if (state->ip_proto == IPPROTO_TCP) {
-			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+			if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, TCP_SIZE)) {
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
@@ -1077,7 +1077,7 @@ nat_encap:
 					bpf_ntohl(state->ip_dst), arpk.ifindex);
 			/* Don't drop it yet, we might get lucky and the MAC is correct */
 		} else {
-			if (skb_refresh_validate_ptrs(ctx, 0)) {
+			if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, 0)) {
 				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
@@ -1172,7 +1172,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		fwd_fib_set_flags(&ctx.fwd, fib_flags);
 	}
 
-	if (skb_refresh_validate_ptrs(&ctx, ICMP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, IPv4_SIZE, ICMP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
@@ -1189,6 +1189,39 @@ SEC("classifier/tc/prologue_v6")
 int calico_tc_v6(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 prologue program");
+
+	/* Initialise the context, which is stored on the stack, and the state, which
+	 * we use to pass data from one program to the next via tail calls. */
+	struct cali_tc_ctx ctx = {
+		.state = state_get(),
+		.skb = skb,
+		.fwd = {
+			.res = TC_ACT_UNSPEC,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+		// maybe use iphdr_len here
+	};
+	if (!ctx.state) {
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		return TC_ACT_SHOT;
+	}
+	__builtin_memset(ctx.state, 0, sizeof(*ctx.state));
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+		ctx.state->prog_start_time = bpf_ktime_get_ns();
+	}
+/*
+	switch(parse_packet_ipv6(&ctx)) {
+	case PARSING_OK_V6:
+		// IPv6 packet.
+		break;
+	default:
+		// A malformed packet or a packet we don't support
+		CALI_DEBUG("Drop malformed or unsupported packet");
+		ctx.fwd.res = TC_ACT_SHOT;
+		goto finalize;
+	}*/
+
 	// TODO: Replace this logic with the proper implementation, and finally a tail call
 	// to the policy program
 	if (CALI_F_WEP) {
@@ -1197,6 +1230,9 @@ int calico_tc_v6(struct __sk_buff *skb)
 	}
 	CALI_DEBUG("IPv6 on host interface: allow");
 	return TC_ACT_UNSPEC;
+
+//finalize:
+	return TC_ACT_SHOT;
 
 deny:
 	return TC_ACT_SHOT;

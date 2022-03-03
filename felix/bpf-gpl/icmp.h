@@ -20,7 +20,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 
 	/* ICMP is on the slow path so we may as well revalidate here to keep calling code
 	 * simple.  We only need to look at the IP header before we resize the packet. */
-	if (skb_refresh_validate_ptrs(ctx, 0)) {
+	if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, 0)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("ICMP v4 reply: too short\n");
 		return -1;
@@ -36,7 +36,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	 * payload but the SKB implementation gets upset if we try to trim
 	 * part-way through the UDP/TCP header.
 	 */
-	__u32 len = skb_iphdr_offset() + sizeof(struct iphdr) + 64;
+	__u32 len = skb_iphdr_offset(IPv4_SIZE) + IPv4_SIZE + 64;
 	switch (ctx->ip_header->protocol) {
 	case IPPROTO_TCP:
 		len += sizeof(struct tcphdr);
@@ -69,7 +69,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	CALI_DEBUG("Len after insert %d\n", len);
 
 	/* ICMP reply carries the IP header + at least 8 bytes of data. */
-	if (skb_refresh_validate_ptrs(ctx, len - skb_iphdr_offset() - IP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, len - skb_iphdr_offset(IPv4_SIZE) - IP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
 		return -1;
@@ -107,10 +107,10 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 
 	__wsum ip_csum = bpf_csum_diff(0, 0, (void *)ctx->ip_header, sizeof(*ctx->ip_header), 0);
 	__wsum icmp_csum = bpf_csum_diff(0, 0, ctx->nh,
-		len - sizeof(struct iphdr) - skb_iphdr_offset(), 0);
+		len - IPv4_SIZE - skb_iphdr_offset(IPv4_SIZE), 0);
 
 	ret = bpf_l3_csum_replace(ctx->skb,
-			skb_iphdr_offset() + offsetof(struct iphdr, check), 0, ip_csum, 0);
+			skb_iphdr_offset(IPv4_SIZE) + offsetof(struct iphdr, check), 0, ip_csum, 0);
 	if (ret) {
 		CALI_DEBUG("ICMP v4 reply: set ip csum failed\n");
 		return -1;
