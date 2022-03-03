@@ -126,6 +126,11 @@ static CALI_BPF_INLINE struct iphdr* ipv4hdr(struct cali_tc_ctx *ctx)
 	return (struct iphdr *)ctx->ip_header;
 }
 
+static CALI_BPF_INLINE struct ipv6hdr* ipv6hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct ipv6hdr *)ctx->ip_header;
+}
+
 static CALI_BPF_INLINE struct ethhdr* tc_ethhdr(struct cali_tc_ctx *ctx)
 {
 	return (struct ethhdr *)ctx->data_start;

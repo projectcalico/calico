@@ -89,21 +89,13 @@ static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx, __u8 i
 	ctx->nh = ctx->ip_header + iphdr_len;
 }
 
-/* skb_refresh_hdr_ptrs refreshes the ip_header/nh fields in the context.
- */
-/*static CALI_BPF_INLINE void skb_refresh_hdr_ptrs_v6(struct cali_tc_ctx *ctx)
-{
-	long offset = skb_iphdr_offset(sizeof(struct ipv6hdr));
-	ctx->ipv6_header = ctx->data_start + offset;
-	ctx->nh = (void*)(ctx->ipv6_header+1);
-}*/
-
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
 #define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
 
 #define ETH_SIZE (sizeof(struct ethhdr))
 #define IP_SIZE (sizeof(struct iphdr))
 #define IPv4_SIZE (sizeof(struct iphdr))
+#define IPv6_SIZE (sizeof(struct ipv6hdr))
 #define UDP_SIZE (sizeof(struct udphdr))
 #define TCP_SIZE (sizeof(struct tcphdr))
 #define ICMP_SIZE (sizeof(struct icmphdr))

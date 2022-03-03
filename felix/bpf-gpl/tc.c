@@ -1210,7 +1210,7 @@ int calico_tc_v6(struct __sk_buff *skb)
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
 	}
-/*
+
 	switch(parse_packet_ipv6(&ctx)) {
 	case PARSING_OK_V6:
 		// IPv6 packet.
@@ -1220,7 +1220,7 @@ int calico_tc_v6(struct __sk_buff *skb)
 		CALI_DEBUG("Drop malformed or unsupported packet");
 		ctx.fwd.res = TC_ACT_SHOT;
 		goto finalize;
-	}*/
+	}
 
 	// TODO: Replace this logic with the proper implementation, and finally a tail call
 	// to the policy program
@@ -1231,7 +1231,7 @@ int calico_tc_v6(struct __sk_buff *skb)
 	CALI_DEBUG("IPv6 on host interface: allow");
 	return TC_ACT_UNSPEC;
 
-//finalize:
+finalize:
 	return TC_ACT_SHOT;
 
 deny:

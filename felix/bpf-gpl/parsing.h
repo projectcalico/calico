@@ -10,20 +10,76 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
-/*
+#define MAX_EXTENSIONS 10
+
+static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
+	__u8 next_header = ipv6hdr(ctx)->nexthdr;
+	__u8 hdrlen = 0;
+	struct ipv6_opt_hdr *opthdr = ctx->nh;
+	#pragma unroll
+	for (__u8 i = 0; i < MAX_EXTENSIONS; i++) {
+		switch (next_header) {
+			case IPPROTO_TCP:
+			case IPPROTO_UDP:
+			case IPPROTO_ICMPV6:
+				// Next header is either tcp, udp, or icmpv6. Thus pointers are correct
+				goto parsing_ok;
+			case IPPROTO_HOPOPTS:
+			case IPPROTO_ROUTING:
+			case IPPROTO_FRAGMENT:
+			case IPPROTO_DSTOPTS:
+			case IPPROTO_MH:
+				// IPv6 extension headers which we ignore at this point
+				hdrlen = opthdr->hdrlen;
+				next_header = opthdr->nexthdr;
+				ctx->nh += hdrlen + 8;
+				opthdr = ctx->nh;
+				continue;
+			case IPPROTO_NONE:
+				// There is no next header! refer to RFC8200.
+				// TODO: How to handle this type of packets?
+			default:
+				// Any other packet that we don't expect to reach here.
+				goto deny;
+		}
+	}
+
+	CALI_DEBUG("Too many IPv6 extension headers");
+deny:
+	return PARSING_ERROR;
+
+parsing_ok:
+	return next_header;
+}
+
 static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
-	if (skb_refresh_validate_ptrs_v6(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
-	CALI_DEBUG("IPv6 s=%x d=%x\n",
-			bpf_ntohl(ctx->ipv6_header->saddr), bpf_ntohl(ctx->ipv6_header->daddr));
+	//CALI_DEBUG("IPv6 s=%x d=%x\n", ipv6hdr(ctx)->saddr, ipv6hdr(ctx)->daddr);
+	CALI_DEBUG("SKB: %x", ctx->data_start);
+	CALI_DEBUG("ip: %x", ctx->ip_header);
+	CALI_DEBUG("nh: %x", ctx->nh);
+
+	switch (parse_ipv6_extensions(ctx)) {
+	case IPPROTO_UDP:
+		CALI_DEBUG("UDP");
+	case IPPROTO_TCP:
+		CALI_DEBUG("TCP");
+	case IPPROTO_ICMPV6:
+		CALI_DEBUG("ICMPv6");
+	default:
+		CALI_DEBUG("Failed to parse IPv6 extensions");
+		goto deny;
+	}
+
 	return PARSING_OK_V6;
 
 deny:
 	return PARSING_ERROR;
-}*/
+}
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
@@ -112,7 +168,6 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	return PARSING_OK;
 
 ipv6_packet:
-	// Parse IPv6 header, and perform necessary checks here
 	return PARSING_OK_V6;
 
 allow_no_fib:
