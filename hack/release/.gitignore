@@ -6,3 +6,5 @@ ssh_key.pub
 terraform.tfstate
 terraform.tfstate.backup
 .terraform.lock.hcl
+bin/
+.terraform.init
