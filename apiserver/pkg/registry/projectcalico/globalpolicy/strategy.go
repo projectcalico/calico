@@ -62,6 +62,14 @@ func (policyStrategy) AllowUnconditionalUpdate() bool {
 	return false
 }
 
+func (policyStrategy) WarningsOnCreate(ctx context.Context, obj runtime.Object) []string {
+	return []string{}
+}
+
+func (policyStrategy) WarningsOnUpdate(ctx context.Context, obj, old runtime.Object) []string {
+	return []string{}
+}
+
 func (policyStrategy) Canonicalize(obj runtime.Object) {
 }
 

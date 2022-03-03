@@ -412,19 +412,31 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		syncer.Stop()
 	})
 
-	It("should handle a Namespace with DefaultDeny (v1beta annotation for namespace isolation)", func() {
+	It("should handle a Namespace with DefaultDeny (v1 annotation for namespace isolation)", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-syncer-namespace-default-deny",
-				Annotations: map[string]string{
-					"net.beta.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"DefaultDeny\"}}",
-				},
+				Name:   "test-syncer-namespace-default-deny",
 				Labels: map[string]string{"label": "value"},
+			},
+		}
+
+		networkPolicy := networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-default-deny-policy",
+			},
+			Spec: networkingv1.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
 		By("Creating a namespace", func() {
 			_, err := c.ClientSet.CoreV1().Namespaces().Create(ctx, &ns, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Adding default deny policy to namespace", func() {
+			_, err := c.ClientSet.NetworkingV1().NetworkPolicies(ns.Name).Create(ctx, &networkPolicy, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 

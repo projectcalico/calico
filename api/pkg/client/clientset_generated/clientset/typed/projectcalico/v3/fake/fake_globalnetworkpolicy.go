@@ -85,7 +85,7 @@ func (c *FakeGlobalNetworkPolicies) Update(ctx context.Context, globalNetworkPol
 // Delete takes name of the globalNetworkPolicy and deletes it. Returns an error if one occurs.
 func (c *FakeGlobalNetworkPolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(globalnetworkpoliciesResource, name), &v3.GlobalNetworkPolicy{})
+		Invokes(testing.NewRootDeleteActionWithOptions(globalnetworkpoliciesResource, name, opts), &v3.GlobalNetworkPolicy{})
 	return err
 }
 
