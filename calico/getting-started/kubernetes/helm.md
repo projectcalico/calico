@@ -55,14 +55,22 @@ echo '{ installation: {kubernetesProvider: EKS }}' > values.yaml
 
 #### Install {{site.prodname}}
 
+1. Create the `tigera-operator` namespace.
+
+   ```
+   kubectl create namespace tigera-operator
+   ```
+
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart:
 
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}}
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} --namespace tigera-operator
    ```
+
    or if you created a `values.yaml` above:
+
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} -f values.yaml
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} -f values.yaml --namespace tigera-operator
    ```
 
 1. Confirm that all of the pods are running with the following command.
