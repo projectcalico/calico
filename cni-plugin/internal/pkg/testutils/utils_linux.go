@@ -249,7 +249,6 @@ func RunCNIPluginWithId(
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, customExec)
-	//TODO: error
 	if err != nil {
 		log.Debugf("config is: %s", netconf)
 		err = je.Trace(err)
