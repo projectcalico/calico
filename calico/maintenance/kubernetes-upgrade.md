@@ -39,7 +39,7 @@ ownership of the helm resources to the new chart location.
 
 ### Upgrade from Calico versions prior to v3.23.0
 
-1. Patch ownership of existing resources.
+1. Patch existing resources so that the new chart can assume ownership.
 
    ```
    kubectl patch installation default --type=merge -p '{"metadata": {"annotations": {"meta.helm.sh/release-namespace": "tigera-operator"}}}'
