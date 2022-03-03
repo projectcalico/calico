@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_METADATA_H__
@@ -53,13 +53,13 @@ static CALI_BPF_INLINE int xdp2tc_set_metadata(struct xdp_md *xdp, __u32 flags) 
 		return PARSING_ERROR;
 	}
 
-	CALI_DEBUG("IP TOS: %d\n", ctx.ip_header->tos);
-	ctx.ip_header->tos |= CALI_META_ACCEPTED_BY_XDP;
-	CALI_DEBUG("Set IP TOS: %d\n", ctx.ip_header->tos);
+	CALI_DEBUG("IP TOS: %d", ipv4hdr(&ctx)->tos);
+	ipv4hdr(&ctx)->tos |= CALI_META_ACCEPTED_BY_XDP;
+	CALI_DEBUG("Set IP TOS: %d", ipv4hdr(&ctx)->tos);
 	return PARSING_OK;
 #endif
 	} else {
-		CALI_DEBUG("Setting metadata is not supported in TC\n");
+		CALI_DEBUG("Setting metadata is not supported in TC");
 		return PARSING_ERROR;
 	}
 }
@@ -87,10 +87,10 @@ static CALI_BPF_INLINE __u32 xdp2tc_get_metadata(struct __sk_buff *skb) {
 		return PARSING_ERROR;
 	}
 
-	CALI_DEBUG("IP TOS: %d\n", ctx.ip_header->tos);
-	__u32 metadata = ctx.ip_header->tos;
-	ctx.ip_header->tos &= (~CALI_META_ACCEPTED_BY_XDP);
-	CALI_DEBUG("Set IP TOS: %d\n", ctx.ip_header->tos);
+	CALI_DEBUG("IP TOS: %d", ipv4hdr(&ctx)->tos);
+	__u32 metadata = ipv4hdr(&ctx)->tos;
+	ipv4hdr(&ctx)->tos &= (~CALI_META_ACCEPTED_BY_XDP);
+	CALI_DEBUG("Set IP TOS: %d", ipv4hdr(&ctx)->tos);
 	return metadata;
 #endif
 	} else {

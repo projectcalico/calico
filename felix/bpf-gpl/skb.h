@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __SKB_H__
@@ -86,7 +86,7 @@ static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx, __u8 i
 {
 	long offset = skb_iphdr_offset(iphdr_len);
 	ctx->ip_header = ctx->data_start + offset;
-	ctx->nh = (void*)(ctx->ip_header + 1);
+	ctx->nh = ctx->ip_header + iphdr_len;
 }
 
 /* skb_refresh_hdr_ptrs refreshes the ip_header/nh fields in the context.
