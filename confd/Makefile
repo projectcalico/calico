@@ -9,9 +9,6 @@ PACKAGE_NAME=github.com/projectcalico/calico/confd
 ###############################################################################
 include ../lib.Makefile
 
-# Override K8S_VERSION
-K8S_VERSION=v1.23.1
-
 ###############################################################################
 
 test: ut test-kdd test-etcd
