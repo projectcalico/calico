@@ -15,6 +15,7 @@
 package node
 
 import (
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"reflect"
 
 	"github.com/sirupsen/logrus"
@@ -34,6 +35,9 @@ func NewDataFeed(c client.Interface) *DataFeed {
 	resourceTypes := []watchersyncer.ResourceType{
 		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindNode},
+		},
+		{
+			ListInterface: model.ResourceListOptions{Kind: v3.KindClusterInformation},
 		},
 		{
 			ListInterface: model.BlockListOptions{},
