@@ -31,6 +31,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/mcuadros/go-version"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -164,6 +165,14 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if len(conf.CNIVersion) < 1 {
+		conf.CNIVersion = "0.2.0"
+	}
+
+	if version.Compare(conf.CNIVersion, "1.0.0", ">") {
+		return fmt.Errorf("unsupported CNI version %s", conf.CNIVersion)
 	}
 
 	utils.ConfigureLogging(conf)
@@ -672,6 +681,11 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	return
 }
 
+func cmdDummyCheck(args *skel.CmdArgs) (err error) {
+	fmt.Println("OK")
+	return nil
+}
+
 func Main(version string) {
 	// Set up logging formatting.
 	logrus.SetFormatter(&logutils.Formatter{})
@@ -732,7 +746,7 @@ func Main(version string) {
 		os.Exit(1)
 	}
 
-	skel.PluginMain(cmdAdd, nil, cmdDel,
+	skel.PluginMain(cmdAdd, cmdDummyCheck, cmdDel,
 		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
 		"Calico CNI plugin "+version)
 }
