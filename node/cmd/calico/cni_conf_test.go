@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,13 +23,17 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("CNI config template tests", func() {
+var _ = Describe("Windows CNI config template tests", func() {
 	It("should be valid JSON", func() {
-		f, err := ioutil.ReadFile("../../windows-packaging/TigeraCalico/cni.conf.template")
+		f, err := ioutil.ReadFile("../../windows-packaging/CalicoWindows/cni.conf.template")
 		Expect(err).NotTo(HaveOccurred())
 
-		// __VNI__ is a placeholder for a bare int so we need to swap it for something valid.
+		// Swap out placeholders in the CNI config template for a valid JSON
+		// value. These placeholders are replaced when the CNI config is copied
+		// from the template.
 		f = bytes.Replace(f, []byte("__VNI__"), []byte("0"), -1)
+		f = bytes.Replace(f, []byte("__DNS_NAME_SERVERS__"), []byte("0"), -1)
+		f = bytes.Replace(f, []byte("__DSR_SUPPORT__"), []byte("0"), -1)
 
 		var data map[string]interface{}
 		err = json.Unmarshal(f, &data)
