@@ -17,9 +17,12 @@ package node
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"time"
+
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 
 	"k8s.io/client-go/tools/cache"
 
@@ -46,6 +49,7 @@ import (
 )
 
 var (
+	poolSizeGauge *prometheus.GaugeVec
 	ipsGauge      *prometheus.GaugeVec
 	blocksGauge   *prometheus.GaugeVec
 	borrowedGauge *prometheus.GaugeVec
@@ -58,6 +62,12 @@ const (
 )
 
 func init() {
+	poolSizeGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_pool_size",
+		Help: "Total number of addresses in the IP Pool",
+	}, []string{"ippool"})
+	prometheus.MustRegister(poolSizeGauge)
+
 	// Total IP allocations.
 	ipsGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "ipam_allocations_per_node",
@@ -107,6 +117,9 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		nodesByBlock:                make(map[string]string),
 		blocksByNode:                make(map[string]map[string]bool),
 		emptyBlocks:                 make(map[string]string),
+		poolsByBlock:                make(map[string]string),
+		blocksByPool:                make(map[string]map[string]bool),
+		poolCache:                   make(map[string]*apiv3.IPPool),
 		datastoreReady:              true,
 
 		// For unit testing purposes.
@@ -145,6 +158,9 @@ type ipamController struct {
 	blocksByNode       map[string]map[string]bool
 	emptyBlocks        map[string]string
 	confirmedLeaks     map[string]*allocation
+	blocksByPool       map[string]map[string]bool
+	poolsByBlock       map[string]string
+	poolCache          map[string]*apiv3.IPPool
 
 	// Cache pods to avoid unnecessary API queries.
 	podCache map[string]*v1.Pod
@@ -174,7 +190,7 @@ func (c *ipamController) onUpdate(update bapi.Update) {
 	switch update.KVPair.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case libapiv3.KindNode, apiv3.KindClusterInformation:
+		case libapiv3.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
@@ -298,6 +314,9 @@ func (c *ipamController) handleUpdate(upd interface{}) {
 			case libapiv3.KindNode:
 				c.handleNodeUpdate(upd)
 				return
+			case apiv3.KindIPPool:
+				c.handlePoolUpdate(upd)
+				return
 			case apiv3.KindClusterInformation:
 				c.handleClusterInformationUpdate(upd)
 				return
@@ -349,6 +368,14 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 			log.Debugf("Remove mapping for calico node %s", cnode)
 			delete(c.kubernetesNodesByCalicoName, cnode)
 		}
+	}
+}
+
+func (c *ipamController) handlePoolUpdate(kvp model.KVPair) {
+	if kvp.Value != nil {
+		c.onPoolUpdated(kvp)
+	} else {
+		c.onPoolDeleted(kvp)
 	}
 }
 
@@ -476,6 +503,10 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 		}
 	}
 
+	// Update association of block to pool.
+	pool := c.getPoolForBlock(blockCIDR)
+	c.updatePoolForBlock(blockCIDR, pool)
+
 	// Finally, update the raw storage.
 	c.allBlocks[blockCIDR] = kvp
 }
@@ -505,6 +536,102 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
 	delete(c.emptyBlocks, blockCIDR)
+
+	pool := c.poolsByBlock[blockCIDR]
+	delete(c.blocksByPool[pool], blockCIDR)
+	delete(c.poolsByBlock, blockCIDR)
+}
+
+func (c *ipamController) onPoolUpdated(kvp model.KVPair) {
+	pool := kvp.Value.(*apiv3.IPPool)
+	_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
+	if err != nil {
+		log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s", pool.Name)
+		return
+	}
+
+	c.matchUnknownBlocksToPool(pool, poolNet)
+
+	if c.poolCache[pool.Name] == nil {
+		publishPoolSizeMetric(pool, poolNet)
+	}
+
+	c.poolCache[pool.Name] = pool
+}
+
+func (c *ipamController) onPoolDeleted(kvp model.KVPair) {
+	poolName := kvp.Key.(model.ResourceKey).Name
+	for block := range c.blocksByPool[poolName] {
+		c.updatePoolForBlock(block, "no_pool")
+	}
+
+	clearPoolSizeMetric(poolName)
+
+	delete(c.blocksByPool, poolName)
+	delete(c.poolCache, poolName)
+}
+
+// Resolve the IP Pool that the Block occupies.
+func (c *ipamController) getPoolForBlock(blockCIDR string) string {
+	_, blockNet, err := net.ParseCIDR(blockCIDR)
+	if err != nil {
+		log.WithError(err).Warnf("Unable to parse block %s for pool determination", blockCIDR)
+		return "no_pool"
+	}
+
+	for poolName, pool := range c.poolCache {
+		_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
+		if err != nil {
+			log.WithError(err).Warnf("Failed to parse CIDR for IP Pool %s", poolName)
+			continue
+		}
+		if blockOccupiesPool(blockNet, poolNet) {
+			return poolName
+		}
+	}
+
+	return "no_pool"
+}
+
+// Blocks may not have a known association to an IP Pool. This can happen when a Pool gets deleted, or if block updates
+// appear before their associated pool updates. Blocks lacking association to an IP Pool are grouped under "no_pool",
+// and we attempt to associate them to a pool when we receive pool updates. This allows blocks to transition between
+// states of known and unknown IP Pool association based on occupancy.
+func (c *ipamController) matchUnknownBlocksToPool(pool *apiv3.IPPool, poolNet *cnet.IPNet) {
+	for block := range c.blocksByPool["no_pool"] {
+		_, blockNet, err := net.ParseCIDR(block)
+		if err != nil {
+			log.WithError(err).Warnf("Unable to parse block %s to determine if it matches pool %s", block, pool.Name)
+			continue
+		}
+
+		if blockOccupiesPool(blockNet, poolNet) {
+			c.updatePoolForBlock(block, pool.Name)
+		}
+	}
+}
+
+func (c *ipamController) updatePoolForBlock(blockCIDR string, newPool string) {
+	previousPool := c.poolsByBlock[blockCIDR]
+	if previousPool == newPool {
+		return
+	}
+
+	// Update pools by block
+	c.poolsByBlock[blockCIDR] = newPool
+
+	// Update blocks by pool
+	if previousPoolBlocks, ok := c.blocksByPool[previousPool]; ok {
+		delete(previousPoolBlocks, blockCIDR)
+	}
+	if c.blocksByPool[newPool] == nil {
+		c.blocksByPool[newPool] = map[string]bool{}
+	}
+	c.blocksByPool[newPool][blockCIDR] = true
+}
+
+func blockOccupiesPool(blockNet *net.IPNet, poolNet *cnet.IPNet) bool {
+	return poolNet.Covers(*blockNet)
 }
 
 func (c *ipamController) updateMetrics() {
@@ -629,6 +756,10 @@ func (c *ipamController) checkEmptyBlocks() error {
 		delete(c.blocksByNode[node], blockCIDR)
 		delete(c.nodesByBlock, blockCIDR)
 		delete(c.allBlocks, blockCIDR)
+
+		pool := c.poolsByBlock[blockCIDR]
+		delete(c.poolsByBlock, blockCIDR)
+		delete(c.blocksByPool[pool], blockCIDR)
 	}
 	return nil
 }
@@ -1071,6 +1202,16 @@ func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 	// Try to pull the k8s name from the retrieved Calico node object. If there is no match,
 	// this will return an ErrorNotKubernetes, indicating the node should be ignored.
 	return getK8sNodeName(*calicoNode)
+}
+
+func publishPoolSizeMetric(pool *apiv3.IPPool, poolNet *cnet.IPNet) {
+	ones, bits := poolNet.Mask.Size()
+	poolSize := math.Pow(2, float64(bits-ones))
+	poolSizeGauge.With(prometheus.Labels{"ippool": pool.Name}).Set(poolSize)
+}
+
+func clearPoolSizeMetric(poolName string) {
+	poolSizeGauge.Delete(prometheus.Labels{"ippool": poolName})
 }
 
 func ordinalToIP(b *model.AllocationBlock, ord int) net.IP {
