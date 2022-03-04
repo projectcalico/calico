@@ -1,0 +1,10 @@
+.terraform/
+terraform.tfvars
+.terraform.tfstate.lock.info
+ssh_key
+ssh_key.pub
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.lock.hcl
+bin/
+.terraform.init
