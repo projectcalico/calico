@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
@@ -71,7 +71,7 @@ func (d *grpcDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
 	args *skel.CmdArgs,
-	result *current.Result,
+	result *cniv1.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
 	endpoint *api.WorkloadEndpoint,

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -709,7 +709,7 @@ var _ = Describe("CalicoCni", func() {
 		var workloadName string
 		var endpointSpec libapiv3.WorkloadEndpointSpec
 		var contNs ns.NetNS
-		var result *current.Result
+		var result *cniv1.Result
 
 		checkIPAMReservation := func() {
 			// IPAM reservation should still be in place.

@@ -121,7 +121,7 @@ func newMockPolMarshaller(pols ...string) mockPolMarshaller {
 
 type mockPolMarshaller []string
 
-func (m mockPolMarshaller) MarshalPolicies() (out []json.RawMessage) {
+func (m mockPolMarshaller) GetHNSEndpointPolicies() (out []json.RawMessage) {
 	for _, p := range m {
 		out = append(out, json.RawMessage(p))
 	}

@@ -32,7 +32,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types020 "github.com/containernetworking/cni/pkg/types/020"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/mcuadros/go-version"
 	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -193,7 +193,7 @@ func DeleteRunningContainer(containerId string) error {
 	return nil
 }
 
-func CreateContainer(netconf, podName, podNamespace, ip, k8sNs string) (containerID string, result *current.Result, contVeth string, contAddr []string, contRoutes []string, err error) {
+func CreateContainer(netconf, podName, podNamespace, ip, k8sNs string) (containerID string, result *cniv1.Result, contVeth string, contAddr []string, contRoutes []string, err error) {
 	// Create a container using dockershim.
 	if os.Getenv("CONTAINER_RUNTIME") != "containerd" {
 		containerID, err = CreateContainerUsingDocker()
@@ -222,7 +222,7 @@ func CreateContainer(netconf, podName, podNamespace, ip, k8sNs string) (containe
 // Create container with the giving containerId when containerId is not empty
 //
 // Deprecated: Please call CreateContainerNamespace and then RunCNIPluginWithID directly.
-func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID, k8sNs string) (containerID string, result *current.Result, contVeth string, contAddr []string, contRoutes []string, err error) {
+func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID, k8sNs string) (containerID string, result *cniv1.Result, contVeth string, contAddr []string, contRoutes []string, err error) {
 	// Create a container using dockershim.
 	if os.Getenv("CONTAINER_RUNTIME") != "containerd" {
 		containerID, err = CreateContainerUsingDocker()
@@ -266,7 +266,7 @@ func RunCNIPluginWithId(
 	ifName,
 	k8sNs string,
 ) (
-	result *current.Result,
+	result *cniv1.Result,
 	contVeth string,
 	contAddr []string,
 	contRoutes []string,
@@ -327,13 +327,13 @@ func RunCNIPluginWithId(
 			return
 		}
 
-		result, err = current.NewResultFromResult(&r020)
+		result, err = cniv1.NewResultFromResult(&r020)
 		if err != nil {
 			return
 		}
 
 	} else {
-		result, err = current.GetResult(r)
+		result, err = cniv1.GetResult(r)
 		if err != nil {
 			return
 		}
@@ -409,7 +409,7 @@ func NetworkPod(
 	ip string,
 	ctx context.Context,
 	calicoClient client.Interface,
-	result *current.Result,
+	result *cniv1.Result,
 	containerID string,
 	netns string,
 	k8sNs string,

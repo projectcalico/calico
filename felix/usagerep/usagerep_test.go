@@ -14,18 +14,17 @@
 package usagerep
 
 import (
+	"context"
+	"fmt"
+	"net"
+	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	"context"
-	"fmt"
-	"net"
-	"net/http"
-	"sync"
 
 	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
@@ -47,7 +46,7 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 	BeforeEach(func() {
 		// Open a listener on a random local port.
 		var err error
-		tcpListener, err = net.Listen("tcp", ":0")
+		tcpListener, err = net.Listen("tcp", "localhost:0")
 		Expect(err).NotTo(HaveOccurred())
 		httpHandler = &requestRecorder{}
 		go func() {
@@ -64,7 +63,7 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 		configUpdateC = make(chan map[string]string)
 
 		// Create a usage reporter and override its base URL and initial interval.
-		u = New(StaticItems{KubernetesVersion: "v1.17.0"}, 500*time.Millisecond, 1*time.Second, statsUpdateC, configUpdateC)
+		u = New(StaticItems{KubernetesVersion: "v1.23.2"}, 500*time.Millisecond, 1*time.Second, statsUpdateC, configUpdateC)
 		port := tcpListener.Addr().(*net.TCPAddr).Port
 		u.BaseURL = fmt.Sprintf("http://localhost:%d/UsageCheck/calicoVersionCheck?", port)
 
@@ -132,7 +131,7 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 				Expect(q.Get("guid")).To(Equal("someguid"))
 				Expect(q.Get("type")).To(Equal("openstack,k8s,kdd"))
 				Expect(q.Get("cal_ver")).To(Equal("v2.6.3"))
-				Expect(q.Get("k8s_ver")).To(Equal("v1.17.0"))
+				Expect(q.Get("k8s_ver")).To(Equal("v1.23.2"))
 				Expect(q.Get("alp")).To(Equal("false"))
 				Expect(q.Get("size")).To(Equal("1"))
 				Expect(q.Get("heps")).To(Equal("2"))
@@ -193,7 +192,7 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 					Expect(q.Get("guid")).To(Equal("someguid2"))
 					Expect(q.Get("type")).To(Equal("openstack,k8s,kdd,typha,bpf"))
 					Expect(q.Get("cal_ver")).To(Equal("v3.0.0"))
-					Expect(q.Get("k8s_ver")).To(Equal("v1.17.0"))
+					Expect(q.Get("k8s_ver")).To(Equal("v1.23.2"))
 					Expect(q.Get("alp")).To(Equal("true"))
 					Expect(q.Get("size")).To(Equal("10"))
 					Expect(q.Get("heps")).To(Equal("20"))
@@ -230,7 +229,7 @@ func (h *requestRecorder) GetRequestURIs() []string {
 }
 
 // These tests create a usage reporter but they don't start it.  Instead they validate its
-// internal calculation methods and and the default configuration.
+// internal calculation methods and the default configuration.
 var _ = Describe("UsageReporter with default URL", func() {
 	var u *UsageReporter
 

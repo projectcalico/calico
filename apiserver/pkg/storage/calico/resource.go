@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	k8swatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"

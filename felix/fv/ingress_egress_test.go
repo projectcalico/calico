@@ -73,7 +73,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
 		infra.Stop()
@@ -261,7 +261,7 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
 		infra.Stop()
@@ -362,7 +362,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
 		infra.Stop()
