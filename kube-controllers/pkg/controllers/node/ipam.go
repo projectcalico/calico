@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -660,7 +661,7 @@ func (c *ipamController) updateMetrics() {
 		blocksForPoolByNode := map[string]int{}
 		gcCandidatesForPoolByNode := map[string]int{}
 
-		for blockCIDR, _ := range poolBlocks {
+		for blockCIDR := range poolBlocks {
 			b := c.allBlocks[blockCIDR].Value.(*model.AllocationBlock)
 
 			affineNode := "no_affinity"
