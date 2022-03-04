@@ -49,10 +49,18 @@ import (
 )
 
 var (
-	poolSizeGauge *prometheus.GaugeVec
-	ipsGauge      *prometheus.GaugeVec
-	blocksGauge   *prometheus.GaugeVec
-	borrowedGauge *prometheus.GaugeVec
+	// Multidimensional metrics, with a vector for each pool to allow resets by pool when handling pool deletion and
+	// refreshing metrics. See https://github.com/prometheus/client_golang/issues/834, option 3.
+	inUseAllocationGauges    map[string]*prometheus.GaugeVec
+	borrowedAllocationGauges map[string]*prometheus.GaugeVec
+	blocksGauges             map[string]*prometheus.GaugeVec
+
+	// Single dimension metrics. Legacy metrics are replaced by multidimensional equivalents above. Retain for
+	// backwards compatibility.
+	poolSizeGauge          *prometheus.GaugeVec
+	legacyAllocationsGauge *prometheus.GaugeVec
+	legacyBlocksGauge      *prometheus.GaugeVec
+	legacyBorrowedGauge    *prometheus.GaugeVec
 )
 
 const (
@@ -62,6 +70,14 @@ const (
 )
 
 func init() {
+	// Pool vectors will be registered and unregistered dynamically as pools are managed.
+	inUseAllocationGauges = make(map[string]*prometheus.GaugeVec)
+	borrowedAllocationGauges = make(map[string]*prometheus.GaugeVec)
+	blocksGauges = make(map[string]*prometheus.GaugeVec)
+
+	// "no_pool" is a special pool vector that represents when a block/allocation has no matching IP pool.
+	registerMetricVectorsForPool("no_pool")
+
 	poolSizeGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "ipam_pool_size",
 		Help: "Total number of addresses in the IP Pool",
@@ -69,25 +85,25 @@ func init() {
 	prometheus.MustRegister(poolSizeGauge)
 
 	// Total IP allocations.
-	ipsGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	legacyAllocationsGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "ipam_allocations_per_node",
 		Help: "Number of IPs allocated",
 	}, []string{"node"})
-	prometheus.MustRegister(ipsGauge)
+	prometheus.MustRegister(legacyAllocationsGauge)
 
 	// Borrowed IPs.
-	borrowedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	legacyBorrowedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "ipam_allocations_borrowed_per_node",
 		Help: "Number of allocated IPs that are from non-affine blocks.",
 	}, []string{"node"})
-	prometheus.MustRegister(borrowedGauge)
+	prometheus.MustRegister(legacyBorrowedGauge)
 
 	// Blocks per-node.
-	blocksGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	legacyBlocksGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "ipam_blocks_per_node",
 		Help: "Number of blocks in IPAM",
 	}, []string{"node"})
-	prometheus.MustRegister(blocksGauge)
+	prometheus.MustRegister(legacyBlocksGauge)
 }
 
 func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, ni cache.Indexer) *ipamController {
@@ -553,6 +569,7 @@ func (c *ipamController) onPoolUpdated(kvp model.KVPair) {
 	c.matchUnknownBlocksToPool(pool, poolNet)
 
 	if c.poolCache[pool.Name] == nil {
+		registerMetricVectorsForPool(pool.Name)
 		publishPoolSizeMetric(pool, poolNet)
 	}
 
@@ -565,6 +582,7 @@ func (c *ipamController) onPoolDeleted(kvp model.KVPair) {
 		c.updatePoolForBlock(block, "no_pool")
 	}
 
+	c.unregisterMetricVectorsForPool(poolName)
 	clearPoolSizeMetric(poolName)
 
 	delete(c.blocksByPool, poolName)
@@ -637,52 +655,82 @@ func blockOccupiesPool(blockNet *net.IPNet, poolNet *cnet.IPNet) bool {
 func (c *ipamController) updateMetrics() {
 	log.Debug("Gathering latest IPAM state for metrics")
 
-	// Keep track of various counts so that we can report them as metrics.
-	blocksByNode := map[string]int{}
-	borrowedIPsByNode := map[string]int{}
+	// Keep track of various counts so that we can report them as metrics. These counts track legacy metrics by node.
+	legacyBlocksByNode := map[string]int{}
+	legacyBorrowedIPsByNode := map[string]int{}
 
 	// Iterate blocks to determine the correct metric values.
-	for _, kvp := range c.allBlocks {
-		b := kvp.Value.(*model.AllocationBlock)
-		if b.Affinity != nil {
-			n := strings.TrimPrefix(*b.Affinity, "host:")
-			blocksByNode[n]++
-		} else {
-			// Count blocks with no affinity as a pseudo-node.
-			blocksByNode["no_affinity"]++
-		}
+	for poolName, poolBlocks := range c.blocksByPool {
+		// These counts track pool-based gauges by node for the current pool.
+		inUseAllocationsForPoolByNode := map[string]int{}
+		borrowedAllocationsForPoolByNode := map[string]int{}
+		blocksForPoolByNode := map[string]int{}
 
-		// Go through each IPAM allocation, check its attributes for the node it is assigned to.
-		for _, idx := range b.Allocations {
-			if idx == nil {
-				// Not allocated.
-				continue
+		for blockCIDR, _ := range poolBlocks {
+			b := c.allBlocks[blockCIDR].Value.(*model.AllocationBlock)
+
+			affineNode := "no_affinity"
+			if b.Affinity != nil {
+				affineNode = strings.TrimPrefix(*b.Affinity, "host:")
 			}
-			attr := b.Attributes[*idx]
 
-			// Track nodes based on IP allocations.
-			if node, ok := attr.AttrSecondary[ipam.AttributeNode]; ok {
-				// Update metrics maps with this allocation.
-				if b.Affinity == nil || node != strings.TrimPrefix(*b.Affinity, "host:") {
-					// If the allocations node doesn't match the block's, then this is borrowed.
-					borrowedIPsByNode[node]++
+			legacyBlocksByNode[affineNode]++
+			blocksForPoolByNode[affineNode]++
+
+			// Go through each IPAM allocation, check its attributes for the node it is assigned to.
+			for _, idx := range b.Allocations {
+				if idx == nil {
+					// Not allocated.
+					continue
+				}
+				attr := b.Attributes[*idx]
+
+				// Track nodes based on IP allocations.
+				if allocationNode, ok := attr.AttrSecondary[ipam.AttributeNode]; ok {
+					// Update metrics maps with this allocation.
+					inUseAllocationsForPoolByNode[allocationNode]++
+
+					if b.Affinity == nil || allocationNode != affineNode {
+						// If the allocations node doesn't match the block's, then this is borrowed.
+						legacyBorrowedIPsByNode[allocationNode]++
+						borrowedAllocationsForPoolByNode[allocationNode]++
+					}
 				}
 			}
 		}
+
+		// Update gauge values, retrieving and resetting the values for the current pool
+		inUseAllocationsGaugeForPool := inUseAllocationGauges[poolName]
+		inUseAllocationsGaugeForPool.Reset()
+		for node, uses := range inUseAllocationsForPoolByNode {
+			inUseAllocationsGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(uses))
+		}
+
+		borrowedAllocationsGaugeForPool := borrowedAllocationGauges[poolName]
+		borrowedAllocationsGaugeForPool.Reset()
+		for node, borrows := range borrowedAllocationsForPoolByNode {
+			borrowedAllocationsGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(borrows))
+		}
+
+		blocksGaugeForPool := blocksGauges[poolName]
+		blocksGaugeForPool.Reset()
+		for node, blocks := range blocksForPoolByNode {
+			blocksGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(blocks))
+		}
 	}
 
-	// Update prometheus metrics.
-	ipsGauge.Reset()
+	// Update legacy gauges
+	legacyAllocationsGauge.Reset()
 	for node, allocations := range c.allocationsByNode {
-		ipsGauge.WithLabelValues(node).Set(float64(len(allocations)))
+		legacyAllocationsGauge.WithLabelValues(node).Set(float64(len(allocations)))
 	}
-	blocksGauge.Reset()
-	for node, num := range blocksByNode {
-		blocksGauge.WithLabelValues(node).Set(float64(num))
+	legacyBlocksGauge.Reset()
+	for node, num := range legacyBlocksByNode {
+		legacyBlocksGauge.WithLabelValues(node).Set(float64(num))
 	}
-	borrowedGauge.Reset()
-	for node, num := range borrowedIPsByNode {
-		borrowedGauge.WithLabelValues(node).Set(float64(num))
+	legacyBorrowedGauge.Reset()
+	for node, num := range legacyBorrowedIPsByNode {
+		legacyBorrowedGauge.WithLabelValues(node).Set(float64(num))
 	}
 	log.Debug("IPAM metrics updated")
 }
@@ -1202,6 +1250,46 @@ func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 	// Try to pull the k8s name from the retrieved Calico node object. If there is no match,
 	// this will return an ErrorNotKubernetes, indicating the node should be ignored.
 	return getK8sNodeName(*calicoNode)
+}
+
+func registerMetricVectorsForPool(poolName string) {
+	inUseAllocationGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name:        "ipam_allocations_in_use",
+		Help:        "Allocations currently in use by workload or host endpoint",
+		ConstLabels: prometheus.Labels{"ippool": poolName},
+	}, []string{"node"})
+	prometheus.MustRegister(inUseAllocationGauges[poolName])
+
+	borrowedAllocationGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_allocations_borrowed",
+		Help: "Allocations currently in use by workload or host endpoint, where the allocation was borrowed " +
+			"from a block affine to another node",
+		ConstLabels: prometheus.Labels{"ippool": poolName},
+	}, []string{"node"})
+	prometheus.MustRegister(borrowedAllocationGauges[poolName])
+
+	blocksGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name:        "ipam_blocks",
+		Help:        "IPAM blocks currently allocated for the IP pool",
+		ConstLabels: prometheus.Labels{"ippool": poolName},
+	}, []string{"node"})
+	prometheus.MustRegister(blocksGauges[poolName])
+}
+
+func (c *ipamController) unregisterMetricVectorsForPool(poolName string) {
+	if c.poolCache[poolName] == nil {
+		log.Warnf("Skipping deletion of pool metrics for unknown pool %s", poolName)
+		return
+	}
+
+	prometheus.Unregister(inUseAllocationGauges[poolName])
+	delete(inUseAllocationGauges, poolName)
+
+	prometheus.Unregister(borrowedAllocationGauges[poolName])
+	delete(borrowedAllocationGauges, poolName)
+
+	prometheus.Unregister(blocksGauges[poolName])
+	delete(blocksGauges, poolName)
 }
 
 func publishPoolSizeMetric(pool *apiv3.IPPool, poolNet *cnet.IPNet) {
