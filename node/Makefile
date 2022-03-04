@@ -389,8 +389,11 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 stop-k8s-apiserver:
 	@-docker rm -f st-apiserver
 
+# Skip packages containing FV tests.
+UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
+.PHONY: ut
 ut:
-	@echo "No UTs available"
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) ginkgo -r -skipPackage=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
 
 ###############################################################################
 # System tests
@@ -529,7 +532,7 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks fv image build-windows-archive st
+ci: static-checks ut fv image build-windows-archive st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-upgrade
