@@ -15,7 +15,7 @@
 static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 	__u8 next_header = ipv6hdr(ctx)->nexthdr;
 	__u8 hdrlen = 0;
-	struct ipv6_opt_hdr *opthdr = ctx->nh;
+	struct ipv6_opt_hdr *opthdr = (struct ipv6_opt_hdr *)ctx->nh;
 	#pragma unroll
 	for (__u8 i = 0; i < MAX_EXTENSIONS; i++) {
 		switch (next_header) {
@@ -30,10 +30,15 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 			case IPPROTO_DSTOPTS:
 			case IPPROTO_MH:
 				// IPv6 extension headers which we ignore at this point
-				hdrlen = opthdr->hdrlen;
+				if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, hdrlen + UDP_SIZE)) {
+					ctx->fwd.reason = CALI_REASON_SHORT;
+					CALI_DEBUG("Too short\n");
+					goto deny;
+				}
 				next_header = opthdr->nexthdr;
-				ctx->nh += hdrlen + 8;
-				opthdr = ctx->nh;
+				hdrlen = opthdr->hdrlen;
+				ctx->nh = ctx->nh + hdrlen + 8;
+				opthdr = (struct ipv6_opt_hdr *)ctx->nh;
 				continue;
 			case IPPROTO_NONE:
 				// There is no next header! refer to RFC8200.
@@ -66,10 +71,13 @@ static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
 	switch (parse_ipv6_extensions(ctx)) {
 	case IPPROTO_UDP:
 		CALI_DEBUG("UDP");
+		break;
 	case IPPROTO_TCP:
 		CALI_DEBUG("TCP");
+		break;
 	case IPPROTO_ICMPV6:
 		CALI_DEBUG("ICMPv6");
+		break;
 	default:
 		CALI_DEBUG("Failed to parse IPv6 extensions");
 		goto deny;
