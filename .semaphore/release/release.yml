@@ -18,6 +18,7 @@ blocks:
       - name: quay-robot-calico+semaphoreci
       - name: docker
       - name: oss-release-secrets
+      - name: google-service-account-for-gce
       prologue:
         commands:
         # Checkout the code and unshallow it.
