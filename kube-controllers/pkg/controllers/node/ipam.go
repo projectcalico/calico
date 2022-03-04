@@ -27,7 +27,6 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -181,7 +180,7 @@ func (c *ipamController) onUpdate(update bapi.Update) {
 	case model.BlockKey:
 		c.syncerUpdates <- update.KVPair
 	default:
-		logrus.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
+		log.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
 	}
 }
 
@@ -331,15 +330,15 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 			// It's possible that a previous version of this node had an orchRef and so was added to the
 			// map. If so, we need to remove it.
 			if current, ok := c.kubernetesNodesByCalicoName[n.Name]; ok {
-				logrus.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
+				log.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
 				delete(c.kubernetesNodesByCalicoName, n.Name)
 			}
 		} else if kn != "" {
 			if current, ok := c.kubernetesNodesByCalicoName[n.Name]; !ok {
-				logrus.Debugf("Add mapping calico node -> k8s node. %s -> %s", n.Name, kn)
+				log.Debugf("Add mapping calico node -> k8s node. %s -> %s", n.Name, kn)
 				c.kubernetesNodesByCalicoName[n.Name] = kn
 			} else if current != kn {
-				logrus.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
+				log.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
 				c.kubernetesNodesByCalicoName[n.Name] = kn
 			}
 			// No change.
@@ -347,7 +346,7 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 	} else {
 		cnode := kvp.Key.(model.ResourceKey).Name
 		if _, ok := c.kubernetesNodesByCalicoName[cnode]; ok {
-			logrus.Debugf("Remove mapping for calico node %s", cnode)
+			log.Debugf("Remove mapping for calico node %s", cnode)
 			delete(c.kubernetesNodesByCalicoName, cnode)
 		}
 	}
@@ -1062,10 +1061,10 @@ func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 	calicoNode, err := c.client.Nodes().Get(context.TODO(), cnode, options.GetOptions{})
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			logrus.WithError(err).Info("Calico Node referenced in IPAM data does not exist")
+			log.WithError(err).Info("Calico Node referenced in IPAM data does not exist")
 			return "", nil
 		}
-		logrus.WithError(err).Warn("failed to query Calico Node referenced in IPAM data")
+		log.WithError(err).Warn("failed to query Calico Node referenced in IPAM data")
 		return "", err
 	}
 
