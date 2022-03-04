@@ -45,6 +45,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -54,6 +55,8 @@ var (
 	inUseAllocationGauges    map[string]*prometheus.GaugeVec
 	borrowedAllocationGauges map[string]*prometheus.GaugeVec
 	blocksGauges             map[string]*prometheus.GaugeVec
+	gcCandidateGauges        map[string]*prometheus.GaugeVec
+	gcReclamationCounters    map[string]*prometheus.CounterVec
 
 	// Single dimension metrics. Legacy metrics are replaced by multidimensional equivalents above. Retain for
 	// backwards compatibility.
@@ -74,6 +77,8 @@ func init() {
 	inUseAllocationGauges = make(map[string]*prometheus.GaugeVec)
 	borrowedAllocationGauges = make(map[string]*prometheus.GaugeVec)
 	blocksGauges = make(map[string]*prometheus.GaugeVec)
+	gcCandidateGauges = make(map[string]*prometheus.GaugeVec)
+	gcReclamationCounters = make(map[string]*prometheus.CounterVec)
 
 	// "no_pool" is a special pool vector that represents when a block/allocation has no matching IP pool.
 	registerMetricVectorsForPool("no_pool")
@@ -125,6 +130,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
+		blocksByAllocation:          make(map[string]string),
 		allocationsByNode:           make(map[string]map[string]*allocation),
 		handleTracker:               newHandleTracker(),
 		kubernetesNodesByCalicoName: make(map[string]string),
@@ -168,6 +174,7 @@ type ipamController struct {
 
 	// Store allocations broken out from the raw blocks by their handle.
 	allocationsByBlock map[string]map[string]*allocation
+	blocksByAllocation map[string]string
 	allocationsByNode  map[string]map[string]*allocation
 	handleTracker      *handleTracker
 	nodesByBlock       map[string]string
@@ -479,6 +486,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
 		}
 		c.allocationsByBlock[blockCIDR][alloc.id()] = &alloc
+		c.blocksByAllocation[alloc.id()] = blockCIDR
 
 		// Update the allocations-by-node view.
 		if node := alloc.node(); node != "" {
@@ -504,6 +512,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			// Needs release.
 			c.handleTracker.removeAllocation(alloc)
 			delete(c.allocationsByBlock[blockCIDR], id)
+			delete(c.blocksByAllocation, id)
 
 			// Also remove from the node view.
 			node := alloc.node()
@@ -512,6 +521,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			}
 			if len(c.allocationsByNode[node]) == 0 {
 				delete(c.allocationsByNode, node)
+				clearNodeFromPoolCounters(node)
 			}
 
 			// And to be safe, remove from confirmed leaks just in case.
@@ -534,12 +544,14 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	// Remove allocations that were contributed by this block.
 	allocations := c.allocationsByBlock[blockCIDR]
 	for id, alloc := range allocations {
+		delete(c.blocksByAllocation, id)
 		node := alloc.node()
 		if node != "" {
 			delete(c.allocationsByNode[node], id)
 		}
 		if len(c.allocationsByNode[node]) == 0 {
 			delete(c.allocationsByNode, node)
+			clearNodeFromPoolCounters(node)
 		}
 	}
 	delete(c.allocationsByBlock, blockCIDR)
@@ -665,6 +677,7 @@ func (c *ipamController) updateMetrics() {
 		inUseAllocationsForPoolByNode := map[string]int{}
 		borrowedAllocationsForPoolByNode := map[string]int{}
 		blocksForPoolByNode := map[string]int{}
+		gcCandidatesForPoolByNode := map[string]int{}
 
 		for blockCIDR, _ := range poolBlocks {
 			b := c.allBlocks[blockCIDR].Value.(*model.AllocationBlock)
@@ -678,23 +691,26 @@ func (c *ipamController) updateMetrics() {
 			blocksForPoolByNode[affineNode]++
 
 			// Go through each IPAM allocation, check its attributes for the node it is assigned to.
-			for _, idx := range b.Allocations {
-				if idx == nil {
-					// Not allocated.
-					continue
-				}
-				attr := b.Attributes[*idx]
-
+			for _, allocation := range c.allocationsByBlock[blockCIDR] {
 				// Track nodes based on IP allocations.
-				if allocationNode, ok := attr.AttrSecondary[ipam.AttributeNode]; ok {
-					// Update metrics maps with this allocation.
-					inUseAllocationsForPoolByNode[allocationNode]++
+				allocationNode := allocation.node()
+				if allocationNode == "" {
+					allocationNode = "unknown_node"
+				}
 
-					if b.Affinity == nil || allocationNode != affineNode {
-						// If the allocations node doesn't match the block's, then this is borrowed.
-						legacyBorrowedIPsByNode[allocationNode]++
-						borrowedAllocationsForPoolByNode[allocationNode]++
-					}
+				// Update metrics maps with this allocation.
+				inUseAllocationsForPoolByNode[allocationNode]++
+
+				if allocationNode != "unknown_node" && (b.Affinity == nil || allocationNode != affineNode) {
+					// If the allocation's node doesn't match the block's, then this is borrowed.
+					legacyBorrowedIPsByNode[allocationNode]++
+					borrowedAllocationsForPoolByNode[allocationNode]++
+				}
+
+				// Update candidate count. Include confirmed leaks as well, in case there is an issue keeping them
+				// from being immediately reclaimed as usual.
+				if allocation.isCandidateLeak() || allocation.isConfirmedLeak() {
+					gcCandidatesForPoolByNode[allocationNode]++
 				}
 			}
 		}
@@ -716,6 +732,12 @@ func (c *ipamController) updateMetrics() {
 		blocksGaugeForPool.Reset()
 		for node, blocks := range blocksForPoolByNode {
 			blocksGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(blocks))
+		}
+
+		gcCandidatesGaugeForPool := gcCandidateGauges[poolName]
+		gcCandidatesGaugeForPool.Reset()
+		for node, candidates := range gcCandidatesForPoolByNode {
+			gcCandidatesGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(candidates))
 		}
 	}
 
@@ -1156,6 +1178,9 @@ func (c *ipamController) garbageCollectIPs() error {
 		delete(c.allocationsByNode[a.node()], id)
 		if len(c.allocationsByNode[a.node()]) == 0 {
 			delete(c.allocationsByNode, a.node())
+			clearNodeFromPoolCounters(a.node())
+		} else {
+			c.incrementReclamationMetric(id, a.node())
 		}
 		delete(c.confirmedLeaks, id)
 	}
@@ -1252,6 +1277,16 @@ func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 	return getK8sNodeName(*calicoNode)
 }
 
+func (c *ipamController) incrementReclamationMetric(allocationId string, node string) {
+	pool := c.poolsByBlock[c.blocksByAllocation[allocationId]]
+	metricNode := node
+	if metricNode == "" {
+		metricNode = "unknown_node"
+	}
+	gcReclamationsCounter := gcReclamationCounters[pool]
+	gcReclamationsCounter.With(prometheus.Labels{"node": metricNode}).Inc()
+}
+
 func registerMetricVectorsForPool(poolName string) {
 	inUseAllocationGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name:        "ipam_allocations_in_use",
@@ -1274,6 +1309,24 @@ func registerMetricVectorsForPool(poolName string) {
 		ConstLabels: prometheus.Labels{"ippool": poolName},
 	}, []string{"node"})
 	prometheus.MustRegister(blocksGauges[poolName])
+
+	gcCandidateGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_gc_candidates",
+		Help: "Allocations that are currently marked by the garbage collector as potential candidates to " +
+			"reclaim. Under normal operation, this metric should return to zero after the garbage collector " +
+			"confirms that this allocation can be reclaimed and reclaims it",
+		ConstLabels: prometheus.Labels{"ippool": poolName},
+	}, []string{"node"})
+	prometheus.MustRegister(gcCandidateGauges[poolName])
+
+	gcReclamationCounters[poolName] = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "ipam_gc_reclamations",
+		Help: "The total allocations that have been reclaimed by the garbage collector over time. Under normal " +
+			"operation, this counter should increase, and increases of this counter should align to a return to zero " +
+			"for the candidate gauge.",
+		ConstLabels: prometheus.Labels{"ippool": poolName},
+	}, []string{"node"})
+	prometheus.MustRegister(gcReclamationCounters[poolName])
 }
 
 func (c *ipamController) unregisterMetricVectorsForPool(poolName string) {
@@ -1290,6 +1343,12 @@ func (c *ipamController) unregisterMetricVectorsForPool(poolName string) {
 
 	prometheus.Unregister(blocksGauges[poolName])
 	delete(blocksGauges, poolName)
+
+	prometheus.Unregister(gcCandidateGauges[poolName])
+	delete(gcCandidateGauges, poolName)
+
+	prometheus.Unregister(gcReclamationCounters[poolName])
+	delete(gcReclamationCounters, poolName)
 }
 
 func publishPoolSizeMetric(pool *apiv3.IPPool, poolNet *cnet.IPNet) {
@@ -1300,6 +1359,13 @@ func publishPoolSizeMetric(pool *apiv3.IPPool, poolNet *cnet.IPNet) {
 
 func clearPoolSizeMetric(poolName string) {
 	poolSizeGauge.Delete(prometheus.Labels{"ippool": poolName})
+}
+
+// When we stop tracking a node, clear counters to prevent accumulation of stale metrics.
+func clearNodeFromPoolCounters(node string) {
+	for _, reclamationCounter := range gcReclamationCounters {
+		reclamationCounter.Delete(prometheus.Labels{"node": node})
+	}
 }
 
 func ordinalToIP(b *model.AllocationBlock, ord int) net.IP {

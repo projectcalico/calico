@@ -164,6 +164,10 @@ func (a *allocation) isConfirmedLeak() bool {
 	return a.confirmedLeak
 }
 
+func (a *allocation) isCandidateLeak() bool {
+	return a.leakedAt != nil && !a.confirmedLeak
+}
+
 func (a *allocation) isPodIP() bool {
 	ns := a.attrs[ipam.AttributeNamespace]
 	pod := a.attrs[ipam.AttributePod]
