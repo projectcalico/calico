@@ -389,17 +389,11 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 stop-k8s-apiserver:
 	@-docker rm -f st-apiserver
 
-GINKGO = ginkgo
-
+# Skip packages containing FV tests.
 UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
 .PHONY: ut
-ut: CMD = go mod download && $(GINKGO) -r
 ut:
-ifdef LOCAL
-	(CMD)
-else
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CMD) -skipPackage=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
-endif
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) ginkgo -r -skipPackage=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
 
 ###############################################################################
 # System tests
