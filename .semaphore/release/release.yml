@@ -34,6 +34,9 @@ blocks:
         # Log in to container registries needed for release.
         - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
         - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+        # Credentials for accessing gcloud, needed to create a GCP VM.
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       jobs:
       - name: "Release on GCP VM"
         env_vars:
