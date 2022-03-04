@@ -38,6 +38,7 @@ import (
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -476,7 +477,11 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 
 	// Write the endpoint object (either the newly created one, or the updated one)
-	if _, err := utils.CreateOrUpdate(ctx, calicoClient, endpoint); err != nil {
+	// Pass special-case flag through to KDD to let it know what kind of patch to apply to the underlying
+	// Pod resource. (In Enterprise) Felix also modifies the pod through a patch and setting this avoids patching the
+	// same fields as Felix so that we can't clobber Felix's updates.
+	ctxPatchCNI := k8sresources.ContextWithPatchMode(ctx, k8sresources.PatchModeCNI)
+	if _, err := utils.CreateOrUpdate(ctxPatchCNI, calicoClient, endpoint); err != nil {
 		logger.WithError(err).Error("Error creating/updating endpoint in datastore.")
 		releaseIPAM()
 		return nil, err
