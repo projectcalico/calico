@@ -93,7 +93,8 @@ WINDOWS_MOD_CACHED_FILES := \
     windows-packaging/templates/peerings.ps1.template \
 
 # Files to include in the Windows ZIP archive.  We need to list some of these explicitly
-# because we need to force them to be built/copied into place.
+# because we need to force them to be built/copied into place. We also have
+# tests in windows-packaging that we don't want to include.
 WINDOWS_ARCHIVE_FILES := \
     $(WINDOWS_ARCHIVE_BINARY) \
     $(WINDOWS_ARCHIVE_ROOT)/README.txt \
