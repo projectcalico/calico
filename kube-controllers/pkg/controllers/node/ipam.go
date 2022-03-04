@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -107,6 +108,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		nodesByBlock:                make(map[string]string),
 		blocksByNode:                make(map[string]map[string]bool),
 		emptyBlocks:                 make(map[string]string),
+		datastoreReady:              true,
 
 		// For unit testing purposes.
 		pauseRequestChannel: make(chan pauseRequest),
@@ -148,6 +150,9 @@ type ipamController struct {
 	// Cache pods to avoid unnecessary API queries.
 	podCache map[string]*v1.Pod
 
+	// Cache datastoreReady to avoid too much API queries.
+	datastoreReady bool
+
 	// For unit testing purposes.
 	pauseRequestChannel chan pauseRequest
 }
@@ -170,7 +175,7 @@ func (c *ipamController) onUpdate(update bapi.Update) {
 	switch update.KVPair.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case apiv3.KindNode:
+		case apiv3.KindNode, v3.KindClusterInformation:
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
@@ -294,6 +299,9 @@ func (c *ipamController) handleUpdate(upd interface{}) {
 			case apiv3.KindNode:
 				c.handleNodeUpdate(upd)
 				return
+			case v3.KindClusterInformation:
+				c.handleClusterInformationUpdate(upd)
+				return
 			}
 		case model.BlockKey:
 			c.handleBlockUpdate(upd)
@@ -342,6 +350,18 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 			logrus.Debugf("Remove mapping for calico node %s", cnode)
 			delete(c.kubernetesNodesByCalicoName, cnode)
 		}
+	}
+}
+
+// handleClusterInformationUpdate wraps the logic to execute when receiving a clusterinformation update.
+func (c *ipamController) handleClusterInformationUpdate(kvp model.KVPair) {
+	if kvp.Value != nil {
+		ci := kvp.Value.(*v3.ClusterInformation)
+		if ci.Spec.DatastoreReady != nil {
+			c.datastoreReady = *ci.Spec.DatastoreReady
+		}
+	} else {
+		c.datastoreReady = false
 	}
 }
 
@@ -869,6 +889,11 @@ func (c *ipamController) allocationIsValid(a *allocation, preferCache bool) bool
 }
 
 func (c *ipamController) syncIPAM() error {
+	if !c.datastoreReady {
+		log.Warn("datastore is locked, skipping ipam sync")
+		return nil
+	}
+
 	// Skip if not InSync yet.
 	if c.syncStatus != bapi.InSync {
 		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping IPAM sync.")
