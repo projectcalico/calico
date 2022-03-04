@@ -36,21 +36,27 @@ In this guide, you install the Tigera {{site.prodname}} operator and custom reso
 #### Download the Helm chart
 
 1. Add the {{site.prodname}} helm repo:
+
 ```
 helm repo add projectcalico https://projectcalico.docs.tigera.io/charts
 ```
 
 #### Customize the Helm chart
+
 If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubernetes Engine (MKE), or you need to customize TLS certificates, you **must** customize this Helm chart by creating a `values.yaml` file. Otherwise, you can skip this step.
 
 1. If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubernetes Engine (MKE), set the `kubernetesProvider` as described in the [Installation reference](../../reference/installation/api#operator.tigera.io/v1.Provider).  For example:
-```
-echo '{ installation: {kubernetesProvider: EKS }}' > values.yaml
-```
+
+   ```
+   echo '{ installation: {kubernetesProvider: EKS }}' > values.yaml
+   ```
+
 1. Add any other customizations you require to `values.yaml`.  You might like to refer to the [helm docs](https://helm.sh/docs/) or run
+
    ```
    helm show values projectcalico/tigera-operator --version {{site.data.versions[0].title}}
    ```
+
    to see the values that can be customized in the chart.
 
 #### Install {{site.prodname}}
