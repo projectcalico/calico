@@ -1,10 +1,13 @@
 include ../../metadata.mk
 include ../../lib.Makefile
 
+# We only ever release from the tip of a release branch.
+GIT_BRANCH?=$(git rev-parse HEAD)
+
 # Build a release from the currently checked out commit.
 # Uses SSH to run commands on the remote builder.
 release: .vm.created
-	./remote-execute.sh "cd calico && git fetch && git checkout $(GIT_VERSION)"
+	./remote-execute.sh "cd calico && git fetch --tags && git checkout $(GIT_BRANCH)"
 	./remote-execute.sh "cd calico && make release"
 
 # Expects that a release has already been created on the remote VM via the "release" target.

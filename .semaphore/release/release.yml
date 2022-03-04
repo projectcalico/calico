@@ -40,5 +40,5 @@ blocks:
         - name: VAR_FILE
           value: /home/semaphore/secrets/release.tfvars
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C hack/release release; fi
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C hack/release release-publish; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release-publish; fi
