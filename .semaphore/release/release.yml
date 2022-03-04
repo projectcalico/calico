@@ -41,5 +41,5 @@ blocks:
       jobs:
       - name: "Release"
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make release; fi
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make release-publish; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C hack/release release; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C hack/release release-publish; fi

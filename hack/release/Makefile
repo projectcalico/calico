@@ -4,14 +4,18 @@ include ../../lib.Makefile
 # Build a release from the currently checked out commit.
 # Uses SSH to run commands on the remote builder.
 release: .vm.created
-	$(./bin/terraform output connect_command) -- cd calico && git fetch && checkout $(GIT_VERSION)
-	$(./bin/terraform output connect_command) -- cd calico && make release
+	./remote-execute.sh "cd calico && git fetch && git checkout $(GIT_VERSION)"
+	./remote-execute.sh "cd calico && make release"
+
+# Expects that a release has already been created on the remote VM via the "release" target.
+release-publish: .vm.created
+	./remote-execute.sh "cd calico && make release-publish"
 
 # Create a VM using the given vars.
 VAR_FILE ?= terraform.tfvars
 apply:  .vm.created
 .vm.created: .terraform.init
-	./bin/terraform apply --auto-approve -var-file=$(VAR_FILE)
+	./bin/terraform apply --auto-approve -var-file=$(VAR_FILE) && touch $@
 
 # Destroy the VM.
 destroy:

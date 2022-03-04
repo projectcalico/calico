@@ -100,6 +100,7 @@ resource "null_resource" "configure_vm" {
       "cd /home/ubuntu/calico",
       "git remote remove origin",
       "git remote add origin git@github.com:projectcalico/calico.git",
+      "ssh-keyscan -H github.com >> ~/.ssh/known_hosts",
     ]
   }
 }
