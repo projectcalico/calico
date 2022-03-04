@@ -26,7 +26,7 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 # fail if unable to download
 CURL=curl -C - -sSf
 
-CNI_VERSION=v1.0.0
+CNI_VERSION=v1.0.1
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -74,7 +74,7 @@ endif
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
-	
+
 ## Build the Calico network plugin and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
 	-mkdir -p .go-pkg-cache
@@ -114,11 +114,9 @@ $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
 
 $(BIN)/flannel:
-	# Flannel was removed from v1.0.0 CNI plugins, but doesn't yet have its own release.
-	# For now, just pull the older version of the binary hosted at containernetworking/plugins.
-	# Eventually, replace with a release from https://github.com/flannel-io/cni-plugin
 	mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/v0.9.1/cni-plugins-linux-$(subst v7,,$(ARCH))-v0.9.1.tgz | tar -xz -C $(BIN) ./flannel
+	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(CNI_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./flannel-$(subst v7,,$(ARCH))
+	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $(BIN)/flannel
 
 ###############################################################################
 # Unit Tests

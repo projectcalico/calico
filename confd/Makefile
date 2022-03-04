@@ -9,9 +9,6 @@ PACKAGE_NAME=github.com/projectcalico/calico/confd
 ###############################################################################
 include ../lib.Makefile
 
-# Override K8S_VERSION
-K8S_VERSION=v1.17.0
-
 ###############################################################################
 
 test: ut test-kdd test-etcd
@@ -155,7 +152,7 @@ stop-k8s-apiserver:
 	@-docker rm -f calico-k8s-apiserver
 
 bin/kubectl:
-	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
+	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
 bin/bird bin/bird6:

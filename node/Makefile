@@ -330,7 +330,7 @@ $(BINDIR)/kind:
 
 $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/v1.22.0/bin/linux/$(ARCH)/kubectl -o $@
+	curl -L https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $(BINDIR)/kubectl
 
 # etcd is used by the STs

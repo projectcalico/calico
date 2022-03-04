@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/projectcalico/calico/felix/config"
@@ -71,11 +72,11 @@ func ServePrometheusMetrics(configParams *config.Config) {
 	} else {
 		if !configParams.PrometheusGoMetricsEnabled {
 			log.Info("Discarding Golang metrics")
-			prometheus.Unregister(prometheus.NewGoCollector())
+			prometheus.Unregister(collectors.NewGoCollector())
 		}
 		if !configParams.PrometheusProcessMetricsEnabled {
 			log.Info("Discarding process metrics")
-			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+			prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		}
 	}
 	http.Handle("/metrics", promhttp.Handler())
