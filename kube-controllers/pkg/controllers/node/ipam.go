@@ -22,13 +22,10 @@ import (
 	"strings"
 	"time"
 
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -36,6 +33,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -679,7 +678,7 @@ func (c *ipamController) updateMetrics() {
 		blocksForPoolByNode := map[string]int{}
 		gcCandidatesForPoolByNode := map[string]int{}
 
-		for blockCIDR, _ := range poolBlocks {
+		for blockCIDR := range poolBlocks {
 			b := c.allBlocks[blockCIDR].Value.(*model.AllocationBlock)
 
 			affineNode := "no_affinity"
