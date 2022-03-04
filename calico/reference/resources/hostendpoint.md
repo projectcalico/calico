@@ -29,9 +29,6 @@ to the interface.
 > **Note**: Host endpoints with `interfaceName: *` do not support [untracked policy]({{ site.baseurl }}/security/high-connection-workloads).
 {: .alert .alert-info}
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
-aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
-
 ### Default behavior of external traffic to/from host
 
 If a host endpoint is created and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules).
