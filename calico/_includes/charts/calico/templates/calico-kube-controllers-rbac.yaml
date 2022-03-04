@@ -71,6 +71,7 @@ rules:
       - ipreservations
     verbs:
       - list
+      - watch
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - blockaffinities
