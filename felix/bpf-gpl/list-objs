@@ -22,7 +22,7 @@ for log_level in debug info no_log; do
       # The workload-to-host drop setting only applies to the from-workload hook.
       ep_types="wep"
     else
-      ep_types="wep hep tnl wg"
+      ep_types="wep hep tnl wg nat"
     fi
     for fib in "" "fib_"; do
       for ep_type in $ep_types; do
