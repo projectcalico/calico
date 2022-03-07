@@ -26,9 +26,9 @@ const (
 	MarkSeenBypassSkipRPF            = MarkSeenBypass | 0x00400000
 	MarkSeenBypassSkipRPFMask        = MarkSeenBypassMask | 0x00f00000
 	MarkSeenNATOutgoing              = MarkSeenBypass | 0x00800000
-	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | MarkSeenNATOutgoing
+	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | 0x00f00000
 	MarkSeenMASQ                     = MarkSeenBypass | 0x00600000
-	MarkSeenMASQMask                 = MarkSeenBypassMask | MarkSeenMASQ
+	MarkSeenMASQMask                 = MarkSeenBypassMask | 0x00f00000
 
 	MarkLinuxConntrackEstablished     = 0x08000000
 	MarkLinuxConntrackEstablishedMask = 0x08000000
