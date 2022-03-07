@@ -53,26 +53,6 @@ type WorkloadEndpointClient struct {
 	converter conversion.Converter
 }
 
-type patchModeKey struct{}
-type PatchMode string
-
-const (
-	PatchModeCNI         PatchMode = "patchModeCNI"
-	PatchModeUnspecified PatchMode = "patchModeUnspecified"
-)
-
-func ContextWithPatchMode(ctx context.Context, mode PatchMode) context.Context {
-	return context.WithValue(ctx, patchModeKey{}, mode)
-}
-
-func PatchModeOf(ctx context.Context) PatchMode {
-	v := ctx.Value(patchModeKey{})
-	if v != nil {
-		return v.(PatchMode)
-	}
-	return PatchModeUnspecified
-}
-
 func (c *WorkloadEndpointClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	log.Debug("Received Create request on WorkloadEndpoint type")
 	// As a special case for the CNI plugin, try to patch the Pod with the IP that we've calculated.
