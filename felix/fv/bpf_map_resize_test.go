@@ -110,7 +110,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		})
 
 		ctMap := conntrack.Map(&bpf.MapContext{})
-		Eventually(func() int { return getMapSize(felixes[0], ctMap) }, "5s", "200ms").Should(Equal(newCtMapSize))
+		Eventually(func() int { return getMapSize(felixes[0], ctMap) }, "10s", "200ms").Should(Equal(newCtMapSize))
 		out, err = felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Count(out, srcIP.String())).To(Equal(1), "entry not found in conntrack map")
@@ -148,12 +148,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 			cfg.Spec.BPFMapSizeIPSets = &newIpSetMapSize
 			cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
 		})
-		Eventually(func() int { return getMapSize(felix, rtMap) }, "5s", "200ms").Should(Equal(newRtSize))
-		Eventually(func() int { return getMapSize(felix, feMap) }, "5s", "200ms").Should(Equal(newNATFeSize))
-		Eventually(func() int { return getMapSize(felix, beMap) }, "5s", "200ms").Should(Equal(newNATBeSize))
-		Eventually(func() int { return getMapSize(felix, affMap) }, "5s", "200ms").Should(Equal(newNATAffSize))
-		Eventually(func() int { return getMapSize(felix, ipsMap) }, "5s", "200ms").Should(Equal(newIpSetMapSize))
-		Eventually(func() int { return getMapSize(felix, ctMap) }, "5s", "200ms").Should(Equal(newCtMapSize))
+		Eventually(func() int { return getMapSize(felix, rtMap) }, "10s", "200ms").Should(Equal(newRtSize))
+		Eventually(func() int { return getMapSize(felix, feMap) }, "10s", "200ms").Should(Equal(newNATFeSize))
+		Eventually(func() int { return getMapSize(felix, beMap) }, "10s", "200ms").Should(Equal(newNATBeSize))
+		Eventually(func() int { return getMapSize(felix, affMap) }, "10s", "200ms").Should(Equal(newNATAffSize))
+		Eventually(func() int { return getMapSize(felix, ipsMap) }, "10s", "200ms").Should(Equal(newIpSetMapSize))
+		Eventually(func() int { return getMapSize(felix, ctMap) }, "10s", "200ms").Should(Equal(newCtMapSize))
 	})
 })
 
