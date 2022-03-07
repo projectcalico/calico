@@ -14,9 +14,9 @@
 
 static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 	__u8 next_header = ipv6hdr(ctx)->nexthdr;
-	__u8 hdrlen = 0;
-	struct ipv6_opt_hdr *opthdr = (struct ipv6_opt_hdr *)ctx->nh;
-	#pragma unroll
+	__u16 hdrlen = 0;
+	struct ipv6_opt_hdr *opthdr;
+
 	for (__u8 i = 0; i < MAX_EXTENSIONS; i++) {
 		switch (next_header) {
 			case IPPROTO_TCP:
@@ -24,22 +24,13 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 			case IPPROTO_ICMPV6:
 				// Next header is either tcp, udp, or icmpv6. Thus pointers are correct
 				goto parsing_ok;
-			case IPPROTO_HOPOPTS:
+			case IPPROTO_HOPOPTS: // Must be the first options
 			case IPPROTO_ROUTING:
 			case IPPROTO_FRAGMENT:
 			case IPPROTO_DSTOPTS:
 			case IPPROTO_MH:
 				// IPv6 extension headers which we ignore at this point
-				if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, hdrlen + UDP_SIZE)) {
-					ctx->fwd.reason = CALI_REASON_SHORT;
-					CALI_DEBUG("Too short\n");
-					goto deny;
-				}
-				next_header = opthdr->nexthdr;
-				hdrlen = opthdr->hdrlen;
-				ctx->nh = ctx->nh + hdrlen + 8;
-				opthdr = (struct ipv6_opt_hdr *)ctx->nh;
-				continue;
+				break;
 			case IPPROTO_NONE:
 				// There is no next header! refer to RFC8200.
 				// TODO: How to handle this type of packets?
@@ -47,10 +38,20 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 				// Any other packet that we don't expect to reach here.
 				goto deny;
 		}
+
+		if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, hdrlen + 8 + UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			goto deny;
+		}
+		opthdr = (struct ipv6_opt_hdr *)(ctx->nh + hdrlen);
+		next_header = opthdr->nexthdr;
+		hdrlen += opthdr->hdrlen * 8 + 8;
 	}
 
 	CALI_DEBUG("Too many IPv6 extension headers");
 deny:
+	ctx->nh = ctx->nh + hdrlen;
 	return PARSING_ERROR;
 
 parsing_ok:
