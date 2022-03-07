@@ -69,6 +69,9 @@ const (
 	// Length of the update channel and the max items to handle in a batch
 	// before kicking off a sync.
 	batchUpdateSize = 1000
+
+	// "no_pool" is a special pool vector that represents when a block/allocation has no matching IP pool.
+	unknownPoolLabel = "no_pool"
 )
 
 func init() {
@@ -79,8 +82,8 @@ func init() {
 	gcCandidateGauges = make(map[string]*prometheus.GaugeVec)
 	gcReclamationCounters = make(map[string]*prometheus.CounterVec)
 
-	// "no_pool" is a special pool vector that represents when a block/allocation has no matching IP pool.
-	registerMetricVectorsForPool("no_pool")
+	// Register the unknown pool explicitly.
+	registerMetricVectorsForPool(unknownPoolLabel)
 
 	poolSizeGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "ipam_pool_size",
@@ -395,9 +398,11 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 
 func (c *ipamController) handlePoolUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
-		c.onPoolUpdated(kvp)
+		pool := kvp.Value.(*apiv3.IPPool)
+		c.onPoolUpdated(pool)
 	} else {
-		c.onPoolDeleted(kvp)
+		poolName := kvp.Key.(model.ResourceKey).Name
+		c.onPoolDeleted(poolName)
 	}
 }
 
@@ -569,15 +574,28 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	delete(c.poolsByBlock, blockCIDR)
 }
 
-func (c *ipamController) onPoolUpdated(kvp model.KVPair) {
-	pool := kvp.Value.(*apiv3.IPPool)
+func (c *ipamController) onPoolUpdated(pool *apiv3.IPPool) {
 	_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
 	if err != nil {
 		log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s", pool.Name)
 		return
 	}
 
-	c.matchUnknownBlocksToPool(pool, poolNet)
+	// Blocks may not have a known association to an IP Pool. This can happen when a Pool gets deleted, or if block
+	// updates appear before their associated pool updates. Blocks lacking association to an IP Pool are grouped under
+	// "no_pool", and we attempt to associate them to a pool when we receive pool updates. This allows blocks to
+	// transition between states of known and unknown IP Pool association based on occupancy.
+	for block := range c.blocksByPool[unknownPoolLabel] {
+		_, blockNet, err := net.ParseCIDR(block)
+		if err != nil {
+			log.WithError(err).Warnf("Unable to parse block %s to determine if it matches pool %s", block, pool.Name)
+			continue
+		}
+
+		if blockOccupiesPool(blockNet, poolNet) {
+			c.updatePoolForBlock(block, pool.Name)
+		}
+	}
 
 	if c.poolCache[pool.Name] == nil {
 		registerMetricVectorsForPool(pool.Name)
@@ -587,10 +605,11 @@ func (c *ipamController) onPoolUpdated(kvp model.KVPair) {
 	c.poolCache[pool.Name] = pool
 }
 
-func (c *ipamController) onPoolDeleted(kvp model.KVPair) {
-	poolName := kvp.Key.(model.ResourceKey).Name
+func (c *ipamController) onPoolDeleted(poolName string) {
+	// When an IP Pool is deleted, its association transitions to "no_pool". The creation of new IP Pools may
+	// transition these blocks back to a known pool name.
 	for block := range c.blocksByPool[poolName] {
-		c.updatePoolForBlock(block, "no_pool")
+		c.updatePoolForBlock(block, unknownPoolLabel)
 	}
 
 	c.unregisterMetricVectorsForPool(poolName)
@@ -605,7 +624,7 @@ func (c *ipamController) getPoolForBlock(blockCIDR string) string {
 	_, blockNet, err := net.ParseCIDR(blockCIDR)
 	if err != nil {
 		log.WithError(err).Warnf("Unable to parse block %s for pool determination", blockCIDR)
-		return "no_pool"
+		return unknownPoolLabel
 	}
 
 	for poolName, pool := range c.poolCache {
@@ -619,25 +638,7 @@ func (c *ipamController) getPoolForBlock(blockCIDR string) string {
 		}
 	}
 
-	return "no_pool"
-}
-
-// Blocks may not have a known association to an IP Pool. This can happen when a Pool gets deleted, or if block updates
-// appear before their associated pool updates. Blocks lacking association to an IP Pool are grouped under "no_pool",
-// and we attempt to associate them to a pool when we receive pool updates. This allows blocks to transition between
-// states of known and unknown IP Pool association based on occupancy.
-func (c *ipamController) matchUnknownBlocksToPool(pool *apiv3.IPPool, poolNet *cnet.IPNet) {
-	for block := range c.blocksByPool["no_pool"] {
-		_, blockNet, err := net.ParseCIDR(block)
-		if err != nil {
-			log.WithError(err).Warnf("Unable to parse block %s to determine if it matches pool %s", block, pool.Name)
-			continue
-		}
-
-		if blockOccupiesPool(blockNet, poolNet) {
-			c.updatePoolForBlock(block, pool.Name)
-		}
-	}
+	return unknownPoolLabel
 }
 
 func (c *ipamController) updatePoolForBlock(blockCIDR string, newPool string) {

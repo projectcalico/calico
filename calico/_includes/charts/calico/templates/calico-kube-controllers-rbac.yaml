@@ -64,14 +64,12 @@ rules:
       - get
       - list
       - watch
-  # IPAM resources are manipulated when nodes are deleted.
+  # IPAM resources are manipulated in response to node and block updates, as well as periodic triggers.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
-      - ippools
       - ipreservations
     verbs:
       - list
-      - watch
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - blockaffinities
@@ -83,6 +81,13 @@ rules:
       - create
       - update
       - delete
+      - watch
+  # Pools are watched to maintain a mapping of blocks to IP pools.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - ippools
+    verbs:
+      - list
       - watch
   # kube-controllers manages hostendpoints.
   - apiGroups: ["crd.projectcalico.org"]

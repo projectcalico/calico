@@ -28,11 +28,11 @@ existing metrics.
 | `ipam_allocations_per_node` | node    | Number of Calico IP allocations, indexed by node on which the allocation was made. Prefer `ipam_allocations_in_use` for new integrations. |
 | `ipam_allocations_borrowed_per_node` | node    | Number of Calico IP allocations borrowed from a non-affine block, indexed by node on which the allocation was made. Prefer `ipam_allocations_borrowed` for new integrations. |
 
-Labels can be interpreted as follows
+Labels can be interpreted as follows:
 
 | Label Name | Description |
 |------------|-------------|
-| `node`     | For allocation metrics, the node on which the allocation was made. For block metrics, the node for which the block has affinity - if the block has no affinity, value will be `no_affinity` |
+| `node`     | For allocation metrics, the node on which the allocation was made. For block metrics, the node for which the block has affinity. If the block has no affinity, value will be `no_affinity` |
 | `ippool`   | The IP Pool that the IPAM block occupies. If there is no IP Pool which matches the block, value will be `no_pool` |
 
 Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
