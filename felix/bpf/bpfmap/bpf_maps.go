@@ -17,6 +17,9 @@
 package bpfmap
 
 import (
+	"fmt"
+	"os"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -50,7 +53,24 @@ func CreateBPFMapContext(ipsetsMapSize, natFEMapSize, natBEMapSize, natAffMapSiz
 	return bpfMapContext
 }
 
-func CreateBPFMaps(mc *bpf.MapContext) {
+func MigrateDataFromOldMap(mc *bpf.MapContext) {
+	ctMap := mc.CtMap
+	err := ctMap.CopyDeltaFromOldMap()
+	if err != nil {
+		log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+	}
+}
+
+func DestroyBPFMaps(mc *bpf.MapContext) {
+	maps := []bpf.Map{mc.IpsetsMap, mc.StateMap, mc.ArpMap, mc.FailsafesMap, mc.FrontendMap,
+		mc.BackendMap, mc.AffinityMap, mc.RouteMap, mc.CtMap, mc.SrMsgMap, mc.CtNatsMap}
+	for _, m := range maps {
+		os.Remove(m.(*bpf.PinnedMap).Path())
+		m.(*bpf.PinnedMap).Close()
+	}
+}
+
+func CreateBPFMaps(mc *bpf.MapContext) error {
 	maps := []bpf.Map{}
 
 	mc.IpsetsMap = ipsets.Map(mc)
@@ -89,7 +109,8 @@ func CreateBPFMaps(mc *bpf.MapContext) {
 	for _, bpfMap := range maps {
 		err := bpfMap.EnsureExists()
 		if err != nil {
-			log.WithError(err).Panicf("Failed to create %s map %s", bpfMap.GetName(), err)
+			return fmt.Errorf("Failed to create %s map, err=%w", bpfMap.GetName(), err)
 		}
 	}
+	return nil
 }
