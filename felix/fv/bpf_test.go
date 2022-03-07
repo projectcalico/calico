@@ -1842,8 +1842,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.Expect(Some, w[0][1], TargetIP(ip), ExpectWithPorts(port))
 						cc.Expect(Some, w[1][0], TargetIP(ip), ExpectWithPorts(port))
 						cc.Expect(Some, w[1][1], TargetIP(ip), ExpectWithPorts(port))
-						cc.Expect(Some, hostW[0], TargetIP(ip), ExpectWithPorts(port))
-						cc.Expect(Some, hostW[1], TargetIP(ip), ExpectWithPorts(port))
 						cc.CheckConnectivity()
 					})
 
@@ -2312,8 +2310,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[0][1], TargetIP(clusterIP), port)
 						cc.ExpectSome(w[1][0], TargetIP(clusterIP), port)
 						cc.ExpectSome(w[1][1], TargetIP(clusterIP), port)
-						cc.ExpectSome(hostW[0], TargetIP(clusterIP), port)
-						cc.ExpectSome(hostW[1], TargetIP(clusterIP), port)
 						cc.CheckConnectivity()
 					})
 
