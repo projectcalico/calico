@@ -39,23 +39,32 @@ var _ = Describe("EncapsulationCalculator", func() {
 	})
 	Context("FelixConfig not set", func() {
 		DescribeTable("pool tests",
-			func(apiPoolsToAdd []*apiv3.IPPool, apiPoolsToRemove []string, modelPoolsToAdd []*model.IPPool, modelPoolsToRemove []string, poolsToInit *model.KVPairList, expectedIPIP, expectedVXLAN bool) {
+			func(apiPoolsToAdd []model.KVPair, apiPoolsToRemove []string, modelPoolsToAdd []model.KVPair, modelPoolsToRemove []string, poolsToInit *model.KVPairList, expectedIPIP, expectedVXLAN bool) {
 				if poolsToInit != nil {
-					encapsulationCalculator.SetAPIPools(poolsToInit)
+					encapsulationCalculator.initPools(poolsToInit)
 				}
 				for _, p := range apiPoolsToAdd {
-					encapsulationCalculator.UpdateAPIPool(p)
+					err := encapsulationCalculator.handlePool(p)
+					Expect(err).To(Not(HaveOccurred()))
 				}
 				for _, p := range modelPoolsToAdd {
-					encapsulationCalculator.UpdateModelPool(p)
+					err := encapsulationCalculator.handlePool(p)
+					Expect(err).To(Not(HaveOccurred()))
 				}
 				for _, p := range apiPoolsToRemove {
-					encapsulationCalculator.RemovePool(p)
+					encapsulationCalculator.removePool(p)
 				}
 				for _, p := range modelPoolsToRemove {
 					_, cidr, err := net.ParseCIDR(p)
 					Expect(err).To(Not(HaveOccurred()))
-					encapsulationCalculator.RemoveModelPool(model.IPPoolKey{CIDR: *cidr})
+					p := model.KVPair{
+						Key: model.IPPoolKey{
+							CIDR: *cidr,
+						},
+						Value: nil,
+					}
+					err = encapsulationCalculator.handlePool(p)
+					Expect(err).To(Not(HaveOccurred()))
 				}
 				Expect(encapsulationCalculator.IPIPEnabled()).To(Equal(expectedIPIP))
 				Expect(encapsulationCalculator.VXLANEnabled()).To(Equal(expectedVXLAN))
@@ -64,114 +73,98 @@ var _ = Describe("EncapsulationCalculator", func() {
 				nil, nil, nil, nil, nil,
 				false, false),
 			Entry("API pool with no encap",
-				[]*apiv3.IPPool{getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever)},
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever)},
 				nil, nil, nil, nil,
 				false, false),
 			Entry("API pool with IPIP 'Always'",
-				[]*apiv3.IPPool{getAPIPool("192.168.1.0/24", apiv3.IPIPModeAlways, apiv3.VXLANModeNever)},
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeAlways, apiv3.VXLANModeNever)},
 				nil, nil, nil, nil,
 				true, false),
 			Entry("API pool with VXLAN 'Always'",
-				[]*apiv3.IPPool{getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways)},
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways)},
 				nil, nil, nil, nil,
 				false, true),
 			Entry("API pool with IPIP 'CrossSubnet' and VXLAN 'CrossSubnet'",
-				[]*apiv3.IPPool{getAPIPool("192.168.1.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeCrossSubnet)},
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeCrossSubnet)},
 				nil, nil, nil, nil,
 				true, true),
 			Entry("2 API pools with mixed encaps",
-				[]*apiv3.IPPool{getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever)},
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), *getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever)},
 				nil, nil, nil, nil,
 				true, true),
 			Entry("2 API pools with mixed encaps, then remove one pool",
-				[]*apiv3.IPPool{getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever)},
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), *getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever)},
 				[]string{"192.168.2.0/24"},
 				nil, nil, nil,
 				false, true),
-			Entry("Initialize with SetAPIPools with no encap",
+			Entry("Initialize with initPools with no encap",
 				nil, nil, nil, nil,
 				&model.KVPairList{
 					KVPairs: []*model.KVPair{
-						{
-							Value: getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever),
-						},
-						{
-							Value: getAPIPool("192.168.2.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever),
-						},
+						getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever),
+						getAPIPool("192.168.2.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever),
 					},
 				},
 				false, false),
-			Entry("Initialize with SetAPIPools with mixed encaps",
+			Entry("Initialize with initPools with mixed encaps",
 				nil, nil, nil, nil,
 				&model.KVPairList{
 					KVPairs: []*model.KVPair{
-						{
-							Value: getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways),
-						},
-						{
-							Value: getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever),
-						},
+						getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways),
+						getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever),
 					},
 				},
 				true, true),
-			Entry("Initialize with SetAPIPools, update one API pool and remove another",
-				[]*apiv3.IPPool{getAPIPool("192.168.1.0/24", apiv3.IPIPModeAlways, apiv3.VXLANModeNever)},
+			Entry("Initialize with initPools, update one API pool and remove another",
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeAlways, apiv3.VXLANModeNever)},
 				[]string{"192.168.2.0/24"},
 				nil, nil,
 				&model.KVPairList{
 					KVPairs: []*model.KVPair{
-						{
-							Value: getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways),
-						},
-						{
-							Value: getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeAlways),
-						},
+						getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways),
+						getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeAlways),
 					},
 				},
 				true, false),
 			Entry("Model pool with no encap",
 				nil, nil,
-				[]*model.IPPool{getModelPool("192.168.1.0/24", encap.Undefined, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Undefined, encap.Undefined)},
 				nil, nil,
 				false, false),
 			Entry("Model pool with IPIP 'Always'",
 				nil, nil,
-				[]*model.IPPool{getModelPool("192.168.1.0/24", encap.Always, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Always, encap.Undefined)},
 				nil, nil,
 				true, false),
 			Entry("Model pool with VXLAN 'Always'",
 				nil, nil,
-				[]*model.IPPool{getModelPool("192.168.1.0/24", encap.Undefined, encap.Always)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Undefined, encap.Always)},
 				nil, nil,
 				false, true),
 			Entry("Model pool with IPIP 'CrossSubnet' and VXLAN 'CrossSubnet'",
 				nil, nil,
-				[]*model.IPPool{getModelPool("192.168.1.0/24", encap.CrossSubnet, encap.CrossSubnet)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.CrossSubnet, encap.CrossSubnet)},
 				nil, nil,
 				true, true),
 			Entry("2 Model pools with mixed encaps",
 				nil, nil,
-				[]*model.IPPool{getModelPool("192.168.1.0/24", encap.Undefined, encap.Always), getModelPool("192.168.2.0/24", encap.CrossSubnet, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Undefined, encap.Always), *getModelPool("192.168.2.0/24", encap.CrossSubnet, encap.Undefined)},
 				nil, nil,
 				true, true),
 			Entry("2 Model pools with mixed encaps, then remove one pool",
 				nil, nil,
-				[]*model.IPPool{getModelPool("192.168.1.0/24", encap.Undefined, encap.Always), getModelPool("192.168.2.0/24", encap.CrossSubnet, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Undefined, encap.Always), *getModelPool("192.168.2.0/24", encap.CrossSubnet, encap.Undefined)},
 				[]string{"192.168.2.0/24"},
 				nil,
 				false, true),
-			Entry("Initialize with SetAPIPools, update one Model pool and remove another",
+			Entry("Initialize with initPools, update one Model pool and remove another",
 				nil, nil,
-				[]*model.IPPool{getModelPool("192.168.1.0/24", encap.Always, encap.Undefined)},
+				[]model.KVPair{*getModelPool("192.168.1.0/24", encap.Always, encap.Undefined)},
 				[]string{"192.168.2.0/24"},
 				&model.KVPairList{
 					KVPairs: []*model.KVPair{
-						{
-							Value: getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways),
-						},
-						{
-							Value: getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeAlways),
-						},
+						getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways),
+						getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeAlways),
 					},
 				},
 				true, false),
@@ -181,14 +174,16 @@ var _ = Describe("EncapsulationCalculator", func() {
 		t := true
 		f := false
 		DescribeTable("FelixConfig tests",
-			func(felixIPIP, felixVXLAN *bool, apiPoolsToAdd []*apiv3.IPPool, modelPoolsToAdd []*model.IPPool, expectedIPIP, expectedVXLAN bool) {
+			func(felixIPIP, felixVXLAN *bool, apiPoolsToAdd, modelPoolsToAdd []model.KVPair, expectedIPIP, expectedVXLAN bool) {
 				conf.DeprecatedIpInIpEnabled = felixIPIP
 				conf.DeprecatedVXLANEnabled = felixVXLAN
 				for _, p := range apiPoolsToAdd {
-					encapsulationCalculator.UpdateAPIPool(p)
+					err := encapsulationCalculator.handlePool(p)
+					Expect(err).To(Not(HaveOccurred()))
 				}
 				for _, p := range modelPoolsToAdd {
-					encapsulationCalculator.UpdateModelPool(p)
+					err := encapsulationCalculator.handlePool(p)
+					Expect(err).To(Not(HaveOccurred()))
 				}
 				Expect(encapsulationCalculator.IPIPEnabled()).To(Equal(expectedIPIP))
 				Expect(encapsulationCalculator.VXLANEnabled()).To(Equal(expectedVXLAN))
@@ -204,8 +199,8 @@ var _ = Describe("EncapsulationCalculator", func() {
 				true, true),
 			Entry("Both IPIP and VXLAN false in FelixConfig with mixed pools",
 				&f, &f,
-				[]*apiv3.IPPool{getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever)},
-				[]*model.IPPool{getModelPool("192.168.3.0/24", encap.Undefined, encap.Always), getModelPool("192.168.4.0/24", encap.CrossSubnet, encap.Undefined)},
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), *getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever)},
+				[]model.KVPair{*getModelPool("192.168.3.0/24", encap.Undefined, encap.Always), *getModelPool("192.168.4.0/24", encap.CrossSubnet, encap.Undefined)},
 				false, false),
 		)
 	})
@@ -381,24 +376,31 @@ func removePoolUpdate(cidr net.IPNet) api.Update {
 	}
 }
 
-func getAPIPool(cidr string, ipipMode apiv3.IPIPMode, vxlanMode apiv3.VXLANMode) *apiv3.IPPool {
-	return &apiv3.IPPool{
-		Spec: apiv3.IPPoolSpec{
-			CIDR:      cidr,
-			IPIPMode:  ipipMode,
-			VXLANMode: vxlanMode,
+func getAPIPool(cidr string, ipipMode apiv3.IPIPMode, vxlanMode apiv3.VXLANMode) *model.KVPair {
+	return &model.KVPair{
+		Value: &apiv3.IPPool{
+			Spec: apiv3.IPPoolSpec{
+				CIDR:      cidr,
+				IPIPMode:  ipipMode,
+				VXLANMode: vxlanMode,
+			},
 		},
 	}
 }
 
-func getModelPool(cidr string, ipipMode, vxlanMode encap.Mode) *model.IPPool {
+func getModelPool(cidr string, ipipMode, vxlanMode encap.Mode) *model.KVPair {
 	_, parsedCidr, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return nil
 	}
-	return &model.IPPool{
-		CIDR:      *parsedCidr,
-		IPIPMode:  ipipMode,
-		VXLANMode: vxlanMode,
+	return &model.KVPair{
+		Key: model.IPPoolKey{
+			CIDR: *parsedCidr,
+		},
+		Value: &model.IPPool{
+			CIDR:      *parsedCidr,
+			IPIPMode:  ipipMode,
+			VXLANMode: vxlanMode,
+		},
 	}
 }
