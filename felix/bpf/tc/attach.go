@@ -48,6 +48,7 @@ type AttachPoint struct {
 	Iface                string
 	LogLevel             string
 	HostIP               net.IP
+	HostTunnelIP         net.IP
 	IntfIP               net.IP
 	FIB                  bool
 	ToHostDrop           bool
@@ -179,21 +180,24 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
 
 	if err := obj.Load(); err != nil {
+		logCxt.Warn("Failed to load program")
 		return "", fmt.Errorf("error loading program: %w", err)
 	}
 
 	isHost := false
-	if ap.Type == "host" {
+	if ap.Type == "host" || ap.Type == "nat" {
 		isHost = true
 	}
 
 	err = updateJumpMap(obj, isHost, ap.IPv6Enabled)
 	if err != nil {
+		logCxt.Warn("Failed to update jump map")
 		return "", fmt.Errorf("error updating jump map %v", err)
 	}
 
 	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, string(ap.Hook))
 	if err != nil {
+		logCxt.Warnf("Failed to attach to TC section %s", SectionName(ap.Type, ap.ToOrFrom))
 		return "", err
 	}
 	logCxt.Info("Program attached to TC.")
@@ -620,8 +624,17 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		flags |= libbpf.GlobalsIPv6Enabled
 	}
 
+	hostTunnelIP := hostIP
+
+	if ap.HostTunnelIP != nil {
+		hostTunnelIP, err = convertIPToUint32(ap.HostTunnelIP)
+		if err != nil {
+			return err
+		}
+	}
+
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, flags)
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP, flags)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
@@ -632,20 +645,19 @@ func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
 }
 
 func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
-	ipVersions := set.New()
-	ipVersions.Add("IPv4")
+	ipVersions := []string{"IPv4"}
 	if ipv6Enabled {
-		ipVersions.Add("IPv6")
+		ipVersions = append(ipVersions, "IPv6")
 	}
 
-	ipVersions.Iter(func(ipFamily interface{}) error {
+	for _, ipFamily := range ipVersions {
 		// Since in IPv4, we don't add prologue to the jump map, and hence the first
 		// program is policy, the base index should be set to -1 to properly offset the
 		// policy program (base+1) to the first entry in the jump map, i.e. 0. However,
 		// in IPv6, we add the prologue program to the jump map, and the first entry is 3.
 		base := -1
 		if ipFamily == "IPv6" {
-			base = 3
+			base = 4
 		}
 
 		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
@@ -673,8 +685,14 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		if err != nil {
 			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
 		}
-		return nil
-	})
+		if ipFamily != "IPv6" {
+			iIndex := base + 4
+			err = obj.UpdateJumpMap("cali_jump", string(programNames[iIndex]), iIndex)
+			if err != nil {
+				return fmt.Errorf("error updating %v host CT conflict program: %v", ipFamily, err)
+			}
+		}
+	}
 
 	return nil
 }
