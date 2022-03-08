@@ -70,8 +70,8 @@ const (
 	// before kicking off a sync.
 	batchUpdateSize = 1000
 
-	// "no_pool" is a special pool vector that represents when a block/allocation has no matching IP pool.
-	unknownPoolLabel = "no_pool"
+	// "no_ippool" is a special pool vector that represents when a block/allocation has no matching IP pool.
+	unknownPoolLabel = "no_ippool"
 )
 
 func init() {
@@ -86,7 +86,7 @@ func init() {
 	registerMetricVectorsForPool(unknownPoolLabel)
 
 	poolSizeGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "ipam_pool_size",
+		Name: "ipam_ippool_size",
 		Help: "Total number of addresses in the IP Pool",
 	}, []string{"ippool"})
 	prometheus.MustRegister(poolSizeGauge)
@@ -533,9 +533,14 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 		}
 	}
 
-	// Update association of block to pool.
-	pool := c.getPoolForBlock(blockCIDR)
-	c.updatePoolForBlock(blockCIDR, pool)
+	// We only update pool association if current association is nil, since block update can only trigger transitions of
+	// association from nil to known pool or nil to unknown pool. Transitions from known to nil or unknown to nil
+	// occur due to block delete, transitions from known to unknown occur due to pool delete, and transitions from
+	// unknown to known occur due to pool update.
+	if c.poolsByBlock[blockCIDR] == "" {
+		pool := c.getPoolForBlock(blockCIDR)
+		c.updatePoolForBlock(blockCIDR, pool)
+	}
 
 	// Finally, update the raw storage.
 	c.allBlocks[blockCIDR] = kvp
@@ -569,6 +574,7 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	delete(c.nodesByBlock, blockCIDR)
 	delete(c.emptyBlocks, blockCIDR)
 
+	// Transition from known or unknown pool association to nil.
 	pool := c.poolsByBlock[blockCIDR]
 	delete(c.blocksByPool[pool], blockCIDR)
 	delete(c.poolsByBlock, blockCIDR)
@@ -583,8 +589,7 @@ func (c *ipamController) onPoolUpdated(pool *apiv3.IPPool) {
 
 	// Blocks may not have a known association to an IP Pool. This can happen when a Pool gets deleted, or if block
 	// updates appear before their associated pool updates. Blocks lacking association to an IP Pool are grouped under
-	// "no_pool", and we attempt to associate them to a pool when we receive pool updates. This allows blocks to
-	// transition between states of known and unknown IP Pool association based on occupancy.
+	// "no_ippool", and we check for transitions from unknown to known pool association on pool update.
 	for block := range c.blocksByPool[unknownPoolLabel] {
 		_, blockNet, err := net.ParseCIDR(block)
 		if err != nil {
@@ -606,8 +611,7 @@ func (c *ipamController) onPoolUpdated(pool *apiv3.IPPool) {
 }
 
 func (c *ipamController) onPoolDeleted(poolName string) {
-	// When an IP Pool is deleted, its association transitions to "no_pool". The creation of new IP Pools may
-	// transition these blocks back to a known pool name.
+	// When an IP Pool is deleted, its association transitions from known to unknown.
 	for block := range c.blocksByPool[poolName] {
 		c.updatePoolForBlock(block, unknownPoolLabel)
 	}
@@ -715,30 +719,11 @@ func (c *ipamController) updateMetrics() {
 			}
 		}
 
-		// Update gauge values, retrieving and resetting the values for the current pool
-		inUseAllocationsGaugeForPool := inUseAllocationGauges[poolName]
-		inUseAllocationsGaugeForPool.Reset()
-		for node, uses := range inUseAllocationsForPoolByNode {
-			inUseAllocationsGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(uses))
-		}
-
-		borrowedAllocationsGaugeForPool := borrowedAllocationGauges[poolName]
-		borrowedAllocationsGaugeForPool.Reset()
-		for node, borrows := range borrowedAllocationsForPoolByNode {
-			borrowedAllocationsGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(borrows))
-		}
-
-		blocksGaugeForPool := blocksGauges[poolName]
-		blocksGaugeForPool.Reset()
-		for node, blocks := range blocksForPoolByNode {
-			blocksGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(blocks))
-		}
-
-		gcCandidatesGaugeForPool := gcCandidateGauges[poolName]
-		gcCandidatesGaugeForPool.Reset()
-		for node, candidates := range gcCandidatesForPoolByNode {
-			gcCandidatesGaugeForPool.With(prometheus.Labels{"node": node}).Set(float64(candidates))
-		}
+		// Update gauge values, resetting the values for the current pool
+		updatePoolGaugeWithNodeValues(inUseAllocationGauges, poolName, inUseAllocationsForPoolByNode)
+		updatePoolGaugeWithNodeValues(borrowedAllocationGauges, poolName, borrowedAllocationsForPoolByNode)
+		updatePoolGaugeWithNodeValues(blocksGauges, poolName, blocksForPoolByNode)
+		updatePoolGaugeWithNodeValues(gcCandidateGauges, poolName, gcCandidatesForPoolByNode)
 	}
 
 	// Update legacy gauges
@@ -1284,6 +1269,10 @@ func (c *ipamController) incrementReclamationMetric(allocationId string, node st
 		metricNode = "unknown_node"
 	}
 	gcReclamationsCounter := gcReclamationCounters[pool]
+	if gcReclamationsCounter == nil {
+		log.Warnf("Reclamation count metric vector used for pool %s was not created, skipping publishing", pool)
+		return
+	}
 	gcReclamationsCounter.With(prometheus.Labels{"node": metricNode}).Inc()
 }
 
@@ -1311,7 +1300,7 @@ func registerMetricVectorsForPool(poolName string) {
 	prometheus.MustRegister(blocksGauges[poolName])
 
 	gcCandidateGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "ipam_gc_candidates",
+		Name: "ipam_allocations_gc_candidates",
 		Help: "Allocations that are currently marked by the garbage collector as potential candidates to " +
 			"reclaim. Under normal operation, this metric should return to zero after the garbage collector " +
 			"confirms that this allocation can be reclaimed and reclaims it",
@@ -1320,7 +1309,7 @@ func registerMetricVectorsForPool(poolName string) {
 	prometheus.MustRegister(gcCandidateGauges[poolName])
 
 	gcReclamationCounters[poolName] = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "ipam_gc_reclamations",
+		Name: "ipam_allocations_gc_reclamations",
 		Help: "The total allocations that have been reclaimed by the garbage collector over time. Under normal " +
 			"operation, this counter should increase, and increases of this counter should align to a return to zero " +
 			"for the candidate gauge.",
@@ -1349,6 +1338,19 @@ func (c *ipamController) unregisterMetricVectorsForPool(poolName string) {
 
 	prometheus.Unregister(gcReclamationCounters[poolName])
 	delete(gcReclamationCounters, poolName)
+}
+
+func updatePoolGaugeWithNodeValues(gaugesByPool map[string]*prometheus.GaugeVec, pool string, nodeValues map[string]int) {
+	poolGauge := gaugesByPool[pool]
+	if poolGauge == nil {
+		log.Warnf("Gauge metric vector used for pool %s was not created, skipping publishing", pool)
+		return
+	}
+
+	poolGauge.Reset()
+	for node, value := range nodeValues {
+		poolGauge.With(prometheus.Labels{"node": node}).Set(float64(value))
+	}
 }
 
 func publishPoolSizeMetric(pool *apiv3.IPPool, poolNet *cnet.IPNet) {
