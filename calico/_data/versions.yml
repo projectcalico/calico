@@ -2,7 +2,7 @@
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: v1.25.2
+   version: v1.25.3
   components:
      typha:
       version: v3.22.1
