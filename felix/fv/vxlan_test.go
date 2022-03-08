@@ -558,7 +558,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 
 					// Disable VXLAN in Felix.
-					felixConfig := api.NewFelixConfiguration() // Create a default FelixConfiguration
+					felixConfig := api.NewFelixConfiguration()
 					felixConfig.Name = "default"
 					enabled := false
 					felixConfig.Spec.VXLANEnabled = &enabled

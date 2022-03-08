@@ -15,6 +15,8 @@
 package calc
 
 import (
+	"fmt"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
@@ -56,28 +58,12 @@ func (r *EncapsulationResolver) RegisterWith(dispatcher *dispatcher.Dispatcher) 
 }
 
 func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool) {
-	if update.Value == nil {
-		log.WithField("update", update).Debug("EncapsulationResolver: IPPool deletion")
+	log.WithField("update", update).Debug("EncapsulationResolver: OnPoolUpdate")
 
-		k, ok := update.Key.(model.IPPoolKey)
-		if !ok {
-			log.Infof("failed to convert %+v to model.IPPoolKey. Ignoring.", update.Key)
-
-			return
-		}
-
-		r.encapCalc.RemoveModelPool(k)
-	} else {
-		log.WithField("update", update).Debug("EncapsulationResolver: IPPool update")
-
-		pool, ok := update.Value.(*model.IPPool)
-		if !ok {
-			log.Infof("failed to convert %+v to *model.IPPool. Ignoring.", update.Value)
-
-			return
-		}
-
-		r.encapCalc.UpdateModelPool(pool)
+	err := r.encapCalc.handlePool(update.KVPair)
+	if err != nil {
+		log.Infof("error handling update %+v: %v. Ignoring.", update, err)
+		return
 	}
 
 	r.triggerCalculation()
@@ -136,13 +122,73 @@ func NewEncapsulationCalculator(config *config.Config, ippoolKVList *model.KVPai
 	}
 
 	if ippoolKVList != nil {
-		encapCalc.SetAPIPools(ippoolKVList)
+		encapCalc.initPools(ippoolKVList)
 	}
 
 	return encapCalc
 }
 
-func (c *EncapsulationCalculator) UpdatePool(cidr string, ipipEnabled, vxlanEnabled bool) {
+func (c *EncapsulationCalculator) initPools(ippoolKVList *model.KVPairList) {
+	for _, kvp := range ippoolKVList.KVPairs {
+		err := c.handlePool(*kvp)
+		if err != nil {
+			log.Infof("error handling update %+v: %v. Ignoring.", *kvp, err)
+		}
+	}
+}
+
+func (c *EncapsulationCalculator) handlePool(p model.KVPair) error {
+	if _, ok := p.Key.(model.IPPoolKey); ok {
+		// When dealing with an model.IPPool, p.Value is nil for a removal
+		return c.handleModelPool(p)
+	}
+
+	if _, ok := p.Value.(*apiv3.IPPool); ok {
+		// When dealing with an apiv3.IPPool, p.Key is nil
+		return c.handleAPIPool(p)
+	}
+
+	return fmt.Errorf("Not a valid IP pool type")
+}
+
+func (c *EncapsulationCalculator) handleModelPool(p model.KVPair) error {
+	k, ok := p.Key.(model.IPPoolKey)
+	if !ok {
+		return fmt.Errorf("failed to convert %+v to model.IPPoolKey", p.Key)
+	}
+
+	poolKey := k.CIDR.String()
+	if p.Value == nil {
+		c.removePool(poolKey)
+	} else {
+		pool, ok := p.Value.(*model.IPPool)
+		if !ok {
+			return fmt.Errorf("failed to convert %+v to *model.IPPool", p.Value)
+		}
+		c.updatePool(poolKey, pool.IPIPMode != encap.Undefined, pool.VXLANMode != encap.Undefined)
+
+	}
+
+	return nil
+}
+
+func (c *EncapsulationCalculator) handleAPIPool(p model.KVPair) error {
+	if p.Value == nil {
+		return fmt.Errorf("API pool KVPair Value is nil")
+	}
+
+	pool, ok := p.Value.(*apiv3.IPPool)
+	if !ok {
+		return fmt.Errorf("failed to convert %+v to *model.IPPool", p.Value)
+	}
+
+	poolKey := pool.Spec.CIDR
+	c.updatePool(poolKey, pool.Spec.IPIPMode != apiv3.IPIPModeNever, pool.Spec.VXLANMode != apiv3.VXLANModeNever)
+
+	return nil
+}
+
+func (c *EncapsulationCalculator) updatePool(cidr string, ipipEnabled, vxlanEnabled bool) {
 	if ipipEnabled {
 		c.ipipPools[cidr] = struct{}{}
 	} else {
@@ -156,35 +202,9 @@ func (c *EncapsulationCalculator) UpdatePool(cidr string, ipipEnabled, vxlanEnab
 	}
 }
 
-func (c *EncapsulationCalculator) RemovePool(cidr string) {
+func (c *EncapsulationCalculator) removePool(cidr string) {
 	delete(c.ipipPools, cidr)
 	delete(c.vxlanPools, cidr)
-}
-
-func (c *EncapsulationCalculator) UpdateAPIPool(pool *apiv3.IPPool) {
-	poolKey := pool.Spec.CIDR
-	c.UpdatePool(poolKey, pool.Spec.IPIPMode != apiv3.IPIPModeNever, pool.Spec.VXLANMode != apiv3.VXLANModeNever)
-}
-
-func (c *EncapsulationCalculator) SetAPIPools(ippoolKVList *model.KVPairList) {
-	for _, kvp := range ippoolKVList.KVPairs {
-		pool, ok := kvp.Value.(*apiv3.IPPool)
-		if ok {
-			c.UpdateAPIPool(pool)
-		} else {
-			log.Infof("failed to convert %+v to *apiv3.IPPool. Ignoring.", kvp.Value)
-		}
-	}
-}
-
-func (c *EncapsulationCalculator) UpdateModelPool(pool *model.IPPool) {
-	poolKey := pool.CIDR.String()
-	c.UpdatePool(poolKey, pool.IPIPMode != encap.Undefined, pool.VXLANMode != encap.Undefined)
-}
-
-func (c *EncapsulationCalculator) RemoveModelPool(k model.IPPoolKey) {
-	poolKey := k.CIDR.String()
-	c.RemovePool(poolKey)
 }
 
 func (c *EncapsulationCalculator) IPIPEnabled() bool {
@@ -192,11 +212,7 @@ func (c *EncapsulationCalculator) IPIPEnabled() bool {
 		return *c.config.DeprecatedIpInIpEnabled
 	}
 
-	if len(c.ipipPools) > 0 {
-		return true
-	}
-
-	return false
+	return len(c.ipipPools) > 0
 }
 
 func (c *EncapsulationCalculator) VXLANEnabled() bool {
@@ -204,9 +220,5 @@ func (c *EncapsulationCalculator) VXLANEnabled() bool {
 		return *c.config.DeprecatedVXLANEnabled
 	}
 
-	if len(c.vxlanPools) > 0 {
-		return true
-	}
-
-	return false
+	return len(c.vxlanPools) > 0
 }
