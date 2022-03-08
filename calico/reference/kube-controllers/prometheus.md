@@ -33,7 +33,7 @@ Labels can be interpreted as follows:
 | Label Name | Description |
 |------------|-------------|
 | `node`     | For allocation metrics, the node on which the allocation was made. For block metrics, the node for which the block has affinity. If the block has no affinity, value will be `no_affinity` |
-| `ippool`   | The IP Pool that the IPAM block occupies. If there is no IP Pool which matches the block, value will be `no_pool` |
+| `ippool`   | The IP Pool that the IPAM block occupies. If there is no IP Pool which matches the block, value will be `no_ippool` |
 
 Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
 metrics along with their help text and type information.
