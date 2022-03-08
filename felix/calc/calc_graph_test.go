@@ -40,6 +40,8 @@ var testIP2 = mustParseIP("10.0.0.2")
 var testIPAs6 = net.IP{IP: testIP.To16()}
 var testIPAs4 = net.IP{IP: testIP.To4()}
 
+var mockConfigCallback = func() {}
+
 var _ = DescribeTable("Calculation graph pass-through tests",
 	func(key model.Key, input interface{}, expUpdate interface{}, expRemove interface{}) {
 		// Create a calculation graph/event buffer combo.
@@ -51,7 +53,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		}
 		conf := config.New()
 		conf.FelixHostname = "hostname"
-		cg := NewCalculationGraph(eb, conf, func() {}).AllUpdDispatcher
+		cg := NewCalculationGraph(eb, conf, mockConfigCallback).AllUpdDispatcher
 
 		// Send in the update and flush the buffer.  It should deposit the message
 		// via our callback.
@@ -167,7 +169,7 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		}
 		conf := config.New()
 		conf.FelixHostname = "hostname"
-		cg = NewCalculationGraph(eb, conf, func() {}).AllUpdDispatcher
+		cg = NewCalculationGraph(eb, conf, mockConfigCallback).AllUpdDispatcher
 	})
 
 	It("should coalesce duplicate updates", func() {
@@ -272,7 +274,7 @@ var _ = Describe("specific scenario tests", func() {
 		eventBuf.Callback = mockDataplane.OnEvent
 		conf := config.New()
 		conf.FelixHostname = localHostname
-		calcGraph = NewCalculationGraph(eventBuf, conf, func() {})
+		calcGraph = NewCalculationGraph(eventBuf, conf, mockConfigCallback)
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			return nil

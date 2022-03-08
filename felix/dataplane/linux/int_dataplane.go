@@ -106,6 +106,8 @@ var (
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
+
+	maxCleanupRetries = 5
 )
 
 func init() {
@@ -454,7 +456,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
-		cleanUpVXLANDevice()
+		// Start a cleanup gorouting not to block felix if it needs to retry
+		go cleanUpVXLANDevice()
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -684,7 +687,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
-		cleanUpIPIPAddrs()
+		// Start a cleanup gorouting not to block felix if it needs to retry
+		go cleanUpIPIPAddrs()
 	}
 
 	// Add a manager for wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -921,43 +925,72 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 }
 
 func cleanUpIPIPAddrs() {
-	// If IPIP is not enabled, check to see if there is are addreses in the IPIP device and delete them if there are.
+	// If IPIP is not enabled, check to see if there is are addresses in the IPIP device and delete them if there are.
 	log.Debug("Checking if we need to clean up the IPIP device")
-	link, err := netlink.LinkByName("tunl0")
-	if err != nil {
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
-			log.Debug("IPIP disabled and no IPIP device found")
-			return
+
+	var errFound bool
+	for i := 0; i < maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		log.WithError(err).Warn("IPIP disabled and failed to query IPIP device. Ignoring.")
-		return
-	}
-	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
-	if err != nil {
-		log.WithError(err).Warn("IPIP disabled and failed to list addresses, will be unable to remove any old addresses from the device should they exist. Ignoring.")
-		return
-	}
-	for _, oldAddr := range addrs {
-		if err := netlink.AddrDel(link, &oldAddr); err != nil {
-			log.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s. Ignoring.", oldAddr.IPNet)
+		link, err := netlink.LinkByName("tunl0")
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				log.Debug("IPIP disabled and no IPIP device found")
+				return
+			}
+			log.WithError(err).Warn("IPIP disabled and failed to query IPIP device.")
+			errFound = true
+			continue
 		}
+		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		if err != nil {
+			log.WithError(err).Warn("IPIP disabled and failed to list addresses, will be unable to remove any old addresses from the device should they exist.")
+			errFound = true
+			continue
+		}
+		for _, oldAddr := range addrs {
+			if err := netlink.AddrDel(link, &oldAddr); err != nil {
+				log.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s.", oldAddr.IPNet)
+				errFound = true
+				continue
+			}
+		}
+	}
+	if errFound {
+		log.Debugf("Errors found after retrying %v times", maxCleanupRetries)
 	}
 }
 
 func cleanUpVXLANDevice() {
 	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
 	log.Debug("Checking if we need to clean up the VXLAN device")
-	link, err := netlink.LinkByName("vxlan.calico")
-	if err != nil {
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
-			log.Debug("VXLAN disabled and no VXLAN device found")
-			return
+
+	var errFound bool
+	for i := 0; i < maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		log.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device. Ignoring.")
-		return
+		link, err := netlink.LinkByName("vxlan.calico")
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				log.Debug("VXLAN disabled and no VXLAN device found")
+				return
+			}
+			log.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device.")
+			errFound = true
+			continue
+		}
+		if err = netlink.LinkDel(link); err != nil {
+			log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device.")
+			errFound = true
+			continue
+		}
 	}
-	if err = netlink.LinkDel(link); err != nil {
-		log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device. Ignoring.")
+	if errFound {
+		log.Debugf("Errors found after retrying %v times", maxCleanupRetries)
 	}
 }
 
