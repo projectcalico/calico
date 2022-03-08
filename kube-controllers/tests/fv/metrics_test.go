@@ -138,8 +138,8 @@ var _ = Describe("kube-controllers metrics tests", func() {
 	})
 
 	It("should export metrics for IPAM state", func() {
-		// Create an IP pool with room for 4 blocks.
-		createIPPool("test-ippool", "192.168.0.0/24", calicoClient)
+		// Create IP Pool 1 with room for 4 blocks, and two more pools to test pool-based metric scenarios.
+		createIPPool("test-ippool-1", "192.168.0.0/24", calicoClient)
 		createIPPool("test-ippool-2", "172.16.0.0/16", calicoClient)
 		createIPPool("test-ippool-3", "10.16.0.0/24", calicoClient)
 
@@ -154,9 +154,9 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// Assert only pool size IPAM metrics are reported at this point.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_pool_size{ippool="test-ippool"} 256`,
-				`ipam_pool_size{ippool="test-ippool-2"} 65536`,
-				`ipam_pool_size{ippool="test-ippool-3"} 256`,
+				`ipam_ippool_size{ippool="test-ippool-1"} 256`,
+				`ipam_ippool_size{ippool="test-ippool-2"} 65536`,
+				`ipam_ippool_size{ippool="test-ippool-3"} 256`,
 			},
 			[]string{
 				`ipam_allocations_`,
@@ -194,26 +194,26 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// Assert that IPAM metrics have been updated to include the blocks and allocations from above.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-a"} 4`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 4`,
 				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-a"} 1`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-b"} 1`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"} 1`,
 				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-b"} 1`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-c"} 1`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"} 1`,
 				`ipam_allocations_per_node{node="node-a"} 5`,
 				`ipam_allocations_per_node{node="node-b"} 2`,
 				`ipam_allocations_per_node{node="node-c"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="node-a"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-a"} 1`,
 				`ipam_blocks{ippool="test-ippool-2",node="node-a"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="node-b"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-b"} 1`,
 				`ipam_blocks{ippool="test-ippool-3",node="node-b"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="node-c"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-c"} 1`,
 				`ipam_blocks_per_node{node="node-a"} 2`,
 				`ipam_blocks_per_node{node="node-b"} 2`,
 				`ipam_blocks_per_node{node="node-c"} 1`,
 			},
 			[]string{
-				`ipam_gc_candidates`,
-				`ipam_gc_reclamations`,
+				`ipam_allocations_gc_candidates`,
+				`ipam_allocations_gc_reclamations`,
 			},
 			kubeControllers.IP,
 			5*time.Second,
@@ -227,26 +227,26 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// and an IP address that is "borrowed" from the empty block on node C.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-a"} 4`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 4`,
 				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-a"} 1`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-b"} 1`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"} 1`,
 				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-b"} 1`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-c"} 1`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"} 1`,
 				`ipam_allocations_per_node{node="node-a"} 5`,
 				`ipam_allocations_per_node{node="node-b"} 2`,
 				`ipam_allocations_per_node{node="node-c"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="node-a"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-a"} 1`,
 				`ipam_blocks{ippool="test-ippool-2",node="node-a"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="node-b"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-b"} 1`,
 				`ipam_blocks{ippool="test-ippool-3",node="node-b"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="no_affinity"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="no_affinity"} 1`,
 				`ipam_blocks_per_node{node="node-a"} 2`,
 				`ipam_blocks_per_node{node="node-b"} 2`,
 				`ipam_blocks_per_node{node="no_affinity"} 1`,
-				`ipam_allocations_borrowed{ippool="test-ippool",node="node-c"} 1`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"} 1`,
 				`ipam_allocations_borrowed_per_node{node="node-c"} 1`,
 			}, []string{
-				`ipam_blocks{ippool="test-ippool",node="node-c"}`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-c"}`,
 				`ipam_blocks_per_node{node="node-c"}`,
 			},
 			kubeControllers.IP,
@@ -260,9 +260,9 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// Assert that IPAM metrics for node-c have been updated.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-c"} 2`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"} 2`,
 				`ipam_allocations_per_node{node="node-c"} 2`,
-				`ipam_allocations_borrowed{ippool="test-ippool",node="node-c"} 2`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"} 2`,
 				`ipam_allocations_borrowed_per_node{node="node-c"} 2`,
 			},
 			[]string{},
@@ -293,8 +293,8 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// Assert that IPAM metrics show the two GC candidates.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_gc_candidates{ippool="test-ippool-2",node="node-a"} 1`,
-				`ipam_gc_candidates{ippool="test-ippool",node="node-b"} 1`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-a"} 1`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-b"} 1`,
 			},
 			[]string{},
 			kubeControllers.IP,
@@ -304,54 +304,54 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// Assert that the candidates are eventually garbage collected and that IPAM metrics are updated.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_gc_reclamations{ippool="test-ippool-2",node="node-a"} 1`,
-				`ipam_gc_reclamations{ippool="test-ippool",node="node-b"} 1`,
+				`ipam_allocations_gc_reclamations{ippool="test-ippool-2",node="node-a"} 1`,
+				`ipam_allocations_gc_reclamations{ippool="test-ippool-1",node="node-b"} 1`,
 			},
 			[]string{
-				`ipam_gc_candidates{ippool="test-ippool-2",node="node-a"}`,
-				`ipam_gc_candidates{ippool="test-ippool",node="node-b"}`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-a"}`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-b"}`,
 			},
 			kubeControllers.IP,
 			time.Minute, 2*time.Second,
 		)
 
-		// Delete Pools 2 and 3 to trigger the change of pool associations
+		// Delete pools 2 and 3 to trigger the change of pool associations
 		_, err = calicoClient.IPPools().Delete(context.Background(), "test-ippool-2", options.DeleteOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		_, err = calicoClient.IPPools().Delete(context.Background(), "test-ippool-3", options.DeleteOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
-		// Assert that associated pools are labelled as no_pool, and block affinities as no_affinity.
+		// Assert that associated pools are labelled as no_ippool, and block affinities as no_affinity.
 		// Blocks lose affinity when their pool is deleted.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_pool_size{ippool="test-ippool"} 256`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-a"} 4`,
-				`ipam_allocations_in_use{ippool="no_pool",node="node-a"} 1`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-b"} 1`,
-				`ipam_allocations_in_use{ippool="no_pool",node="node-b"} 1`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-c"} 2`,
+				`ipam_ippool_size{ippool="test-ippool-1"} 256`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 4`,
+				`ipam_allocations_in_use{ippool="no_ippool",node="node-a"} 1`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"} 1`,
+				`ipam_allocations_in_use{ippool="no_ippool",node="node-b"} 1`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"} 2`,
 				`ipam_allocations_per_node{node="node-a"} 5`,
 				`ipam_allocations_per_node{node="node-b"} 2`,
 				`ipam_allocations_per_node{node="node-c"} 2`,
-				`ipam_blocks{ippool="test-ippool",node="node-a"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="node-b"} 1`,
-				`ipam_blocks{ippool="no_pool",node="no_affinity"} 2`, // Blocks from pools 2 and 3 lose affinity and pool.
-				`ipam_blocks{ippool="test-ippool",node="no_affinity"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-a"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-b"} 1`,
+				`ipam_blocks{ippool="no_ippool",node="no_affinity"} 2`, // Blocks from pools 2 and 3 lose affinity and pool.
+				`ipam_blocks{ippool="test-ippool-1",node="no_affinity"} 1`,
 				`ipam_blocks_per_node{node="node-a"} 1`,
 				`ipam_blocks_per_node{node="node-b"} 1`,
 				`ipam_blocks_per_node{node="no_affinity"} 3`,
-				`ipam_allocations_borrowed{ippool="test-ippool",node="node-c"} 2`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"} 2`,
 				`ipam_allocations_borrowed_per_node{node="node-c"} 2`,
 			},
 			[]string{
-				`ipam_pool_size{ippool="test-ippool-2"}`,
-				`ipam_pool_size{ippool="test-ippool-3"}`,
+				`ipam_ippool_size{ippool="test-ippool-2"}`,
+				`ipam_ippool_size{ippool="test-ippool-3"}`,
 				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-a"}`,
 				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-b"}`,
 				`ipam_blocks{ippool="test-ippool-2",node="node-a"}`,
 				`ipam_blocks{ippool="test-ippool-3",node="node-b"}`,
-				`ipam_gc_reclamations{ippool="test-ippool-2",node="node-a"}`,
+				`ipam_allocations_gc_reclamations{ippool="test-ippool-2",node="node-a"}`,
 			},
 			kubeControllers.IP,
 			5*time.Second,
@@ -396,25 +396,25 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// still be affine to node-b.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-a"} 4`,
-				`ipam_allocations_in_use{ippool="no_pool",node="node-a"} 1`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-c"} 2`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 4`,
+				`ipam_allocations_in_use{ippool="no_ippool",node="node-a"} 1`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"} 2`,
 				`ipam_allocations_per_node{node="node-a"} 5`,
 				`ipam_allocations_per_node{node="node-c"} 2`,
-				`ipam_blocks{ippool="test-ippool",node="node-a"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="node-b"} 1`,
-				`ipam_blocks{ippool="no_pool",node="no_affinity"} 1`,
-				`ipam_blocks{ippool="test-ippool",node="no_affinity"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-a"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-b"} 1`,
+				`ipam_blocks{ippool="no_ippool",node="no_affinity"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="no_affinity"} 1`,
 				`ipam_blocks_per_node{node="node-a"} 1`,
 				`ipam_blocks_per_node{node="node-b"} 1`,
 				`ipam_blocks_per_node{node="no_affinity"} 2`,
-				`ipam_allocations_borrowed{ippool="test-ippool",node="node-c"} 2`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"} 2`,
 				`ipam_allocations_borrowed_per_node{node="node-c"} 2`,
 			},
 			[]string{
-				`ipam_gc_reclamations{ippool="test-ippool",node="node-b"}`,
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-b"}`,
-				`ipam_allocations_in_use{ippool="no_pool",node="node-b"}`,
+				`ipam_allocations_gc_reclamations{ippool="test-ippool-1",node="node-b"}`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"}`,
+				`ipam_allocations_in_use{ippool="no_ippool",node="node-b"}`,
 				`ipam_allocations_per_node{node="node-b"}`,
 			},
 			kubeControllers.IP,
@@ -445,21 +445,21 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// left is the block and allocations for node A.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-a"} 4`,
-				`ipam_allocations_in_use{ippool="no_pool",node="node-a"} 1`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 4`,
+				`ipam_allocations_in_use{ippool="no_ippool",node="node-a"} 1`,
 				`ipam_allocations_per_node{node="node-a"} 5`,
-				`ipam_blocks{ippool="test-ippool",node="node-a"} 1`,
-				`ipam_blocks{ippool="no_pool",node="no_affinity"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-a"} 1`,
+				`ipam_blocks{ippool="no_ippool",node="no_affinity"} 1`,
 				`ipam_blocks_per_node{node="node-a"} 1`,
 				`ipam_blocks_per_node{node="no_affinity"} 1`,
 			},
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-c"}`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"}`,
 				`ipam_allocations_per_node{node="node-c"}`,
-				`ipam_blocks{ippool="test-ippool",node="node-b"}`,
-				`ipam_blocks{ippool="test-ippool",node="no_affinity"}`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-b"}`,
+				`ipam_blocks{ippool="test-ippool-1",node="no_affinity"}`,
 				`ipam_blocks_per_node{node="node-b"}`,
-				`ipam_allocations_borrowed{ippool="test-ippool",node="node-c"}`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"}`,
 				`ipam_allocations_borrowed_per_node{node="node-c"}`,
 			},
 			kubeControllers.IP,
@@ -473,17 +473,17 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		// Pool labels represent the pool occupied by the block and allocations.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-a"} 4`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 4`,
 				`ipam_allocations_in_use{ippool="test-ippool-2-analogue",node="node-a"} 1`,
 				`ipam_allocations_per_node{node="node-a"} 5`,
-				`ipam_blocks{ippool="test-ippool",node="node-a"} 1`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-a"} 1`,
 				`ipam_blocks{ippool="test-ippool-2-analogue",node="no_affinity"} 1`,
 				`ipam_blocks_per_node{node="node-a"} 1`,
 				`ipam_blocks_per_node{node="no_affinity"} 1`,
 			},
 			[]string{
-				`ipam_allocations_in_use{ippool="no_pool",node="node-a"} 1`,
-				`ipam_blocks{ippool="no_pool",node="no_affinity"} 1`,
+				`ipam_allocations_in_use{ippool="no_ippool",node="node-a"} 1`,
+				`ipam_blocks{ippool="no_ippool",node="no_affinity"} 1`,
 			},
 			kubeControllers.IP,
 			5*time.Second,
@@ -498,10 +498,10 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		validateExpectedAndUnexpectedMetrics(
 			[]string{},
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool",node="node-a"}`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"}`,
 				`ipam_allocations_in_use{ippool="test-ippool-2-analogue",node="node-a"}`,
 				`ipam_allocations_per_node{node="node-a"}`,
-				`ipam_blocks{ippool="test-ippool",node="node-a"}`,
+				`ipam_blocks{ippool="test-ippool-1",node="node-a"}`,
 				`ipam_blocks{ippool="test-ippool-2-analogue",node="no_affinity"}`,
 				`ipam_blocks_per_node{node="node-a"}`,
 				`ipam_blocks_per_node{node="no_affinity"}`,
@@ -574,7 +574,7 @@ func createNode(node string, k8sClient *kubernetes.Clientset) {
 			Spec:       v1.NodeSpec{},
 		},
 		metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
 func createIPPool(name string, cidr string, calicoClient client.Interface) {
@@ -585,7 +585,7 @@ func createIPPool(name string, cidr string, calicoClient client.Interface) {
 	p.Spec.NodeSelector = "all()"
 	p.Spec.Disabled = false
 	_, err := calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
 func allocatePodIpWithHandle(ip string, handle string, node string, pod string, calicoClient client.Interface) {
@@ -593,7 +593,7 @@ func allocatePodIpWithHandle(ip string, handle string, node string, pod string, 
 	err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 		IP: net.MustParseIP(ip), HandleID: &handle, Attrs: attrs, Hostname: node,
 	})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
 func allocateInterfaceIpWithHandle(ip string, handle string, node string, itype string, calicoClient client.Interface) {
@@ -601,7 +601,7 @@ func allocateInterfaceIpWithHandle(ip string, handle string, node string, itype 
 	err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 		IP: net.MustParseIP(ip), HandleID: &handle, Attrs: attrs, Hostname: node,
 	})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
 func createPod(podName string, ip string, handle string, node string, k8sClient *kubernetes.Clientset, calicoClient client.Interface) {
@@ -620,24 +620,24 @@ func createPod(podName string, ip string, handle string, node string, k8sClient 
 		},
 	}
 	pod, err := k8sClient.CoreV1().Pods("default").Create(context.Background(), pod, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	pod.Status.PodIP = ip
 	pod.Status.Phase = v1.PodRunning
 	_, err = k8sClient.CoreV1().Pods("default").UpdateStatus(context.Background(), pod, metav1.UpdateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 	allocatePodIpWithHandle(ip, handle, node, podName, calicoClient)
 }
 
 func deletePodWithIP(pod string, ip string, k8sClient *kubernetes.Clientset, calicoClient client.Interface) {
 	err := k8sClient.CoreV1().Pods("default").Delete(context.Background(), pod, metav1.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	_, err = calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: ip})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
 func validateExpectedAndUnexpectedMetrics(expectedMetrics []string, notExpectedMetrics []string, host string, intervals ...interface{}) {
-	Eventually(func() error {
+	EventuallyWithOffset(1, func() error {
 		out, err := getMetrics(fmt.Sprintf("http://%s:9094/metrics", host))
 		Expect(err).NotTo(HaveOccurred())
 		for _, s := range expectedMetrics {
