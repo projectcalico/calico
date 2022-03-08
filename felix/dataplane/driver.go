@@ -257,11 +257,11 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesMarkEndpoint:        markEndpointMark,
 				IptablesMarkNonCaliEndpoint: markEndpointNonCaliEndpoint,
 
-				VXLANEnabled: configParams.VXLANEnabled,
+				VXLANEnabled: configParams.Encapsulation.VXLANEnabled,
 				VXLANPort:    configParams.VXLANPort,
 				VXLANVNI:     configParams.VXLANVNI,
 
-				IPIPEnabled:        configParams.IpInIpEnabled,
+				IPIPEnabled:        configParams.Encapsulation.IPIPEnabled,
 				IPIPTunnelAddress:  configParams.IpInIpTunnelAddr,
 				VXLANTunnelAddress: configParams.IPv4VXLANTunnelAddr,
 

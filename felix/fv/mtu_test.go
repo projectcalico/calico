@@ -87,10 +87,10 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 			infra.Stop()
 		})
 
-		It("should configure MTU correctly", func() {
+		It("should configure MTU correctly based on FelixConfiguration", func() {
 			// We should NOT detect the primary interface's MTU of 1500, and instead default
 			// to 1460 due to the mismatched regex. Since VXLAN is enabled, we expect 1460 minus
-			// the VXLAN overhead of to show up in the MTU file.
+			// the VXLAN overhead of 50 to show up in the MTU file.
 			for _, felix := range felixes {
 				Eventually(func() string {
 					out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
@@ -99,11 +99,54 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 			}
 
 			// Disable VXLAN. We should expect the MTU to change, but still based on the default 1460.
-			fc, err := client.FelixConfigurations().Get(context.Background(), "default", options.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			// Create a default FelixConfiguration
+			fc := api.NewFelixConfiguration()
+			fc.Name = "default"
 			f := false
 			fc.Spec.VXLANEnabled = &f
-			_, err = client.FelixConfigurations().Update(context.Background(), fc, options.SetOptions{})
+			_, err := client.FelixConfigurations().Create(context.Background(), fc, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// It should now have an MTU of 1460 since there is no encap.
+			for _, felix := range felixes {
+				Eventually(func() string {
+					out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
+					return out
+				}, "30s", "100ms").Should(ContainSubstring("1460"))
+			}
+		})
+
+		It("should configure MTU correctly based on IP pools", func() {
+			// We should NOT detect the primary interface's MTU of 1500, and instead default
+			// to 1460 due to the mismatched regex. Since VXLAN is enabled, we expect 1460
+			// minus the VXLAN overhead of 50 to show up in the MTU file.
+			for _, felix := range felixes {
+				Eventually(func() string {
+					out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
+					return out
+				}, "30s", "100ms").Should(ContainSubstring("1410"))
+			}
+
+			// Unset VXLAN on FelixConfiguration. We should expect the MTU not to change, since the VXLAN encap is set in the default IPPool.
+			fc := api.NewFelixConfiguration()
+			fc.Name = "default"
+			fc.Spec.VXLANEnabled = nil
+			_, err := client.FelixConfigurations().Create(context.Background(), fc, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// It should still have an MTU of 1410 since the VXLAN encap is set in the default IPPool.
+			for _, felix := range felixes {
+				Eventually(func() string {
+					out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
+					return out
+				}, "30s", "100ms").Should(ContainSubstring("1410"))
+			}
+
+			// Set VXLANModeNever on the default IP pool
+			pool, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPPoolName, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			pool.Spec.VXLANMode = api.VXLANModeNever
+			_, err = client.IPPools().Update(context.Background(), pool, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// It should now have an MTU of 1460 since there is no encap.
