@@ -67,15 +67,16 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: bgp-secrets
-  namespace: kube-system
+  namespace: calico-system
 type: Opaque
 stringData:
   rr-password: very-secret
 EOF
 ```
 
-If {{site.noderunning}} in your cluster is running in a namespace other than kube-system,
-you should create the secret in that namespace instead of in kube-system.
+> **Note:** If {{site.noderunning}} in your cluster is running in a namespace other than calico-system,
+> you should create the secret in that namespace instead of in calico-system.
+{: .alert .alert-info}
 
 To use this password below in a BGPPeer resource, you need to note the secret name
 `bgp-secrets` and key name `rr-password`.
@@ -91,7 +92,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: secret-access
-  namespace: <namespace>
+  namespace: calico-system
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
@@ -102,7 +103,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: secret-access
-  namespace: <namespace>
+  namespace: calico-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -110,7 +111,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: calico-node
-  namespace: <namespace>
+  namespace: calico-system
 EOF
 ```
 
