@@ -295,7 +295,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("ip", "addr")
 					felix.Exec("ip", "rule")
 					felix.Exec("ip", "route")
-					felix.Exec("ip", "route", "show", "table", "1")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
