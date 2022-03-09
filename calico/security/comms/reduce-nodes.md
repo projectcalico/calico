@@ -45,6 +45,7 @@ Check if the `calico-typha` deployment exists in the `kube-system` namespace.
 kubectl get deployment -n kube-system calico-typha
 ```
 
+%>
 {% endtabs %}
 
 #### Schedule Typha to well-known nodes
@@ -80,4 +81,5 @@ spec:
 
 See [scheduling Typha to well-known nodes](https://kubernetes.io/docs/concepts/configuration/assign-pod-node/){:target="_blank"}.
 
+%>
 {% endtabs %}

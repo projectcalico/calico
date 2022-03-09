@@ -35,6 +35,7 @@ its connections as follows.
   - [Neutron plugin or ML2 driver](../../networking/openstack/configuration#neutron-server-etcneutronneutronconf) (OpenStack only)
   - [DHCP agent](../../networking/openstack/configuration#neutron-server-etcneutronneutronconf) (OpenStack only)
 
+%>
 {% endtabs %}
 
 ### Connections from {{site.prodname}} components to kube-apiserver (Kubernetes and OpenShift)
@@ -137,4 +138,5 @@ For detailed reference information on these parameters, refer to:
 
 - **Felix**: [Felix-Typha TLS configuration](../../reference/felix/configuration#felix-typha-tls-configuration)
 
+%>
 {% endtabs %}

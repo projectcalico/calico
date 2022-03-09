@@ -74,8 +74,9 @@ stringData:
 EOF
 ```
 
-If {{site.noderunning}} in your cluster is running in a namespace other than calico-system,
-you should create the secret in that namespace instead of in calico-system.
+> **Note:** If {{site.noderunning}} in your cluster is running in a namespace other than calico-system,
+> you should create the secret in that namespace instead of in calico-system.
+{: .alert .alert-info}
 
 To use this password below in a BGPPeer resource, you need to note the secret name
 `bgp-secrets` and key name `rr-password`.
