@@ -538,7 +538,7 @@ kubectl port-forward pod/prometheus-pod 9090:9090 -n calico-monitoring
 
 Browse to [http://localhost:9090](http://localhost:9090){: data-proofer-ignore=""} you should be able to see prometheus dashboard. Type **felix_active_local_endpoints** in the Expression input textbox then hit the execute button. Console table should be populated with all your nodes and quantity of endpoints in each of them.
 
-> **Note**: A comprehensive list of metrics can be [found at this link]({{ site.baseurl }}/reference/felix/prometheus).
+> **Note**: A list of Felix metrics can be [found at this link]({{ site.baseurl }}/reference/felix/prometheus). Similar lists can be found for [kube-controllers]({{ site.baseurl }}/reference/kube-controllers/prometheus) and [Typha]({{ site.baseurl }}/reference/typha/prometheus).
    {: .alert .alert-info}
 
 Push the `Add Graph` button, You should be able to see the metric plotted on a Graph.
