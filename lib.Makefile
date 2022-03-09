@@ -232,6 +232,9 @@ endif
 ifeq ($(ARCH),armv7)
 TARGET_PLATFORM=--platform=linux/arm/v7
 endif
+ifeq ($(ARCH),ppc64le)
+TARGET_PLATFORM=--platform=linux/ppc64le
+endif
 
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --pull \
