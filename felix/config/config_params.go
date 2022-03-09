@@ -230,7 +230,8 @@ type Config struct {
 	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);auto"`
 	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
 	InterfaceRefreshInterval           time.Duration     `config:"seconds;90"`
-	DeviceRouteSourceAddress           net.IP            `config:"ipv4;"`
+	DeviceRouteV4SourceAddress         net.IP            `config:"ipv4;"`
+	DeviceRouteV6SourceAddress         net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;90"`

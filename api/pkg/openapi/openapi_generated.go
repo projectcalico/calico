@@ -2195,7 +2195,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"deviceRouteSourceAddress": {
+					"deviceRouteV4SourceAddress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "This is the source address to use on programmed device routes. By default the source address is left blank, leaving the kernel to choose the source address used.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"deviceRouteV6SourceAddress": {
 						SchemaProps: spec.SchemaProps{
 							Description: "This is the source address to use on programmed device routes. By default the source address is left blank, leaving the kernel to choose the source address used.",
 							Type:        []string{"string"},
