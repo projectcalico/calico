@@ -64,6 +64,7 @@ const (
 	FlagLocal       Flags = 0x08
 	FlagHost        Flags = 0x10
 	FlagSameSubnet  Flags = 0x20
+	FlagTunneled    Flags = 0x40
 
 	FlagsUnknown        Flags = 0
 	FlagsRemoteWorkload       = FlagWorkload
@@ -131,6 +132,10 @@ func (v Value) String() string {
 
 	if typeFlags&FlagSameSubnet != 0 {
 		parts = append(parts, "same-subnet")
+	}
+
+	if typeFlags&FlagTunneled != 0 {
+		parts = append(parts, "tunneled")
 	}
 
 	if typeFlags&FlagLocal != 0 && typeFlags&FlagWorkload != 0 {
