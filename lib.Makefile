@@ -220,6 +220,10 @@ ifdef ARM_VERSION
 GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
 endif
 
+# Location of certificates used in UTs.
+REPO_ROOT := $(shell git rev-parse --show-toplevel)
+CERTS_PATH := $(REPO_ROOT)/hack/test/certs
+
 # Set the platform correctly for building docker images so that 
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
@@ -247,8 +251,8 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
-		-v $(CURDIR)/..:/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/../.go-pkg-cache:/go-cache:rw \
+		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
+		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
@@ -263,8 +267,8 @@ DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
-		-v $(CURDIR)/..:/go/src/github.com/projectcalico/calico:ro \
-		-v $(CURDIR)/../.go-pkg-cache:/go-cache:rw \
+		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:ro \
+		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
@@ -1102,6 +1106,138 @@ release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
+
+###############################################################################
+# Common functions for launching a local Kubernetes control plane.
+###############################################################################
+## Kubernetes apiserver used for tests
+APISERVER_NAME := calico-local-apiserver
+run-k8s-apiserver: stop-k8s-apiserver run-etcd
+	docker run --detach --net=host \
+		--name $(APISERVER_NAME) \
+		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
+		-v $(CERTS_PATH):/home/user/certs \
+		-e KUBECONFIG=/home/user/certs/kubeconfig \
+		$(CALICO_BUILD) kube-apiserver \
+		--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+		--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
+		--authorization-mode=RBAC \
+		--service-account-key-file=/home/user/certs/service-account.pem \
+		--service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+		--service-account-issuer=https://localhost:443 \
+		--api-audiences=kubernetes.default \
+		--client-ca-file=/home/user/certs/ca.pem \
+		--tls-cert-file=/home/user/certs/kubernetes.pem \
+		--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+		--enable-priority-and-fairness=false \
+		--max-mutating-requests-inflight=0 \
+		--max-requests-inflight=0
+
+	# Wait until the apiserver is accepting requests.
+	while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+
+	# Wait until we can configure a cluster role binding which allows anonymous auth.
+	while ! docker exec $(APISERVER_NAME) kubectl create \
+		clusterrolebinding anonymous-admin \
+		--clusterrole=cluster-admin \
+		--user=system:anonymous 2>/dev/null ; \
+		do echo "Waiting for $(APISERVER_NAME) to come up"; \
+		sleep 1; \
+		done
+
+	# Create CustomResourceDefinition (CRD) for Calico resources
+	while ! docker exec $(APISERVER_NAME) kubectl \
+		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
+		do echo "Trying to create CRDs"; \
+		sleep 1; \
+		done
+
+# Stop Kubernetes apiserver
+stop-k8s-apiserver:
+	@-docker rm -f $(APISERVER_NAME)
+
+# Run a local Kubernetes controller-manager in a docker container, useful for tests.
+CONTROLLER_MANAGER_NAME := calico-local-controller-manager
+run-k8s-controller-manager: stop-k8s-controller-manager run-k8s-apiserver
+	docker run --detach --net=host \
+		--name $(CONTROLLER_MANAGER_NAME) \
+		-v $(CERTS_PATH):/home/user/certs \
+		$(CALICO_BUILD) kube-controller-manager \
+		--master=https://127.0.0.1:6443 \
+		--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+		--min-resync-period=3m \
+		--allocate-node-cidrs=true \
+		--cluster-cidr=192.168.0.0/16 \
+		--v=5 \
+		--service-account-private-key-file=/home/user/certs/service-account-key.pem \
+		--root-ca-file=/home/user/certs/ca.pem
+
+## Stop Kubernetes controller manager
+stop-k8s-controller-manager:
+	@-docker rm -f $(CONTROLLER_MANAGER_NAME)
+
+###############################################################################
+# Common functions for create a local kind cluster.
+###############################################################################
+KIND_DIR := $(REPO_ROOT)/hack/test/kind
+KIND ?= $(KIND_DIR)/kind
+KUBECTL ?= $(KIND_DIR)/kubectl
+
+# Different tests may require different kind configurations.
+KIND_CONFIG ?= $(KIND_DIR)/kind.config
+KIND_NAME = $(basename $(notdir $(KIND_CONFIG)))
+KIND_KUBECONFIG?=$(KIND_DIR)/$(KIND_NAME)-kubeconfig.yaml
+
+kind-cluster-create: $(REPO_ROOT)/.$(KIND_NAME).created
+$(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
+	# First make sure any previous cluster is deleted
+	$(MAKE) kind-cluster-destroy
+
+	# Create a kind cluster.
+	$(KIND) create cluster \
+		--config $(KIND_CONFIG) \
+		--kubeconfig $(KIND_KUBECONFIG) \
+		--name $(KIND_NAME) \
+		--image kindest/node:$(K8S_VERSION)
+
+	# Wait for controller manager to be running and healthy, then create Calico CRDs.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd; do echo "Waiting for CRDs to be created"; sleep 2; done
+	touch $@
+
+kind-cluster-destroy: $(KIND) $(KUBECTL)
+	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
+	-$(KIND) delete cluster --name $(KIND_NAME)
+	rm -f $(KIND_KUBECONFIG)
+	rm -f $(REPO_ROOT)/.$(KIND_NAME).created
+
+kind $(KIND):
+	mkdir -p $(KIND_DIR)
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.11.1"
+
+kubectl $(KUBECTL):
+	mkdir -p $(KIND_DIR)
+	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
+	chmod +x $@
+
+###############################################################################
+# Common functions for launching a local etcd instance.
+###############################################################################
+## Run etcd as a container (calico-etcd)
+# TODO: We shouldn't need to tear this down every time it is called.
+# TODO: We shouldn't need to enable the v2 API, but some of our test code still relies on it.
+.PHONY: run-etcd stop-etcd
+run-etcd: stop-etcd
+	docker run --detach \
+		--net=host \
+		--entrypoint=/usr/local/bin/etcd \
+		--name calico-etcd $(ETCD_IMAGE) \
+		--enable-v2 \
+		--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+		--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
+stop-etcd:
+	@-docker rm -f calico-etcd
 
 ###############################################################################
 # Helpers

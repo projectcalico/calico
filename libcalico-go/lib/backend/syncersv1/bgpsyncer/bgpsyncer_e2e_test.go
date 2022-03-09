@@ -16,6 +16,7 @@ package bgpsyncer_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -36,6 +37,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+)
+
+const (
+	controlPlaneNodeName = "kind-single-control-plane"
 )
 
 // These tests validate that the various resources that the BGP watches are
@@ -84,7 +89,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			// For Kubernetes test one entry already in the cache for the node.
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/nodes/127.0.0.1")
-				syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/nodes/kind-control-plane")
+				syncTester.ExpectPath(fmt.Sprintf("/calico/resources/v3/projectcalico.org/nodes/%s", controlPlaneNodeName))
 			}
 
 			By("Disabling node to node mesh and adding a default ASNumber")
