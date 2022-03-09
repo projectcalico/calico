@@ -40,7 +40,7 @@ VERSIONS_WITHOUT_IMAGE_LIST = [
 VPP_IMAGES = ["calicovpp/agent", "calicovpp/vpp", "calicovpp/init-eks"]
 with open("%s/_config.yml" % DOCS_PATH) as configFile:
     config = yaml.safe_load(configFile)
-    VPP_RELEASE = config["defaults"]["values"]["vppbranch"]
+    VPP_RELEASE = config["defaults"][0]["values"]["vppbranch"]
 
 def test_vpp_branch():
     assert VPP_RELEASE != "master", "vppbranch cannot be 'master' for a release"
