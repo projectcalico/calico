@@ -93,7 +93,8 @@ WINDOWS_MOD_CACHED_FILES := \
     windows-packaging/templates/peerings.ps1.template \
 
 # Files to include in the Windows ZIP archive.  We need to list some of these explicitly
-# because we need to force them to be built/copied into place.
+# because we need to force them to be built/copied into place. We also have
+# tests in windows-packaging that we don't want to include.
 WINDOWS_ARCHIVE_FILES := \
     $(WINDOWS_ARCHIVE_BINARY) \
     $(WINDOWS_ARCHIVE_ROOT)/README.txt \
@@ -389,8 +390,11 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 stop-k8s-apiserver:
 	@-docker rm -f st-apiserver
 
+# Skip packages containing FV tests.
+UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
+.PHONY: ut
 ut:
-	@echo "No UTs available"
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) ginkgo -r -skipPackage=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
 
 ###############################################################################
 # System tests
@@ -529,7 +533,7 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks fv image build-windows-archive st
+ci: static-checks ut fv image build-windows-archive st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-upgrade
