@@ -165,8 +165,8 @@ func (hook ContextHook) Fire(entry *log.Entry) error {
 	// frame.  However, if an intermediate frame gets inlined we can skip too many frames in
 	// that case.  The only safe option is to use skip=1 and then let CallersFrames() deal
 	// with any inlining.
-	pcs := make([]uintptr, 10)
-	if numEntries := runtime.Callers(1, pcs); numEntries > 0 {
+	pcs := make([]uintptr, 20)
+	if numEntries := runtime.Callers(0, pcs); numEntries > 0 {
 		pcs = pcs[:numEntries]
 		frames := runtime.CallersFrames(pcs)
 		for {
@@ -178,9 +178,14 @@ func (hook ContextHook) Fire(entry *log.Entry) error {
 				break
 			}
 			if !more {
+				entry.Data[fieldFileName] = "filename-lookup-failed"
+				entry.Data[fieldLineNumber] = -1
 				break
 			}
 		}
+	} else {
+		entry.Data[fieldFileName] = "filename-lookup-failed"
+		entry.Data[fieldLineNumber] = -2
 	}
 	return nil
 }
@@ -195,6 +200,9 @@ func (hook ContextHook) Fire(entry *log.Entry) error {
 // - using strings.LastIndex(): ~10x slower
 // - omitting the package:      no benefit
 func shouldSkipFrame(frame runtime.Frame) bool {
+	if strings.Contains(frame.File, "runtime/extern.go") {
+		return true
+	}
 	if strings.HasSuffix(frame.File, "/hooks.go") ||
 		strings.HasSuffix(frame.File, "/entry.go") ||
 		strings.HasSuffix(frame.File, "/logger.go") ||
