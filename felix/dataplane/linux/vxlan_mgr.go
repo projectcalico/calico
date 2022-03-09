@@ -110,7 +110,7 @@ func newVXLANManager(
 		4,
 		false,
 		dpConfig.NetlinkTimeout,
-		dpConfig.DeviceRouteSourceAddress,
+		dpConfig.DeviceRouteV4SourceAddress,
 		blackHoleProto,
 		false,
 		0,

@@ -772,11 +772,19 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 		}
 	}
 
-	if c.DeviceRouteSourceAddress != "" {
-		parsedAddress := cnet.ParseIP(c.DeviceRouteSourceAddress)
+	if c.DeviceRouteV4SourceAddress != "" {
+		parsedAddress := cnet.ParseIP(c.DeviceRouteV4SourceAddress)
 		if parsedAddress == nil || parsedAddress.Version() != 4 {
-			structLevel.ReportError(reflect.ValueOf(c.DeviceRouteSourceAddress),
-				"DeviceRouteSourceAddress", "", reason("is not a valid IPv4 address"), "")
+			structLevel.ReportError(reflect.ValueOf(c.DeviceRouteV4SourceAddress),
+				"DeviceRouteV4SourceAddress", "", reason("is not a valid IPv4 address"), "")
+		}
+	}
+
+	if c.DeviceRouteV6SourceAddress != "" {
+		parsedAddress := cnet.ParseIP(c.DeviceRouteV6SourceAddress)
+		if parsedAddress == nil || parsedAddress.Version() != 6 {
+			structLevel.ReportError(reflect.ValueOf(c.DeviceRouteV6SourceAddress),
+				"DeviceRouteV6SourceAddress", "", reason("is not a valid IPv6 address"), "")
 		}
 	}
 
