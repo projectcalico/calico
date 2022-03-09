@@ -122,7 +122,7 @@ $(BIN)/flannel:
 # Unit Tests
 ###############################################################################
 ## Run the unit tests.
-ut: run-k8s-controller $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
@@ -148,17 +148,17 @@ ut-datastore:
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e KUBECONFIG=/home/user/certs/kubeconfig \
 	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	-v $(CURDIR)/tests/certs:/home/user/certs \
+	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
 
-ut-etcd: run-k8s-controller build $(BIN)/host-local
+ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	make stop-etcd
 	make stop-k8s-controller
 
-ut-kdd: run-k8s-controller build $(BIN)/host-local
+ut-kdd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 	make stop-etcd
 	make stop-k8s-controller
@@ -175,68 +175,6 @@ test-cni-versions:
 			exit 1; \
 		fi; \
 	done
-
-## Kubernetes apiserver used for tests
-run-k8s-apiserver: stop-k8s-apiserver run-etcd
-	docker run --detach --net=host \
-	  --name calico-k8s-apiserver \
-	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
-	  -e KUBECONFIG=/home/user/certs/kubeconfig \
-	  $(CALICO_BUILD) kube-apiserver \
-	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-	    --service-cluster-ip-range=10.101.0.0/16 \
-            --authorization-mode=RBAC \
-            --service-account-key-file=/home/user/certs/service-account.pem \
-            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
-            --service-account-issuer=https://localhost:443 \
-            --api-audiences=kubernetes.default \
-            --client-ca-file=/home/user/certs/ca.pem \
-            --tls-cert-file=/home/user/certs/kubernetes.pem \
-            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
-            --enable-priority-and-fairness=false \
-            --max-mutating-requests-inflight=0 \
-            --max-requests-inflight=0
-
-	# Wait until the apiserver is accepting requests.
-	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-	while ! docker exec calico-k8s-apiserver kubectl apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; do echo "Waiting for CRDs..."; sleep 2; done
-
-## Kubernetes controller manager used for tests
-run-k8s-controller: stop-k8s-controller run-k8s-apiserver
-	docker run --detach --net=host \
-	  --name calico-k8s-controller \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
-	  $(CALICO_BUILD) kube-controller-manager \
-            --master=https://127.0.0.1:6443 \
-            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
-            --min-resync-period=3m \
-            --allocate-node-cidrs=true \
-            --cluster-cidr=192.168.0.0/16 \
-            --v=5 \
-            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
-            --root-ca-file=/home/user/certs/ca.pem
-
-## Stop Kubernetes apiserver
-stop-k8s-apiserver:
-	@-docker rm -f calico-k8s-apiserver
-
-## Stop Kubernetes controller manager
-stop-k8s-controller:
-	@-docker rm -f calico-k8s-controller
-
-## Etcd is used by the tests
-run-etcd: stop-etcd
-	docker run --detach \
-	  -p 2379:2379 \
-	  --name calico-etcd $(ETCD_IMAGE) \
-	  etcd \
-	  --advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	  --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-## Stops calico-etcd containers
-stop-etcd:
-	@-docker rm -f calico-etcd
 
 ###############################################################################
 # Install test
