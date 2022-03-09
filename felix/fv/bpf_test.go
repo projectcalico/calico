@@ -167,16 +167,16 @@ FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
 const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
-10.65.0.1/32: local host
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
 10.65.0.4/32: local workload in-pool nat-out idx -
-10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
-10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
+10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
 FELIX_0/32: local host idx -
+FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
@@ -295,7 +295,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("ip", "addr")
 					felix.Exec("ip", "rule")
 					felix.Exec("ip", "route")
-					felix.Exec("ip", "route", "show", "table", "1")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
@@ -823,10 +822,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 
 			It("should have correct routes", func() {
+				tunnelAddr := ""
 				expectedRoutes := expectedRouteDump
-				if felixes[0].ExpectedIPIPTunnelAddr != "" || felixes[0].ExpectedVXLANTunnelAddr != "" || felixes[0].ExpectedWireguardTunnelAddr != "" {
+				switch {
+				case felixes[0].ExpectedIPIPTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedIPIPTunnelAddr
+				case felixes[0].ExpectedVXLANTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedVXLANTunnelAddr
+				case felixes[0].ExpectedWireguardTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedWireguardTunnelAddr
+				}
+
+				if tunnelAddr != "" {
 					expectedRoutes = expectedRouteDumpWithTunnelAddr
 				}
+
 				dumpRoutes := func() string {
 					out, err := felixes[0].ExecOutput("calico-bpf", "routes", "dump")
 					if err != nil {
@@ -845,6 +855,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						l = strings.ReplaceAll(l, felixes[1].IP, "FELIX_1")
 						l = strings.ReplaceAll(l, felixes[2].IP, "FELIX_2")
 						l = idxRE.ReplaceAllLiteralString(l, "idx -")
+						if tunnelAddr != "" {
+							l = strings.ReplaceAll(l, tunnelAddr+"/32", "FELIX_0_TNL/32")
+						}
 						filteredLines = append(filteredLines, l)
 					}
 					sort.Strings(filteredLines)
