@@ -50,11 +50,6 @@ endif
 # checking them.
 UPDATE_EXPECTED_DATA?=false
 
-# Location of the certs directory. 
-# TODO: Centralize this instead of just using cni-plugins certs. Right now each
-# directory has an exact copy of these files!
-CERTS_PATH=$(CURDIR)/../cni-plugin/tests/certs
-
 .PHONY: test-kdd
 ## Run template tests against KDD
 test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
@@ -110,46 +105,6 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 ut:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r .'
 
-
-run-etcd: stop-etcd
-	docker run --detach \
-	--net=host \
-	--name calico-etcd $(ETCD_IMAGE) \
-	etcd \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-## Stops calico-etcd containers
-stop-etcd:
-	@-docker rm -f calico-etcd
-
-## Kubernetes apiserver used for tests
-run-k8s-apiserver: stop-k8s-apiserver run-etcd
-	docker run --detach --net=host \
-	  --name calico-k8s-apiserver \
-	  -v $(CERTS_PATH):/home/user/certs \
-	  -v $(CURDIR)/config:/config \
-	  -e KUBECONFIG=/home/user/certs/kubeconfig \
-	  $(CALICO_BUILD) kube-apiserver \
-	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-	    --service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
-            --authorization-mode=RBAC \
-            --service-account-key-file=/home/user/certs/service-account.pem \
-            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
-            --service-account-issuer=https://localhost:443 \
-            --api-audiences=kubernetes.default \
-            --client-ca-file=/home/user/certs/ca.pem \
-            --tls-cert-file=/home/user/certs/kubernetes.pem \
-            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
-            --enable-priority-and-fairness=false \
-            --max-mutating-requests-inflight=0 \
-            --max-requests-inflight=0
-	# Wait until the apiserver is accepting requests.
-	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-
-## Stop Kubernetes apiserver
-stop-k8s-apiserver:
-	@-docker rm -f calico-k8s-apiserver
 
 bin/kubectl:
 	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
