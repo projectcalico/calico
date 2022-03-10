@@ -2319,7 +2319,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						clusterIP := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						cc.ExpectSome(w[0][0], TargetIP(clusterIP), port)
 						cc.ExpectSome(w[0][1], TargetIP(clusterIP), port)
 						cc.ExpectSome(w[1][0], TargetIP(clusterIP), port)
 						cc.ExpectSome(w[1][1], TargetIP(clusterIP), port)
