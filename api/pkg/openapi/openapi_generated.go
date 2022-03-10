@@ -2109,6 +2109,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format: "",
 						},
 					},
+					"iptablesFilterDenyAction": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IptablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with an iptables \"DROP\" action. If you want to use \"REJECT\" action instead you can configure it in here.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"logPrefix": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]",
