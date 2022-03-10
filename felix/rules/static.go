@@ -1122,7 +1122,7 @@ func RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled, 
 
 	rules = append(rules, Rule{
 		Match:  Match().MarkMatchesWithMask(mark, mask).RPFCheckFailed(acceptLocal),
-		Action: r.dropActionOverride,
+		Action: DropAction{},
 	})
 
 	return rules
