@@ -291,6 +291,7 @@ type InternalDataplane struct {
 	managersWithRouteTables []ManagerWithRouteTables
 	managersWithRouteRules  []ManagerWithRouteRules
 	ruleRenderer            rules.RuleRenderer
+	defaultRuleRenderer     rules.DefaultRuleRenderer
 
 	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
 	// call apply().
@@ -1379,8 +1380,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			},
 			iptables.Rule{
 				Match:   iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-				Comment: []string{"Drop packets from unknown flows."},
-				Action:  iptables.DropAction{},
+				Comment: []string{fmt.Sprintf("%s packets from unknown flows.", d.defaultRuleRenderer.IptablesFilterDenyAction)},
+				Action:  d.defaultRuleRenderer.IptablesFilterDenyAction,
 			},
 		)
 
@@ -1399,10 +1400,10 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 		for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
 			fwdRules = append(fwdRules,
-				// Drop packets that have come from a workload but have not been through our BPF program.
+				// Drop/reject packets that have come from a workload but have not been through our BPF program.
 				iptables.Rule{
 					Match:   iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-					Action:  iptables.DropAction{},
+					Action:  d.defaultRuleRenderer.IptablesFilterDenyAction,
 					Comment: []string{"From workload without BPF seen mark"},
 				},
 			)
@@ -1419,7 +1420,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
 				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-				Action: iptables.DropAction{},
+				Action: d.defaultRuleRenderer.IptablesFilterDenyAction,
 			})
 		}
 
@@ -1438,7 +1439,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// In BPF mode, we don't support IPv6 yet.  Drop it.
 				fwdRules = append(fwdRules, iptables.Rule{
 					Match:   iptables.Match().OutInterface(prefix + "+"),
-					Action:  iptables.DropAction{},
+					Action:  d.defaultRuleRenderer.IptablesFilterDenyAction,
 					Comment: []string{"To workload, drop IPv6."},
 				})
 			}
