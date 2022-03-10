@@ -275,7 +275,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
-		"Deny rules should be correctly rendered",
+		"Deny (DROP) rules should be correctly rendered",
 		func(ipVer int, in proto.Rule, expMatch string) {
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
@@ -285,6 +285,23 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.DropAction{}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny (REJECT) rules should be correctly rendered",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			rrConfigReject := rrConfigNormal
+			rrConfigReject.DropActionOverride = "REJECT"
+			renderer := NewRenderer(rrConfigReject)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
+			// For deny, should be one match rule that just does the REJECT.
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.RejectAction{}))
 		},
 		ruleTestData...,
 	)

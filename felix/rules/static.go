@@ -222,8 +222,8 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 			},
 			Rule{
 				Match:   Match().ProtocolNum(ProtoIPIP),
-				Action:  DropAction{},
-				Comment: []string{"Drop IPIP packets from non-Calico hosts"},
+				Action:  r.DropActionOverride,
+				Comment: []string{fmt.Sprintf("%s IPIP packets from non-Calico hosts", r.DropActionOverride)},
 			},
 		)
 	}
@@ -266,8 +266,8 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(AddrTypeLocal),
-				Action:  DropAction{},
-				Comment: []string{"Drop IPv6 VXLAN packets from non-whitelisted hosts"},
+				Action:  r.DropActionOverride,
+				Comment: []string{fmt.Sprintf("%s VXLAN packets from non-whitelisted hosts", r.DropActionOverride)},
 			},
 		)
 	}
@@ -1186,7 +1186,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	// usually spoof but privileged containers and VMs can.
 	//
 	rules = append(rules,
-		RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, false)...)
+		RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, false, r.DropActionOverride)...)
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.
@@ -1206,7 +1206,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 }
 
 // RPFilter returns rules that implement RPF
-func RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled, acceptLocal bool) []Rule {
+func RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled, acceptLocal bool, dropActionOverride Action) []Rule {
 	rules := make([]Rule, 0, 2)
 
 	// For OpenStack, allow DHCP v4 packets with source 0.0.0.0.  These must be allowed before
@@ -1243,8 +1243,9 @@ func RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled, 
 
 	rules = append(rules, Rule{
 		Match:  Match().MarkMatchesWithMask(mark, mask).RPFCheckFailed(acceptLocal),
-		Action: DropAction{},
+		Action: dropActionOverride,
 	})
+	// FixMe: Reject also here?
 
 	return rules
 }

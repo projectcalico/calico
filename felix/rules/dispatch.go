@@ -39,7 +39,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 	endRules := []Rule{
 		Rule{
 			Match:   Match(),
-			Action:  DropAction{},
+			Action:  r.DropActionOverride,
 			Comment: []string{"Unknown interface"},
 		},
 	}
@@ -68,7 +68,7 @@ func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
 	endRules := []Rule{
 		{
 			Match:   Match(),
-			Action:  DropAction{},
+			Action:  r.DropActionOverride,
 			Comment: []string{"Unknown interface"},
 		},
 	}
@@ -383,7 +383,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 		ifaceMatch := prefix + "+"
 		rootSetMarkRules = append(rootSetMarkRules, Rule{
 			Match:   Match().InInterface(ifaceMatch),
-			Action:  DropAction{},
+			Action:  r.DropActionOverride,
 			Comment: []string{"Unknown endpoint"},
 		})
 	}
@@ -426,11 +426,11 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 		}
 	}
 
-	// Finalizing with a drop rule.
-	log.Debug("Adding drop rules at end of root from mark chains.")
+	// Finalizing with a drop/reject rule.
+	log.Debugf("Adding %s rules at end of root from mark chains.", r.DropActionOverride)
 	rootFromMarkRules = append(rootFromMarkRules, Rule{
 		Match:   Match(),
-		Action:  DropAction{},
+		Action:  r.DropActionOverride,
 		Comment: []string{"Unknown interface"},
 	})
 
