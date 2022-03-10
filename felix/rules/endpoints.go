@@ -15,6 +15,8 @@
 package rules
 
 import (
+	"fmt"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/hashutils"
@@ -327,7 +329,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// Endpoint is admin-down, drop all traffic to/from it.
 		rules = append(rules, Rule{
 			Match:   Match(),
-			Action:  DropAction{},
+			Action:  r.DropActionOverride,
 			Comment: []string{"Endpoint admin disabled"},
 		})
 		return &Chain{
@@ -361,15 +363,15 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		rules = append(rules, Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(r.Config.VXLANPort)),
-			Action:  DropAction{},
-			Comment: []string{"Drop VXLAN encapped packets originating in workloads"},
+			Action:  r.DropActionOverride,
+			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", r.DropActionOverride)},
 		})
 	}
 	if !allowIPIPEncap {
 		rules = append(rules, Rule{
 			Match:   Match().ProtocolNum(ProtoIPIP),
-			Action:  DropAction{},
-			Comment: []string{"Drop IPinIP encapped packets originating in workloads"},
+			Action:  r.DropActionOverride,
+			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", r.DropActionOverride)},
 		})
 	}
 
@@ -414,15 +416,15 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		}
 
 		if chainType == chainTypeNormal || chainType == chainTypeForward {
-			// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
-			// packet.
+			// When rendering normal and forward rules, if no policy marked the packet as "pass", drop
+			// or reject the packet.
 			//
 			// For untracked and pre-DNAT rules, we don't do that because there may be
 			// normal rules still to be applied to the packet in the filter table.
 			rules = append(rules, Rule{
 				Match:   Match().MarkClear(r.IptablesMarkPass),
-				Action:  DropAction{},
-				Comment: []string{"Drop if no policies passed packet"},
+				Action:  r.DropActionOverride,
+				Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.DropActionOverride)},
 			})
 		}
 
@@ -462,8 +464,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		//if dropIfNoProfilesMatched {
 		rules = append(rules, Rule{
 			Match:   Match(),
-			Action:  DropAction{},
-			Comment: []string{"Drop if no profiles matched"},
+			Action:  r.DropActionOverride,
+			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.DropActionOverride)},
 		})
 		//}
 	}
@@ -497,7 +499,7 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule, allowAction Act
 		// connection.
 		rules = append(rules, Rule{
 			Match:  Match().ConntrackState("INVALID"),
-			Action: DropAction{},
+			Action: r.DropActionOverride,
 		})
 	}
 	return rules
