@@ -260,7 +260,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	__u64 now = bpf_ktime_get_ns();
 
 	CALI_DEBUG("CT-%d Creating FWD entry at %llu.\n", ip_proto, now);
-	CALI_DEBUG("FWD %x -> %x\n", ip_src, ip_dst);
+	CALI_DEBUG("FWD %x -> %x\n", bpf_ntohl(ip_src), bpf_ntohl(ip_dst));
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
