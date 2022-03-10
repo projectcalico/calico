@@ -103,6 +103,17 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			expected = append(expected, *epskv)
 		}
 
+		// Add services.
+		svcs, err := cs.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, svc := range svcs.Items {
+			// Endpoints slices get updated frequently, so don't include the revision info.
+			svc.ResourceVersion = ""
+			svckv, err := converter.ServiceToKVP(&svc)
+			Expect(err).NotTo(HaveOccurred())
+			expected = append(expected, *svckv)
+		}
+
 		// Add resources for the namespaces we expect in the cluster.
 		namespaces, err := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
