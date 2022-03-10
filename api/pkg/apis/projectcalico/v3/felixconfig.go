@@ -291,13 +291,13 @@ type FelixConfigurationSpec struct {
 	// (ie it uses the iptables MASQUERADE target)
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
-	// This is the source address to use on programmed device routes. By default the source address is left blank,
+	// This is the IPv4 source address to use on programmed device routes. By default the source address is left blank,
 	// leaving the kernel to choose the source address used.
-	DeviceRouteV4SourceAddress string `json:"deviceRouteV4SourceAddress,omitempty"`
+	DeviceRouteSourceAddress string `json:"deviceRouteSourceAddress,omitempty"`
 
-	// This is the source address to use on programmed device routes. By default the source address is left blank,
+	// This is the IPv6 source address to use on programmed device routes. By default the source address is left blank,
 	// leaving the kernel to choose the source address used.
-	DeviceRouteV6SourceAddress string `json:"deviceRouteV6SourceAddress,omitempty"`
+	DeviceRouteSourceAddressIPv6 string `json:"deviceRouteSourceAddressIPv6,omitempty"`
 
 	// This defines the route protocol added to programmed device routes, by default this will be RTPROT_BOOT
 	// when left blank.

@@ -208,7 +208,12 @@ spec:
                   routes, by default this will be RTPROT_BOOT when left blank.
                 type: integer
               deviceRouteSourceAddress:
-                description: This is the source address to use on programmed device
+                description: This is the IPv4 source address to use on programmed device
+                  routes. By default the source address is left blank, leaving the
+                  kernel to choose the source address used.
+                type: string
+              deviceRouteSourceAddressIPv6:
+                description: This is the IPv6 source address to use on programmed device
                   routes. By default the source address is left blank, leaving the
                   kernel to choose the source address used.
                 type: string
