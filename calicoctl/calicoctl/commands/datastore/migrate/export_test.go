@@ -31,12 +31,14 @@ var _ = Describe("Etcd to KDD Migration Export handling", func() {
 				DefaultEndpointToHostAction: "DROP",
 				IptablesFilterAllowAction:   "ACCEPT",
 				IptablesMangleAllowAction:   "RETURN",
+				IptablesFilterDenyAction:    "DROP",
 			}
 
 			migrate.ConvertIptablesFields(felixConfig)
 			Expect(felixConfig.Spec.DefaultEndpointToHostAction).To(Equal("Drop"))
 			Expect(felixConfig.Spec.IptablesFilterAllowAction).To(Equal("Accept"))
 			Expect(felixConfig.Spec.IptablesMangleAllowAction).To(Equal("Return"))
+			Expect(felixConfig.Spec.IptablesFilterDenyAction).To(Equal("Drop"))
 		})
 
 		It("Should not change v3 API iptables values", func() {
@@ -45,12 +47,14 @@ var _ = Describe("Etcd to KDD Migration Export handling", func() {
 				DefaultEndpointToHostAction: "Drop",
 				IptablesFilterAllowAction:   "ACCEPT",
 				IptablesMangleAllowAction:   "Return",
+				IptablesFilterDenyAction:    "Drop",
 			}
 
 			migrate.ConvertIptablesFields(felixConfig)
 			Expect(felixConfig.Spec.DefaultEndpointToHostAction).To(Equal("Drop"))
 			Expect(felixConfig.Spec.IptablesFilterAllowAction).To(Equal("Accept"))
 			Expect(felixConfig.Spec.IptablesMangleAllowAction).To(Equal("Return"))
+			Expect(felixConfig.Spec.IptablesFilterDenyAction).To(Equal("Drop"))
 		})
 
 		It("Should not change any values if no iptables values are set", func() {
@@ -61,6 +65,7 @@ var _ = Describe("Etcd to KDD Migration Export handling", func() {
 			Expect(felixConfig.Spec.DefaultEndpointToHostAction).To(Equal(""))
 			Expect(felixConfig.Spec.IptablesFilterAllowAction).To(Equal(""))
 			Expect(felixConfig.Spec.IptablesMangleAllowAction).To(Equal(""))
+			Expect(felixConfig.Spec.IptablesFilterDenyAction).To(Equal(""))
 		})
 	})
 })
