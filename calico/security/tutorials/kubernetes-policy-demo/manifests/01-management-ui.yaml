@@ -19,13 +19,18 @@ spec:
   selector:
     role: management-ui 
 ---
-apiVersion: v1
-kind: ReplicationController
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: management-ui 
   namespace: management-ui 
+  labels:
+    role: management-ui
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      role: management-ui
   template:
     metadata:
       labels:
@@ -33,7 +38,7 @@ spec:
     spec:
       containers:
       - name: management-ui 
-        image: calico/star-collect:v0.1.0
+        image: calico/star-collect:multiarch
         imagePullPolicy: Always
         ports:
         - containerPort: 9001
