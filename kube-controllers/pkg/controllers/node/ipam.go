@@ -70,8 +70,8 @@ const (
 	// before kicking off a sync.
 	batchUpdateSize = 1000
 
-	// "no_ippool" is a special pool vector that represents when a block/allocation has no matching IP pool.
-	unknownPoolLabel = "no_ippool"
+	// Used to label an allocation that does not have its node attribute set.
+	unknownNodeLabel = "unknown_node"
 )
 
 func init() {
@@ -140,9 +140,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		nodesByBlock:                make(map[string]string),
 		blocksByNode:                make(map[string]map[string]bool),
 		emptyBlocks:                 make(map[string]string),
-		poolsByBlock:                make(map[string]string),
-		blocksByPool:                make(map[string]map[string]bool),
-		poolCache:                   make(map[string]*apiv3.IPPool),
+		poolManager:                 newPoolManager(),
 		datastoreReady:              true,
 
 		// For unit testing purposes.
@@ -181,9 +179,7 @@ type ipamController struct {
 	blocksByNode       map[string]map[string]bool
 	emptyBlocks        map[string]string
 	confirmedLeaks     map[string]*allocation
-	blocksByPool       map[string]map[string]bool
-	poolsByBlock       map[string]string
-	poolCache          map[string]*apiv3.IPPool
+	poolManager        *poolManager
 
 	// Cache pods to avoid unnecessary API queries.
 	podCache map[string]*v1.Pod
@@ -530,14 +526,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 		}
 	}
 
-	// We only update pool association if current association is nil, since block update can only trigger transitions of
-	// association from nil to known pool or nil to unknown pool. Transitions from known to nil or unknown to nil
-	// occur due to block delete, transitions from known to unknown occur due to pool delete, and transitions from
-	// unknown to known occur due to pool update.
-	if c.poolsByBlock[blockCIDR] == "" {
-		pool := c.getPoolForBlock(blockCIDR)
-		c.updatePoolForBlock(blockCIDR, pool)
-	}
+	c.poolManager.onBlockUpdated(blockCIDR)
 
 	// Finally, update the raw storage.
 	c.allBlocks[blockCIDR] = kvp
@@ -570,98 +559,23 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	delete(c.nodesByBlock, blockCIDR)
 	delete(c.emptyBlocks, blockCIDR)
 
-	// Transition from known or unknown pool association to nil.
-	pool := c.poolsByBlock[blockCIDR]
-	delete(c.blocksByPool[pool], blockCIDR)
-	delete(c.poolsByBlock, blockCIDR)
+	c.poolManager.onBlockDeleted(blockCIDR)
 }
 
 func (c *ipamController) onPoolUpdated(pool *apiv3.IPPool) {
-	_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
-	if err != nil {
-		log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s", pool.Name)
-		return
-	}
-
-	// Blocks may not have a known association to an IP Pool. This can happen when a Pool gets deleted, or if block
-	// updates appear before their associated pool updates. Blocks lacking association to an IP Pool are grouped under
-	// "no_ippool", and we check for transitions from unknown to known pool association on pool update.
-	for block := range c.blocksByPool[unknownPoolLabel] {
-		_, blockNet, err := net.ParseCIDR(block)
-		if err != nil {
-			log.WithError(err).Warnf("Unable to parse block %s to determine if it matches pool %s", block, pool.Name)
-			continue
-		}
-
-		if blockOccupiesPool(blockNet, poolNet) {
-			c.updatePoolForBlock(block, pool.Name)
-		}
-	}
-
-	if c.poolCache[pool.Name] == nil {
+	if c.poolManager.allPools[pool.Name] == nil {
 		registerMetricVectorsForPool(pool.Name)
-		publishPoolSizeMetric(pool, poolNet)
+		publishPoolSizeMetric(pool)
 	}
 
-	c.poolCache[pool.Name] = pool
+	c.poolManager.onPoolUpdated(pool)
 }
 
 func (c *ipamController) onPoolDeleted(poolName string) {
-	// When an IP Pool is deleted, its association transitions from known to unknown.
-	for block := range c.blocksByPool[poolName] {
-		c.updatePoolForBlock(block, unknownPoolLabel)
-	}
-
-	c.unregisterMetricVectorsForPool(poolName)
+	unregisterMetricVectorsForPool(poolName)
 	clearPoolSizeMetric(poolName)
 
-	delete(c.blocksByPool, poolName)
-	delete(c.poolCache, poolName)
-}
-
-// Resolve the IP Pool that the Block occupies.
-func (c *ipamController) getPoolForBlock(blockCIDR string) string {
-	_, blockNet, err := net.ParseCIDR(blockCIDR)
-	if err != nil {
-		log.WithError(err).Warnf("Unable to parse block %s for pool determination", blockCIDR)
-		return unknownPoolLabel
-	}
-
-	for poolName, pool := range c.poolCache {
-		_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
-		if err != nil {
-			log.WithError(err).Warnf("Failed to parse CIDR for IP Pool %s", poolName)
-			continue
-		}
-		if blockOccupiesPool(blockNet, poolNet) {
-			return poolName
-		}
-	}
-
-	return unknownPoolLabel
-}
-
-func (c *ipamController) updatePoolForBlock(blockCIDR string, newPool string) {
-	previousPool := c.poolsByBlock[blockCIDR]
-	if previousPool == newPool {
-		return
-	}
-
-	// Update pools by block
-	c.poolsByBlock[blockCIDR] = newPool
-
-	// Update blocks by pool
-	if previousPoolBlocks, ok := c.blocksByPool[previousPool]; ok {
-		delete(previousPoolBlocks, blockCIDR)
-	}
-	if c.blocksByPool[newPool] == nil {
-		c.blocksByPool[newPool] = map[string]bool{}
-	}
-	c.blocksByPool[newPool][blockCIDR] = true
-}
-
-func blockOccupiesPool(blockNet *net.IPNet, poolNet *cnet.IPNet) bool {
-	return poolNet.Covers(*blockNet)
+	c.poolManager.onPoolDeleted(poolName)
 }
 
 func (c *ipamController) updateMetrics() {
@@ -672,7 +586,7 @@ func (c *ipamController) updateMetrics() {
 	legacyBorrowedIPsByNode := map[string]int{}
 
 	// Iterate blocks to determine the correct metric values.
-	for poolName, poolBlocks := range c.blocksByPool {
+	for poolName, poolBlocks := range c.poolManager.blocksByPool {
 		// These counts track pool-based gauges by node for the current pool.
 		inUseAllocationsForPoolByNode := map[string]int{}
 		borrowedAllocationsForPoolByNode := map[string]int{}
@@ -695,13 +609,13 @@ func (c *ipamController) updateMetrics() {
 				// Track nodes based on IP allocations.
 				allocationNode := allocation.node()
 				if allocationNode == "" {
-					allocationNode = "unknown_node"
+					allocationNode = unknownNodeLabel
 				}
 
 				// Update metrics maps with this allocation.
 				inUseAllocationsForPoolByNode[allocationNode]++
 
-				if allocationNode != "unknown_node" && (b.Affinity == nil || allocationNode != affineNode) {
+				if allocationNode != unknownNodeLabel && (b.Affinity == nil || allocationNode != affineNode) {
 					// If the allocation's node doesn't match the block's, then this is borrowed.
 					legacyBorrowedIPsByNode[allocationNode]++
 					borrowedAllocationsForPoolByNode[allocationNode]++
@@ -808,9 +722,7 @@ func (c *ipamController) checkEmptyBlocks() error {
 		delete(c.nodesByBlock, blockCIDR)
 		delete(c.allBlocks, blockCIDR)
 
-		pool := c.poolsByBlock[blockCIDR]
-		delete(c.poolsByBlock, blockCIDR)
-		delete(c.blocksByPool[pool], blockCIDR)
+		c.poolManager.onBlockDeleted(blockCIDR)
 	}
 	return nil
 }
@@ -1259,10 +1171,10 @@ func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 }
 
 func (c *ipamController) incrementReclamationMetric(block string, node string) {
-	pool := c.poolsByBlock[block]
+	pool := c.poolManager.poolsByBlock[block]
 	metricNode := node
 	if metricNode == "" {
-		metricNode = "unknown_node"
+		metricNode = unknownNodeLabel
 	}
 	gcReclamationsCounter := gcReclamationCounters[pool]
 	if gcReclamationsCounter == nil {
@@ -1314,26 +1226,31 @@ func registerMetricVectorsForPool(poolName string) {
 	prometheus.MustRegister(gcReclamationCounters[poolName])
 }
 
-func (c *ipamController) unregisterMetricVectorsForPool(poolName string) {
-	if c.poolCache[poolName] == nil {
-		log.Warnf("Skipping deletion of pool metrics for unknown pool %s", poolName)
-		return
+func unregisterMetricVectorsForPool(poolName string) {
+	if _, ok := inUseAllocationGauges[poolName]; ok {
+		prometheus.Unregister(inUseAllocationGauges[poolName])
+		delete(inUseAllocationGauges, poolName)
 	}
 
-	prometheus.Unregister(inUseAllocationGauges[poolName])
-	delete(inUseAllocationGauges, poolName)
+	if _, ok := borrowedAllocationGauges[poolName]; ok {
+		prometheus.Unregister(borrowedAllocationGauges[poolName])
+		delete(borrowedAllocationGauges, poolName)
+	}
 
-	prometheus.Unregister(borrowedAllocationGauges[poolName])
-	delete(borrowedAllocationGauges, poolName)
+	if _, ok := blocksGauges[poolName]; ok {
+		prometheus.Unregister(blocksGauges[poolName])
+		delete(blocksGauges, poolName)
+	}
 
-	prometheus.Unregister(blocksGauges[poolName])
-	delete(blocksGauges, poolName)
+	if _, ok := gcCandidateGauges[poolName]; ok {
+		prometheus.Unregister(gcCandidateGauges[poolName])
+		delete(gcCandidateGauges, poolName)
+	}
 
-	prometheus.Unregister(gcCandidateGauges[poolName])
-	delete(gcCandidateGauges, poolName)
-
-	prometheus.Unregister(gcReclamationCounters[poolName])
-	delete(gcReclamationCounters, poolName)
+	if _, ok := gcReclamationCounters[poolName]; ok {
+		prometheus.Unregister(gcReclamationCounters[poolName])
+		delete(gcReclamationCounters, poolName)
+	}
 }
 
 func updatePoolGaugeWithNodeValues(gaugesByPool map[string]*prometheus.GaugeVec, pool string, nodeValues map[string]int) {
@@ -1349,7 +1266,13 @@ func updatePoolGaugeWithNodeValues(gaugesByPool map[string]*prometheus.GaugeVec,
 	}
 }
 
-func publishPoolSizeMetric(pool *apiv3.IPPool, poolNet *cnet.IPNet) {
+func publishPoolSizeMetric(pool *apiv3.IPPool) {
+	_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
+	if err != nil {
+		log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s", pool.Name)
+		return
+	}
+
 	ones, bits := poolNet.Mask.Size()
 	poolSize := math.Pow(2, float64(bits-ones))
 	poolSizeGauge.With(prometheus.Labels{"ippool": pool.Name}).Set(poolSize)

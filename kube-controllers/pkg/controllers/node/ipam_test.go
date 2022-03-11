@@ -238,6 +238,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			ip:     "10.0.0.0",
 			handle: handle,
 			attrs:  b.Attributes[0].AttrSecondary,
+			block:  "10.0.0.0/30",
 		}
 
 		// Unique ID we expect for this allocation.
