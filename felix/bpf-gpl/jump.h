@@ -23,7 +23,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
 	.value_size = 4,
-	.max_entries = 8,
+	.max_entries = 16,
 #if !defined(__BPFTOOL_LOADER__) && defined(__IPTOOL_LOADER__)
 	.map_id = 1,
 	.pinning_strategy = 1 /* object namespace */,
@@ -35,9 +35,11 @@ enum cali_jump_index {
 	PROG_INDEX_POLICY,
 	PROG_INDEX_ALLOWED,
 	PROG_INDEX_ICMP,
+	PROG_INDEX_DROP,
 	PROG_INDEX_V6_PROLOGUE,
 	PROG_INDEX_V6_POLICY,
 	PROG_INDEX_V6_ALLOWED,
 	PROG_INDEX_V6_ICMP,
+	PROG_INDEX_V6_DROP,
 };
 #endif /* __CALI_BPF_JUMP_H__ */

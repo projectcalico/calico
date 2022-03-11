@@ -878,10 +878,6 @@ func testPacket46(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, ipv6Alt *layers
 		eth     *layers.Ethernet
 		ipv4    *layers.IPv4
 		ipv6    *layers.IPv6
-		udp     *layers.UDP
-		tcp     *layers.TCP
-		icmp    *layers.ICMPv4
-		icmpv6  *layers.ICMPv6
 		payload []byte
 	)
 
@@ -915,8 +911,31 @@ func testPacket46(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, ipv6Alt *layers
 		}
 	}
 
-	if l4Alt != nil {
-		switch v := l4Alt.(type) {
+	if l4Alt == nil {
+		l4Alt = udpDefault
+	}
+
+	if payloadAlt != nil {
+		payload = payloadAlt
+	} else {
+		payload = payloadDefault
+	}
+
+	return generatePacket(eth, ipv4, ipv6, l4Alt, payload, ipv6Enabled)
+
+}
+
+func generatePacket(eth *layers.Ethernet, ipv4 *layers.IPv4, ipv6 *layers.IPv6, l4 gopacket.Layer, payload []byte, ipv6Enabled bool) (
+	*layers.Ethernet, *layers.IPv4, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
+	var (
+		udp    *layers.UDP
+		tcp    *layers.TCP
+		icmp   *layers.ICMPv4
+		icmpv6 *layers.ICMPv6
+	)
+
+	if l4 != nil {
+		switch v := l4.(type) {
 		case *layers.UDP:
 			udp = v
 			if ipv6Enabled {
@@ -937,18 +956,9 @@ func testPacket46(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, ipv6Alt *layers
 		case *layers.ICMPv6:
 			icmpv6 = v
 			ipv6.NextHeader = layers.IPProtocolICMPv6
-
 		default:
-			return nil, nil, nil, nil, nil, nil, errors.Errorf("unrecognized l4 layer type %t", l4Alt)
+			return nil, nil, nil, nil, nil, nil, errors.Errorf("unrecognized l4 layer type %t", l4)
 		}
-	} else {
-		udp = udpDefault
-	}
-
-	if payloadAlt != nil {
-		payload = payloadAlt
-	} else {
-		payload = payloadDefault
 	}
 
 	switch {
@@ -1012,9 +1022,26 @@ func testPacket46(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, ipv6Alt *layers
 			eth, ipv6, icmp, gopacket.Payload(payload))
 
 		return eth, nil, ipv6, icmp, payload, pkt.Bytes(), err
-	}
+	default:
+		if ipv6Enabled {
+			ipv6.Length = uint16(8 + len(payload))
 
-	panic("UNREACHABLE")
+			pkt := gopacket.NewSerializeBuffer()
+			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+				eth, ipv6, gopacket.Payload(payload))
+
+			return eth, nil, ipv6, nil, payload, pkt.Bytes(), err
+		} else {
+			ipv4.Length = uint16(5*4 + 8 + len(payload))
+
+			pkt := gopacket.NewSerializeBuffer()
+			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+				eth, ipv4, gopacket.Payload(payload))
+
+			return eth, ipv4, nil, nil, payload, pkt.Bytes(), err
+
+		}
+	}
 }
 
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
