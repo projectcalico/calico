@@ -10,39 +10,27 @@
 # WARNING: should be kept in sync with the combinations used in tests, in particular bpf_prog_test.go.
 
 emit_filename() {
-  echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}_skb${skb}${dsr}.o"
+  echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}${dsr}.o"
 }
-
-((mark_seen = 0x1000000))
-((mark_seen_bypass = mark_seen | 0x2000000))
-((mark_seen_bypass_src_fixup = mark_seen_bypass | 0x500000))
-((mark_seen_bypass_forward = mark_seen_bypass | 0x300000))
-((mark_seen_bypass_skip_rpf = mark_seen_bypass | 0x400000))
 
 log_level=debug
 ep_types="wep hep"
 for ep_type in $ep_types; do
   directions="from to"
   for from_or_to in $directions; do
-    for skb in "0x0" \
-      $(printf 0x%x $mark_seen) \
-      $(printf 0x%x $mark_seen_bypass_src_fixup) \
-      $(printf 0x%x $mark_seen_bypass_skip_rpf) \
-      $(printf 0x%x $mark_seen_bypass_forward); do
-      for dsr in "" "_dsr"; do
-        if [ "${dsr}" = "_dsr" ]; then
-          if [ "${ep_type}" = "hep" ]; then
-            emit_filename
-            continue
-          fi
-          if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
-            emit_filename
-            continue
-          fi
-        else
+    for dsr in "" "_dsr"; do
+      if [ "${dsr}" = "_dsr" ]; then
+        if [ "${ep_type}" = "hep" ]; then
           emit_filename
+          continue
         fi
-      done
+        if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
+          emit_filename
+          continue
+        fi
+      else
+        emit_filename
+      fi
     done
   done
 done
