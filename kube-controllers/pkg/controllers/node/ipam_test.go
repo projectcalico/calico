@@ -384,6 +384,52 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
+	It("should handle clusterinformation updates and maintain its clusterinformation datastoreReady cache", func() {
+		// Start the controller.
+		c.Start(stopChan)
+
+		calicoNodeName := "cname"
+		isReady := false
+
+		key := model.ResourceKey{Name: calicoNodeName, Kind: apiv3.KindClusterInformation}
+		ci := apiv3.ClusterInformation{}
+		ci.Name = calicoNodeName
+		ci.Spec.DatastoreReady = &isReady
+		kvp := model.KVPair{
+			Key:   key,
+			Value: &ci,
+		}
+		update := bapi.Update{
+			KVPair:     kvp,
+			UpdateType: bapi.UpdateTypeKVNew,
+		}
+
+		// Send a new ClusterInformation update.
+		c.onUpdate(update)
+
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(false), "Cache not updated after UPDATE")
+
+		isReady = true
+		c.onUpdate(update)
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(true), "Cache not updated after ADD")
+
+		update.KVPair.Value = nil
+		c.onUpdate(update)
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(false), "Cache not updated after DELETE")
+	})
+
 	It("should clean up leaked IP addresses", func() {
 		// Add a new block with one allocation - on a valid node but no corresponding pod.
 		n := libapiv3.Node{}
