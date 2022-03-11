@@ -43,6 +43,8 @@ LABEL name="Calico FlexVolume driver installer" \
 
 COPY --from=ubi /licenses /licenses
 COPY --from=ubi /bin /bin
+COPY --from=ubi /lib64 /lib64
+COPY --from=ubi /usr/lib64 /usr/lib64
 COPY --from=ubi /usr/bin /usr/bin
 COPY --from=ubi /usr/local/bin/flexvol.sh /usr/local/bin/flexvol.sh
 
