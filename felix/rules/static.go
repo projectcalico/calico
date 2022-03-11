@@ -222,8 +222,8 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 			},
 			Rule{
 				Match:   Match().ProtocolNum(ProtoIPIP),
-				Action:  DropAction{},
-				Comment: []string{"Drop IPIP packets from non-Calico hosts"},
+				Action:  r.dropActionOverride,
+				Comment: []string{fmt.Sprintf("%s IPIP packets from non-Calico hosts", r.dropActionOverride)},
 			},
 		)
 	}
@@ -244,8 +244,8 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(AddrTypeLocal),
-				Action:  DropAction{},
-				Comment: []string{"Drop VXLAN packets from non-whitelisted hosts"},
+				Action:  r.dropActionOverride,
+				Comment: []string{fmt.Sprintf("%s VXLAN packets from non-whitelisted hosts", r.dropActionOverride)},
 			},
 		)
 	}
