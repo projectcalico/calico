@@ -72,6 +72,7 @@ type allocation struct {
 	handle         string
 	attrs          map[string]string
 	sequenceNumber uint64
+	block          string
 
 	// The Kubernetes node name hosting this allocation.
 	knode string

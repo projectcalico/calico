@@ -132,7 +132,6 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
-		blocksByAllocation:          make(map[string]string),
 		allocationsByNode:           make(map[string]map[string]*allocation),
 		handleTracker:               newHandleTracker(),
 		kubernetesNodesByCalicoName: make(map[string]string),
@@ -176,7 +175,6 @@ type ipamController struct {
 
 	// Store allocations broken out from the raw blocks by their handle.
 	allocationsByBlock map[string]map[string]*allocation
-	blocksByAllocation map[string]string
 	allocationsByNode  map[string]map[string]*allocation
 	handleTracker      *handleTracker
 	nodesByBlock       map[string]string
@@ -476,6 +474,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			handle:         handle,
 			attrs:          attr.AttrSecondary,
 			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
+			block:          blockCIDR,
 		}
 
 		currentAllocations[alloc.id()] = true
@@ -490,7 +489,6 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
 		}
 		c.allocationsByBlock[blockCIDR][alloc.id()] = &alloc
-		c.blocksByAllocation[alloc.id()] = blockCIDR
 
 		// Update the allocations-by-node view.
 		if node := alloc.node(); node != "" {
@@ -516,7 +514,6 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			// Needs release.
 			c.handleTracker.removeAllocation(alloc)
 			delete(c.allocationsByBlock[blockCIDR], id)
-			delete(c.blocksByAllocation, id)
 
 			// Also remove from the node view.
 			node := alloc.node()
@@ -525,7 +522,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			}
 			if len(c.allocationsByNode[node]) == 0 {
 				delete(c.allocationsByNode, node)
-				clearNodeFromPoolCounters(node)
+				clearReclaimedIPCountForNode(node)
 			}
 
 			// And to be safe, remove from confirmed leaks just in case.
@@ -553,14 +550,13 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	// Remove allocations that were contributed by this block.
 	allocations := c.allocationsByBlock[blockCIDR]
 	for id, alloc := range allocations {
-		delete(c.blocksByAllocation, id)
 		node := alloc.node()
 		if node != "" {
 			delete(c.allocationsByNode[node], id)
 		}
 		if len(c.allocationsByNode[node]) == 0 {
 			delete(c.allocationsByNode, node)
-			clearNodeFromPoolCounters(node)
+			clearReclaimedIPCountForNode(node)
 		}
 	}
 	delete(c.allocationsByBlock, blockCIDR)
@@ -1163,9 +1159,9 @@ func (c *ipamController) garbageCollectIPs() error {
 		delete(c.allocationsByNode[a.node()], id)
 		if len(c.allocationsByNode[a.node()]) == 0 {
 			delete(c.allocationsByNode, a.node())
-			clearNodeFromPoolCounters(a.node())
+			clearReclaimedIPCountForNode(a.node())
 		} else {
-			c.incrementReclamationMetric(id, a.node())
+			c.incrementReclamationMetric(a.block, a.node())
 		}
 		delete(c.confirmedLeaks, id)
 	}
@@ -1262,8 +1258,8 @@ func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 	return getK8sNodeName(*calicoNode)
 }
 
-func (c *ipamController) incrementReclamationMetric(allocationId string, node string) {
-	pool := c.poolsByBlock[c.blocksByAllocation[allocationId]]
+func (c *ipamController) incrementReclamationMetric(block string, node string) {
+	pool := c.poolsByBlock[block]
 	metricNode := node
 	if metricNode == "" {
 		metricNode = "unknown_node"
@@ -1279,22 +1275,22 @@ func (c *ipamController) incrementReclamationMetric(allocationId string, node st
 func registerMetricVectorsForPool(poolName string) {
 	inUseAllocationGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name:        "ipam_allocations_in_use",
-		Help:        "Allocations currently in use by workload or host endpoint",
+		Help:        "IPs currently allocated in IPAM to a workload or tunnel endpoint.",
 		ConstLabels: prometheus.Labels{"ippool": poolName},
 	}, []string{"node"})
 	prometheus.MustRegister(inUseAllocationGauges[poolName])
 
 	borrowedAllocationGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "ipam_allocations_borrowed",
-		Help: "Allocations currently in use by workload or host endpoint, where the allocation was borrowed " +
-			"from a block affine to another node",
+		Help: "IPs currently allocated in IPAM to a workload or tunnel endpoint, where the allocation was borrowed " +
+			"from a block affine to another node.",
 		ConstLabels: prometheus.Labels{"ippool": poolName},
 	}, []string{"node"})
 	prometheus.MustRegister(borrowedAllocationGauges[poolName])
 
 	blocksGauges[poolName] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name:        "ipam_blocks",
-		Help:        "IPAM blocks currently allocated for the IP pool",
+		Help:        "IPAM blocks currently allocated for the IP pool.",
 		ConstLabels: prometheus.Labels{"ippool": poolName},
 	}, []string{"node"})
 	prometheus.MustRegister(blocksGauges[poolName])
@@ -1303,7 +1299,7 @@ func registerMetricVectorsForPool(poolName string) {
 		Name: "ipam_allocations_gc_candidates",
 		Help: "Allocations that are currently marked by the garbage collector as potential candidates to " +
 			"reclaim. Under normal operation, this metric should return to zero after the garbage collector " +
-			"confirms that this allocation can be reclaimed and reclaims it",
+			"confirms that this allocation can be reclaimed and reclaims it, or the allocation is confirmed as valid.",
 		ConstLabels: prometheus.Labels{"ippool": poolName},
 	}, []string{"node"})
 	prometheus.MustRegister(gcCandidateGauges[poolName])
@@ -1364,7 +1360,7 @@ func clearPoolSizeMetric(poolName string) {
 }
 
 // When we stop tracking a node, clear counters to prevent accumulation of stale metrics.
-func clearNodeFromPoolCounters(node string) {
+func clearReclaimedIPCountForNode(node string) {
 	for _, reclamationCounter := range gcReclamationCounters {
 		reclamationCounter.Delete(prometheus.Labels{"node": node})
 	}
