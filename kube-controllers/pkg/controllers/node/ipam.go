@@ -518,7 +518,6 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			}
 			if len(c.allocationsByNode[node]) == 0 {
 				delete(c.allocationsByNode, node)
-				clearReclaimedIPCountForNode(node)
 			}
 
 			// And to be safe, remove from confirmed leaks just in case.
@@ -545,7 +544,6 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 		}
 		if len(c.allocationsByNode[node]) == 0 {
 			delete(c.allocationsByNode, node)
-			clearReclaimedIPCountForNode(node)
 		}
 	}
 	delete(c.allocationsByBlock, blockCIDR)
@@ -588,21 +586,21 @@ func (c *ipamController) updateMetrics() {
 	// Iterate blocks to determine the correct metric values.
 	for poolName, poolBlocks := range c.poolManager.blocksByPool {
 		// These counts track pool-based gauges by node for the current pool.
-		inUseAllocationsForPoolByNode := map[string]int{}
-		borrowedAllocationsForPoolByNode := map[string]int{}
-		blocksForPoolByNode := map[string]int{}
-		gcCandidatesForPoolByNode := map[string]int{}
+		inUseAllocationsByNode := map[string]int{}
+		borrowedAllocationsByNode := map[string]int{}
+		blocksByNode := map[string]int{}
+		gcCandidatesByNode := map[string]int{}
 
 		for blockCIDR := range poolBlocks {
 			b := c.allBlocks[blockCIDR].Value.(*model.AllocationBlock)
 
 			affineNode := "no_affinity"
-			if b.Affinity != nil {
+			if b.Affinity != nil && strings.HasPrefix(*b.Affinity, "host:") {
 				affineNode = strings.TrimPrefix(*b.Affinity, "host:")
 			}
 
 			legacyBlocksByNode[affineNode]++
-			blocksForPoolByNode[affineNode]++
+			blocksByNode[affineNode]++
 
 			// Go through each IPAM allocation, check its attributes for the node it is assigned to.
 			for _, allocation := range c.allocationsByBlock[blockCIDR] {
@@ -613,27 +611,27 @@ func (c *ipamController) updateMetrics() {
 				}
 
 				// Update metrics maps with this allocation.
-				inUseAllocationsForPoolByNode[allocationNode]++
+				inUseAllocationsByNode[allocationNode]++
 
 				if allocationNode != unknownNodeLabel && (b.Affinity == nil || allocationNode != affineNode) {
 					// If the allocation's node doesn't match the block's, then this is borrowed.
 					legacyBorrowedIPsByNode[allocationNode]++
-					borrowedAllocationsForPoolByNode[allocationNode]++
+					borrowedAllocationsByNode[allocationNode]++
 				}
 
 				// Update candidate count. Include confirmed leaks as well, in case there is an issue keeping them
 				// from being immediately reclaimed as usual.
 				if allocation.isCandidateLeak() || allocation.isConfirmedLeak() {
-					gcCandidatesForPoolByNode[allocationNode]++
+					gcCandidatesByNode[allocationNode]++
 				}
 			}
 		}
 
 		// Update gauge values, resetting the values for the current pool
-		updatePoolGaugeWithNodeValues(inUseAllocationGauges, poolName, inUseAllocationsForPoolByNode)
-		updatePoolGaugeWithNodeValues(borrowedAllocationGauges, poolName, borrowedAllocationsForPoolByNode)
-		updatePoolGaugeWithNodeValues(blocksGauges, poolName, blocksForPoolByNode)
-		updatePoolGaugeWithNodeValues(gcCandidateGauges, poolName, gcCandidatesForPoolByNode)
+		updatePoolGaugeWithNodeValues(inUseAllocationGauges, poolName, inUseAllocationsByNode)
+		updatePoolGaugeWithNodeValues(borrowedAllocationGauges, poolName, borrowedAllocationsByNode)
+		updatePoolGaugeWithNodeValues(blocksGauges, poolName, blocksByNode)
+		updatePoolGaugeWithNodeValues(gcCandidateGauges, poolName, gcCandidatesByNode)
 	}
 
 	// Update legacy gauges
@@ -1071,10 +1069,10 @@ func (c *ipamController) garbageCollectIPs() error {
 		delete(c.allocationsByNode[a.node()], id)
 		if len(c.allocationsByNode[a.node()]) == 0 {
 			delete(c.allocationsByNode, a.node())
-			clearReclaimedIPCountForNode(a.node())
-		} else {
-			c.incrementReclamationMetric(a.block, a.node())
 		}
+
+		c.incrementReclamationMetric(a.block, a.node())
+
 		delete(c.confirmedLeaks, id)
 	}
 	return nil
@@ -1090,6 +1088,8 @@ func (c *ipamController) cleanupNode(cnode string) error {
 		logc.WithError(err).Errorf("Failed to release block affinities for node")
 		return err
 	}
+
+	clearReclaimedIPCountForNode(cnode)
 
 	logc.Debug("Released all affinities for node")
 	return nil

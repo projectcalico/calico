@@ -177,9 +177,9 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		handleAIPIP := "handleAIPIP"
 		handleAVXLAN := "handleAVXLAN"
 		handleAWG := "handleAWireguard"
-		allocateInterfaceIpWithHandle("192.168.0.2", handleAIPIP, nodeA, "ipipTunnelAddress", calicoClient)
-		allocateInterfaceIpWithHandle("192.168.0.3", handleAVXLAN, nodeA, "vxlanTunnelAddress", calicoClient)
-		allocateInterfaceIpWithHandle("192.168.0.4", handleAWG, nodeA, "wireguardTunnelAddress", calicoClient)
+		allocateInterfaceIPWithHandle("192.168.0.2", handleAIPIP, nodeA, "ipipTunnelAddress", calicoClient)
+		allocateInterfaceIPWithHandle("192.168.0.3", handleAVXLAN, nodeA, "vxlanTunnelAddress", calicoClient)
+		allocateInterfaceIPWithHandle("192.168.0.4", handleAWG, nodeA, "wireguardTunnelAddress", calicoClient)
 
 		// Allocate pod IP addresses from pool 1 and 3, and thus blocks and affinities to NodeB.
 		handleB := "handleB"
@@ -286,9 +286,9 @@ var _ = Describe("kube-controllers metrics tests", func() {
 
 		// Simulate a leaked addresses on pool 1 and 2 by allocating Pod IPs that do not match any known Pods.
 		handleA3 := "handleA3"
-		allocatePodIpWithHandle("172.16.0.2", handleA3, nodeA, "pod-a3", calicoClient)
+		allocatePodIPWithHandle("172.16.0.2", handleA3, nodeA, "pod-a3", 0, calicoClient)
 		handleB3 := "handleB3"
-		allocatePodIpWithHandle("192.168.0.67", handleB3, nodeB, "pod-b3", calicoClient)
+		allocatePodIPWithHandle("192.168.0.67", handleB3, nodeB, "pod-b3", 0, calicoClient)
 
 		// Assert that IPAM metrics show the two GC candidates.
 		validateExpectedAndUnexpectedMetrics(
@@ -393,7 +393,7 @@ var _ = Describe("kube-controllers metrics tests", func() {
 
 		// Assert that IPAM metrics have been updated. We should no longer have any allocations on NodeB, however
 		// the block should still exist. Since we don't release affinity until the block is empty, the block should
-		// still be affine to node-b.
+		// still be affine to node-b. The reclamation metric should also remain.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 4`,
@@ -410,9 +410,9 @@ var _ = Describe("kube-controllers metrics tests", func() {
 				`ipam_blocks_per_node{node="no_affinity"} 2`,
 				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"} 2`,
 				`ipam_allocations_borrowed_per_node{node="node-c"} 2`,
+				`ipam_allocations_gc_reclamations{ippool="test-ippool-1",node="node-b"} 1`,
 			},
 			[]string{
-				`ipam_allocations_gc_reclamations{ippool="test-ippool-1",node="node-b"}`,
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"}`,
 				`ipam_allocations_in_use{ippool="no_ippool",node="node-b"}`,
 				`ipam_allocations_per_node{node="node-b"}`,
@@ -461,6 +461,7 @@ var _ = Describe("kube-controllers metrics tests", func() {
 				`ipam_blocks_per_node{node="node-b"}`,
 				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"}`,
 				`ipam_allocations_borrowed_per_node{node="node-c"}`,
+				`ipam_allocations_gc_reclamations`,
 			},
 			kubeControllers.IP,
 			5*time.Second,
@@ -588,15 +589,15 @@ func createIPPool(name string, cidr string, calicoClient client.Interface) {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
-func allocatePodIpWithHandle(ip string, handle string, node string, pod string, calicoClient client.Interface) {
+func allocatePodIPWithHandle(ip string, handle string, node string, pod string, existingOffset int, calicoClient client.Interface) {
 	attrs := map[string]string{"node": node, "pod": pod, "namespace": "default"}
 	err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 		IP: net.MustParseIP(ip), HandleID: &handle, Attrs: attrs, Hostname: node,
 	})
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(existingOffset+1, err).NotTo(HaveOccurred())
 }
 
-func allocateInterfaceIpWithHandle(ip string, handle string, node string, itype string, calicoClient client.Interface) {
+func allocateInterfaceIPWithHandle(ip string, handle string, node string, itype string, calicoClient client.Interface) {
 	attrs := map[string]string{"node": node, "type": itype}
 	err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 		IP: net.MustParseIP(ip), HandleID: &handle, Attrs: attrs, Hostname: node,
@@ -605,6 +606,7 @@ func allocateInterfaceIpWithHandle(ip string, handle string, node string, itype 
 }
 
 func createPod(podName string, ip string, handle string, node string, k8sClient *kubernetes.Clientset, calicoClient client.Interface) {
+	// Create pod in Pending state
 	pod := &v1.Pod{
 		TypeMeta:   metav1.TypeMeta{Kind: "Pod", APIVersion: "v1"},
 		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: "default"},
@@ -621,12 +623,15 @@ func createPod(podName string, ip string, handle string, node string, k8sClient 
 	}
 	pod, err := k8sClient.CoreV1().Pods("default").Create(context.Background(), pod, metav1.CreateOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	// Allocate an IP with Calico IPAM
+	allocatePodIPWithHandle(ip, handle, node, podName, 1, calicoClient)
+
+	// Update pod status as Running, include pod IP
 	pod.Status.PodIP = ip
 	pod.Status.Phase = v1.PodRunning
 	_, err = k8sClient.CoreV1().Pods("default").UpdateStatus(context.Background(), pod, metav1.UpdateOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-	allocatePodIpWithHandle(ip, handle, node, podName, calicoClient)
 }
 
 func deletePodWithIP(pod string, ip string, k8sClient *kubernetes.Clientset, calicoClient client.Interface) {
