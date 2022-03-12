@@ -32,24 +32,26 @@ const (
 )
 
 func (p *poolManager) onPoolUpdated(pool *v3.IPPool) {
-	_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
-	if err != nil {
-		log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s", pool.Name)
-		return
-	}
-
 	// Blocks may not have a known association to an IP Pool. This can happen when a Pool gets deleted, or if block
 	// updates appear before their associated pool updates. Blocks lacking association to an IP Pool are grouped under
-	// "no_ippool", and we check for transitions from unknown to known pool association on pool update.
-	for block := range p.blocksByPool[unknownPoolLabel] {
-		_, blockNet, err := net.ParseCIDR(block)
+	// "no_ippool", and we check for transitions from unknown to known pool association on pool creation.
+	if p.allPools[pool.Name] == nil {
+		_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
 		if err != nil {
-			log.WithError(err).Warnf("Unable to parse block %s to determine if it matches pool %s", block, pool.Name)
-			continue
+			log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s", pool.Name)
+			return
 		}
 
-		if blockOccupiesPool(blockNet, poolNet) {
-			p.updatePoolForBlock(block, pool.Name)
+		for block := range p.blocksByPool[unknownPoolLabel] {
+			_, blockNet, err := net.ParseCIDR(block)
+			if err != nil {
+				log.WithError(err).Warnf("Unable to parse block %s to determine if it matches pool %s", block, pool.Name)
+				continue
+			}
+
+			if blockOccupiesPool(blockNet, poolNet) {
+				p.updatePoolForBlock(block, pool.Name)
+			}
 		}
 	}
 
