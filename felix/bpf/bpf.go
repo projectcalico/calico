@@ -2239,3 +2239,7 @@ func KTimeNanos() int64 {
 	}
 	return ts.Nano()
 }
+
+func JumpMapName() string {
+	return "cali_jump2"
+}
