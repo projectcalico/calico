@@ -19,16 +19,12 @@ static CALI_BPF_INLINE struct cali_tc_state *state_get(void)
 	return cali_v4_state_lookup_elem(&key);
 }
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 16,
-#if !defined(__BPFTOOL_LOADER__) && defined(__IPTOOL_LOADER__)
-	.map_id = 1,
-	.pinning_strategy = 1 /* object namespace */,
-#endif
-};
+CALI_MAP(cali_jump, 2,
+		BPF_MAP_TYPE_PROG_ARRAY,
+		__u32, __u32, 16,
+		0, MAP_PIN_GLOBAL)
+
+#define CALI_JUMP_TO(ctx, index) bpf_tail_call(ctx, &map_symbol(cali_jump, 2), index)
 
 /* Add new values to the end as these are program indices */
 enum cali_jump_index {

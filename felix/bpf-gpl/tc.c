@@ -449,7 +449,7 @@ syn_force_policy:
 	}
 
 	CALI_DEBUG("About to jump to policy program.\n");
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_POLICY);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_POLICY);
 	if (CALI_F_HEP) {
 		CALI_DEBUG("HEP with no policy, allow.\n");
 		goto skip_policy;
@@ -460,14 +460,14 @@ syn_force_policy:
 	}
 
 icmp_send_reply:
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_ICMP);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_ICMP);
 	/* should not reach here */
 	goto deny;
 
 skip_policy:
 	ctx->state->pol_rc = CALI_POL_ALLOW;
 	ctx->state->flags |= CALI_ST_SKIP_POLICY;
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_ALLOWED);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	goto deny;
 
@@ -1062,7 +1062,7 @@ icmp_too_big:
 	goto icmp_send_reply;
 
 icmp_send_reply:
-	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ICMP);
+	CALI_JUMP_TO(skb, PROG_INDEX_ICMP);
 	goto deny;
 
 nat_encap:

@@ -93,7 +93,7 @@ func TestMalformedPackets(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 			fmt.Printf("pktR = %+v\n", pktR)
-			Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), fmt.Sprintf("expected the program to return TC_ACT_SHOT"))
+			Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected the program to return TC_ACT_SHOT")
 			Expect(res.dataOut).To(HaveLen(len(pktBytes)))
 			Expect(res.dataOut).To(Equal(pktBytes))
 		})

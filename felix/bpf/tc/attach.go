@@ -151,7 +151,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 			continue
 		}
 		subDir := "globals"
-		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), "cali_jump") {
+		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
 			// Remove period in the interface name if any
 			ifName := strings.ReplaceAll(ap.Iface, ".", "")
 			if ap.Hook == HookIngress {
@@ -403,7 +403,7 @@ func CleanUpJumpMaps() {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), "cali_jump") {
+		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) {
 			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
@@ -650,30 +650,30 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
 		// of execution, and we don't need to add it into the jump map
 		if ipFamily == "IPv6" {
-			err := obj.UpdateJumpMap("cali_jump", string(programNames[base]), base)
+			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[base]), base)
 			if err != nil {
 				return fmt.Errorf("error updating %v proglogue program: %v", ipFamily, err)
 			}
 		}
 		pIndex := base + 1
 		if !isHost {
-			err := obj.UpdateJumpMap("cali_jump", string(programNames[pIndex]), pIndex)
+			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
 			if err != nil {
 				return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
 			}
 		}
 		eIndex := base + 2
-		err := obj.UpdateJumpMap("cali_jump", string(programNames[eIndex]), eIndex)
+		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
 		if err != nil {
 			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
 		}
 		iIndex := base + 3
-		err = obj.UpdateJumpMap("cali_jump", string(programNames[iIndex]), iIndex)
+		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
 		if err != nil {
 			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
 		}
 		dIndex := base + 4
-		err = obj.UpdateJumpMap("cali_jump", string(programNames[dIndex]), dIndex)
+		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
 		if err != nil {
 			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
 		}
