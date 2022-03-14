@@ -774,6 +774,8 @@ func loadParams() {
 				Msg: "invalid URL authority"}
 		case "ipv4":
 			param = &Ipv4Param{}
+		case "ipv6":
+			param = &Ipv6Param{}
 		case "endpoint-list":
 			param = &EndpointListParam{}
 		case "port-list":

@@ -323,6 +323,19 @@ func (p *Ipv4Param) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+type Ipv6Param struct {
+	Metadata
+}
+
+func (p *Ipv6Param) Parse(raw string) (result interface{}, err error) {
+	res := net.ParseIP(raw)
+	if res == nil {
+		err = p.parseFailed(raw, "invalid IP")
+	}
+	result = res
+	return
+}
+
 type PortListParam struct {
 	Metadata
 }
