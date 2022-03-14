@@ -3,6 +3,7 @@
 REPO_NAME=${REPO_NAME:-master}
 test -n "$SECRET_KEY"
 
+rootdir=`git rev-parse --show-toplevel`
 keydir=`mktemp -t -d calico-publish-debs.XXXXXX`
 cp -a $SECRET_KEY ${keydir}/key
 
@@ -16,7 +17,7 @@ else
     # -ti to docker-run, and $SECRET_KEY must not require a pass phrase.
     interactive=
 fi
-docker run --rm ${interactive} -v `pwd`:/code -v ${keydir}:/keydir calico-build/bionic /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' *_*_source.changes"
+docker run --rm ${interactive} -v ${rootdir}:/code -v ${keydir}:/keydir -w /code/hack/release/packaging/output calico-build/bionic /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' *_*_source.changes"
 
 for series in trusty xenial bionic focal; do
     # Get the packages and versions that already exist in the PPA, so we can avoid
@@ -37,6 +38,6 @@ for series in trusty xenial bionic focal; do
                 break
             fi
         done
-        ${already_exists} || docker run --rm -v `pwd`:/code -w /code calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file}
+        ${already_exists} || docker run --rm -v ${rootdir}:/code -w /code calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file}
     done
 done

@@ -23,6 +23,11 @@ scriptdir=$(dirname $(realpath $0))
 . ${scriptdir}/lib.sh
 rootdir=`git_repo_root`
 
+# Directory to copy package build output to. Ensure it exists
+# and is empty before each build.
+outputDir=${rootdir}/hack/release/packaging/output/
+rm -rf ${outputdir} && mkdir -p ${outputDir}
+
 pub_steps=
 if "${PUBLISH:-false}"; then
     pub_steps="pub_debs pub_rpms"
@@ -32,11 +37,11 @@ if [ "${SEMAPHORE_GIT_PR_NUMBER}${SEMAPHORE_GIT_BRANCH}" = master -o -z "${SEMAP
     # Normally - if not Semaphore, or if this is Semaphore running on
     # the master branch and not for a PR - do all the steps including
     # publication.
-    : ${STEPS:=clone_repo bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
+    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
 else
     # For Semaphore building a PR or a branch other than master, build
     # packages but do not publish them.
-    : ${STEPS:=clone_repo bld_images net_cal felix etcd3gw dnsmasq nettle}
+    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle}
 fi
 
 function require_version {
@@ -103,10 +108,6 @@ function precheck_bld_images {
     :
 }
 
-function precheck_clone_repo {
-    :
-}
-
 function precheck_net_cal {
     test -n "${CALICO_CHECKOUT}" || require_version
 }
@@ -164,7 +165,7 @@ function docker_run_rm {
 
 function do_bld_images {
     # Build the docker images that we use for building for each target platform.
-    pushd ${rootdir}/docker-build-images
+    pushd ${rootdir}/hack/release/packaging/docker-build-images
     docker build -f ubuntu-trusty-build.Dockerfile.${ARCH} -t calico-build/trusty .
     docker build -f ubuntu-xenial-build.Dockerfile.${ARCH} -t calico-build/xenial .
     docker build -f ubuntu-bionic-build.Dockerfile.${ARCH} -t calico-build/bionic .
@@ -181,30 +182,21 @@ function do_bld_images {
     fi
 }
 
-function do_clone_repo {
-    rm -rf calico
-    CALICO_REPO=${CALICO_REPO:-https://github.com/projectcalico/calico.git}
-    git clone $CALICO_REPO -b $CALICO_CHECKOUT calico
-}
-
 function do_net_cal {
     # Build networking-calico packages.
-    pushd ${rootdir}
-    cd calico/networking-calico
+    pushd ${rootdir}/networking-calico
     PKG_NAME=networking-calico \
 	    NAME=networking-calico \
 	    DEB_EPOCH=1: \
-	    ../../utils/make-packages.sh deb rpm
-    # Packages are produced in rootDir/calico/, but we need
-    # them one level higher, so move them there.
-    find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' $rootdir \;
+	    ${rootdir}/hack/release/packaging/utils/make-packages.sh deb rpm
+    # Packages are produced in rootDir/ - move them to the output dir.
+    find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' $outputDir \;
     popd
 }
 
 function do_felix {
     # Build Felix packages.
-    pushd ${rootdir}
-    cd calico/felix
+    pushd ${rootdir}/felix
     # We build the Felix binary and include it in our source package
     # content, because it's infeasible to work out a set of Debian and
     # RPM golang build dependencies that is exactly equivalent to our
@@ -224,19 +216,20 @@ function do_felix {
 	    NAME=Felix \
 	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
-	    ../../utils/make-packages.sh deb rpm
+	    ${rootdir}/hack/release/packaging/utils/make-packages.sh deb rpm
+    git checkout Makefile
 
-    # Packages are produced in rootDir/calico/, but we need
-    # them one level higher, so move them there.
-    find ../ -type f -name 'felix_*-*' -exec mv '{}' $rootdir \;
+    
+    # Packages are produced in rootDir/ - move them to the output dir.
+    find ../ -type f -name 'felix_*-*' -exec mv '{}' $outputDir \;
     popd
 }
 
 function do_etcd3gw {
-    pushd ${rootdir}/etcd3gw
+    pushd ${rootdir}/hack/release/packaging/etcd3gw
     if ${PACKAGE_ETCD3GW:-false}; then
 	# When PACKAGE_ETCD3GW is explicitly specified, build RPM Python 2 packages for etcd3gw.
-	PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
+	PKG_NAME=python-etcd3gw ${rootdir}/hack/release/packaging/utils/make-packages.sh rpm
     else
         # Otherwise, no-op.  We don't have Python 3 RPM packaging for etcd3gw, so it makes sense to
 	# retreat to the same solution as for Debian/Ubuntu: don't build etcd3gw packages, and
@@ -247,6 +240,7 @@ function do_etcd3gw {
 }
 
 function do_dnsmasq {
+    # TODO: Add dnsmasq to monorepo.
     pushd ${rootdir}
     rm -rf dnsmasq
     git clone https://github.com/projectcalico/calico-dnsmasq.git dnsmasq
@@ -264,9 +258,15 @@ function do_dnsmasq {
 
     # CentOS/RHEL 7
     git checkout origin/rpm_2.79
-    docker_run_rm -e EL_VERSION=el7 calico-build/centos7 ../rpm/build-rpms
+    docker_run_rm -e EL_VERSION=el7 calico-build/centos7 /code/hack/release/packaging/rpm/build-rpms
+
+    # Packages are produced in rootDir/ - move them to the output dir.
+    find ../ -type f -name 'dnsmasq_*-*' -exec mv '{}' $outputDir \;
 
     popd
+
+    # Clean up unneeded repo.
+    rm -rf ${rootdir}/dnsmasq
 }
 
 function do_nettle {
@@ -293,12 +293,18 @@ function do_nettle {
     sed -i '1 s/unstable/xenial/' debian/changelog
     docker_run_rm calico-build/xenial dpkg-buildpackage -S
 
+    # Packages are produced in rootDir/ - move them to the output dir.
+    find ../ -type f -name 'nettle_*-*' -exec mv '{}' $outputDir \;
+
     popd
+
+    # Clean up nettle build files.
+    rm -rf ${rootdir}/nettle ${rootdir}/nettle-3.3 ${rootdir}/nettle_3.3.orig.tar.gz
 }
 
 function do_pub_debs {
     # Publish Debian packages.
-    pushd ${rootdir}
+    pushd ${rootdir}/hack/release/packaging
     ./utils/publish-debs.sh
     popd
 }
@@ -309,7 +315,7 @@ function do_pub_rpms {
 
     # Publish RPM packages.  Note, this includes updating the RPM repo
     # metadata.
-    pushd ${rootdir}
+    pushd ${rootdir}/hack/release/packaging
     ./utils/publish-rpms.sh
     popd
 }
