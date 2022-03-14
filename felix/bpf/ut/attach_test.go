@@ -195,7 +195,7 @@ func countJumpMaps() int {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), "cali_jump") {
+		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) {
 			log.Debugf("Jump map: %s", p)
 			count++
 		}

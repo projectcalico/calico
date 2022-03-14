@@ -25,6 +25,6 @@ func MapForTest(mc *bpf.MapContext) bpf.Map {
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 8,
-		Name:       "cali_jump",
+		Name:       bpf.JumpMapName(),
 	})
 }
