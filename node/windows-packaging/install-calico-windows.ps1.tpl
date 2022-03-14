@@ -205,9 +205,9 @@ function GetCalicoKubeConfig()
 function EnableWinDsrForEKS()
 {
     $OSInfo = (Get-ComputerInfo  | select WindowsVersion, OsBuildNumber)
-    $PlatformSupportDSR = (($OSInfo.WindowsVersion -as [int]) -GE 1903 -And ($OSInfo.OsBuildNumber -as [int]) -GE 18317)
+    $supportsDSR = Get-IsDSRSupported
 
-    if (-Not $PlatformSupportDSR) {
+    if (-Not $supportsDSR) {
         Write-Host "WinDsr is not supported ($OSInfo)"
         return
     }
@@ -218,7 +218,7 @@ function EnableWinDsrForEKS()
         Write-Host "WinDsr is enabled by default."
     } else {
         $UpdatedPath = $Path + " --enable-dsr=true --feature-gates=WinDSR=true"
-        Get-CimInstance win32_service -filter 'Name="kube-proxy"' | Invoke-CimMethod -Name Change -ArgumentList @($null,$null,$null,$null,$null,$UpdatedPath)
+        Get-CimInstance win32_service -filter 'Name="kube-proxy"' | Invoke-CimMethod -Name Change -Arguments @{PathName=$UpdatedPath}
         Restart-Service -name "kube-proxy"
         Write-Host "WinDsr has been enabled for kube-proxy."
     }
