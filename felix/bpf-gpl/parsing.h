@@ -13,13 +13,28 @@
 #define MAX_EXTENSIONS 10
 
 static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
-	__u8 next_header = ipv6hdr(ctx)->nexthdr;
-	__u16 index = skb_iphdr_offset(IPv6_SIZE) + IPv6_SIZE;
+	//__u8 next_header = ipv6hdr(ctx)->nexthdr;
+	__u8 next_header = 0;
+	//void *nh;
+	//__u16 offset = skb_iphdr_offset(IPv6_SIZE) + IPv6_SIZE;
+	int nh_offset = skb_iphdr_offset(IPv6_SIZE) + 6;
+	__u16 extension_offset = skb_iphdr_offset(IPv6_SIZE) + IPv6_SIZE;
 	__u16 hdrlen = 0;
 	__u16 hdrlen_total = 0;
 	//struct ipv6_opt_hdr *opthdr;
 
 	for (int i = 0; i < MAX_EXTENSIONS; i++) {
+		/*if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, hdrlen_total + UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			goto deny;
+		}*/
+
+		if (bpf_skb_load_bytes(ctx->skb, nh_offset, &next_header, sizeof(next_header))) {
+			CALI_DEBUG("Failed to load next header\n");
+			goto deny;
+		}
+
 		switch (next_header) {
 			case IPPROTO_TCP:
 			case IPPROTO_UDP:
@@ -41,27 +56,18 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 				goto deny;
 		}
 
-		/*if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, hdrlen_total + 8 + UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
-			CALI_DEBUG("Too short\n");
-			goto deny;
-		}*/
 		
 		//opthdr = (struct ipv6_opt_hdr *)(ctx->nh + hdrlen);
 		//next_header = opthdr->nexthdr;
-
-		if (bpf_skb_load_bytes(ctx->skb, index, &next_header, sizeof(next_header))) {
-			CALI_DEBUG("FAILED TO load");
-			goto deny;
-		}
+		nh_offset = extension_offset;
 	
-		if (bpf_skb_load_bytes(ctx->skb, index + 1, &hdrlen, sizeof(hdrlen))) {
-			CALI_DEBUG("FAILED TO load");
+		if (bpf_skb_load_bytes(ctx->skb, nh_offset + 1, &hdrlen, sizeof(hdrlen))) {
+			CALI_DEBUG("Failed to load header length\n");
 			goto deny;
 		}
 
 		hdrlen_total += hdrlen * 8 + 8;
-		index += hdrlen * 8 + 8;
+		extension_offset += hdrlen * 8 + 8;
 	}
 
 	CALI_DEBUG("Too many IPv6 extension headers");
