@@ -43,21 +43,6 @@ Supported, optional environment variables:
 -  `REPO_NAME`: override the PPA and RPM repo name to publish to.
    Default is automatically derived from `VERSION`.
 
--  `FELIX_REPO`: override the Git repository to get Felix code from.
-   Default is https://github.com/projectcalico/felix.git.
-
--  `FELIX_CHECKOUT`: override the point in the Git repository to check
-   out (a Git commit ID, tag or branch name).  Default is
-   automatically derived from `VERSION`.
-
--  `NETWORKING_CALICO_REPO`: override the Git repository to get
-   networking-calico code from.  Default is
-   https://github.com/projectcalico/networking-calico.git.
-
--  `NETWORKING_CALICO_CHECKOUT`: override the point in the Git
-   repository to check out (a Git commit ID, tag or branch name).
-   Default is automatically derived from `VERSION`.
-
 -  `STEPS`: override the parts of the process to execute.  Default is
    all of the following:
 
