@@ -85,7 +85,7 @@ func (c *FakeBGPConfigurations) Update(ctx context.Context, bGPConfiguration *v3
 // Delete takes name of the bGPConfiguration and deletes it. Returns an error if one occurs.
 func (c *FakeBGPConfigurations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(bgpconfigurationsResource, name), &v3.BGPConfiguration{})
+		Invokes(testing.NewRootDeleteActionWithOptions(bgpconfigurationsResource, name, opts), &v3.BGPConfiguration{})
 	return err
 }
 

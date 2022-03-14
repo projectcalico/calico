@@ -395,7 +395,7 @@ Attached to this release are the following artifacts:
 		ver,
 		r.uploadDir(ver),
 	}
-	_, err = r.runner.Run("ghr", args, nil)
+	_, err = r.runner.Run("./hack/release/ghr", args, nil)
 	return err
 }
 

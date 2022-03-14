@@ -81,6 +81,24 @@ func (key ProfileRulesKey) String() string {
 	return fmt.Sprintf("ProfileRules(name=%s)", key.Name)
 }
 
+// ProfileLabelsKey implements the KeyInterface for the profile labels
+type ProfileLabelsKey struct {
+	ProfileKey
+}
+
+func (key ProfileLabelsKey) defaultPath() (string, error) {
+	e, err := key.ProfileKey.defaultPath()
+	return e + "/labels", err
+}
+
+func (key ProfileLabelsKey) valueType() (reflect.Type, error) {
+	return reflect.TypeOf(map[string]string{}), nil
+}
+
+func (key ProfileLabelsKey) String() string {
+	return fmt.Sprintf("ProfileLabels(name=%s)", key.Name)
+}
+
 type ProfileListOptions struct {
 	Name string
 }
@@ -109,6 +127,8 @@ func (options ProfileListOptions) KeyFromDefaultPath(path string) Key {
 	}
 	pk := ProfileKey{Name: name}
 	switch kind {
+	case "labels":
+		return ProfileLabelsKey{ProfileKey: pk}
 	case "rules":
 		return ProfileRulesKey{ProfileKey: pk}
 	}
@@ -135,6 +155,8 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 	var name string
 	for _, d := range ds {
 		switch t := d.Key.(type) {
+		case ProfileLabelsKey:
+			name = t.Name
 		case ProfileRulesKey:
 			name = t.Name
 		default:

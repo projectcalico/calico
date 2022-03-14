@@ -305,6 +305,7 @@ fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) image bin/iptables-locker bi
 	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
 	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \
 	  FV_FELIX_LOG_LEVEL="$(FV_FELIX_LOG_LEVEL)" \
+	  CERTS_PATH=$(CERTS_PATH) \
 	  PRIVATE_KEY=`pwd`/private.key \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
@@ -364,6 +365,7 @@ k8sfv-test-existing-felix: $(REMOTE_DEPS) bin/k8sfv.test
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	CERTS_PATH=$(CERTS_PATH) \
 	PRIVATE_KEY=`pwd`/fv/private.key \
 	k8sfv/run-test
 
@@ -465,23 +467,8 @@ cd: cd-common
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created 
 .release-$(VERSION).created:
-	$(MAKE) clean image-all
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
+	$(MAKE) clean build bin/calico-bpf
 	touch $@
-
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# Check the reported version is correct for each release artifact.
-	for img in $(FELIX_IMAGE):$(VERSION)-$(ARCH) quay.io/$(FELIX_IMAGE):$(VERSION)-$(ARCH); do \
-	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
-	  then \
-	    echo "Check successful. ($$img)"; \
-	  else \
-	    echo "Incorrect version in docker image $$img!"; \
-	    result=false; \
-	  fi \
-	done; \
 
 ###############################################################################
 # Developer helper scripts (not used by build or test)

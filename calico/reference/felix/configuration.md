@@ -155,6 +155,12 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for step
 | BPFKubeProxyIptablesCleanupEnabled / <br/> FELIX_BPFKUBEPROXYIPTABLESCLEANUPENABLED   | Controls whether Felix will clean up the iptables rules created by the Kubernetes `kube-proxy`; should only be enabled if `kube-proxy` is not running. | true,false| true |
 | BPFKubeProxyMinSyncPeriod          / <br/> FELIX_BPFKUBEPROXYMINSYNCPERIOD            | Controls the minimum time between dataplane updates for Felix's embedded `kube-proxy` implementation. | seconds | `1` |
 | BPFKubeProxyEndpointSlicesEnabled  / <br/> FELIX_BPFKUBEPROXYENDPOINTSLICESENABLED    | Controls whether Felix's embedded kube-proxy derives its services from Kubernetes' EndpointSlices resources. Using EndpointSlices is more efficient but it requires EndpointSlices support to be enabled at the Kubernetes API server. | true,false | false |
+| BPFMapSizeConntrack / <br/> FELIX_BPFMapSizeConntrack | Controls the size of the conntrack map. This map must be large enough to hold an entry for each active connection. Warning: changing the size of the conntrack map can cause disruption. | int | 512000 |
+| BPFMapSizeNATFrontend / <br/> FELIX_BPFMapSizeNATFrontend | Controls the size of the NAT frontend map. FrontendMap should be large enough to hold an entry for each nodeport, external IP and each port in each service. | int | 65536 |
+| BPFMapSizeNATBackend / <br/> FELIX_BPFMapSizeNATBackend | Controls the size of the NAT backend map. This is the total number of endpoints. This is mostly more than the size of the number of services. | int | 262144 |
+| BPFMapSizeNATAffinity / <br/> FELIX_BPFMapSizeNATAffinity | Controls the size of the NAT affinity map. | int | 65536 |
+| BPFMapSizeIPSets / <br/> FELIX_BPFMapSizeIPSets | Controls the size of the IPSets map. The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors such as "all()" can result in large numbers of entries (one entry per endpoint in that case). | int | 1048576 |
+| BPFMapSizeRoute / <br/> FELIX_BPFMapSizeRoute | Controls the size of the route map. The routes map should be large enough to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and tunnel IPs). | int | 262144 |
 
 #### Kubernetes-specific configuration
 

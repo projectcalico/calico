@@ -247,6 +247,9 @@ func KeyFromDefaultPath(path string) Key {
 		case "rules":
 			log.Debugf("Profile rules")
 			return ProfileRulesKey{ProfileKey: pk}
+		case "labels":
+			log.Debugf("Profile labels")
+			return ProfileLabelsKey{ProfileKey: pk}
 		}
 		return nil
 	} else if m := matchHostIp.FindStringSubmatch(path); m != nil {

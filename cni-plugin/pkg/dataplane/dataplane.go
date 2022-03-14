@@ -21,7 +21,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc"
@@ -35,7 +35,7 @@ type Dataplane interface {
 		ctx context.Context,
 		calicoClient calicoclient.Interface,
 		args *skel.CmdArgs,
-		result *current.Result,
+		result *cniv1.Result,
 		desiredVethName string,
 		routes []*net.IPNet,
 		endpoint *api.WorkloadEndpoint,

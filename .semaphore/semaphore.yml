@@ -91,14 +91,10 @@ blocks:
       commands:
       - cd api
     jobs:
-    - name: "make build"
+    - name: "make build / ci / static-checks"
       commands:
       - make build
-    - name: "make ci"
-      commands:
       - make ci
-    - name: "make static-checks"
-      commands:
       - make static-checks
 
 - name: "apiserver"
@@ -108,6 +104,10 @@ blocks:
     minutes: 30
   dependencies: []
   task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
     prologue:
       commands:
       - cd apiserver
@@ -141,10 +141,6 @@ blocks:
       commands:
       - cd typha
       - make ci EXCEPT=k8sfv-test
-    - name: "Typha: felix k8s-st tests"
-      commands:
-      - cd felix
-      - JUST_A_MINUTE=true USE_TYPHA=true make k8sfv-test
     epilogue:
       always:
         commands:
@@ -194,6 +190,7 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
+      - make static-checks
       - make image-all
 
 - name: "Felix: Build Windows binaries"
@@ -330,28 +327,6 @@ blocks:
         - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
     - name: google-service-account-for-gce
-
-- name: "Felix: Static checks on e1-standard-8"
-  run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
-  task:
-    agent:
-      machine:
-        # Linters use a lot of RAM so use a bigger machine type.
-        type: e1-standard-8
-        os_image: ubuntu1804
-    prologue:
-      commands:
-      - cd felix
-      - cache restore go-pkg-cache
-      - cache restore go-mod-cache
-    jobs:
-    - name: Static checks
-      execution_time_limit:
-        minutes: 15
-      commands:
-      - make static-checks
 
 - name: "confd: tests"
   run:

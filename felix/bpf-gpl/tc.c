@@ -49,11 +49,11 @@ const volatile struct cali_tc_globals __globals;
  */
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 {
-#ifdef CALI_SET_SKB_MARK
+#ifdef UNITTEST
 	/* UT-only workaround to allow us to run the program with BPF_TEST_PROG_RUN
 	 * and simulate a specific mark
 	 */
-	skb->mark = CALI_SET_SKB_MARK;
+	skb->mark = SKB_MARK;
 #endif
 	CALI_DEBUG("New packet at ifindex=%d; mark=%x\n", skb->ifindex, skb->mark);
 
