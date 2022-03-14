@@ -149,6 +149,12 @@ function copy_rpms_to_host {
 	    $ssh_host -- mkdir -p $rpmdir/$reponame/$arch/
 	    $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/
 	fi
+
+	# Some packages are produced in the calico dir.
+	set -- `find calico/dist/rpms-el7 -name "*.$arch.rpm"`
+	if test $# -gt 0; then
+	    $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/
+	fi
     done
 }
 
