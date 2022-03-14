@@ -519,9 +519,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				It("should clean up jump maps", func() {
 					numJumpMaps := func() int {
-						output, err := felixes[0].ExecOutput("sh", "-c", "find /sys/fs/bpf/tc -name cali_jump")
+						command := fmt.Sprintf("find /sys/fs/bpf/tc -name %s", bpf.JumpMapName())
+						output, err := felixes[0].ExecOutput("sh", "-c", command)
 						Expect(err).NotTo(HaveOccurred())
-						return strings.Count(output, "cali_jump")
+						return strings.Count(output, bpf.JumpMapName())
 					}
 
 					expJumpMaps := func(numWorkloads int) int {
