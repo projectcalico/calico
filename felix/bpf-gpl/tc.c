@@ -34,6 +34,7 @@
 #include "sendrecv.h"
 #include "fib.h"
 #include "tc.h"
+#include "tcv6.h"
 #include "policy_program.h"
 #include "parsing.h"
 #include "failsafe.h"
@@ -448,7 +449,7 @@ syn_force_policy:
 	}
 
 	CALI_DEBUG("About to jump to policy program.\n");
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_POLICY);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_POLICY);
 	if (CALI_F_HEP) {
 		CALI_DEBUG("HEP with no policy, allow.\n");
 		goto skip_policy;
@@ -459,14 +460,14 @@ syn_force_policy:
 	}
 
 icmp_send_reply:
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_ICMP);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_ICMP);
 	/* should not reach here */
 	goto deny;
 
 skip_policy:
 	ctx->state->pol_rc = CALI_POL_ALLOW;
 	ctx->state->flags |= CALI_ST_SKIP_POLICY;
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_ALLOWED);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	goto deny;
 
@@ -1061,7 +1062,7 @@ icmp_too_big:
 	goto icmp_send_reply;
 
 icmp_send_reply:
-	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ICMP);
+	CALI_JUMP_TO(skb, PROG_INDEX_ICMP);
 	goto deny;
 
 nat_encap:
@@ -1191,31 +1192,12 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/prologue_v6")
-int calico_tc_v6(struct __sk_buff *skb)
+SEC("classifier/tc/drop")
+int calico_tc_skb_drop(struct __sk_buff *skb)
 {
-	CALI_DEBUG("Entering IPv6 prologue program");
-	// TODO: Replace this logic with the proper implementation, and finally a tail call
-	// to the policy program
-	return TC_ACT_UNSPEC;
-}
-
-SEC("classifier/tc/accept_v6")
-int calico_tc_v6_skb_accepted_entrypoint(struct __sk_buff *skb)
-{
-	CALI_DEBUG("Entering IPv6 accepted program");
-	// TODO: Implement the logic for accepted packets by the policy program
+	CALI_DEBUG("Entering calico_tc_skb_drop\n");
 	// We should not reach here since no tail call happens to this program
-	return TC_ACT_UNSPEC;
-}
-
-SEC("classifier/tc/icmp_v6")
-int calico_tc_v6_skb_send_icmp_replies(struct __sk_buff *skb)
-{
-	CALI_DEBUG("Entering IPv6 icmp program");
-	// TODO: Implement the logic for accepted icmp packets by the policy program
-	// We should not reach here since no tail call happens to this program
-	return TC_ACT_UNSPEC;
+	return TC_ACT_SHOT;
 }
 
 #ifndef CALI_ENTRYPOINT_NAME
