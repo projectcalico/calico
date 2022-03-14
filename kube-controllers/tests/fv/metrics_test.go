@@ -151,17 +151,46 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		createNode(nodeB, k8sClient)
 		createNode(nodeC, k8sClient)
 
-		// Assert only pool size IPAM metrics are reported at this point.
+		// Metrics for pool size should be present, along with explicit zero values on allocation gauges for pool,node pairs
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
 				`ipam_ippool_size{ippool="test-ippool-1"} 256`,
 				`ipam_ippool_size{ippool="test-ippool-2"} 65536`,
 				`ipam_ippool_size{ippool="test-ippool-3"} 256`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-a"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-b"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-c"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-a"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-b"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-c"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-a"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-b"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-a"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-b"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-c"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-a"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-b"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-c"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-a"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-b"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-c"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-a"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-b"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-c"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-a"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-b"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-c"} 0`,
 			},
 			[]string{
-				`ipam_allocations_`,
+				// Block gauges, GC reclamation count, and legacy allocation gauges should be absent.
 				`ipam_blocks_`,
-				`ipam_gc_`,
+				`ipam_allocations_gc_reclamations`,
+				`ipam_allocations_per_node`,
+				`ipam_allocations_borrowed_per_node`,
 			},
 			kubeControllers.IP,
 			10*time.Second, 1*time.Second,
@@ -210,30 +239,6 @@ var _ = Describe("kube-controllers metrics tests", func() {
 				`ipam_blocks_per_node{node="node-a"} 2`,
 				`ipam_blocks_per_node{node="node-b"} 2`,
 				`ipam_blocks_per_node{node="node-c"} 1`,
-
-				// Pool-based allocation gauges explicitly return zero for ippool,node pairs
-				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-a"} 0`,
-				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-b"} 0`,
-				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-c"} 0`,
-				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-c"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-a"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-b"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-a"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-b"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-c"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-a"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-b"} 0`,
-				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-c"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-a"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-b"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-c"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-a"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-b"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-c"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-a"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-b"} 0`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-c"} 0`,
 			},
 			[]string{
 				`ipam_allocations_gc_reclamations`,
@@ -367,6 +372,7 @@ var _ = Describe("kube-controllers metrics tests", func() {
 				`ipam_allocations_borrowed_per_node{node="node-c"} 2`,
 			},
 			[]string{
+				// Ensure all pool gauges are no longer using the deleted pool labels
 				`ipam_ippool_size{ippool="test-ippool-2"}`,
 				`ipam_ippool_size{ippool="test-ippool-3"}`,
 				`ipam_allocations_in_use{ippool="test-ippool-2"`,
@@ -379,7 +385,15 @@ var _ = Describe("kube-controllers metrics tests", func() {
 				`ipam_allocations_gc_candidates{ippool="test-ippool-3"`,
 				`ipam_allocations_gc_reclamations{ippool="test-ippool-2"`,
 				`ipam_allocations_gc_reclamations{ippool="test-ippool-3"`,
+
+				// Counter clears rather than lose association
 				`ipam_allocations_gc_reclamations{ippool="no_ippool",node="node-a"}`,
+
+				// There should be no explicit zero values for the no_ippool label. This behaviour only makes
+				// sense for active IP pools.
+				`{ippool="no_ippool",node="node-a"} 0`,
+				`{ippool="no_ippool",node="node-b"} 0`,
+				`{ippool="no_ippool",node="node-c"} 0`,
 			},
 			kubeControllers.IP,
 			5*time.Second,
