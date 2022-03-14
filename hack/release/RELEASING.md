@@ -226,17 +226,22 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 ### 4.d Build and publish OpenStack packages
 
-1. Check out the [packaging repository](https://github.com/projectcalico/packaging).
+1. Check out the the release tag in the `projectcalico/calico` repository.
 
-1. In your environment, set `HOST` to the GCP name for
-   binaries.projectcalico.org, `GCLOUD_ARGS` to the `--zone` and
-   `--project` args needed to access that host, and `SECRET_KEY` to
-   the secret key for a GPG identity that you have uploaded to your
-   Launchpad account.
+   ```
+   git fetch origin --tags && git checkout vX.Y.Z
+   ```
+
+1. In your environment, set `HOST` to the GCP name for binaries.projectcalico.org, `GCLOUD_ARGS` to the `--zone` and `--project` args needed to access that host, and `SECRET_KEY` to
+   the secret key for a GPG identity that you have uploaded to your Launchpad account.
 
 1. Establish GCP credentials so that gcloud with `HOST` and `GCLOUD_ARGS` can access binaries.projectcalico.org.
 
-1. Run `make release-publish VERSION=<version>`, where `<version>` is the Calico version being released.
+1. Build OpenStack packages from the checked out commit.
+
+   ```
+   make -C hack/release/packaging release-publish VERSION=vX.Y.Z
+   ```
 
 ### 4.e Update the docs with the new version
 

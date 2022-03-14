@@ -1,0 +1,8 @@
+FROM ppc64le/ubuntu:xenial
+MAINTAINER Shaun Crampton <shaun@tigera.io>
+ENV STREAM xenial
+
+ADD install-ubuntu-build-deps install-ubuntu-build-deps
+RUN ./install-ubuntu-build-deps
+
+WORKDIR /code
