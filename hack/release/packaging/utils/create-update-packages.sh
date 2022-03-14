@@ -191,6 +191,8 @@ function do_net_cal {
 	    ${rootdir}/hack/release/packaging/utils/make-packages.sh deb rpm
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' $outputDir \;
+    # Revert the changes made to networking-calico as part of the package build.
+    git checkout setup.py
     popd
 }
 

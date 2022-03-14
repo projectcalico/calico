@@ -32,5 +32,5 @@ setup(
             'calico = networking_calico.plugins.calico.plugin:CalicoPlugin',
         ],
     },
-    version="3.23.0-0.dev.post281+20220314200351+0000+db982de",
+    version="0.0.0",
 )
