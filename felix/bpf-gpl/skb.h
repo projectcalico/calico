@@ -160,6 +160,6 @@ static CALI_BPF_INLINE __u32 skb_ingress_ifindex(struct __sk_buff *skb)
 #endif
 }
 
-#define skb_is_gso(skb) ((skb)->gso_segs > 1)
+#define skb_is_gso(skb) ((skb)->gso_segs > 0)
 
 #endif /* __SKB_H__ */

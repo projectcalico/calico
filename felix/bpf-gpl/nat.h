@@ -68,6 +68,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 			sizeof(struct udphdr) + sizeof(struct vxlanhdr);
 
 	ret = bpf_skb_adjust_room(ctx->skb, new_hdrsz, BPF_ADJ_ROOM_MAC,
+						  BPF_F_ADJ_ROOM_FIXED_GSO |
 						  BPF_F_ADJ_ROOM_ENCAP_L4_UDP |
 						  BPF_F_ADJ_ROOM_ENCAP_L3_IPV4 |
 						  BPF_F_ADJ_ROOM_ENCAP_L2(sizeof(struct ethhdr)));
@@ -133,7 +134,7 @@ static CALI_BPF_INLINE int vxlan_v4_decap(struct __sk_buff *skb)
 	extra_hdrsz = sizeof(struct ethhdr) + sizeof(struct iphdr) +
 		sizeof(struct udphdr) + sizeof(struct vxlanhdr);
 
-	ret = bpf_skb_adjust_room(skb, -extra_hdrsz, BPF_ADJ_ROOM_MAC, 0);
+	ret = bpf_skb_adjust_room(skb, -extra_hdrsz, BPF_ADJ_ROOM_MAC | BPF_F_ADJ_ROOM_FIXED_GSO, 0);
 
 	return ret;
 }
