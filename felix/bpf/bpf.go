@@ -2240,6 +2240,8 @@ func KTimeNanos() int64 {
 	return ts.Nano()
 }
 
+const jumpMapVersion = 2
+
 func JumpMapName() string {
-	return "cali_jump2"
+	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
 }
