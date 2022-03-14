@@ -13,22 +13,18 @@
 #define MAX_EXTENSIONS 10
 
 static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
-	//__u8 next_header = ipv6hdr(ctx)->nexthdr;
 	__u8 next_header = 0;
-	//void *nh;
-	//__u16 offset = skb_iphdr_offset(IPv6_SIZE) + IPv6_SIZE;
-	int nh_offset = skb_iphdr_offset(IPv6_SIZE) + 6;
-	__u16 extension_offset = skb_iphdr_offset(IPv6_SIZE) + IPv6_SIZE;
-	__u16 hdrlen = 0;
+	__u8 hdrlen = 0;
 	__u16 hdrlen_total = 0;
-	//struct ipv6_opt_hdr *opthdr;
+	__u16 nh_offset = skb_iphdr_offset(IPv6_SIZE) + 6;
+	__u16 extension_offset = skb_iphdr_offset(IPv6_SIZE) + IPv6_SIZE;
 
 	for (int i = 0; i < MAX_EXTENSIONS; i++) {
-		/*if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, hdrlen_total + UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, hdrlen_total + UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
-		}*/
+		}
 
 		if (bpf_skb_load_bytes(ctx->skb, nh_offset, &next_header, sizeof(next_header))) {
 			CALI_DEBUG("Failed to load next header\n");
@@ -55,10 +51,7 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 				// Any other packet that we don't expect to reach here.
 				goto deny;
 		}
-
 		
-		//opthdr = (struct ipv6_opt_hdr *)(ctx->nh + hdrlen);
-		//next_header = opthdr->nexthdr;
 		nh_offset = extension_offset;
 	
 		if (bpf_skb_load_bytes(ctx->skb, nh_offset + 1, &hdrlen, sizeof(hdrlen))) {
@@ -67,12 +60,12 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 		}
 
 		hdrlen_total += hdrlen * 8 + 8;
-		extension_offset += hdrlen * 8 + 8;
+		nh_offset += hdrlen_total;
 	}
 
 	CALI_DEBUG("Too many IPv6 extension headers");
 deny:
-	ctx->nh = ctx->nh + hdrlen;
+	ctx->nh = ctx->nh + hdrlen_total;
 	return PARSING_ERROR;
 
 parsing_ok:
@@ -80,16 +73,6 @@ parsing_ok:
 }
 
 static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
-	if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, UDP_SIZE)) {
-		ctx->fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("Too short\n");
-		goto deny;
-	}
-	//CALI_DEBUG("IPv6 s=%x d=%x\n", ipv6hdr(ctx)->saddr, ipv6hdr(ctx)->daddr);
-	CALI_DEBUG("SKB: %x", ctx->data_start);
-	CALI_DEBUG("ip: %x", ctx->ip_header);
-	CALI_DEBUG("nh: %x", ctx->nh);
-
 	switch (parse_ipv6_extensions(ctx)) {
 	case IPPROTO_UDP:
 		CALI_DEBUG("UDP");
@@ -105,6 +88,10 @@ static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
 		goto deny;
 	}
 
+	//CALI_DEBUG("IPv6 s=%x d=%x\n", ipv6hdr(ctx)->saddr, ipv6hdr(ctx)->daddr);
+	CALI_DEBUG("SKB: %x", ctx->data_start);
+	CALI_DEBUG("ip: %x", ctx->ip_header);
+	CALI_DEBUG("nh: %x", ctx->nh);
 	return PARSING_OK_V6;
 
 deny:
