@@ -1,0 +1,53 @@
+version: v1.0
+name: CI for https://github.com/projectcalico/packaging
+agent:
+  machine:
+    type: e1-standard-4
+    os_image: ubuntu1804
+
+global_job_config:
+  secrets:
+    - name: google-service-account-for-tigera-infra
+    - name: launchpad-secret-key
+  prologue:
+    commands:
+      - checkout
+      - git config --global user.email marvin@tigera.io
+      - git config --global user.name Marvin
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json
+      - gcloud config set project tigera-wp-tcp-redirect
+      - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+      - export SECRET_KEY=$HOME/secrets/marvin.txt
+      - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
+      - export HOST=ubuntu@binaries-projectcalico-org
+
+blocks:
+  - name: 'Packaging'
+    task:
+      jobs:
+        - name: 'Master'
+          commands:
+            - make release-publish
+        - name: 'v3.15 Python 2 branch'
+          # This is a special case, probably (hopefully!) for v3.15
+          # only: we have 2 separate PPAs for Python 2 and Python 3,
+          # and corresponding separate branches in the
+          # networking-calico repo.
+          commands:
+            - export REPO_NAME=calico-latest-python2
+            - export VERSION=release-v3.15-python2
+            - export FELIX_CHECKOUT=release-v3.15
+            - export PACKAGE_ETCD3GW=true
+            - make release-publish
+        - name: 'Current release branch'
+          commands:
+            - export REPO_NAME=calico-current
+            - export VERSION=release-v3.21
+            - make release-publish
+        # TODO: Uncomment this once v3.22 is released. v3.20 is not monorepo compatible,
+        # so needs to use an older version of the packaging repository.
+        # - name: 'Previous release branch'
+        #   commands:
+        #     - export REPO_NAME=calico-previous
+        #     - export VERSION=release-v3.20
+        #     - make release-publish
