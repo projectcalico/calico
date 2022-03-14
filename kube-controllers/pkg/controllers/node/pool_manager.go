@@ -32,16 +32,18 @@ const (
 )
 
 func (p *poolManager) onPoolUpdated(pool *v3.IPPool) {
-	// Blocks may not have a known association to an IP Pool. This can happen when a Pool gets deleted, or if block
-	// updates appear before their associated pool updates. Blocks lacking association to an IP Pool are grouped under
-	// "no_ippool", and we check for transitions from unknown to known pool association on pool creation.
 	if p.allPools[pool.Name] == nil {
+		// Establish an empty map of blocks for this pool.
+		p.blocksByPool[pool.Name] = map[string]bool{}
+
+		// Blocks may not have a known association to an IP Pool. This can happen when a Pool gets deleted, or if block
+		// updates appear before their associated pool updates. Blocks lacking association to an IP Pool are grouped under
+		// "no_ippool", and we check for transitions from unknown to known pool association on pool creation.
 		_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
 		if err != nil {
 			log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s", pool.Name)
 			return
 		}
-
 		for block := range p.blocksByPool[unknownPoolLabel] {
 			_, blockNet, err := net.ParseCIDR(block)
 			if err != nil {
@@ -83,6 +85,13 @@ func (p *poolManager) onBlockDeleted(blockCIDR string) {
 	// Transition from known or unknown pool association to nil.
 	pool := p.poolsByBlock[blockCIDR]
 	delete(p.blocksByPool[pool], blockCIDR)
+
+	// If the unknown pool has no more blocks, we can clean it up.
+	// Maintain empty maps for known pools, clean them up on pool deletion.
+	if pool == unknownPoolLabel && len(p.blocksByPool[pool]) == 0 {
+		delete(p.blocksByPool, pool)
+	}
+
 	delete(p.poolsByBlock, blockCIDR)
 }
 

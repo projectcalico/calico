@@ -586,9 +586,9 @@ func (c *ipamController) updateMetrics() {
 	// Iterate blocks to determine the correct metric values.
 	for poolName, poolBlocks := range c.poolManager.blocksByPool {
 		// These counts track pool-based gauges by node for the current pool.
-		inUseAllocationsByNode := c.createZeroedMapForNodeValues()
-		borrowedAllocationsByNode := c.createZeroedMapForNodeValues()
-		gcCandidatesByNode := c.createZeroedMapForNodeValues()
+		inUseAllocationsByNode := c.createZeroedMapForNodeValues(poolName)
+		borrowedAllocationsByNode := c.createZeroedMapForNodeValues(poolName)
+		gcCandidatesByNode := c.createZeroedMapForNodeValues(poolName)
 		blocksByNode := map[string]int{}
 
 		for blockCIDR := range poolBlocks {
@@ -1255,12 +1255,16 @@ func unregisterMetricVectorsForPool(poolName string) {
 
 // Creates map used to index gauge values by node, and seeds with zeroes to create explicit zero values rather than
 // absence of data for a node. This enables users to construct utilization expressions that return 0 when the numerator
-// is zero, rather than no data.
-func (c *ipamController) createZeroedMapForNodeValues() map[string]int {
+// is zero, rather than no data. If the pool is the 'unknown' pool, the map is not seeded.
+func (c *ipamController) createZeroedMapForNodeValues(poolName string) map[string]int {
 	valuesByNode := map[string]int{}
-	for cnode := range c.kubernetesNodesByCalicoName {
-		valuesByNode[cnode] = 0
+
+	if poolName != unknownPoolLabel {
+		for cnode := range c.kubernetesNodesByCalicoName {
+			valuesByNode[cnode] = 0
+		}
 	}
+
 	return valuesByNode
 }
 
