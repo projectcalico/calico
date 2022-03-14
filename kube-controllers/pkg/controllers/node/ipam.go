@@ -586,10 +586,10 @@ func (c *ipamController) updateMetrics() {
 	// Iterate blocks to determine the correct metric values.
 	for poolName, poolBlocks := range c.poolManager.blocksByPool {
 		// These counts track pool-based gauges by node for the current pool.
-		inUseAllocationsByNode := map[string]int{}
-		borrowedAllocationsByNode := map[string]int{}
+		inUseAllocationsByNode := c.createZeroedMapForNodeValues()
+		borrowedAllocationsByNode := c.createZeroedMapForNodeValues()
+		gcCandidatesByNode := c.createZeroedMapForNodeValues()
 		blocksByNode := map[string]int{}
-		gcCandidatesByNode := map[string]int{}
 
 		for blockCIDR := range poolBlocks {
 			b := c.allBlocks[blockCIDR].Value.(*model.AllocationBlock)
@@ -1251,6 +1251,17 @@ func unregisterMetricVectorsForPool(poolName string) {
 		prometheus.Unregister(gcReclamationCounters[poolName])
 		delete(gcReclamationCounters, poolName)
 	}
+}
+
+// Creates map used to index gauge values by node, and seeds with zeroes to create explicit zero values rather than
+// absence of data for a node. This enables users to construct utilization expressions that return 0 when the numerator
+// is zero, rather than no data.
+func (c *ipamController) createZeroedMapForNodeValues() map[string]int {
+	valuesByNode := map[string]int{}
+	for cnode := range c.kubernetesNodesByCalicoName {
+		valuesByNode[cnode] = 0
+	}
+	return valuesByNode
 }
 
 func updatePoolGaugeWithNodeValues(gaugesByPool map[string]*prometheus.GaugeVec, pool string, nodeValues map[string]int) {

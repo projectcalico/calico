@@ -210,9 +210,32 @@ var _ = Describe("kube-controllers metrics tests", func() {
 				`ipam_blocks_per_node{node="node-a"} 2`,
 				`ipam_blocks_per_node{node="node-b"} 2`,
 				`ipam_blocks_per_node{node="node-c"} 1`,
+
+				// Pool-based allocation gauges explicitly return zero for ippool,node pairs
+				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-a"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-b"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-c"} 0`,
+				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-c"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-a"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-b"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-a"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-b"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-2",node="node-c"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-a"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-b"} 0`,
+				`ipam_allocations_borrowed{ippool="test-ippool-3",node="node-c"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-a"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-b"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-c"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-a"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-b"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-c"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-a"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-b"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-3",node="node-c"} 0`,
 			},
 			[]string{
-				`ipam_allocations_gc_candidates`,
 				`ipam_allocations_gc_reclamations`,
 			},
 			kubeControllers.IP,
@@ -306,11 +329,10 @@ var _ = Describe("kube-controllers metrics tests", func() {
 			[]string{
 				`ipam_allocations_gc_reclamations{ippool="test-ippool-2",node="node-a"} 1`,
 				`ipam_allocations_gc_reclamations{ippool="test-ippool-1",node="node-b"} 1`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-a"} 0`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-b"} 0`,
 			},
-			[]string{
-				`ipam_allocations_gc_candidates{ippool="test-ippool-2",node="node-a"}`,
-				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-b"}`,
-			},
+			[]string{},
 			kubeControllers.IP,
 			time.Minute, 2*time.Second,
 		)
@@ -322,7 +344,7 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Assert that associated pools are labelled as no_ippool, and block affinities as no_affinity.
-		// Blocks lose affinity when their pool is deleted.
+		// Blocks lose affinity when their pool is deleted. Reclamation counters are reset when their pool is deleted.
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
 				`ipam_ippool_size{ippool="test-ippool-1"} 256`,
@@ -347,11 +369,17 @@ var _ = Describe("kube-controllers metrics tests", func() {
 			[]string{
 				`ipam_ippool_size{ippool="test-ippool-2"}`,
 				`ipam_ippool_size{ippool="test-ippool-3"}`,
-				`ipam_allocations_in_use{ippool="test-ippool-2",node="node-a"}`,
-				`ipam_allocations_in_use{ippool="test-ippool-3",node="node-b"}`,
-				`ipam_blocks{ippool="test-ippool-2",node="node-a"}`,
-				`ipam_blocks{ippool="test-ippool-3",node="node-b"}`,
-				`ipam_allocations_gc_reclamations{ippool="test-ippool-2",node="node-a"}`,
+				`ipam_allocations_in_use{ippool="test-ippool-2"`,
+				`ipam_allocations_in_use{ippool="test-ippool-3"`,
+				`ipam_allocations_borrowed{ippool="test-ippool-2"`,
+				`ipam_allocations_borrowed{ippool="test-ippool-3"`,
+				`ipam_blocks{ippool="test-ippool-2"`,
+				`ipam_blocks{ippool="test-ippool-3"`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-2"`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-3"`,
+				`ipam_allocations_gc_reclamations{ippool="test-ippool-2"`,
+				`ipam_allocations_gc_reclamations{ippool="test-ippool-3"`,
+				`ipam_allocations_gc_reclamations{ippool="no_ippool",node="node-a"}`,
 			},
 			kubeControllers.IP,
 			5*time.Second,
@@ -415,6 +443,8 @@ var _ = Describe("kube-controllers metrics tests", func() {
 			[]string{
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"}`,
 				`ipam_allocations_in_use{ippool="no_ippool",node="node-b"}`,
+				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-b"}`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-b"}`,
 				`ipam_allocations_per_node{node="node-b"}`,
 			},
 			kubeControllers.IP,
@@ -461,6 +491,7 @@ var _ = Describe("kube-controllers metrics tests", func() {
 				`ipam_blocks_per_node{node="node-b"}`,
 				`ipam_allocations_borrowed{ippool="test-ippool-1",node="node-c"}`,
 				`ipam_allocations_borrowed_per_node{node="node-c"}`,
+				`ipam_allocations_gc_candidates{ippool="test-ippool-1",node="node-c"}`,
 				`ipam_allocations_gc_reclamations`,
 			},
 			kubeControllers.IP,
@@ -499,13 +530,12 @@ var _ = Describe("kube-controllers metrics tests", func() {
 		validateExpectedAndUnexpectedMetrics(
 			[]string{},
 			[]string{
-				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"}`,
-				`ipam_allocations_in_use{ippool="test-ippool-2-analogue",node="node-a"}`,
-				`ipam_allocations_per_node{node="node-a"}`,
-				`ipam_blocks{ippool="test-ippool-1",node="node-a"}`,
-				`ipam_blocks{ippool="test-ippool-2-analogue",node="no_affinity"}`,
-				`ipam_blocks_per_node{node="node-a"}`,
-				`ipam_blocks_per_node{node="no_affinity"}`,
+				`ipam_allocations_in_use`,
+				`ipam_allocations_borrowed`,
+				`ipam_allocations_per_node`,
+				`ipam_blocks`,
+				`ipam_blocks_per_node`,
+				`ipam_allocations_gc_candidates`,
 			},
 			kubeControllers.IP,
 			5*time.Second,
