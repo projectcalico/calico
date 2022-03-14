@@ -20,8 +20,8 @@
 #>
 
 Param(
-    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/v3.22.0/",
-    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-v3.22.0.zip",
+    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/v3.22.1/",
+    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-v3.22.1.zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
