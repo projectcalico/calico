@@ -85,7 +85,7 @@ func (c *FakeProfiles) Update(ctx context.Context, profile *v3.Profile, opts v1.
 // Delete takes name of the profile and deletes it. Returns an error if one occurs.
 func (c *FakeProfiles) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(profilesResource, name), &v3.Profile{})
+		Invokes(testing.NewRootDeleteActionWithOptions(profilesResource, name, opts), &v3.Profile{})
 	return err
 }
 

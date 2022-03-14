@@ -4,10 +4,7 @@
 TEST_DIR=./tests/k8st
 
 # kubectl binary.
-: ${kubectl:=./bin/kubectl}
-
-# kind binary.
-: ${KIND:=./bin/kind}
+: ${kubectl:=../hack/test/kind/kubectl}
 
 function checkModule(){
   MODULE="$1"

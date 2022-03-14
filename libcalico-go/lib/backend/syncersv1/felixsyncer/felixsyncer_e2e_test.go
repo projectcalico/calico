@@ -44,6 +44,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
+const (
+	controlPlaneNodeName = "kind-single-control-plane"
+)
+
 // calculateDefaultFelixSyncerEntries determines the expected set of Felix configuration for the currently configured
 // cluster.
 func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.DatastoreType) (expected []model.KVPair) {
@@ -74,7 +78,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			Expect(err).NotTo(HaveOccurred())
 			expected = append(expected, *cnodekv)
 
-			if node.Name == "kind-control-plane" {
+			if node.Name == controlPlaneNodeName {
 				for _, ip := range cnodekv.Value.(*libapiv3.Node).Spec.Addresses {
 					if ip.Type == libapiv3.InternalIP {
 						expected = append(expected, model.KVPair{
@@ -89,7 +93,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 		}
 
 		// Add endpoint slices.
-		epss, err := cs.DiscoveryV1beta1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
+		epss, err := cs.DiscoveryV1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		for _, eps := range epss.Items {
 			// Endpoints slices get updated frequently, so don't include the revision info.
@@ -114,9 +118,18 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 				},
 			})
 
-			// And expect a v3 profile for each namespace. The labels should include the name
+			// Expect profile labels for each namespace as well. The labels should include the name
 			// of the namespace. As of Kubernetes v1.21, k8s also includes a label for the namespace name
 			// that will be inherited by the profile.
+			expected = append(expected, model.KVPair{
+				Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
+				Value: map[string]string{
+					"pcns.projectcalico.org/name":      ns.Name,
+					"pcns.kubernetes.io/metadata.name": ns.Name,
+				},
+			})
+
+			// And expect a v3 profile for each namespace.
 			prof := apiv3.Profile{
 				TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
 				ObjectMeta: metav1.ObjectMeta{Name: name, UID: ns.UID, CreationTimestamp: ns.CreationTimestamp},
@@ -148,8 +161,16 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 					},
 				})
 
-				//  We also expect one v3 Profile to be present for each ServiceAccount. The labels should include the name
+				// Expect profile labels for each default serviceaccount as well. The labels should include the name
 				// of the service account.
+				expected = append(expected, model.KVPair{
+					Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
+					Value: map[string]string{
+						"pcsa.projectcalico.org/name": sa.Name,
+					},
+				})
+
+				//  We also expect one v3 Profile to be present for each ServiceAccount.
 				prof := apiv3.Profile{
 					TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
 					ObjectMeta: metav1.ObjectMeta{Name: name, UID: sa.UID, CreationTimestamp: sa.CreationTimestamp},

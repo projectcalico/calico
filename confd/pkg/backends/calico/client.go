@@ -419,15 +419,16 @@ func (c *client) OnSyncChange(source string, ready bool) {
 }
 
 type bgpPeer struct {
-	PeerIP      cnet.IP              `json:"ip"`
-	ASNum       numorstring.ASNumber `json:"as_num,string"`
-	RRClusterID string               `json:"rr_cluster_id"`
-	Password    *string              `json:"password"`
-	SourceAddr  string               `json:"source_addr"`
-	Port        uint16               `json:"port"`
-	KeepNextHop bool                 `json:"keep_next_hop"`
-	RestartTime string               `json:"restart_time"`
-	CalicoNode  bool                 `json:"calico_node"`
+	PeerIP          cnet.IP              `json:"ip"`
+	ASNum           numorstring.ASNumber `json:"as_num,string"`
+	RRClusterID     string               `json:"rr_cluster_id"`
+	Password        *string              `json:"password"`
+	SourceAddr      string               `json:"source_addr"`
+	Port            uint16               `json:"port"`
+	KeepNextHop     bool                 `json:"keep_next_hop"`
+	RestartTime     string               `json:"restart_time"`
+	CalicoNode      bool                 `json:"calico_node"`
+	NumAllowLocalAS int32                `json:"num_allow_local_as"`
 }
 
 type bgpPrefix struct {
@@ -546,13 +547,20 @@ func (c *client) updatePeersV1() {
 				// Check if the peer represents a node Calico is running on.
 				_, isCalicoNode := c.nodeIPs[host]
 
+				// Check if local AS numbers are allowed.
+				var numLocalAS int32
+				if v3res.Spec.NumAllowedLocalASNumbers != nil {
+					numLocalAS = *v3res.Spec.NumAllowedLocalASNumbers
+				}
+
 				peers = append(peers, &bgpPeer{
-					PeerIP:      *ip,
-					ASNum:       v3res.Spec.ASNumber,
-					SourceAddr:  string(v3res.Spec.SourceAddress),
-					Port:        port,
-					KeepNextHop: v3res.Spec.KeepOriginalNextHop,
-					CalicoNode:  isCalicoNode,
+					PeerIP:          *ip,
+					ASNum:           v3res.Spec.ASNumber,
+					SourceAddr:      string(v3res.Spec.SourceAddress),
+					Port:            port,
+					KeepNextHop:     v3res.Spec.KeepOriginalNextHop,
+					CalicoNode:      isCalicoNode,
+					NumAllowLocalAS: numLocalAS,
 				})
 			}
 			log.Debugf("Peers %#v", peers)

@@ -17,7 +17,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/sirupsen/logrus"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -43,6 +43,6 @@ func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 	conf types.NetConf,
 	epIDs WEPIdentifiers,
 	endpoint *api.WorkloadEndpoint,
-	logger *logrus.Entry) (*current.Result, error) {
+	logger *logrus.Entry) (*cniv1.Result, error) {
 	return nil, nil
 }

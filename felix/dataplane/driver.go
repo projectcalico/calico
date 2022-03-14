@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,12 +27,13 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/clock"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -319,6 +320,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			IptablesLockProbeInterval:      configParams.IptablesLockProbeIntervalMillis,
 			MaxIPSetSize:                   configParams.MaxIpsetSize,
 			IPv6Enabled:                    configParams.Ipv6Support,
+			BPFIpv6Enabled:                 configParams.BpfIpv6Support,
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 			XDPRefreshInterval:             configParams.XDPRefreshInterval,
 
@@ -352,7 +354,6 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			BPFMapRepin:                        configParams.DebugBPFMapRepinEnabled,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
-			KubeProxyEndpointSlicesEnabled:     configParams.BPFKubeProxyEndpointSlicesEnabled,
 			BPFPSNATPorts:                      configParams.BPFPSNATPorts,
 			BPFMapSizeRoute:                    configParams.BPFMapSizeRoute,
 			BPFMapSizeNATFrontend:              configParams.BPFMapSizeNATFrontend,
@@ -412,11 +413,11 @@ func ServePrometheusMetrics(configParams *config.Config) {
 	} else {
 		if !configParams.PrometheusGoMetricsEnabled {
 			log.Info("Discarding Golang metrics")
-			prometheus.Unregister(prometheus.NewGoCollector())
+			prometheus.Unregister(collectors.NewGoCollector())
 		}
 		if !configParams.PrometheusProcessMetricsEnabled {
 			log.Info("Discarding process metrics")
-			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+			prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		}
 		if !configParams.PrometheusWireGuardMetricsEnabled || !configParams.WireguardEnabled {
 			log.Info("Discarding WireGuard metrics")

@@ -16,9 +16,12 @@ package fv
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -32,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -84,6 +88,35 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		}
 	}
 
+	It("should copy data from old map to new map", func() {
+		srcIP := net.IPv4(123, 123, 123, 123)
+		dstIP := net.IPv4(121, 121, 121, 121)
+
+		now := time.Duration(timeshim.RealTime().KTimeNanos())
+		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+		val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+		val64 := base64.StdEncoding.EncodeToString(val[:])
+
+		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
+		key64 := base64.StdEncoding.EncodeToString(key[:])
+
+		felixes[0].Exec("calico-bpf", "conntrack", "write", key64, val64)
+		out, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Count(out, srcIP.String())).To(Equal(1), "entry not found in conntrack map")
+		newCtMapSize := 6000
+		updateFelixConfig(func(cfg *api.FelixConfiguration) {
+			cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
+		})
+
+		ctMap := conntrack.Map(&bpf.MapContext{})
+		Eventually(func() int { return getMapSize(felixes[0], ctMap) }, "10s", "200ms").Should(Equal(newCtMapSize))
+		out, err = felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Count(out, srcIP.String())).To(Equal(1), "entry not found in conntrack map")
+
+	})
+
 	It("should program new map sizes", func() {
 		affMap := nat.AffinityMap(&bpf.MapContext{})
 		feMap := nat.FrontendMap(&bpf.MapContext{})
@@ -115,12 +148,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 			cfg.Spec.BPFMapSizeIPSets = &newIpSetMapSize
 			cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
 		})
-		Eventually(func() int { return getMapSize(felix, rtMap) }, "5s", "200ms").Should(Equal(newRtSize))
-		Eventually(func() int { return getMapSize(felix, feMap) }, "5s", "200ms").Should(Equal(newNATFeSize))
-		Eventually(func() int { return getMapSize(felix, beMap) }, "5s", "200ms").Should(Equal(newNATBeSize))
-		Eventually(func() int { return getMapSize(felix, affMap) }, "5s", "200ms").Should(Equal(newNATAffSize))
-		Eventually(func() int { return getMapSize(felix, ipsMap) }, "5s", "200ms").Should(Equal(newIpSetMapSize))
-		Eventually(func() int { return getMapSize(felix, ctMap) }, "5s", "200ms").Should(Equal(newCtMapSize))
+		Eventually(func() int { return getMapSize(felix, rtMap) }, "10s", "200ms").Should(Equal(newRtSize))
+		Eventually(func() int { return getMapSize(felix, feMap) }, "10s", "200ms").Should(Equal(newNATFeSize))
+		Eventually(func() int { return getMapSize(felix, beMap) }, "10s", "200ms").Should(Equal(newNATBeSize))
+		Eventually(func() int { return getMapSize(felix, affMap) }, "10s", "200ms").Should(Equal(newNATAffSize))
+		Eventually(func() int { return getMapSize(felix, ipsMap) }, "10s", "200ms").Should(Equal(newIpSetMapSize))
+		Eventually(func() int { return getMapSize(felix, ctMap) }, "10s", "200ms").Should(Equal(newCtMapSize))
 	})
 })
 

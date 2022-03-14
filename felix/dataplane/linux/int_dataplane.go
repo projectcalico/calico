@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -185,8 +185,8 @@ type Config struct {
 	BPFMapSizeNATBackend               int
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
+	BPFIpv6Enabled                     bool
 	KubeProxyMinSyncPeriod             time.Duration
-	KubeProxyEndpointSlicesEnabled     bool
 
 	SidecarAccelerationEnabled bool
 
@@ -562,7 +562,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
-		bpfmap.CreateBPFMaps(bpfMapContext)
+		err := bpfmap.CreateBPFMaps(bpfMapContext)
+		if err != nil {
+			log.WithError(err).Panic("error creating bpf maps")
+		}
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
@@ -613,10 +616,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		bpfproxyOpts := []bpfproxy.Option{
 			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
-		}
-
-		if config.KubeProxyEndpointSlicesEnabled {
-			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithEndpointsSlices())
 		}
 
 		if config.BPFNodePortDSREnabled {

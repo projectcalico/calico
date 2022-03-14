@@ -22,8 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/clock"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/netlinkshim"

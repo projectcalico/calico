@@ -263,6 +263,11 @@ func (in *BGPPeerSpec) DeepCopyInto(out *BGPPeerSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.NumAllowedLocalASNumbers != nil {
+		in, out := &in.NumAllowedLocalASNumbers, &out.NumAllowedLocalASNumbers
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
