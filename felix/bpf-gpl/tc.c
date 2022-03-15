@@ -83,6 +83,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.iphdr_len = IPv4_SIZE,
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");
@@ -112,7 +113,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			ctx.fwd.reason = CALI_REASON_BYPASS;
 
 			/* we need to fix up the right src host IP */
-			if (skb_refresh_validate_ptrs(&ctx, IPv4_SIZE, UDP_SIZE)) {
+			if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 				ctx.fwd.reason = CALI_REASON_SHORT;
 				CALI_DEBUG("Too short\n");
 				goto deny;
@@ -128,7 +129,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			/* XXX do a proper CT lookup to find this */
 			ipv4hdr(&ctx)->saddr = HOST_IP;
-			int l3_csum_off = skb_iphdr_offset(IPv4_SIZE) + offsetof(struct iphdr, check);
+			int l3_csum_off = skb_iphdr_offset(&ctx) + offsetof(struct iphdr, check);
 
 			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
 			if (res) {
@@ -385,7 +386,7 @@ syn_force_policy:
 	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
 	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
-	if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
@@ -485,6 +486,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.iphdr_len = IPv4_SIZE,
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");
@@ -498,7 +500,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
-	if (skb_refresh_validate_ptrs(&ctx, IPv4_SIZE, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
@@ -585,7 +587,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	l3_csum_off = skb_iphdr_offset(IPv4_SIZE) +  offsetof(struct iphdr, check);
+	l3_csum_off = skb_iphdr_offset(ctx) +  offsetof(struct iphdr, check);
 
 	if (ct_related) {
 		if (ipv4hdr(ctx)->protocol == IPPROTO_ICMP) {
@@ -617,7 +619,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 			/* Related ICMP traffic must be an error response so it should include inner IP
 			 * and 8 bytes as payload. */
-			if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, ICMP_SIZE + IPv4_SIZE + 8)) {
+			if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + IPv4_SIZE + 8)) {
 				CALI_DEBUG("Failed to revalidate packet size\n");
 				goto deny;
 			}
@@ -661,8 +663,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	__u8 ihl = ipv4hdr(ctx)->ihl * 4;
-
 	int res = 0;
 	bool encap_needed = false;
 
@@ -671,10 +671,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	} else {
 		switch (ipv4hdr(ctx)->protocol) {
 		case IPPROTO_TCP:
-			l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
+			l4_csum_off = skb_l4hdr_offset(ctx) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
-			l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
+			l4_csum_off = skb_l4hdr_offset(ctx) + offsetof(struct udphdr, check);
 			break;
 		}
 	}
@@ -718,7 +718,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 
 		if (state->ip_proto == IPPROTO_TCP) {
-			if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, TCP_SIZE)) {
+			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
@@ -1077,7 +1077,7 @@ nat_encap:
 					bpf_ntohl(state->ip_dst), arpk.ifindex);
 			/* Don't drop it yet, we might get lucky and the MAC is correct */
 		} else {
-			if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, 0)) {
+			if (skb_refresh_validate_ptrs(ctx, 0)) {
 				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
@@ -1147,6 +1147,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.iphdr_len = IPv4_SIZE,
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");
@@ -1172,7 +1173,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		fwd_fib_set_flags(&ctx.fwd, fib_flags);
 	}
 
-	if (skb_refresh_validate_ptrs(&ctx, IPv4_SIZE, ICMP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, ICMP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
@@ -1199,7 +1200,7 @@ int calico_tc_v6(struct __sk_buff *skb)
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
-		// maybe use iphdr_len here
+		.iphdr_len = IPv6_SIZE,
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");

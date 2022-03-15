@@ -10,17 +10,17 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
-#define MAX_EXTENSIONS 10
+#define MAX_EXTENSIONS 1
 
 static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
-	__u8 next_header = 0;
-	__u8 hdrlen = 0;
-	__u16 hdrlen_total = 0;
-	__u16 nh_offset = skb_iphdr_offset(IPv6_SIZE) + 6;
-	__u16 extension_offset = skb_iphdr_offset(IPv6_SIZE) + IPv6_SIZE;
+	//__u8 next_header = 0;
+	//__u8 hdrlen = 0;
+	//__u16 hdrlen_total = 0;
+	//__u16 nh_offset = skb_iphdr_offset(ctx) + 6;
+	//__u16 extension_offset = skb_l4hdr_offset(ctx);
 
-	for (int i = 0; i < MAX_EXTENSIONS; i++) {
-		if (skb_refresh_validate_ptrs(ctx, IPv6_SIZE, hdrlen_total + UDP_SIZE)) {
+	/*for (int i = 0; i < MAX_EXTENSIONS; i++) {
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
@@ -59,21 +59,21 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 			goto deny;
 		}
 
-		hdrlen_total += hdrlen * 8 + 8;
-		nh_offset += hdrlen_total;
-	}
+		//extension_offset += hdrlen * 8 + 8;
+		ctx->iphdr_len+= hdrlen * 8 + 8;
+	}*/
 
 	CALI_DEBUG("Too many IPv6 extension headers");
-deny:
-	ctx->nh = ctx->nh + hdrlen_total;
+//deny:
 	return PARSING_ERROR;
 
-parsing_ok:
-	return next_header;
+//parsing_ok:
+//	ctx->nh = ctx->data_start + extension_offset;
+//	return next_header;
 }
 
 static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
-	switch (parse_ipv6_extensions(ctx)) {
+	/*switch (parse_ipv6_extensions(ctx)) {
 	case IPPROTO_UDP:
 		CALI_DEBUG("UDP");
 		break;
@@ -86,16 +86,16 @@ static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
 	default:
 		CALI_DEBUG("Failed to parse IPv6 extensions");
 		goto deny;
-	}
+	}*/
 
 	//CALI_DEBUG("IPv6 s=%x d=%x\n", ipv6hdr(ctx)->saddr, ipv6hdr(ctx)->daddr);
-	CALI_DEBUG("SKB: %x", ctx->data_start);
-	CALI_DEBUG("ip: %x", ctx->ip_header);
-	CALI_DEBUG("nh: %x", ctx->nh);
+	//CALI_DEBUG("SKB: %x", ctx->data_start);
+	//CALI_DEBUG("ip: %x", ctx->ip_header);
+	//CALI_DEBUG("nh: %x", ctx->nh);
 	return PARSING_OK_V6;
 
-deny:
-	return PARSING_ERROR;
+//deny:
+//	return PARSING_ERROR;
 }
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
@@ -110,7 +110,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	 * for more headers.
 	 */
 	if (CALI_F_XDP) {
-		if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
@@ -154,7 +154,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	// In TC programs, parse packet and validate its size. This is
 	// already done for XDP programs at the beginning of the function.
 	if (!CALI_F_XDP) {
-		if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
@@ -210,7 +210,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 	switch (ctx->state->ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, TCP_SIZE)) {
+		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;

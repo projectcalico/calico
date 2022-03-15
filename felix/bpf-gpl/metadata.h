@@ -46,9 +46,10 @@ static CALI_BPF_INLINE int xdp2tc_set_metadata(struct xdp_md *xdp, __u32 flags) 
 	 * bits to indicate that the packet has been accepted.*/
 	struct cali_tc_ctx ctx = {
 		.xdp = xdp,
+		.iphdr_len = IPv4_SIZE,
 	};
 
-	if (skb_refresh_validate_ptrs(&ctx, IPv4_SIZE, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		CALI_DEBUG("Too short\n");
 		return PARSING_ERROR;
 	}
@@ -80,9 +81,10 @@ static CALI_BPF_INLINE __u32 xdp2tc_get_metadata(struct __sk_buff *skb) {
 #else
 	struct cali_tc_ctx ctx = {
 		.skb = skb,
+		.iphdr_len = IPv4_SIZE,
 	};
 
-	if (skb_refresh_validate_ptrs(&ctx, IPv4_SIZE, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		CALI_DEBUG("Too short\n");
 		return PARSING_ERROR;
 	}

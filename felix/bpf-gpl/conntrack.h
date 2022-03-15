@@ -272,7 +272,7 @@ static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct 
 	/* ICMP packet is an error, its payload should contain the full IP header and
 	 * at least the first 8 bytes of the next header. */
 
-	if (skb_refresh_validate_ptrs(ctx, IPv4_SIZE, ICMP_SIZE + IPv4_SIZE + 8)) {
+	if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + IPv4_SIZE + 8)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		ctx->fwd.res = TC_ACT_SHOT;
 		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
@@ -411,7 +411,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	};
 	struct ct_lookup_ctx *ct_ctx = &ct_lookup_ctx;
 	if (tc_ctx->state->ip_proto == IPPROTO_TCP) {
-		if (skb_refresh_validate_ptrs(tc_ctx, IPv4_SIZE, TCP_SIZE)) {
+		if (skb_refresh_validate_ptrs(tc_ctx, TCP_SIZE)) {
 			tc_ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			bpf_exit(TC_ACT_SHOT);

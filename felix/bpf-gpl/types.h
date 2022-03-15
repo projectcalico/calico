@@ -113,6 +113,7 @@ struct cali_tc_ctx {
   void *data_start;
   void *data_end;
   void *ip_header;
+  __u16 iphdr_len;
   void *nh;
 
   struct cali_tc_state *state;
