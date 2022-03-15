@@ -152,10 +152,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		// TODO: Replace this logic with the proper implementation, and finally a
 		// tail call to the IPv6 prologue program
 		if (CALI_F_WEP) {
-			CALI_DEBUG("IPv6 from workload: drop");
+			CALI_DEBUG("IPv6 from workload: drop\n");
 			goto deny;
 		}
-		CALI_DEBUG("IPv6 on host interface: allow");
+		CALI_DEBUG("IPv6 on host interface: allow\n");
 		fwd_fib_set(&ctx.fwd, false);
 		ctx.fwd.res = TC_ACT_UNSPEC;
 		goto finalize;
@@ -167,7 +167,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	case PARSING_ERROR:
 	default:
 		// A malformed packet or a packet we don't support
-		CALI_DEBUG("Drop malformed or unsupported packet");
+		CALI_DEBUG("Drop malformed or unsupported packet\n");
 		ctx.fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
@@ -196,7 +196,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 			goto deny;
 		case -2:
 			/* Non-BPF VXLAN packet from another Calico node. */
-			CALI_DEBUG("VXLAN packet from known Calico host, allow.");
+			CALI_DEBUG("VXLAN packet from known Calico host, allow.\n");
 			fwd_fib_set(&(ctx->fwd), false);
 			goto allow;
 		}
@@ -1196,7 +1196,6 @@ SEC("classifier/tc/drop")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_drop\n");
-	// We should not reach here since no tail call happens to this program
 	return TC_ACT_SHOT;
 }
 
