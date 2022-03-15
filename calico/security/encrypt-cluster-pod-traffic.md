@@ -19,21 +19,27 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-**Supported**
-
 The following platforms using only IPv4:
+
 - Kubernetes, on-premises
 - EKS using Calico CNI
 - EKS using AWS CNI
 - AKS using Azure CNI
 
-All platforms listed above will encrypt pod-to-pod traffic. Additionally, when using AKS or EKS, host-to-host traffic will also be encrypted, including host-networked pods.
+**Supported traffic for encryption**
 
-- [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
-- Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
-- WireGuard in {{site.prodname}} requires node IP addresses to establish secure tunnels between nodes. {{site.prodname}} can automatically detect IP address of a node using [IP Setting]({{site.baseurl}}/reference/node/configuration#ip-setting) and [IP autodetection method]({{site.baseurl}}/reference/node/configuration#ip-autodetection-methods) in [calico/node]({{site.baseurl}}/reference/node/configuration) resource.
-    - Set `IP` (or `IP6`) environment variable to `autodetect`.
-    - Set `IP_AUTODETECTION_METHOD` (or `IP6_AUTODETECTION_METHOD`) to an appropriate value. If there are multiple interfaces on a node, set the value to detect the IP address of the primary interface.
+- Pod-to-pod traffic
+- Host-to-host traffic (only for managed clusters deployed on EKS and AKS)
+
+**Required**
+
+- On all nodes in the cluster that you want to participate in {{site.prodname}} encryption, verify that the operating system(s) on the nodes are {% include open-new-window.html text='installed with WireGuard' url='https://www.wireguard.com/install/' %}.
+
+  > **Note**: Some node operating systems do not support Wireguard, or do not have it installed by default. Enabling {{site.prodname}} Wireguard encryption does not require all nodes to be installed with Wireguard. However, traffic to or from a node that does not have Wireguard installed, will not be encrypted.
+  {: .alert .alert-info}
+
+- IP addresses for every node in the cluster. This is required to establish secure tunnels between the nodes. {{site.prodname}} can automatically do this using [IP Setting]({{site.baseurl}}/reference/node/configuration#ip-setting) and [IP autodetection methods]({{site.baseurl}}/reference/node/configuration#ip-autodetection-methods) available under [calico/node]({{site.baseurl}}/reference/node/configuration) resource.
+    - Under [installation]({{site.baseurl}}/reference/installation/api), set the [autodetection method]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.NodeAddressAutodetection) (`nodeAddressAutodetectionV4` and/or `nodeAddressAutodetectionV6`) for your cluster.
 
 ### How to
 
@@ -140,9 +146,6 @@ To install WireGuard for OpenShift v4.8:
 {% endtabs %}
 
 #### Enable WireGuard for a cluster
-
-   > **Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
-   {: .alert .alert-info}
 
 Enable WireGuard encryption across all the nodes using the following command.
 
