@@ -30,25 +30,21 @@ import (
 )
 
 // EncapsulationResolver is a Calculation Graph component that watches IP pool updates and
-// calculates if the IPIP or VXLAN encaps should be enabled or disabled. If there is
-// a change, Felix restarts by calling configChangedRestartCallback() to apply them.
+// calculates if the IPIP or VXLAN encaps should be enabled or disabled. The new Encapsulation
+// is sent to the dataplane, which restarts Felix if it changed.
 type EncapsulationResolver struct {
-	config                       *config.Config
-	encapCalc                    *EncapsulationCalculator
-	configChangedRestartCallback func()
-	inSync                       bool
+	config    *config.Config
+	callbacks encapCallbacks
+	encapCalc *EncapsulationCalculator
+	inSync    bool
 }
 
-func NewEncapsulationResolver(config *config.Config, configChangedRestartCallback func()) *EncapsulationResolver {
-	if configChangedRestartCallback == nil {
-		log.Panic("Starting EncapsulationResolver with nil callback func.")
-	}
-
+func NewEncapsulationResolver(config *config.Config, callbacks encapCallbacks) *EncapsulationResolver {
 	return &EncapsulationResolver{
-		config:                       config,
-		encapCalc:                    NewEncapsulationCalculator(config, nil),
-		configChangedRestartCallback: configChangedRestartCallback,
-		inSync:                       false,
+		config:    config,
+		callbacks: callbacks,
+		encapCalc: NewEncapsulationCalculator(config, nil),
+		inSync:    false,
 	}
 }
 
@@ -74,7 +70,7 @@ func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool)
 func (r *EncapsulationResolver) OnStatusUpdate(status api.SyncStatus) {
 	log.WithField("status", status).Debug("EncapsulationResolver: SyncStatus update")
 
-	if status == api.InSync {
+	if !r.inSync && status == api.InSync {
 		r.inSync = true
 		r.triggerCalculation()
 	}
@@ -87,20 +83,21 @@ func (r *EncapsulationResolver) triggerCalculation() {
 		return
 	}
 
-	if r.config != nil {
-		newIPIPEnabled := r.encapCalc.IPIPEnabled()
-		newVXLANEnabled := r.encapCalc.VXLANEnabled()
-
-		if r.config.Encapsulation.IPIPEnabled != newIPIPEnabled || r.config.Encapsulation.VXLANEnabled != newVXLANEnabled {
-			log.WithFields(log.Fields{
-				"oldIPIPEnabled":  r.config.Encapsulation.IPIPEnabled,
-				"newIPIPEnabled":  newIPIPEnabled,
-				"oldVXLANEnabled": r.config.Encapsulation.VXLANEnabled,
-				"newVXLANEnabled": newVXLANEnabled,
-			}).Info("EncapsulationResolver: Encapsulation changed. Restart Felix.")
-			r.configChangedRestartCallback()
-		}
+	newEncap := config.Encapsulation{
+		IPIPEnabled:  r.encapCalc.IPIPEnabled(),
+		VXLANEnabled: r.encapCalc.VXLANEnabled(),
 	}
+
+	if r.config.Encapsulation.IPIPEnabled != newEncap.IPIPEnabled || r.config.Encapsulation.VXLANEnabled != newEncap.VXLANEnabled {
+		log.WithFields(log.Fields{
+			"oldIPIPEnabled":  r.config.Encapsulation.IPIPEnabled,
+			"newIPIPEnabled":  newEncap.IPIPEnabled,
+			"oldVXLANEnabled": r.config.Encapsulation.VXLANEnabled,
+			"newVXLANEnabled": newEncap.VXLANEnabled,
+		}).Info("EncapsulationResolver: Encapsulation changed.")
+	}
+
+	r.callbacks.OnEncapUpdate(newEncap)
 }
 
 // EncapsulationCalculator is a helper struct to aid in calculating if IPIP and/or VXLAN
@@ -115,6 +112,10 @@ type EncapsulationCalculator struct {
 }
 
 func NewEncapsulationCalculator(config *config.Config, ippoolKVList *model.KVPairList) *EncapsulationCalculator {
+	if config == nil {
+		log.Panic("Starting EncapsulationResolver with config==nil.")
+	}
+
 	encapCalc := &EncapsulationCalculator{
 		config:     config,
 		ipipPools:  map[string]struct{}{},
@@ -144,7 +145,7 @@ func (c *EncapsulationCalculator) handlePool(p model.KVPair) error {
 	}
 
 	if _, ok := p.Value.(*apiv3.IPPool); ok {
-		// When dealing with an apiv3.IPPool, p.Key is nil
+		// When dealing with an apiv3.IPPool (from listing IP pools via client), p.Key is nil
 		return c.handleAPIPool(p)
 	}
 
@@ -161,10 +162,7 @@ func (c *EncapsulationCalculator) handleModelPool(p model.KVPair) error {
 	if p.Value == nil {
 		c.removePool(poolKey)
 	} else {
-		pool, ok := p.Value.(*model.IPPool)
-		if !ok {
-			return fmt.Errorf("failed to convert %+v to *model.IPPool", p.Value)
-		}
+		pool, _ := p.Value.(*model.IPPool)
 		c.updatePool(poolKey, pool.IPIPMode != encap.Undefined, pool.VXLANMode != encap.Undefined)
 
 	}
@@ -172,6 +170,9 @@ func (c *EncapsulationCalculator) handleModelPool(p model.KVPair) error {
 	return nil
 }
 
+// handleAPIPool handles apiv3.IPPool values in KVPairs. This currently only happens
+// in initPools(), which may be passed to NewEncapsulationCalculator() with a list of
+// IP pools retrieved from the client.
 func (c *EncapsulationCalculator) handleAPIPool(p model.KVPair) error {
 	if p.Value == nil {
 		return fmt.Errorf("API pool KVPair Value is nil")
@@ -208,16 +209,16 @@ func (c *EncapsulationCalculator) removePool(cidr string) {
 }
 
 func (c *EncapsulationCalculator) IPIPEnabled() bool {
-	if c.config != nil && c.config.DeprecatedIpInIpEnabled != nil {
-		return *c.config.DeprecatedIpInIpEnabled
+	if c.config != nil && c.config.IpInIpEnabled != nil {
+		return *c.config.IpInIpEnabled
 	}
 
 	return len(c.ipipPools) > 0
 }
 
 func (c *EncapsulationCalculator) VXLANEnabled() bool {
-	if c.config != nil && c.config.DeprecatedVXLANEnabled != nil {
-		return *c.config.DeprecatedVXLANEnabled
+	if c.config != nil && c.config.VXLANEnabled != nil {
+		return *c.config.VXLANEnabled
 	}
 
 	return len(c.vxlanPools) > 0

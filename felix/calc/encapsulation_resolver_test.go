@@ -16,9 +16,11 @@ package calc
 
 import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
+	"github.com/projectcalico/calico/felix/proto"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -175,8 +177,8 @@ var _ = Describe("EncapsulationCalculator", func() {
 		f := false
 		DescribeTable("FelixConfig tests",
 			func(felixIPIP, felixVXLAN *bool, apiPoolsToAdd, modelPoolsToAdd []model.KVPair, expectedIPIP, expectedVXLAN bool) {
-				conf.DeprecatedIpInIpEnabled = felixIPIP
-				conf.DeprecatedVXLANEnabled = felixVXLAN
+				conf.IpInIpEnabled = felixIPIP
+				conf.VXLANEnabled = felixVXLAN
 				for _, p := range apiPoolsToAdd {
 					err := encapsulationCalculator.handlePool(p)
 					Expect(err).To(Not(HaveOccurred()))
@@ -209,15 +211,12 @@ var _ = Describe("EncapsulationCalculator", func() {
 var _ = Describe("EncapsulationResolver", func() {
 	var encapsulationResolver *EncapsulationResolver
 	var conf *config.Config
-	var restartTriggered bool
-	configChangedRestartCallback := func() {
-		restartTriggered = true
-	}
+	var callbacks *encapResolverCallbackRecorder
 
 	BeforeEach(func() {
 		conf = config.New()
-		restartTriggered = false
-		encapsulationResolver = NewEncapsulationResolver(conf, configChangedRestartCallback)
+		callbacks = &encapResolverCallbackRecorder{}
+		encapsulationResolver = NewEncapsulationResolver(conf, callbacks)
 	})
 
 	Describe("OnStatusUpdate", func() {
@@ -248,107 +247,132 @@ var _ = Describe("EncapsulationResolver", func() {
 				KVPair:     model.KVPair{Key: model.HostEndpointKey{}},
 				UpdateType: api.UpdateTypeKVNew,
 			})
-			Expect(restartTriggered).To(BeFalse())
 		})
 	})
 
 	Describe("Not inSync", func() {
-		It("should not trigger restart when adding pools with IPIP encap", func() {
+		It("should not send encapUpdates when adding pools with IPIP encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Always, encap.Undefined))
-			Expect(restartTriggered).To(BeFalse())
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			Expect(callbacks.encapUpdates).To(BeNil())
 		})
 
-		It("should not trigger restart when adding pools with VXLAN encap", func() {
+		It("should not send encapUpdates when adding pools with VXLAN encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
-			Expect(restartTriggered).To(BeFalse())
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
+			Expect(callbacks.encapUpdates).To(BeNil())
 		})
-		It("should not trigger restart when adding and removing pools", func() {
+		It("should not send encapUpdates when adding and removing pools", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Always, encap.CrossSubnet))
-			Expect(restartTriggered).To(BeFalse())
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.CrossSubnet))
 			encapsulationResolver.OnPoolUpdate(removePoolUpdate(*cidr))
-			Expect(restartTriggered).To(BeFalse())
+			Expect(callbacks.encapUpdates).To(BeNil())
 		})
-		It("should not trigger restart when changing encap in FelixConfig", func() {
+		It("should not send encapUpdates when changing encap in FelixConfig", func() {
 			t := true
-			conf.DeprecatedIpInIpEnabled = &t
-			conf.DeprecatedVXLANEnabled = &t
-			Expect(restartTriggered).To(BeFalse())
+			conf.IpInIpEnabled = &t
+			conf.VXLANEnabled = &t
+			Expect(callbacks.encapUpdates).To(BeNil())
 		})
 	})
 
 	Describe("Already inSync", func() {
-		It("should trigger restart when adding pools with IPIP encap", func() {
+		BeforeEach(func() {
 			encapsulationResolver.OnStatusUpdate(api.InSync)
-
+		})
+		It("should send encapUpdates when adding pools with IPIP encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Always, encap.Undefined))
-			Expect(restartTriggered).To(BeTrue())
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			Expect(callbacks.encapUpdates).To(Equal(
+				[]*proto.Encapsulation{
+					{IpipEnabled: false, VxlanEnabled: false},
+					{IpipEnabled: true, VxlanEnabled: false},
+				}))
 		})
-		It("should trigger restart when adding pools with VXLAN encap", func() {
-			encapsulationResolver.OnStatusUpdate(api.InSync)
-
+		It("should send encapUpdates when adding pools with VXLAN encap", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
-			Expect(restartTriggered).To(BeTrue())
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Undefined, encap.CrossSubnet))
+			Expect(callbacks.encapUpdates).To(Equal(
+				[]*proto.Encapsulation{
+					{IpipEnabled: false, VxlanEnabled: false},
+					{IpipEnabled: false, VxlanEnabled: true},
+				}))
 		})
-		It("should trigger restart when removing pools", func() {
+		It("should send encapUpdates when removing pools", func() {
+			Expect(callbacks.encapUpdates).To(Equal(
+				[]*proto.Encapsulation{
+					{IpipEnabled: false, VxlanEnabled: false},
+				}))
 			_, cidr1, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr1, encap.Always, encap.CrossSubnet))
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr1, encap.Always, encap.CrossSubnet))
 
 			_, cidr2, err := net.ParseCIDR("192.168.2.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr2, encap.Undefined, encap.Always))
-			Expect(restartTriggered).To(BeFalse())
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr2, encap.Undefined, encap.Always))
+			Expect(callbacks.encapUpdates).To(Equal(
+				[]*proto.Encapsulation{
+					{IpipEnabled: false, VxlanEnabled: false},
+					{IpipEnabled: true, VxlanEnabled: true},
+					{IpipEnabled: true, VxlanEnabled: true},
+				}))
 
 			encapsulationResolver.OnStatusUpdate(api.InSync)
-			Expect(restartTriggered).To(BeTrue())
 
-			restartTriggered = false // reset restartTriggered
 			encapsulationResolver.OnPoolUpdate(removePoolUpdate(*cidr1))
-			Expect(restartTriggered).To(BeTrue())
+			Expect(callbacks.encapUpdates).To(Equal(
+				[]*proto.Encapsulation{
+					{IpipEnabled: false, VxlanEnabled: false},
+					{IpipEnabled: true, VxlanEnabled: true},
+					{IpipEnabled: true, VxlanEnabled: true},
+					{IpipEnabled: false, VxlanEnabled: true},
+				}))
 		})
-		It("should not trigger restart when changing encap in FelixConfig (Felix will restart through another code path)", func() {
-			encapsulationResolver.OnStatusUpdate(api.InSync)
-
+		It("should not send encapUpdates when changing encap in FelixConfig (Felix will restart through another code path)", func() {
 			t := true
-			conf.DeprecatedIpInIpEnabled = &t
-			conf.DeprecatedVXLANEnabled = &t
-			Expect(restartTriggered).To(BeFalse())
+			conf.IpInIpEnabled = &t
+			conf.VXLANEnabled = &t
+			Expect(callbacks.encapUpdates).To(Equal(
+				[]*proto.Encapsulation{
+					{IpipEnabled: false, VxlanEnabled: false},
+				}))
 		})
 	})
 
 	Describe("Changing inSync", func() {
-		It("should not trigger restart when adding pools before inSync, but should right after", func() {
+		It("should not send encapUpdates when adding pools before inSync, but should right after", func() {
 			_, cidr, err := net.ParseCIDR("192.168.1.0/24")
 			Expect(err).To(Not(HaveOccurred()))
-			encapsulationResolver.OnPoolUpdate(AddPoolUpdate(*cidr, encap.Always, encap.Undefined))
-			Expect(restartTriggered).To(BeFalse())
+			encapsulationResolver.OnPoolUpdate(addPoolUpdate(*cidr, encap.Always, encap.Undefined))
+			Expect(callbacks.encapUpdates).To(BeNil())
 
 			encapsulationResolver.OnStatusUpdate(api.InSync)
-			Expect(restartTriggered).To(BeTrue())
+			Expect(callbacks.encapUpdates).To(Equal(
+				[]*proto.Encapsulation{
+					{IpipEnabled: true, VxlanEnabled: false},
+				}))
 		})
-		It("should not trigger restart when changing FelixConfig before inSync, but should right after", func() {
+		It("should not send encapUpdates when changing FelixConfig before inSync, but should right after", func() {
 			t := true
 			f := false
-			conf.DeprecatedIpInIpEnabled = &f
-			conf.DeprecatedVXLANEnabled = &t
+			conf.IpInIpEnabled = &f
+			conf.VXLANEnabled = &t
 
 			encapsulationResolver.OnStatusUpdate(api.InSync)
-			Expect(restartTriggered).To(BeTrue())
+			Expect(callbacks.encapUpdates).To(Equal(
+				[]*proto.Encapsulation{
+					{IpipEnabled: false, VxlanEnabled: true},
+				}))
 		})
 	})
 })
 
-func AddPoolUpdate(cidr net.IPNet, ipipMode, vxlanMode encap.Mode) api.Update {
+func addPoolUpdate(cidr net.IPNet, ipipMode, vxlanMode encap.Mode) api.Update {
 	return api.Update{
 		KVPair: model.KVPair{
 			Key: model.IPPoolKey{
@@ -403,4 +427,60 @@ func getModelPool(cidr string, ipipMode, vxlanMode encap.Mode) *model.KVPair {
 			VXLANMode: vxlanMode,
 		},
 	}
+}
+
+type encapResolverCallbackRecorder struct {
+	encapUpdates []*proto.Encapsulation
+}
+
+func (e *encapResolverCallbackRecorder) OnEncapUpdate(encap config.Encapsulation) {
+	e.encapUpdates = append(e.encapUpdates,
+		&proto.Encapsulation{
+			IpipEnabled:  encap.IPIPEnabled,
+			VxlanEnabled: encap.VXLANEnabled,
+		})
+}
+
+func (e *encapResolverCallbackRecorder) OnHostIPUpdate(hostname string, ip *net.IP) {
+	Fail("HostIPUpdate received")
+}
+
+func (e *encapResolverCallbackRecorder) OnHostIPRemove(hostname string) {
+	Fail("HostIPRemove received")
+}
+
+func (e *encapResolverCallbackRecorder) OnIPPoolUpdate(model.IPPoolKey, *model.IPPool) {
+	Fail("IPPoolUpdate received")
+}
+
+func (e *encapResolverCallbackRecorder) OnIPPoolRemove(model.IPPoolKey) {
+	Fail("IPPoolRemove received")
+}
+
+func (e *encapResolverCallbackRecorder) OnWireguardUpdate(string, *model.Wireguard) {
+	Fail("OnWireguardUpdate received")
+}
+
+func (e *encapResolverCallbackRecorder) OnWireguardRemove(string) {
+	Fail("OnWireguardRemove received")
+}
+
+func (e *encapResolverCallbackRecorder) OnServiceAccountUpdate(update *proto.ServiceAccountUpdate) {
+	Fail("ServiceAccountUpdate received")
+}
+
+func (e *encapResolverCallbackRecorder) OnServiceAccountRemove(id proto.ServiceAccountID) {
+	Fail("ServiceAccountRemove received")
+}
+
+func (e *encapResolverCallbackRecorder) OnNamespaceUpdate(update *proto.NamespaceUpdate) {
+	Fail("NamespaceUpdate received")
+}
+
+func (e *encapResolverCallbackRecorder) OnNamespaceRemove(id proto.NamespaceID) {
+	Fail("NamespaceRemove received")
+}
+
+func (e *encapResolverCallbackRecorder) OnGlobalBGPConfigUpdate(*v3.BGPConfiguration) {
+	Fail("OnGlobalBGPConfigUpdate received")
 }

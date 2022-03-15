@@ -45,6 +45,7 @@ type State struct {
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
 	ExpectedNumberOfALPPolicies          int
+	ExpectedEncapsulation                proto.Encapsulation
 }
 
 func (s State) String() string {
@@ -94,6 +95,7 @@ func (s State) Copy() State {
 	cpy.ExpectedRoutes = s.ExpectedRoutes.Copy()
 	cpy.ExpectedVTEPs = s.ExpectedVTEPs.Copy()
 	cpy.ExpectedNumberOfALPPolicies = s.ExpectedNumberOfALPPolicies
+	cpy.ExpectedEncapsulation = s.ExpectedEncapsulation
 
 	cpy.Name = s.Name
 	return cpy
@@ -227,6 +229,12 @@ func (s State) withVTEPs(vteps ...proto.VXLANTunnelEndpointUpdate) (newState Sta
 func (s State) withRoutes(routes ...proto.RouteUpdate) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedRoutes = set.FromArray(routes)
+	return newState
+}
+
+func (s State) withExpectedEncapsulation(encap proto.Encapsulation) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedEncapsulation = encap
 	return newState
 }
 

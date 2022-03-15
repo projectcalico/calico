@@ -66,6 +66,10 @@ type configCallbacks interface {
 	OnDatastoreNotReady()
 }
 
+type encapCallbacks interface {
+	OnEncapUpdate(encap config.Encapsulation)
+}
+
 type passthruCallbacks interface {
 	OnHostIPUpdate(hostname string, ip *net.IP)
 	OnHostIPRemove(hostname string)
@@ -93,6 +97,7 @@ type vxlanCallbacks interface {
 type PipelineCallbacks interface {
 	ipSetUpdateCallbacks
 	rulesUpdateCallbacks
+	encapCallbacks
 	endpointCallbacks
 	configCallbacks
 	passthruCallbacks
@@ -106,7 +111,7 @@ type CalcGraph struct {
 	activeRulesCalculator *ActiveRulesCalculator
 }
 
-func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, configChangedRestartCallback func()) *CalcGraph {
+func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *CalcGraph {
 	hostname := conf.FelixHostname
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
 
@@ -396,9 +401,9 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, confi
 	profileDecoder := NewProfileDecoder(callbacks)
 	profileDecoder.RegisterWith(allUpdDispatcher)
 
-	// Register for IP Pool updates. EncapsulationResolver will call
-	// configChangedRestartCallback() if IPIP and/or VXLAN encapsulation changes due to IP
-	// pool changes, so that it is recalculated at Felix startup.
+	// Register for IP Pool updates. EncapsulationResolver will send a message to the
+	// dataplane so that Felix is restarted if IPIP and/or VXLAN encapsulation changes
+	// due to IP pool changes, so that it is recalculated at Felix startup.
 	//
 	//        ...
 	//     Dispatcher (all updates)
@@ -407,7 +412,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, confi
 	//         |
 	//       encapsulation resolver
 	//
-	encapsulationResolver := NewEncapsulationResolver(conf, configChangedRestartCallback)
+	encapsulationResolver := NewEncapsulationResolver(conf, callbacks)
 	encapsulationResolver.RegisterWith(allUpdDispatcher)
 
 	return &CalcGraph{

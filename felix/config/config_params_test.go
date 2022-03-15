@@ -64,8 +64,8 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"BpfIpv6Support",
 	}
 	cpFieldNameToFC := map[string]string{
-		"DeprecatedIpInIpEnabled":            "IPIPEnabled",
-		"DeprecatedVXLANEnabled":             "VXLANEnabled",
+		"IpInIpEnabled":                      "IPIPEnabled",
+		"VXLANEnabled":                       "VXLANEnabled",
 		"IpInIpMtu":                          "IPIPMTU",
 		"Ipv6Support":                        "IPv6Support",
 		"IptablesLockTimeoutSecs":            "IptablesLockTimeout",
@@ -310,9 +310,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", "", (*regexp.Regexp)(nil)),
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", ".*", regexp.MustCompile(".*")),
 
-	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "true", &t),
-	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "y", &t),
-	Entry("IpInIpEnabled", "DeprecatedIpInIpEnabled", "True", &t),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "true", &t),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "y", &t),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "True", &t),
 
 	Entry("IpInIpMtu", "IpInIpMtu", "1234", int(1234)),
 	Entry("IpInIpTunnelAddr", "IpInIpTunnelAddr",
@@ -548,7 +548,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
 			t := true
-			c.DeprecatedIpInIpEnabled = &t
+			c.IpInIpEnabled = &t
 			c.Encapsulation.IPIPEnabled = true
 		})
 		It("should leave node polling enabled", func() {
@@ -560,7 +560,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
 			f := false
-			c.DeprecatedIpInIpEnabled = &f
+			c.IpInIpEnabled = &f
 			c.Encapsulation.IPIPEnabled = false
 		})
 		It("should leave node polling enabled", func() {
