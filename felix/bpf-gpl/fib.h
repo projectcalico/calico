@@ -114,7 +114,7 @@ skip_redir_ifindex:
 
 		struct bpf_fib_lookup fib_params = {
 			.family = 2, /* AF_INET */
-			.tot_len = bpf_ntohs(ctx->ip_header->tot_len),
+			.tot_len = 0,
 			.ifindex = ctx->skb->ingress_ifindex,
 			.l4_protocol = state->ip_proto,
 			.sport = bpf_htons(state->sport),
