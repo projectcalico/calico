@@ -641,7 +641,7 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		// Since in IPv4, we don't add prologue to the jump map, and hence the first
 		// program is policy, the base index should be set to -1 to properly offset the
 		// policy program (base+1) to the first entry in the jump map, i.e. 0. However,
-		// in IPv6, we add the prologue program to the jump map, and the first entry is 3.
+		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
 		base := -1
 		if ipFamily == "IPv6" {
 			base = 4
