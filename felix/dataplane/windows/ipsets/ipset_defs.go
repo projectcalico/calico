@@ -22,6 +22,7 @@ import (
 type IPSetMetadata = ipsets.IPSetMetadata
 type IPFamily = ipsets.IPFamily
 type IPSetType = ipsets.IPSetType
+type IPVersionConfig = ipsets.IPVersionConfig
 
 const (
 	IPSetTypeHashIPPort = ipsets.IPSetTypeHashIPPort
@@ -39,9 +40,9 @@ type ipSet struct {
 }
 
 // IPVersionConfig wraps up the metadata for a particular IP version.
-type IPVersionConfig struct {
-	Family IPFamily
-}
+// type IPVersionConfig struct {
+// Family IPFamily
+// }
 
 func NewIPVersionConfig(family IPFamily) *IPVersionConfig {
 	return &IPVersionConfig{
