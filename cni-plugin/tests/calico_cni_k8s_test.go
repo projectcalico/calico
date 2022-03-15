@@ -2545,8 +2545,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			clientset := getKubernetesClient()
 
-			// Now create a K8s pod.
-			name := "mypod-1"
+			// Create two k8s pods - for this test we want to ensure that the names for the pods
+			// look alike so make sure we handle pods with very similar names.
+			name2 := fmt.Sprintf("pod-%d", rand.Uint32())
+			name := fmt.Sprintf("%s1", name2)
 
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
@@ -2633,8 +2635,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// Now we create another pod with a very similar name.
-			name2 := "mypod"
-
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -3036,7 +3036,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			clientset := getKubernetesClient()
 
 			// Now create a K8s pod.
-			name := "mypod-1"
+			name := fmt.Sprintf("pod-%d", rand.Uint32())
 
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
@@ -3105,7 +3105,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			clientset := getKubernetesClient()
 
 			// Now create a K8s pod.
-			name := "mypod-1"
+			name := fmt.Sprintf("pod-%d", rand.Uint32())
 
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
