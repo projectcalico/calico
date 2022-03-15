@@ -119,6 +119,8 @@ message ToDataplane {
 
     // GlobalBGPConfigUpdate is sent when global BGPConfiguration changes.
     GlobalBGPConfigUpdate global_bgp_config_update = 29;
+
+    Encapsulation encapsulation = 30;
   }
 }
 
@@ -464,6 +466,11 @@ message IPAMPoolRemove {
 message IPAMPool {
   string cidr = 1;
   bool masquerade = 2;
+}
+
+message Encapsulation {
+  bool ipip_enabled = 1;
+  bool vxlan_enabled = 2;
 }
 
 message ServiceAccountUpdate {
