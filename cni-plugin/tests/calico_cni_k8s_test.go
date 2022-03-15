@@ -88,7 +88,8 @@ func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string
 		podName,
 		metav1.DeleteOptions{
 			PropagationPolicy:  &fg,
-			GracePeriodSeconds: &zero})
+			GracePeriodSeconds: &zero,
+		})
 	Expect(err).NotTo(HaveOccurred())
 
 	// Wait for pod to disappear.
@@ -120,7 +121,8 @@ func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 		nodeName,
 		metav1.DeleteOptions{
 			PropagationPolicy:  &fg,
-			GracePeriodSeconds: &zero})
+			GracePeriodSeconds: &zero,
+		})
 	Expect(err).NotTo(HaveOccurred())
 
 	// Wait for node to disappear.
@@ -1113,9 +1115,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var nc types.NetConf
 		var netconf string
 		var pool1CIDR, pool2CIDR *net.IPNet
-		var pool1 = "50.60.0.0/28"
-		var pool2 = "60.70.0.0/28"
-		var numAddrsInPool = 16
+		pool1 := "50.60.0.0/28"
+		pool2 := "60.70.0.0/28"
+		numAddrsInPool := 16
 		var clientset *kubernetes.Clientset
 		var name string
 		var testNS string
@@ -1354,14 +1356,13 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			err = calicoClient.IPAM().ReleaseByHandle(context.Background(), handle)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
-
 	})
 
 	Context("using calico-ipam with Namespace annotation and pod annotation", func() {
 		var nc types.NetConf
 		var netconf string
 		var ipPoolCIDR *net.IPNet
-		var pool1 = "50.70.0.0/16"
+		pool1 := "50.70.0.0/16"
 		var clientset *kubernetes.Clientset
 		var name string
 		var testNS string
@@ -1447,8 +1448,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	Context("using calico-ipam specifying IP pools via pod annotation", func() {
 		var nc types.NetConf
 		var netconf string
-		var pool1 = "172.16.0.0/16"
-		var pool2 = "172.17.0.0/16"
+		pool1 := "172.16.0.0/16"
+		pool2 := "172.17.0.0/16"
 		var pool1CIDR, pool2CIDR *net.IPNet
 		var pool2Name string
 		var clientset *kubernetes.Clientset
@@ -1554,7 +1555,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
-
 	})
 
 	Context("using floatingIPs annotation to assign a DNAT", func() {
@@ -2139,6 +2139,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			netconf = string(ncb)
 
+			// Make sure the namespace exists.
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
+
 			// Create a new ipPool.
 			testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
 
@@ -2542,8 +2545,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			clientset := getKubernetesClient()
 
-			// Now create a K8s pod.
-			name := "mypod-1"
+			// Create two k8s pods - for this test we want to ensure that the names for the pods
+			// look alike so make sure we handle pods with very similar names.
+			name2 := fmt.Sprintf("pod-%d", rand.Uint32())
+			name := fmt.Sprintf("%s1", name2)
 
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
@@ -2630,8 +2635,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// Now we create another pod with a very similar name.
-			name2 := "mypod"
-
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2768,7 +2771,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					saName,
 					metav1.DeleteOptions{
 						PropagationPolicy:  &fg,
-						GracePeriodSeconds: &zero})
+						GracePeriodSeconds: &zero,
+					})
 				Expect(err).NotTo(HaveOccurred())
 			}()
 
@@ -2921,8 +2925,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			name = fmt.Sprintf("run%d", rand.Uint32())
 			generateName := "test-gen-name"
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Name: name,
-					GenerateName: generateName},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:         name,
+					GenerateName: generateName,
+				},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{{
 						Name:  fmt.Sprintf("container-%s", name),
@@ -3030,7 +3036,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			clientset := getKubernetesClient()
 
 			// Now create a K8s pod.
-			name := "mypod-1"
+			name := fmt.Sprintf("pod-%d", rand.Uint32())
 
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
@@ -3099,7 +3105,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			clientset := getKubernetesClient()
 
 			// Now create a K8s pod.
-			name := "mypod-1"
+			name := fmt.Sprintf("pod-%d", rand.Uint32())
 
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
@@ -3128,7 +3134,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	Describe("testConnection tests", func() {
-
 		It("successfully connects to the datastore", func(done Done) {
 			netconf := fmt.Sprintf(`
 			{
@@ -3198,9 +3203,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).To(HaveOccurred())
 			close(done)
 		}, 10)
-
 	})
-
 })
 
 func checkPodIPAnnotations(clientset *kubernetes.Clientset, ns, name, expectedIP, expectedIPs string) {
