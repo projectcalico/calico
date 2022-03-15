@@ -47,6 +47,7 @@ type MockDataplane struct {
 	namespaces                     map[proto.NamespaceID]*proto.NamespaceUpdate
 	config                         map[string]string
 	numEvents                      int
+	encapsulation                  proto.Encapsulation
 }
 
 func (d *MockDataplane) InSync() bool {
@@ -179,6 +180,13 @@ func (d *MockDataplane) NumEventsRecorded() int {
 	defer d.Unlock()
 
 	return d.numEvents
+}
+
+func (d *MockDataplane) Encapsulation() proto.Encapsulation {
+	d.Lock()
+	defer d.Unlock()
+
+	return d.encapsulation
 }
 
 func copyPolOrder(in map[string][]TierInfo) map[string][]TierInfo {
@@ -419,6 +427,8 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.VXLANTunnelEndpointRemove:
 		Expect(d.activeVTEPs).To(HaveKey(event.Node), "delete for unknown VTEP")
 		delete(d.activeVTEPs, event.Node)
+	case *proto.Encapsulation:
+		d.encapsulation = *event
 	}
 }
 

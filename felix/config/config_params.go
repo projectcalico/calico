@@ -270,16 +270,18 @@ type Config struct {
 	// to Debug level logs.
 	LogDebugFilenameRegex *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
-	DeprecatedVXLANEnabled *bool  `config:"*bool;"`
-	VXLANPort              int    `config:"int;4789"`
-	VXLANVNI               int    `config:"int;4096"`
-	VXLANMTU               int    `config:"int;0"`
-	IPv4VXLANTunnelAddr    net.IP `config:"ipv4;"`
-	VXLANTunnelMACAddr     string `config:"string;"`
+	// Deprecated: VXLAN encap is now determined by the existing IP pools (Encapsulation struct)
+	VXLANEnabled        *bool  `config:"*bool;"`
+	VXLANPort           int    `config:"int;4789"`
+	VXLANVNI            int    `config:"int;4096"`
+	VXLANMTU            int    `config:"int;0"`
+	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
+	VXLANTunnelMACAddr  string `config:"string;"`
 
-	DeprecatedIpInIpEnabled *bool  `config:"*bool;"`
-	IpInIpMtu               int    `config:"int;0"`
-	IpInIpTunnelAddr        net.IP `config:"ipv4;"`
+	// Deprecated: IPIP encap is now determined by the existing IP pools (Encapsulation struct)
+	IpInIpEnabled    *bool  `config:"*bool;"`
+	IpInIpMtu        int    `config:"int;0"`
+	IpInIpTunnelAddr net.IP `config:"ipv4;"`
 
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
 	// from workloads. We always add them unless explicitly requested not to add them.
@@ -354,7 +356,7 @@ type Config struct {
 	// Configures MTU auto-detection.
 	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)"`
 
-	// Encapsulation information calculated from IP Pools and FelixConfiguration (DeprecatedVXLANEnabled and DeprecatedIpInIpEnabled)
+	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
 
 	// State tracking.

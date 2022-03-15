@@ -456,7 +456,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
-		// Start a cleanup gorouting not to block felix if it needs to retry
+		// Start a cleanup goroutine not to block felix if it needs to retry
 		go cleanUpVXLANDevice()
 	}
 
@@ -687,7 +687,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
-		// Start a cleanup gorouting not to block felix if it needs to retry
+		// Start a cleanup goroutine not to block felix if it needs to retry
 		go cleanUpIPIPAddrs()
 	}
 
@@ -929,7 +929,7 @@ func cleanUpIPIPAddrs() {
 	log.Debug("Checking if we need to clean up the IPIP device")
 
 	var errFound bool
-	for i := 0; i < maxCleanupRetries; i++ {
+	for i := 0; i <= maxCleanupRetries; i++ {
 		errFound = false
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
@@ -959,7 +959,7 @@ func cleanUpIPIPAddrs() {
 		}
 	}
 	if errFound {
-		log.Debugf("Errors found after retrying %v times", maxCleanupRetries)
+		log.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", maxCleanupRetries)
 	}
 }
 
@@ -968,7 +968,7 @@ func cleanUpVXLANDevice() {
 	log.Debug("Checking if we need to clean up the VXLAN device")
 
 	var errFound bool
-	for i := 0; i < maxCleanupRetries; i++ {
+	for i := 0; i <= maxCleanupRetries; i++ {
 		errFound = false
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
@@ -990,7 +990,7 @@ func cleanUpVXLANDevice() {
 		}
 	}
 	if errFound {
-		log.Debugf("Errors found after retrying %v times", maxCleanupRetries)
+		log.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
 	}
 }
 
