@@ -10,13 +10,18 @@ spec:
   selector:
     role: frontend 
 ---
-apiVersion: v1
-kind: ReplicationController
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: frontend 
   namespace: stars
+  labels:
+    role: frontend 
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      role: frontend
   template:
     metadata:
       labels:
@@ -24,7 +29,7 @@ spec:
     spec:
       containers:
       - name: frontend 
-        image: calico/star-probe:v0.1.0
+        image: calico/star-probe:multiarch
         imagePullPolicy: Always
         command:
         - probe
