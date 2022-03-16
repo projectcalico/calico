@@ -151,7 +151,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	case PARSING_OK_V6:
 		// An IPv6 packet, so we should jump to the relevant IPv6 programs
 		CALI_DEBUG("About to jump to IPv6 prologue program.");
-		bpf_tail_call(ctx.skb, &cali_jump, PROG_INDEX_V6_PROLOGUE);
+		CALI_JUMP_TO(ctx.skb, PROG_INDEX_V6_PROLOGUE);
 		CALI_DEBUG("Failed to jump to IPv6 prologue program.");
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
