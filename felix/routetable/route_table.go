@@ -76,9 +76,10 @@ const (
 type TargetType string
 
 const (
-	TargetTypeUnicast TargetType = "unicast"
-	TargetTypeVXLAN   TargetType = "vxlan"
-	TargetTypeNoEncap TargetType = "noencap"
+	TargetTypeUnicastGlobal    TargetType = "unicast-link-local"
+	TargetTypeUnicastLinkLocal TargetType = "unicast"
+	TargetTypeVXLAN            TargetType = "vxlan"
+	TargetTypeNoEncap          TargetType = "noencap"
 
 	// The following target types should be used with InterfaceNone.
 	TargetTypeBlackhole TargetType = "blackhole"
@@ -121,7 +122,7 @@ func (t Target) RouteType() int {
 		return syscall.RTN_BLACKHOLE
 	case TargetTypeProhibit:
 		return syscall.RTN_PROHIBIT
-	case TargetTypeUnicast:
+	case TargetTypeUnicastGlobal, TargetTypeUnicastLinkLocal:
 		return syscall.RTN_UNICAST
 	default:
 		return syscall.RTN_UNICAST
@@ -136,7 +137,9 @@ func (t Target) RouteScope() netlink.Scope {
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeProhibit:
 		return netlink.SCOPE_UNIVERSE
-	case TargetTypeUnicast:
+	case TargetTypeUnicastGlobal:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeUnicastLinkLocal:
 		return netlink.SCOPE_LINK
 	default:
 		return netlink.SCOPE_LINK
