@@ -40,6 +40,8 @@ spec:
                   about certain subsets of information.
                 items:
                   type: string
+                maxItems: 3
+                minItems: 1
                 type: array
               node:
                 description: The node name identifies the Calico node instance for

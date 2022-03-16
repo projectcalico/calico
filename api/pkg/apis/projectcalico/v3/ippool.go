@@ -52,10 +52,16 @@ type IPPoolSpec struct {
 
 	// Contains configuration for VXLAN tunneling for this pool. If not specified,
 	// then this is defaulted to "Never" (i.e. VXLAN tunneling is disabled).
+	//
+	// +kubebuilder:default=Never
+	// +kubebuilder:validation:Enum=Never;Always;CrossSubnet
 	VXLANMode VXLANMode `json:"vxlanMode,omitempty" validate:"omitempty,vxlanMode"`
 
 	// Contains configuration for IPIP tunneling for this pool. If not specified,
 	// then this is defaulted to "Never" (i.e. IPIP tunneling is disabled).
+	//
+	// +kubebuilder:default=Never
+	// +kubebuilder:validation:Enum=Never;Always;CrossSubnet
 	IPIPMode IPIPMode `json:"ipipMode,omitempty" validate:"omitempty,ipIpMode"`
 
 	// When nat-outgoing is true, packets sent from Calico networked containers in
@@ -84,6 +90,8 @@ type IPPoolSpec struct {
 
 	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
 	// ["Tunnel", "Workload"] for back-compatibility
+	//
+	// +kubebuilder:validation:UniqueItems=true
 	AllowedUses []IPPoolAllowedUse `json:"allowedUses,omitempty" validate:"omitempty"`
 }
 

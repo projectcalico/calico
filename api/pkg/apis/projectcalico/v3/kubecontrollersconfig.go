@@ -49,40 +49,54 @@ type KubeControllersConfiguration struct {
 // KubeControllersConfigurationSpec contains the values of the Kubernetes controllers configuration.
 type KubeControllersConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
+	// +kubebuilder:default=Info
+	// +kubebuilder:validation:Enum=Debug;Info;Warning;Error;Fatal
+	// +optional
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
 
 	// HealthChecks enables or disables support for health checks [Default: Enabled]
+	// +kubebuilder:default=Enabled
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
 	HealthChecks string `json:"healthChecks,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// EtcdV3CompactionPeriod is the period between etcdv3 compaction requests. Set to 0 to disable. [Default: 10m]
+	// +optional
 	EtcdV3CompactionPeriod *metav1.Duration `json:"etcdV3CompactionPeriod,omitempty" validate:"omitempty"`
 
 	// PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
+	// +kubebuilder:default=9094
+	// +optional
 	PrometheusMetricsPort *int `json:"prometheusMetricsPort,omitempty"`
 
 	// Controllers enables and configures individual Kubernetes controllers
 	Controllers ControllersConfig `json:"controllers"`
 
-	// DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
-	// is disabled.
+	// DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling is disabled.
+	// +optional
 	DebugProfilePort *int32 `json:"debugProfilePort,omitempty"`
 }
 
 // ControllersConfig enables and configures individual Kubernetes controllers
 type ControllersConfig struct {
 	// Node enables and configures the node controller. Enabled by default, set to nil to disable.
+	// +optional
 	Node *NodeControllerConfig `json:"node,omitempty"`
 
 	// Policy enables and configures the policy controller. Enabled by default, set to nil to disable.
+	// +optional
 	Policy *PolicyControllerConfig `json:"policy,omitempty"`
 
 	// WorkloadEndpoint enables and configures the workload endpoint controller. Enabled by default, set to nil to disable.
+	// +optional
 	WorkloadEndpoint *WorkloadEndpointControllerConfig `json:"workloadEndpoint,omitempty"`
 
 	// ServiceAccount enables and configures the service account controller. Enabled by default, set to nil to disable.
+	// +optional
 	ServiceAccount *ServiceAccountControllerConfig `json:"serviceAccount,omitempty"`
 
 	// Namespace enables and configures the namespace controller. Enabled by default, set to nil to disable.
+	// +optional
 	Namespace *NamespaceControllerConfig `json:"namespace,omitempty"`
 }
 
@@ -90,9 +104,15 @@ type ControllersConfig struct {
 // for nodes that no longer exist. Optionally, it can create host endpoints for all Kubernetes nodes.
 type NodeControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
+	//
+	// +kubebuilder:default="5m"
+	// +optional
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 
 	// SyncLabels controls whether to copy Kubernetes node labels to Calico nodes. [Default: Enabled]
+	// +kubebuilder:default=Enabled
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
 	SyncLabels string `json:"syncLabels,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// HostEndpoint controls syncing nodes to host endpoints. Disabled by default, set to nil to disable.
@@ -100,12 +120,18 @@ type NodeControllerConfig struct {
 
 	// LeakGracePeriod is the period used by the controller to determine if an IP address has been leaked.
 	// Set to 0 to disable IP garbage collection. [Default: 15m]
+	//
+	// +kubebuilder:default="15m"
 	// +optional
 	LeakGracePeriod *metav1.Duration `json:"leakGracePeriod,omitempty"`
 }
 
 type AutoHostEndpointConfig struct {
 	// AutoCreate enables automatic creation of host endpoints for every node. [Default: Disabled]
+	//
+	// +kubebuilder:default=Disabled
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
 	AutoCreate string `json:"autoCreate,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 }
 
@@ -113,6 +139,9 @@ type AutoHostEndpointConfig struct {
 // to Calico policies (only used for etcdv3 datastore).
 type PolicyControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
+	//
+	// +kubebuilder:default="5m"
+	// +optional
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 
@@ -120,6 +149,9 @@ type PolicyControllerConfig struct {
 // labels to Calico workload endpoints (only used for etcdv3 datastore).
 type WorkloadEndpointControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
+	//
+	// +kubebuilder:default="5m"
+	// +optional
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 
@@ -127,6 +159,9 @@ type WorkloadEndpointControllerConfig struct {
 // service accounts to Calico profiles (only used for etcdv3 datastore).
 type ServiceAccountControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
+	//
+	// +kubebuilder:default="5m"
+	// +optional
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 
@@ -134,6 +169,9 @@ type ServiceAccountControllerConfig struct {
 // service accounts to Calico profiles (only used for etcdv3 datastore).
 type NamespaceControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
+	//
+	// +kubebuilder:default="5m"
+	// +optional
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 

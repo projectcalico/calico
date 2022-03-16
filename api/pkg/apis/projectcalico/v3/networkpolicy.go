@@ -49,13 +49,17 @@ type NetworkPolicySpec struct {
 	// order.  If the order is omitted, it may be considered to be "infinite" - i.e. the
 	// policy will be applied last.  Policies with identical order will be applied in
 	// alphanumerical order based on the Policy "Name".
+	// +optional
 	Order *float64 `json:"order,omitempty"`
+
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
+
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
+
 	// The selector is an expression used to pick pick out the endpoints that the policy should
 	// be applied to.
 	//
@@ -82,6 +86,7 @@ type NetworkPolicySpec struct {
 	// 	deployment != "dev"
 	// 	! has(label_name)
 	Selector string `json:"selector,omitempty" validate:"selector"`
+
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
 	// Types according to what Ingress and Egress are present in the policy.  The

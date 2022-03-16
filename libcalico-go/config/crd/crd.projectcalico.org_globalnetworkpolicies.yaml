@@ -54,6 +54,11 @@ spec:
                     and both must be satisfied for the rule to match."
                   properties:
                     action:
+                      enum:
+                      - Allow
+                      - Deny
+                      - Log
+                      - Pass
                       type: string
                     destination:
                       description: Destination contains the match criteria that apply
@@ -235,6 +240,9 @@ spec:
                     ipVersion:
                       description: IPVersion is an optional field that restricts the
                         rule to only match a specific IP version.
+                      enum:
+                      - 4
+                      - 6
                       type: integer
                     metadata:
                       description: Metadata contains additional information for this
@@ -427,6 +435,11 @@ spec:
                     and both must be satisfied for the rule to match."
                   properties:
                     action:
+                      enum:
+                      - Allow
+                      - Deny
+                      - Log
+                      - Pass
                       type: string
                     destination:
                       description: Destination contains the match criteria that apply
@@ -608,6 +621,9 @@ spec:
                     ipVersion:
                       description: IPVersion is an optional field that restricts the
                         rule to only match a specific IP version.
+                      enum:
+                      - 4
+                      - 6
                       type: integer
                     metadata:
                       description: Metadata contains additional information for this
@@ -840,6 +856,8 @@ spec:
                   description: PolicyType enumerates the possible values of the PolicySpec
                     Types field.
                   type: string
+                maxItems: 2
+                minItems: 0
                 type: array
             type: object
         type: object
