@@ -49,13 +49,17 @@ type ClusterInformation struct {
 type ClusterInformationSpec struct {
 	// ClusterGUID is the GUID of the cluster
 	ClusterGUID string `json:"clusterGUID,omitempty" validate:"omitempty"`
+
 	// ClusterType describes the type of the cluster
 	ClusterType string `json:"clusterType,omitempty" validate:"omitempty"`
+
 	// CalicoVersion is the version of Calico that the cluster is running
 	CalicoVersion string `json:"calicoVersion,omitempty" validate:"omitempty"`
+
 	// DatastoreReady is used during significant datastore migrations to signal to components
 	// such as Felix that it should wait before accessing the datastore.
 	DatastoreReady *bool `json:"datastoreReady,omitempty"`
+
 	// Variant declares which variant of Calico should be active.
 	Variant string `json:"variant,omitempty"`
 }

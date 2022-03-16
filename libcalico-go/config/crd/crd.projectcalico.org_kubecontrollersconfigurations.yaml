@@ -40,6 +40,7 @@ spec:
                       Enabled by default, set to nil to disable.
                     properties:
                       reconcilerPeriod:
+                        default: 5m
                         description: 'ReconcilerPeriod is the period to perform reconciliation
                           with the Calico datastore. [Default: 5m]'
                         type: string
@@ -53,22 +54,32 @@ spec:
                           Disabled by default, set to nil to disable.
                         properties:
                           autoCreate:
+                            default: Disabled
                             description: 'AutoCreate enables automatic creation of
                               host endpoints for every node. [Default: Disabled]'
+                            enum:
+                            - Enabled
+                            - Disabled
                             type: string
                         type: object
                       leakGracePeriod:
+                        default: 15m
                         description: 'LeakGracePeriod is the period used by the controller
                           to determine if an IP address has been leaked. Set to 0
                           to disable IP garbage collection. [Default: 15m]'
                         type: string
                       reconcilerPeriod:
+                        default: 5m
                         description: 'ReconcilerPeriod is the period to perform reconciliation
                           with the Calico datastore. [Default: 5m]'
                         type: string
                       syncLabels:
+                        default: Enabled
                         description: 'SyncLabels controls whether to copy Kubernetes
                           node labels to Calico nodes. [Default: Enabled]'
+                        enum:
+                        - Enabled
+                        - Disabled
                         type: string
                     type: object
                   policy:
@@ -76,6 +87,7 @@ spec:
                       Enabled by default, set to nil to disable.
                     properties:
                       reconcilerPeriod:
+                        default: 5m
                         description: 'ReconcilerPeriod is the period to perform reconciliation
                           with the Calico datastore. [Default: 5m]'
                         type: string
@@ -85,6 +97,7 @@ spec:
                       account controller. Enabled by default, set to nil to disable.
                     properties:
                       reconcilerPeriod:
+                        default: 5m
                         description: 'ReconcilerPeriod is the period to perform reconciliation
                           with the Calico datastore. [Default: 5m]'
                         type: string
@@ -94,6 +107,7 @@ spec:
                       endpoint controller. Enabled by default, set to nil to disable.
                     properties:
                       reconcilerPeriod:
+                        default: 5m
                         description: 'ReconcilerPeriod is the period to perform reconciliation
                           with the Calico datastore. [Default: 5m]'
                         type: string
@@ -109,14 +123,26 @@ spec:
                   compaction requests. Set to 0 to disable. [Default: 10m]'
                 type: string
               healthChecks:
+                default: Enabled
                 description: 'HealthChecks enables or disables support for health
                   checks [Default: Enabled]'
+                enum:
+                - Enabled
+                - Disabled
                 type: string
               logSeverityScreen:
+                default: Info
                 description: 'LogSeverityScreen is the log severity above which logs
                   are sent to the stdout. [Default: Info]'
+                enum:
+                - Debug
+                - Info
+                - Warning
+                - Error
+                - Fatal
                 type: string
               prometheusMetricsPort:
+                default: 9094
                 description: 'PrometheusMetricsPort is the TCP port that the Prometheus
                   metrics server should bind to. Set to 0 to disable. [Default: 9094]'
                 type: integer
@@ -149,6 +175,7 @@ spec:
                           controller. Enabled by default, set to nil to disable.
                         properties:
                           reconcilerPeriod:
+                            default: 5m
                             description: 'ReconcilerPeriod is the period to perform
                               reconciliation with the Calico datastore. [Default:
                               5m]'
@@ -163,24 +190,34 @@ spec:
                               endpoints. Disabled by default, set to nil to disable.
                             properties:
                               autoCreate:
+                                default: Disabled
                                 description: 'AutoCreate enables automatic creation
                                   of host endpoints for every node. [Default: Disabled]'
+                                enum:
+                                - Enabled
+                                - Disabled
                                 type: string
                             type: object
                           leakGracePeriod:
+                            default: 15m
                             description: 'LeakGracePeriod is the period used by the
                               controller to determine if an IP address has been leaked.
                               Set to 0 to disable IP garbage collection. [Default:
                               15m]'
                             type: string
                           reconcilerPeriod:
+                            default: 5m
                             description: 'ReconcilerPeriod is the period to perform
                               reconciliation with the Calico datastore. [Default:
                               5m]'
                             type: string
                           syncLabels:
+                            default: Enabled
                             description: 'SyncLabels controls whether to copy Kubernetes
                               node labels to Calico nodes. [Default: Enabled]'
+                            enum:
+                            - Enabled
+                            - Disabled
                             type: string
                         type: object
                       policy:
@@ -188,6 +225,7 @@ spec:
                           Enabled by default, set to nil to disable.
                         properties:
                           reconcilerPeriod:
+                            default: 5m
                             description: 'ReconcilerPeriod is the period to perform
                               reconciliation with the Calico datastore. [Default:
                               5m]'
@@ -198,6 +236,7 @@ spec:
                           account controller. Enabled by default, set to nil to disable.
                         properties:
                           reconcilerPeriod:
+                            default: 5m
                             description: 'ReconcilerPeriod is the period to perform
                               reconciliation with the Calico datastore. [Default:
                               5m]'
@@ -208,6 +247,7 @@ spec:
                           endpoint controller. Enabled by default, set to nil to disable.
                         properties:
                           reconcilerPeriod:
+                            default: 5m
                             description: 'ReconcilerPeriod is the period to perform
                               reconciliation with the Calico datastore. [Default:
                               5m]'
@@ -224,14 +264,26 @@ spec:
                       compaction requests. Set to 0 to disable. [Default: 10m]'
                     type: string
                   healthChecks:
+                    default: Enabled
                     description: 'HealthChecks enables or disables support for health
                       checks [Default: Enabled]'
+                    enum:
+                    - Enabled
+                    - Disabled
                     type: string
                   logSeverityScreen:
+                    default: Info
                     description: 'LogSeverityScreen is the log severity above which
                       logs are sent to the stdout. [Default: Info]'
+                    enum:
+                    - Debug
+                    - Info
+                    - Warning
+                    - Error
+                    - Fatal
                     type: string
                   prometheusMetricsPort:
+                    default: 9094
                     description: 'PrometheusMetricsPort is the TCP port that the Prometheus
                       metrics server should bind to. Set to 0 to disable. [Default:
                       9094]'
