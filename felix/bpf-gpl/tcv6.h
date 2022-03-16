@@ -9,8 +9,35 @@ SEC("classifier/tc/prologue_v6")
 int calico_tc_v6(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 prologue program\n");
-	// TODO: Replace this logic with the proper implementation, and finally a tail call
-	// to the policy program
+
+	struct cali_tc_ctx ctx = {
+		.state = state_get(),
+		.skb = skb,
+		.fwd = {
+			.res = TC_ACT_UNSPEC,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+		.iphdr_len = IPv6_SIZE,
+	};
+	if (!ctx.state) {
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		return TC_ACT_SHOT;
+	}
+	__builtin_memset(ctx.state, 0, sizeof(*ctx.state));
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+		ctx.state->prog_start_time = bpf_ktime_get_ns();
+	}
+
+	if (CALI_F_WEP) {
+		CALI_DEBUG("IPv6 from workload: drop\n");
+		goto deny;
+	}
+
+	CALI_DEBUG("IPv6 on host interface: allow\n");
+	return TC_ACT_UNSPEC;
+
+deny:
 	return TC_ACT_SHOT;
 }
 
