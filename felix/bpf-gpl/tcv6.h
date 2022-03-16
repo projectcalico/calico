@@ -29,6 +29,14 @@ int calico_tc_v6(struct __sk_buff *skb)
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
 	}
 
+	switch (parse_packet_ipv6(&ctx)) {
+	case PARSING_OK_V6:
+		break;
+	case PARSING_ERROR:
+	default:
+		goto deny;
+	}
+
 	if (CALI_F_WEP) {
 		CALI_DEBUG("IPv6 from workload: drop\n");
 		goto deny;

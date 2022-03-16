@@ -10,16 +10,15 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
-#define MAX_EXTENSIONS 1
+#define MAX_EXTENSIONS 10
 
 static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
-	//__u8 next_header = 0;
-	//__u8 hdrlen = 0;
-	//__u16 hdrlen_total = 0;
-	//__u16 nh_offset = skb_iphdr_offset(ctx) + 6;
-	//__u16 extension_offset = skb_l4hdr_offset(ctx);
+	__u8 next_header = 0;
+	__u8 hdrlen = 0;
+	__u16 nh_offset = skb_iphdr_offset(ctx) + 6;
+	__u16 extension_offset = skb_l4hdr_offset(ctx);
 
-	/*for (int i = 0; i < MAX_EXTENSIONS; i++) {
+	for (int i = 0; i < MAX_EXTENSIONS; i++) {
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
@@ -61,19 +60,19 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 
 		//extension_offset += hdrlen * 8 + 8;
 		ctx->iphdr_len+= hdrlen * 8 + 8;
-	}*/
+	}
 
 	CALI_DEBUG("Too many IPv6 extension headers");
-//deny:
+deny:
 	return PARSING_ERROR;
 
-//parsing_ok:
-//	ctx->nh = ctx->data_start + extension_offset;
-//	return next_header;
+parsing_ok:
+	//ctx->nh = ctx->data_start + extension_offset;
+	return next_header;
 }
 
 static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
-	/*switch (parse_ipv6_extensions(ctx)) {
+	switch (parse_ipv6_extensions(ctx)) {
 	case IPPROTO_UDP:
 		CALI_DEBUG("UDP");
 		break;
@@ -86,16 +85,16 @@ static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
 	default:
 		CALI_DEBUG("Failed to parse IPv6 extensions");
 		goto deny;
-	}*/
+	}
 
-	//CALI_DEBUG("IPv6 s=%x d=%x\n", ipv6hdr(ctx)->saddr, ipv6hdr(ctx)->daddr);
-	//CALI_DEBUG("SKB: %x", ctx->data_start);
-	//CALI_DEBUG("ip: %x", ctx->ip_header);
-	//CALI_DEBUG("nh: %x", ctx->nh);
+	//`CALI_DEBUG("IPv6 s=%x d=%x\n", ipv6hdr(ctx)->saddr, ipv6hdr(ctx)->daddr);
+	CALI_DEBUG("SKB: %x", ctx->data_start);
+	CALI_DEBUG("ip: %x", ctx->ip_header);
+	CALI_DEBUG("nh: %x", ctx->nh);
 	return PARSING_OK_V6;
 
-//deny:
-//	return PARSING_ERROR;
+deny:
+	return PARSING_ERROR;
 }
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {

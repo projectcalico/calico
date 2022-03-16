@@ -34,11 +34,11 @@
 #include "sendrecv.h"
 #include "fib.h"
 #include "tc.h"
-#include "tcv6.h"
 #include "policy_program.h"
 #include "parsing.h"
 #include "failsafe.h"
 #include "metadata.h"
+#include "tcv6.h"
 #include "bpf_helpers.h"
 
 #if !defined(__BPFTOOL_LOADER__) && !defined (__IPTOOL_LOADER__)
