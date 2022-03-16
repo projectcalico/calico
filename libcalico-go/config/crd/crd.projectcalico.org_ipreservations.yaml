@@ -40,6 +40,7 @@ spec:
                 items:
                   type: string
                 type: array
+                uniqueItems: true
             type: object
         type: object
     served: true

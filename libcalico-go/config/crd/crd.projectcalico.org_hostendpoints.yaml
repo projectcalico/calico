@@ -44,6 +44,7 @@ spec:
                 items:
                   type: string
                 type: array
+                uniqueItems: true
               interfaceName:
                 description: "Either \"*\", or the name of a specific Linux interface
                   to apply policy to; or empty.  \"*\" indicates that this HostEndpoint
@@ -73,6 +74,7 @@ spec:
                     name:
                       type: string
                     port:
+                      minimum: 1
                       type: integer
                     protocol:
                       anyOf:
@@ -81,11 +83,10 @@ spec:
                       pattern: ^.*
                       x-kubernetes-int-or-string: true
                   required:
-                  - name
                   - port
-                  - protocol
                   type: object
                 type: array
+                uniqueItems: true
               profiles:
                 description: A list of identifiers of security Profile objects that
                   apply to this endpoint. Each profile is applied in the order that
@@ -94,6 +95,7 @@ spec:
                 items:
                   type: string
                 type: array
+                uniqueItems: true
             type: object
         type: object
     served: true
