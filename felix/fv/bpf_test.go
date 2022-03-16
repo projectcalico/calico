@@ -295,6 +295,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("ip", "addr")
 					felix.Exec("ip", "rule")
 					felix.Exec("ip", "route")
+					felix.Exec("ip", "neigh")
+					felix.Exec("arp")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
@@ -751,7 +753,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			Expect(err).NotTo(HaveOccurred())
 
 			for _, felix := range felixes {
-				felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
+				felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=1")
 				switch testOpts.tunnel {
 				case "none":
 					felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
@@ -3678,7 +3680,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	Expect(err).NotTo(HaveOccurred())
 
 	lines := strings.Split(out, "\n")
-	rtRE := regexp.MustCompile(ip + " dev bpfnatin")
+	rtRE := regexp.MustCompile(ip + " .* dev bpfnatin")
 
 	for _, l := range lines {
 		if rtRE.MatchString(l) {
