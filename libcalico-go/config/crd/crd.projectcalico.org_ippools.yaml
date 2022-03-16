@@ -36,6 +36,7 @@ spec:
                 items:
                   type: string
                 type: array
+                uniqueItems: true
               blockSize:
                 description: The block size to use for IP address assignments from
                   this pool. Defaults to 26 for IPv4 and 112 for IPv6.
@@ -70,9 +71,14 @@ spec:
                     type: string
                 type: object
               ipipMode:
+                default: Never
                 description: Contains configuration for IPIP tunneling for this pool.
                   If not specified, then this is defaulted to "Never" (i.e. IPIP tunneling
                   is disabled).
+                enum:
+                - Never
+                - Always
+                - CrossSubnet
                 type: string
               nat-outgoing:
                 description: 'Deprecated: this field is only used for APIv1 backwards
@@ -89,9 +95,14 @@ spec:
                   selector.
                 type: string
               vxlanMode:
+                default: Never
                 description: Contains configuration for VXLAN tunneling for this pool.
                   If not specified, then this is defaulted to "Never" (i.e. VXLAN
                   tunneling is disabled).
+                enum:
+                - Never
+                - Always
+                - CrossSubnet
                 type: string
             required:
             - cidr

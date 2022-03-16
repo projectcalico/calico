@@ -49,7 +49,10 @@ type BGPConfiguration struct {
 
 // BGPConfigurationSpec contains the values of the BGP configuration.
 type BGPConfigurationSpec struct {
-	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: INFO]
+	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
+	// +kubebuilder:default=Info
+	// +kubebuilder:validation:Enum=Debug;Info;Warning;Error;Fatal
+	// +optional
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel" confignamev1:"loglevel"`
 
 	// NodeToNodeMeshEnabled sets whether full node to node BGP mesh is enabled. [Default: true]
@@ -77,8 +80,9 @@ type BGPConfigurationSpec struct {
 	PrefixAdvertisements []PrefixAdvertisement `json:"prefixAdvertisements,omitempty" validate:"omitempty,dive" confignamev1:"prefix_advertisements"`
 
 	// ListenPort is the port where BGP protocol should listen. Defaults to 179
-	// +kubebuilder:validation:Minimum:=1
-	// +kubebuilder:validation:Maximum:=65535
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +kubebuilder:default=179
 	ListenPort uint16 `json:"listenPort,omitempty" validate:"omitempty,gt=0" confignamev1:"listen_port"`
 
 	// Optional BGP password for full node-to-mesh peerings.
@@ -112,6 +116,7 @@ type ServiceClusterIPBlock struct {
 type Community struct {
 	// Name given to community value.
 	Name string `json:"name,omitempty" validate:"required,name"`
+
 	// Value must be of format `aa:nn` or `aa:nn:mm`.
 	// For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
 	// For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
@@ -124,6 +129,7 @@ type Community struct {
 type PrefixAdvertisement struct {
 	// CIDR for which properties should be advertised.
 	CIDR string `json:"cidr,omitempty" validate:"required,net"`
+
 	// Communities can be list of either community names already defined in `Specs.Communities` or community value of format `aa:nn` or `aa:nn:mm`.
 	// For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
 	// For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.

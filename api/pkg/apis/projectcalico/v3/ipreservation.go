@@ -53,6 +53,8 @@ type IPReservation struct {
 // IPReservationSpec contains the specification for an IPReservation resource.
 type IPReservationSpec struct {
 	// ReservedCIDRs is a list of CIDRs and/or IP addresses that Calico IPAM will exclude from new allocations.
+	//
+	// +kubebuilder:validation:UniqueItems=true
 	ReservedCIDRs []string `json:"reservedCIDRs,omitempty" validate:"cidrs,omitempty"`
 }
 

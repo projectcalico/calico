@@ -49,14 +49,19 @@ type CalicoNodeStatus struct {
 // CalicoNodeStatusSpec contains the specification for a CalicoNodeStatus resource.
 type CalicoNodeStatusSpec struct {
 	// The node name identifies the Calico node instance for node status.
+	// +required
 	Node string `json:"node,omitempty" validate:"required,name"`
 
 	// Classes declares the types of information to monitor for this calico/node,
 	// and allows for selective status reporting about certain subsets of information.
+	// +kubebuilder:validaiton:UniqueItems=true
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=3
 	Classes []NodeStatusClassType `json:"classes,omitempty" validate:"required,unique"`
 
 	// UpdatePeriodSeconds is the period at which CalicoNodeStatus should be updated.
 	// Set to 0 to disable CalicoNodeStatus refresh. Maximum update period is one day.
+	// +optional
 	UpdatePeriodSeconds *uint32 `json:"updatePeriodSeconds,omitempty" validate:"required,gte=0,lte=86400"`
 }
 

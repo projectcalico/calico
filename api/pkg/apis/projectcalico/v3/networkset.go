@@ -46,6 +46,7 @@ type NetworkSet struct {
 // NetworkSetSpec contains the specification for a NetworkSet resource.
 type NetworkSetSpec struct {
 	// The list of IP networks that belong to this set.
+	// +kubebuilder:validation:UniqueItems=true
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
 }
 
