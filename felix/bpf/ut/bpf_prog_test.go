@@ -437,7 +437,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 			polProgPathv6 := path.Join(bpfFsDir, "classifier_tc_policy_v6")
 			_, err = os.Stat(polProgPathv6)
 			if err == nil {
-				_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", polProgPathv6)
+				_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0", "value", "pinned", polProgPathv6)
 				if err != nil {
 					return errors.Wrap(err, "failed to update jump map (policy_v6 program)")
 				}
@@ -448,7 +448,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		if err != nil {
 			log.WithError(err).Info("failed to update jump map (deleting policy program)")
 		}
-		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0")
+		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0")
 		if err != nil {
 			log.WithError(err).Info("failed to update jump map (deleting policy_v6 program)")
 		}
@@ -467,17 +467,25 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "3", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "3", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (drop program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (prologue_v6)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_accept_v6"))
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "6", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_accept_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (accept_v6 program)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "6", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp_v6"))
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "7", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp_v6 program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "8", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (drop_v6 program)")
 		}
 	}
 
