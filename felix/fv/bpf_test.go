@@ -753,17 +753,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			err := infra.AddDefaultDeny()
 			Expect(err).NotTo(HaveOccurred())
 
-			for _, felix := range felixes {
-				felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=1")
-				switch testOpts.tunnel {
-				case "none":
-					felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
-				case "ipip":
-					felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter=2")
-				case "wireguard":
-					felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter=2")
-				case "vxlan":
-					felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter=2")
+			if !testOpts.connTimeEnabled {
+				for _, felix := range felixes {
+					// N.B. we only support environment with not so strict RPF - can be
+					// strict per iface, but not for all.
+					felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
+					switch testOpts.tunnel {
+					case "none":
+						felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
+					case "ipip":
+						felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter=2")
+					case "wireguard":
+						felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter=2")
+					case "vxlan":
+						felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter=2")
+					}
 				}
 			}
 		}
