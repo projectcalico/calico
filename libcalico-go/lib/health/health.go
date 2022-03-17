@@ -132,7 +132,6 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 		"lastReport": reporter.latest,
 	})
 
-	logCxt.Debug("New health report")
 	if reporter.latest != *report {
 		logCxt.Info("Health of component changed")
 		reporter.latest = *report
