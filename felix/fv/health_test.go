@@ -37,6 +37,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"time"
@@ -465,7 +466,8 @@ func getHealthStatus(ip, port, endpoint string) func() int {
 			return statusErr
 		}
 		defer resp.Body.Close()
-		log.WithField("resp", resp).Info("Health response")
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.WithField("resp", resp).Infof("Health response:\n%v\n", string(body))
 		return resp.StatusCode
 	}
 }
