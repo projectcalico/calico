@@ -153,6 +153,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				Port:     uint16(8080),
 			},
 		}
+		res.Spec.AllowSpoofedSourceIPs = []string{"8.8.8.8"}
 
 		kvps, err = up.Process(&model.KVPair{
 			Key:      v3WorkloadEndpointKey2,
@@ -184,6 +185,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 							Port:     uint16(8080),
 						},
 					},
+					AllowSpoofedSourceIPs: []string{"8.8.8.8"},
 				},
 				Revision: "1234",
 			},

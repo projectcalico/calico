@@ -1898,6 +1898,21 @@ func schema_libcalico_go_lib_apis_v1_WorkloadEndpointSpec(ref common.ReferenceCa
 							},
 						},
 					},
+					"allow_spoofed_source_ips": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowSpoofedSourceIPs is a list of IP addresses this workload endoint is allowed to send traffic from, i.e. this allows the workload endpoint to spoof its IP address using these addresses",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
