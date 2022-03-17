@@ -10,6 +10,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
 	struct cali_tc_ctx ctx = {
 		.skb = skb,
+		.iphdr_len = IPv4_SIZE,
 	};
 	return icmp_v4_ttl_exceeded(&ctx);
 }
