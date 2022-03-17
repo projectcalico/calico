@@ -174,6 +174,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var numClientsCreated int
 	var k8sClientSet *kubernetes.Clientset
 	var kubernetesVersion string
+	var ippoolKVList *model.KVPairList
 configRetry:
 	for {
 		if numClientsCreated > 60 {
@@ -269,7 +270,7 @@ configRetry:
 
 		// List all IP pools and feed them into an EncapsulationCalculator to determine if
 		// IPIP and/or VXLAN encapsulations should be enabled
-		ippoolKVList, err := backendClient.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
+		ippoolKVList, err = backendClient.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
 		if err != nil {
 			log.WithError(err).Error("Failed to list IP Pools")
 			time.Sleep(1 * time.Second)
@@ -412,7 +413,8 @@ configRetry:
 		healthAggregator,
 		configChangedRestartCallback,
 		fatalErrorCallback,
-		k8sClientSet)
+		k8sClientSet,
+		ippoolKVList)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")

@@ -152,7 +152,7 @@ func (c *config) GetGlobalASNumber() (numorstring.ASNumber, error) {
 // IP in IP tunnel.
 func (c *config) SetGlobalIPIP(enabled bool) error {
 	_, err := c.c.Backend.Apply(context.Background(), &model.KVPair{
-		Key:   model.GlobalConfigKey{Name: "DeprecatedIpInIpEnabled"},
+		Key:   model.GlobalConfigKey{Name: "IpInIpEnabled"},
 		Value: strconv.FormatBool(enabled),
 	})
 	return err
@@ -160,7 +160,7 @@ func (c *config) SetGlobalIPIP(enabled bool) error {
 
 // GetGlobalIPIP gets the global IPIP enabled setting.  See SetGlobalIPIP for details.
 func (c *config) GetGlobalIPIP() (bool, error) {
-	if s, err := c.getValue(model.GlobalConfigKey{Name: "DeprecatedIpInIpEnabled"}); err != nil {
+	if s, err := c.getValue(model.GlobalConfigKey{Name: "IpInIpEnabled"}); err != nil {
 		return false, err
 	} else if s == nil {
 		return GlobalDefaultIPIP, nil

@@ -373,7 +373,7 @@ kind-k8st-setup: $(K8ST_IMAGE_TARS) kind-cluster-create
 	KUBECONFIG=$(KIND_KUBECONFIG) ./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: calico_test.created $(KIND_KUBECONFIG)
+kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
