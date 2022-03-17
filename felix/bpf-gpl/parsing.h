@@ -58,8 +58,7 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 			goto deny;
 		}
 
-		//extension_offset += hdrlen * 8 + 8;
-		ctx->iphdr_len+= hdrlen * 8 + 8;
+		ctx->iphdr_len += hdrlen * 8 + 8;
 	}
 
 	CALI_DEBUG("Too many IPv6 extension headers");
@@ -67,7 +66,6 @@ deny:
 	return PARSING_ERROR;
 
 parsing_ok:
-	//ctx->nh = ctx->data_start + extension_offset;
 	return next_header;
 }
 
