@@ -270,7 +270,7 @@ type Config struct {
 	// to Debug level logs.
 	LogDebugFilenameRegex *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
-	// Deprecated: VXLAN encap is now determined by the existing IP pools (Encapsulation struct)
+	// Optional: VXLAN encap is now determined by the existing IP pools (Encapsulation struct)
 	VXLANEnabled        *bool  `config:"*bool;"`
 	VXLANPort           int    `config:"int;4789"`
 	VXLANVNI            int    `config:"int;4096"`
@@ -278,7 +278,7 @@ type Config struct {
 	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
 	VXLANTunnelMACAddr  string `config:"string;"`
 
-	// Deprecated: IPIP encap is now determined by the existing IP pools (Encapsulation struct)
+	// Optional: IPIP encap is now determined by the existing IP pools (Encapsulation struct)
 	IpInIpEnabled    *bool  `config:"*bool;"`
 	IpInIpMtu        int    `config:"int;0"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
