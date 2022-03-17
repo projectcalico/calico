@@ -32,8 +32,25 @@ int calico_tc_v6(struct __sk_buff *skb)
 	switch (parse_packet_ipv6(&ctx)) {
 	case PARSING_OK_V6:
 		break;
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+		goto allow_no_fib;
 	case PARSING_ERROR:
 	default:
+		goto deny;
+	}
+
+	switch (ctx.state->ip_proto) {
+	case IPPROTO_UDP:
+		CALI_DEBUG("UDP\n");
+		break;
+	case IPPROTO_TCP:
+		CALI_DEBUG("TCP\n");
+		break;
+	case IPPROTO_ICMPV6:
+		CALI_DEBUG("ICMPv6\n");
+		break;
+	default:
+		CALI_DEBUG("Failed to parse IPv6 packet\n");
 		goto deny;
 	}
 
@@ -43,6 +60,10 @@ int calico_tc_v6(struct __sk_buff *skb)
 	}
 
 	CALI_DEBUG("IPv6 on host interface: allow\n");
+	return TC_ACT_UNSPEC;
+
+
+allow_no_fib:
 	return TC_ACT_UNSPEC;
 
 deny:

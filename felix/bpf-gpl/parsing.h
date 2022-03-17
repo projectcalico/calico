@@ -12,11 +12,11 @@
 
 #define MAX_EXTENSIONS 10
 
-static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
+static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
 	__u8 next_header = 0;
 	__u8 hdrlen = 0;
-	__u16 nh_offset = skb_iphdr_offset(ctx) + 6;
-	__u16 extension_offset = skb_l4hdr_offset(ctx);
+	// The offset of next header field in IPv6 header is 6.
+	long nh_offset = skb_iphdr_offset(ctx) + 6;
 
 	for (int i = 0; i < MAX_EXTENSIONS; i++) {
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
@@ -36,63 +36,54 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 			case IPPROTO_ICMPV6:
 				// Next header is either tcp, udp, or icmpv6. Thus pointers are correct
 				goto parsing_ok;
-			case IPPROTO_HOPOPTS: // Must be the first options
+			case IPPROTO_HOPOPTS:
+				// Must be the first option, but at the moment, we only want to find
+				// transport layer, so we don't care about ordering.
 			case IPPROTO_ROUTING:
-			case IPPROTO_FRAGMENT:
 			case IPPROTO_DSTOPTS:
-			case IPPROTO_MH:
-				// IPv6 extension headers which we ignore at this point
+				nh_offset = skb_l4hdr_offset(ctx);
+				if (bpf_skb_load_bytes(ctx->skb, nh_offset + 1, &hdrlen, sizeof(hdrlen))) {
+					CALI_DEBUG("Failed to load header length\n");
+					goto deny;
+				}
+				ctx->iphdr_len += hdrlen * 8 + 8;
+				break;
+			case IPPROTO_FRAGMENT:
+				ctx->iphdr_len += 8;
+				break;
+			case IPPROTO_AH:
+				nh_offset = skb_l4hdr_offset(ctx);
+				if (bpf_skb_load_bytes(ctx->skb, nh_offset + 1, &hdrlen, sizeof(hdrlen))) {
+					CALI_DEBUG("Failed to load header length\n");
+					goto deny;
+				}
+				ctx->iphdr_len += (hdrlen + 2) * 4;
 				break;
 			case IPPROTO_NONE:
 				// There is no next header! refer to RFC8200.
 				// TODO: How to handle this type of packets?
+				goto allow_no_fib;
 			default:
 				// Any other packet that we don't expect to reach here.
 				goto deny;
 		}
-		
-		nh_offset = extension_offset;
-	
-		if (bpf_skb_load_bytes(ctx->skb, nh_offset + 1, &hdrlen, sizeof(hdrlen))) {
-			CALI_DEBUG("Failed to load header length\n");
-			goto deny;
-		}
-
-		ctx->iphdr_len += hdrlen * 8 + 8;
 	}
+	CALI_DEBUG("Too many IPv6 extension headers\n");
 
-	CALI_DEBUG("Too many IPv6 extension headers");
 deny:
+	CALI_DEBUG("Failed to parse IPv6 header\n");
 	return PARSING_ERROR;
 
+allow_no_fib:
+	return PARSING_ALLOW_WITHOUT_ENFORCING_POLICY;
+
 parsing_ok:
-	return next_header;
-}
-
-static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
-	switch (parse_ipv6_extensions(ctx)) {
-	case IPPROTO_UDP:
-		CALI_DEBUG("UDP");
-		break;
-	case IPPROTO_TCP:
-		CALI_DEBUG("TCP");
-		break;
-	case IPPROTO_ICMPV6:
-		CALI_DEBUG("ICMPv6");
-		break;
-	default:
-		CALI_DEBUG("Failed to parse IPv6 extensions");
-		goto deny;
-	}
-
+	ctx->state->ip_proto = next_header;
 	//`CALI_DEBUG("IPv6 s=%x d=%x\n", ipv6hdr(ctx)->saddr, ipv6hdr(ctx)->daddr);
 	CALI_DEBUG("SKB: %x", ctx->data_start);
 	CALI_DEBUG("ip: %x", ctx->ip_header);
 	CALI_DEBUG("nh: %x", ctx->nh);
 	return PARSING_OK_V6;
-
-deny:
-	return PARSING_ERROR;
 }
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
