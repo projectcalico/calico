@@ -15,6 +15,7 @@
 package health_test
 
 import (
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -180,6 +181,14 @@ var _ = Describe("Health timeouts", func() {
 		It("is ready and live", func() {
 			Expect(aggregator.Summary().Ready).To(BeTrue())
 			Expect(aggregator.Summary().Live).To(BeTrue())
+			Expect(aggregator.Summary().Detail).To(Equal(strings.Join([]string{
+				"+-----------+---------+----------------+-----------------+--------+",
+				"| COMPONENT | TIMEOUT |    LIVENESS    |    READINESS    | DETAIL |",
+				"+-----------+---------+----------------+-----------------+--------+",
+				"| source1   | 100ms   | -              | reporting ready |        |",
+				"| source2   | 0s      | reporting live | reporting ready |        |",
+				"+-----------+---------+----------------+-----------------+--------+",
+			}, "\n")))
 		})
 
 		Context("after waiting past one reporter's timeout", func() {
