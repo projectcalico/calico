@@ -147,7 +147,8 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean chart _site
 	touch $@
 
-chart: clean _includes/charts/tigera-operator/values.yaml bin/helm3
+chart: clean bin/tigera-operator-$(GIT_VERSION).tgz
+bin/tigera-operator-$(GIT_VERSION).tgz: _includes/charts/tigera-operator/values.yaml bin/helm3
 	bin/helm3 package ./_includes/charts/tigera-operator \
 	--destination ./bin/ \
 	--version $(GIT_VERSION) \
