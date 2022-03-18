@@ -5,7 +5,6 @@
 #ifndef __SKB_H__
 #define __SKB_H__
 
-#include <bpf_core_read.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
