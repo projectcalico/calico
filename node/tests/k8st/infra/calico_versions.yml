@@ -1,0 +1,26 @@
+# Components defined here are required to be kept in sync with hack/gen-versions/calico.go.tpl
+title: latest
+components:
+  libcalico-go:
+    version: master
+  typha:
+    image: calico/typha
+    version: latest-amd64
+  calico/node:
+    image: library/node
+    version: latest-amd64
+  calico/cni:
+    image: calico/cni
+    version: latest-amd64
+  calico/kube-controllers:
+    image: calico/kube-controllers
+    version: latest-amd64
+  flexvol:
+    image: calico/pod2daemon-flexvol
+    version: latest-amd64
+  calico/apiserver:
+    image: calico/apiserver
+    version: latest-amd64
+  calico/windows-upgrade:
+    image: not-used
+    version: latest-amd64
