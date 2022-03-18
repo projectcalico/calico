@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -519,9 +519,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				It("should clean up jump maps", func() {
 					numJumpMaps := func() int {
-						output, err := felixes[0].ExecOutput("sh", "-c", "find /sys/fs/bpf/tc -name cali_jump")
+						command := fmt.Sprintf("find /sys/fs/bpf/tc -name %s", bpf.JumpMapName())
+						output, err := felixes[0].ExecOutput("sh", "-c", command)
 						Expect(err).NotTo(HaveOccurred())
-						return strings.Count(output, "cali_jump")
+						return strings.Count(output, bpf.JumpMapName())
 					}
 
 					expJumpMaps := func(numWorkloads int) int {

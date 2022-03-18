@@ -34,6 +34,7 @@
 #include "sendrecv.h"
 #include "fib.h"
 #include "tc.h"
+#include "tcv6.h"
 #include "policy_program.h"
 #include "parsing.h"
 #include "failsafe.h"
@@ -49,11 +50,11 @@ const volatile struct cali_tc_globals __globals;
  */
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 {
-#ifdef CALI_SET_SKB_MARK
+#ifdef UNITTEST
 	/* UT-only workaround to allow us to run the program with BPF_TEST_PROG_RUN
 	 * and simulate a specific mark
 	 */
-	skb->mark = CALI_SET_SKB_MARK;
+	skb->mark = SKB_MARK;
 #endif
 	CALI_DEBUG("New packet at ifindex=%d; mark=%x\n", skb->ifindex, skb->mark);
 
@@ -151,10 +152,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		// TODO: Replace this logic with the proper implementation, and finally a
 		// tail call to the IPv6 prologue program
 		if (CALI_F_WEP) {
-			CALI_DEBUG("IPv6 from workload: drop");
+			CALI_DEBUG("IPv6 from workload: drop\n");
 			goto deny;
 		}
-		CALI_DEBUG("IPv6 on host interface: allow");
+		CALI_DEBUG("IPv6 on host interface: allow\n");
 		fwd_fib_set(&ctx.fwd, false);
 		ctx.fwd.res = TC_ACT_UNSPEC;
 		goto finalize;
@@ -166,7 +167,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	case PARSING_ERROR:
 	default:
 		// A malformed packet or a packet we don't support
-		CALI_DEBUG("Drop malformed or unsupported packet");
+		CALI_DEBUG("Drop malformed or unsupported packet\n");
 		ctx.fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
@@ -195,7 +196,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 			goto deny;
 		case -2:
 			/* Non-BPF VXLAN packet from another Calico node. */
-			CALI_DEBUG("VXLAN packet from known Calico host, allow.");
+			CALI_DEBUG("VXLAN packet from known Calico host, allow.\n");
 			fwd_fib_set(&(ctx->fwd), false);
 			goto allow;
 		}
@@ -299,6 +300,9 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 				/* Set DNAT info for policy */
 				ctx->state->post_nat_ip_dst = ctx->state->ct_result.nat_ip;
 				ctx->state->post_nat_dport = ctx->state->ct_result.nat_port;
+			} else {
+				ctx->state->post_nat_ip_dst = ctx->state->ip_dst;
+				ctx->state->post_nat_dport = ctx->state->dport;
 			}
 			goto syn_force_policy;
 		}
@@ -448,7 +452,7 @@ syn_force_policy:
 	}
 
 	CALI_DEBUG("About to jump to policy program.\n");
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_POLICY);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_POLICY);
 	if (CALI_F_HEP) {
 		CALI_DEBUG("HEP with no policy, allow.\n");
 		goto skip_policy;
@@ -459,14 +463,14 @@ syn_force_policy:
 	}
 
 icmp_send_reply:
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_ICMP);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_ICMP);
 	/* should not reach here */
 	goto deny;
 
 skip_policy:
 	ctx->state->pol_rc = CALI_POL_ALLOW;
 	ctx->state->flags |= CALI_ST_SKIP_POLICY;
-	bpf_tail_call(ctx->skb, &cali_jump, PROG_INDEX_ALLOWED);
+	CALI_JUMP_TO(ctx->skb, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	goto deny;
 
@@ -1061,7 +1065,7 @@ icmp_too_big:
 	goto icmp_send_reply;
 
 icmp_send_reply:
-	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ICMP);
+	CALI_JUMP_TO(skb, PROG_INDEX_ICMP);
 	goto deny;
 
 nat_encap:
@@ -1191,31 +1195,29 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/prologue_v6")
-int calico_tc_v6(struct __sk_buff *skb)
+SEC("classifier/tc/drop")
+int calico_tc_skb_drop(struct __sk_buff *skb)
 {
-	CALI_DEBUG("Entering IPv6 prologue program");
-	// TODO: Replace this logic with the proper implementation, and finally a tail call
-	// to the policy program
-	return TC_ACT_UNSPEC;
-}
+	CALI_DEBUG("Entering calico_tc_skb_drop\n");
 
-SEC("classifier/tc/accept_v6")
-int calico_tc_v6_skb_accepted_entrypoint(struct __sk_buff *skb)
-{
-	CALI_DEBUG("Entering IPv6 accepted program");
-	// TODO: Implement the logic for accepted packets by the policy program
-	// We should not reach here since no tail call happens to this program
-	return TC_ACT_UNSPEC;
-}
+	struct cali_tc_state *state = state_get();
+	if (!state) {
+		CALI_DEBUG("State map lookup failed: no event generated\n");
+		goto drop;
+	}
 
-SEC("classifier/tc/icmp_v6")
-int calico_tc_v6_skb_send_icmp_replies(struct __sk_buff *skb)
-{
-	CALI_DEBUG("Entering IPv6 icmp program");
-	// TODO: Implement the logic for accepted icmp packets by the policy program
-	// We should not reach here since no tail call happens to this program
-	return TC_ACT_UNSPEC;
+	CALI_DEBUG("proto=%d\n", state->ip_proto);
+	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
+	CALI_DEBUG("pre_nat=%x:%d\n", bpf_ntohl(state->pre_nat_ip_dst), state->pre_nat_dport);
+	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(state->post_nat_ip_dst), state->post_nat_dport);
+	CALI_DEBUG("tun_ip=%x\n", state->tun_ip);
+	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
+	CALI_DEBUG("sport=%d\n", state->sport);
+	CALI_DEBUG("flags=0x%x\n", state->flags);
+	CALI_DEBUG("ct_rc=%d\n", state->ct_result.rc);
+
+drop:
+	return TC_ACT_SHOT;
 }
 
 #ifndef CALI_ENTRYPOINT_NAME

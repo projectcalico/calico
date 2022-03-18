@@ -263,6 +263,11 @@ func (in *BGPPeerSpec) DeepCopyInto(out *BGPPeerSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.NumAllowedLocalASNumbers != nil {
+		in, out := &in.NumAllowedLocalASNumbers, &out.NumAllowedLocalASNumbers
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
@@ -769,6 +774,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.UseInternalDataplaneDriver != nil {
 		in, out := &in.UseInternalDataplaneDriver, &out.UseInternalDataplaneDriver
 		*out = new(bool)
+		**out = **in
+	}
+	if in.DataplaneWatchdogTimeout != nil {
+		in, out := &in.DataplaneWatchdogTimeout, &out.DataplaneWatchdogTimeout
+		*out = new(v1.Duration)
 		**out = **in
 	}
 	if in.IPv6Support != nil {

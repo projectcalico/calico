@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -35,7 +36,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -107,6 +108,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		nodesByBlock:                make(map[string]string),
 		blocksByNode:                make(map[string]map[string]bool),
 		emptyBlocks:                 make(map[string]string),
+		datastoreReady:              true,
 
 		// For unit testing purposes.
 		pauseRequestChannel: make(chan pauseRequest),
@@ -148,6 +150,9 @@ type ipamController struct {
 	// Cache pods to avoid unnecessary API queries.
 	podCache map[string]*v1.Pod
 
+	// Cache datastoreReady to avoid too much API queries.
+	datastoreReady bool
+
 	// For unit testing purposes.
 	pauseRequestChannel chan pauseRequest
 }
@@ -170,7 +175,7 @@ func (c *ipamController) onUpdate(update bapi.Update) {
 	switch update.KVPair.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case apiv3.KindNode:
+		case libapiv3.KindNode, apiv3.KindClusterInformation:
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
@@ -291,8 +296,11 @@ func (c *ipamController) handleUpdate(upd interface{}) {
 		switch upd.Key.(type) {
 		case model.ResourceKey:
 			switch upd.Key.(model.ResourceKey).Kind {
-			case apiv3.KindNode:
+			case libapiv3.KindNode:
 				c.handleNodeUpdate(upd)
+				return
+			case apiv3.KindClusterInformation:
+				c.handleClusterInformationUpdate(upd)
 				return
 			}
 		case model.BlockKey:
@@ -315,7 +323,7 @@ func (c *ipamController) handleBlockUpdate(kvp model.KVPair) {
 // handleNodeUpdate wraps up the logic to execute when receiving a node update.
 func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
-		n := kvp.Value.(*apiv3.Node)
+		n := kvp.Value.(*libapiv3.Node)
 		kn, err := getK8sNodeName(*n)
 		if err != nil {
 			log.WithError(err).Info("Unable to get corresponding k8s node name, skipping")
@@ -342,6 +350,18 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 			logrus.Debugf("Remove mapping for calico node %s", cnode)
 			delete(c.kubernetesNodesByCalicoName, cnode)
 		}
+	}
+}
+
+// handleClusterInformationUpdate wraps the logic to execute when receiving a clusterinformation update.
+func (c *ipamController) handleClusterInformationUpdate(kvp model.KVPair) {
+	if kvp.Value != nil {
+		ci := kvp.Value.(*apiv3.ClusterInformation)
+		if ci.Spec.DatastoreReady != nil {
+			c.datastoreReady = *ci.Spec.DatastoreReady
+		}
+	} else {
+		c.datastoreReady = false
 	}
 }
 
@@ -843,7 +863,7 @@ func (c *ipamController) allocationIsValid(a *allocation, preferCache bool) bool
 			logc.Warn("Pod converted to nil WorkloadEndpoint")
 			continue
 		}
-		wep := kvp.Value.(*apiv3.WorkloadEndpoint)
+		wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
 		for _, nw := range wep.Spec.IPNetworks {
 			ip, _, err := net.ParseCIDR(nw)
 			if err != nil {
@@ -869,6 +889,11 @@ func (c *ipamController) allocationIsValid(a *allocation, preferCache bool) bool
 }
 
 func (c *ipamController) syncIPAM() error {
+	if !c.datastoreReady {
+		log.Warn("datastore is locked, skipping ipam sync")
+		return nil
+	}
+
 	// Skip if not InSync yet.
 	if c.syncStatus != bapi.InSync {
 		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping IPAM sync.")

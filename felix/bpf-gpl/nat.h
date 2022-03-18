@@ -133,7 +133,7 @@ static CALI_BPF_INLINE int vxlan_v4_decap(struct __sk_buff *skb)
 	extra_hdrsz = sizeof(struct ethhdr) + sizeof(struct iphdr) +
 		sizeof(struct udphdr) + sizeof(struct vxlanhdr);
 
-	ret = bpf_skb_adjust_room(skb, -extra_hdrsz, BPF_ADJ_ROOM_MAC, 0);
+	ret = bpf_skb_adjust_room(skb, -extra_hdrsz, BPF_ADJ_ROOM_MAC | BPF_F_ADJ_ROOM_FIXED_GSO, 0);
 
 	return ret;
 }

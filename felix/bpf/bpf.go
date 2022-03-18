@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2247,4 +2247,10 @@ func SupportsBTF() bool {
 		return false
 	}
 	return true
+}
+
+const jumpMapVersion = 2
+
+func JumpMapName() string {
+	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
 }

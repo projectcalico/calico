@@ -847,6 +847,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"numAllowedLocalASNumbers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Maximum number of local AS numbers that are allowed in the AS path for received routes. This removes BGP loop prevention and should only be used if absolutely necesssary.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},
@@ -1749,20 +1756,29 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"useInternalDataplaneDriver": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it will launch an external dataplane driver and communicate with it over protobuf.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 					"dataplaneDriver": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "DataplaneDriver filename of the external dataplane driver to use.  Only used if UseInternalDataplaneDriver is set to false.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dataplaneWatchdogTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver. Increase this value if you experience spurious non-ready or non-live events when Felix is under heavy load. Decrease the value to get felix to report non-live or non-ready more quickly. [Default: 90s]",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"ipv6Support": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "IPv6Support controls whether Felix enables support for IPv6 (if supported by the in-use dataplane).",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 					"routeRefreshInterval": {

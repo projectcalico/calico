@@ -42,6 +42,7 @@ ephemeral nature of init containers.
    If you have already installed the operator, skip to the next step.
 
 1. Edit the {{site.prodname}} installation to set the `nonPrivileged` field to `Enabled`.
+
    ```
    kubectl edit installation default
    ```

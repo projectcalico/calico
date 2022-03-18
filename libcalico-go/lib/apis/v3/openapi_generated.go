@@ -2298,7 +2298,7 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 						},
 					},
 				},
-				Required: []string{"cidr", "allocations", "unallocated", "attributes", "sequenceNumber", "strictAffinity"},
+				Required: []string{"cidr", "allocations", "unallocated", "attributes", "strictAffinity"},
 			},
 		},
 		Dependencies: []string{

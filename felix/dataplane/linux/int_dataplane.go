@@ -158,6 +158,7 @@ type Config struct {
 
 	PostInSyncCallback func()
 	HealthAggregator   *health.HealthAggregator
+	WatchdogTimeout    time.Duration
 	RouteTableManager  *idalloc.IndexAllocator
 
 	DebugSimulateDataplaneHangAfter time.Duration
@@ -784,10 +785,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Register that we will report liveness and readiness.
 	if config.HealthAggregator != nil {
 		log.Info("Registering to report health.")
+		timeout := config.WatchdogTimeout
+		if timeout < healthInterval*2 {
+			log.Warnf("Dataplane watchdog timeout (%v) too low, defaulting to %v", timeout, healthInterval*2)
+			timeout = healthInterval * 2
+		}
 		config.HealthAggregator.RegisterReporter(
 			healthName,
 			&health.HealthReport{Live: true, Ready: true},
-			healthInterval*2,
+			timeout,
 		)
 	}
 
