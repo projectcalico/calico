@@ -34,6 +34,7 @@ import (
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -59,6 +60,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
 	"github.com/projectcalico/calico/felix/wireguard"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
@@ -106,6 +108,8 @@ var (
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
+
+	maxCleanupRetries = 5
 )
 
 func init() {
@@ -239,8 +243,8 @@ type UpdateBatchResolver interface {
 // The internal dataplane does not do consistency checks on the incoming data (as the
 // old Python-based driver used to do).  It expects to be told about dependent resources
 // before they are needed and for their lifetime to exceed that of the resources that
-// depend on them.  For example, it is important the the datastore layer send an
-// IP set create event before it sends a rule that references that IP set.
+// depend on them. For example, it is important that the datastore layer sends an IP set
+// create event before it sends a rule that references that IP set.
 type InternalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
@@ -310,7 +314,7 @@ const (
 	aksMTUOverhead       = 100
 )
 
-func NewIntDataplaneDriver(config Config) *InternalDataplane {
+func NewIntDataplaneDriver(config Config, ippoolKVList *model.KVPairList) *InternalDataplane {
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -454,7 +458,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
-		cleanUpVXLANDevice()
+		// Start a cleanup goroutine not to block felix if it needs to retry
+		go cleanUpVXLANDevice()
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -680,9 +685,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
-		// Add a manger to keep the all-hosts IP set up to date.
+		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
+	} else {
+		// Start a cleanup goroutine not to block felix if it needs to retry
+		go cleanUpIPIPAddrs(ippoolKVList)
 	}
 
 	// Add a manager for wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -918,20 +926,96 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 	}
 }
 
+func cleanUpIPIPAddrs(ippoolKVList *model.KVPairList) {
+	// If IPIP is not enabled, check to see if there is are addresses in the IPIP device and delete them if there are.
+	log.Debug("Checking if we need to clean up the IPIP device")
+
+	if ippoolKVList == nil || len(ippoolKVList.KVPairs) == 0 {
+		log.Debug("Skipping IPIP cleanup because there is no IP pool information or no IP pools are configured")
+		return
+	}
+
+	var errFound bool
+
+cleanupRetry:
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+		}
+		link, err := netlink.LinkByName("tunl0")
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				log.Debug("IPIP disabled and no IPIP device found")
+				return
+			}
+			log.WithError(err).Warn("IPIP disabled and failed to query IPIP device.")
+			errFound = true
+			continue
+		}
+		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		if err != nil {
+			log.WithError(err).Warn("IPIP disabled and failed to list addresses, will be unable to remove any old addresses from the device should they exist.")
+			errFound = true
+			continue
+		}
+
+		// Try to clean up addresses that belong to configured Calico IP pools, leave others
+		// as they may have been intentionally configured outside of Calico. This is an
+		// imperfect solution as it may leave "dangling" addresses that were configured
+		// by Calico in some cases (such as an IP pool that was removed).
+		for _, oldAddr := range addrs {
+			for _, kvp := range ippoolKVList.KVPairs {
+				pool, _ := kvp.Value.(*apiv3.IPPool)
+				_, poolCidr, err := net.ParseCIDR(pool.Spec.CIDR)
+				if err != nil {
+					log.WithError(err).Errorf("IPIP disabled and failed to parse IP pool CIDR %s.", pool.Spec.CIDR)
+					errFound = true
+					continue cleanupRetry
+				}
+				if poolCidr.Contains(oldAddr.IP) {
+					if err := netlink.AddrDel(link, &oldAddr); err != nil {
+						log.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s.", oldAddr.IPNet)
+						errFound = true
+						continue cleanupRetry
+					}
+				}
+			}
+		}
+	}
+	if errFound {
+		log.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", maxCleanupRetries)
+	}
+}
+
 func cleanUpVXLANDevice() {
 	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
 	log.Debug("Checking if we need to clean up the VXLAN device")
-	link, err := netlink.LinkByName("vxlan.calico")
-	if err != nil {
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
-			log.Debug("VXLAN disabled and no VXLAN device found")
-			return
+
+	var errFound bool
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		log.WithError(err).Warnf("VXLAN disabled and failed to query VXLAN device.  Ignoring.")
-		return
+		link, err := netlink.LinkByName("vxlan.calico")
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				log.Debug("VXLAN disabled and no VXLAN device found")
+				return
+			}
+			log.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device.")
+			errFound = true
+			continue
+		}
+		if err = netlink.LinkDel(link); err != nil {
+			log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device.")
+			errFound = true
+			continue
+		}
 	}
-	if err = netlink.LinkDel(link); err != nil {
-		log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device. Ignoring.")
+	if errFound {
+		log.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
 	}
 }
 
