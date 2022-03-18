@@ -393,6 +393,11 @@ var baseTests = []StateList{
 		endpointSliceAndLocalWorkload,
 		endpointSliceActive,
 	},
+	{
+		encapWithIPIPPool,
+		encapWithVXLANPool,
+		encapWithIPIPAndVXLANPool,
+	},
 }
 
 var logOnce sync.Once
@@ -484,11 +489,11 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					// Create the calculation graph.
 					conf := config.New()
 					conf.FelixHostname = localHostname
-					conf.VXLANEnabled = true
 					conf.BPFEnabled = true
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan interface{})
+					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
 					// and the async graph.
@@ -590,6 +595,9 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActivePreDNATPolicies()).To(Equal(state.ExpectedPreDNATPolicyIDs),
 		"PreDNAT policies incorrect after moving to state: %v",
 		state.Name)
+	Expect(mockDataplane.Encapsulation()).To(Equal(state.ExpectedEncapsulation),
+		"Encapsulation incorrect after moving to state: %v",
+		state.Name)
 }
 
 func stringifyRoutes(routes set.Set) []string {
@@ -624,13 +632,13 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	BeforeEach(func() {
 		conf := config.New()
 		conf.FelixHostname = localHostname
-		conf.VXLANEnabled = true
 		conf.BPFEnabled = true
 		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
 		conf.RouteSource = expandedTest.RouteSource()
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
+		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
 		calcGraph = NewCalculationGraph(eventBuf, conf)
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
@@ -719,6 +727,7 @@ var _ = Describe("calc graph with health state", func() {
 		conf.FelixHostname = localHostname
 		outputChan := make(chan interface{})
 		healthAggregator := health.NewHealthAggregator()
+		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
 		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator)
 		Expect(asyncGraph).NotTo(BeNil())
 	})
