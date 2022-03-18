@@ -344,7 +344,7 @@ func (dp *mockDataplane) expectLinkStateCb(ifaceName string, state ifacemonitor.
 }
 
 func (dp *mockDataplane) notExpectLinkStateCb() {
-	Consistently(dp.linkC, "50ms", "5ms").ShouldNot(Receive())
+	ConsistentlyWithOffset(1, dp.linkC, "50ms", "5ms").ShouldNot(Receive())
 }
 
 func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
@@ -357,7 +357,7 @@ func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
 }
 
 func (dp *mockDataplane) notExpectAddrStateCb() {
-	Consistently(dp.addrC, "50ms", "5ms").ShouldNot(Receive())
+	ConsistentlyWithOffset(1, dp.addrC, "50ms", "5ms").ShouldNot(Receive())
 }
 
 func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, present bool) {
@@ -477,7 +477,7 @@ var _ = Describe("ifacemonitor", func() {
 			nl.addLink(iface)
 			resyncC <- time.Time{}
 			dp.notExpectAddrStateCb()
-			dp.notExpectLinkStateCb()
+			dp.expectLinkStateCb(iface, ifacemonitor.StateDown, idx)
 			nl.addAddr(iface, "10.100.0.1/32")
 			dp.notExpectAddrStateCb()
 
@@ -486,23 +486,24 @@ var _ = Describe("ifacemonitor", func() {
 			nl.changeLinkState(iface, "down")
 			dp.expectLinkStateCb(iface, ifacemonitor.StateDown, idx)
 
-			// Should notify down from up on deletion.
+			// Should notify not present from up on deletion.
 			nl.changeLinkState(iface, "up")
 			dp.expectLinkStateCb(iface, ifacemonitor.StateUp, idx)
 			nl.delLink(iface)
 			dp.notExpectAddrStateCb()
-			dp.expectLinkStateCb(iface, ifacemonitor.StateDown, idx)
+			dp.expectLinkStateCb(iface, ifacemonitor.StateNotPresent, idx)
 
 			// Check it can be added again.
+			idx = nl.nextIndex
 			nl.addLink(iface)
 			resyncC <- time.Time{}
+			dp.expectLinkStateCb(iface, ifacemonitor.StateDown, idx)
 			dp.notExpectAddrStateCb()
-			dp.notExpectLinkStateCb()
 
 			// Clean it.
 			nl.delLink(iface)
+			dp.expectLinkStateCb(iface, ifacemonitor.StateNotPresent, idx)
 			dp.notExpectAddrStateCb()
-			dp.notExpectLinkStateCb()
 		}
 
 		// Repeat for 3 different interfaces (to test regexp of interface excludes)
@@ -531,6 +532,7 @@ var _ = Describe("ifacemonitor", func() {
 		idx := nl.nextIndex
 		nl.addLink("eth0")
 		resyncC <- time.Time{}
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx)
 		dp.expectAddrStateCb("eth0", "", true)
 		nl.addAddr("eth0", "10.0.240.10/24")
 		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
@@ -568,7 +570,7 @@ var _ = Describe("ifacemonitor", func() {
 		// accordingly.
 		nl.delLinkNoSignal("eth0")
 		resyncC <- time.Time{}
-		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx)
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx)
 		dp.expectAddrStateCb("eth0", "", false)
 
 		// Trigger another resync.  Nothing is expected.  We ensure that the resync
@@ -596,6 +598,7 @@ var _ = Describe("ifacemonitor", func() {
 		dp.expectAddrStateCb("eth0", "", true)
 		nl.addAddr("eth0", "10.0.240.10/24")
 		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx)
 
 		// Set the link up, and expect a link callback.  Addresses are unchanged, so there
 		// is no address callback.
@@ -604,7 +607,7 @@ var _ = Describe("ifacemonitor", func() {
 
 		// Rename the interface, address and old name should be signalled as gone.
 		nl.renameLink("eth0", "eth1")
-		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx)
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx)
 		dp.expectAddrStateCb("eth0", "10.0.240.10", false)
 		dp.expectLinkStateCb("eth1", ifacemonitor.StateUp, idx)
 		dp.expectAddrStateCb("eth1", "10.0.240.10", true)
@@ -624,6 +627,7 @@ var _ = Describe("ifacemonitor", func() {
 		idx := nl.nextIndex
 		nl.addLink("eth0")
 		resyncC <- time.Time{}
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx)
 		dp.expectAddrStateCb("eth0", "", true)
 		nl.addAddr("eth0", "10.0.240.10/24")
 		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
@@ -637,7 +641,7 @@ var _ = Describe("ifacemonitor", func() {
 		// assume that there is never any Netlink signal for the link deletion.
 		_ = nl.delLinkNoSignal("eth0")
 		resyncC <- time.Time{}
-		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx)
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx)
 		dp.expectAddrStateCb("eth0", "", false)
 
 		// Add the link again, with the same ifIndex, but hold the signal through Netlink.

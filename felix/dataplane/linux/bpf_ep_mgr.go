@@ -373,7 +373,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
-	if update.State == ifacemonitor.StateUnknown {
+	if update.State == ifacemonitor.StateNotPresent {
 		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
 			log.WithError(err).Errorf("Error in removing interface %s json file. err=%v", update.Name, err)
 		}
