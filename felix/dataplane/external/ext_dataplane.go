@@ -197,6 +197,8 @@ func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 		envelope.Payload = &proto.ToDataplane_WireguardEndpointRemove{WireguardEndpointRemove: msg}
 	case *proto.GlobalBGPConfigUpdate:
 		envelope.Payload = &proto.ToDataplane_GlobalBgpConfigUpdate{GlobalBgpConfigUpdate: msg}
+	case *proto.Encapsulation:
+		envelope.Payload = &proto.ToDataplane_Encapsulation{Encapsulation: msg}
 
 	default:
 		log.WithField("msg", msg).Panic("Unknown message type")

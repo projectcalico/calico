@@ -55,6 +55,7 @@ type EventSequencer struct {
 	pendingPolicyDeletes         set.Set
 	pendingProfileUpdates        map[model.ProfileRulesKey]*ParsedRules
 	pendingProfileDeletes        set.Set
+	pendingEncapUpdate           *config.Encapsulation
 	pendingEndpointUpdates       map[model.Key]interface{}
 	pendingEndpointTierUpdates   map[model.Key][]tierInfo
 	pendingEndpointDeletes       set.Set
@@ -462,6 +463,24 @@ func (buf *EventSequencer) flushEndpointTierDeletes() {
 	})
 }
 
+func (buf *EventSequencer) OnEncapUpdate(encap config.Encapsulation) {
+	log.WithFields(log.Fields{
+		"IPIPEnabled":  encap.IPIPEnabled,
+		"VXLANEnabled": encap.VXLANEnabled,
+	}).Debug("Encapsulation update")
+	buf.pendingEncapUpdate = &encap
+}
+
+func (buf *EventSequencer) flushEncapUpdate() {
+	if buf.pendingEncapUpdate != nil {
+		buf.Callback(&proto.Encapsulation{
+			IpipEnabled:  buf.pendingEncapUpdate.IPIPEnabled,
+			VxlanEnabled: buf.pendingEncapUpdate.VXLANEnabled,
+		})
+		buf.pendingEncapUpdate = nil
+	}
+}
+
 func (buf *EventSequencer) OnHostIPUpdate(hostname string, ip *net.IP) {
 	log.WithFields(log.Fields{
 		"hostname": hostname,
@@ -646,6 +665,7 @@ func (buf *EventSequencer) Flush() {
 	buf.flushHostIPUpdates()
 	buf.flushIPPoolDeletes()
 	buf.flushIPPoolUpdates()
+	buf.flushEncapUpdate()
 
 	// Flush global BGPConfiguration updates.
 	if buf.pendingGlobalBGPConfig != nil {

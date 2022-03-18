@@ -174,6 +174,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var numClientsCreated int
 	var k8sClientSet *kubernetes.Clientset
 	var kubernetesVersion string
+	var ippoolKVList *model.KVPairList
 configRetry:
 	for {
 		if numClientsCreated > 60 {
@@ -266,6 +267,18 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+
+		// List all IP pools and feed them into an EncapsulationCalculator to determine if
+		// IPIP and/or VXLAN encapsulations should be enabled
+		ippoolKVList, err = backendClient.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
+		if err != nil {
+			log.WithError(err).Error("Failed to list IP Pools")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
+		encapCalculator := calc.NewEncapsulationCalculator(configParams, ippoolKVList)
+		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
+		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
@@ -400,7 +413,8 @@ configRetry:
 		healthAggregator,
 		configChangedRestartCallback,
 		fatalErrorCallback,
-		k8sClientSet)
+		k8sClientSet,
+		ippoolKVList)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
@@ -534,8 +548,7 @@ configRetry:
 	asyncCalcGraph := calc.NewAsyncCalcGraph(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
-		healthAggregator,
-	)
+		healthAggregator)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update
@@ -1174,6 +1187,11 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 		case *calc.DatastoreNotReady:
 			log.Warn("Datastore became unready, need to restart.")
 			fc.shutDownProcess("datastore became unready")
+		case *proto.Encapsulation:
+			if msg.IpipEnabled != fc.config.Encapsulation.IPIPEnabled || msg.VxlanEnabled != fc.config.Encapsulation.VXLANEnabled {
+				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
+				fc.shutDownProcess("IPIP and/or VXLAN encapsulation changed")
+			}
 		}
 		if err := fc.dataplane.SendMessage(msg); err != nil {
 			fc.shutDownProcess("Failed to write to dataplane driver")

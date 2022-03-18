@@ -576,7 +576,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 
-			By("Creating an VXLANModeAlways pool and verifying global felix config is updated")
+			By("Creating an VXLANModeAlways pool and verifying global felix config is not created")
 			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "ippool2"},
 				Spec: apiv3.IPPoolSpec{
@@ -585,9 +585,9 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 			}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			enabled, err := getGlobalSetting()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(*enabled).To(BeTrue())
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 		})
 
 		It("should enable VXLAN globally on an IPPool Update if the global setting is not configured", func() {
@@ -608,13 +608,13 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 
-			By("Updating the pool to enabled VXLAN and checking felix configuration is added")
+			By("Updating the pool to enabled VXLAN and checking felix configuration is not added")
 			pool.Spec.VXLANMode = apiv3.VXLANModeAlways
 			_, err = c.IPPools().Update(ctx, pool, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			enabled, err := getGlobalSetting()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(*enabled).To(BeTrue())
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 		})
 
 		It("should not enable VXLAN globally on an IPPool Create if the global setting already configured to false", func() {
@@ -697,7 +697,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 
-			By("Creating an IPIPModeAlways pool and verifying global felix config is updated")
+			By("Creating an IPIPModeAlways pool and verifying global felix config is not created")
 			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "ippool2"},
 				Spec: apiv3.IPPoolSpec{
@@ -706,9 +706,9 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 			}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			enabled, err := getGlobalSetting()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(*enabled).To(BeTrue())
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 		})
 
 		It("should enable IPIP globally on an IPPool Create (IPIPModeNever) if the global setting is not configured", func() {
@@ -717,7 +717,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 
-			By("Creating an IPIPModeCrossSubnet pool and verifying global felix config is updated")
+			By("Creating an IPIPModeCrossSubnet pool and verifying global felix config is not created")
 			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
 				Spec: apiv3.IPPoolSpec{
@@ -726,9 +726,9 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 			}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			enabled, err := getGlobalSetting()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(*enabled).To(BeTrue())
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 		})
 
 		It("should enable IPIP globally on an IPPool Update if the global setting is not configured", func() {
@@ -749,13 +749,13 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 
-			By("Updating the pool to enabled IPIP and checking felix configuration is added")
+			By("Updating the pool to enabled IPIP and checking felix configuration is not added")
 			pool.Spec.IPIPMode = apiv3.IPIPModeAlways
 			_, err = c.IPPools().Update(ctx, pool, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			enabled, err := getGlobalSetting()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(*enabled).To(BeTrue())
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 		})
 
 		It("should not enable IPIP globally on an IPPool Create if the global setting already configured to false", func() {
