@@ -73,6 +73,7 @@ spec:
                     name:
                       type: string
                     port:
+                      minimum: 1
                       type: integer
                     protocol:
                       anyOf:
@@ -81,9 +82,7 @@ spec:
                       pattern: ^.*
                       x-kubernetes-int-or-string: true
                   required:
-                  - name
                   - port
-                  - protocol
                   type: object
                 type: array
               profiles:

@@ -51,6 +51,7 @@ type HostEndpoint struct {
 type HostEndpointSpec struct {
 	// The node name identifying the Calico node instance.
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
+
 	// Either "*", or the name of a specific Linux interface to apply policy to; or empty.  "*"
 	// indicates that this HostEndpoint governs all traffic to, from or through the default
 	// network namespace of the host named by the "Node" field; entering and leaving that
@@ -66,6 +67,7 @@ type HostEndpointSpec struct {
 	// Note: Only some kinds of policy are implemented for "*" HostEndpoints; initially just
 	// pre-DNAT policy.  Please check Calico documentation for the latest position.
 	InterfaceName string `json:"interfaceName,omitempty" validate:"omitempty,interface"`
+
 	// The expected IP addresses (IPv4 and IPv6) of the endpoint.
 	// If "InterfaceName" is not present, Calico will look for an interface matching any
 	// of the IPs in the list and apply policy to that.
@@ -75,19 +77,32 @@ type HostEndpointSpec struct {
 	// 	endpoints, the ExpectedIPs field is used for that purpose. (If only the interface
 	// 	name is specified, Calico does not learn the IPs of the interface for use in match
 	// 	criteria.)
+	//
+	// +optional
 	ExpectedIPs []string `json:"expectedIPs,omitempty" validate:"omitempty,dive,ip"`
+
 	// A list of identifiers of security Profile objects that apply to this endpoint. Each
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
 	// after the selector-based security policy.
+	//
+	// +optional
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
+
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
+	//
+	// +optional
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
 }
 
 type EndpointPort struct {
-	Name     string               `json:"name" validate:"portName"`
+	// +optional
+	Name string `json:"name" validate:"portName"`
+
+	// +optional
 	Protocol numorstring.Protocol `json:"protocol"`
-	Port     uint16               `json:"port" validate:"gt=0"`
+
+	// +kubebuilder:validation:Minimum=1
+	Port uint16 `json:"port" validate:"gt=0"`
 }
 
 // NewHostEndpoint creates a new (zeroed) HostEndpoint struct with the TypeMetadata initialised to the current

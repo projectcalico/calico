@@ -851,14 +851,14 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.IPIPMTU != nil {
-		in, out := &in.IPIPMTU, &out.IPIPMTU
-		*out = new(int)
-		**out = **in
-	}
 	if in.VXLANEnabled != nil {
 		in, out := &in.VXLANEnabled, &out.VXLANEnabled
 		*out = new(bool)
+		**out = **in
+	}
+	if in.IPIPMTU != nil {
+		in, out := &in.IPIPMTU, &out.IPIPMTU
+		*out = new(int)
 		**out = **in
 	}
 	if in.VXLANMTU != nil {

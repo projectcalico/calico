@@ -34,10 +34,14 @@ const (
 // criteria within a rule must be satisfied for a packet to match. A single rule can contain
 // the positive and negative version of a match and both must be satisfied for the rule to match.
 type Rule struct {
+	// +kubebuilder:validation:Enum=Allow;Deny;Log;Pass
 	Action Action `json:"action" validate:"action"`
+
 	// IPVersion is an optional field that restricts the rule to only match a specific IP
 	// version.
+	// +kubebuilder:validation:Enum=4;6
 	IPVersion *int `json:"ipVersion,omitempty" validate:"omitempty,ipVersion"`
+
 	// Protocol is an optional field that restricts the rule to only apply to traffic of
 	// a specific IP protocol. Required if any of the EntityRules contain Ports
 	// (because ports only apply to certain protocols).
@@ -45,16 +49,21 @@ type Rule struct {
 	// Must be one of these string values: "TCP", "UDP", "ICMP", "ICMPv6", "SCTP", "UDPLite"
 	// or an integer in the range 1-255.
 	Protocol *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
+
 	// ICMP is an optional field that restricts the rule to apply to a specific type and
 	// code of ICMP traffic.  This should only be specified if the Protocol field is set to
 	// "ICMP" or "ICMPv6".
 	ICMP *ICMPFields `json:"icmp,omitempty" validate:"omitempty"`
+
 	// NotProtocol is the negated version of the Protocol field.
 	NotProtocol *numorstring.Protocol `json:"notProtocol,omitempty" validate:"omitempty"`
+
 	// NotICMP is the negated version of the ICMP field.
 	NotICMP *ICMPFields `json:"notICMP,omitempty" validate:"omitempty"`
+
 	// Source contains the match criteria that apply to source entity.
 	Source EntityRule `json:"source,omitempty" validate:"omitempty"`
+
 	// Destination contains the match criteria that apply to destination entity.
 	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
 
@@ -80,6 +89,7 @@ type HTTPMatch struct {
 	// HTTP Methods (e.g. GET, PUT, etc.)
 	// Multiple methods are OR'd together.
 	Methods []string `json:"methods,omitempty" validate:"omitempty"`
+
 	// Paths is an optional field that restricts the rule to apply to HTTP requests that use one of the listed
 	// HTTP Paths.
 	// Multiple paths are OR'd together.
@@ -95,6 +105,7 @@ type ICMPFields struct {
 	// Match on a specific ICMP type.  For example a value of 8 refers to ICMP Echo Request
 	// (i.e. pings).
 	Type *int `json:"type,omitempty" validate:"omitempty,gte=0,lte=254"`
+
 	// Match on a specific ICMP code.  If specified, the Type value must also be specified.
 	// This is a technical limitation imposed by the kernel's iptables firewall, which
 	// Calico uses to enforce the rule.

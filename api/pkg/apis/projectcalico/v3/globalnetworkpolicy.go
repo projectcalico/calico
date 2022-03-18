@@ -51,13 +51,17 @@ type GlobalNetworkPolicySpec struct {
 	// order.  If the order is omitted, it may be considered to be "infinite" - i.e. the
 	// policy will be applied last.  Policies with identical order will be applied in
 	// alphanumerical order based on the Policy "Name".
+	// +optional
 	Order *float64 `json:"order,omitempty"`
+
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
+
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
+
 	// The selector is an expression used to pick pick out the endpoints that the policy should
 	// be applied to.
 	//
@@ -84,6 +88,7 @@ type GlobalNetworkPolicySpec struct {
 	// 	deployment != "dev"
 	// 	! has(label_name)
 	Selector string `json:"selector,omitempty" validate:"selector"`
+
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
 	// Types according to what Ingress and Egress rules are present in the policy.  The
@@ -98,6 +103,10 @@ type GlobalNetworkPolicySpec struct {
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.
+	//
+	// +kubebuilder:validation:MinItems=0
+	// +kubebuilder:validation:MaxItems=2
+	// +optional
 	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
 
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
@@ -105,8 +114,10 @@ type GlobalNetworkPolicySpec struct {
 	// this policy are applied before any data plane connection tracking, and packets allowed by
 	// this policy are marked as not to be tracked.
 	DoNotTrack bool `json:"doNotTrack,omitempty"`
+
 	// PreDNAT indicates to apply the rules in this policy before any DNAT.
 	PreDNAT bool `json:"preDNAT,omitempty"`
+
 	// ApplyOnForward indicates to apply the rules in this policy on forward traffic.
 	ApplyOnForward bool `json:"applyOnForward,omitempty"`
 
