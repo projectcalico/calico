@@ -1002,16 +1002,17 @@ type ifaceUpdate struct {
 	Index int
 }
 
-// Check if current felix ipvs config is correct when felix gets an kube-ipvs0 interface update.
+// Check if current felix ipvs config is correct when felix gets a kube-ipvs0 interface update.
 // If KubeIPVSInterface is UP and felix ipvs support is disabled (kube-proxy switched from iptables to ipvs mode),
 // or if KubeIPVSInterface is DOWN and felix ipvs support is enabled (kube-proxy switched from ipvs to iptables mode),
 // restart felix to pick up correct ipvs support mode.
 func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.State) {
-	if (!d.config.RulesConfig.KubeIPVSSupportEnabled && state == ifacemonitor.StateUp) ||
-		(d.config.RulesConfig.KubeIPVSSupportEnabled && state == ifacemonitor.StateDown) {
+	ipvsIfacePresent := state != ifacemonitor.StateNotPresent
+	ipvsSupportEnabled := d.config.RulesConfig.KubeIPVSSupportEnabled
+	if ipvsSupportEnabled != ipvsIfacePresent {
 		log.WithFields(log.Fields{
 			"ipvsIfaceState": state,
-			"ipvsSupport":    d.config.RulesConfig.KubeIPVSSupportEnabled,
+			"ipvsSupport":    ipvsSupportEnabled,
 		}).Info("kube-proxy mode changed. Restart felix.")
 		d.config.ConfigChangedRestartCallback()
 	}
