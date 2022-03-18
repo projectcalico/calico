@@ -68,7 +68,11 @@ sub-image-%:
 
 $(FLEXVOL_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
+ifeq ($(ARCH),s390x)
+	$(DOCKER_BUILD) -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+else
 	$(DOCKER_BUILD) -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+endif
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

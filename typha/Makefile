@@ -103,7 +103,11 @@ $(TYPHA_IMAGE): bin/calico-typha-$(ARCH) register
 	mkdir -p docker-image/bin
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
+ifeq ($(ARCH),s390x)
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image
+else
 	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+endif
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ###############################################################################
