@@ -177,10 +177,12 @@ clean: clean-windows-upgrade
 	rm -f $(WINDOWS_UPGRADE_INSTALL_FILE)
 	rm -f $(WINDOWS_UPGRADE_BUILD)/*.zip
 	rm -rf filesystem/included-source
+	rm -rf tests/k8st/infra/operator
 	rm -rf dist
 	rm -rf bin
-	# We build felix as part of the node build, so clean it as part of the clean.
+	# We build these as part of the node build, so clean them as part of the clean.
 	make -C ../felix clean
+	make -C ../calico clean
 	# Delete images that we built in this repo
 	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
@@ -282,7 +284,7 @@ $(FELIX_GPL_SOURCE):
 ###############################################################################
 # FV Tests
 ###############################################################################
-K8ST_IMAGE_TARS=calico-node.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
+K8ST_IMAGE_TARS=calico-node.tar calico-typha.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar operator.tar
 
 ## Run the ginkgo FVs
 fv: run-k8s-apiserver
@@ -329,8 +331,20 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 	cd calico_test && $(DOCKER_BUILD) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) . --load
 	touch calico_test.created
 
+chart: ../calico/bin/tigera-operator-$(GIT_VERSION).tgz
+../calico/bin/tigera-operator-$(GIT_VERSION).tgz:
+	make -C ../calico bin/tigera-operator-$(GIT_VERSION).tgz
+
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
+
+calico-typha.tar: ../go.mod $(shell find ../typha -name '*.go')
+	make -C ../typha image
+	docker save --output $@ calico/typha:latest-$(ARCH)
+
+operator.tar:
+	cd tests/k8st/infra/ && ./build-operator.sh
+	docker save --output $@ docker.io/tigera/operator:test-build
 
 calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go')
 	make -C ../apiserver image
@@ -378,8 +392,8 @@ k8s-test:
 	$(MAKE) kind-k8st-cleanup
 
 .PHONY: kind-k8st-setup
-kind-k8st-setup: $(K8ST_IMAGE_TARS) kind-cluster-create
-	KUBECONFIG=$(KIND_KUBECONFIG) ./tests/k8st/deploy_resources_on_kind_cluster.sh
+kind-k8st-setup: $(K8ST_IMAGE_TARS) ../calico/bin/tigera-operator-$(GIT_VERSION).tgz kind-cluster-create
+	KUBECONFIG=$(KIND_KUBECONFIG) GIT_VERSION=$(GIT_VERSION) ./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: calico_test.created $(KIND_KUBECONFIG)

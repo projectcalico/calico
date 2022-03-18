@@ -1,0 +1,16 @@
+installation:
+  enabled: true 
+  kubernetesProvider: ""
+  calicoNetwork:
+    ipPools:
+    - cidr: 192.168.0.0/16
+    - cidr: fd00:10:244::/64
+
+apiServer:
+  enabled: true
+
+# Configuration for the tigera operator
+tigeraOperator:
+  image: tigera/operator
+  version: test-build
+  registry: docker.io
