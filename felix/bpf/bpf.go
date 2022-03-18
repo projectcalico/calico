@@ -2239,3 +2239,12 @@ func KTimeNanos() int64 {
 	}
 	return ts.Nano()
 }
+
+func SupportsBTF() bool {
+	_, err := os.Stat("/sys/kernel/btf/vmlinux")
+	if err != nil {
+		log.WithError(err).Debug("BTF not supported")
+		return false
+	}
+	return true
+}
