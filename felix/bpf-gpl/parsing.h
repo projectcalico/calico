@@ -46,9 +46,12 @@ static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
 					CALI_DEBUG("Failed to load header length\n");
 					goto deny;
 				}
+				// Header len is in 8-octet units, excluding the first 8 octets
+				// Refer to rfc8200 for more information.
 				ctx->iphdr_len += hdrlen * 8 + 8;
 				break;
 			case IPPROTO_FRAGMENT:
+				// Fragment header has a fixed length size of 8 octets.
 				ctx->iphdr_len += 8;
 				break;
 			case IPPROTO_AH:
@@ -57,11 +60,12 @@ static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx) {
 					CALI_DEBUG("Failed to load header length\n");
 					goto deny;
 				}
+				// AH header length is in 4-octet units, excluding the first 8 octets
+				// Refer to rfc4302 for more information.
 				ctx->iphdr_len += (hdrlen + 2) * 4;
 				break;
 			case IPPROTO_NONE:
 				// There is no next header! refer to RFC8200.
-				// TODO: How to handle this type of packets?
 				goto allow_no_fib;
 			default:
 				// Any other packet that we don't expect to reach here.
@@ -79,7 +83,9 @@ allow_no_fib:
 
 parsing_ok:
 	ctx->state->ip_proto = next_header;
-	//`CALI_DEBUG("IPv6 s=%x d=%x\n", ipv6hdr(ctx)->saddr, ipv6hdr(ctx)->daddr);
+	//CALI_DEBUG("IPv6 s=%ld d=%ld\n", ipv6hdr(ctx)->saddr.in6_u.u6_addr32[0], ipv6hdr(ctx)->daddr.in6_u.u6_addr32[0]);
+	CALI_DEBUG("IPhdr_len: %d", ctx->iphdr_len);
+	CALI_DEBUG("Protocol: %d", ipv6hdr(ctx)->nexthdr);
 	CALI_DEBUG("SKB: %x", ctx->data_start);
 	CALI_DEBUG("ip: %x", ctx->ip_header);
 	CALI_DEBUG("nh: %x", ctx->nh);

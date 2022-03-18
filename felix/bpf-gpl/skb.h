@@ -113,6 +113,7 @@ static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
 	int min_size = skb_iphdr_offset(ctx) + ctx->iphdr_len;
 	skb_refresh_start_end(ctx);
+	CALI_DEBUG("checking for %d bytes in packet\n", min_size + nh_len);
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 		// This is an XDP program and there is not enough data for next header.
 		if (CALI_F_XDP) {
