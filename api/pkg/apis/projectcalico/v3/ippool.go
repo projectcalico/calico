@@ -90,8 +90,6 @@ type IPPoolSpec struct {
 
 	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
 	// ["Tunnel", "Workload"] for back-compatibility
-	//
-	// +kubebuilder:validation:UniqueItems=true
 	AllowedUses []IPPoolAllowedUse `json:"allowedUses,omitempty" validate:"omitempty"`
 }
 

@@ -36,7 +36,6 @@ spec:
                 items:
                   type: string
                 type: array
-                uniqueItems: true
               blockSize:
                 description: The block size to use for IP address assignments from
                   this pool. Defaults to 26 for IPv4 and 112 for IPv6.

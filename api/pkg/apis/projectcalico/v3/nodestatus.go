@@ -54,7 +54,6 @@ type CalicoNodeStatusSpec struct {
 
 	// Classes declares the types of information to monitor for this calico/node,
 	// and allows for selective status reporting about certain subsets of information.
-	// +kubebuilder:validaiton:UniqueItems=true
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=3
 	Classes []NodeStatusClassType `json:"classes,omitempty" validate:"required,unique"`

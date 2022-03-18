@@ -78,7 +78,6 @@ type HostEndpointSpec struct {
 	// 	name is specified, Calico does not learn the IPs of the interface for use in match
 	// 	criteria.)
 	//
-	// +kubebuilder:validation:UniqueItems=true
 	// +optional
 	ExpectedIPs []string `json:"expectedIPs,omitempty" validate:"omitempty,dive,ip"`
 
@@ -86,13 +85,11 @@ type HostEndpointSpec struct {
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
 	// after the selector-based security policy.
 	//
-	// +kubebuilder:validation:UniqueItems=true
 	// +optional
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
 	//
-	// +kubebuilder:validation:UniqueItems=true
 	// +optional
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
 }
