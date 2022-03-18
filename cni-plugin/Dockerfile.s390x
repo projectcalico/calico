@@ -8,11 +8,8 @@ RUN mkdir -p /opt/cni/bin
 
 FROM scratch
 
-COPY --from=ubi /licenses /licenses
-COPY --from=ubi /opt/cni/bin /opt/cni/bin
-
 ADD bin/s390x/ /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
-WORKDIR /opt/cni/bin]
+WORKDIR /opt/cni/bin
 CMD ["/opt/cni/bin/install"]
