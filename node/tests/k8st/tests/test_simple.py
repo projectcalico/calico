@@ -27,7 +27,7 @@ _log = logging.getLogger(__name__)
 class TestGracefulRestart(TestBase):
 
     def get_restart_node_pod_name(self):
-        self.restart_pod_name = run("kubectl get po -n kube-system" +
+        self.restart_pod_name = run("kubectl get po -n calico-system" +
                                     " -l k8s-app=calico-node" +
                                     " --field-selector status.podIP=" + self.restart_node_ip +
                                     " -o jsonpath='{.items[*].metadata.name}'")
@@ -98,13 +98,13 @@ class TestGracefulRestart(TestBase):
         # Test that we do _not_ observe route churn when Kubernetes
         # deletes and restarts a pod.
         def delete_calico_node_pod(self):
-            run("kubectl delete po %s -n kube-system" % self.restart_pod_name)
+            run("kubectl delete po %s -n calico-system" % self.restart_pod_name)
 
             # Wait until a replacement calico-node pod has been created.
             retry_until_success(self.get_restart_node_pod_name, retries=10, wait_time=1)
 
             # Wait until it is ready, before returning.
-            run("kubectl wait po %s -n kube-system --timeout=2m --for=condition=ready" %
+            run("kubectl wait po %s -n calico-system --timeout=2m --for=condition=ready" %
                 self.restart_pod_name)
 
         # Expect GR behaviour, i.e. no route churn.
@@ -114,7 +114,7 @@ class TestGracefulRestart(TestBase):
 class TestAllRunning(TestBase):
     def test_kubesystem_pods_running(self):
         with DiagsCollector():
-            self.check_pod_status('kube-system')
+            self.check_pod_status('calico-system')
 
     def test_default_pods_running(self):
         with DiagsCollector():

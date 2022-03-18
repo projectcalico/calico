@@ -75,9 +75,9 @@ class TestSpoof(TestBase):
         default_pool["spec"]["ipipMode"] = "Always"
         calicoctl_apply_dict(default_pool)
         # restart calico-nodes
-        kubectl("delete po -n kube-system -l k8s-app=calico-node")
+        kubectl("delete po -n calico-system -l k8s-app=calico-node")
         kubectl("wait --timeout=2m --for=condition=ready" +
-                " pods -l k8s-app=calico-node -n kube-system")
+                " pods -l k8s-app=calico-node -n calico-system")
 
     def test_ipip_spoof(self):
         with DiagsCollector():
@@ -88,9 +88,9 @@ class TestSpoof(TestBase):
                 default_pool["spec"]["ipipMode"] = "Always"
                 calicoctl_apply_dict(default_pool)
                 # restart calico-nodes
-                kubectl("delete po -n kube-system -l k8s-app=calico-node")
+                kubectl("delete po -n calico-system -l k8s-app=calico-node")
                 kubectl("wait --timeout=2m --for=condition=ready" +
-                        " pods -l k8s-app=calico-node -n kube-system")
+                        " pods -l k8s-app=calico-node -n calico-system")
 
             # get busybox pod IP
             remote_pod_ip = retry_until_success(self.get_pod_ip, function_args=["access", self.ns_name])
@@ -130,9 +130,9 @@ class TestSpoof(TestBase):
                 default_pool["spec"]["ipipMode"] = "Never"
                 calicoctl_apply_dict(default_pool)
                 # restart calico-nodes
-                kubectl("delete po -n kube-system -l k8s-app=calico-node")
+                kubectl("delete po -n calico-system -l k8s-app=calico-node")
                 kubectl("wait --timeout=2m --for=condition=ready" +
-                        " pods -l k8s-app=calico-node -n kube-system")
+                        " pods -l k8s-app=calico-node -n calico-system")
             # get busybox pod IP
             remote_pod_ip = retry_until_success(self.get_pod_ip, function_args=["access", self.ns_name])
             print(remote_pod_ip)
@@ -169,13 +169,13 @@ class TestSpoof(TestBase):
     @staticmethod
     def clear_conntrack():
         node_dict = json.loads(kubectl("get po "
-                                       "-n kube-system "
+                                       "-n calico-system "
                                        "-l k8s-app=calico-node "
                                        "-o json"))
         # Flush conntrack in every calico-node pod
         for entry in node_dict["items"]:
             node = entry["metadata"]["name"]
-            kubectl("exec -n kube-system %s -- conntrack -F" % node)
+            kubectl("exec -n calico-system %s -- conntrack -F" % node)
 
     @staticmethod
     def send_packet(ns_name, name, remote_pod_ip, message):
