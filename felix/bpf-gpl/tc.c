@@ -271,6 +271,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				/* Set DNAT info for policy */
 				ctx.state->post_nat_ip_dst = ctx.state->ct_result.nat_ip;
 				ctx.state->post_nat_dport = ctx.state->ct_result.nat_port;
+			} else {
+				ctx.state->post_nat_ip_dst = ctx.state->ip_dst;
+				ctx.state->post_nat_dport = ctx.state->dport;
 			}
 			goto syn_force_policy;
 		}
