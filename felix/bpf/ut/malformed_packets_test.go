@@ -84,18 +84,25 @@ func TestMalformedPackets(t *testing.T) {
 
 	for _, tc := range malformedTestCases {
 		runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-			_, _, _, _, _, pktBytes, err := generatePacket(ethDefault, tc.IPv4Header, nil, tc.NextHeader, tc.Payload, false)
+			pkt := Packet{
+				eth:     ethDefault,
+				ipv4:    tc.IPv4Header,
+				l4:      tc.NextHeader,
+				payload: tc.Payload,
+				isIPv6:  false,
+			}
+			err := pkt.Generatev4()
 			Expect(err).NotTo(HaveOccurred())
 			if tc.Size != 0 {
-				pktBytes = pktBytes[:tc.Size]
+				pkt.bytes = pkt.bytes[:tc.Size]
 			}
-			res, err := bpfrun(pktBytes)
+			res, err := bpfrun(pkt.bytes)
 			Expect(err).NotTo(HaveOccurred())
 			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 			fmt.Printf("pktR = %+v\n", pktR)
 			Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected the program to return TC_ACT_SHOT")
-			Expect(res.dataOut).To(HaveLen(len(pktBytes)))
-			Expect(res.dataOut).To(Equal(pktBytes))
+			Expect(res.dataOut).To(HaveLen(len(pkt.bytes)))
+			Expect(res.dataOut).To(Equal(pkt.bytes))
 		})
 	}
 }

@@ -39,6 +39,18 @@ int calico_tc_v6(struct __sk_buff *skb)
 		goto deny;
 	}
 
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
+		ctx.fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+	//CALI_DEBUG("IPv6 s=%ld d=%ld\n", ipv6hdr(ctx)->saddr.in6_u.u6_addr32[0], ipv6hdr(ctx)->daddr.in6_u.u6_addr32[0]);
+	CALI_DEBUG("IPhdr_len: %d", ctx.iphdr_len);
+	//CALI_DEBUG("Protocol: %d", ipv6hdr(&ctx)->nexthdr);
+	CALI_DEBUG("SKB: %x", ctx.data_start);
+	CALI_DEBUG("ip: %x", ctx.ip_header);
+	CALI_DEBUG("nh: %x", ctx.nh);
+
 	switch (ctx.state->ip_proto) {
 	case IPPROTO_UDP:
 		CALI_DEBUG("UDP\n");
