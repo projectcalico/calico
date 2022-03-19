@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_BPF_TYPES_H__
@@ -9,6 +9,7 @@
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/tcp.h>
 #include <linux/icmp.h>
 #include <linux/in.h>
@@ -111,14 +112,25 @@ struct cali_tc_ctx {
   /* Our single copies of the data start/end pointers loaded from the skb. */
   void *data_start;
   void *data_end;
-  struct iphdr *ip_header;
+  void *ip_header;
   void *nh;
+  long iphdr_len;
 
   struct cali_tc_state *state;
   struct calico_nat_dest *nat_dest;
   struct arp_key arpk;
   struct fwd fwd;
 };
+
+static CALI_BPF_INLINE struct iphdr* ipv4hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct iphdr *)ctx->ip_header;
+}
+
+static CALI_BPF_INLINE struct ipv6hdr* ipv6hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct ipv6hdr *)ctx->ip_header;
+}
 
 static CALI_BPF_INLINE struct ethhdr* tc_ethhdr(struct cali_tc_ctx *ctx)
 {
