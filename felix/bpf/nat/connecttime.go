@@ -28,6 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
 
@@ -193,11 +194,16 @@ func ProgFileName(logLevel string, ipver int) string {
 		logLevel = "no_log"
 	}
 
+	btf := ""
+	if bpfutils.BTFEnabled {
+		btf = "_co-re"
+	}
+
 	switch ipver {
 	case 4:
-		return fmt.Sprintf("connect_time_%s_v4.o", logLevel)
+		return fmt.Sprintf("connect_time_%s_v4%s.o", logLevel, btf)
 	case 6:
-		return fmt.Sprintf("connect_time_%s_v6.o", logLevel)
+		return fmt.Sprintf("connect_time_%s_v6%s.o", logLevel, btf)
 	}
 
 	log.WithField("ipver", ipver).Fatal("Invalid IP version")
