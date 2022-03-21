@@ -78,6 +78,13 @@ var _ = Describe("Static", func() {
 
 	for _, trueOrFalse := range []bool{true, false} {
 		kubeIPVSEnabled := trueOrFalse
+		var dropAction Action
+		dropAction = DropAction{}
+		dropActionString := "Drop"
+		if trueOrFalse {
+			dropAction = RejectAction{}
+			dropActionString = "Reject"
+		}
 		Describe(fmt.Sprintf("with default config and IPVS=%v", kubeIPVSEnabled), func() {
 			BeforeEach(func() {
 				conf = Config{
@@ -118,7 +125,7 @@ var _ = Describe("Static", func() {
 							{Match: Match().Protocol("udp").SourceNet("0.0.0.0").SourcePorts(68).DestPorts(67),
 								Action: AcceptAction{}},
 							{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
-								Action: DropAction{}},
+								Action: dropAction},
 							{Match: Match().MarkClear(0x40),
 								Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 							{Match: Match().MarkSingleBitSet(0x10),
@@ -135,7 +142,7 @@ var _ = Describe("Static", func() {
 							{Match: Match().InInterface("cali+"),
 								Action: SetMarkAction{Mark: 0x40}},
 							{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
-								Action: DropAction{}},
+								Action: dropAction},
 							{Match: Match().MarkClear(0x40),
 								Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 							{Match: Match().MarkSingleBitSet(0x10),
@@ -487,7 +494,7 @@ var _ = Describe("Static", func() {
 						{Match: Match().InInterface("cali+"),
 							Action: SetMarkAction{Mark: 0x40}},
 						{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
-							Action: DropAction{}},
+							Action: dropAction},
 						{Match: Match().MarkClear(0x40),
 							Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 						{Match: Match().MarkSingleBitSet(0x10),
@@ -503,7 +510,7 @@ var _ = Describe("Static", func() {
 						{Match: Match().InInterface("cali+"),
 							Action: SetMarkAction{Mark: 0x40}},
 						{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
-							Action: DropAction{}},
+							Action: dropAction},
 						{Match: Match().MarkClear(0x40),
 							Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 						{Match: Match().MarkSingleBitSet(0x10),
@@ -635,8 +642,8 @@ var _ = Describe("Static", func() {
 						Action:  AcceptAction{},
 						Comment: []string{"Allow IPIP packets from Calico hosts"}},
 					{Match: Match().ProtocolNum(4),
-						Action:  DropAction{},
-						Comment: []string{"Drop IPIP packets from non-Calico hosts"}},
+						Action:  dropAction,
+						Comment: []string{fmt.Sprintf("%s IPIP packets from non-Calico hosts", dropActionString)}},
 
 					// Forward check chain.
 					{Action: ClearMarkAction{Mark: epMark}},
@@ -677,8 +684,8 @@ var _ = Describe("Static", func() {
 						Action:  AcceptAction{},
 						Comment: []string{"Allow IPIP packets from Calico hosts"}},
 					{Match: Match().ProtocolNum(4),
-						Action:  DropAction{},
-						Comment: []string{"Drop IPIP packets from non-Calico hosts"}},
+						Action:  dropAction,
+						Comment: []string{fmt.Sprintf("%s IPIP packets from non-Calico hosts", dropActionString)}},
 
 					// Per-prefix workload jump rules.  Note use of goto so that we
 					// don't return here.
