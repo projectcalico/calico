@@ -59,6 +59,7 @@ type AttachPoint struct {
 	PSNATEnd             uint16
 	IPv6Enabled          bool
 	MapSizes             map[string]uint32
+	BTFEnabled           bool
 }
 
 var tcLock sync.RWMutex
@@ -121,6 +122,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		logCxt.WithError(err).Error("Failed to patch binary")
 		return "", err
 	}
+
 
 	// Using the RLock allows multiple attach calls to proceed in parallel unless
 	// CleanUpJumpMaps() (which takes the writer lock) is running.
@@ -366,7 +368,7 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 
 // FileName return the file the AttachPoint will load the program from
 func (ap AttachPoint) FileName() string {
-	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel)
+	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, ap.BTFEnabled)
 }
 
 func (ap AttachPoint) IsAttached() (bool, error) {
