@@ -907,21 +907,20 @@ func testPacket(eth *layers.Ethernet, ipv4 *layers.IPv4, l4 gopacket.Layer, payl
 }
 
 type Packet struct {
-	eth          *layers.Ethernet
-	ipv4         *layers.IPv4
-	ipv6         *layers.IPv6
-	ipv6HopByHop *layers.IPv6HopByHop
-	l4           gopacket.Layer
-	udp          *layers.UDP
-	tcp          *layers.TCP
-	icmp         *layers.ICMPv4
-	icmpv6       *layers.ICMPv6
-	payload      []byte
-	bytes        []byte
-	layers       []gopacket.SerializableLayer
-	length       int
-	protocol     layers.IPProtocol
-	isIPv6       bool
+	eth      *layers.Ethernet
+	ipv4     *layers.IPv4
+	ipv6     *layers.IPv6
+	l4       gopacket.Layer
+	udp      *layers.UDP
+	tcp      *layers.TCP
+	icmp     *layers.ICMPv4
+	icmpv6   *layers.ICMPv6
+	payload  []byte
+	bytes    []byte
+	layers   []gopacket.SerializableLayer
+	length   int
+	protocol layers.IPProtocol
+	isIPv6   bool
 }
 
 func (pkt *Packet) handlePayload() {
@@ -983,8 +982,7 @@ func (pkt *Packet) handleIPv6() {
 	if pkt.ipv6 == nil {
 		// Make a copy so that we do not mangle the default if we set the
 		// protocol below.
-		var ipv6 *layers.IPv6
-		ipv6 = new(layers.IPv6)
+		var ipv6 *layers.IPv6 = new(layers.IPv6)
 		*ipv6 = *ipv6Default
 		*pkt.ipv6 = *ipv6
 	}
@@ -997,8 +995,7 @@ func (pkt *Packet) handleIPv4() {
 	if pkt.ipv4 == nil {
 		// Make a copy so that we do not mangle the default if we set the
 		// protocol below.
-		var ipv4 *layers.IPv4
-		ipv4 = new(layers.IPv4)
+		var ipv4 *layers.IPv4 = new(layers.IPv4)
 		*ipv4 = *ipv4Default
 		pkt.ipv4 = ipv4
 	}
