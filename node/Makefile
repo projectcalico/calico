@@ -63,14 +63,6 @@ NODE_CONTAINER_BIN_DIR=./dist/bin/
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
 
-WINDOWS_GEN_INSTALL_SCRIPT_BIN := hack/bin/gen-install-calico-windows-script
-
-# Base URL of the Calico for Windows installation zip archive.
-# This can be overridden for dev releases.
-WINDOWS_ARCHIVE_BASE_URL ?= https://docs.projectcalico.org
-
-# This is either "Calico" or "Calico Enterprise"
-WINDOWS_INSTALL_SCRIPT_PRODUCT ?= Calico
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 
 # Variables for the Windows packaging.
@@ -172,7 +164,6 @@ clean: clean-windows-upgrade
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
-	rm -f $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
 	rm -f $(WINDOWS_INSTALL_SCRIPT)
 	rm -f $(WINDOWS_UPGRADE_INSTALL_FILE)
 	rm -f $(WINDOWS_UPGRADE_BUILD)/*.zip
@@ -453,8 +444,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	# Generate the install-calico-windows.ps1 script
-	$(MAKE) install-calico-windows-script
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
 	$(MAKE) release-windows-upgrade-archive
@@ -565,21 +554,10 @@ $(WINDOWS_UPGRADE_SCRIPT): $(WINDOWS_UPGRADE_DIST_STAGE)
 $(WINDOWS_UPGRADE_INSTALL_ZIP): build-windows-archive $(WINDOWS_UPGRADE_DIST_STAGE)
 	cp $(WINDOWS_ARCHIVE) $@
 
-# Build the tool to generate the install-calico-windows.ps1 installation script.
-$(WINDOWS_GEN_INSTALL_SCRIPT_BIN):
-	mkdir -p hack/bin
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-	$(GIT_CONFIG_SSH) \
-	go build -o $@ ./hack/gen-install-calico-windows-script'
-
-# Generate the install-calico-windows.ps1 installation script.
-# For dev releases, override WINDOWS_ARCHIVE_BASE_URL.
-install-calico-windows-script $(WINDOWS_INSTALL_SCRIPT): $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
-	$(WINDOWS_GEN_INSTALL_SCRIPT_BIN) \
-		-product "$(WINDOWS_INSTALL_SCRIPT_PRODUCT)" \
-		-version $(GIT_VERSION) \
-		-templatePath windows-packaging/install-calico-windows.ps1.tpl \
-		-baseUrl $(WINDOWS_ARCHIVE_BASE_URL) > $(WINDOWS_INSTALL_SCRIPT)
+# Copy over the install-calico-windows.ps1 installation script.
+$(WINDOWS_INSTALL_SCRIPT):
+	-mkdir -p dist
+	cp $(CURDIR)/../calico/scripts/install-calico-windows.ps1 $@
 
 # Copy the install-calico-windows.ps1 script to the temporary directory where we
 # build the windows upgrade zip file.

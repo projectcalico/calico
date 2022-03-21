@@ -20,7 +20,8 @@
 #>
 
 Param(
-
+    # Note: we don't publish a release artifact for the "master" branch. To test
+    # against master, build calico-windows.zip from projectcalico/node.
 {{- if eq .Product "Calico" }}
 {{- if eq .BaseUrl "https://docs.projectcalico.org" }}
     [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/{{.Version}}/",
