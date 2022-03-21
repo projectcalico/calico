@@ -102,7 +102,11 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
+ifeq ($(ARCH),s390x)
+	$(DOCKER_BUILD) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+else
 	$(DOCKER_BUILD) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+endif
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
