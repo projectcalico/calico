@@ -470,11 +470,6 @@ release-publish: release-prereqs .release-$(VERSION).published
 	# Push Windows upgrade images.
 	$(MAKE) cd-windows-upgrade RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
-	# TODO: Update release tool to upload this to the correct location.
-	# Update the release with the install-calico-windows.ps1 file too.
-	# ghr -u projectcalico -r node \
-	# 	-n $(VERSION) \
-	# 	$(VERSION) $(WINDOWS_INSTALL_SCRIPT)
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
