@@ -20,11 +20,10 @@ emit_filename() {
 for core_support in co-re legacy;do
   for log_level in debug info no_log; do
     echo "bin/connect_time_${log_level}_v4.o"
-    echo "bin/connect_time_${log_level}_v4_core.o"
+    echo "bin/connect_time_${log_level}_v4_co-re.o"
     echo "bin/connect_time_${log_level}_v6.o"
-    echo "bin/connect_time_${log_level}_v6_core.o"
+    echo "bin/connect_time_${log_level}_v6_co-re.o"
     echo "bin/xdp_${log_level}.o"
-    echo "bin/xdp_${log_level}_core.o"
     for host_drop in "" "host_drop_"; do
       if [ "${host_drop}" = "host_drop_" ]; then
         # The workload-to-host drop setting only applies to the from-workload hook.

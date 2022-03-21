@@ -26,6 +26,10 @@ import (
 var memLockOnce sync.Once
 var BTFEnabled bool
 
+func init() {
+	BTFEnabled = SupportsBTF()
+}
+
 func SupportsBTF() bool {
 	_, err := os.Stat("/sys/kernel/btf/vmlinux")
 	if err != nil {
@@ -33,10 +37,6 @@ func SupportsBTF() bool {
 		return false
 	}
 	return true
-}
-
-func init() {
-	BTFEnabled = SupportsBTF()
 }
 
 func IncreaseLockedMemoryQuota() {

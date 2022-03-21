@@ -98,9 +98,9 @@ bin/connect_time_%v4.o: connect_time_%v4.ll | bin
 	$(LINK)
 bin/connect_time_%v6.o: connect_time_%v6.ll | bin
 	$(LINK)
-bin/connect_time_%v4_core.o: connect_time_%v4.ll | bin
+bin/connect_time_%v4_co-re.o: connect_time_%v4.ll | bin
 	$(LINK)
-bin/connect_time_%v6_core.o: connect_time_%v6.ll | bin
+bin/connect_time_%v6_co-re.o: connect_time_%v6.ll | bin
 	$(LINK)
 ut/%.o: ut/%.ll
 	$(LINK)

@@ -45,7 +45,10 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
-	fmt.Println(checkBTFEnabled())
+	defer func() {
+		bpfutils.BTFEnabled = bpfutils.SupportsBTF()
+	}()
+
 	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
 		logLevel := logLevel
 		// Compile the TC endpoint programs.
