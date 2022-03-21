@@ -164,7 +164,6 @@ static CALI_BPF_INLINE __u32 skb_ingress_ifindex(struct __sk_buff *skb)
 static CALI_BPF_INLINE bool skb_is_gso(struct __sk_buff *skb) {
 #ifdef BPF_CORE_SUPPORTED
 	if (bpf_core_field_exists(skb->gso_size)) {
-		CALI_DEBUG("Sridhar: using gso_size");
 		return (skb->gso_size > 0);
 	}
 #endif
