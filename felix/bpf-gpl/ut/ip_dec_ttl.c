@@ -18,7 +18,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		return -1;
 	}
 
-	ip_dec_ttl(ctx.ip_header);
+	ip_dec_ttl(ipv4hdr(&ctx));
 
 	return 0;
 }

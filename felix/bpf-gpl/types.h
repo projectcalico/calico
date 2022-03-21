@@ -111,7 +111,7 @@ struct cali_tc_ctx {
   /* Our single copies of the data start/end pointers loaded from the skb. */
   void *data_start;
   void *data_end;
-  struct iphdr *ip_header;
+  void *ip_header;
   void *nh;
 
   struct cali_tc_state *state;
@@ -119,6 +119,11 @@ struct cali_tc_ctx {
   struct arp_key arpk;
   struct fwd fwd;
 };
+
+static CALI_BPF_INLINE struct iphdr* ipv4hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct iphdr *)ctx->ip_header;
+}
 
 static CALI_BPF_INLINE struct ethhdr* tc_ethhdr(struct cali_tc_ctx *ctx)
 {

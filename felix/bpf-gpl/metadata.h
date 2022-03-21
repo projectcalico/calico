@@ -53,9 +53,9 @@ static CALI_BPF_INLINE int xdp2tc_set_metadata(struct xdp_md *xdp, __u32 flags) 
 		goto error;
 	}
 
-	CALI_DEBUG("IP TOS: %d\n", ctx.ip_header->tos);
-	ctx.ip_header->tos |= CALI_META_ACCEPTED_BY_XDP;
-	CALI_DEBUG("Set IP TOS: %d\n", ctx.ip_header->tos);
+	CALI_DEBUG("IP TOS: %d\n", ipv4hdr(&ctx)->tos);
+	ipv4hdr(&ctx)->tos |= CALI_META_ACCEPTED_BY_XDP;
+	CALI_DEBUG("Set IP TOS: %d\n", ipv4hdr(&ctx)->tos);
 	goto metadata_ok;
 #endif
 	} else {
@@ -93,12 +93,12 @@ static CALI_BPF_INLINE __u32 xdp2tc_get_metadata(struct __sk_buff *skb) {
 		goto no_metadata;
 	}
 
-	CALI_DEBUG("IP TOS: %d\n", ctx.ip_header->tos);
+	CALI_DEBUG("IP TOS: %d\n", ipv4hdr(&ctx)->tos);
 	struct cali_metadata unittest_metadata = {};
-	unittest_metadata.flags = ctx.ip_header->tos;
+	unittest_metadata.flags = ipv4hdr(&ctx)->tos;
 	metadata = &unittest_metadata;
-	ctx.ip_header->tos &= (~CALI_META_ACCEPTED_BY_XDP);
-	CALI_DEBUG("Set IP TOS: %d\n", ctx.ip_header->tos);
+	ipv4hdr(&ctx)->tos &= (~CALI_META_ACCEPTED_BY_XDP);
+	CALI_DEBUG("Set IP TOS: %d\n", ipv4hdr(&ctx)->tos);
 	goto metadata_ok;
 #endif /* UNITTEST */
 	} else {
