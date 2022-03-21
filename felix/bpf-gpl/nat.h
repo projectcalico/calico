@@ -85,7 +85,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	}
 
 	// Note: assuming L2 packet here so this code can't be used on an L3 device.
-	struct vxlanhdr *vxlan = (void *)(tc_udphdr(ctx) + 1);
+	struct vxlanhdr *vxlan = (void *)(udphdr(ctx) + 1);
 	struct ethhdr *eth_inner = (void *)(vxlan+1);
 	struct iphdr *ip_inner = (void*)(eth_inner+1);
 
@@ -104,14 +104,14 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	ipv4hdr(ctx)->check = 0;
 	ipv4hdr(ctx)->protocol = IPPROTO_UDP;
 
-	tc_udphdr(ctx)->source = tc_udphdr(ctx)->dest = bpf_htons(VXLAN_PORT);
-	tc_udphdr(ctx)->len = bpf_htons(bpf_ntohs(ipv4hdr(ctx)->tot_len) - IPv4_SIZE);
+	udphdr(ctx)->source = udphdr(ctx)->dest = bpf_htons(VXLAN_PORT);
+	udphdr(ctx)->len = bpf_htons(bpf_ntohs(ipv4hdr(ctx)->tot_len) - IPv4_SIZE);
 
 	*((__u8*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
 	vxlan->vni = bpf_htonl(CALI_VXLAN_VNI) >> 8; /* it is actually 24-bit, last 8 reserved */
 
 	/* keep eth_inner MACs zeroed, it is useless after decap */
-	eth_inner->h_proto = tc_ethhdr(ctx)->h_proto;
+	eth_inner->h_proto = ethhdr(ctx)->h_proto;
 
 	CALI_DEBUG("vxlan encap %x : %x\n", bpf_ntohl(ipv4hdr(ctx)->saddr), bpf_ntohl(ipv4hdr(ctx)->daddr));
 
@@ -155,7 +155,7 @@ static CALI_BPF_INLINE __u32 vxlan_vni(struct cali_tc_ctx *ctx)
 {
 	struct vxlanhdr *vxlan;
 
-	vxlan = skb_ptr_after(skb, tc_udphdr(ctx));
+	vxlan = skb_ptr_after(skb, udphdr(ctx));
 
 	return bpf_ntohl(vxlan->vni << 8); /* 24-bit field, last 8 reserved */
 }
@@ -164,7 +164,7 @@ static CALI_BPF_INLINE bool vxlan_vni_is_valid(struct cali_tc_ctx *ctx)
 {
 	struct vxlanhdr *vxlan;
 
-	vxlan = skb_ptr_after(ctx->skb, tc_udphdr(ctx));
+	vxlan = skb_ptr_after(ctx->skb, udphdr(ctx));
 
 	return *((__u8*)&vxlan->flags) & (1 << 3);
 }
@@ -223,7 +223,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 		goto deny;
 	}
-	if (!vxlan_udp_csum_ok(tc_udphdr(ctx))) {
+	if (!vxlan_udp_csum_ok(udphdr(ctx))) {
 		/* Our VNI but checksum is incorrect (we always use check=0). */
 		CALI_DEBUG("VXLAN with our VNI but incorrect checksum.\n");
 		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
@@ -237,7 +237,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	 * dst:src but the value is src:dst so it flips it automatically
 	 * when we use it on xmit.
 	 */
-	cali_v4_arp_update_elem(&ctx->arpk, tc_ethhdr(ctx), 0);
+	cali_v4_arp_update_elem(&ctx->arpk, ethhdr(ctx), 0);
 	CALI_DEBUG("ARP update for ifindex %d ip %x\n", ctx->arpk.ifindex, bpf_ntohl(ctx->arpk.ip));
 
 	ctx->state->tun_ip = ipv4hdr(ctx)->saddr;

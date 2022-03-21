@@ -636,7 +636,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			 * WARNING: this modifies the ip_header pointer in the main context; need to
 			 * be careful in later code to avoid overwriting that. */
 			l3_csum_off += IPv4_SIZE + sizeof(struct icmphdr);
-			ctx->ip_header = (tc_icmphdr(ctx) + 1); /* skip to inner ip */
+			ctx->ip_header = (icmphdr(ctx) + 1); /* skip to inner ip */
 			if (ipv4hdr(ctx)->ihl != 5) {
 				CALI_INFO("ICMP inner IP header has options; unsupported\n");
 				ctx->fwd.reason = CALI_REASON_IP_OPTIONS;
@@ -732,7 +732,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
-			ct_ctx_nat.tcp = tc_tcphdr(ctx);
+			ct_ctx_nat.tcp = tcphdr(ctx);
 		}
 
 		// If we get here, we've passed policy.
@@ -862,18 +862,18 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		case IPPROTO_TCP:
 			if (state->ct_result.nat_sport) {
 				CALI_DEBUG("Fixing TCP source port from %d to %d\n",
-						bpf_ntohs(tc_tcphdr(ctx)->source), state->ct_result.nat_sport);
-				tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+						bpf_ntohs(tcphdr(ctx)->source), state->ct_result.nat_sport);
+				tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
 			}
-			tc_tcphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
+			tcphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		case IPPROTO_UDP:
 			if (state->ct_result.nat_sport) {
 				CALI_DEBUG("Fixing UDP source port from %d to %d\n",
-						bpf_ntohs(tc_udphdr(ctx)->source), state->ct_result.nat_sport);
-				tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+						bpf_ntohs(udphdr(ctx)->source), state->ct_result.nat_sport);
+				udphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
 			}
-			tc_udphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
+			udphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		}
 
@@ -956,19 +956,19 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		switch (ipv4hdr(ctx)->protocol) {
 		case IPPROTO_TCP:
-			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
 			if (state->ct_result.nat_sport) {
 				CALI_DEBUG("Fixing TCP dest port from %d to %d\n",
-						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
-				tc_tcphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
+						bpf_ntohs(tcphdr(ctx)->dest), state->ct_result.nat_sport);
+				tcphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
 			}
 			break;
 		case IPPROTO_UDP:
-			tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			udphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
 			if (state->ct_result.nat_sport) {
 				CALI_DEBUG("Fixing UDP dest port from %d to %d\n",
-						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
-				tc_udphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
+						bpf_ntohs(tcphdr(ctx)->dest), state->ct_result.nat_sport);
+				udphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
 			}
 			break;
 		}
@@ -1091,7 +1091,7 @@ nat_encap:
 				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
-			__builtin_memcpy(&tc_ethhdr(ctx)->h_dest, arpv->mac_dst, ETH_ALEN);
+			__builtin_memcpy(&ethhdr(ctx)->h_dest, arpv->mac_dst, ETH_ALEN);
 			if (state->ct_result.ifindex_fwd == skb->ifindex) {
 				/* No need to change src MAC, if we are at the right device */
 			} else {

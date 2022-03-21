@@ -100,10 +100,10 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	ipv4hdr(ctx)->saddr = INTF_IP;
 	ipv4hdr(ctx)->daddr = ip_orig.saddr;
 
-	tc_icmphdr(ctx)->type = type;
-	tc_icmphdr(ctx)->code = code;
-	*((__be32 *)&tc_icmphdr(ctx)->un) = un;
-	tc_icmphdr(ctx)->checksum = 0;
+	icmphdr(ctx)->type = type;
+	icmphdr(ctx)->code = code;
+	*((__be32 *)&icmphdr(ctx)->un) = un;
+	icmphdr(ctx)->checksum = 0;
 
 	__wsum ip_csum = bpf_csum_diff(0, 0, ctx->ip_header, IPv4_SIZE, 0);
 	__wsum icmp_csum = bpf_csum_diff(0, 0, ctx->nh,
