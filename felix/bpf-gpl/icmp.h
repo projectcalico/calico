@@ -26,9 +26,9 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 		return -1;
 	}
 
-	struct iphdr ip_orig = *ctx->ip_header;
-	CALI_DEBUG("ip->ihl: %d\n", ctx->ip_header->ihl);
-	if (ctx->ip_header->ihl > 5) {
+	struct iphdr ip_orig = *ipv4hdr(ctx);
+	CALI_DEBUG("ip->ihl: %d\n", ipv4hdr(ctx)->ihl);
+	if (ipv4hdr(ctx)->ihl > 5) {
 		CALI_DEBUG("ICMP v4 reply: IP options\n");
 		return -1;
 	}
@@ -37,7 +37,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	 * part-way through the UDP/TCP header.
 	 */
 	__u32 len = skb_iphdr_offset() + sizeof(struct iphdr) + 64;
-	switch (ctx->ip_header->protocol) {
+	switch (ipv4hdr(ctx)->protocol) {
 	case IPPROTO_TCP:
 		len += sizeof(struct tcphdr);
 		break;
@@ -78,13 +78,13 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	/* we do not touch ethhdr, we rely on linux to rewrite it after routing
 	 * XXX we might want to swap MACs and bounce it back from the same device
 	 */
-	ctx->ip_header->version = 4;
-	ctx->ip_header->ihl = 5;
-	ctx->ip_header->tos = 0;
-	ctx->ip_header->ttl = 64; /* good default */
-	ctx->ip_header->protocol = IPPROTO_ICMP;
-	ctx->ip_header->check = 0;
-	ctx->ip_header->tot_len = bpf_htons(len - sizeof(struct ethhdr));
+	ipv4hdr(ctx)->version = 4;
+	ipv4hdr(ctx)->ihl = 5;
+	ipv4hdr(ctx)->tos = 0;
+	ipv4hdr(ctx)->ttl = 64; /* good default */
+	ipv4hdr(ctx)->protocol = IPPROTO_ICMP;
+	ipv4hdr(ctx)->check = 0;
+	ipv4hdr(ctx)->tot_len = bpf_htons(len - sizeof(struct ethhdr));
 
 #ifdef CALI_PARANOID
 	/* XXX verify that ip_orig.daddr is always the node's IP
@@ -97,17 +97,17 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 #endif
 
 	/* use the host IP of the program that handles the packet */
-	ctx->ip_header->saddr = INTF_IP;
-	ctx->ip_header->daddr = ip_orig.saddr;
+	ipv4hdr(ctx)->saddr = INTF_IP;
+	ipv4hdr(ctx)->daddr = ip_orig.saddr;
 
-	tc_icmphdr(ctx)->type = type;
-	tc_icmphdr(ctx)->code = code;
-	*((__be32 *)&tc_icmphdr(ctx)->un) = un;
-	tc_icmphdr(ctx)->checksum = 0;
+	icmphdr(ctx)->type = type;
+	icmphdr(ctx)->code = code;
+	*((__be32 *)&icmphdr(ctx)->un) = un;
+	icmphdr(ctx)->checksum = 0;
 
-	__wsum ip_csum = bpf_csum_diff(0, 0, (void *)ctx->ip_header, sizeof(*ctx->ip_header), 0);
+	__wsum ip_csum = bpf_csum_diff(0, 0, ctx->ip_header, IPv4_SIZE, 0);
 	__wsum icmp_csum = bpf_csum_diff(0, 0, ctx->nh,
-		len - sizeof(struct iphdr) - skb_iphdr_offset(), 0);
+		len - IPv4_SIZE - skb_iphdr_offset(), 0);
 
 	ret = bpf_l3_csum_replace(ctx->skb,
 			skb_iphdr_offset() + offsetof(struct iphdr, check), 0, ip_csum, 0);
@@ -123,7 +123,6 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	}
 
 	CALI_DEBUG("ICMP v4 reply creation succeeded\n");
-
 	return 0;
 }
 
