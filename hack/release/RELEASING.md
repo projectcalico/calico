@@ -205,6 +205,12 @@ When starting development on a new minor release, the first step is to create a 
    git add calico/_includes/release-notes/<VERSION>-release-notes.md
    ```
 
+1. Update the Calico for Windows installation script.
+
+   ```
+   make -C calico install-calico-windows-script GIT_VERSION=<VERSION>
+   ```
+
 1. Commit your changes. For example:
 
    ```
