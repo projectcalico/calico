@@ -352,7 +352,7 @@ func SetupRoutes(hostVeth netlink.Link, result *cniv1.Result) error {
 				var conflict string
 
 				for _, r := range routes {
-					if r.Dst.IP.Equal(route.Dst.IP) {
+					if r.Dst != nil && r.Dst.IP.Equal(route.Dst.IP) {
 						linkName := "unknown"
 						if link, err := netlink.LinkByIndex(r.LinkIndex); err == nil {
 							linkName = link.Attrs().Name
