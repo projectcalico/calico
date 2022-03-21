@@ -694,6 +694,13 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	logCxt := log.WithField("reason", reason)
 	logCxt.Warn("Felix is shutting down")
 
+	// Keep draining the report channel so that other goroutines don't block on the channel.
+	go func() {
+		for msg := range failureReportChan {
+			log.WithField("reason", msg).Info("Shutdown request received while already shutting down, ignoring.")
+		}
+	}()
+
 	// Notify other components to stop.  Each notified component must call Done() on the wait
 	// group when it has completed its shutdown.
 	var stopWG sync.WaitGroup
