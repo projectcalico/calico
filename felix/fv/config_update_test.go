@@ -185,7 +185,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 	})
 
 	Context("after switching kube-proxy mode that should trigger a restart", func() {
-		// This test simulate kube-proxy switching between iptables to ipvs mode by adding/removing
+		// This test simulates kube-proxy switching between iptables to ipvs mode by adding/removing
 		// kube-ipvs0 dummy interface.
 		var proxy *kubeProxy
 
