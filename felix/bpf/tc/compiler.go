@@ -107,7 +107,7 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 	}
 	corePart := ""
 	if btf {
-		corePart = "_core"
+		corePart = "_co-re"
 	}
 	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v%s.o",
 		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel, corePart)

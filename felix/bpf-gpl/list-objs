@@ -10,14 +10,14 @@
 # WARNING: naming and set of cases must be kept in sync with tc.ProgFilename() in Felix's compiler.go.
 
 emit_filename() {
-  if [ "${core_support}" = "non_core" ]; then
+  if [ "${core_support}" = "legacy" ]; then
     echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}.o"
   else
     echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}_${core_support}.o"
   fi
 }
 
-for core_support in core non_core;do
+for core_support in co-re legacy;do
   for log_level in debug info no_log; do
     echo "bin/connect_time_${log_level}_v4.o"
     echo "bin/connect_time_${log_level}_v4_core.o"

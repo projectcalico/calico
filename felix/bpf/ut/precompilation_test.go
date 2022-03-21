@@ -27,8 +27,16 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 )
+
+func checkBTFEnabled() []bool {
+	if bpfutils.BTFEnabled {
+		return []bool{false, true}
+	}
+	return []bool{false}
+}
 
 func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	RegisterTestingT(t)
@@ -37,12 +45,13 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
+	fmt.Println(checkBTFEnabled())
 	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
 		logLevel := logLevel
 		// Compile the TC endpoint programs.
 		logCxt := log.WithField("logLevel", logLevel)
-		for _, btfEnabled := range []bool{false, true} {
-			btfEnabled := btfEnabled
+		for _, btfEnabled := range checkBTFEnabled() {
+			bpfutils.BTFEnabled = btfEnabled
 			for _, epToHostDrop := range []bool{false, true} {
 				epToHostDrop := epToHostDrop
 				logCxt = logCxt.WithField("epToHostDrop", epToHostDrop)
@@ -88,7 +97,6 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 									LogLevel:   logLevel,
 									HostIP:     net.ParseIP("10.0.0.1"),
 									IntfIP:     net.ParseIP("10.0.0.2"),
-									BTFEnabled: btfEnabled,
 								}
 
 								t.Run(ap.FileName(), func(t *testing.T) {
