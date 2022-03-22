@@ -535,7 +535,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					expJumpMaps := func(numWorkloads int) int {
 						numHostIfaces := 1
-						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces
+						specialIfaces := 1
+						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
 						return expectedNumMaps
 					}
 
@@ -2463,6 +2464,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
 									case "wireguard":
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+									case "vxlan":
+										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
 									}
 
 									ports := ExpectWithPorts(npPort)
