@@ -855,12 +855,6 @@ var ethDefault = &layers.Ethernet{
 	EthernetType: layers.EthernetTypeIPv4,
 }
 
-var ethDefaultWithIPv6 = &layers.Ethernet{
-	SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
-	DstMAC:       []byte{0, 0, 0, 0, 0, 2},
-	EthernetType: layers.EthernetTypeIPv6,
-}
-
 var payloadDefault = []byte("ABCDEABCDEXXXXXXXXXXXX")
 
 var srcIP = net.IPv4(1, 1, 1, 1)
@@ -897,30 +891,30 @@ func testPacket(eth *layers.Ethernet, ipv4 *layers.IPv4, l4 gopacket.Layer, payl
 	*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
 	pkt := Packet{
 		eth:     eth,
-		ipv4:    ipv4,
+		l3:      ipv4,
 		l4:      l4,
 		payload: payload,
-		isIPv6:  false,
 	}
 	err := pkt.Generate()
 	return pkt.eth, pkt.ipv4, pkt.l4, pkt.payload, pkt.bytes, err
 }
 
 type Packet struct {
-	eth      *layers.Ethernet
-	ipv4     *layers.IPv4
-	ipv6     *layers.IPv6
-	l4       gopacket.Layer
-	udp      *layers.UDP
-	tcp      *layers.TCP
-	icmp     *layers.ICMPv4
-	icmpv6   *layers.ICMPv6
-	payload  []byte
-	bytes    []byte
-	layers   []gopacket.SerializableLayer
-	length   int
-	protocol layers.IPProtocol
-	isIPv6   bool
+	eth        *layers.Ethernet
+	l3         gopacket.Layer
+	ipv4       *layers.IPv4
+	ipv6       *layers.IPv6
+	l4         gopacket.Layer
+	udp        *layers.UDP
+	tcp        *layers.TCP
+	icmp       *layers.ICMPv4
+	icmpv6     *layers.ICMPv6
+	payload    []byte
+	bytes      []byte
+	layers     []gopacket.SerializableLayer
+	length     int
+	l4Protocol layers.IPProtocol
+	l3Protocol layers.EthernetType
 }
 
 func (pkt *Packet) handlePayload() {
@@ -939,43 +933,53 @@ func (pkt *Packet) handleL4() error {
 	switch v := pkt.l4.(type) {
 	case *layers.UDP:
 		pkt.udp = v
-		pkt.protocol = layers.IPProtocolUDP
+		pkt.length += 8
+		pkt.l4Protocol = layers.IPProtocolUDP
 		pkt.layers = append(pkt.layers, pkt.udp)
 	case *layers.TCP:
 		pkt.tcp = v
-		pkt.protocol = layers.IPProtocolTCP
+		pkt.length += 20
+		pkt.l4Protocol = layers.IPProtocolTCP
 		pkt.layers = append(pkt.layers, pkt.tcp)
 	case *layers.ICMPv4:
 		pkt.icmp = v
-		pkt.protocol = layers.IPProtocolICMPv4
+		pkt.length += 8
+		pkt.l4Protocol = layers.IPProtocolICMPv4
 		pkt.layers = append(pkt.layers, pkt.icmp)
 	case *layers.ICMPv6:
 		pkt.icmpv6 = v
-		pkt.protocol = layers.IPProtocolICMPv6
+		pkt.length += 8
+		pkt.l4Protocol = layers.IPProtocolICMPv6
 		pkt.layers = append(pkt.layers, pkt.icmpv6)
 	default:
 		return errors.Errorf("unrecognized l4 layer type %t", pkt.l4)
 	}
 
-	pkt.length += 8
 	return nil
 }
 
-func (pkt *Packet) setChecksum() {
-	switch pkt.protocol {
-	case layers.IPProtocolUDP:
-		if pkt.isIPv6 {
-			_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv6)
-		} else {
-			_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv4)
-		}
-	case layers.IPProtocolTCP:
-		if pkt.isIPv6 {
-			_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv6)
-		} else {
-			_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv4)
-		}
+func (pkt *Packet) handleL3() error {
+	if pkt.l3 == nil {
+		pkt.l3 = ipv4Default
 	}
+
+	switch v := pkt.l3.(type) {
+	case *layers.IPv4:
+		pkt.ipv4 = v
+		pkt.l3Protocol = layers.EthernetTypeIPv4
+		pkt.handleIPv4()
+	case *layers.IPv6:
+		pkt.ipv6 = v
+		pkt.l3Protocol = layers.EthernetTypeIPv6
+		pkt.handleIPv6()
+	default:
+		return errors.Errorf("unrecognized l3 layer type %t", pkt.l3)
+	}
+
+	if pkt.ipv4 != nil && pkt.ipv6 != nil {
+		panic("Both IPv4 and IPv6 are set")
+	}
+	return nil
 }
 
 func (pkt *Packet) handleIPv6() {
@@ -986,7 +990,13 @@ func (pkt *Packet) handleIPv6() {
 		*ipv6 = *ipv6Default
 		*pkt.ipv6 = *ipv6
 	}
-	pkt.ipv6.NextHeader = pkt.protocol
+	switch pkt.l4Protocol {
+	case layers.IPProtocolUDP:
+		_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv6)
+	case layers.IPProtocolTCP:
+		_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv6)
+	}
+	pkt.ipv6.NextHeader = pkt.l4Protocol
 	pkt.ipv6.Length = uint16(pkt.length)
 	pkt.layers = append(pkt.layers, pkt.ipv6)
 }
@@ -999,19 +1009,22 @@ func (pkt *Packet) handleIPv4() {
 		*ipv4 = *ipv4Default
 		pkt.ipv4 = ipv4
 	}
-	pkt.ipv4.Protocol = pkt.protocol
+	switch pkt.l4Protocol {
+	case layers.IPProtocolUDP:
+		_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv4)
+	case layers.IPProtocolTCP:
+		_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv4)
+	}
+	pkt.ipv4.Protocol = pkt.l4Protocol
 	pkt.ipv4.Length = uint16(pkt.length + 5*4)
 	pkt.layers = append(pkt.layers, pkt.ipv4)
 }
 
 func (pkt *Packet) handleEthernet() {
 	if pkt.eth == nil {
-		if pkt.isIPv6 {
-			pkt.eth = ethDefaultWithIPv6
-		} else {
-			pkt.eth = ethDefault
-		}
+		pkt.eth = ethDefault
 	}
+	pkt.eth.EthernetType = pkt.l3Protocol
 	pkt.layers = append(pkt.layers, pkt.eth)
 }
 
@@ -1022,12 +1035,11 @@ func (pkt *Packet) Generate() error {
 		return err
 	}
 
-	if pkt.isIPv6 {
-		pkt.handleIPv6()
-	} else {
-		pkt.handleIPv4()
+	err = pkt.handleL3()
+	if err != nil {
+		return err
 	}
-	pkt.setChecksum()
+
 	pkt.handleEthernet()
 	pkt.bytes, err = generatePacket(pkt.layers)
 	return err

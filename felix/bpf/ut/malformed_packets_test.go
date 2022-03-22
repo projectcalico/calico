@@ -34,7 +34,7 @@ var malformedTestCases = []packetTest{
 	{
 		Description: "1 - A packet with IHL=4",
 		Pkt: Packet{
-			ipv4: &layers.IPv4{
+			l3: &layers.IPv4{
 				Version: 4,
 				IHL:     4,
 				TTL:     64,
@@ -51,7 +51,7 @@ var malformedTestCases = []packetTest{
 	{
 		Description: "2 - A packet with IHL=6",
 		Pkt: Packet{
-			ipv4: &layers.IPv4{
+			l3: &layers.IPv4{
 				Version: 4,
 				IHL:     4,
 				TTL:     64,
@@ -68,7 +68,7 @@ var malformedTestCases = []packetTest{
 	{
 		Description: "3 - A packet with IP PROTO=UDP but no UDP header",
 		Pkt: Packet{
-			ipv4: &layers.IPv4{
+			l3: &layers.IPv4{
 				Version:  4,
 				IHL:      5,
 				TTL:      64,

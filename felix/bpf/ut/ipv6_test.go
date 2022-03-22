@@ -41,7 +41,7 @@ var ipTestCases = []ipv6Test{
 		Section:     "calico_from_host_ep",
 		Rules:       nil,
 		pkt: Packet{
-			ipv6: &layers.IPv6{
+			l3: &layers.IPv6{
 				Version:  6,
 				HopLimit: 64,
 				SrcIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}),
@@ -51,7 +51,6 @@ var ipTestCases = []ipv6Test{
 				DstPort: 53,
 				SrcPort: 54321,
 			},
-			isIPv6: true,
 		},
 		Drop: false,
 	},
@@ -60,7 +59,7 @@ var ipTestCases = []ipv6Test{
 		Section:     "calico_from_workload_ep",
 		Rules:       nil,
 		pkt: Packet{
-			ipv6: &layers.IPv6{
+			l3: &layers.IPv6{
 				Version:  6,
 				HopLimit: 64,
 				SrcIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}),
@@ -70,7 +69,6 @@ var ipTestCases = []ipv6Test{
 				DstPort: 53,
 				SrcPort: 54321,
 			},
-			isIPv6: true,
 		},
 		Drop: true,
 	},
@@ -83,7 +81,6 @@ func TestIPv6Parsing(t *testing.T) {
 
 	for _, tc := range ipTestCases {
 		runBpfTest(t, tc.Section, tc.Rules, func(bpfrun bpfProgRunFn) {
-			//_, _, _, _, pktBytes, err := testPacketv6(nil, tc.IPv6Header, tc.NextHeader, nil)
 			err := tc.pkt.Generate()
 			Expect(err).NotTo(HaveOccurred())
 			res, err := bpfrun(tc.pkt.bytes)
