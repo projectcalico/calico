@@ -30,6 +30,9 @@ var _ = Describe("Set", func() {
 	It("should be empty", func() {
 		Expect(s.Len()).To(BeZero())
 	})
+	It("should stringify", func() {
+		Expect(s.String()).To(Equal("set.mapSet{}"))
+	})
 	It("should iterate over no items", func() {
 		called := false
 		s.Iter(func(item interface{}) error {
@@ -55,6 +58,11 @@ var _ = Describe("Set", func() {
 		})
 		It("should not contain 3", func() {
 			Expect(s.Contains(3)).To(BeFalse())
+		})
+		It("should stringify", func() {
+			Expect(s.String()).To(Or(
+				Equal("set.mapSet{1,2}"),
+				Equal("set.mapSet{2,1}")))
 		})
 	})
 
@@ -218,5 +226,8 @@ var _ = Describe("EmptySet", func() {
 			Fail("Iterated > 0 times")
 			return nil
 		})
+	})
+	It("should stringify", func() {
+		Expect(empty.String()).To(Equal("set.mapSet{}"))
 	})
 })

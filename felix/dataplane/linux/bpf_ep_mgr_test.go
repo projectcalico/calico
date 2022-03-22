@@ -467,6 +467,17 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					}]).NotTo(HaveKey("eth0"))
 				})
 			})
+			Context("with eth0 deleted", func() {
+				JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateNotPresent, 10))
+
+				It("clears host endpoint for eth0", func() {
+					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
+					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+						Tier: "default",
+						Name: "mypolicy",
+					}]).NotTo(HaveKey("eth0"))
+				})
+			})
 		})
 	})
 })

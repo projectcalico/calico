@@ -295,6 +295,9 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 				/* Set DNAT info for policy */
 				ctx->state->post_nat_ip_dst = ctx->state->ct_result.nat_ip;
 				ctx->state->post_nat_dport = ctx->state->ct_result.nat_port;
+			} else {
+				ctx->state->post_nat_ip_dst = ctx->state->ip_dst;
+				ctx->state->post_nat_dport = ctx->state->dport;
 			}
 			goto syn_force_policy;
 		}
@@ -1191,6 +1194,24 @@ SEC("classifier/tc/drop")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_drop\n");
+
+	struct cali_tc_state *state = state_get();
+	if (!state) {
+		CALI_DEBUG("State map lookup failed: no event generated\n");
+		goto drop;
+	}
+
+	CALI_DEBUG("proto=%d\n", state->ip_proto);
+	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
+	CALI_DEBUG("pre_nat=%x:%d\n", bpf_ntohl(state->pre_nat_ip_dst), state->pre_nat_dport);
+	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(state->post_nat_ip_dst), state->post_nat_dport);
+	CALI_DEBUG("tun_ip=%x\n", state->tun_ip);
+	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
+	CALI_DEBUG("sport=%d\n", state->sport);
+	CALI_DEBUG("flags=0x%x\n", state->flags);
+	CALI_DEBUG("ct_rc=%d\n", state->ct_result.rc);
+
+drop:
 	return TC_ACT_SHOT;
 }
 

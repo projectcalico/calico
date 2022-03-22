@@ -831,7 +831,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.endpoint_syncer.delete_endpoint(original)
             else:
                 LOG.info("Update on unbound port: no action")
-                pass
 
     @requires_state
     def update_floatingip(self, plugin_context):

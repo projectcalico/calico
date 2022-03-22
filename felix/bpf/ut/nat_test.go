@@ -1353,6 +1353,89 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	resetCTMap(ctMap)
 }
 
+// TestNormalSYNRetryForcePolicy does tha same test for forcing policy
+// as TestNATSYNRetryGoesToSameBackend but without NAT.
+func TestNormalSYNRetryForcePolicy(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "SYN1"
+
+	tcpSyn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    7890,
+		SYN:        true,
+		DataOffset: 5,
+	}
+
+	_, ipv4, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	defer resetRTMap(rtMap)
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(synPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+	})
+
+	bpfIfaceName = "SYN2"
+	explicitAllow := &polprog.Rules{
+		Tiers: []polprog.Tier{{
+			Name: "base tier",
+			Policies: []polprog.Policy{{
+				Name: "expAllow",
+				Rules: []polprog.Rule{{
+					Rule: &proto.Rule{
+						Action:   "Allow",
+						DstPorts: []*proto.PortRange{{First: 7890, Last: 7890}},
+						DstNet:   []string{ipv4.DstIP.String()},
+					}}},
+			}},
+		}},
+	}
+
+	// Make sure that policy still allows the retry (is enforce correctly)
+	runBpfTest(t, "calico_from_workload_ep", explicitAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(synPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+	})
+
+	bpfIfaceName = "SYN3"
+	changedToDeny := &polprog.Rules{
+		Tiers: []polprog.Tier{{
+			Name: "base tier",
+			Policies: []polprog.Policy{{
+				Name: "allow->deny",
+				Rules: []polprog.Rule{{
+					Rule: &proto.Rule{
+						Action:      "Allow",
+						NotDstPorts: []*proto.PortRange{{First: 7890, Last: 7890}},
+						NotDstNet:   []string{ipv4.DstIP.String()},
+					}}},
+			}},
+		}},
+	}
+
+	// Make sure that when the policy changes, it is applied correctly to the next SYN
+	runBpfTest(t, "calico_from_workload_ep", changedToDeny, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(synPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+	})
+}
+
 // TestNATSYNRetryGoesToSameBackend checks that SYN retries all go to the same backend.  I.e.
 // that we conntrack SYN packets once they're past policy.  If we load balance each SYN independently
 // then we run into trouble if the response SYN-ACK is lost.  In that case, the client can end up
@@ -1467,7 +1550,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 		}},
 	}
 
-	// Make sure that when the policy changes, it is applied to correctly to the next SYN
+	// Make sure that when the policy changes, it is applied correctly to the next SYN
 	runBpfTest(t, "calico_from_workload_ep", changedToDeny, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())

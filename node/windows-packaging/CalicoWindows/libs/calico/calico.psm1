@@ -109,7 +109,7 @@ function Install-CNIPlugin()
         $mode = "vxlan"
     }
 
-    $dnsIPs=$env:DNS_NAME_SERVERS.Split(",")
+    $dnsIPs = "$env:DNS_NAME_SERVERS".Split(",")
     $ipList = @()
     foreach ($ip in $dnsIPs) {
         $ipList += "`"$ip`""
