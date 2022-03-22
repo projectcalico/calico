@@ -66,7 +66,7 @@ func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
 }
 
-func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string) string {
+func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, btf bool) string {
 	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
 		// epToHostDrop only makes sense in the from-workload program.
 		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
@@ -105,7 +105,11 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 	case EpTypeWireguard:
 		epTypeShort = "wg"
 	}
-	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v.o",
-		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel)
+	corePart := ""
+	if btf {
+		corePart = "_co-re"
+	}
+	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v%s.o",
+		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel, corePart)
 	return oFileName
 }
