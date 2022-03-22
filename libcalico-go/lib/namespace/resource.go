@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ const (
 	// to avoid an import loop.
 	KindKubernetesNetworkPolicy = "KubernetesNetworkPolicy"
 	KindKubernetesEndpointSlice = "KubernetesEndpointSlice"
+	KindK8sService              = "K8sService"
 )
 
 func IsNamespaced(kind string) bool {
@@ -38,8 +39,9 @@ func IsNamespaced(kind string) bool {
 	case KindKubernetesEndpointSlice:
 		// KindKubernetesEndpointSlice is a special-case resource. We don't expose it over the
 		// v3 API, but it is used in the felix syncer.
+	case KindK8sService:
 		return true
-	default:
-		return false
 	}
+
+	return false
 }
