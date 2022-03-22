@@ -14,6 +14,16 @@
 #include "types.h"
 #include "log.h"
 
+#define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
+#define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
+
+#define ETH_SIZE (sizeof(struct ethhdr))
+#define IP_SIZE (sizeof(struct iphdr))
+#define IPv4_SIZE (sizeof(struct iphdr))
+#define UDP_SIZE (sizeof(struct udphdr))
+#define TCP_SIZE (sizeof(struct tcphdr))
+#define ICMP_SIZE (sizeof(struct icmphdr))
+
 /* skb_start_ptr is equivalent to (void*)((__u64)skb->data); the read is done
  * in a way that is acceptable to the verifier and it is done as a volatile read
  * ensuring that a fresh value is returned and the compiler cannot
@@ -84,22 +94,11 @@ static CALI_BPF_INLINE long skb_iphdr_offset(void)
  */
 static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx)
 {
-	long offset = skb_iphdr_offset();
-	struct iphdr *ip =  ctx->data_start + offset;
-	CALI_DEBUG("IP id=%d s=%x d=%x\n",
-			bpf_ntohs(ip->id), bpf_ntohl(ip->saddr), bpf_ntohl(ip->daddr));
-	ctx->ip_header = ip;
-	ctx->nh = (void*)(ctx->ip_header+1);
+	ctx->ip_header = ctx->data_start + skb_iphdr_offset();
+	ctx->nh = ctx->ip_header + IPv4_SIZE;
+	CALI_DEBUG("IP id=%d s=%x d=%x\n", bpf_ntohs(ipv4hdr(ctx)->id),
+			bpf_ntohl(ipv4hdr(ctx)->saddr), bpf_ntohl(ipv4hdr(ctx)->daddr));
 }
-
-#define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
-#define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
-
-#define ETH_SIZE (sizeof(struct ethhdr))
-#define IP_SIZE (sizeof(struct iphdr))
-#define UDP_SIZE (sizeof(struct udphdr))
-#define TCP_SIZE (sizeof(struct tcphdr))
-#define ICMP_SIZE (sizeof(struct icmphdr))
 
 /* skb_refresh_validate_ptrs refreshes the packet pointers in the context and validates access
  * to the IP header + nh_len (next header length) bytes.  If the skb is non-linear; attempts to

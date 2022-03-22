@@ -27,7 +27,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
-		protocol = bpf_ntohs(tc_ethhdr(ctx)->h_proto);
+		protocol = bpf_ntohs(ethhdr(ctx)->h_proto);
 	} else {
 		protocol = bpf_ntohs(ctx->skb->protocol);
 	}
@@ -74,15 +74,15 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	}
 
 	// Drop malformed IP packets
-	if (ctx->ip_header->ihl < 5) {
+	if (ipv4hdr(ctx)->ihl < 5) {
 		ctx->fwd.reason = CALI_REASON_IP_MALFORMED;
 		CALI_DEBUG("Drop malformed IP packets\n");
 		goto deny;
-	} else if (ctx->ip_header->ihl > 5) {
+	} else if (ipv4hdr(ctx)->ihl > 5) {
 		/* Drop packets with IP options from/to WEP.
 		 * Also drop packets with IP options if the dest IP is not host IP
 		 */
-		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ctx->ip_header->daddr))) {
+		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ipv4hdr(ctx)->daddr))) {
 			ctx->fwd.reason = CALI_REASON_IP_OPTIONS;
 			CALI_DEBUG("Drop packets with IP options\n");
 			goto deny;
@@ -106,11 +106,11 @@ deny:
 
 static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
 {
-	ctx->state->ip_src = ctx->ip_header->saddr;
-	ctx->state->ip_dst = ctx->ip_header->daddr;
-	ctx->state->pre_nat_ip_dst = ctx->ip_header->daddr;
-	ctx->state->ip_proto = ctx->ip_header->protocol;
-	ctx->state->ip_size = ctx->ip_header->tot_len;
+	ctx->state->ip_src = ipv4hdr(ctx)->saddr;
+	ctx->state->ip_dst = ipv4hdr(ctx)->daddr;
+	ctx->state->pre_nat_ip_dst = ipv4hdr(ctx)->daddr;
+	ctx->state->ip_proto = ipv4hdr(ctx)->protocol;
+	ctx->state->ip_size = ipv4hdr(ctx)->tot_len;
 }
 
 /* Continue parsing packet based on the IP protocol and fill in relevant fields
@@ -125,14 +125,14 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
-		ctx->state->sport = bpf_ntohs(tc_tcphdr(ctx)->source);
-		ctx->state->dport = bpf_ntohs(tc_tcphdr(ctx)->dest);
+		ctx->state->sport = bpf_ntohs(tcphdr(ctx)->source);
+		ctx->state->dport = bpf_ntohs(tcphdr(ctx)->dest);
 		ctx->state->pre_nat_dport = ctx->state->dport;
 		CALI_DEBUG("TCP; ports: s=%d d=%d\n", ctx->state->sport, ctx->state->dport);
 		break;
 	case IPPROTO_UDP:
-		ctx->state->sport = bpf_ntohs(tc_udphdr(ctx)->source);
-		ctx->state->dport = bpf_ntohs(tc_udphdr(ctx)->dest);
+		ctx->state->sport = bpf_ntohs(udphdr(ctx)->source);
+		ctx->state->dport = bpf_ntohs(udphdr(ctx)->dest);
 		ctx->state->pre_nat_dport = ctx->state->dport;
 		CALI_DEBUG("UDP; ports: s=%d d=%d\n", ctx->state->sport, ctx->state->dport);
 		if (ctx->state->dport == VXLAN_PORT) {
@@ -152,11 +152,11 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 		}
 		break;
 	case IPPROTO_ICMP:
-		ctx->state->icmp_type = tc_icmphdr(ctx)->type;
-		ctx->state->icmp_code = tc_icmphdr(ctx)->code;
+		ctx->state->icmp_type = icmphdr(ctx)->type;
+		ctx->state->icmp_code = icmphdr(ctx)->code;
 
 		CALI_DEBUG("ICMP; type=%d code=%d\n",
-				tc_icmphdr(ctx)->type, tc_icmphdr(ctx)->code);
+				icmphdr(ctx)->type, icmphdr(ctx)->code);
 		break;
 	case IPPROTO_IPIP:
 		if (CALI_F_TUNNEL | CALI_F_WIREGUARD) {
