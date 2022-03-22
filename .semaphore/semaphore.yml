@@ -77,6 +77,10 @@ global_job_config:
     - sudo apt-get install -y -u crudini
     - sudo crudini --set /etc/initramfs-tools/update-initramfs.conf '' update_initramfs no
     - cat /etc/initramfs-tools/update-initramfs.conf
+    - mkdir artifacts
+  epilogue:
+    commands:
+    - .semaphore/publish-artifacts
 
 blocks:
 
@@ -93,9 +97,7 @@ blocks:
     jobs:
     - name: "make build / ci / static-checks"
       commands:
-      - make build
-      - make ci
-      - make static-checks
+      - "../.semaphore/run-and-monitor api-make-ci.log make ci"
 
 - name: "apiserver"
   run:
@@ -114,7 +116,7 @@ blocks:
     jobs:
     - name: "make ci"
       commands:
-      - make ci
+      - "../.semaphore/run-and-monitor apiserver-make-ci.log make ci"
 
 - name: "libcalico-go"
   run:
@@ -125,7 +127,7 @@ blocks:
     - name: "libcalico-go: tests"
       commands:
       - cd libcalico-go
-      - make ci
+      - "../.semaphore/run-and-monitor libcalico-go-make-ci.log make ci"
 
 - name: "Typha"
   run:
@@ -140,7 +142,7 @@ blocks:
     - name: "Typha: UT and FV tests"
       commands:
       - cd typha
-      - make ci EXCEPT=k8sfv-test
+      - "../.semaphore/run-and-monitor typha-make-ci.log make ci EXCEPT=k8sfv-test"
     epilogue:
       always:
         commands:
@@ -183,15 +185,15 @@ blocks:
       - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
       - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
       - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
-      - make ut
-      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+      - "../.semaphore/run-and-monitor felix-ut.log make ut"
+      - "../.semaphore/run-and-monitor felix-k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true"
+      - "../.semaphore/run-and-monitor felix-k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false"
     - name: make image-all
       execution_time_limit:
         minutes: 60
       commands:
-      - make static-checks
-      - make image-all
+      - "../.semaphore/run-and-monitor felix-static-checks.log make static-checks"
+      - "../.semaphore/run-and-monitor felix-image-all.log make image-all"
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -287,7 +289,7 @@ blocks:
         minutes: 120
       commands:
       - make check-wireguard
-      - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+      - ../.semaphore/run-and-monitor felix-fv-${SEMAPHORE_JOB_INDEX}.log make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
       parallelism: 3
     epilogue:
       always:
@@ -341,7 +343,7 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-        - make ci
+        - "../.semaphore/run-and-monitor confd-ci.log make ci"
 
 - name: "Node: Tests"
   run:
@@ -358,10 +360,10 @@ blocks:
     jobs:
     - name: "Node: CI"
       commands:
-      - make ci
+      - "../.semaphore/run-and-monitor node-ci.log make ci"
     - name: "Node: k8s-test"
       commands:
-      - make k8s-test
+      - "../.semaphore/run-and-monitor node-k8s-test.log make k8s-test"
     epilogue:
       always:
         commands:
@@ -387,10 +389,10 @@ blocks:
       - env_var: ARCH
         values: [ "arm64", "armv7", "ppc64le" ]
       commands:
-      - make image ARCH=$ARCH
+      - ../.semaphore/run-and-monitor node-image-$ARCH.log make image ARCH=$ARCH
     - name: "Build Windows archive"
       commands:
-      - make build-windows-archive
+      - ../.semaphore/run-and-monitor node-windows.log make build-windows-archive
 
 - name: "e2e tests"
   run:
@@ -407,7 +409,7 @@ blocks:
       - name: E2E_FOCUS
         value: "sig-network.*Conformance"
       commands:
-      - make e2e-test
+      - ../.semaphore/run-and-monitor e2e-test.log make e2e-test
 
 - name: "kube-controllers: Tests"
   run:
@@ -420,7 +422,7 @@ blocks:
     jobs:
     - name: "kube-controllers: tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor kube-controllers-ci.log make ci
 
 - name: "pod2daemon"
   run:
@@ -433,7 +435,7 @@ blocks:
     jobs:
     - name: "pod2daemon tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor pod2daemon-ci.log make ci
 
 - name: "app-policy"
   run:
@@ -446,7 +448,7 @@ blocks:
     jobs:
     - name: "app-policy tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor app-policy-ci.log make ci
 
 - name: "calicoctl"
   run:
@@ -459,7 +461,7 @@ blocks:
     jobs:
     - name: "calicoctl tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor calicoctl-ci.log make ci
 
 - name: "cni-plugin: Windows"
   run:
@@ -537,7 +539,7 @@ blocks:
     jobs:
     - name: "cni-plugin tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor cni-plugin-ci.log make ci
 
 - name: 'networking-calico'
   run:
@@ -553,7 +555,7 @@ blocks:
     jobs:
       - name: 'Unit and FV tests (tox)'
         commands:
-          - tox
+          - ../.semaphore/run-and-monitor networking-calico-tox.log tox
       # TODO: Re-enable
       # - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
       #   commands:
