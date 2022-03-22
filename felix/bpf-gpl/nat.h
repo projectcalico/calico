@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_NAT_H__
@@ -92,20 +92,20 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	/* Copy the original IP header. Since it is already DNATed, the dest IP is
 	 * already set. All we need to do is to change the source IP
 	 */
-	*ctx->ip_header = *ip_inner;
+	*ipv4hdr(ctx) = *ip_inner;
 
 	/* decrement TTL for the inner IP header. TTL must be > 1 to get here */
 	ip_dec_ttl(ip_inner);
 
-	ctx->ip_header->saddr = ip_src;
-	ctx->ip_header->daddr = ip_dst;
-	ctx->ip_header->tot_len = bpf_htons(bpf_ntohs(ctx->ip_header->tot_len) + new_hdrsz);
-	ctx->ip_header->ihl = 5; /* in case there were options in ip_inner */
-	ctx->ip_header->check = 0;
-	ctx->ip_header->protocol = IPPROTO_UDP;
+	ipv4hdr(ctx)->saddr = ip_src;
+	ipv4hdr(ctx)->daddr = ip_dst;
+	ipv4hdr(ctx)->tot_len = bpf_htons(bpf_ntohs(ipv4hdr(ctx)->tot_len) + new_hdrsz);
+	ipv4hdr(ctx)->ihl = 5; /* in case there were options in ip_inner */
+	ipv4hdr(ctx)->check = 0;
+	ipv4hdr(ctx)->protocol = IPPROTO_UDP;
 
 	tc_udphdr(ctx)->source = tc_udphdr(ctx)->dest = bpf_htons(VXLAN_PORT);
-	tc_udphdr(ctx)->len = bpf_htons(bpf_ntohs(ctx->ip_header->tot_len) - sizeof(struct iphdr));
+	tc_udphdr(ctx)->len = bpf_htons(bpf_ntohs(ipv4hdr(ctx)->tot_len) - IPv4_SIZE);
 
 	*((__u8*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
 	vxlan->vni = bpf_htonl(CALI_VXLAN_VNI) >> 8; /* it is actually 24-bit, last 8 reserved */
@@ -113,11 +113,11 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	/* keep eth_inner MACs zeroed, it is useless after decap */
 	eth_inner->h_proto = tc_ethhdr(ctx)->h_proto;
 
-	CALI_DEBUG("vxlan encap %x : %x\n", bpf_ntohl(ctx->ip_header->saddr), bpf_ntohl(ctx->ip_header->daddr));
+	CALI_DEBUG("vxlan encap %x : %x\n", bpf_ntohl(ipv4hdr(ctx)->saddr), bpf_ntohl(ipv4hdr(ctx)->daddr));
 
 	/* change the checksums last to avoid pointer access revalidation */
 
-	csum = bpf_csum_diff(0, 0, (void *)ctx->ip_header, sizeof(struct iphdr), 0);
+	csum = bpf_csum_diff(0, 0, ctx->ip_header, IPv4_SIZE, 0);
 	ret = bpf_l3_csum_replace(ctx->skb, ((long) ctx->ip_header) - ((long) skb_start_ptr(ctx->skb)) +
 				  offsetof(struct iphdr, check), 0, csum, 0);
 
@@ -197,10 +197,10 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	/* decap on host ep only if directly for the node */
 	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n",
-		bpf_ntohl(ctx->ip_header->daddr),
+		bpf_ntohl(ipv4hdr(ctx)->daddr),
 		bpf_ntohl(HOST_IP));
 
-	if (!rt_addr_is_local_host(ctx->ip_header->daddr)) {
+	if (!rt_addr_is_local_host(ipv4hdr(ctx)->daddr)) {
 		goto fall_through;
 	}
 	if (!vxlan_size_ok(ctx)) {
@@ -211,14 +211,14 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 		goto fall_through;
 	}
 	if (vxlan_vni(ctx) != CALI_VXLAN_VNI) {
-		if (rt_addr_is_remote_host(ctx->ip_header->saddr)) {
+		if (rt_addr_is_remote_host(ipv4hdr(ctx)->saddr)) {
 			/* Not BPF-generated VXLAN packet but it was from a Calico host to this node. */
 			goto auto_allow;
 		}
 		/* Not our VNI, not from Calico host. Fall through to policy. */
 		goto fall_through;
 	}
-	if (!rt_addr_is_remote_host(ctx->ip_header->saddr)) {
+	if (!rt_addr_is_remote_host(ipv4hdr(ctx)->saddr)) {
 		CALI_DEBUG("VXLAN with our VNI from unexpected source.\n");
 		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 		goto deny;
@@ -230,7 +230,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 		goto deny;
 	}
 
-	ctx->arpk.ip = ctx->ip_header->saddr;
+	ctx->arpk.ip = ipv4hdr(ctx)->saddr;
 	ctx->arpk.ifindex = ctx->skb->ifindex;
 
 	/* We update the map straight with the packet data, eth header is
@@ -240,7 +240,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	cali_v4_arp_update_elem(&ctx->arpk, tc_ethhdr(ctx), 0);
 	CALI_DEBUG("ARP update for ifindex %d ip %x\n", ctx->arpk.ifindex, bpf_ntohl(ctx->arpk.ip));
 
-	ctx->state->tun_ip = ctx->ip_header->saddr;
+	ctx->state->tun_ip = ipv4hdr(ctx)->saddr;
 	CALI_DEBUG("vxlan decap\n");
 	if (vxlan_v4_decap(ctx->skb)) {
 		ctx->fwd.reason = CALI_REASON_DECAP_FAIL;

@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_FIB_H__
@@ -146,7 +146,7 @@ skip_redir_ifindex:
 			 * IP stack handle it. It was approved by policy, so it
 			 * is safe.
 			 */
-			if ip_ttl_exceeded(ctx->ip_header) {
+			if ip_ttl_exceeded(ipv4hdr(ctx)) {
 				rc = TC_ACT_UNSPEC;
 				goto cancel_fib;
 			}
@@ -161,7 +161,7 @@ skip_redir_ifindex:
 			rc = bpf_redirect(fib_params.ifindex, 0);
 			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 			if (rc == TC_ACT_REDIRECT) {
-				ip_dec_ttl(ctx->ip_header);
+				ip_dec_ttl(ipv4hdr(ctx));
 			}
 		} else if (rc < 0) {
 			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);

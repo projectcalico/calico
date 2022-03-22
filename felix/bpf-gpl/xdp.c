@@ -38,6 +38,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 			.res = XDP_PASS, // TODO: Adjust based on the design
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.iphdr_len = IPv4_SIZE,
 	};
 
 	if (!ctx.state) {
