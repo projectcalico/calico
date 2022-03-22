@@ -667,7 +667,9 @@ func (p *Port) SourceIPs() []string {
 // Return if a connection is good and packet loss string "PacketLoss[xx]".
 // If it is not a packet loss test, packet loss string is "".
 func (p *Port) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
-	opts = append(opts, connectivity.WithSourcePort(strconv.Itoa(int(p.Port))))
+	if p.Port != 0 {
+		opts = append(opts, connectivity.WithSourcePort(strconv.Itoa(int(p.Port))))
+	}
 	return canConnectTo(p.Workload, ip, port, protocol, "(with source port)", opts...)
 }
 
