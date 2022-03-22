@@ -197,10 +197,14 @@ ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 # we're only depending on the BPF programs from other phony targets.  (Otherwise, we'd do
 # unnecessary rebuilds of anything that depends on the BPF prgrams.)
 .PHONY: build-bpf clean-bpf
-build-bpf:
+build-bpf: build-bpf-$(ARCH)
+build-bpf-$(ARCH):
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache all && \
 	                          make -j -C bpf-gpl all ut-objs"
+
+build-bpf-ppc64le:
+	@echo "BPF not supported for $(ARCH), skipping build"
 
 clean-bpf:
 	rm -f bpf-gpl/*.d bpf-apache/*.d
