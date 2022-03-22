@@ -5,6 +5,7 @@ bin/
 .idea
 .vscode
 vendor/
+artifacts/
 
 /* Produced as part of release */
 hack/release/release
