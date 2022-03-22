@@ -2855,12 +2855,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
 
+						flx := felixes[1]
+						if testOpts.connTimeEnabled {
+							flx = felixes[0] // Because the ctlb uses the table created at 0 across all nodes.
+						}
+
 						// sync with NAT table being applied
-						natFtKey := nat.NewNATKey(net.ParseIP(felixes[1].IP), npPort, numericProto)
+						natFtKey := nat.NewNATKey(net.ParseIP(flx.IP), npPort, numericProto)
+
 						Eventually(func() bool {
-							m := dumpNATMap(felixes[1])
+							m := dumpNATMap(flx)
 							v, ok := m[natFtKey]
-							return ok && v.Count() > 0
+							if !ok || v.Count() == 0 {
+								return false
+							}
+
+							beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+							be := dumpEPMap(flx)
+							_, ok = be[beKey]
+							return ok
 						}, 5*time.Second).Should(BeTrue())
 
 						// Sync with policy
@@ -2964,7 +2978,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							cc.ExpectNone(w[1][1], TargetIP(felixes[1].IP), npPort)
 							cc.CheckConnectivity()
-							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }, 10*time.Second, 200*time.Millisecond).
 								Should(BeNumerically(">", 0), matcher)
 						})
 					})
