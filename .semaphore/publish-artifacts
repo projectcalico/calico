@@ -17,6 +17,7 @@
 # No set -e so that we continue to collect artifacts even if some fail.
 set -x
 
+echo "Current dir: $(pwd)"
 my_dir=$(dirname "$0")
 repo_dir=$my_dir/..
 
