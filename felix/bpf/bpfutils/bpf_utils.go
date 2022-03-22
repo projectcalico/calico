@@ -17,11 +17,27 @@ package bpfutils
 import (
 	"sync"
 
+	"os"
+
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
 var memLockOnce sync.Once
+var BTFEnabled bool
+
+func init() {
+	BTFEnabled = SupportsBTF()
+}
+
+func SupportsBTF() bool {
+	_, err := os.Stat("/sys/kernel/btf/vmlinux")
+	if err != nil {
+		log.WithError(err).Debug("BTF not supported")
+		return false
+	}
+	return true
+}
 
 func IncreaseLockedMemoryQuota() {
 	memLockOnce.Do(func() {
