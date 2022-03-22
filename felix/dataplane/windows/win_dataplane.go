@@ -19,7 +19,10 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/dataplane/windows/hcn"
+	"github.com/projectcalico/calico/felix/idalloc"
+	"github.com/projectcalico/calico/felix/logutils"
 
 	log "github.com/sirupsen/logrus"
 
@@ -32,6 +35,8 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/throttle"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+
+	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 )
 
 const (
@@ -64,6 +69,10 @@ type Config struct {
 	VXLANEnabled bool
 	VXLANID      int
 	VXLANPort    int
+
+	BPFEnabled       bool
+	BPFMapSizeIPSets int
+	BPFLogLevel      string
 }
 
 // winDataplane implements an in-process Felix dataplane driver capable of applying network policy
@@ -127,6 +136,8 @@ type WindowsDataplane struct {
 	// config provides a way for felix to provide some additional configuration options
 	// to the dataplane driver. This isn't really used currently, but will be in the future.
 	config Config
+
+	loopSummarizer *logutils.Summarizer
 }
 
 const (
@@ -169,6 +180,7 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 		ifaceAddrUpdates: make(chan []string, 1),
 		config:           config,
 		applyThrottle:    throttle.New(10),
+		loopSummarizer:   logutils.NewSummarizer("dataplane reconciliation loops"),
 	}
 
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
@@ -181,11 +193,11 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 	}
 	dp.policySets = policysets.NewPolicySets(hns, ipsc, policysets.FileReader(policysets.StaticFileName))
 
-	dp.RegisterManager(common.NewIPSetsManager(ipSetsV4, config.MaxIPSetSize))
+	ipsetsManager := common.NewIPSetsManager(ipSetsV4, config.MaxIPSetSize)
+	dp.RegisterManager(ipsetsManager)
+
 	dp.RegisterManager(newPolicyManager(dp.policySets))
-	dp.endpointMgr = newEndpointManager(hns, dp.policySets)
-	dp.RegisterManager(dp.endpointMgr)
-	ipSetsV4.SetCallback(dp.endpointMgr.OnIPSetsUpdate)
+
 	if config.VXLANEnabled {
 		log.Info("VXLAN enabled, starting the VXLAN manager")
 		dp.RegisterManager(newVXLANManager(
@@ -197,6 +209,48 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 		))
 	} else {
 		log.Info("VXLAN disabled, not starting the VXLAN manager")
+	}
+
+	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, 0,
+		0, 0, 0, 0, false)
+
+	var (
+		bpfEndpointManager *bpfEndpointManager
+	)
+
+	if !config.BPFEnabled {
+		log.Info("Windows BPF enabled, starting BPF endpoint manager and map manager.")
+		err := bpfmap.CreateBPFMaps(bpfMapContext)
+		if err != nil {
+			log.WithError(err).Panic("error creating bpf maps")
+		}
+		// Register map managers first since they create the maps that will be used by the endpoint manager.
+		// Important that we create the maps before we load a BPF program with TC since we make sure the map
+		// metadata name is set whereas TC doesn't set that field.
+		ipSetIDAllocator := idalloc.New()
+		ipSetsV4BPF := bpfipsets.NewBPFIPSets(
+			ipSetsConfigV4,
+			ipSetIDAllocator,
+			bpfMapContext.IpsetsMap,
+			dp.loopSummarizer,
+		)
+		// dp.ipSets = append(dp.ipSets, ipSetsV4BPF) // TODO: Not sure if it is useful
+		ipsetsManager.AddDataplane(ipSetsV4BPF)
+
+		bpfEndpointManager = newBPFEndpointManager(
+			&config,
+			bpfMapContext,
+			ipSetIDAllocator,
+			dp.reportHealth,
+			dp.loopSummarizer,
+		)
+		dp.RegisterManager(bpfEndpointManager)
+
+		dp.endpointMgr = newEndpointManager(hns, dp.policySets,
+			config.BPFEnabled,
+			bpfEndpointManager)
+		dp.RegisterManager(dp.endpointMgr)
+		ipSetsV4.SetCallback(dp.endpointMgr.OnIPSetsUpdate)
 	}
 
 	// Register that we will report liveness and readiness.

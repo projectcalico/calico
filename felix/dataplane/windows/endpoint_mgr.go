@@ -53,6 +53,10 @@ var (
 	ErrorUpdateFailed    = errors.New("Endpoint update failed")
 )
 
+type hepListener interface {
+	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
+}
+
 // endpointManager processes WorkloadEndpoint* updates from the datastore. Updates are
 // stored and pended for processing during CompleteDeferredWork. endpointManager is also
 // responsible for orchestrating a refresh of all impacted endpoints after a IPSet update.
@@ -79,6 +83,17 @@ type endpointManager struct {
 	pendingHostAddrs []string
 	// hostAddrs contains the list of IPs detected on the host.
 	hostAddrs []string
+
+	// hostIfaceToAddrs maps host interface name to the set of IPs on that interface (reported
+	// fro the dataplane).
+	hostIfaceToAddrs map[string]set.Set
+	// rawHostEndpoints contains the raw (i.e. not resolved to interface) host endpoints.
+	rawHostEndpoints map[proto.HostEndpointID]*proto.HostEndpoint
+	// hostEndpointsDirty is set to true when host endpoints are updated.
+	hostEndpointsDirty bool
+
+	bpfEnabled         bool
+	bpfEndpointManager hepListener
 }
 
 type hnsInterface interface {
@@ -87,7 +102,11 @@ type hnsInterface interface {
 	GetAttachedContainerIDs(endpoint *hns.HNSEndpoint) ([]string, error)
 }
 
-func newEndpointManager(hns hnsInterface, policysets policysets.PolicySetsDataplane) *endpointManager {
+func newEndpointManager(hns hnsInterface,
+	policysets policysets.PolicySetsDataplane,
+	bpfEnabled bool,
+	bpfEndpointManager hepListener,
+) *endpointManager {
 	var networkName string
 	if os.Getenv(envNetworkName) != "" {
 		networkName = os.Getenv(envNetworkName)
@@ -120,6 +139,8 @@ func newEndpointManager(hns hnsInterface, policysets policysets.PolicySetsDatapl
 		pendingWlEpUpdates:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIPSetUpdate:  set.New(),
 		hostAddrs:           hostIPv4s,
+		bpfEnabled:          bpfEnabled,
+		bpfEndpointManager:  bpfEndpointManager,
 	}
 }
 
@@ -147,6 +168,14 @@ func (m *endpointManager) OnUpdate(msg interface{}) {
 	case *proto.ActiveProfileUpdate:
 		log.WithField("profileId", msg.Id).Info("Processing ActiveProfileUpdate")
 		m.ProcessPolicyProfileUpdate(policysets.ProfileNamePrefix + msg.Id.Name)
+	case *proto.HostEndpointUpdate:
+		log.WithField("msg", msg).Debug("Host endpoint update")
+		m.rawHostEndpoints[*msg.Id] = msg.Endpoint
+		m.hostEndpointsDirty = true
+	case *proto.HostEndpointRemove:
+		log.WithField("msg", msg).Debug("Host endpoint removed")
+		delete(m.rawHostEndpoints, *msg.Id)
+		m.hostEndpointsDirty = true
 	}
 }
 
@@ -297,6 +326,12 @@ func (m *endpointManager) ProcessPolicyProfileUpdate(policySetId string) {
 // have already been processed by the various managers and we should now have a complete picture
 // of the policy/rules to be applied for each pending endpoint.
 func (m *endpointManager) CompleteDeferredWork() error {
+	if m.hostEndpointsDirty {
+		log.Debug("Host endpoints updated, resolving them.")
+		m.resolveHostEndpoints()
+		m.hostEndpointsDirty = false
+	}
+
 	m.pendingIPSetUpdate.Iter(func(item interface{}) error {
 		id := item.(string)
 		m.ProcessIpSetUpdate(id)
@@ -546,4 +581,136 @@ func loopPollingForInterfaceAddrs(c chan []string) {
 		log.WithField("update", ipv4s).Debug("Interface addresses updated.")
 		c <- ipv4s
 	}
+}
+
+func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID {
+
+	// Host endpoint resolution
+	// ------------------------
+	//
+	// There is a set of non-workload interfaces on the local host, each possibly with
+	// IP addresses, that might be controlled by HostEndpoint resources in the Calico
+	// data model.  The data model syntactically allows multiple HostEndpoint
+	// resources to match a given interface - for example, an interface 'eth1' might
+	// have address 10.240.0.34 and 172.19.2.98, and the data model might include:
+	//
+	// - HostEndpoint A with Name 'eth1'
+	//
+	// - HostEndpoint B with ExpectedIpv4Addrs including '10.240.0.34'
+	//
+	// - HostEndpoint C with ExpectedIpv4Addrs including '172.19.2.98'.
+	//
+	// but at runtime, at any given time, we only allow one HostEndpoint to govern
+	// that interface.  That HostEndpoint becomes the active one, and the others
+	// remain inactive.  (But if, for example, the active HostEndpoint resource was
+	// deleted, then one of the inactive ones could take over.)  Given multiple
+	// matching HostEndpoint resources, the one that wins is the one with the
+	// alphabetically earliest HostEndpointId
+	//
+	// So the process here is not about 'resolving' a particular HostEndpoint on its
+	// own.  Rather it is looking at the set of local non-workload interfaces and
+	// seeing which of them are matched by the current set of HostEndpoints as a
+	// whole.
+	newIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
+	for ifaceName, ifaceAddrs := range m.hostIfaceToAddrs {
+		ifaceCxt := log.WithFields(log.Fields{
+			"ifaceName":  ifaceName,
+			"ifaceAddrs": ifaceAddrs,
+		})
+		bestHostEpId := proto.HostEndpointID{}
+	HostEpLoop:
+		for id, hostEp := range m.rawHostEndpoints {
+			logCxt := ifaceCxt.WithField("id", id)
+			if forAllInterfaces(hostEp) {
+				logCxt.Debug("Skip all-interfaces host endpoint")
+				continue
+			}
+			logCxt.WithField("bestHostEpId", bestHostEpId).Debug("See if HostEp matches interface")
+			if (bestHostEpId.EndpointId != "") && (bestHostEpId.EndpointId < id.EndpointId) {
+				// We already have a HostEndpointId that is better than
+				// this one, so no point looking any further.
+				logCxt.Debug("No better than existing match")
+				continue
+			}
+			if hostEp.Name == ifaceName {
+				// The HostEndpoint has an explicit name that matches the
+				// interface.
+				logCxt.Debug("Match on explicit iface name")
+				bestHostEpId = id
+				continue
+			} else if hostEp.Name != "" {
+				// The HostEndpoint has an explicit name that isn't this
+				// interface.  Continue, so as not to allow it to match on
+				// an IP address instead.
+				logCxt.Debug("Rejected on explicit iface name")
+				continue
+			}
+			for _, wantedList := range [][]string{hostEp.ExpectedIpv4Addrs, hostEp.ExpectedIpv6Addrs} {
+				for _, wanted := range wantedList {
+					logCxt.WithField("wanted", wanted).Debug("Address wanted by HostEp")
+					if ifaceAddrs.Contains(wanted) {
+						// The HostEndpoint expects an IP address
+						// that is on this interface.
+						logCxt.Debug("Match on address")
+						bestHostEpId = id
+						continue HostEpLoop
+					}
+				}
+			}
+		}
+		if bestHostEpId.EndpointId != "" {
+			logCxt := log.WithFields(log.Fields{
+				"ifaceName":    ifaceName,
+				"bestHostEpId": bestHostEpId,
+			})
+			logCxt.Debug("Got HostEp for interface")
+			newIfaceNameToHostEpID[ifaceName] = bestHostEpId
+		}
+	}
+
+	// Similar loop to find the best all-interfaces host endpoint.
+	bestHostEpId := proto.HostEndpointID{}
+	for id, hostEp := range m.rawHostEndpoints {
+		logCxt := log.WithField("id", id)
+		if !forAllInterfaces(hostEp) {
+			logCxt.Debug("Skip interface-specific host endpoint")
+			continue
+		}
+		if (bestHostEpId.EndpointId != "") && (bestHostEpId.EndpointId < id.EndpointId) {
+			// We already have a HostEndpointId that is better than
+			// this one, so no point looking any further.
+			logCxt.Debug("No better than existing match")
+			continue
+		}
+		logCxt.Debug("New best all-interfaces host endpoint")
+		bestHostEpId = id
+	}
+
+	if bestHostEpId.EndpointId != "" {
+		log.WithField("bestHostEpId", bestHostEpId).Debug("Got all interfaces HostEp")
+		newIfaceNameToHostEpID[allInterfaces] = bestHostEpId
+	}
+
+	if m.bpfEndpointManager != nil {
+		// Construct map of interface names to host endpoints, and pass to the BPF endpoint
+		// manager.
+		hostIfaceToEpMap := map[string]proto.HostEndpoint{}
+		for ifaceName, id := range newIfaceNameToHostEpID {
+			// Note, dereference the proto.HostEndpoint here so that the data lifetime
+			// is decoupled from the validity of the pointer here.
+			hostIfaceToEpMap[ifaceName] = *m.rawHostEndpoints[id]
+		}
+		m.bpfEndpointManager.OnHEPUpdate(hostIfaceToEpMap)
+	}
+
+	return newIfaceNameToHostEpID
+}
+
+// The interface name that we use to mean "all interfaces".  This is intentionally longer than
+// IFNAMSIZ (16) characters, so that it can't possibly match a real interface name.
+var allInterfaces = "any-interface-at-all"
+
+// True if the given host endpoint is for all interfaces, as opposed to for a specific interface.
+func forAllInterfaces(hep *proto.HostEndpoint) bool {
+	return hep.Name == "*"
 }
