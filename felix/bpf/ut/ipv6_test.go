@@ -16,7 +16,6 @@ package ut_test
 
 import (
 	"fmt"
-	"net"
 	"testing"
 
 	"github.com/google/gopacket"
@@ -41,12 +40,7 @@ var ipTestCases = []ipv6Test{
 		Section:     "calico_from_host_ep",
 		Rules:       nil,
 		pkt: Packet{
-			l3: &layers.IPv6{
-				Version:  6,
-				HopLimit: 64,
-				SrcIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}),
-				DstIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}),
-			},
+			l3: ipv6Default,
 			l4: &layers.UDP{
 				DstPort: 53,
 				SrcPort: 54321,
@@ -59,12 +53,7 @@ var ipTestCases = []ipv6Test{
 		Section:     "calico_from_workload_ep",
 		Rules:       nil,
 		pkt: Packet{
-			l3: &layers.IPv6{
-				Version:  6,
-				HopLimit: 64,
-				SrcIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}),
-				DstIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}),
-			},
+			l3: ipv6Default,
 			l4: &layers.UDP{
 				DstPort: 53,
 				SrcPort: 54321,
