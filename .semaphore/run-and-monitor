@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2019 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+log_monitor_regexps=(
+  "Failure"
+  "FAIL"
+  "SUCCESS"
+  "Test batch"
+)
+
+echo "Current dir: $(pwd)"
+my_dir="$(dirname $0)"
+repo_dir="${my_dir}/.."
+artifacts_dir="$repo_dir/artifacts"
+log_file_name="$1"
+log_file="${artifacts_dir}/$1"
+
+mkdir -p "${artifacts_dir}"
+
+shift
+
+echo "==== About to run:"
+command_pretty="$(printf "%q " "$@")"
+echo "     $command_pretty"
+echo "==== Redirecting to artifacts/${log_file_name}"
+
+cmd="$1"
+shift
+
+$cmd "$@" >& "$log_file" &
+pid=$!
+echo "     Main command PID=$pid"
+
+grep_args=("--line-buffered" "-C10")
+for r in "${log_monitor_regexps[@]}"; do
+  grep_args+=("-e" "$(printf "%q" "$r")")
+done
+
+tail -F "$log_file" | grep "${grep_args[@]}" &
+mon_pid=$!
+
+final_result=0
+cmd_done=false
+function cleanup()
+{
+  if ! $cmd_done; then
+    echo "==== Stopping command PID=${pid}..."
+    kill $pid || true
+    final_result=1
+  fi
+  echo "==== Stopping log monitor PID=${mon_pid}..."
+  kill $mon_pid || true
+  echo "==== Done, exiting with RC=$final_result"
+  exit $final_result
+}
+trap cleanup EXIT
+
+echo "     Monitor command PID=$mon_pid"
+
+echo "==== Waiting and monitoring output..."
+if wait "$pid"; then
+  echo "==== Command ${command_pretty}SUCCEEDED (PID=$pid).  Full command output in artifacts/${log_file_name}."
+else
+  echo "==== Command ${command_pretty}FAILED (PID=$pid).  Full command output in artifacts/${log_file_name}."
+  final_result=1
+fi
+cmd_done=true
+
