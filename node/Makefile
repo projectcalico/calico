@@ -23,11 +23,16 @@ LIBBPF_A=../felix/bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
 
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+# BPF dependencies only needed for platforms which support BPF.
+BPF_REMOTE_DEPS = $(LIBBPF_A) filesystem/usr/lib/calico/bpf
+endif
+
 # Complete list of files from other directories that we need to build calico/node.
-REMOTE_DEPS = $(LIBBPF_A) \
-	      filesystem/usr/lib/calico/bpf \
-	      filesystem/etc/calico/confd/conf.d \
-	      filesystem/etc/calico/confd/templates
+# These vary based on architecture.
+REMOTE_DEPS = filesystem/etc/calico/confd/conf.d \
+	      filesystem/etc/calico/confd/templates \
+	      $(BPF_REOMTE_DEPS)
 
 ###############################################################################
 # Include ../lib.Makefile
@@ -228,7 +233,7 @@ endif
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
+$(NODE_CONTAINER_BINARY): $(BPF_REMOTE_DEPS) $(SRC_FILES) ../go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
