@@ -172,11 +172,34 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Send a delete for the node, which should remove the entry from the cache.
 		update.KVPair.Value = nil
 		c.onUpdate(update)
-		Eventually(func() string {
+		Eventually(func() map[string]string {
 			done := c.pause()
 			defer done()
-			return c.kubernetesNodesByCalicoName[n.Name]
-		}, 1*time.Second, 100*time.Millisecond).Should(Equal(""), "Cache not updated after DELETE")
+			return c.kubernetesNodesByCalicoName
+		}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveKey(n.Name), "Cache not updated after DELETE")
+
+		// Recreate the Calico node as a non-Kubernetes node.
+		n.Spec.OrchRefs[0].Orchestrator = apiv3.OrchestratorOpenStack
+		update.KVPair.Value = &n
+		update.UpdateType = bapi.UpdateTypeKVNew
+		c.onUpdate(update)
+
+		// Expect the cache to be updated, mapping the Calico name to "".
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			kname, ok := c.kubernetesNodesByCalicoName[n.Name]
+			return ok && kname == ""
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Cache not updated as expected after ADD of non-k8s node")
+
+		// Send a delete for the non-Kubernetes node, which should remove the entry from the cache.
+		update.KVPair.Value = nil
+		c.onUpdate(update)
+		Eventually(func() map[string]string {
+			done := c.pause()
+			defer done()
+			return c.kubernetesNodesByCalicoName
+		}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveKey(n.Name), "Cache not updated after DELETE")
 	})
 
 	It("should handle adding and deleting blocks", func() {
@@ -340,11 +363,11 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{0, 1, 2, 3},
 			Attributes:  []model.AllocationAttribute{},
 		}
-		firstBlockKvp := model.KVPair{
+		firstBlockKVP := model.KVPair{
 			Key:   firstBlockKey,
 			Value: &firstBlock,
 		}
-		firstBlockUpdate := bapi.Update{KVPair: firstBlockKvp, UpdateType: bapi.UpdateTypeKVNew}
+		firstBlockUpdate := bapi.Update{KVPair: firstBlockKVP, UpdateType: bapi.UpdateTypeKVNew}
 		c.onUpdate(firstBlockUpdate)
 
 		// Expect new entries in the pool manager maps under unknown pool.
@@ -373,12 +396,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		firstIPPool.Spec.BlockSize = 30
 		firstIPPool.Spec.NodeSelector = "all()"
 		firstIPPool.Spec.Disabled = false
-		firstPoolKvp := model.KVPair{
+		firstPoolKVP := model.KVPair{
 			Key:   firstIPPoolKey,
 			Value: &firstIPPool,
 		}
 		firstPoolUpdate := bapi.Update{
-			KVPair:     firstPoolKvp,
+			KVPair:     firstPoolKVP,
 			UpdateType: bapi.UpdateTypeKVNew,
 		}
 		c.onUpdate(firstPoolUpdate)
@@ -409,12 +432,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		secondIPPool.Spec.BlockSize = 30
 		secondIPPool.Spec.NodeSelector = "all()"
 		secondIPPool.Spec.Disabled = false
-		secondIPPoolKvp := model.KVPair{
+		secondIPPoolKVP := model.KVPair{
 			Key:   secondIPPoolKey,
 			Value: &secondIPPool,
 		}
 		secondPoolUpdate := bapi.Update{
-			KVPair:     secondIPPoolKvp,
+			KVPair:     secondIPPoolKVP,
 			UpdateType: bapi.UpdateTypeKVNew,
 		}
 		c.onUpdate(secondPoolUpdate)
@@ -429,11 +452,11 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{0, 1, 2, 3},
 			Attributes:  []model.AllocationAttribute{},
 		}
-		secondBlockKvp := model.KVPair{
+		secondBlockKVP := model.KVPair{
 			Key:   secondBlockKey,
 			Value: &secondBlock,
 		}
-		secondBlockUpdate := bapi.Update{KVPair: secondBlockKvp, UpdateType: bapi.UpdateTypeKVNew}
+		secondBlockUpdate := bapi.Update{KVPair: secondBlockKVP, UpdateType: bapi.UpdateTypeKVNew}
 		c.onUpdate(secondBlockUpdate)
 
 		// Expect second block to be associated with second pool.

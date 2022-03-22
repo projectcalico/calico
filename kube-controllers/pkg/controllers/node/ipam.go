@@ -362,24 +362,21 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
 		n := kvp.Value.(*libapiv3.Node)
 		kn, err := getK8sNodeName(*n)
-		if err != nil {
-			log.WithError(err).Info("Unable to get corresponding k8s node name, skipping")
 
-			// It's possible that a previous version of this node had an orchRef and so was added to the
-			// map. If so, we need to remove it.
-			if current, ok := c.kubernetesNodesByCalicoName[n.Name]; ok {
-				log.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
-				delete(c.kubernetesNodesByCalicoName, n.Name)
-			}
-		} else if kn != "" {
-			if current, ok := c.kubernetesNodesByCalicoName[n.Name]; !ok {
-				log.Debugf("Add mapping calico node -> k8s node. %s -> %s", n.Name, kn)
-				c.kubernetesNodesByCalicoName[n.Name] = kn
-			} else if current != kn {
-				log.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
-				c.kubernetesNodesByCalicoName[n.Name] = kn
-			}
-			// No change.
+		if err != nil {
+			log.WithError(err).Info("Unable to get corresponding k8s node name")
+		}
+
+		// Maintain mapping of Calico node to Kubernetes node, ensuring all Calico nodes have an entry in the map by
+		// assigning a value of "" for Calico nodes without a known Kubernetes node name. Expects getK8sNodeName
+		// to return "" when err != nil, and to also return "" when Kubernetes orchRef.NodeName is "".
+		if current, ok := c.kubernetesNodesByCalicoName[n.Name]; !ok {
+			log.Debugf("Add mapping calico node -> k8s node. %s -> %s", n.Name, kn)
+			c.kubernetesNodesByCalicoName[n.Name] = kn
+		} else if current != kn && !(err == nil && kn == "") {
+			// Update mapping if the value has changed, and the change is not a loss of Kubernetes name in orchRef.
+			log.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
+			c.kubernetesNodesByCalicoName[n.Name] = kn
 		}
 	} else {
 		cnode := kvp.Key.(model.ResourceKey).Name
@@ -1147,7 +1144,7 @@ func (c *ipamController) nodeIsBeingMigrated(name string) (bool, error) {
 // Returns ErrorNotKubernetes if the given Calico node is not a Kubernetes node.
 func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 	// Check if we have the node name cached.
-	if kn, ok := c.kubernetesNodesByCalicoName[cnode]; ok {
+	if kn, ok := c.kubernetesNodesByCalicoName[cnode]; ok && kn != "" {
 		return kn, nil
 	}
 	log.WithField("cnode", cnode).Debug("Node not in cache, look it up in the API")
@@ -1172,16 +1169,15 @@ func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 
 func (c *ipamController) incrementReclamationMetric(block string, node string) {
 	pool := c.poolManager.poolsByBlock[block]
-	metricNode := node
-	if metricNode == "" {
-		metricNode = unknownNodeLabel
+	if node == "" {
+		node = unknownNodeLabel
 	}
 	gcReclamationsCounter := gcReclamationCounters[pool]
 	if gcReclamationsCounter == nil {
 		log.Warnf("Reclamation count metric vector used for pool %s was not created, skipping publishing", pool)
 		return
 	}
-	gcReclamationsCounter.With(prometheus.Labels{"node": metricNode}).Inc()
+	gcReclamationsCounter.With(prometheus.Labels{"node": node}).Inc()
 }
 
 func registerMetricVectorsForPool(poolName string) {
