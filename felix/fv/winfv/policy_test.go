@@ -70,6 +70,7 @@ func kubectlExec(command string) error {
 		log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).WithError(err).Error("Error running kubectl command")
 		return err
 	}
+	log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).Info("kubectl command succeeded")
 	return nil
 }
 
