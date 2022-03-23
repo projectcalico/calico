@@ -4,7 +4,35 @@ description: Sample configuration files etcd.
 canonical_url: '/maintenance/clis/calicoctl/configure/etcd'
 ---
 
-## Complete list of etcd configuration options
+### Big picture
+
+Learn how to configure the calicoctl CLI tool for an etcd cluster.
+
+### Value
+
+The `calicoctl` CLI tool provides helpful administrative commands for interacting with a {{site.prodname}} cluster.
+
+### Concepts
+
+#### calicoctl vs kubectl
+
+In previous releases, calicoctl has been required to manage Calico API resources in the `projectcalico.org/v3` API group. The calicoctl CLI tool provides important validation and defaulting on these APIs.
+
+In newer releases, the Calico API server performs that defaulting and validation server-side, exposing the same API semantics without a dependency on calicoctl. For this reason, we recommend
+[installing the Calico API server]({{site.baseurl}}/maintenance/install-apiserver.md) and using `kubectl` instead of `calicoctl` for most operations.
+
+calicoctl is still required for the following subcommands:
+
+- [calicoctl node]({{site.baseurl}}/reference/calicoctl/node)
+- [calicoctl ipam]({{site.baseurl}}/reference/calicoctl/ipam)
+- [calicoctl convert]({{site.baseurl}}/reference/calicoctl/convert)
+- [calicoctl version]({{site.baseurl}}/reference/calicoctl/version)
+
+calicoctl is also required for non-Kubernetes platforms such as OpenStack.
+
+### How to
+
+#### Complete list of etcd configuration options
 
 | Configuration file option | Environment variable | Description                                                                           | Schema
 | --------------------------| -------------------- | ------------------------------------------------------------------------------------- | ------
@@ -34,8 +62,6 @@ canonical_url: '/maintenance/clis/calicoctl/configure/etcd'
 >   variables as a mechanism for specifying the etcd endpoints. These variables are
 >   no longer supported. Use `ETCD_ENDPOINTS` instead.
 {: .alert .alert-info}
-
-## Examples
 
 #### Example configuration file
 
@@ -127,7 +153,7 @@ Use the IPv4 endpoint:
 ETCD_ENDPOINTS=http://127.0.0.1:2379 calicoctl get bgppeers
 ```
 
-## {{site.nodecontainer}}
+#### {{site.nodecontainer}}
 
 It is important to note that not only will calicoctl will use the specified keys directly
 on the host to access etcd, **it will also pass on these environment variables
@@ -137,7 +163,7 @@ Therefore, configuring `{{site.nodecontainer}}` for etcd is easily accomplished 
 `calicoctl node run` with the parameters set correctly.
 
 
-### Checking the configuration
+#### Checking the configuration
 
 Here is a simple command to check that the installation and configuration is
 correct.
