@@ -254,7 +254,11 @@ $(FELIX_IMAGE)-$(ARCH): $(FV_BINARY) \
 	mkdir -p docker-image/bpf/bin
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
+ifeq ($(ARCH),s390x)
+	$(DOCKER_BUILD) --build-arg FV_BINARY=$(FV_BINARY) -t $(FELIX_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
+else
 	$(DOCKER_BUILD) --build-arg FV_BINARY=$(FV_BINARY) -t $(FELIX_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
+endif
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ###############################################################################

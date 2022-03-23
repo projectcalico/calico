@@ -1,18 +1,34 @@
-ARG QEMU_IMAGE=calico/go-build:latest
-FROM ${QEMU_IMAGE} as qemu
-
 FROM calico/bpftool:v5.3-s390x as bpftool
 
-FROM s390x/alpine:3.8 as base
+FROM debian:10-slim
+# Install remaining runtime deps required for felix from the global repository
+RUN apt-get update && apt-get install -y \
+    ipset \
+    iptables \
+    iproute2 \
+    iputils-arping \
+    iputils-ping \
+    iputils-tracepath \
+    # Need arp
+    net-tools \
+    conntrack \
+    runit \
+    # Need kmod to ensure ip6tables-save works correctly
+    kmod \
+    # Need netbase in order for ipset to work correctly
+    # See https://github.com/kubernetes/kubernetes/issues/68703
+    netbase \
+    # Also needed (provides utilities for browsing procfs like ps)
+    procps \
+    ca-certificates
 
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-# we only need this for the intermediate "base" image, so we can run all the apk and other commands
-# when running on a kernel >= 4.8, this will become less relevant
-COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/
+# Default to the xtables backend of iptables.
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
+RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
-# Install our dependencies.
-RUN apk --no-cache add ip6tables tini ipset iputils iproute2 conntrack-tools file
+# Install tini, the init daemon we use.
+ENV TINI_VERSION v0.18.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-s390x /sbin/tini
 
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin
@@ -20,11 +36,16 @@ ADD calico-felix-wrapper /usr/bin
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the Felix build artefacts from the container.
 ADD bin/calico-felix-s390x /code/calico-felix
+ADD bin/calico-bpf /usr/bin/calico-bpf
+ADD bpf/bin/* /usr/lib/calico/bpf/
 RUN ln -s /code/calico-felix /usr/bin
 COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
+RUN chmod +x /sbin/tini
 ENTRYPOINT ["/sbin/tini", "--"]
 # Run felix (via the wrapper script) by default
 CMD ["calico-felix-wrapper"]
+CMD ["/usr/bin/calico-felix-wrapper"]
+
