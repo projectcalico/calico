@@ -61,6 +61,7 @@ global_job_config:
   prologue:
     commands:
     - checkout
+    - export REPO_DIR="$(pwd)"
     # Semaphore is doing shallow clone on a commit without tags.
     # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
     - git fetch --unshallow
@@ -80,6 +81,7 @@ global_job_config:
     - mkdir artifacts
   epilogue:
     commands:
+    - cd "$REPO_DIR"
     - .semaphore/publish-artifacts
 
 blocks:
