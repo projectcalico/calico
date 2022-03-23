@@ -362,19 +362,16 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
 		n := kvp.Value.(*libapiv3.Node)
 		kn, err := getK8sNodeName(*n)
-
 		if err != nil {
 			log.WithError(err).Info("Unable to get corresponding k8s node name")
 		}
 
 		// Maintain mapping of Calico node to Kubernetes node. Ensure all Calico nodes have an entry in the map by
-		// assigning a value of "" for nodes that are not orchestrated by Kubernetes (1) or have a Kubernetes name of "" (2).
-		// Expects getK8sNodeName to return "", err for (1) and "", nil for (2).
+		// assigning a value of "" for nodes that are not orchestrated by Kubernetes.
 		if current, ok := c.kubernetesNodesByCalicoName[n.Name]; !ok {
 			log.Debugf("Add mapping calico node -> k8s node. %s -> %s", n.Name, kn)
 			c.kubernetesNodesByCalicoName[n.Name] = kn
-		} else if current != kn && !(err == nil && kn == "") {
-			// Update mapping if the value has changed, and the change is not a loss of Kubernetes name.
+		} else if current != kn {
 			log.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
 			c.kubernetesNodesByCalicoName[n.Name] = kn
 		}
