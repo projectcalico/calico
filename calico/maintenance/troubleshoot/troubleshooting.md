@@ -14,7 +14,7 @@ sudo calicoctl node diags
 
 To view logs, use the following command:
 
-`kubectl logs -n kube-system <pod_name>`
+`kubectl logs -n calico-system <pod_name>`
 
 
 To view debug logs on some Calico components, set the `LogSeverityScreen` through the associated environment variable. 
