@@ -15,6 +15,7 @@
 package health_test
 
 import (
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -151,14 +152,12 @@ var _ = Describe("Health timeouts", func() {
 		aggregator *health.HealthAggregator
 	)
 
-	notifySource := func(source string) func() {
-		return func() {
-			switch source {
-			case SOURCE1:
-				aggregator.Report(source, &health.HealthReport{Ready: true})
-			case SOURCE2:
-				aggregator.Report(source, &health.HealthReport{Live: true, Ready: true})
-			}
+	notifySource := func(source string, detail string) {
+		switch source {
+		case SOURCE1:
+			aggregator.Report(source, &health.HealthReport{Ready: true, Detail: detail})
+		case SOURCE2:
+			aggregator.Report(source, &health.HealthReport{Live: true, Ready: true, Detail: detail})
 		}
 	}
 
@@ -173,13 +172,21 @@ var _ = Describe("Health timeouts", func() {
 	Context("with ready reports", func() {
 
 		BeforeEach(func() {
-			notifySource(SOURCE1)()
-			notifySource(SOURCE2)()
+			notifySource(SOURCE1, "")
+			notifySource(SOURCE2, "but very busy!")
 		})
 
 		It("is ready and live", func() {
 			Expect(aggregator.Summary().Ready).To(BeTrue())
 			Expect(aggregator.Summary().Live).To(BeTrue())
+			Expect(aggregator.Summary().Detail).To(Equal(strings.Join([]string{
+				"+-----------+---------+----------------+-----------------+----------------+",
+				"| COMPONENT | TIMEOUT |    LIVENESS    |    READINESS    |     DETAIL     |",
+				"+-----------+---------+----------------+-----------------+----------------+",
+				"| source1   | 100ms   | -              | reporting ready |                |",
+				"| source2   | 0s      | reporting live | reporting ready | but very busy! |",
+				"+-----------+---------+----------------+-----------------+----------------+",
+			}, "\n")))
 		})
 
 		Context("after waiting past one reporter's timeout", func() {
