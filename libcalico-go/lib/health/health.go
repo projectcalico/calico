@@ -147,20 +147,6 @@ func NewHealthAggregator() *HealthAggregator {
 		reporters:    map[string]*reporterState{},
 		httpServeMux: http.NewServeMux(),
 	}
-	genResponse := func(rsp http.ResponseWriter, quality string, state bool, detail string) {
-		status := StatusBad
-		if state {
-			log.Debug("Health: " + quality)
-			status = StatusGood
-			if len(detail) == 0 {
-				status = StatusGoodNoContent
-			}
-		} else {
-			log.Warn("Health: not " + quality)
-		}
-		rsp.WriteHeader(status)
-		rsp.Write([]byte(detail))
-	}
 	aggregator.httpServeMux.HandleFunc("/readiness", func(rsp http.ResponseWriter, req *http.Request) {
 		log.Debug("GET /readiness")
 		summary := aggregator.Summary()
@@ -172,6 +158,21 @@ func NewHealthAggregator() *HealthAggregator {
 		genResponse(rsp, "live", summary.Live, summary.Detail)
 	})
 	return aggregator
+}
+
+func genResponse(rsp http.ResponseWriter, quality string, state bool, detail string) {
+	status := StatusBad
+	if state {
+		log.Debug("Health: " + quality)
+		status = StatusGood
+		if len(detail) == 0 {
+			status = StatusGoodNoContent
+		}
+	} else {
+		log.Warn("Health: not " + quality)
+	}
+	rsp.WriteHeader(status)
+	rsp.Write([]byte(detail))
 }
 
 // Summary calculates the current overall health for a HealthAggregator.
