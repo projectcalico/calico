@@ -141,11 +141,11 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
-		// Temporarily reduce the watch and list poll interval to make the tests faster.
+		// Temporarily reduce the poll interval to make the tests faster.
 		// Since we are timing the processing, we still need the interval to be sufficiently
 		// large to make the measurements more accurate.
-		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
-		setWatchIntervals(500*time.Millisecond, 2000*time.Millisecond)
+		defer setWatchPollInterval(watchersyncer.WatchPollInterval)
+		setWatchPollInterval(2000 * time.Millisecond)
 
 		// All of the events should have been consumed within a time frame dictated by the
 		// list retry and poll timers.
@@ -178,7 +178,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUnchanged()
-		//rs.ExpectStatusUpdate(api.InSync)
+		// rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r1, nil)
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, notSupported)
@@ -200,13 +200,14 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUnchanged()
 
 		// Sim. for resource 3.  We send in these client responses:
+		// - list succeeds; initial backoff 100ms
+		// - watch fails with not supported (watch interval); poll interval long so backoff resets to 100ms
+		// - list fails; backoff 200ms
 		// - list succeeds
-		// - watch fails with not supported (watch interval)
-		// - list fails (list interval)
-		// - list succeeds
-		// - watch succeeds ... total 6s
+		// - watch succeeds ... total 5.6s
 		By("Driving a bunch of List complete, Watch fail events for the 3rd resource type")
-		expectedDuration = watchersyncer.WatchPollInterval * watchersyncer.ListRetryInterval
+		expBackoff := (100 + 100 + 200) * time.Millisecond
+		expectedDuration = watchersyncer.WatchPollInterval + expBackoff
 		minDuration = 70 * expectedDuration / 100
 		maxDuration = 130 * expectedDuration / 100
 		before = time.Now()
@@ -269,8 +270,8 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		eventL3Added1 := addEvent(l3Key1)
 
 		// Temporarily reduce the watch and list poll interval to make the tests faster.
-		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
-		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond)
+		defer setWatchPollInterval(watchersyncer.WatchPollInterval)
+		setWatchPollInterval(500 * time.Millisecond)
 
 		By("Syncing a single result for resource 1 and creating the watch")
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -359,8 +360,8 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		eventL1Modified4_2 := modifiedEvent(l1Key4)
 
 		// Temporarily reduce the watch and list poll interval to make the tests faster.
-		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
-		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond)
+		defer setWatchPollInterval(watchersyncer.WatchPollInterval)
+		setWatchPollInterval(500 * time.Millisecond)
 
 		By("returning a sync list with three entries and then failing the watch")
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -704,10 +705,8 @@ var (
 	}
 )
 
-// Set the list interval and watch interval in the WatcherSyncer.  We do this to reduce
-// the test time.
-func setWatchIntervals(listRetryInterval, watchPollInterval time.Duration) {
-	watchersyncer.ListRetryInterval = listRetryInterval
+// Set the watch interval in the WatcherSyncer.  We do this to reduce the test time.
+func setWatchPollInterval(watchPollInterval time.Duration) {
 	watchersyncer.WatchPollInterval = watchPollInterval
 }
 
