@@ -75,6 +75,7 @@ clean:
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
 	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
+	rm -rf ./hack/bin
 
 ###############################################################################
 # CI / test targets
