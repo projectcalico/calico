@@ -43,7 +43,7 @@ CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].title')
 include ../lib.Makefile
 
 ##############################################################################
-serve: bin/helm install-calico-windows-script
+serve: bin/helm
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
 	# When set to 'pages', jekyll starts in safe mode which means it will not
 	# load any plugins. Since we're no longer running in github-pages, but would
@@ -59,7 +59,7 @@ serve: bin/helm install-calico-windows-script
 	  jekyll/jekyll:$(JEKYLL_VERSION) jekyll serve --incremental $(CONFIG)
 
 .PHONY: build
-_site build: bin/helm install-calico-windows-script
+_site build: bin/helm
 	docker run --rm \
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
@@ -248,29 +248,3 @@ build-operator-reference:
 	           go mod download all && go build && \
 	           ./gen-crd-api-reference-docs -config /go/src/$(PACKAGE_NAME)/reference/installation/config.json \
 	                   -api-dir github.com/tigera/operator/api -out-file /go/src/$(PACKAGE_NAME)/reference/installation/_api.html'
-
-WINDOWS_GEN_INSTALL_SCRIPT_BIN := hack/bin/gen-install-calico-windows-script
-
-# This is either "Calico" or "Calico Enterprise"
-WINDOWS_INSTALL_SCRIPT_PRODUCT ?= Calico
-# Base URL of the Calico for Windows installation zip archive.
-# This can be overridden for dev releases.
-WINDOWS_ARCHIVE_BASE_URL ?= https://docs.projectcalico.org
-
-WINDOWS_INSTALL_SCRIPT := scripts/install-calico-windows.ps1
-
-# Build the tool to generate the install-calico-windows.ps1 installation script.
-$(WINDOWS_GEN_INSTALL_SCRIPT_BIN):
-	mkdir -p hack/bin
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-	$(GIT_CONFIG_SSH) \
-	go build -o $@ ./hack/gen-install-calico-windows-script'
-
-# Generate the install-calico-windows.ps1 installation script.
-# For dev releases, override WINDOWS_ARCHIVE_BASE_URL.
-install-calico-windows-script: $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
-	$(WINDOWS_GEN_INSTALL_SCRIPT_BIN) \
-		-product "$(WINDOWS_INSTALL_SCRIPT_PRODUCT)" \
-		-version $(GIT_VERSION) \
-		-templatePath hack/gen-install-calico-windows-script/install-calico-windows.ps1.tpl \
-		-baseUrl $(WINDOWS_ARCHIVE_BASE_URL) > $(WINDOWS_INSTALL_SCRIPT)

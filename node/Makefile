@@ -549,10 +549,11 @@ $(WINDOWS_UPGRADE_SCRIPT): $(WINDOWS_UPGRADE_DIST_STAGE)
 $(WINDOWS_UPGRADE_INSTALL_ZIP): build-windows-archive $(WINDOWS_UPGRADE_DIST_STAGE)
 	cp $(WINDOWS_ARCHIVE) $@
 
-# Copy over the install-calico-windows.ps1 installation script.
+# Build the docs site and copy over the install-calico-windows.ps1 script.
 $(WINDOWS_INSTALL_SCRIPT):
 	-mkdir -p dist
-	cp $(CURDIR)/../calico/scripts/install-calico-windows.ps1 $@
+	make -C ../calico clean _site
+	cp $(CURDIR)/../calico/_site/scripts/install-calico-windows.ps1 $@
 
 # Copy the install-calico-windows.ps1 script to the temporary directory where we
 # build the windows upgrade zip file.
