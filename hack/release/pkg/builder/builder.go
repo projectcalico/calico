@@ -250,7 +250,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{"calico/scripts/install-calico-windows.ps1", uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"calico/_site/scripts/install-calico-windows.ps1", uploadDir}, nil); err != nil {
 		return err
 	}
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
