@@ -2404,6 +2404,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"bpfEnforceStrictRPF": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFEnforceStrictRPF enforce strict RPF on all interfaces with BPF programs regardless of what is the per-interfaces or global setting. [Default: true]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",
