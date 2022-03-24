@@ -998,16 +998,47 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, wgEncryptHost, bypassHostConntrack bool) []*Chain {
+func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
+	wgEncryptHost, bypassHostConntrack, enforceRPF bool) []*Chain {
 
-	var rawRules []Rule
+	var rawRules, rpfRules []Rule
 
 	rpfChainName := ChainNamePrefix + "RPF"
 
-	rawRules = append(rawRules,
-		Rule{
+	if enforceRPF {
+		rawRules = append(rawRules, Rule{
 			Action: JumpAction{Target: rpfChainName},
-		},
+		})
+
+		// Do not RPF check what is marked as to be skipped by RPF check.
+		rpfRules = []Rule{{
+			Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
+			Action: ReturnAction{},
+		}}
+
+		// For anything we approved for forward, permit accept_local as it is
+		// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
+		rpfRules = append(rpfRules, Rule{
+			Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
+			Action: ReturnAction{},
+		})
+
+		// Do the full RPF check and dis-allow accept_local for anything else.
+		rpfRules = append(rpfRules, RPFilter(ipVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
+			r.OpenStackSpecialCasesEnabled, false)...)
+
+		if r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && wgEncryptHost {
+			// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
+			// check allows it.
+			log.Debug("Adding Wireguard iptables rule chain")
+			rawRules = append(rawRules, Rule{
+				Match:  nil,
+				Action: JumpAction{Target: ChainSetWireguardIncomingMark},
+			})
+		}
+	}
+
+	rawRules = append(rawRules,
 		Rule{
 			Match:  Match().NotDestAddrType(AddrTypeLocal),
 			Action: GotoAction{Target: ChainRawUntrackedFlows},
@@ -1019,33 +1050,6 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, wgEncryptH
 			Comment: []string{"Jump to target for packets with Bypass mark"},
 		},
 	)
-
-	// Do not RPF check what is marked as to be skipped by RPF check.
-	rpfRules := []Rule{{
-		Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
-		Action: ReturnAction{},
-	}}
-
-	// For anything we approved for forward, permit accept_local as it is
-	// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
-	rpfRules = append(rpfRules, Rule{
-		Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
-		Action: ReturnAction{},
-	})
-
-	// Do the full RPF check and dis-allow accept_local for anything else.
-	rpfRules = append(rpfRules, RPFilter(ipVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
-		r.OpenStackSpecialCasesEnabled, false)...)
-
-	if r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && wgEncryptHost {
-		// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
-		// check allows it.
-		log.Debug("Adding Wireguard iptables rule chain")
-		rawRules = append(rawRules, Rule{
-			Match:  nil,
-			Action: JumpAction{Target: ChainSetWireguardIncomingMark},
-		})
-	}
 
 	rawPreroutingChain := &Chain{
 		Name:  ChainRawPrerouting,
@@ -1117,10 +1121,13 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, wgEncryptH
 		bpfUntrackedFlowChain,
 		r.failsafeOutChain("raw", ipVersion),
 		r.WireguardIncomingMarkChain(),
-		&Chain{
+	}
+
+	if enforceRPF {
+		chains = append(chains, &Chain{
 			Name:  rpfChainName,
 			Rules: rpfRules,
-		},
+		})
 	}
 
 	if ipVersion == 4 {
