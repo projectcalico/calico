@@ -16,11 +16,24 @@ may be tied to particular implementation choices inside kube-controllers we can'
 metrics will persist across releases.  However, we aim not to make any spurious changes to
 existing metrics.
 
-| Name          | Description     |
-| ------------- | --------------- |
-| `ipam_blocks_per_node` | Number of IPAM blocks, indexed by the node to which they have affinity. |
-| `ipam_allocations_per_node` | Number of Calico IP allocations, indexed by node on which the allocation was made. |
-| `ipam_allocations_borrowed_per_node` | Number of Calico IP allocations borrowed from a non-affine block, indexed by node on which the allocation was made. |
+| Metric Name  | Labels  | Description |
+|--------------|---------|-------------|
+| `ipam_allocations_in_use` | ippool, node | Number of Calico IP allocations currently in use by a workload or interface. |
+| `ipam_allocations_borrowed` | ippool, node | Number of Calico IP allocations currently in use where the allocation was borrowed from a block affine to another node. |
+| `ipam_allocations_gc_candidates` | ippool, node | Number of Calico IP allocations currently marked by the GC as potential leaks. This metric returns to zero under normal GC operation. |
+| `ipam_allocations_gc_reclamations` | ippool, node | Count of Calico IP allocations that have been reclaimed by the GC. Increase of this counter corresponds with a decrease of the candidates gauge under normal operation. |
+| `ipam_blocks` | ippool, node | Number of IPAM blocks. |
+| `ipam_ippool_size` | ippool  | Number of IP addresses in the IP Pool CIDR. |
+| `ipam_blocks_per_node` | node    | Number of IPAM blocks, indexed by the node to which they have affinity. Prefer `ipam_blocks` for new integrations. |
+| `ipam_allocations_per_node` | node    | Number of Calico IP allocations, indexed by node on which the allocation was made. Prefer `ipam_allocations_in_use` for new integrations. |
+| `ipam_allocations_borrowed_per_node` | node    | Number of Calico IP allocations borrowed from a non-affine block, indexed by node on which the allocation was made. Prefer `ipam_allocations_borrowed` for new integrations. |
+
+Labels can be interpreted as follows:
+
+| Label Name | Description |
+|------------|-------------|
+| `node`     | For allocation metrics, the node on which the allocation was made. For block metrics, the node for which the block has affinity. If the block has no affinity, value will be `no_affinity`. |
+| `ippool`   | The IP Pool that the IPAM block occupies. If there is no IP Pool which matches the block, value will be `no_ippool`. |
 
 Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
 metrics along with their help text and type information.

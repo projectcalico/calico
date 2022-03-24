@@ -175,7 +175,11 @@ func NewNodeController(ctx context.Context,
 func getK8sNodeName(calicoNode api.Node) (string, error) {
 	for _, orchRef := range calicoNode.Spec.OrchRefs {
 		if orchRef.Orchestrator == "k8s" {
-			return orchRef.NodeName, nil
+			if orchRef.NodeName == "" {
+				return "", &ErrorNotKubernetes{calicoNode.Name}
+			} else {
+				return orchRef.NodeName, nil
+			}
 		}
 	}
 	return "", &ErrorNotKubernetes{calicoNode.Name}
