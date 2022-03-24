@@ -35,7 +35,7 @@ layout: null
 Param(
     # Note: we don't publish a release artifact for the "master" branch. To test
     # against master, build calico-windows.zip from projectcalico/node.
-{%- if site.url == "https://docs.projectcalico.org" %}
+{%- if site.url contains "tigera.io" %}
     [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/{{site.data.versions.first.components["calico/node"].version}}/",
 {%- else %}
     [parameter(Mandatory = $false)] $ReleaseBaseURL="{{site.url}}/files/windows/",
