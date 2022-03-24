@@ -982,6 +982,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 					It("should not be able to spoof TCP", func() {
+						By("Disabling dev RPF")
+						setRPF(felixes, testOpts.tunnel, 0, 0)
 						// Make sure the workload is up and has configured its routes.
 						By("Having basic connectivity")
 						cc.Expect(Some, w[0][0], w[1][0])
@@ -1076,6 +1078,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "udp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 					It("should not be able to spoof UDP", func() {
+						By("Disabling dev RPF")
+						setRPF(felixes, testOpts.tunnel, 0, 0)
+						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf."+w[1][0].InterfaceName+".rp_filter=0")
+						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf."+w[1][1].InterfaceName+".rp_filter=0")
+
 						By("allowing any traffic", func() {
 							pol.Spec.Ingress = []api.Rule{
 								{
@@ -3445,4 +3452,22 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
 		"Service endpoints didn't get created? Is controller-manager happy?")
 	return testSvc
+}
+
+func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
+	for _, felix := range felixes {
+		// N.B. we only support environment with not so strict RPF - can be
+		// strict per iface, but not for all.
+		felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+strconv.Itoa(all))
+		switch tunnel {
+		case "none":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+strconv.Itoa(main))
+		case "ipip":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+strconv.Itoa(main))
+		case "wireguard":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+strconv.Itoa(main))
+		case "vxlan":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+strconv.Itoa(main))
+		}
+	}
 }
