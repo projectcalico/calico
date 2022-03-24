@@ -14,17 +14,6 @@ layout: null
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-{%- if site.prodname == "Calico" %}
-{%- assign installName = "Calico for Windows" %}
-{%- assign rootDir = "CalicoWindows" %}
-{%- assign zipFileName = "calico-windows.zip" %}
-{%- else %}
-{%- assign installName = "Tigera Calico for Windows" %}
-{%- assign rootDir = "TigeraCalico" %}
-{%- assign zipFileName = "tigera-calico-windows.zip" %}
-{%- endif %}
-
 <#
 .DESCRIPTION
     This script installs and starts {{site.prodname}} services on a Windows node.
@@ -35,7 +24,7 @@ layout: null
 Param(
     # Note: we don't publish a release artifact for the "master" branch. To test
     # against master, build calico-windows.zip from projectcalico/node.
-{%- if site.url contains "tigera.io" %}
+{%- if site.url contains "projectcalico" %}
     [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/{{site.data.versions.first.components["calico/node"].version}}/",
 {%- else %}
     [parameter(Mandatory = $false)] $ReleaseBaseURL="{{site.url}}/files/windows/",
@@ -301,18 +290,20 @@ function SetAKSCalicoStaticRules {
 
 function StartCalico()
 {
-    Write-Host "`nStart {{installName}}...`n"
+    Write-Host "`nStart Calico for Windows...`n"
 
     pushd
     cd $RootDir
     .\install-calico.ps1
     popd
-    Write-Host "`n{{installName}} Started`n"
+    Write-Host "`nCalico for Windows Started`n"
 }
 
 $BaseDir="c:\k"
-$RootDir="c:\{{rootDir}}"
-$CalicoZip="c:\{{zipFileName}}"
+# Note: the directory name depends on the product variant.
+$RootDir="c:\CalicoWindows"
+# Note: the zip file differs depends on the product variant.
+$CalicoZip="c:\calico-windows.zip"
 
 # Must load the helper modules before doing anything else.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -332,14 +323,9 @@ ipmo -force $helperv2
 
 if (!(Test-Path $CalicoZip))
 {
-{%- if site.prodname == "Calico Enterprise" %}
-    throw "Cannot find {{installName}} zip file $CalicoZip."
-{%- else if site.prodname == "Calico" %}
-    Write-Host "$CalicoZip not found, downloading {{installName}} release..."
+    # Note: zip file location depends on the product variant.
+    Write-Host "$CalicoZip not found, downloading Calico for Windows release..."
     DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\calico-windows.zip
-{%- else %}
-    throw "Invalid product name - did prodname in _config.yml change?"
-{%- endif %}
 }
 
 $platform=GetPlatformType
@@ -354,10 +340,10 @@ Exit
 }
 
 Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
-Write-Host "Unzip {{installName}} release..."
+Write-Host "Unzip Calico for Windows release..."
 Expand-Archive -Force $CalicoZip c:\
 
-Write-Host "Setup {{installName}}..."
+Write-Host "Setup Calico for Windows..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
 SetConfigParameters -OldString '<your etcd endpoints>' -NewString "$EtcdEndpoints"
 
@@ -372,7 +358,7 @@ SetConfigParameters -OldString '<your service cidr>' -NewString $ServiceCidr
 SetConfigParameters -OldString '<your dns server ips>' -NewString $DNSServerIPs
 
 if ($platform -EQ "aks") {
-    Write-Host "Setup {{installName}} for AKS..."
+    Write-Host "Setup Calico for Windows for AKS..."
     $Backend="none"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
@@ -387,7 +373,7 @@ if ($platform -EQ "eks") {
 
     $token = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token-ttl-seconds" = "300"} -Method PUT -Uri http://169.254.169.254/latest/api/token -ErrorAction Ignore
     $awsNodeName = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token" = $token} -Method GET -Uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup {{installName}} for EKS, node name $awsNodeName ..."
+    Write-Host "Setup Calico for Windows for EKS, node name $awsNodeName ..."
     $Backend = "none"
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
@@ -400,7 +386,7 @@ if ($platform -EQ "eks") {
 if ($platform -EQ "ec2") {
     $token = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token-ttl-seconds" = "300"} -Method PUT -Uri http://169.254.169.254/latest/api/token -ErrorAction Ignore
     $awsNodeName = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token" = $token} -Method GET -Uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup {{installName}} for AWS, node name $awsNodeName ..."
+    Write-Host "Setup Calico for Windows for AWS, node name $awsNodeName ..."
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
 
@@ -415,7 +401,7 @@ if ($platform -EQ "ec2") {
 }
 if ($platform -EQ "gce") {
     $gceNodeName = Invoke-RestMethod -UseBasicParsing -Headers @{"Metadata-Flavor"="Google"} "http://metadata.google.internal/computeMetadata/v1/instance/hostname" -ErrorAction Ignore
-    Write-Host "Setup {{installName}} for GCE, node name $gceNodeName ..."
+    Write-Host "Setup Calico for Windows for GCE, node name $gceNodeName ..."
     $gceNodeNameQuote = """$gceNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$gceNodeNameQuote"
 
@@ -440,7 +426,7 @@ if ($platform -EQ "bare-metal") {
 }
 
 if ($DownloadOnly -EQ "yes") {
-    Write-Host "Downloaded {{installName}}. Update c:\{{rootDir}}\config.ps1 and run c:\{{rootDir}}\install-calico.ps1"
+    Write-Host "Downloaded Calico for Windows installation zip file."
     Exit
 }
 
