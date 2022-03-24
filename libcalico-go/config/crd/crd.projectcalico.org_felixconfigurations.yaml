@@ -161,6 +161,11 @@ spec:
                   are inclusive. [Default: 20000:29999]'
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
+              bpfEnforceStrictRPF:
+                description: 'BPFEnforceStrictRPF enforce strict RPF on all interfaces
+                  with BPF programs regardless of what is the per-interfaces or global
+                  setting. [Default: true]'
+                type: boolean
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s
                   top-level iptables chains by inserting a rule at the top of the
