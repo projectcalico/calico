@@ -16,8 +16,10 @@ package winfv_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -70,6 +72,11 @@ func kubectlExec(command string) error {
 		log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).WithError(err).Error("Error running kubectl command")
 		return err
 	}
+	if strings.Contains(stderr, "timed out") {
+		log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).WithError(err).Error("kubectl stderr indicates timeout")
+		return errors.New("timed out")
+	}
+	log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).Info("kubectl command succeeded")
 	return nil
 }
 
