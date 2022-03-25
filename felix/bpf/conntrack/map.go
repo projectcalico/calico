@@ -183,6 +183,14 @@ func (e Value) AsBytes() []byte {
 	return e[:]
 }
 
+func (e *Value) SetLegA2B(leg Leg) {
+	copy(e[24:36], leg.AsBytes())
+}
+
+func (e *Value) SetLegB2A(leg Leg) {
+	copy(e[36:48], leg.AsBytes())
+}
+
 func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint16) {
 	binary.LittleEndian.PutUint64(v[:8], uint64(created))
 	binary.LittleEndian.PutUint64(v[8:16], uint64(lastSeen))
@@ -197,8 +205,8 @@ func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Le
 
 	initValue(&v, created, lastSeen, TypeNormal, flags)
 
-	copy(v[24:36], legA.AsBytes())
-	copy(v[36:48], legA.AsBytes())
+	v.SetLegA2B(legA)
+	v.SetLegB2A(legB)
 
 	return v
 }
@@ -223,8 +231,8 @@ func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, leg
 
 	initValue(&v, created, lastSeen, TypeNATReverse, flags)
 
-	copy(v[24:36], legA.AsBytes())
-	copy(v[36:48], legA.AsBytes())
+	v.SetLegA2B(legA)
+	v.SetLegB2A(legB)
 
 	copy(v[48:52], origIP.To4())
 	binary.LittleEndian.PutUint16(v[52:54], origPort)

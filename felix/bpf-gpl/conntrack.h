@@ -594,6 +594,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		}
 		if (tcp_recycled(syn, tracking_v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			cali_v4_ct_delete_elem(&k);
+			cali_v4_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
 		}
 
@@ -653,10 +655,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		if (tcp_recycled(syn, v)) {
-			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
-			goto out_lookup_fail;
-		}
+		// N.B. we do not check for tcp_recycled because this cannot be the first
+		// SYN that is opening a new connection. This must be returning traffic.
 		if (srcLTDest) {
 			CALI_VERB("CT-ALL REV src_to_dst A->B\n");
 			src_to_dst = &v->a_to_b;
@@ -717,6 +717,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		CALI_CT_DEBUG("Hit! NORMAL entry.\n");
 		if (tcp_recycled(syn, v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			cali_v4_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
 		CALI_CT_VERB("Created: %llu.\n", v->created);
