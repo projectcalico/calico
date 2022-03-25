@@ -1198,12 +1198,16 @@ deny:
 SEC("classifier/tc/drop")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
-	CALI_DEBUG("Entering calico_tc_skb_drop\n");
+	CALI_DEBUG("Entering calico_tc_skb_drop - DENY\n");
 
-	struct cali_tc_state *state = state_get();
-	if (!state) {
-		CALI_DEBUG("State map lookup failed: no event generated\n");
-		goto drop;
+	struct cali_tc_state *state;
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
+		state = state_get();
+		if (!state) {
+			CALI_DEBUG("State map lookup failed: no event generated\n");
+			return TC_ACT_SHOT;
+		}
 	}
 
 	CALI_DEBUG("proto=%d\n", state->ip_proto);
@@ -1216,7 +1220,6 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	CALI_DEBUG("flags=0x%x\n", state->flags);
 	CALI_DEBUG("ct_rc=%d\n", state->ct_result.rc);
 
-drop:
 	return TC_ACT_SHOT;
 }
 
