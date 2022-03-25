@@ -2395,7 +2395,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
-					"BPFEnforceStrictRPF": {
+					"bpfEnforceStrictRPF": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnforceStrictRPF enforce strict RPF on all interfaces with BPF programs regardless of what is the per-interfaces or global setting. [Default: true]",
 							Type:        []string{"boolean"},
@@ -2499,7 +2499,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"BPFEnforceStrictRPF"},
 			},
 		},
 		Dependencies: []string{
