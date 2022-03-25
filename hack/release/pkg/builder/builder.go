@@ -204,8 +204,11 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 
-	// Add in the already-buily windows zip archive and helm chart.
+	// Add in the already-built windows zip archive, the Windows install script, and the helm chart.
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
+		return err
+	}
+	if _, err := r.runner.Run("cp", []string{"calico/_site/scripts/install-calico-windows.ps1", uploadDir}, nil); err != nil {
 		return err
 	}
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
