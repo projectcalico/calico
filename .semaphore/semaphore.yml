@@ -550,7 +550,6 @@ blocks:
   task:
     prologue:
       commands:
-      - checkout
       - cd networking-calico
       - sudo apt-get install -y python-all-dev python3-all-dev python3-pip
       - sudo pip3 install tox
