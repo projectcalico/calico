@@ -35,6 +35,15 @@ NAME_PREFIX="$CLUSTER_NAME" KUBE_VERSION="${K8S_VERSION}" WINDOWS_KEYPAIR_NAME="
 
 # Run FV
 MASTER_IP=$(grep ubuntu@ fv.log | cut -d '@' -f2)
+
+# Stop for debug
+echo "Check for pause file and master ip : $MASTER_IP"
+while [ -f /home/semaphore/pause-for-debug ];
+do
+    echo "#"
+    sleep 30
+done
+
 SSH_CMD=$(echo ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${MASTER_CONNECT_KEY} ubuntu@${MASTER_IP})
 
 ${SSH_CMD} ls -ltr /home/ubuntu
