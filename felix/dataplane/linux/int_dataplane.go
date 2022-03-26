@@ -34,7 +34,6 @@ import (
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -60,7 +59,6 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
 	"github.com/projectcalico/calico/felix/wireguard"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
@@ -314,7 +312,7 @@ const (
 	aksMTUOverhead       = 100
 )
 
-func NewIntDataplaneDriver(config Config, ippoolKVList *model.KVPairList) *InternalDataplane {
+func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -689,8 +687,11 @@ func NewIntDataplaneDriver(config Config, ippoolKVList *model.KVPairList) *Inter
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
-		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpIPIPAddrs(ippoolKVList)
+		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
+		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
+			// Start a cleanup goroutine not to block felix if it needs to retry
+			go cleanUpIPIPAddrs()
+		}
 	}
 
 	// Add a manager for wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -926,14 +927,9 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 	}
 }
 
-func cleanUpIPIPAddrs(ippoolKVList *model.KVPairList) {
+func cleanUpIPIPAddrs() {
 	// If IPIP is not enabled, check to see if there is are addresses in the IPIP device and delete them if there are.
 	log.Debug("Checking if we need to clean up the IPIP device")
-
-	if ippoolKVList == nil || len(ippoolKVList.KVPairs) == 0 {
-		log.Debug("Skipping IPIP cleanup because there is no IP pool information or no IP pools are configured")
-		return
-	}
 
 	var errFound bool
 
@@ -965,21 +961,10 @@ cleanupRetry:
 		// imperfect solution as it may leave "dangling" addresses that were configured
 		// by Calico in some cases (such as an IP pool that was removed).
 		for _, oldAddr := range addrs {
-			for _, kvp := range ippoolKVList.KVPairs {
-				pool, _ := kvp.Value.(*apiv3.IPPool)
-				_, poolCidr, err := net.ParseCIDR(pool.Spec.CIDR)
-				if err != nil {
-					log.WithError(err).Errorf("IPIP disabled and failed to parse IP pool CIDR %s.", pool.Spec.CIDR)
-					errFound = true
-					continue cleanupRetry
-				}
-				if poolCidr.Contains(oldAddr.IP) {
-					if err := netlink.AddrDel(link, &oldAddr); err != nil {
-						log.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s.", oldAddr.IPNet)
-						errFound = true
-						continue cleanupRetry
-					}
-				}
+			if err := netlink.AddrDel(link, &oldAddr); err != nil {
+				log.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s.", oldAddr.IPNet)
+				errFound = true
+				continue cleanupRetry
 			}
 		}
 	}

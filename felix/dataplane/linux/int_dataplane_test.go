@@ -98,7 +98,7 @@ var _ = Describe("Constructor test", func() {
 	})
 
 	It("should be constructable", func() {
-		var dp = intdataplane.NewIntDataplaneDriver(dpConfig, nil)
+		var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
 		Expect(dp).ToNot(BeNil())
 	})
 
@@ -109,7 +109,7 @@ var _ = Describe("Constructor test", func() {
 		})
 
 		It("should be constructable", func() {
-			var dp = intdataplane.NewIntDataplaneDriver(dpConfig, nil)
+			var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
 			Expect(dp).ToNot(BeNil())
 		})
 	})

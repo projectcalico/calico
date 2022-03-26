@@ -159,9 +159,29 @@ class TestIPIP(TestBase):
             # This triggers a felix restart, so use assert_tunl_ip_consistently()
             self.assert_tunl_ip_consistently(host, ipv4_pool, expect=False)
 
-            # Test that re-adding the pool triggers the confd watch and we get an IP
+            # Test that re-adding the pool makes the tunl IP be assigned from that IP pool again.
             self.pool_action(host, "create", ipv4_pool, ipip_mode="Always")
-            self.assert_tunl_ip(host, ipv4_pool, expect=True)
+            # This triggers a felix restart, so use assert_tunl_ip_consistently()
+            self.assert_tunl_ip_consistently(host, ipv4_pool, expect=True)
+
+            # Test that explicitly disabling IPIP on FelixConfig does not remove the tunl IP.
+            self.add_felix_config(host, "default", {'ipipEnabled': False})
+            # This triggers a felix restart, so use assert_tunl_ip_consistently()
+            self.assert_tunl_ip_consistently(host, ipv4_pool, expect=True)
+
+            # Test that removing the pool does not remove the tunl IP because of the FelixConfiguration.
+            self.pool_action(host, "delete", ipv4_pool, ipip_mode="Always")
+            self.assert_tunl_ip_consistently(host, ipv4_pool, expect=True)
+
+            # Test that removing the default FelixConfiguration makes the tunl IP be cleaned up.
+            host.delete_all_resource("FelixConfiguration")
+            # This triggers a felix restart, so use assert_tunl_ip_consistently()
+            self.assert_tunl_ip_consistently(host, ipv4_pool, expect=False)
+
+            # Test that re-adding the pool makes the tunl IP be assigned from that IP pool again.
+            self.pool_action(host, "create", ipv4_pool, ipip_mode="Always")
+            # This triggers a felix restart, so use assert_tunl_ip_consistently()
+            self.assert_tunl_ip_consistently(host, ipv4_pool, expect=True)
 
             # Test that by adding another pool, then deleting the first,
             # we remove the original IP, and allocate a new one from the new pool
@@ -279,6 +299,18 @@ class TestIPIP(TestBase):
             testdata['spec']['natOutgoing'] = nat_outgoing
         host.writejson("testfile", testdata)
         host.calicoctl("%s -f testfile" % action)
+
+    @staticmethod
+    def add_felix_config(host, name, spec):
+        felix_config = {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'FelixConfiguration',
+            'metadata': {
+                'name': name,
+            },
+            'spec': spec,
+        }
+        host.add_resource(felix_config)
 
     def assert_tunl_ip(self, host, ip_network, expect=True):
         """

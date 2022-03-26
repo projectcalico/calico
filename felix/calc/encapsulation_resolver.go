@@ -111,7 +111,7 @@ type EncapsulationCalculator struct {
 	vxlanPools map[string]struct{}
 }
 
-func NewEncapsulationCalculator(config *config.Config, ippoolKVList *model.KVPairList) *EncapsulationCalculator {
+func NewEncapsulationCalculator(config *config.Config, ippoolKVPList *model.KVPairList) *EncapsulationCalculator {
 	if config == nil {
 		log.Panic("Starting EncapsulationResolver with config==nil.")
 	}
@@ -122,15 +122,15 @@ func NewEncapsulationCalculator(config *config.Config, ippoolKVList *model.KVPai
 		vxlanPools: map[string]struct{}{},
 	}
 
-	if ippoolKVList != nil {
-		encapCalc.initPools(ippoolKVList)
+	if ippoolKVPList != nil {
+		encapCalc.initPools(ippoolKVPList)
 	}
 
 	return encapCalc
 }
 
-func (c *EncapsulationCalculator) initPools(ippoolKVList *model.KVPairList) {
-	for _, kvp := range ippoolKVList.KVPairs {
+func (c *EncapsulationCalculator) initPools(ippoolKVPList *model.KVPairList) {
+	for _, kvp := range ippoolKVPList.KVPairs {
 		err := c.handlePool(*kvp)
 		if err != nil {
 			log.Infof("error handling update %+v: %v. Ignoring.", *kvp, err)
@@ -175,6 +175,11 @@ func (c *EncapsulationCalculator) handleModelPool(p model.KVPair) error {
 // IP pools retrieved from the client.
 func (c *EncapsulationCalculator) handleAPIPool(p model.KVPair) error {
 	if p.Value == nil {
+		// Currently, API pools are only retrieved from an API List() on Felix startup and
+		// p.Key is nil in this case.
+		// When handling a deletion of an API pool, p.Key will be a model.ResourceKey
+		// with Kind apiv3.KindIPPool and a name. A map from IP pool names to CIDRs will
+		// be required to handle these.
 		return fmt.Errorf("API pool KVPair Value is nil")
 	}
 
