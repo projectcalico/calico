@@ -32,7 +32,6 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	windataplane "github.com/projectcalico/calico/felix/dataplane/windows"
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
@@ -40,8 +39,7 @@ func StartDataplaneDriver(configParams *config.Config,
 	healthAggregator *health.HealthAggregator,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset,
-	ippoolKVList *model.KVPairList) (DataplaneDriver, *exec.Cmd) {
+	k8sClientSet *kubernetes.Clientset) (DataplaneDriver, *exec.Cmd) {
 	log.Info("Using Windows dataplane driver.")
 
 	dpConfig := windataplane.Config{
