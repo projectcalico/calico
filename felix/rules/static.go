@@ -999,26 +999,47 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 }
 
 func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*Chain {
+
 	rawPreroutingChain := &Chain{
 		Name: ChainRawPrerouting,
 		Rules: []Rule{
-			/*Rule{
+			Rule{
+				Match:  Match().NotDestAddrType(AddrTypeLocal),
+				Action: GotoAction{Target: ChainRawUntrackedFlows},
+			},
+			Rule{
+				// Return, i.e. no-op, if bypass mark is not set.
+				Match:  Match().MarkMatchesWithMask(tcBypassMark, 0xffffffff),
+				Action: GotoAction{Target: ChainRawBPFUntrackedPolicy},
+			},
+		},
+	}
+
+	bpfUntrackedFlowChain := &Chain{
+		Name: ChainRawUntrackedFlows,
+		Rules: []Rule{
+			Rule{
+				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
+				Action: ReturnAction{},
+			},
+			Rule{
 				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
 				Action: ReturnAction{},
 			},
 			Rule{
 				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
 				Action: ReturnAction{},
-			},*/
+			},
 			Rule{
-				//Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
+				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
 				Action: NoTrackAction{},
 			},
-			/*Rule{
-				// Return, i.e. no-op, if bypass mark is not set.
-				Match:  Match().NotMarkMatchesWithMask(tcBypassMark, 0xffffffff),
-				Action: ReturnAction{},
-			},*/
+		},
+	}
+
+	xdpUntrakedPoliciesChain := &Chain{
+		Name: ChainRawBPFUntrackedPolicy,
+		Rules: []Rule{
 			// At this point we know bypass mark is set, which means that the packet has
 			// been explicitly allowed by untracked ingress policy (XDP).  We should
 			// clear the mark so as not to affect any FROM_HOST processing.  (There
@@ -1029,17 +1050,20 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 			// mark.  Note that we can clear the mark without stomping on anyone else's
 			// logic because no one else's iptables should have had a chance to execute
 			// yet.
-			/*Rule{
+			Rule{
 				Action: SetMarkAction{Mark: 0},
 			},
 			// Now ensure that the packet is not tracked.
 			Rule{
 				Action: NoTrackAction{},
-			},*/
+			},
 		},
 	}
+
 	return []*Chain{
 		rawPreroutingChain,
+		xdpUntrakedPoliciesChain,
+		bpfUntrackedFlowChain,
 		r.failsafeOutChain("raw", ipVersion),
 		r.StaticRawOutputChain(tcBypassMark),
 	}
@@ -1176,18 +1200,6 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *Chain {
 
 func (r *DefaultRuleRenderer) StaticRawOutputChain(tcBypassMark uint32) *Chain {
 	rules := []Rule{
-		/*Rule{
-			Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
-			Action: ReturnAction{},
-		},
-		Rule{
-			Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
-			Action: ReturnAction{},
-		},*/
-		Rule{
-			//Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-			Action: NoTrackAction{},
-		},
 		// For safety, clear all our mark bits before we start.  (We could be in
 		// append mode and another process' rules could have left the mark bit set.)
 		{Action: ClearMarkAction{Mark: r.allCalicoMarkBits()}},
