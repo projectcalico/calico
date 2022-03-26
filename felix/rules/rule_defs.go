@@ -42,8 +42,10 @@ const (
 	ChainFilterForward = ChainNamePrefix + "FORWARD"
 	ChainFilterOutput  = ChainNamePrefix + "OUTPUT"
 
-	ChainRawPrerouting = ChainNamePrefix + "PREROUTING"
-	ChainRawOutput     = ChainNamePrefix + "OUTPUT"
+	ChainRawPrerouting         = ChainNamePrefix + "PREROUTING"
+	ChainRawOutput             = ChainNamePrefix + "OUTPUT"
+	ChainRawUntrackedFlows     = ChainNamePrefix + "untracked-flows"
+	ChainRawBPFUntrackedPolicy = ChainNamePrefix + "untracked-policy"
 
 	ChainFailsafeIn  = ChainNamePrefix + "failsafe-in"
 	ChainFailsafeOut = ChainNamePrefix + "failsafe-out"

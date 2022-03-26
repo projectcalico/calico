@@ -999,14 +999,47 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 }
 
 func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*Chain {
+
 	rawPreroutingChain := &Chain{
 		Name: ChainRawPrerouting,
 		Rules: []Rule{
 			Rule{
+				Match:  Match().NotDestAddrType(AddrTypeLocal),
+				Action: GotoAction{Target: ChainRawUntrackedFlows},
+			},
+			Rule{
 				// Return, i.e. no-op, if bypass mark is not set.
-				Match:  Match().NotMarkMatchesWithMask(tcBypassMark, 0xffffffff),
+				Match:  Match().MarkMatchesWithMask(tcBypassMark, 0xffffffff),
+				Action: GotoAction{Target: ChainRawBPFUntrackedPolicy},
+			},
+		},
+	}
+
+	bpfUntrackedFlowChain := &Chain{
+		Name: ChainRawUntrackedFlows,
+		Rules: []Rule{
+			Rule{
+				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
 				Action: ReturnAction{},
 			},
+			Rule{
+				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
+				Action: ReturnAction{},
+			},
+			Rule{
+				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
+				Action: ReturnAction{},
+			},
+			Rule{
+				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
+				Action: NoTrackAction{},
+			},
+		},
+	}
+
+	xdpUntrakedPoliciesChain := &Chain{
+		Name: ChainRawBPFUntrackedPolicy,
+		Rules: []Rule{
 			// At this point we know bypass mark is set, which means that the packet has
 			// been explicitly allowed by untracked ingress policy (XDP).  We should
 			// clear the mark so as not to affect any FROM_HOST processing.  (There
@@ -1026,8 +1059,11 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 			},
 		},
 	}
+
 	return []*Chain{
 		rawPreroutingChain,
+		xdpUntrakedPoliciesChain,
+		bpfUntrackedFlowChain,
 		r.failsafeOutChain("raw", ipVersion),
 		r.StaticRawOutputChain(tcBypassMark),
 	}
