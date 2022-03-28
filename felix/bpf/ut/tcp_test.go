@@ -34,6 +34,8 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 	defer func() { bpfIfaceName = "" }()
 	bpfIfaceName = "REC1"
 
+	resetCTMap(ctMap) // ensure it is clean
+
 	tcpSyn := &layers.TCP{
 		SrcPort:    54321,
 		DstPort:    7890,
@@ -113,6 +115,8 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 
 	defer func() { bpfIfaceName = "" }()
 	bpfIfaceName = "Rec1"
+
+	resetCTMap(ctMap) // ensure it is clean
 
 	tcpSyn := &layers.TCP{
 		SrcPort:    54321,
