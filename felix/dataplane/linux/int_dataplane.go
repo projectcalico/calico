@@ -55,6 +55,7 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
@@ -186,6 +187,7 @@ type Config struct {
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
 	BPFIpv6Enabled                     bool
+	BPFEnforceStrictRPF                bool
 	KubeProxyMinSyncPeriod             time.Duration
 
 	SidecarAccelerationEnabled bool
@@ -264,6 +266,7 @@ type InternalDataplane struct {
 
 	allManagers             []Manager
 	managersWithRouteTables []ManagerWithRouteTables
+	managersWithRouteRules  []ManagerWithRouteRules
 	ruleRenderer            rules.RuleRenderer
 
 	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
@@ -578,7 +581,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
 		ipsetsManager.AddDataplane(ipSetsV4)
-		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer)
+		bpfRTMgr := newBPFRouteManager(&config, bpfMapContext, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
@@ -951,6 +954,26 @@ type ManagerWithRouteTables interface {
 	GetRouteTableSyncers() []routeTableSyncer
 }
 
+type ManagerWithRouteRules interface {
+	Manager
+	GetRouteRules() []routeRules
+}
+
+// routeTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
+// interface state changes, hooks to queue a full resync and apply routing updates.
+type routeTableSyncer interface {
+	OnIfaceStateChanged(string, ifacemonitor.State)
+	QueueResync()
+	Apply() error
+}
+
+type routeRules interface {
+	SetRule(rule *routerule.Rule)
+	RemoveRule(rule *routerule.Rule)
+	QueueResync()
+	Apply() error
+}
+
 func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 	var rts []routeTableSyncer
 	for _, mrts := range d.managersWithRouteTables {
@@ -960,13 +983,28 @@ func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 	return rts
 }
 
+func (d *InternalDataplane) routeRules() []routeRules {
+	var rrs []routeRules
+	for _, mrrs := range d.managersWithRouteRules {
+		rrs = append(rrs, mrrs.GetRouteRules()...)
+	}
+
+	return rrs
+}
+
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
-	switch mgr := mgr.(type) {
-	case ManagerWithRouteTables:
+	tableMgr, ok := mgr.(ManagerWithRouteTables)
+	if ok {
 		// Used to log the whole manager out here but if we do that then we cause races if the manager has
 		// other threads or locks.
 		log.WithField("manager", reflect.TypeOf(mgr).Name()).Debug("registering ManagerWithRouteTables")
-		d.managersWithRouteTables = append(d.managersWithRouteTables, mgr)
+		d.managersWithRouteTables = append(d.managersWithRouteTables, tableMgr)
+	}
+
+	rulesMgr, ok := mgr.(ManagerWithRouteRules)
+	if ok {
+		log.WithField("manager", mgr).Debug("registering ManagerWithRouteRules")
+		d.managersWithRouteRules = append(d.managersWithRouteRules, rulesMgr)
 	}
 	d.allManagers = append(d.allManagers, mgr)
 }
@@ -1219,62 +1257,12 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	}
 
 	for _, t := range d.iptablesRawTables {
-		// Do not RPF check what is marked as to be skipped by RPF check.
-		rpfRules := []iptables.Rule{{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
-			Action: iptables.ReturnAction{},
-		}}
-
-		// For anything we approved for forward, permit accept_local as it is
-		// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
-		rpfRules = append(rpfRules, iptables.Rule{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
-			Action: iptables.ReturnAction{},
-		})
-
-		// Do the full RPF check and dis-allow accept_local for anything else.
-		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
-			rulesConfig.OpenStackSpecialCasesEnabled, false)...)
-
-		rpfChain := []*iptables.Chain{{
-			Name:  rules.ChainNamePrefix + "RPF",
-			Rules: rpfRules,
-		}}
-		t.UpdateChains(rpfChain)
-
-		var rawRules []iptables.Rule
-		if t.IPVersion == 4 && rulesConfig.WireguardEnabled && len(rulesConfig.WireguardInterfaceName) > 0 &&
-			d.config.Wireguard.EncryptHostTraffic {
-			// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
-			// check allows it.
-			log.Debug("Adding Wireguard iptables rule chain")
-			rawRules = append(rawRules, iptables.Rule{
-				Match:  nil,
-				Action: iptables.JumpAction{Target: rules.ChainSetWireguardIncomingMark},
-			})
-			t.UpdateChain(d.ruleRenderer.WireguardIncomingMarkChain())
-		}
-
-		rawRules = append(rawRules, iptables.Rule{
-			Action: iptables.JumpAction{Target: rpfChain[0].Name},
-		})
-
-		rawChains := []*iptables.Chain{{
-			Name:  rules.ChainRawPrerouting,
-			Rules: rawRules,
-		}}
-		t.UpdateChains(rawChains)
-
+		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(
+			t.IPVersion, d.config.Wireguard.EncryptHostTraffic, d.config.BPFEnforceStrictRPF))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
-
 		if t.IPVersion == 4 {
-			// Iptables for untracked policy.
-			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass)))
-			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
-				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
-			}})
 			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
 			}})
@@ -1743,6 +1731,10 @@ func (d *InternalDataplane) apply() {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
+		for _, r := range d.routeRules() {
+			// Queue a resync on the next Apply().
+			r.QueueResync()
+		}
 		d.forceRouteRefresh = false
 	}
 
@@ -1783,6 +1775,22 @@ func (d *InternalDataplane) apply() {
 		}(r)
 	}
 
+	// Update the routing rules in parallel with the other updates.  We'll wait for it to finish
+	// before we return.
+	var rulesWG sync.WaitGroup
+	for _, r := range d.routeRules() {
+		rulesWG.Add(1)
+		go func(r routeRules) {
+			err := r.Apply()
+			if err != nil {
+				log.Warn("Failed to synchronize routing rules, will retry...")
+				d.dataplaneNeedsSync = true
+			}
+			d.reportHealth()
+			rulesWG.Done()
+		}(r)
+	}
+
 	// Wait for the IP sets update to finish.  We can't update iptables until it has.
 	ipSetsWG.Wait()
 
@@ -1819,6 +1827,9 @@ func (d *InternalDataplane) apply() {
 
 	// Wait for the route updates to finish.
 	routesWG.Wait()
+
+	// Wait for the rule updates to finish.
+	rulesWG.Wait()
 
 	// And publish and status updates.
 	d.endpointStatusCombiner.Apply()

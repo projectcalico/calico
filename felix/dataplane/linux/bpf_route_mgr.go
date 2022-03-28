@@ -81,15 +81,17 @@ type bpfRouteManager struct {
 	routesDeleteCB  func(routes.Key)
 
 	opReporter logutils.OpRecorder
+
+	wgEnabled bool
 }
 
-func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapContext,
+func newBPFRouteManager(config *Config, mc *bpf.MapContext,
 	opReporter logutils.OpRecorder) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New()
 	dirtyCIDRs := set.New()
-	for _, cidrStr := range externalCIDRs {
+	for _, cidrStr := range config.ExternalNodesCidrs {
 		if strings.Contains(cidrStr, ":") {
 			log.WithField("cidr", cidrStr).Debug("Ignoring IPv6 external CIDR")
 			continue
@@ -104,7 +106,7 @@ func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapCo
 	}
 
 	return &bpfRouteManager{
-		myNodename:        myNodename,
+		myNodename:        config.Hostname,
 		cidrToRoute:       map[ip.V4CIDR]proto.RouteUpdate{},
 		cidrToLocalIfaces: map[ip.V4CIDR]set.Set{},
 		localIfaceToCIDRs: map[string]set.Set{},
@@ -122,6 +124,8 @@ func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapCo
 		resyncScheduled: true,
 
 		opReporter: opReporter,
+
+		wgEnabled: config.Wireguard.Enabled,
 	}
 }
 
@@ -278,6 +282,13 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
 		}
 	case proto.RouteType_REMOTE_WORKLOAD:
 		flags |= routes.FlagsRemoteWorkload
+		if m.wgEnabled {
+			flags |= routes.FlagTunneled
+		}
+		switch cgRoute.IpPoolType {
+		case proto.IPPoolType_VXLAN, proto.IPPoolType_IPIP:
+			flags |= routes.FlagTunneled
+		}
 		if cgRoute.DstNodeIp == "" {
 			log.WithField("node", cgRoute.DstNodeName).Debug(
 				"Can't program route for remote workload, don't know its node's IP")

@@ -22,6 +22,7 @@ const (
 	MarkSeenFallThrough              = MarkSeen | 0x04000000
 	MarkSeenFallThroughMask          = MarkSeenMask | MarkSeenFallThrough
 	MarkSeenBypassForward            = MarkSeenBypass | 0x00300000
+	MarkSeenBypassForwardMask        = MarkSeenBypassMask | 0x00f00000
 	MarkSeenBypassForwardSourceFixup = MarkSeenBypass | 0x00500000
 	MarkSeenBypassSkipRPF            = MarkSeenBypass | 0x00400000
 	MarkSeenBypassSkipRPFMask        = MarkSeenBypassMask | 0x00f00000
@@ -32,6 +33,9 @@ const (
 
 	MarkLinuxConntrackEstablished     = 0x08000000
 	MarkLinuxConntrackEstablishedMask = 0x08000000
+
+	MarkSeenToNatIfaceOut   = 0x41000000
+	MarkSeenFromNatIfaceOut = 0x81000000
 
 	MarksMask uint32 = 0x1ff00000
 )
