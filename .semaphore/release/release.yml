@@ -10,17 +10,21 @@ execution_time_limit:
 
 blocks:
   - name: "Publish official release"
-    skip:
-      # Only run on branches, not PRs.
-      when: "branch !~ '.+'"
+    # skip:
+    #   # Only run on branches, not PRs.
+    #   when: "branch !~ '.+'"
     task:
       secrets:
       - name: quay-robot-calico+semaphoreci
       - name: docker
       - name: oss-release-secrets
       - name: google-service-account-for-gce
+      - name: marvin-github-ssh-private-key
       prologue:
         commands:
+        # Load the github access secrets.  First fix the permissions.
+        - chmod 0600 ~/.keys/marvin/*
+        - ssh-add ~/.keys/marvin/*
         # Checkout the code and unshallow it.
         - checkout
         - git fetch --unshallow
@@ -44,8 +48,9 @@ blocks:
         - name: VAR_FILE
           value: /home/semaphore/secrets/release.tfvars
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release-publish; fi
+        - make VAR_FILE=/home/semaphore/secrets/release.tfvars -C hack/release release
+        # - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
+        # - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release-publish; fi
       epilogue:
         always:
           commands:
