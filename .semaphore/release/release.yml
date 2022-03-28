@@ -10,9 +10,9 @@ execution_time_limit:
 
 blocks:
   - name: "Publish official release"
-    skip:
-      # Only run on branches, not PRs.
-      when: "branch !~ '.+'"
+    # skip:
+    #   # Only run on branches, not PRs.
+    #   when: "branch !~ '.+'"
     task:
       secrets:
       - name: quay-robot-calico+semaphoreci
