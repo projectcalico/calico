@@ -1010,10 +1010,18 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, wgEncryptH
 		})
 
 		// Do not RPF check what is marked as to be skipped by RPF check.
-		rpfRules = []Rule{{
-			Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
-			Action: ReturnAction{},
-		}}
+		rpfRules = []Rule{
+			{
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
+				Action:  ReturnAction{},
+				Comment: []string{"Skip RPF if requested"},
+			},
+			{
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarkSeenBypassForwardMask),
+				Action:  ReturnAction{},
+				Comment: []string{"Skip RPF on packets returning from tunnel to the client"},
+			},
+		}
 
 		// For anything we approved for forward, permit accept_local as it is
 		// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
