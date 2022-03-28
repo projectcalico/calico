@@ -76,6 +76,7 @@ const (
 	// String sent on the failure report channel to indicate we're shutting down for config
 	// change.
 	reasonConfigChanged = "config changed"
+	reasonEncapChanged  = "encapsulation changed"
 	reasonFatalError    = "fatal error"
 	// Process return code used to report a config change.  This is the same as the code used
 	// by SIGHUP, which means that the wrapper script also restarts Felix on a SIGHUP.
@@ -762,8 +763,12 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		go func() {
 			time.Sleep(2 * time.Second)
 
-			if reason == reasonConfigChanged {
+			switch reason {
+			case reasonConfigChanged:
 				exitWithCustomRC(configChangedRC, "Exiting for config change")
+				return
+			case reasonEncapChanged:
+				exitWithCustomRC(configChangedRC, "Exiting for encapsulation change")
 				return
 			}
 
@@ -1175,7 +1180,7 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				}
 
 				if restartNeeded {
-					fc.shutDownProcess("config changed")
+					fc.shutDownProcess(reasonConfigChanged)
 				}
 			}
 
@@ -1195,7 +1200,7 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 		case *proto.Encapsulation:
 			if msg.IpipEnabled != fc.config.Encapsulation.IPIPEnabled || msg.VxlanEnabled != fc.config.Encapsulation.VXLANEnabled {
 				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
-				fc.shutDownProcess("IPIP and/or VXLAN encapsulation changed")
+				fc.shutDownProcess(reasonEncapChanged)
 			}
 		}
 		if err := fc.dataplane.SendMessage(msg); err != nil {
