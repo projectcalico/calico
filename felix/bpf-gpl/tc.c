@@ -602,6 +602,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		// We are going to SNAT this traffic, using iptables SNAT so set the mark
 		// to trigger that and leave the fib lookup disabled.
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
+		CALI_DEBUG("marking CALI_SKB_MARK_NAT_OUT\n");
 	} else {
 		if (state->flags & CALI_ST_SKIP_FIB) {
 			fib = false;
@@ -925,6 +926,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			}
 			state->ip_src = HOST_IP;
 			seen_mark = CALI_SKB_MARK_SKIP_RPF;
+			CALI_DEBUG("marking CALI_SKB_MARK_SKIP_RPF\n");
 
 			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
 			fib = true;
@@ -1096,6 +1098,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 									state->ct_result.tun_ip) {
 			state->ip_dst = state->ct_result.tun_ip;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
+			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP\n");
 			goto nat_encap;
 		}
 
@@ -1107,6 +1110,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	case CALI_CT_ESTABLISHED_BYPASS:
 		if (!ct_result_is_syn(state->ct_result.rc)) {
 			seen_mark = CALI_SKB_MARK_BYPASS;
+			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS\n");
 		}
 		// fall through
 	case CALI_CT_ESTABLISHED:
@@ -1209,6 +1213,7 @@ allow:
 	if (CALI_F_FROM_WEP && state->ip_src == state->ip_dst) {
 		CALI_DEBUG("Loopback SNAT\n");
 		seen_mark |=  CALI_SKB_MARK_MASQ;
+		CALI_DEBUG("marking CALI_SKB_MARK_MASQ\n");
 		fib = false; /* Disable FIB because we want to drop to iptables */
 	}
 
