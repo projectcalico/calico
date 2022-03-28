@@ -1063,6 +1063,8 @@ func resetBPFMaps() {
 	resetCTMap(ctMap)
 	resetRTMap(rtMap)
 	resetMap(fsafeMap)
+	resetMap(natMap)
+	resetMap(natBEMap)
 }
 
 func TestMapIterWithDelete(t *testing.T) {
