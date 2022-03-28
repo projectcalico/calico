@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -404,7 +405,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
+				if err != nil {
+					// Create the default config if it doesn't already exist.
+					if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+						c = api.NewFelixConfiguration()
+						c.Name = "default"
+						c, err = client.FelixConfigurations().Create(ctx, c, options.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+					} else {
+						Expect(err).NotTo(HaveOccurred())
+					}
+				}
 				c.Spec.ExternalNodesCIDRList = &[]string{addr, "1.1.1.1"}
 				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
 				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
