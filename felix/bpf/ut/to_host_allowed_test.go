@@ -33,6 +33,8 @@ import (
 func TestToHostAllowedCTFull(t *testing.T) {
 	RegisterTestingT(t)
 
+	resetBPFMaps()
+
 	hostIP := net.IPv4(1, 1, 1, 1)
 	hostPort := uint16(666)
 
