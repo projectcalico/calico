@@ -19,12 +19,11 @@ blocks:
       - name: docker
       - name: oss-release-secrets
       - name: google-service-account-for-gce
-      - name: marvin-github-ssh-private-key
       prologue:
         commands:
         # Load the github access secrets.  First fix the permissions.
-        - chmod 0600 ~/.keys/marvin/*
-        - ssh-add ~/.keys/marvin/*
+        - chmod 0600 /home/semaphore/.keys/*
+        - ssh-add /home/semaphore/.keys/*
         # Checkout the code and unshallow it.
         - checkout
         - git fetch --unshallow
