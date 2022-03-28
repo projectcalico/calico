@@ -1358,6 +1358,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 func TestNormalSYNRetryForcePolicy(t *testing.T) {
 	RegisterTestingT(t)
 
+	defer func() { bpfIfaceName = "" }()
 	bpfIfaceName = "SYN1"
 
 	tcpSyn := &layers.TCP{
