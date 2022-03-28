@@ -999,7 +999,6 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 }
 
 func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*Chain {
-
 	rawPreroutingChain := &Chain{
 		Name: ChainRawPrerouting,
 		Rules: []Rule{
@@ -1009,8 +1008,9 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 			},
 			Rule{
 				// Return, i.e. no-op, if bypass mark is not set.
-				Match:  Match().MarkMatchesWithMask(tcBypassMark, 0xffffffff),
-				Action: GotoAction{Target: ChainRawBPFUntrackedPolicy},
+				Match:   Match().MarkMatchesWithMask(tcBypassMark, 0xffffffff),
+				Action:  GotoAction{Target: ChainRawBPFUntrackedPolicy},
+				Comment: []string{"Jump to target for packets with Bypass mark"},
 			},
 		},
 	}
@@ -1019,20 +1019,34 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 		Name: ChainRawUntrackedFlows,
 		Rules: []Rule{
 			Rule{
-				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-				Action: ReturnAction{},
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenSkipFIB Mark"},
 			},
 			Rule{
-				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
-				Action: ReturnAction{},
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenFallThrough Mark"},
 			},
 			Rule{
-				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
-				Action: ReturnAction{},
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenMASQ Mark"},
 			},
 			Rule{
-				Match:  Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-				Action: NoTrackAction{},
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenNATOutgoing Mark"},
+			},
+			Rule{
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenBypass, tcdefs.MarkSeenBypassMask),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenBypass Mark"},
+			},
+			Rule{
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
+				Action:  NoTrackAction{},
+				Comment: []string{"MarkSeen Mark"},
 			},
 		},
 	}
