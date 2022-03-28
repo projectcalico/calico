@@ -19,26 +19,33 @@
 #define CALI_VXLAN_VNI 0xca11c0
 #endif
 
-#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
-#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
-#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
+#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD && !CALI_F_NAT_IF)
+#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD && !CALI_F_NAT_IF)
+#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD && !CALI_F_NAT_IF)
 
 /* Number of bytes we add to a packet when we do encap. */
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
 static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t off,
-						__be32 ip_from, __be32 ip_to,
+						__be32 ip_src_from, __be32 ip_src_to,
+						__be32 ip_dst_from, __be32 ip_dst_to,
 						__u16 dport_from, __u16 dport_to,
 						__u16 sport_from, __u16 sport_to,
 						__u64 flags)
 {
 	int ret = 0;
 
-	if (ip_from != ip_to) {
-		CALI_DEBUG("L4 checksum update (csum is at %d) IP from %x to %x\n", off,
-				bpf_ntohl(ip_from), bpf_ntohl(ip_to));
-		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, flags | BPF_F_PSEUDO_HDR | 4);
+	if (ip_src_from != ip_src_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) src IP from %x to %x\n", off,
+				bpf_ntohl(ip_src_from), bpf_ntohl(ip_src_to));
+		ret = bpf_l4_csum_replace(skb, off, ip_src_from, ip_src_to, flags | BPF_F_PSEUDO_HDR | 4);
+		CALI_DEBUG("bpf_l4_csum_replace(IP): %d\n", ret);
+	}
+	if (ip_dst_from != ip_dst_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) dst IP from %x to %x\n", off,
+				bpf_ntohl(ip_dst_from), bpf_ntohl(ip_dst_to));
+		ret = bpf_l4_csum_replace(skb, off, ip_dst_from, ip_dst_to, flags | BPF_F_PSEUDO_HDR | 4);
 		CALI_DEBUG("bpf_l4_csum_replace(IP): %d\n", ret);
 	}
 	if (sport_from != sport_to) {
