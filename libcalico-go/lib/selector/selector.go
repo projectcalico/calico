@@ -30,6 +30,15 @@ type Selector interface {
 
 	// UniqueID returns the unique ID that represents this selector.
 	UniqueID() string
+
+
+	/*
+	Get exact match, returning the label and value. For selector 'a=a1 && b in "b1, "b2"',
+	 (a, a1) is the exact match. For selector 'a=a1 && b in "b1"', both (a, a1) and (b, b1) are
+	exact matches. For selector 'a=a1 || b in "b1"', there is no exact matches.
+	*/
+	GetExactMatch() map[string]string
+
 }
 
 // Parse a string representation of a selector expression into a Selector.

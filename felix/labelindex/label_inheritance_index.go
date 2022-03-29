@@ -44,12 +44,12 @@
 package labelindex
 
 import (
+	"github.com/projectcalico/calico/felix/multidict"
 	"reflect"
 
 	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -91,9 +91,11 @@ type parentData struct {
 type MatchCallback func(selId, labelId interface{})
 
 type InheritIndex struct {
-	itemDataByID         map[interface{}]*itemData
-	parentDataByParentID map[string]*parentData
-	selectorsById        map[interface{}]selector.Selector
+	itemDataByID              map[interface{}]*itemData
+	labelIdByVauewithEMLabels map[string]multidict.StringToIface
+	parentDataByParentID      map[string]*parentData
+	selectorsById             map[interface{}]selector.Selector
+	selIdsByValueWithEMLabels map[string]multidict.StringToIface
 
 	// Current matches.
 	selIdsByLabelId map[interface{}]set.Set
@@ -106,13 +108,22 @@ type InheritIndex struct {
 	dirtyItemIDs set.Set
 }
 
+/*
+	This should be passed in with config option.
+	Ordered by potential match number.
+ */
+var (
+	ExactMatchLabels = []string{v3.LabelNamespace}
+)
+
 func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex {
 	itemData := map[interface{}]*itemData{}
 	inheritIDx := InheritIndex{
-		itemDataByID:         itemData,
-		parentDataByParentID: map[string]*parentData{},
-		selectorsById:        map[interface{}]selector.Selector{},
-
+		itemDataByID:              itemData,
+		labelIdByVauewithEMLabels: map[string]multidict.StringToIface{},
+		parentDataByParentID:      map[string]*parentData{},
+		selectorsById:             map[interface{}]selector.Selector{},
+		selIdsByValueWithEMLabels: map[string]multidict.StringToIface{},
 		selIdsByLabelId: map[interface{}]set.Set{},
 		labelIdsBySelId: map[interface{}]set.Set{},
 
@@ -121,6 +132,10 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		OnMatchStopped: onMatchStopped,
 
 		dirtyItemIDs: set.New(),
+	}
+	for _, em := range ExactMatchLabels {
+		inheritIDx.labelIdByVauewithEMLabels[em] = multidict.NewStringToIface()
+		inheritIDx.selIdsByValueWithEMLabels[em] = multidict.NewStringToIface()
 	}
 	return &inheritIDx
 }
@@ -142,7 +157,7 @@ func (l *InheritIndex) OnUpdate(update api.Update) (_ bool) {
 	case model.HostEndpointKey:
 		if update.Value != nil {
 			// Figure out what's changed and update the cache.
-			log.Debugf("Updating InheritIndex for host endpoint %v", key)
+			log.Infof("Updating InheritIndex for host endpoint %v", key)
 			endpoint := update.Value.(*model.HostEndpoint)
 			profileIDs := endpoint.ProfileIDs
 			l.UpdateLabels(key, endpoint.Labels, profileIDs)
@@ -177,7 +192,14 @@ func (idx *InheritIndex) UpdateSelector(id interface{}, sel selector.Selector) {
 		log.WithField("selID", id).Debug("Skipping unchanged selector")
 		return
 	}
+
 	log.WithField("selID", id).Info("Updating selector")
+	sem := sel.GetExactMatch()
+	for _, emk := range ExactMatchLabels {
+		// Use empty to indicate not-specified
+		v := sem[emk]
+		idx.selIdsByValueWithEMLabels[emk].Put(v, id)
+	}
 	idx.scanAllLabels(id, sel)
 	idx.selectorsById[id] = sel
 }
@@ -191,6 +213,14 @@ func (idx *InheritIndex) DeleteSelector(id interface{}) {
 			idx.deleteMatch(id, labelId)
 			return nil
 		})
+	}
+	sel := idx.selectorsById[id]
+	if sel != nil {
+		sem := sel.GetExactMatch()
+		for _, e := range ExactMatchLabels {
+			v := sem[e]
+			idx.selIdsByValueWithEMLabels[e].Discard(v, id)
+		}
 	}
 	delete(idx.selectorsById, id)
 }
@@ -213,6 +243,10 @@ func (idx *InheritIndex) UpdateLabels(id interface{}, labels map[string]string, 
 	newItemData := &itemData{}
 	if len(labels) > 0 {
 		newItemData.labels = labels
+		for _, em := range ExactMatchLabels{
+			v := labels[em]
+			idx.labelIdByVauewithEMLabels[em].Put(v, id)
+		}
 	}
 	if len(parentIDs) > 0 {
 		parents := make([]*parentData, len(parentIDs))
@@ -236,6 +270,13 @@ func (idx *InheritIndex) DeleteLabels(id interface{}) {
 	var oldParents []*parentData
 	if oldItemData != nil {
 		oldParents = oldItemData.parents
+	}
+	for _, em := range ExactMatchLabels{
+		v := ""
+		if oldItemData!= nil && oldItemData.labels != nil {
+			v = oldItemData.labels[em]
+		}
+		idx.labelIdByVauewithEMLabels[em].Discard(v, id)
 	}
 	delete(idx.itemDataByID, id)
 	idx.onItemParentsUpdate(id, oldParents, nil)
@@ -353,8 +394,33 @@ func (idx *InheritIndex) flushUpdates() {
 func (idx *InheritIndex) scanAllLabels(selId interface{}, sel selector.Selector) {
 	log.Debugf("Scanning all (%v) labels against selector %v",
 		len(idx.itemDataByID), selId)
-	for labelId, labels := range idx.itemDataByID {
-		idx.updateMatches(selId, sel, labelId, labels)
+
+	sem := sel.GetExactMatch()
+	emk := ""
+	emv := ""
+	for _, e := range ExactMatchLabels{
+		if _, ok := sem[e]; ok {
+			emk = e
+			emv =sem[e]
+			break
+		}
+	}
+	//We get the exact match
+	if emk != "" {
+		count := 0
+		idx.labelIdByVauewithEMLabels[emk].Iter(emv, func(labelId interface{}){
+			labels := idx.itemDataByID[labelId]
+			idx.updateMatches(selId, sel, labelId, labels)
+			count ++
+		})
+		if count != 0 {
+			log.WithField("sel", sel).Infof("scanAllLabels: emk %s emv %s count %d with total %d", emk, emv, count, len(idx.itemDataByID))
+		}
+	} else {
+		for labelId, labels := range idx.itemDataByID {
+			idx.updateMatches(selId, sel, labelId, labels)
+		}
+		log.WithField("sel", sel).Infof("scanAllLabels: hit global search %d", len(idx.itemDataByID))
 	}
 }
 
@@ -362,8 +428,38 @@ func (idx *InheritIndex) scanAllSelectors(labelId interface{}) {
 	log.Debugf("Scanning all (%v) selectors against labels %v",
 		len(idx.selectorsById), labelId)
 	labels := idx.itemDataByID[labelId]
-	for selId, sel := range idx.selectorsById {
-		idx.updateMatches(selId, sel, labelId, labels)
+
+	emk := ""
+	emv := ""
+	for _, e := range ExactMatchLabels{
+		if _, ok := labels.labels[e]; ok {
+			emk = e
+			emv =labels.labels[e]
+			break
+		}
+	}
+	if emk != "" {
+		count := 0
+		emptyCount := 0
+		idx.selIdsByValueWithEMLabels[emk].Iter(emv, func(selId interface{}){
+			sel := idx.selectorsById[selId]
+			idx.updateMatches(selId, sel, labelId, labels)
+			count++
+		})
+		// Check selector without corresponding match
+		idx.selIdsByValueWithEMLabels[emk].Iter("", func(selId interface{}){
+			sel := idx.selectorsById[selId]
+			idx.updateMatches(selId, sel, labelId, labels)
+			emptyCount++
+		})
+		if count != 0 || emptyCount != 0 {
+			log.WithField("label", labelId).Infof("scanAllSelectors: emk %s emv %s count %d emptyCount %d with total %d", emk, emv, count, emptyCount, len(idx.selectorsById))
+		}
+	} else {
+		for selId, sel := range idx.selectorsById {
+			idx.updateMatches(selId, sel, labelId, labels)
+		}
+		log.WithField("label", labelId).Infof("scanAllSelectors: hit global search %d", len(idx.selectorsById))
 	}
 }
 

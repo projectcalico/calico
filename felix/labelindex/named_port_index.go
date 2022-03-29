@@ -16,6 +16,7 @@ package labelindex
 
 import (
 	"fmt"
+	"github.com/projectcalico/calico/felix/multidict"
 	"reflect"
 	"strings"
 
@@ -235,6 +236,9 @@ type SelectorAndNamedPortIndex struct {
 	parentDataByParentID map[string]*npParentData
 	ipSetDataByID        map[string]*ipSetData
 
+	endpointIDByVauewithEMLabels map[string]multidict.StringToIface
+	ipSetIDByVauewithEMLabels map[string]multidict.StringToString
+
 	// Callback functions
 	OnMemberAdded   NamedPortMatchCallback
 	OnMemberRemoved NamedPortMatchCallback
@@ -246,9 +250,15 @@ func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 		parentDataByParentID: map[string]*npParentData{},
 		ipSetDataByID:        map[string]*ipSetData{},
 
+		endpointIDByVauewithEMLabels: map[string]multidict.StringToIface{},
+		ipSetIDByVauewithEMLabels: map[string]multidict.StringToString{},
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
 		OnMemberRemoved: func(ipSetID string, member IPSetMember) {},
+	}
+	for _, em := range ExactMatchLabels {
+		inheritIdx.endpointIDByVauewithEMLabels[em] = multidict.NewStringToIface()
+		inheritIdx.ipSetIDByVauewithEMLabels[em] = multidict.NewStringToString()
 	}
 	return &inheritIdx
 }
@@ -427,17 +437,32 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 		namedPortProtocol: namedPortProtocol,
 		memberToRefCount:  map[IPSetMember]uint64{},
 	}
+	sem := sel.GetExactMatch()
+	for _, e := range ExactMatchLabels {
+		idx.ipSetIDByVauewithEMLabels[e].Put(sem[e], ipSetID)
+	}
+
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 
+	emk := ""
+	emv := ""
+	for _, e := range ExactMatchLabels {
+		if _, ok := sem[e]; ok {
+			emk = e
+			emv = sem[e]
+			break
+		}
+	}
+
 	// Then scan all endpoints.
-	for epID, epData := range idx.endpointDataByID {
+	checkOneEndpointData := func(epID interface{}, epData *endpointData) {
 		if !sel.EvaluateLabels(epData) {
 			// Endpoint doesn't match.
-			continue
+			return
 		}
 		contrib := idx.CalculateEndpointContribution(epData, newIPSetData)
 		if len(contrib) == 0 {
-			continue
+			return
 		}
 		if log.GetLevel() >= log.DebugLevel {
 			logCxt = logCxt.WithField("epID", epID)
@@ -454,6 +479,23 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 			}
 			newIPSetData.memberToRefCount[member] = refCount + 1
 		}
+	}
+
+	if emk != "" {
+		count := 0
+		idx.endpointIDByVauewithEMLabels[emk].Iter(emv, func(epID interface{}){
+			epData := idx.endpointDataByID[epID]
+			checkOneEndpointData(epID, epData)
+			count++
+		})
+		if count != 0 {
+			log.WithField("sel", sel).Infof("UpdateIPSet: emk %s emv %s Checked %d endpointID with %d in total", emk, emv, count, len(idx.endpointDataByID))
+		}
+	} else {
+		for epID, epData := range idx.endpointDataByID {
+			checkOneEndpointData(epID, epData)
+		}
+		log.WithField("sel", sel).Infof("UpdateIPSet: hit global search %d", len(idx.endpointDataByID))
 	}
 }
 
@@ -475,10 +517,36 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 	}
 
 	// Then scan all endpoints and fix up their indexes to remove the match.
-	for _, epData := range idx.endpointDataByID {
-		epData.RemoveMatchingIPSetID(id)
+	sem := ipSetData.selector.GetExactMatch()
+	emk := ""
+	emv := ""
+	for _, e := range ExactMatchLabels {
+		if _, ok := sem[e]; ok {
+			emk = e
+			emv = sem[e]
+			break
+		}
 	}
-
+	if emk != "" {
+		count := 0
+		idx.endpointIDByVauewithEMLabels[emk].Iter(emv, func(epid interface{}){
+			epdata := idx.endpointDataByID[epid]
+			epdata.RemoveMatchingIPSetID(id)
+			count++
+		})
+		if count != 0 {
+			log.WithField("selID", id).Infof("DeleteIPSet: emk %s emv %s count %d total count %d", emk, emv, count, len(idx.endpointDataByID))
+		}
+	} else {
+		for _, epData := range idx.endpointDataByID {
+			epData.RemoveMatchingIPSetID(id)
+		}
+		log.WithField("selID", id).Infof("DeleteIPSet: hit global search %d", len(idx.endpointDataByID))
+	}
+	for _, e := range ExactMatchLabels {
+		v := sem[e]
+		idx.ipSetIDByVauewithEMLabels[e].Discard(v, id)
+	}
 	delete(idx.ipSetDataByID, id)
 }
 
@@ -541,6 +609,13 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	// new contributions and then mop up deletions.
 	idx.scanEndpointAgainstAllIPSets(newEndpointData, oldIPSetContributions)
 
+	for _, e := range ExactMatchLabels {
+		v := ""
+		if labels != nil {
+			v = labels[e]
+		}
+		idx.endpointIDByVauewithEMLabels[e].Put(v, id)
+	}
 	// Record the new endpoint data.
 	idx.endpointDataByID[id] = newEndpointData
 
@@ -564,7 +639,8 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 	epData *endpointData,
 	oldIPSetContributions map[string][]IPSetMember,
 ) {
-	for ipSetID, ipSetData := range idx.ipSetDataByID {
+
+	updateIpset := func(ipSetID string, ipSetData *ipSetData) {
 		// Remove any previous match from the endpoint's cache.  We'll re-add it below if the match
 		// is still correct.  (This is a no-op when we're called from UpdateEndpointOrSet(), which always
 		// creates a new endpointData struct.)
@@ -608,6 +684,39 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 			}
 		}
 	}
+
+	emk := ""
+	emv := ""
+	for _, e := range ExactMatchLabels {
+		if _, ok := epData.labels[e]; ok {
+			emk = e
+			emv = epData.labels[e]
+			break
+		}
+	}
+	if emk != "" {
+		count := 0
+		emptyCount := 0
+		idx.ipSetIDByVauewithEMLabels[emk].Iter(emv, func(ipSetID string){
+			ipSetData := idx.ipSetDataByID[ipSetID]
+			updateIpset(ipSetID, ipSetData)
+			count++
+		})
+
+		idx.ipSetIDByVauewithEMLabels[emk].Iter("", func(ipSetID string){
+			ipSetData := idx.ipSetDataByID[ipSetID]
+			updateIpset(ipSetID, ipSetData)
+			emptyCount++
+		})
+		if count != 0 || emptyCount != 0 {
+			log.WithField("endpoint", epData).Debugf("scanEndpointAgainstAllIPSets: emk %s emv %s checked %d and empty %d with total %d", emk, emv, count, emptyCount, len(idx.ipSetDataByID))
+		}
+	} else {
+		for ipSetID, ipSetData := range idx.ipSetDataByID {
+			updateIpset(ipSetID, ipSetData)
+		}
+		log.WithField("endpoint", epData).Debugf("scanEndpointAgainstAllIPSets: hit global search %d", len(idx.ipSetDataByID))
+	}
 }
 
 func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id interface{}) {
@@ -636,6 +745,13 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id interface{}) {
 		}
 	}
 
+	for _, e := range ExactMatchLabels {
+		v := ""
+		if oldEndpointData.labels != nil  {
+			v = oldEndpointData.labels[e]
+		}
+		idx.endpointIDByVauewithEMLabels[e].Discard(v, id)
+	}
 	// Record the new endpoint data.
 	delete(idx.endpointDataByID, id)
 	for _, parent := range oldEndpointData.parents {

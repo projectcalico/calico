@@ -56,6 +56,9 @@ type Selector interface {
 
 	// AcceptVisitor allows an external visitor to modify this selector.
 	AcceptVisitor(v Visitor)
+
+	//
+	GetExactMatch() map[string]string
 }
 
 type Visitor interface {
@@ -96,6 +99,8 @@ type selectorRoot struct {
 	root         node
 	cachedString *string
 	cachedHash   *string
+	exactMatch   map[string]string
+	exactMatchValid bool
 }
 
 func (sel *selectorRoot) Evaluate(labels map[string]string) bool {
@@ -125,6 +130,45 @@ func (sel *selectorRoot) UniqueID() string {
 		sel.cachedHash = &hash
 	}
 	return *sel.cachedHash
+}
+
+func (sel *selectorRoot) GetExactMatch() map[string]string {
+	if sel.exactMatchValid {
+		return sel.exactMatch
+	}
+
+	/*
+	This is ugly. However, haven't think out a clean way to finalize
+	the exactMatch during parsing
+	 */
+	em := map[string]string{}
+stoploop:
+	switch v := sel.root.(type) {
+	case *AndNode:
+		for _, n := range v.Operands {
+			switch av := n.(type) {
+			case *LabelEqValueNode:
+				em[av.LabelName] = av.Value
+			case *LabelInSetNode:
+				if len(av.Value) == 1 {
+					em[av.LabelName] = av.Value[0]
+				}
+			default:
+				continue
+			}
+		}
+	case *LabelEqValueNode:
+		em[v.LabelName] = v.Value
+	case *LabelInSetNode:
+		if len(v.Value) == 1 {
+			em[v.LabelName] = v.Value[0]
+		}
+	default:
+		break stoploop
+	}
+	sel.exactMatchValid = true
+	sel.exactMatch = em
+	return sel.exactMatch
 }
 
 var _ Selector = (*selectorRoot)(nil)

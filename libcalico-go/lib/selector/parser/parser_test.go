@@ -341,3 +341,35 @@ var _ = Describe("Visitor", func() {
 		),
 	)
 })
+
+var exactMatchTests = []struct {
+	sel           string
+	exactMatch    map[string]string
+} {
+	{`a == 'a1' && b == 'b1'`, map[string]string{"a": "a1", "b": "b1"}},
+	{`a == 'a1'`, map[string]string{"a": "a1"}},
+	{`a == 'a1' && b in {'b1'}`, map[string]string{"a": "a1", "b": "b1"}},
+	{`a == 'a1' && b in {'b1', 'b2'}`, map[string]string{"a": "a1"}},
+	{`a == 'a1' || b == 'b1'`, map[string]string{}},
+	{`a == 'a1' && (b == 'b1' || c == 'c1')`, map[string]string{"a": "a1"}},
+}
+
+var _ = Describe("exactMatch", func() {
+	for _, test := range exactMatchTests {
+		var test = test // Take copy of variable for the closure.
+		Context(fmt.Sprintf("selector %#v", test.sel), func() {
+			var sel parser.Selector
+			var err error
+			BeforeEach(func() {
+				sel, err = parser.Parse(test.sel)
+				Expect(err).To(BeNil())
+			})
+			It("should match the exact Match", func() {
+				em := sel.GetExactMatch()
+
+				Expect(em).To(Equal(test.exactMatch))
+			})
+		})
+	}
+
+})
