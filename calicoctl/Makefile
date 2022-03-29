@@ -224,26 +224,26 @@ run-kubernetes-master: stop-kubernetes-master
             --root-ca-file=/home/user/certs/ca.pem
 
 	# Create a Node in the API for the tests to use.
-	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec $(DOCKER_INTERACTIVE) st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /code/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
 
 	# Apply CRDs because the tests require them.
-	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec $(DOCKER_INTERACTIVE) st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; \
 		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
-	-docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	-docker exec $(DOCKER_INTERACTIVE) st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		create namespace test
 	
 ## Stop the local kubernetes master
 stop-kubernetes-master:
 	# Delete the cluster role binding.
-	-docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl delete clusterrolebinding anonymous-admin
+	-docker exec $(DOCKER_INTERACTIVE) st-apiserver-${KUBE_APISERVER_PORT} kubectl delete clusterrolebinding anonymous-admin
 
 	# Stop master components.
 	-docker rm -f st-apiserver-${KUBE_APISERVER_PORT} st-controller-manager-${KUBE_APISERVER_PORT}

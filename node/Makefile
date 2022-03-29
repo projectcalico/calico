@@ -383,7 +383,7 @@ kind-k8st-setup: $(K8ST_IMAGE_TARS) kind-cluster-create
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: calico_test.created $(KIND_KUBECONFIG)
-	docker run -t --rm \
+	docker run $(DOCKER_INTERACTIVE) --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v $(KIND_KUBECONFIG):/root/.kube/config \
@@ -423,7 +423,7 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 		   -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
 		   -e NODE_CONTAINER_NAME=$(NODE_IMAGE):latest-$(ARCH) \
-		   --rm -t \
+		   --rm $(DOCKER_INTERACTIVE) \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
 		   sh -c 'nosetests $(ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
