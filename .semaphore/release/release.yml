@@ -22,8 +22,8 @@ blocks:
       prologue:
         commands:
         # Load the github access secrets.  First fix the permissions.
-        - chmod 0600 /home/semaphore/.keys/git_ssa_rsa
-        - ssh-add /home/semaphore/.keys/git_ssa_rsa
+        - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
+        - ssh-add /home/semaphore/.keys/git_ssh_rsa
         # Checkout the code and unshallow it.
         - checkout
         - git fetch --unshallow
