@@ -1073,7 +1073,6 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 			},
 		},
 	}
-
 	return []*Chain{
 		rawPreroutingChain,
 		xdpUntrakedPoliciesChain,

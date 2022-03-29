@@ -3174,6 +3174,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[1][0], w[0][0])
 						cc.ExpectSome(w[1][1], w[0][0])
 						cc.CheckConnectivity()
+						time.Sleep(time.Minute * 60)
 						cc.ResetExpectations()
 					})
 
