@@ -780,6 +780,14 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 		}
 	}
 
+	if c.DeviceRouteSourceAddressIPv6 != "" {
+		parsedAddress := cnet.ParseIP(c.DeviceRouteSourceAddressIPv6)
+		if parsedAddress == nil || parsedAddress.Version() != 6 {
+			structLevel.ReportError(reflect.ValueOf(c.DeviceRouteSourceAddressIPv6),
+				"DeviceRouteSourceAddressIPv6", "", reason("is not a valid IPv6 address"), "")
+		}
+	}
+
 	if c.RouteTableRange != nil && c.RouteTableRanges != nil {
 		structLevel.ReportError(reflect.ValueOf(c.RouteTableRange),
 			"RouteTableRange", "", reason("cannot be set when `RouteTableRanges` is also set"), "")

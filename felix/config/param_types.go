@@ -17,6 +17,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 	"net"
 	"net/url"
 	"os"
@@ -302,6 +303,25 @@ func (p *Ipv4Param) Parse(raw string) (result interface{}, err error) {
 	res := net.ParseIP(raw)
 	if res == nil {
 		err = p.parseFailed(raw, "invalid IP")
+	}
+	if !utils.IsIPv4(res) {
+		err = p.parseFailed(raw, "not an IPv4 address")
+	}
+	result = res
+	return
+}
+
+type Ipv6Param struct {
+	Metadata
+}
+
+func (p *Ipv6Param) Parse(raw string) (result interface{}, err error) {
+	res := net.ParseIP(raw)
+	if res == nil {
+		err = p.parseFailed(raw, "invalid IP")
+	}
+	if !utils.IsIPv6(res) {
+		err = p.parseFailed(raw, "not an IPv6 address")
 	}
 	result = res
 	return
