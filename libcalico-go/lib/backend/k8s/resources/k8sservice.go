@@ -22,6 +22,7 @@ import (
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
@@ -117,27 +118,20 @@ func (c *serviceClient) List(ctx context.Context, list model.ListInterface, revi
 	}
 
 	// Listing all services.
-	serviceList, err := c.clientSet.CoreV1().Services(rl.Namespace).List(ctx, metav1.ListOptions{ResourceVersion: revision})
-	if err != nil {
-		return nil, K8sErrorToCalico(err, list)
+	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		return c.clientSet.CoreV1().Services(rl.Namespace).List(ctx, opts)
 	}
-
-	converter := func(r Resource) *model.KVPair {
+	convertFunc := func(r Resource) ([]*model.KVPair, error) {
 		kvp, err := c.ServiceToKVP(r.(*kapiv1.Service))
 		if err != nil {
-			return nil
+			return nil, err
 		}
-		return kvp
+		return []*model.KVPair{kvp}, nil
 	}
 
-	for i := range serviceList.Items {
-		kvps = append(kvps, converter(&serviceList.Items[i]))
-	}
-
-	return &model.KVPairList{
-		KVPairs:  kvps,
-		Revision: serviceList.ResourceVersion,
-	}, nil
+	// For each object returned from the API server, add it to a KVPairList.
+	logContext := log.WithField("Resource", "Service")
+	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
 }
 
 func (c *serviceClient) EnsureInitialized() error {
