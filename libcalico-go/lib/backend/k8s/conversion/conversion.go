@@ -262,7 +262,7 @@ func (c converter) ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error) 
 			Namespace: service.Namespace,
 			Kind:      model.KindK8sService,
 		},
-		Value:    service,
+		Value:    service.DeepCopy(),
 		Revision: service.ResourceVersion,
 	}, nil
 }
