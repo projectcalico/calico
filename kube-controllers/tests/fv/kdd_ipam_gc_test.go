@@ -223,6 +223,46 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		}, 30*time.Second, 2*time.Second).Should(BeNil())
 	})
 
+	It("should clean up empty blocks after the grace period", func() {
+		// Allocate and then release an IP to create an empty block.
+		handle := "block-gc-test-handle"
+		By("allocating an IP address to create a valid block", func() {
+			attrs := map[string]string{"node": nodeA}
+			err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.1"), HandleID: &handle, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		handle2 := "block-gc-test-handle-2"
+		By("allocating an IP address to create a second valid block", func() {
+			attrs := map[string]string{"node": nodeA}
+			err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.65"), HandleID: &handle2, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Expect two blocks, both affine to node A.
+		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(blocks.KVPairs)).To(Equal(2))
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(affs.KVPairs)).To(Equal(2))
+
+		By("releasing the second IP address to create an empty affine block", func() {
+			unalloc, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(unalloc)).To(Equal(0))
+		})
+
+		// Expect the block to be cleaned up by the GC, eventually.
+		Eventually(func() error {
+			return assertNumBlocks(bc, 1)
+		}, 15*time.Second, 2*time.Second).Should(BeNil())
+	})
+
 	It("should NOT clean up allocations that are not Kubernetes pods", func() {
 		var err error
 		handleNonKubernetes := "handle-not-kubernetes"
@@ -529,5 +569,174 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 			}
 			return nil
 		}, time.Minute, 2*time.Second).Should(BeNil())
+	})
+})
+
+var _ = Describe("IPAM garbage collection FV tests with long leak grace period", func() {
+	var (
+		etcd              *containers.Container
+		controller        *containers.Container
+		apiserver         *containers.Container
+		calicoClient      client.Interface
+		bc                backend.Client
+		k8sClient         *kubernetes.Clientset
+		controllerManager *containers.Container
+		kconfigfile       *os.File
+		nodeA             string
+	)
+
+	BeforeEach(func() {
+		// Run etcd.
+		etcd = testutils.RunEtcd()
+
+		// Run apiserver.
+		apiserver = testutils.RunK8sApiserver(etcd.IP)
+
+		// Write out a kubeconfig file
+		var err error
+		kconfigfile, err = ioutil.TempFile("", "ginkgo-policycontroller")
+		Expect(err).NotTo(HaveOccurred())
+		defer os.Remove(kconfigfile.Name())
+		data := testutils.BuildKubeconfig(apiserver.IP)
+		_, err = kconfigfile.Write([]byte(data))
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make the kubeconfig readable by the container.
+		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+
+		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wait for the apiserver to be available.
+		Eventually(func() error {
+			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+			return err
+		}, 30*time.Second, 1*time.Second).Should(BeNil())
+
+		// Apply the necessary CRDs. There can sometimes be a delay between starting
+		// the API server and when CRDs are apply-able, so retry here.
+		apply := func() error {
+			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
+			if err != nil {
+				return fmt.Errorf("%s: %s", err, out)
+			}
+			return nil
+		}
+		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+
+		// Make a Calico client and backend client.
+		type accessor interface {
+			Backend() backend.Client
+		}
+		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
+		bc = calicoClient.(accessor).Backend()
+
+		// Create an IP pool with room for 4 blocks.
+		By("creating an IP pool for the test", func() {
+			p := api.NewIPPool()
+			p.Name = "test-ipam-gc-ippool"
+			p.Spec.CIDR = "192.168.0.0/24"
+			p.Spec.BlockSize = 26
+			p.Spec.NodeSelector = "all()"
+			p.Spec.Disabled = false
+			_, err = calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Set a long grace period. The tests in this suite verify behavior of the controller before the
+		// grace period has been hit.
+		By("lengthening the leak grace period for the test", func() {
+			kcc := api.NewKubeControllersConfiguration()
+			kcc.Name = "default"
+			kcc.Spec.Controllers.Node = &api.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Minute}}
+			_, err = calicoClient.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		By("creating a node for the test", func() {
+			nodeA = "node-a"
+			_, err = k8sClient.CoreV1().Nodes().Create(context.Background(),
+				&v1.Node{
+					TypeMeta:   metav1.TypeMeta{Kind: "Node", APIVersion: "v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: nodeA},
+					Spec:       v1.NodeSpec{},
+				},
+				metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("creating a serviceaccount for the test", func() {
+			sa := &v1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "default",
+					Namespace: "default",
+				},
+			}
+			Eventually(func() error {
+				_, err := k8sClient.CoreV1().ServiceAccounts("default").Create(
+					context.Background(),
+					sa,
+					metav1.CreateOptions{},
+				)
+				return err
+			}, time.Second*10, 500*time.Millisecond).ShouldNot(HaveOccurred())
+		})
+
+		// Start the controller.
+		controller = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+
+		// Run controller manager.
+		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
+	})
+
+	AfterEach(func() {
+		// Delete the IP pool.
+		_, err := calicoClient.IPPools().Delete(context.Background(), "test-ipam-gc-ippool", options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		controllerManager.Stop()
+		controller.Stop()
+		apiserver.Stop()
+		etcd.Stop()
+	})
+
+	It("should NOT clean up empty blocks within the grace period", func() {
+		// Allocate and then release an IP to create an empty block.
+		handle := "block-gc-test-handle"
+		By("allocating an IP address to create a valid block", func() {
+			attrs := map[string]string{"node": nodeA}
+			err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.1"), HandleID: &handle, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		handle2 := "block-gc-test-handle-2"
+		By("allocating an IP address to create a second valid block", func() {
+			attrs := map[string]string{"node": nodeA}
+			err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.65"), HandleID: &handle2, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Expect two blocks, both affine to node A.
+		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(blocks.KVPairs)).To(Equal(2))
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(affs.KVPairs)).To(Equal(2))
+
+		By("releasing the second IP address to create an empty affine block", func() {
+			unalloc, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(unalloc)).To(Equal(0))
+		})
+
+		// Expect that the block is not removed immediately.
+		Consistently(func() error {
+			return assertNumBlocks(bc, 2)
+		}, 15*time.Second, 2*time.Second).Should(BeNil())
 	})
 })
