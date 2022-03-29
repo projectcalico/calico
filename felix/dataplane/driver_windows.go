@@ -47,7 +47,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		HealthAggregator: healthAggregator,
 
 		Hostname:     configParams.FelixHostname,
-		VXLANEnabled: configParams.VXLANEnabled,
+		VXLANEnabled: configParams.Encapsulation.VXLANEnabled,
 		VXLANID:      configParams.VXLANVNI,
 		VXLANPort:    configParams.VXLANPort,
 	}

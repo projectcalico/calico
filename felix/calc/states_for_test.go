@@ -987,6 +987,14 @@ var routeUpdateIPPoolVXLAN = proto.RouteUpdate{
 	NatOutgoing: ipPoolWithVXLAN.Masquerade,
 }
 
+// RouteUpdate expected for ipPool2WithVXLAN.
+var routeUpdateIPPool2VXLAN = proto.RouteUpdate{
+	Type:        proto.RouteType_CIDR_INFO,
+	IpPoolType:  proto.IPPoolType_VXLAN,
+	Dst:         ipPool2WithVXLAN.CIDR.String(),
+	NatOutgoing: ipPool2WithVXLAN.Masquerade,
+}
+
 // RouteUpdate expected for ipPoolWithVXLANSlash32.
 var routeUpdateIPPoolVXLANSlash32 = proto.RouteUpdate{
 	Type:        proto.RouteType_CIDR_INFO,
@@ -1046,6 +1054,8 @@ var vxlanWithWEPIPs = empty.withKVUpdates(
 ).withRoutes(
 	routeUpdateIPPoolVXLAN,
 	routeUpdateRemoteHost2,
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 // Adds in an workload on remoteHost2 and expected route.
@@ -1112,6 +1122,8 @@ var vxlanWithBlock = empty.withKVUpdates(
 		Ipv4Addr:       remoteHostVXLANTunnelIP,
 		ParentDeviceIp: remoteHostIP.String(),
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 ).withRoutes(vxlanWithBlockRoutes...)
 
 var vxlanWithBlockRoutes = []proto.RouteUpdate{
@@ -1354,6 +1366,8 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 var localVXLANWep1Route1 = proto.RouteUpdate{
@@ -1552,6 +1566,8 @@ var vxlanToIPIPSwitch = vxlanWithBlock.withKVUpdates(
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIP.String(),
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: true, VxlanEnabled: false},
 )
 
 var vxlanBlockDelete = vxlanWithBlock.withKVUpdates(
@@ -1607,6 +1623,8 @@ var vxlanSlash32 = empty.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 var vxlanSlash32NoBlock = empty.withKVUpdates(
@@ -1624,6 +1642,8 @@ var vxlanSlash32NoBlock = empty.withKVUpdates(
 ).withRoutes(
 	routeUpdateIPPoolVXLANSlash32,
 	routeUpdateRemoteHost,
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 var vxlanSlash32NoPool = empty.withKVUpdates(
@@ -1678,6 +1698,8 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 // we start from vxlan setup as the test framework expects vxlan enabled
@@ -1869,6 +1891,32 @@ var endpointSliceActive = endpointSliceAndLocalWorkload.withKVUpdates(
 		{Name: "default", EgressPolicyNames: []string{"svc-policy"}},
 	},
 )
+
+var encapWithIPIPPool = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithIPIP},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: true, VxlanEnabled: false},
+).withRoutes(
+	routeUpdateIPPoolIPIP,
+).withName("Encap with IPIP Pool")
+
+var encapWithVXLANPool = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
+).withRoutes(
+	routeUpdateIPPoolVXLAN,
+).withName("Encap with VXLAN Pool")
+
+var encapWithIPIPAndVXLANPool = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithIPIP},
+	KVPair{Key: ipPoolKey2, Value: &ipPool2WithVXLAN},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: true, VxlanEnabled: true},
+).withRoutes(
+	routeUpdateIPPoolIPIP,
+	routeUpdateIPPool2VXLAN,
+).withName("Encap with IPIP and VXLAN Pools")
 
 type StateList []State
 
