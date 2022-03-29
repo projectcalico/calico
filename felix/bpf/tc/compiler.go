@@ -46,6 +46,7 @@ const (
 	EpTypeHost      EndpointType = "host"
 	EpTypeTunnel    EndpointType = "tunnel"
 	EpTypeWireguard EndpointType = "wireguard"
+	EpTypeNAT       EndpointType = "nat"
 )
 
 type ProgName string
@@ -55,6 +56,7 @@ var programNames = []ProgName{
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
+	"calico_tc_host_ct_conflict",
 	"calico_tc_v6",
 	"calico_tc_v6_norm_pol_tail",
 	"calico_tc_v6_skb_accepted_entrypoint",
@@ -104,6 +106,8 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		epTypeShort = "tnl"
 	case EpTypeWireguard:
 		epTypeShort = "wg"
+	case EpTypeNAT:
+		epTypeShort = "nat"
 	}
 	corePart := ""
 	if btf {
