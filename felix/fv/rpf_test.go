@@ -40,7 +40,7 @@ var _ = infrastructure.DatastoreDescribe(
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
 	func(getInfra infrastructure.InfraFactory) {
 
-		// XXX disable for non-bpf as it may not be enforced
+		// Only BPF mode enforces strict RPF by default.
 		if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
 			// Non-BPF run.
 			return
@@ -134,7 +134,8 @@ var _ = infrastructure.DatastoreDescribe(
 				_, err = external.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
 				Expect(err).NotTo(HaveOccurred())
 				// Add a route to the test workload to the fake external
-				// client emulated by the test-workload
+				// client emulated by the test-workload so that RPF can find a
+				// valid route.
 				_, err = external.RunCmd("ip", "route", "add", w.IP+"/32", "via", "10.0.0.20")
 				Expect(err).NotTo(HaveOccurred())
 
