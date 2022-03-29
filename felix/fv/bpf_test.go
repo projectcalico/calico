@@ -83,6 +83,8 @@ var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
 var _ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"))
 var _ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"))
+var _ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
 // with debug disabled and that can lead to verifier issues.
@@ -165,16 +167,16 @@ FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
 const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
-10.65.0.1/32: local host
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
 10.65.0.4/32: local workload in-pool nat-out idx -
-10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
-10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
+10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
 FELIX_0/32: local host idx -
+FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
@@ -258,6 +260,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			case "ipip":
 				options.IPIPEnabled = true
 				options.IPIPRoutesEnabled = true
+			case "vxlan":
+				options.VXLANMode = api.VXLANModeAlways
 			case "wireguard":
 				// Delay running Felix until Node resource has been created.
 				options.DelayFelixStart = true
@@ -286,10 +290,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				for i, felix := range felixes {
 					felix.Exec("iptables-save", "-c")
-					felix.Exec("ip", "r")
+					felix.Exec("conntrack", "-L")
 					felix.Exec("ip", "link")
 					felix.Exec("ip", "addr")
-					felix.Exec("ip", "route", "show", "cached")
+					felix.Exec("ip", "rule")
+					felix.Exec("ip", "route")
+					felix.Exec("ip", "neigh")
+					felix.Exec("arp")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
@@ -527,7 +534,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					expJumpMaps := func(numWorkloads int) int {
 						numHostIfaces := 1
-						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces
+						specialIfaces := 1
+						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
 						return expectedNumMaps
 					}
 
@@ -743,6 +751,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			err := infra.AddDefaultDeny()
 			Expect(err).NotTo(HaveOccurred())
+
+			if !testOpts.connTimeEnabled {
+				for _, felix := range felixes {
+					// N.B. we only support environment with not so strict RPF - can be
+					// strict per iface, but not for all.
+					felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
+					switch testOpts.tunnel {
+					case "none":
+						felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
+					case "ipip":
+						felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter=2")
+					case "wireguard":
+						felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter=2")
+					case "vxlan":
+						felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter=2")
+					}
+				}
+			}
 		}
 
 		Describe(fmt.Sprintf("with a %d node cluster", numNodes), func() {
@@ -815,10 +841,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 
 			It("should have correct routes", func() {
+				tunnelAddr := ""
 				expectedRoutes := expectedRouteDump
-				if felixes[0].ExpectedIPIPTunnelAddr != "" || felixes[0].ExpectedVXLANTunnelAddr != "" || felixes[0].ExpectedWireguardTunnelAddr != "" {
+				switch {
+				case felixes[0].ExpectedIPIPTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedIPIPTunnelAddr
+				case felixes[0].ExpectedVXLANTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedVXLANTunnelAddr
+				case felixes[0].ExpectedWireguardTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedWireguardTunnelAddr
+				}
+
+				if tunnelAddr != "" {
 					expectedRoutes = expectedRouteDumpWithTunnelAddr
 				}
+
 				dumpRoutes := func() string {
 					out, err := felixes[0].ExecOutput("calico-bpf", "routes", "dump")
 					if err != nil {
@@ -837,6 +874,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						l = strings.ReplaceAll(l, felixes[1].IP, "FELIX_1")
 						l = strings.ReplaceAll(l, felixes[2].IP, "FELIX_2")
 						l = idxRE.ReplaceAllLiteralString(l, "idx -")
+						if tunnelAddr != "" {
+							l = strings.ReplaceAll(l, tunnelAddr+"/32", "FELIX_0_TNL/32")
+						}
 						filteredLines = append(filteredLines, l)
 					}
 					sort.Strings(filteredLines)
@@ -982,6 +1022,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 					It("should not be able to spoof TCP", func() {
+						By("Disabling dev RPF")
+						setRPF(felixes, testOpts.tunnel, 0, 0)
 						// Make sure the workload is up and has configured its routes.
 						By("Having basic connectivity")
 						cc.Expect(Some, w[0][0], w[1][0])
@@ -1076,6 +1118,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "udp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 					It("should not be able to spoof UDP", func() {
+						By("Disabling dev RPF")
+						setRPF(felixes, testOpts.tunnel, 0, 0)
+						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf."+w[1][0].InterfaceName+".rp_filter=0")
+						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf."+w[1][1].InterfaceName+".rp_filter=0")
+
 						By("allowing any traffic", func() {
 							pol.Spec.Ingress = []api.Rule{
 								{
@@ -2338,6 +2385,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									ipOK = append(ipOK, felixes[0].ExpectedIPIPTunnelAddr,
 										felixes[1].ExpectedIPIPTunnelAddr, felixes[2].ExpectedIPIPTunnelAddr)
 								}
+								if testOpts.tunnel == "vxlan" {
+									ipOK = append(ipOK, felixes[0].ExpectedVXLANTunnelAddr,
+										felixes[1].ExpectedVXLANTunnelAddr, felixes[2].ExpectedVXLANTunnelAddr)
+								}
 								if testOpts.tunnel == "wireguard" {
 									ipOK = append(ipOK, felixes[0].ExpectedWireguardTunnelAddr,
 										felixes[1].ExpectedWireguardTunnelAddr, felixes[2].ExpectedWireguardTunnelAddr)
@@ -2383,26 +2434,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity()
 						})
 
-						if testOpts.connTimeEnabled {
-							Describe("with policy enabling ingress to w[0][0] from host endpoints", func() {
-								BeforeEach(func() {
-									pol = api.NewGlobalNetworkPolicy()
-									pol.Namespace = "fv"
-									pol.Name = "policy-host-eps"
-									pol.Spec.Ingress = []api.Rule{
-										{
-											Action: "Allow",
-											Source: api.EntityRule{
-												Selector: "ep-type=='host'",
-											},
+						Describe("with policy enabling ingress to w[0][0] from host endpoints", func() {
+							BeforeEach(func() {
+								pol = api.NewGlobalNetworkPolicy()
+								pol.Namespace = "fv"
+								pol.Name = "policy-host-eps"
+								pol.Spec.Ingress = []api.Rule{
+									{
+										Action: "Allow",
+										Source: api.EntityRule{
+											Selector: "ep-type=='host'",
 										},
-									}
-									w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
-									pol.Spec.Selector = w00Slector
+									},
+								}
+								w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
+								pol.Spec.Selector = w00Slector
 
-									pol = createPolicy(pol)
-								})
+								pol = createPolicy(pol)
+							})
 
+							if testOpts.connTimeEnabled {
 								It("should have connectivity from all host-networked workloads to workload 0", func() {
 									node0IP := felixes[0].IP
 									node1IP := felixes[1].IP
@@ -2416,22 +2467,149 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
 									case "wireguard":
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+									case "vxlan":
+										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
 									}
 
 									ports := ExpectWithPorts(npPort)
 
 									// Also try host networked pods, both on a local and remote node.
 									// N.B. it cannot work without the connect time balancer
-									cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
-									cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
+									// cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
+									// cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
 									cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
 									cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
 
 									cc.CheckConnectivity()
 								})
-							})
-						}
+							}
 
+							_ = testIfNotUDPUConnected && // two app with two sockets cannot conflict
+								Context("with conflict from host-networked workloads via clusterIP and directly", func() {
+									JustBeforeEach(func() {
+										for i, felix := range felixes {
+											f := felix
+											idx := i
+											Eventually(func() bool {
+												return checkServiceRoute(f, testSvc.Spec.ClusterIP)
+											}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(),
+												fmt.Sprintf("felix %d failed to sync with service", idx))
+
+											felix.Exec("ip", "route")
+										}
+									})
+									if !testOpts.connTimeEnabled {
+										It("should have connection when via clusterIP starts first", func() {
+											node1IP := felixes[1].IP
+
+											hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+											switch testOpts.tunnel {
+											case "ipip":
+												hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+											case "wireguard":
+												hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+											case "vxlan":
+												hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+											}
+
+											clusterIP := testSvc.Spec.ClusterIP
+											port := uint16(testSvc.Spec.Ports[0].Port)
+
+											By("syncing with service programming")
+											ports := ExpectWithPorts(port)
+											cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+											cc.CheckConnectivity()
+											cc.ResetExpectations()
+
+											By("starting a persistent connection to cluster IP")
+											pc := hostW[1].StartPersistentConnection(clusterIP, int(port),
+												workload.PersistentConnectionOpts{
+													SourcePort:          12345,
+													MonitorConnectivity: true,
+												},
+											)
+											defer pc.Stop()
+
+											cc.Expect(Some, hostW[1], w[0][0], hostW1SrcIP, ExpectWithSrcPort(12345))
+											cc.CheckConnectivity()
+
+											prevCount := pc.PongCount()
+											Eventually(pc.PongCount, "5s").Should(BeNumerically(">", prevCount),
+												"Expected to see pong responses on the connection but didn't receive any")
+										})
+
+										It("should have connection when direct starts first", func() {
+											node1IP := felixes[1].IP
+
+											hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+											switch testOpts.tunnel {
+											case "ipip":
+												hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+											case "wireguard":
+												hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+											case "vxlan":
+												hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+											}
+
+											clusterIP := testSvc.Spec.ClusterIP
+											port := uint16(testSvc.Spec.Ports[0].Port)
+
+											By("syncing with service programming")
+											ports := ExpectWithPorts(port)
+											cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+											cc.CheckConnectivity()
+											cc.ResetExpectations()
+
+											By("starting a persistent connection directly")
+											pc := hostW[1].StartPersistentConnection(w[0][0].IP, 8055,
+												workload.PersistentConnectionOpts{
+													SourcePort:          12345,
+													MonitorConnectivity: true,
+												},
+											)
+											defer pc.Stop()
+
+											cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports,
+												hostW1SrcIP, ExpectWithSrcPort(12345))
+											cc.CheckConnectivity()
+
+											prevCount := pc.PongCount()
+											Eventually(pc.PongCount, "5s").Should(BeNumerically(">", prevCount),
+												"Expected to see pong responses on the connection but didn't receive any")
+										})
+									}
+								})
+
+							It("should have connectivity from all host-networked workloads to workload 0 via clusterIP", func() {
+								node0IP := felixes[0].IP
+								node1IP := felixes[1].IP
+
+								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+								switch testOpts.tunnel {
+								case "ipip":
+									hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+								case "wireguard":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+								case "vxlan":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+								}
+
+								clusterIP := testSvc.Spec.ClusterIP
+								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
+
+								// Also try host networked pods, both on a local and remote node.
+								// N.B. it cannot work without the connect time balancer
+								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+
+								cc.CheckConnectivity()
+							})
+						})
 					}
 
 					if !intLocal {
@@ -3445,4 +3623,38 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
 		"Service endpoints didn't get created? Is controller-manager happy?")
 	return testSvc
+}
+
+func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
+	out, err := felix.ExecOutput("ip", "route")
+	Expect(err).NotTo(HaveOccurred())
+
+	lines := strings.Split(out, "\n")
+	rtRE := regexp.MustCompile(ip + " .* dev bpfnatin")
+
+	for _, l := range lines {
+		if rtRE.MatchString(l) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
+	for _, felix := range felixes {
+		// N.B. we only support environment with not so strict RPF - can be
+		// strict per iface, but not for all.
+		felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+strconv.Itoa(all))
+		switch tunnel {
+		case "none":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+strconv.Itoa(main))
+		case "ipip":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+strconv.Itoa(main))
+		case "wireguard":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+strconv.Itoa(main))
+		case "vxlan":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+strconv.Itoa(main))
+		}
+	}
 }
