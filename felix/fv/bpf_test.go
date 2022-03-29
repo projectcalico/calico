@@ -2385,6 +2385,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									ipOK = append(ipOK, felixes[0].ExpectedIPIPTunnelAddr,
 										felixes[1].ExpectedIPIPTunnelAddr, felixes[2].ExpectedIPIPTunnelAddr)
 								}
+								if testOpts.tunnel == "vxlan" {
+									ipOK = append(ipOK, felixes[0].ExpectedVXLANTunnelAddr,
+										felixes[1].ExpectedVXLANTunnelAddr, felixes[2].ExpectedVXLANTunnelAddr)
+								}
 								if testOpts.tunnel == "wireguard" {
 									ipOK = append(ipOK, felixes[0].ExpectedWireguardTunnelAddr,
 										felixes[1].ExpectedWireguardTunnelAddr, felixes[2].ExpectedWireguardTunnelAddr)
