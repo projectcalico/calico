@@ -23,7 +23,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/calico
 
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yq.v2"
-YAML_CMD:=$(shell which yq.v2 || echo docker run --rm -i mikefarah/yq:2.4.2 yq)
+YAML_CMD:=$(shell which yq.v2 || echo docker run --rm $(DOCKER_INTERACTIVE) mikefarah/yq:2.4.2 yq)
 
 # Local directories to ignore when running htmlproofer
 HP_IGNORE_LOCAL_DIRS="/v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/,/v2.3/,/v2.4/,/v2.5/,/v2.6/,/v3.0/"
@@ -49,7 +49,7 @@ serve: bin/helm
 	# load any plugins. Since we're no longer running in github-pages, but would
 	# like to use a docker image that comes preloaded with all the github-pages plugins,
 	# its ok to override this variable.
-	docker run --rm -it \
+	docker run --rm $(DOCKER_INTERACTIVE) \
 	  -v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
 	  -v $(CURDIR):/srv/jekyll \
 	  -v $(CURDIR)/../libcalico-go:/srv/libcalico-go \

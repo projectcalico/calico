@@ -233,6 +233,9 @@ ifeq ($(ARCH),armv7)
 TARGET_PLATFORM=--platform=linux/arm/v7
 endif
 
+# DOCKER_INTERACTIVE is set to "-ti" if we're run on an interactive shell (TTY).
+DOCKER_INTERACTIVE=$(shell test -t 1 && echo -ti)
+
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --pull \
 	     --build-arg QEMU_IMAGE=$(CALICO_BUILD) \
@@ -243,6 +246,7 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
+		$(DOCKER_INTERACTIVE) \
 		$(EXTRA_DOCKER_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
@@ -259,6 +263,7 @@ DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
+		$(DOCKER_INTERACTIVE) \
 		$(EXTRA_DOCKER_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
@@ -294,7 +299,7 @@ define update_pin
 	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
 	$(eval repo := $(if $(4),$(1)/$(4),$(1)))
 
-	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
 		if [ ! -z "$(new_ver)" ]; then \
 			$(GIT_CONFIG_SSH) \
 			go get -d $(repo)@$(new_ver); \
@@ -311,7 +316,7 @@ define update_replace_pin
 	$(eval original_repo := $(if $(4),$(1)/$(4),$(1)))
 	$(eval replace_repo := $(if $(4),$(2)/$(4),$(2)))
 
-	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
 		if [ ! -z "$(new_ver)" ]; then \
 			$(GIT_CONFIG_SSH) \
 			go mod edit -replace $(original_repo)=$(replace_repo)@$(new_ver); \
@@ -401,14 +406,14 @@ git-commit:
 # different implementation.
 ###############################################################################
 
-CRANE_CMD         = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c \
+CRANE_CMD         = docker run $(DOCKER_INTERACTIVE) --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c \
                     $(double_quote)crane
 GIT_CMD           = git
 DOCKER_CMD        = docker
 
 MANIFEST_TOOL_EXTRA_DOCKER_ARGS ?=
 # note that when using the MANIFEST_TOOL command you need to close the command with $(double_quote).
-MANIFEST_TOOL_CMD = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(MANIFEST_TOOL_EXTRA_DOCKER_ARGS) $(CALICO_BUILD) -c \
+MANIFEST_TOOL_CMD = docker run $(DOCKER_INTERACTIVE) --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(MANIFEST_TOOL_EXTRA_DOCKER_ARGS) $(CALICO_BUILD) -c \
 					  $(double_quote)/usr/bin/manifest-tool
 
 ifdef CONFIRM
@@ -774,7 +779,7 @@ docker-compress:
 	$(eval CHANGE := $(CHANGE)$(shell echo $(JSONOBJ) | jq -r \
 		"if has(\"ExposedPorts\") and (.ExposedPorts | length) > 0 then .ExposedPorts | keys | map(\" --change 'EXPOSE \(.)'\") | join(\"\") else \"\" end"\
 	))
-	$(eval CONTAINER_ID := $(shell docker run -d -it --entrypoint /bin/true $(IMAGE_NAME) /bin/true))
+	$(eval CONTAINER_ID := $(shell docker run -d $(DOCKER_INTERACTIVE) --entrypoint /bin/true $(IMAGE_NAME) /bin/true))
 	docker export $(CONTAINER_ID) | docker import $(CHANGE) - $(IMAGE_NAME)
 
 ###############################################################################
