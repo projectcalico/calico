@@ -97,9 +97,9 @@ blocks:
       commands:
       - cd api
     jobs:
-    - name: "make build / ci / static-checks"
+    - name: "make ci"
       commands:
-      - "../.semaphore/run-and-monitor make-ci.log make ci"
+      - ../.semaphore/run-and-monitor make-ci.log make ci
 
 - name: "apiserver"
   run:
@@ -118,7 +118,7 @@ blocks:
     jobs:
     - name: "make ci"
       commands:
-      - "../.semaphore/run-and-monitor make-ci.log make ci"
+      - ../.semaphore/run-and-monitor make-ci.log make ci
 
 - name: "libcalico-go"
   run:
@@ -129,7 +129,7 @@ blocks:
     - name: "libcalico-go: tests"
       commands:
       - cd libcalico-go
-      - "../.semaphore/run-and-monitor make-ci.log make ci"
+      - ../.semaphore/run-and-monitor make-ci.log make ci
 
 - name: "Typha"
   run:
@@ -144,7 +144,7 @@ blocks:
     - name: "Typha: UT and FV tests"
       commands:
       - cd typha
-      - "../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test"
+      - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
     epilogue:
       always:
         commands:
@@ -187,15 +187,15 @@ blocks:
       - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
       - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
       - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
-      - "../.semaphore/run-and-monitor ut.log make ut"
-      - "../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true"
-      - "../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false"
+      - ../.semaphore/run-and-monitor ut.log make ut
+      - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+      - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
     - name: make image-all
       execution_time_limit:
         minutes: 60
       commands:
-      - "../.semaphore/run-and-monitor static-checks.log make static-checks"
-      - "../.semaphore/run-and-monitor image-all.log make image-all"
+      - ../.semaphore/run-and-monitor static-checks.log make static-checks
+      - ../.semaphore/run-and-monitor image-all.log make image-all
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -345,7 +345,7 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-        - "../.semaphore/run-and-monitor ci.log make ci"
+        - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: "Node: Tests"
   run:
@@ -362,10 +362,10 @@ blocks:
     jobs:
     - name: "Node: CI"
       commands:
-      - "../.semaphore/run-and-monitor ci.log make ci"
+      - ../.semaphore/run-and-monitor ci.log make ci
     - name: "Node: k8s-test"
       commands:
-      - "../.semaphore/run-and-monitor k8s-test.log make k8s-test"
+      - ../.semaphore/run-and-monitor k8s-test.log make k8s-test
     epilogue:
       always:
         commands:
