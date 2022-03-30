@@ -114,7 +114,7 @@ func init() {
 }
 
 func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, ni cache.Indexer) *ipamController {
-	var duration *time.Duration
+	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		duration = &cfg.LeakGracePeriod.Duration
 	}
