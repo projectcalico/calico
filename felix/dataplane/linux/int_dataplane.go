@@ -186,6 +186,7 @@ type Config struct {
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
 	BPFIpv6Enabled                     bool
+	BPFDisableLinuxConntrack           bool
 	KubeProxyMinSyncPeriod             time.Duration
 
 	SidecarAccelerationEnabled bool
@@ -1271,7 +1272,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 		if t.IPVersion == 4 {
 			// Iptables for untracked policy.
-			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass)))
+			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass), d.config.BPFDisableLinuxConntrack))
 			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 			}})
