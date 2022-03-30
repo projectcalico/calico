@@ -184,7 +184,6 @@ deny:
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 {
-	__u64 cookie;
 	/* Now we've got as far as the UDP header, check if this is one of our VXLAN packets, which we
 	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
@@ -217,6 +216,20 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 
 	/* Do conntrack lookup before anything else */
 	ctx->state->ct_result = calico_ct_v4_lookup(ctx);
+
+	calico_tc_process_ct_lookup(ctx);
+
+allow:
+finalize:
+	return forward_or_drop(ctx);
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+}
+
+
+static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
+{
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
 
 	/* Check if someone is trying to spoof a tunnel packet */
@@ -418,7 +431,7 @@ syn_force_policy:
 	// sending socket's cookie, so we can reverse a DNAT that the CTLB may have done.
 	// This allows us to give the policy program the pre-DNAT destination as well as
 	// the post-DNAT destination in all cases.
-	cookie = bpf_get_socket_cookie(ctx->skb);
+	__u64 cookie = bpf_get_socket_cookie(ctx->skb);
 	if (cookie) {
 		CALI_DEBUG("Socket cookie: %x\n", cookie);
 		struct ct_nats_key ct_nkey = {
@@ -478,12 +491,11 @@ skip_policy:
 	/* should not reach here */
 	goto deny;
 
-allow:
 finalize:
-	return forward_or_drop(ctx);
+	return;
+
 deny:
 	ctx->fwd.res = TC_ACT_SHOT;
-	goto finalize;
 }
 
 SEC("classifier/tc/accept")

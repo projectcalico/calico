@@ -82,7 +82,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		Expect(firstRunBase).NotTo(BeClosed())
 
 		// This should not happen at initial execution of felix, since there is no program attached
-		secondRunBase := felix.WatchStdoutFor(regexp.MustCompile("Continue with attaching BPF program"))
+		secondRunBase := felix.WatchStdoutFor(regexp.MustCompile(`Continue with attaching BPF program (to|from)_hep`))
 		// These should happen after restart of felix, since BPF programs are already attached
 		secondRunProg1 := felix.WatchStdoutFor(regexp.MustCompile(`Program already attached to TC, skip reattaching to_hep_debug(|_co-re)\.o`))
 		secondRunProg2 := felix.WatchStdoutFor(regexp.MustCompile(`Program already attached to TC, skip reattaching from_hep_fib_debug(|_co-re)\.o`))
