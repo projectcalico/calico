@@ -931,6 +931,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1][0], w[0][0])
 					cc.ExpectSome(w[1][1], w[0][0])
 					cc.CheckConnectivity()
+					checkNodeConntrack(felixes)
 				})
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
@@ -3431,4 +3432,23 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
 		"Service endpoints didn't get created? Is controller-manager happy?")
 	return testSvc
+}
+
+func checkNodeConntrack(felixes []*infrastructure.Felix) {
+	for _, felix := range felixes {
+		conntrack, err := felix.ExecOutput("conntrack", "-L")
+		Expect(err).NotTo(HaveOccurred())
+		lines := strings.Split(conntrack, "\n")
+		felixAddr := fmt.Sprintf("src=%s", felix.IP)
+		ipAddr := regexp.MustCompile(felixAddr)
+		for _, line := range lines {
+			line = strings.Trim(line, " ")
+			if len(line) == 0 {
+				continue
+			}
+			if strings.Contains(line, "src=") {
+				Expect(ipAddr.MatchString(line)).To(BeTrue())
+			}
+		}
+	}
 }

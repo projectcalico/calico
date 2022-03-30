@@ -726,7 +726,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
-			seen_mark = CALI_SKB_MARK_SKIP_FIB;
 		}
 
 		if (state->ip_proto == IPPROTO_TCP) {

@@ -1045,14 +1045,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 					Comment: []string{"MarkSeenNATOutgoing Mark"},
 				},
 				Rule{
-					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenBypass, tcdefs.MarkSeenBypassMask),
-					Action:  ReturnAction{},
-					Comment: []string{"MarkSeenBypass Mark"},
-				},
-				Rule{
-					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-					Action:  NoTrackAction{},
-					Comment: []string{"MarkSeen Mark"},
+					Action: NoTrackAction{},
 				},
 			},
 		}
