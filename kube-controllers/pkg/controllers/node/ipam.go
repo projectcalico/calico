@@ -114,6 +114,10 @@ func init() {
 }
 
 func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, ni cache.Indexer) *ipamController {
+	var leakGracePeriod *time.Duration
+	if cfg.LeakGracePeriod != nil {
+		leakGracePeriod = &cfg.LeakGracePeriod.Duration
+	}
 	return &ipamController{
 		client:    c,
 		clientset: cs,
@@ -123,8 +127,6 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		syncChan: make(chan interface{}, 1),
 
 		nodeIndexer: ni,
-
-		// Channel for updates
 
 		// Buffered channels for potentially bursty channels.
 		syncerUpdates: make(chan interface{}, batchUpdateSize),
@@ -142,6 +144,9 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		emptyBlocks:                 make(map[string]string),
 		poolManager:                 newPoolManager(),
 		datastoreReady:              true,
+
+		// Track blocks which we might want to release.
+		blockReleaseTracker: newBlockReleaseTracker(leakGracePeriod),
 
 		// For unit testing purposes.
 		pauseRequestChannel: make(chan pauseRequest),
@@ -172,14 +177,15 @@ type ipamController struct {
 	allBlocks map[string]model.KVPair
 
 	// Store allocations broken out from the raw blocks by their handle.
-	allocationsByBlock map[string]map[string]*allocation
-	allocationsByNode  map[string]map[string]*allocation
-	handleTracker      *handleTracker
-	nodesByBlock       map[string]string
-	blocksByNode       map[string]map[string]bool
-	emptyBlocks        map[string]string
-	confirmedLeaks     map[string]*allocation
-	poolManager        *poolManager
+	allocationsByBlock  map[string]map[string]*allocation
+	allocationsByNode   map[string]map[string]*allocation
+	handleTracker       *handleTracker
+	nodesByBlock        map[string]string
+	blocksByNode        map[string]map[string]bool
+	emptyBlocks         map[string]string
+	confirmedLeaks      map[string]*allocation
+	poolManager         *poolManager
+	blockReleaseTracker *blockReleaseTracker
 
 	// Cache pods to avoid unnecessary API queries.
 	podCache map[string]*v1.Pod
@@ -551,6 +557,7 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	delete(c.nodesByBlock, blockCIDR)
 	delete(c.emptyBlocks, blockCIDR)
 
+	c.blockReleaseTracker.onBlockDeleted(blockCIDR)
 	c.poolManager.onBlockDeleted(blockCIDR)
 }
 
@@ -676,6 +683,7 @@ func (c *ipamController) checkEmptyBlocks() error {
 		// Make sure there are some addresses available before releasing.
 		if numAddressesAvailableOnNode < 3 {
 			logc.Debug("Block is still needed, skip release")
+			c.blockReleaseTracker.markInUse(blockCIDR)
 			continue
 		}
 
@@ -683,10 +691,20 @@ func (c *ipamController) checkEmptyBlocks() error {
 		migrating, err := c.nodeIsBeingMigrated(node)
 		if err != nil {
 			logc.WithError(err).Warn("Failed to check if node is being migrated from Flannel, skipping affinity release")
+			c.blockReleaseTracker.markInUse(blockCIDR)
 			continue
 		}
 		if migrating {
 			logc.Info("Node affined to block is currently undergoing a migration from Flannel, skipping affinity release")
+			c.blockReleaseTracker.markInUse(blockCIDR)
+			continue
+		}
+
+		// Block is a candidate for GC. We don't want to release it immediately after it is created, since there is a
+		// small but valid window when allocating an IP that can result in an empty block. Make sure this block is empty
+		// for the duration of the grace period before deletion.
+		if !c.blockReleaseTracker.markEmpty(blockCIDR) {
+			logc.Debug("Block is empty, but still within grace period")
 			continue
 		}
 
@@ -714,6 +732,7 @@ func (c *ipamController) checkEmptyBlocks() error {
 		delete(c.nodesByBlock, blockCIDR)
 		delete(c.allBlocks, blockCIDR)
 
+		c.blockReleaseTracker.onBlockDeleted(blockCIDR)
 		c.poolManager.onBlockDeleted(blockCIDR)
 	}
 	return nil
