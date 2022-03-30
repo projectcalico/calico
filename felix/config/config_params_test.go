@@ -59,6 +59,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"loadClientConfigFromEnvironment",
 		"useNodeResourceUpdates",
 		"internalOverrides",
+		"BPFDisableLinuxConntrack",
 
 		// Temporary field to implement and test IPv6 in BPF dataplane
 		"BpfIpv6Support",

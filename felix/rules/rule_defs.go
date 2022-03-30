@@ -169,7 +169,7 @@ type RuleRenderer interface {
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATPostroutingChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
-	StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*iptables.Chain
+	StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32, disableConntrack bool) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 	StaticFilterForwardAppendRules() []iptables.Rule
 
