@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv
+package fv_test
 
 import (
 	"context"
@@ -64,7 +64,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 	)
 
 	BeforeEach(func() {
-		// Create a temporary directory to map into the container as /var/run/calico/policsync, which
+		// Create a temporary directory to map into the container as /var/run/calico/policysync, which
 		// is where we tell Felix to put the policy sync mounts and credentials.
 		var err error
 		tempDir, err = ioutil.TempDir("", "felixfv")
@@ -192,7 +192,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 			It("felix should create the workload socket", func() {
 				for _, p := range hostWlSocketPath {
-					Eventually(p).Should(BeAnExistingFile())
+					Eventually(p, "3s").Should(BeAnExistingFile())
 				}
 			})
 
@@ -224,7 +224,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 					for i := range w {
 						// Use the fact that anything we exec inside the Felix container runs as root to fix the
 						// permissions on the socket so the test process can connect.
-						Eventually(hostWlSocketPath[i]).Should(BeAnExistingFile())
+						Eventually(hostWlSocketPath[i], "3s").Should(BeAnExistingFile())
 						felix.Exec("chmod", "a+rw", containerWlSocketPath[i])
 						wlConn[i], wlClient[i] = createWorkloadConn(i)
 					}
