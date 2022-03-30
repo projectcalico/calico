@@ -223,6 +223,52 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		}, 30*time.Second, 2*time.Second).Should(BeNil())
 	})
 
+	It("CASEY should clean up empty blocks after the grace period", func() {
+		var err error
+
+		// Allocate and then release an IP to create an empty block.
+		handle := "block-gc-test-handle"
+		By("allocating an IP address to create a valid block", func() {
+			// Allocate an IPIP, VXLAN and WG address to NodeA as well.
+			// These only get cleaned up if the node is deleted, so for this test should never be GC'd.
+			attrs := map[string]string{"node": nodeA}
+			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.1"), HandleID: &handle, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		handle2 := "block-gc-test-handle-2"
+		By("allocating an IP address to create a second valid block", func() {
+			// Allocate an IPIP, VXLAN and WG address to NodeA as well.
+			// These only get cleaned up if the node is deleted, so for this test should never be GC'd.
+			attrs := map[string]string{"node": nodeA}
+			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.65"), HandleID: &handle2, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Expect two blocks, both affine to node A.
+		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(blocks.KVPairs)).To(Equal(2))
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(affs.KVPairs)).To(Equal(2))
+
+		By("releasing the second IP address to create an empty affine block", func() {
+			unalloc, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(unalloc)).To(Equal(0))
+		})
+
+		// Expect the block and affinity to be cleaned up by the GC, eventually.
+		Eventually(func() error {
+			return assertNumBlocks(bc, 1)
+		}, 15*time.Second, 2*time.Second).Should(BeNil())
+	})
+
 	It("should NOT clean up allocations that are not Kubernetes pods", func() {
 		var err error
 		handleNonKubernetes := "handle-not-kubernetes"
