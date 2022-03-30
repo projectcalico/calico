@@ -43,23 +43,28 @@ func (t *blockReleaseTracker) markEmpty(cidr string) bool {
 		first, ok := t.blocks[cidr]
 		if !ok {
 			// This is the first time we've been marked empty.
+			log.WithField("block", cidr).Infof("Block marked as empty. Will be GC'd in %s", *t.leakGracePeriod)
 			t.blocks[cidr] = time.Now()
 			return false
 		}
 
 		// OK to release if this block has been empty for over the grace period.
+		log.WithField("block", cidr).Info("OK to release block")
 		return time.Since(first) > *t.leakGracePeriod
 	}
+	log.WithField("block", cidr).Info("No grace period set, block GC disabled")
 	return false
 }
 
 // MarkInUse indicates to the tracker that this block is still in use.
 func (t *blockReleaseTracker) markInUse(cidr string) {
+	log.WithField("block", cidr).Info("markInUse block")
 	delete(t.blocks, cidr)
 }
 
 // OnBlockDeleted clears up any internal state associated with the block.
 func (t *blockReleaseTracker) onBlockDeleted(cidr string) {
+	log.WithField("block", cidr).Info("onBlockDeleted")
 	delete(t.blocks, cidr)
 }
 
