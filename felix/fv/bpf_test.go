@@ -930,10 +930,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[0][1], w[0][0])
 					cc.ExpectSome(w[1][0], w[0][0])
 					cc.ExpectSome(w[1][1], w[0][0])
-					for i := 0; i < 100; i++ {
-						cc.CheckConnectivity()
-						time.Sleep(30 * time.Second)
-					}
+					cc.CheckConnectivity()
 				})
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
