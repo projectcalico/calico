@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv
+package fv_test
 
 import (
 	"os"
@@ -39,7 +39,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 
 	BeforeEach(func() {
 		infra = getInfra()
-		//opts := infrastructure.DefaultTopologyOptions()
+		// opts := infrastructure.DefaultTopologyOptions()
 		opts := infrastructure.TopologyOptions{
 			FelixLogSeverity: "debug",
 			DelayFelixStart:  true,
