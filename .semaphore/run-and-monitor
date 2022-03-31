@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2022 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+num_unfiltered_lines=1000
+log_monitor_regexps=(
+  "Failure"
+  "FAIL"
+  "SUCCESS"
+  "Test batch"
+)
+
+echo "Current dir: $(pwd)"
+my_dir="$(dirname $0)"
+repo_dir="${my_dir}/.."
+artifacts_dir="$repo_dir/artifacts"
+log_file_name="$1"
+log_file="${artifacts_dir}/$1"
+
+mkdir -p "${artifacts_dir}"
+
+shift
+
+cmd_escaped="$(printf "%q " "$@")"
+echo "==== Running command: $cmd_escaped"
+
+expect <<END >& "$log_file" &
+spawn -noecho $cmd_escaped
+set timeout -1
+expect eof
+
+lassign [wait] pid spawnid os_error_flag value
+exit \$value
+END
+pid=$!
+
+grep_args=("--line-buffered" "-C10")
+for r in "${log_monitor_regexps[@]}"; do
+  grep_args+=("-e" "$(printf "%q" "$r")")
+done
+
+tail --pid $pid -n 1000000 -F "$log_file" | {
+  # Always output the first n lines.
+  head -n $num_unfiltered_lines;
+  echo "---- Output to screen filtered from here ----";
+  grep "${grep_args[@]}";
+} &
+mon_pid=$!
+
+final_result=0
+cmd_done=false
+function cleanup()
+{
+  kill $mon_pid || true
+  if ! $cmd_done; then
+    echo "==== Stopping command PID=${pid}..."
+    kill $pid || true
+    final_result=1
+  fi
+  echo "==== Done, exiting with RC=$final_result"
+  exit $final_result
+}
+trap cleanup EXIT
+
+echo "==== Filtered output to screen, full output in artifacts/${log_file_name} (main PID=$pid, filter PID=$mon_pid)"
+if wait "$pid"; then
+  echo "==== Command ${cmd_escaped}SUCCEEDED (PID=$pid).  Full command output in artifacts/${log_file_name}."
+else
+  echo "==== Command ${cmd_escaped}FAILED (PID=$pid).  Full command output in artifacts/${log_file_name}."
+  final_result=1
+fi
+cmd_done=true
+
