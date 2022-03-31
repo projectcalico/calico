@@ -77,11 +77,11 @@ spec:
                 description: 'BPFEnabled, if enabled Felix will use the BPF dataplane.
                   [Default: false]'
                 type: boolean
-              bpfEnforceStrictRPF:
-                description: 'BPFEnforceStrictRPF enforce strict RPF on all interfaces
+              bpfEnforceRPF:
+                description: 'BPFEnforceRPF enforce strict RPF on all interfaces
                   with BPF programs regardless of what is the per-interfaces or global
-                  setting. [Default: true]'
-                type: boolean
+                  setting. POssible values are Disabled or Strict [Default: Strict]'
+                type: string
               bpfExtToServiceConnmark:
                 description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
                   mark that is set on connections from an external client to a local
