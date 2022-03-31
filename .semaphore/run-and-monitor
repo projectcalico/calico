@@ -16,6 +16,7 @@
 
 set -e
 
+num_unfiltered_lines=1000
 log_monitor_regexps=(
   "Failure"
   "FAIL"
@@ -56,7 +57,12 @@ for r in "${log_monitor_regexps[@]}"; do
   grep_args+=("-e" "$(printf "%q" "$r")")
 done
 
-tail -F "$log_file" | grep "${grep_args[@]}" &
+tail --pid $pid -n 1000000 -F "$log_file" | {
+  # Always output the first n lines.
+  head -n $num_unfiltered_lines;
+  echo "---- Output to screen filtered from here ----";
+  grep "${grep_args[@]}";
+} &
 mon_pid=$!
 
 final_result=0
