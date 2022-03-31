@@ -162,6 +162,7 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for step
 | BPFMapSizeNATAffinity / <br/> FELIX_BPFMapSizeNATAffinity | Controls the size of the NAT affinity map. | int | 65536 |
 | BPFMapSizeIPSets / <br/> FELIX_BPFMapSizeIPSets | Controls the size of the IPSets map. The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors such as "all()" can result in large numbers of entries (one entry per endpoint in that case). | int | 1048576 |
 | BPFMapSizeRoute / <br/> FELIX_BPFMapSizeRoute | Controls the size of the route map. The routes map should be large enough to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and tunnel IPs). | int | 262144 |
+| BPFDisableLinuxConntrack / <br/> FELIX_BPFDisableLinuxConntrack | Controls whether to enable or disable Linux conntrack in BPF mode for workloads | true,false | true |
 
 #### Kubernetes-specific configuration
 
