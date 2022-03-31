@@ -102,6 +102,8 @@ const (
 	HostToEndpointForwardPfx   = ChainNamePrefix + "thfw-"
 	HostFromEndpointForwardPfx = ChainNamePrefix + "fhfw-"
 
+	RPFChain = ChainNamePrefix + "rpf"
+
 	RuleHashPrefix = "cali:"
 
 	// HistoricNATRuleInsertRegex is a regex pattern to match to match
