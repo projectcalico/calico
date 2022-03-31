@@ -61,7 +61,8 @@ struct calico_ct_value {
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
 	// failures when debug logging is compiled out only :-).
-	__u8 pad0[6];
+	__u8 pad0[5];
+	__u8 flags2;
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
@@ -84,6 +85,17 @@ struct calico_ct_value {
 		};
 	};
 };
+
+#define ct_value_set_flags(v, f) do {		\
+	(v)->flags |= ((f) & 0xff);		\
+	(v)->flags2 |= (((f) >> 8) & 0xff);	\
+} while(0)
+
+#define ct_value_get_flags(v) ({			\
+	__u16 ret = (v)->flags | ((v)->flags2 << 8);	\
+							\
+	ret;						\
+})
 
 struct ct_lookup_ctx {
 	__u8 proto;
@@ -108,7 +120,7 @@ struct ct_create_ctx {
 	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
 			* It is also set on the first node when we create the
 			* initial CT entry for the tunneled traffic. */
-	__u8 flags;
+	__u16 flags;
 	enum cali_ct_type type;
 	bool allow_return;
 };
