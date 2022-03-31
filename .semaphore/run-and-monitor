@@ -35,10 +35,8 @@ mkdir -p "${artifacts_dir}"
 
 shift
 
-echo "==== About to run:"
 cmd_escaped="$(printf "%q " "$@")"
-echo "     $cmd_escaped"
-echo "==== Redirecting to artifacts/${log_file_name}"
+echo "==== Running command: $cmd_escaped"
 
 expect <<END >& "$log_file" &
 spawn -noecho $cmd_escaped
@@ -48,9 +46,7 @@ expect eof
 lassign [wait] pid spawnid os_error_flag value
 exit \$value
 END
-
 pid=$!
-echo "     Main command PID=$pid"
 
 grep_args=("--line-buffered" "-C10")
 for r in "${log_monitor_regexps[@]}"; do
@@ -69,21 +65,18 @@ final_result=0
 cmd_done=false
 function cleanup()
 {
+  kill $mon_pid || true
   if ! $cmd_done; then
     echo "==== Stopping command PID=${pid}..."
     kill $pid || true
     final_result=1
   fi
-  echo "==== Stopping log monitor PID=${mon_pid}..."
-  kill $mon_pid || true
   echo "==== Done, exiting with RC=$final_result"
   exit $final_result
 }
 trap cleanup EXIT
 
-echo "     Monitor command PID=$mon_pid"
-
-echo "==== Waiting and monitoring output..."
+echo "==== Filtered output to screen, full output in artifacts/${log_file_name} (main PID=$pid, filter PID=$mon_pid)"
 if wait "$pid"; then
   echo "==== Command ${cmd_escaped}SUCCEEDED (PID=$pid).  Full command output in artifacts/${log_file_name}."
 else
