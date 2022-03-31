@@ -36,7 +36,7 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe(
-	"RPF tests",
+	"_BPF-SAFE_ RPF tests",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
 	func(getInfra infrastructure.InfraFactory) {
 
@@ -53,6 +53,7 @@ var _ = infrastructure.DatastoreDescribe(
 			calicoClient client.Interface
 			w            *workload.Workload
 			cc           *Checker
+			external     *workload.Workload
 		)
 
 		BeforeEach(func() {
@@ -87,28 +88,12 @@ var _ = infrastructure.DatastoreDescribe(
 				CheckSNAT: true,
 				Protocol:  "udp",
 			}
-		})
 
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				for _, felix := range felixes {
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ip", "link")
-					felix.Exec("ip", "addr")
-					felix.Exec("ip", "rule")
-					felix.Exec("ip", "route")
-				}
-			}
-		})
-
-		It("should not allow packets from wrong direction with non-strict RPF on main device", func() {
 			By("turning off RPF per device", func() {
 				felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
 				felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.default.rp_filter=0")
 				felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=0")
 			})
-
-			var external *workload.Workload
 
 			By("setting up node's fake external ifaces", func() {
 				// We name the ifaces ethXY since such ifaces are
@@ -145,7 +130,26 @@ var _ = infrastructure.DatastoreDescribe(
 				cc.CheckConnectivity()
 			})
 
-			By("testing with bad source", func() {
+		})
+
+		JustAfterEach(func() {
+			if CurrentGinkgoTestDescription().Failed {
+				for _, felix := range felixes {
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ip", "link")
+					felix.Exec("ip", "addr")
+					felix.Exec("ip", "rule")
+					felix.Exec("ip", "route")
+				}
+			}
+		})
+
+		Context("With BPFEnforceRPF=Strict", func() {
+			BeforeEach(func() {
+				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Strict"
+			})
+
+			It("should not allow packets from wrong direction with non-strict RPF on main device", func() {
 				fakeWorkloadIP := "10.65.15.15"
 
 				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
@@ -173,6 +177,42 @@ var _ = infrastructure.DatastoreDescribe(
 				// Expect not to receive the packet from the .20 as it is dropped by RPF.
 				Consistently(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
 					Should(BeNumerically("==", 0), "Wl - "+matcherWl)
+			})
+		})
+
+		Context("With BPFEnforceRPF=Disabled", func() {
+			BeforeEach(func() {
+				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Disabled"
+			})
+
+			It("should allow packets from wrong direction with non-strict RPF on main device", func() {
+				fakeWorkloadIP := "10.65.15.15"
+
+				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
+				tcpdumpHEP.SetLogEnabled(true)
+				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
+				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
+				tcpdumpHEP.Start()
+				defer tcpdumpHEP.Stop()
+
+				tcpdumpWl := w.AttachTCPDump()
+				tcpdumpWl.SetLogEnabled(true)
+				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
+				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
+				tcpdumpWl.Start()
+				defer tcpdumpWl.Stop()
+
+				_, err := external.RunCmd("/pktgen", fakeWorkloadIP, w.IP, "udp",
+					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Expect to see the packet from the .20 network at eth20 before RPF
+				Eventually(func() int { return tcpdumpHEP.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 1), "HEP - "+matcherHEP)
+
+				// Expect to receive the packet from the .20 as it is not dropped by RPF.
+				Eventually(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 1), "Wl - "+matcherWl)
 			})
 		})
 	})
