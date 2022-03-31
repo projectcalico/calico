@@ -904,6 +904,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("SNATting outgoing traffic with the flag set")
 					cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
 					cc.CheckConnectivity()
+					checkNodeConntrack(felixes)
 
 					if testOpts.tunnel == "none" {
 						By("Leaving traffic alone with the flag clear")
@@ -915,6 +916,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 						cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 
 						By("SNATting again with the flag set")
 						pool.Spec.NATOutgoing = true
@@ -923,6 +925,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 						cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 					}
 				})
 
@@ -1512,6 +1515,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[1][0], TargetIP(ip), port)
 						cc.ExpectSome(w[1][1], TargetIP(ip), port)
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 					})
 
 					/* Below Context handles the following transitions.
@@ -1534,6 +1538,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.ExpectSome(w[0][1], TargetIP(ip[0]), port)
 							cc.ExpectSome(w[1][1], TargetIP(ip[0]), port)
 							cc.CheckConnectivity()
+							checkNodeConntrack(felixes)
 						})
 						Context("change service type from external IP to LoadBalancer", func() {
 							srcIPRange := []string{}
@@ -1550,6 +1555,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.ExpectSome(w[1][1], TargetIP(ip[0]), port)
 								cc.ExpectSome(w[0][1], TargetIP(ip[0]), port)
 								cc.CheckConnectivity()
+								checkNodeConntrack(felixes)
 							})
 						})
 
@@ -3176,12 +3182,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[1][1], w[0][0])
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
+						checkNodeConntrack(felixes)
 					})
 
 					By("checking connectivity to the external workload", func() {
 						cc.Expect(Some, w[0][0], extWorkload, ExpectWithPorts(4321), ExpectWithSrcIPs(felixes[0].IP))
 						cc.Expect(Some, w[1][0], extWorkload, ExpectWithPorts(4321), ExpectWithSrcIPs(felixes[1].IP))
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 					})
 				})
 
@@ -3439,15 +3447,13 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) {
 		conntrack, err := felix.ExecOutput("conntrack", "-L")
 		Expect(err).NotTo(HaveOccurred())
 		lines := strings.Split(conntrack, "\n")
-		felixAddr := fmt.Sprintf("src=%s", felix.IP)
-		ipAddr := regexp.MustCompile(felixAddr)
 		for _, line := range lines {
 			line = strings.Trim(line, " ")
 			if len(line) == 0 {
 				continue
 			}
 			if strings.Contains(line, "src=") {
-				Expect(ipAddr.MatchString(line)).To(BeTrue())
+				Expect(strings.Contains(line, felix.IP)).To(BeTrue())
 			}
 		}
 	}
