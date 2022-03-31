@@ -583,15 +583,16 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		// to trigger that and leave the fib lookup disabled.
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {
+		seen_mark = CALI_SKB_MARK_SEEN;
 		if (state->flags & CALI_ST_SKIP_FIB) {
 			fib = false;
+			seen_mark = CALI_SKB_MARK_SKIP_FIB;
 		} else if (CALI_F_TO_HOST && !ct_result_rpf_failed(state->ct_result.rc)) {
 			// Non-SNAT case, allow FIB lookup only if RPF check passed.
 			// Note: tried to pass in the calculated value from calico_tc but
 			// hit verifier issues so recalculate it here.
 			fib = true;
 		}
-		seen_mark = CALI_SKB_MARK_SEEN;
 	}
 
 	/* We check the ttl here to avoid needing complicated handling of
