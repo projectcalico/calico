@@ -152,7 +152,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	Expect(ok).To(BeTrue())
 	// No NATing, service already resolved
 	Expect(v.Type()).To(Equal(conntrack.TypeNormal))
-	Expect(v.Flags()).To(Equal(uint8(0)))
+	Expect(v.Flags()).To(Equal(uint16(0)))
 
 	// Arriving at workload at node 2
 	skbMark = tcdefs.MarkSeen // CALI_SKB_MARK_SEEN
@@ -1358,6 +1358,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 func TestNormalSYNRetryForcePolicy(t *testing.T) {
 	RegisterTestingT(t)
 
+	defer func() { bpfIfaceName = "" }()
 	bpfIfaceName = "SYN1"
 
 	tcpSyn := &layers.TCP{

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv
+package fv_test
 
 import (
 	"os"
@@ -39,7 +39,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 
 	BeforeEach(func() {
 		infra = getInfra()
-		//opts := infrastructure.DefaultTopologyOptions()
+		// opts := infrastructure.DefaultTopologyOptions()
 		opts := infrastructure.TopologyOptions{
 			FelixLogSeverity: "debug",
 			DelayFelixStart:  true,
@@ -73,8 +73,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		// This should not happen at initial execution of felix, since there is no program attached
 		firstRunBase := felix.WatchStdoutFor(regexp.MustCompile("Program already attached, skip reattaching"))
 		// These should happen at first execution of felix, since there is no program attached
-		firstRunProg1 := felix.WatchStdoutFor(regexp.MustCompile("Continue with attaching BPF program to_hep_debug.o"))
-		firstRunProg2 := felix.WatchStdoutFor(regexp.MustCompile("Continue with attaching BPF program from_hep_fib_debug.o"))
+		firstRunProg1 := felix.WatchStdoutFor(regexp.MustCompile(`Continue with attaching BPF program to_hep_debug(|_co-re)\.o`))
+		firstRunProg2 := felix.WatchStdoutFor(regexp.MustCompile(`Continue with attaching BPF program from_hep_fib_debug(|_co-re)\.o`))
 		By("Starting Felix")
 		felix.TriggerDelayedStart()
 		Eventually(firstRunProg1, "10s", "100ms").Should(BeClosed())
@@ -82,10 +82,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		Expect(firstRunBase).NotTo(BeClosed())
 
 		// This should not happen at initial execution of felix, since there is no program attached
-		secondRunBase := felix.WatchStdoutFor(regexp.MustCompile("Continue with attaching BPF program"))
+		secondRunBase := felix.WatchStdoutFor(regexp.MustCompile(`Continue with attaching BPF program (to|from)_hep`))
 		// These should happen after restart of felix, since BPF programs are already attached
-		secondRunProg1 := felix.WatchStdoutFor(regexp.MustCompile("Program already attached to TC, skip reattaching to_hep_debug.o"))
-		secondRunProg2 := felix.WatchStdoutFor(regexp.MustCompile("Program already attached to TC, skip reattaching from_hep_fib_debug.o"))
+		secondRunProg1 := felix.WatchStdoutFor(regexp.MustCompile(`Program already attached to TC, skip reattaching to_hep_debug(|_co-re)\.o`))
+		secondRunProg2 := felix.WatchStdoutFor(regexp.MustCompile(`Program already attached to TC, skip reattaching from_hep_fib_debug(|_co-re)\.o`))
 		By("Restarting Felix")
 		felix.Restart()
 		Eventually(secondRunProg1, "10s", "100ms").Should(BeClosed())

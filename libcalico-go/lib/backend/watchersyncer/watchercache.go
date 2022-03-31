@@ -44,12 +44,13 @@ type watcherCache struct {
 	hasSynced            bool
 	resourceType         ResourceType
 	currentWatchRevision string
+	resyncBlockedUntil   time.Time
 }
 
 var (
-	ListRetryInterval     = 1000 * time.Millisecond
-	WatchPollInterval     = 5000 * time.Millisecond
-	DefaultErrorThreshold = 15
+	MinResyncInterval = 500 * time.Millisecond
+	ListRetryInterval = 1000 * time.Millisecond
+	WatchPollInterval = 5000 * time.Millisecond
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -70,6 +71,7 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		results:              results,
 		resources:            make(map[string]cacheEntry, 0),
 		currentWatchRevision: "0",
+		resyncBlockedUntil:   time.Now(),
 	}
 }
 
@@ -157,19 +159,22 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 
 	// If we don't have a currentWatchRevision then we need to perform a full resync.
 	performFullResync := wc.currentWatchRevision == "0"
-
 	for {
 		select {
 		case <-ctx.Done():
 			wc.logger.Debug("Context is done. Returning")
 			wc.cleanExistingWatcher()
 			return
-		default:
+		case <-wc.resyncThrottleC():
 			// Start the resync.  This processing loops until we create the watcher.  If the
 			// watcher continuously fails then this loop effectively becomes a polling based
 			// syncer.
 			wc.logger.Debug("Starting main resync loop")
 		}
+
+		// Avoid tight loop in unexpected failure scenarios.  For example, if creating the watch succeeds but the
+		// watch immediately ends.
+		wc.resyncBlockedUntil = time.Now().Add(MinResyncInterval)
 
 		if performFullResync {
 			wc.logger.Info("Full resync is required")
@@ -186,14 +191,8 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			if err != nil {
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
-				select {
-				case <-time.After(ListRetryInterval):
-					continue
-				case <-ctx.Done():
-					wc.logger.Debug("Context is done. Returning")
-					wc.cleanExistingWatcher()
-					return
-				}
+				wc.resyncBlockedUntil = time.Now().Add(ListRetryInterval)
+				continue
 			}
 
 			// Once this point is reached, it's important not to drop out if the context is cancelled.
@@ -228,17 +227,11 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				// let us watch if there are no resources yet). Pause for the watch poll interval.
 				// This loop effectively becomes a poll loop for this resource type.
 				wc.logger.Debug("Watch operation not supported")
-				select {
-				case <-time.After(WatchPollInterval):
-					// Make sure we force a re-list of the resource even if the watch previously succeeded
-					// but now cannot.
-					performFullResync = true
-					continue
-				case <-ctx.Done():
-					wc.logger.Debug("Context is done. Returning")
-					wc.cleanExistingWatcher()
-					return
-				}
+				wc.resyncBlockedUntil = time.Now().Add(WatchPollInterval)
+				// Make sure we force a re-list of the resource even if the watch previously succeeded
+				// but now cannot.
+				performFullResync = true
+				continue
 			}
 
 			// We hit an error creating the Watch.  Trigger a full resync.
@@ -252,6 +245,24 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 		wc.watch = w
 		return
 	}
+}
+
+var closedTimeC = make(chan time.Time)
+
+func init() {
+	close(closedTimeC)
+}
+
+func (wc *watcherCache) resyncThrottleC() <-chan time.Time {
+	blockFor := time.Until(wc.resyncBlockedUntil)
+	var blockC <-chan time.Time
+	if blockFor > 0 {
+		wc.logger.WithField("delay", blockFor).Debug("Sleeping before next resync")
+		blockC = time.After(blockFor)
+	} else {
+		blockC = closedTimeC // Triggers immediately.
+	}
+	return blockC
 }
 
 func (wc *watcherCache) cleanExistingWatcher() {

@@ -281,7 +281,8 @@ type Config struct {
 	VXLANPort    int
 	VXLANVNI     int
 
-	IPIPEnabled bool
+	IPIPEnabled            bool
+	FelixConfigIPIPEnabled *bool
 	// IPIPTunnelAddress is an address chosen from an IPAM pool, used as a source address
 	// by the host when sending traffic to a workload over IPIP.
 	IPIPTunnelAddress net.IP

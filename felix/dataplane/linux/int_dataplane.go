@@ -55,6 +55,7 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
@@ -106,6 +107,8 @@ var (
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
+
+	maxCleanupRetries = 5
 )
 
 func init() {
@@ -240,8 +243,8 @@ type UpdateBatchResolver interface {
 // The internal dataplane does not do consistency checks on the incoming data (as the
 // old Python-based driver used to do).  It expects to be told about dependent resources
 // before they are needed and for their lifetime to exceed that of the resources that
-// depend on them.  For example, it is important the the datastore layer send an
-// IP set create event before it sends a rule that references that IP set.
+// depend on them. For example, it is important that the datastore layer sends an IP set
+// create event before it sends a rule that references that IP set.
 type InternalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
@@ -265,6 +268,7 @@ type InternalDataplane struct {
 
 	allManagers             []Manager
 	managersWithRouteTables []ManagerWithRouteTables
+	managersWithRouteRules  []ManagerWithRouteRules
 	ruleRenderer            rules.RuleRenderer
 
 	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
@@ -455,7 +459,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
-		cleanUpVXLANDevice()
+		// Start a cleanup goroutine not to block felix if it needs to retry
+		go cleanUpVXLANDevice()
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -681,9 +686,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
-		// Add a manger to keep the all-hosts IP set up to date.
+		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
+	} else {
+		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
+		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
+			// Start a cleanup goroutine not to block felix if it needs to retry
+			go cleanUpIPIPAddrs()
+		}
 	}
 
 	// Add a manager for wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -919,20 +930,91 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 	}
 }
 
+func cleanUpIPIPAddrs() {
+	// If IPIP is not enabled, check to see if there is are addresses in the IPIP device and delete them if there are.
+	log.Debug("Checking if we need to clean up the IPIP device")
+
+	var errFound bool
+
+cleanupRetry:
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+		}
+		link, err := netlink.LinkByName("tunl0")
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				log.Debug("IPIP disabled and no IPIP device found")
+				return
+			}
+			log.WithError(err).Warn("IPIP disabled and failed to query IPIP device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		if err != nil {
+			log.WithError(err).Warn("IPIP disabled and failed to list addresses, will be unable to remove any old addresses from the device should they exist.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		for _, oldAddr := range addrs {
+			if err := netlink.AddrDel(link, &oldAddr); err != nil {
+				log.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s.", oldAddr.IPNet)
+				errFound = true
+
+				// Sleep for 1 second before retrying
+				time.Sleep(1 * time.Second)
+				continue cleanupRetry
+			}
+		}
+	}
+	if errFound {
+		log.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", maxCleanupRetries)
+	}
+}
+
 func cleanUpVXLANDevice() {
 	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
 	log.Debug("Checking if we need to clean up the VXLAN device")
-	link, err := netlink.LinkByName("vxlan.calico")
-	if err != nil {
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
-			log.Debug("VXLAN disabled and no VXLAN device found")
-			return
+
+	var errFound bool
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		log.WithError(err).Warnf("VXLAN disabled and failed to query VXLAN device.  Ignoring.")
-		return
+		link, err := netlink.LinkByName("vxlan.calico")
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				log.Debug("VXLAN disabled and no VXLAN device found")
+				return
+			}
+			log.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if err = netlink.LinkDel(link); err != nil {
+			log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
 	}
-	if err = netlink.LinkDel(link); err != nil {
-		log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device. Ignoring.")
+	if errFound {
+		log.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
 	}
 }
 
@@ -952,6 +1034,26 @@ type ManagerWithRouteTables interface {
 	GetRouteTableSyncers() []routeTableSyncer
 }
 
+type ManagerWithRouteRules interface {
+	Manager
+	GetRouteRules() []routeRules
+}
+
+// routeTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
+// interface state changes, hooks to queue a full resync and apply routing updates.
+type routeTableSyncer interface {
+	OnIfaceStateChanged(string, ifacemonitor.State)
+	QueueResync()
+	Apply() error
+}
+
+type routeRules interface {
+	SetRule(rule *routerule.Rule)
+	RemoveRule(rule *routerule.Rule)
+	QueueResync()
+	Apply() error
+}
+
 func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 	var rts []routeTableSyncer
 	for _, mrts := range d.managersWithRouteTables {
@@ -961,13 +1063,28 @@ func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 	return rts
 }
 
+func (d *InternalDataplane) routeRules() []routeRules {
+	var rrs []routeRules
+	for _, mrrs := range d.managersWithRouteRules {
+		rrs = append(rrs, mrrs.GetRouteRules()...)
+	}
+
+	return rrs
+}
+
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
-	switch mgr := mgr.(type) {
-	case ManagerWithRouteTables:
+	tableMgr, ok := mgr.(ManagerWithRouteTables)
+	if ok {
 		// Used to log the whole manager out here but if we do that then we cause races if the manager has
 		// other threads or locks.
 		log.WithField("manager", reflect.TypeOf(mgr).Name()).Debug("registering ManagerWithRouteTables")
-		d.managersWithRouteTables = append(d.managersWithRouteTables, mgr)
+		d.managersWithRouteTables = append(d.managersWithRouteTables, tableMgr)
+	}
+
+	rulesMgr, ok := mgr.(ManagerWithRouteRules)
+	if ok {
+		log.WithField("manager", mgr).Debug("registering ManagerWithRouteRules")
+		d.managersWithRouteRules = append(d.managersWithRouteRules, rulesMgr)
 	}
 	d.allManagers = append(d.allManagers, mgr)
 }
@@ -1744,6 +1861,10 @@ func (d *InternalDataplane) apply() {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
+		for _, r := range d.routeRules() {
+			// Queue a resync on the next Apply().
+			r.QueueResync()
+		}
 		d.forceRouteRefresh = false
 	}
 
@@ -1784,6 +1905,22 @@ func (d *InternalDataplane) apply() {
 		}(r)
 	}
 
+	// Update the routing rules in parallel with the other updates.  We'll wait for it to finish
+	// before we return.
+	var rulesWG sync.WaitGroup
+	for _, r := range d.routeRules() {
+		rulesWG.Add(1)
+		go func(r routeRules) {
+			err := r.Apply()
+			if err != nil {
+				log.Warn("Failed to synchronize routing rules, will retry...")
+				d.dataplaneNeedsSync = true
+			}
+			d.reportHealth()
+			rulesWG.Done()
+		}(r)
+	}
+
 	// Wait for the IP sets update to finish.  We can't update iptables until it has.
 	ipSetsWG.Wait()
 
@@ -1820,6 +1957,9 @@ func (d *InternalDataplane) apply() {
 
 	// Wait for the route updates to finish.
 	routesWG.Wait()
+
+	// Wait for the rule updates to finish.
+	rulesWG.Wait()
 
 	// And publish and status updates.
 	d.endpointStatusCombiner.Apply()
