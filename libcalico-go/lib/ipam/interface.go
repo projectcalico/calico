@@ -41,7 +41,7 @@ type Interface interface {
 
 	// ReleaseIPs releases any of the given IP addresses that are currently assigned,
 	// so that they are available to be used in another assignment.
-	ReleaseIPs(ctx context.Context, ips []cnet.IP) ([]cnet.IP, error)
+	ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]cnet.IP, error)
 
 	// GetAssignmentAttributes returns the attributes stored with the given IP address
 	// upon assignment, as well as the handle used for assignment (if any).
