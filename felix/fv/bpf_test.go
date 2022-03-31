@@ -432,6 +432,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectNone(w[1], hostW)
 					cc.ExpectSome(hostW, w[0])
 					cc.CheckConnectivity()
+					checkNodeConntrack(felixes)
 				})
 			})
 
@@ -474,6 +475,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1], hostW)
 					cc.ExpectSome(hostW, w[0])
 					cc.CheckConnectivity()
+					checkNodeConntrack(felixes)
 				})
 			})
 
@@ -1912,6 +1914,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.ExpectSome(w[1][0], TargetIP(ip), port)
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 
 						By("Checking timestamps on conntrack entries are sane")
 						// This test verifies that we correctly interpret conntrack entry timestamps by reading them back
@@ -1921,6 +1924,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						re := regexp.MustCompile(`LastSeen:\s*(\d+)`)
 						matches := re.FindAllStringSubmatch(ctDump, -1)
 						Expect(matches).ToNot(BeEmpty(), "didn't find any conntrack entries")
+						checkNodeConntrack(felixes)
 						for _, match := range matches {
 							lastSeenNanos, err := strconv.ParseInt(match[1], 10, 64)
 							Expect(err).NotTo(HaveOccurred())
@@ -3009,6 +3013,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.Expect(Some, felixes[0], hostW[1])
 							cc.Expect(Some, felixes[1], hostW[0])
 							cc.CheckConnectivity()
+							checkNodeConntrack(felixes)
 						})
 
 						By("checking pod-pod connectivity fails", func() {
@@ -3030,6 +3035,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.Expect(Some, w[1][0], w[0][0])
 							cc.Expect(Some, w[1][1], w[0][0])
 							cc.CheckConnectivity()
+							checkNodeConntrack(felixes)
 						})
 					})
 				})
@@ -3453,6 +3459,7 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) {
 				continue
 			}
 			if strings.Contains(line, "src=") {
+				// Wheather traffic is generated in host namespace, or involves NAT, each contrack entry should be related to node's address
 				Expect(strings.Contains(line, felix.IP)).To(BeTrue())
 			}
 		}
