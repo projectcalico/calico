@@ -35,14 +35,19 @@ mkdir -p "${artifacts_dir}"
 shift
 
 echo "==== About to run:"
-command_pretty="$(printf "%q " "$@")"
-echo "     $command_pretty"
+cmd_escaped="$(printf "%q " "$@")"
+echo "     $cmd_escaped"
 echo "==== Redirecting to artifacts/${log_file_name}"
 
-cmd="$1"
-shift
+expect <<END >& "$log_file" &
+spawn -noecho $cmd_escaped
+set timeout -1
+expect eof
 
-$cmd "$@" >& "$log_file" &
+lassign [wait] pid spawnid os_error_flag value
+exit \$value
+END
+
 pid=$!
 echo "     Main command PID=$pid"
 
@@ -74,9 +79,9 @@ echo "     Monitor command PID=$mon_pid"
 
 echo "==== Waiting and monitoring output..."
 if wait "$pid"; then
-  echo "==== Command ${command_pretty}SUCCEEDED (PID=$pid).  Full command output in artifacts/${log_file_name}."
+  echo "==== Command ${cmd_escaped}SUCCEEDED (PID=$pid).  Full command output in artifacts/${log_file_name}."
 else
-  echo "==== Command ${command_pretty}FAILED (PID=$pid).  Full command output in artifacts/${log_file_name}."
+  echo "==== Command ${cmd_escaped}FAILED (PID=$pid).  Full command output in artifacts/${log_file_name}."
   final_result=1
 fi
 cmd_done=true
