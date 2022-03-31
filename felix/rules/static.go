@@ -1003,11 +1003,9 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 	var rawRules, rpfRules []Rule
 
-	rpfChainName := ChainNamePrefix + "RPF"
-
 	if enforceRPF {
 		rawRules = append(rawRules, Rule{
-			Action: JumpAction{Target: rpfChainName},
+			Action: JumpAction{Target: RPFChain},
 		})
 
 		// Do not RPF check what is marked as to be skipped by RPF check.
@@ -1125,7 +1123,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 	if enforceRPF {
 		chains = append(chains, &Chain{
-			Name:  rpfChainName,
+			Name:  RPFChain,
 			Rules: rpfRules,
 		})
 	}
