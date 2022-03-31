@@ -404,9 +404,10 @@ type FelixConfigurationSpec struct {
 	// for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors
 	// such as "all()" can result in large numbers of entries (one entry per endpoint in that case).
 	BPFMapSizeIPSets *int `json:"bpfMapSizeIPSets,omitempty"`
-	// BPFEnforceStrictRPF enforce strict RPF on all interfaces with BPF programs
-	// regardless of what is the per-interfaces or global setting. [Default: true]
-	BPFEnforceStrictRPF *bool `json:"bpfEnforceStrictRPF,omitempty"`
+	// BPFEnforceRPF enforce strict RPF on all interfaces with BPF programs regardless of
+	// what is the per-interfaces or global setting. Possible values are Disabled or
+	// Strict. [Default: Strict]
+	BPFEnforceRPF string `json:"bpfEnforceRPF,omitempty"`
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
