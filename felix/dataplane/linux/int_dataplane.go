@@ -186,7 +186,7 @@ type Config struct {
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
 	BPFIpv6Enabled                     bool
-	BPFEnforceStrictRPF                bool
+	BPFEnforceRPF                      string
 	KubeProxyMinSyncPeriod             time.Duration
 
 	SidecarAccelerationEnabled bool
@@ -1221,7 +1221,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 	for _, t := range d.iptablesRawTables {
 		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(
-			t.IPVersion, d.config.Wireguard.EncryptHostTraffic, d.config.BPFEnforceStrictRPF))
+			t.IPVersion, d.config.Wireguard.EncryptHostTraffic, d.config.BPFEnforceRPF == "Strict"))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})

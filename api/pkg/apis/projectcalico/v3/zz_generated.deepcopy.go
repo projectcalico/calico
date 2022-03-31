@@ -1122,11 +1122,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
-	if in.BPFEnforceStrictRPF != nil {
-		in, out := &in.BPFEnforceStrictRPF, &out.BPFEnforceStrictRPF
-		*out = new(bool)
-		**out = **in
-	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges
 		*out = new(RouteTableRanges)
