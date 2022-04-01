@@ -38,6 +38,14 @@ shift
 cmd_escaped="$(printf "%q " "$@")"
 echo "==== Running command: $cmd_escaped"
 
+# Many of the commands that we run expect to be run in an interactive terminal,
+# even though they don't actually interact with the user.  If we just redirect
+# such a command's output to file then it will fail with a variant of "stdout
+# is not a TTY".  Work around that by using a trivial "expect" script that:
+#
+# * spawns the program in a TTY
+# * runs it to completion (by waiting for EOF)
+# * exits, copying the command's return code.
 expect <<END >& "$log_file" &
 spawn -noecho $cmd_escaped
 set timeout -1
@@ -46,6 +54,8 @@ expect eof
 lassign [wait] pid spawnid os_error_flag value
 exit \$value
 END
+
+# Capture the PID of the expect process so we can wait on it below.
 pid=$!
 
 grep_args=("--line-buffered" "-C10")
