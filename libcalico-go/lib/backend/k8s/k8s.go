@@ -208,7 +208,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		model.KindK8sService,
+		model.KindKubernetesService,
 		resources.NewServiceClient(cs),
 	)
 

@@ -84,7 +84,7 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 		}
 
 		// If running in kdd mode, also watch Kubernetes network policies directly.
-		// We don't need this in etcd mode, since kube-controllers copies k8s policies into etcd.
+		// We don't need this in etcd mode, since kube-controllers copies k8s resources into etcd.
 		if cfg.DatastoreType == apiconfig.Kubernetes {
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
 				ListInterface:   model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy},
@@ -94,7 +94,7 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 				ListInterface: model.ResourceListOptions{Kind: model.KindKubernetesEndpointSlice},
 			})
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
-				ListInterface: model.ResourceListOptions{Kind: model.KindK8sService},
+				ListInterface: model.ResourceListOptions{Kind: model.KindKubernetesService},
 			})
 		}
 

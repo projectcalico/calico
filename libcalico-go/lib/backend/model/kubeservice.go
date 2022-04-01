@@ -15,5 +15,5 @@
 package model
 
 const (
-	KindK8sService = "K8sService"
+	KindKubernetesService = "KubernetesService"
 )

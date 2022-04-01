@@ -95,12 +95,12 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			log.WithField("update", update).Debug("Passing through global BGPConfiguration")
 			bgpConfig, _ := update.Value.(*v3.BGPConfiguration)
 			h.callbacks.OnGlobalBGPConfigUpdate(bgpConfig)
-		} else if key.Kind == model.KindK8sService {
+		} else if key.Kind == model.KindKubernetesService {
 			log.WithField("update", update).Debug("Passing through a Service")
 			if update.Value == nil {
 				h.callbacks.OnServiceRemove(&proto.ServiceRemove{Name: key.Name, Namespace: key.Namespace})
 			} else {
-				h.callbacks.OnServiceUpdate(k8sServiceToProto(update.Value.(*kapiv1.Service)))
+				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
 			}
 		} else {
 			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
@@ -109,7 +109,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 	return
 }
 
-func k8sServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
+func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 	return &proto.ServiceUpdate{
 		Name:           s.Name,
 		Namespace:      s.Namespace,

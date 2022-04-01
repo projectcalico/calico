@@ -25,7 +25,7 @@ const (
 	// to avoid an import loop.
 	KindKubernetesNetworkPolicy = "KubernetesNetworkPolicy"
 	KindKubernetesEndpointSlice = "KubernetesEndpointSlice"
-	KindK8sService              = "K8sService"
+	KindKubernetesService       = "KubernetesService"
 )
 
 func IsNamespaced(kind string) bool {
@@ -39,7 +39,7 @@ func IsNamespaced(kind string) bool {
 	case KindKubernetesEndpointSlice:
 		// KindKubernetesEndpointSlice is a special-case resource. We don't expose it over the
 		// v3 API, but it is used in the felix syncer.
-	case KindK8sService:
+	case KindKubernetesService:
 		return true
 	}
 

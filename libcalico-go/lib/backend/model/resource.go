@@ -150,8 +150,8 @@ func init() {
 		"kubecontrollersconfigurations",
 		reflect.TypeOf(apiv3.KubeControllersConfiguration{}))
 	registerResourceInfo(
-		KindK8sService,
-		"k8s-service",
+		KindKubernetesService,
+		"kubernetesservice",
 		reflect.TypeOf(kapiv1.Service{}),
 	)
 }

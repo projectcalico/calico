@@ -99,7 +99,7 @@ func (c *serviceClient) List(ctx context.Context, list model.ListInterface, revi
 	if rl.Name != "" {
 		// The service is already fully qualified, so perform a Get instead.
 		// If the entry does not exist then we just return an empty list.
-		kvp, err := c.Get(ctx, model.ResourceKey{Name: rl.Name, Namespace: rl.Namespace, Kind: model.KindK8sService}, revision)
+		kvp, err := c.Get(ctx, model.ResourceKey{Name: rl.Name, Namespace: rl.Namespace, Kind: model.KindKubernetesService}, revision)
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				return nil, err
