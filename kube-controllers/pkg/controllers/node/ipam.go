@@ -105,7 +105,6 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		// For unit testing purposes.
 		pauseRequestChannel: make(chan pauseRequest),
 	}
-
 }
 
 type ipamController struct {
@@ -393,9 +392,10 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 		handle := *attr.AttrPrimary
 
 		alloc := allocation{
-			ip:     ordinalToIP(b, ord).String(),
-			handle: handle,
-			attrs:  attr.AttrSecondary,
+			ip:             ordinalToIP(b, ord).String(),
+			handle:         handle,
+			attrs:          attr.AttrSecondary,
+			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
 		}
 
 		currentAllocations[alloc.id()] = true
@@ -919,12 +919,12 @@ func (c *ipamController) garbageCollectIPs() error {
 			continue
 		}
 
-		logc.Info("Garbage collecting leaked IP address, and any IPs with its handle")
-		if err := c.client.IPAM().ReleaseByHandle(context.TODO(), a.handle); err != nil {
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-				logc.WithField("handle", a.handle).Debug("IP already released")
-				continue
-			}
+		logc.Info("Garbage collecting leaked IP address")
+		unallocated, err := c.client.IPAM().ReleaseIPs(context.TODO(), a.ReleaseOptions())
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok || len(unallocated) == 1 {
+			logc.WithField("handle", a.handle).Debug("IP already released")
+			continue
+		} else if err != nil {
 			logc.WithError(err).WithField("handle", a.handle).Warning("Failed to release leaked IP")
 			return err
 		}

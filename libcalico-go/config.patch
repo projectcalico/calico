@@ -1,8 +1,8 @@
 diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.projectcalico.org_ipamblocks.yaml
 --- config.orig/crd/crd.projectcalico.org_ipamblocks.yaml	2020-07-12 17:30:08.454690094 -0700
 +++ config/crd/crd.projectcalico.org_ipamblocks.yaml	2020-07-12 17:28:42.742835462 -0700
-@@ -41,6 +41,9 @@
-               allocations:
+@@ -49,6 +46,9 @@
+                   array.
                  items:
                    type: integer
 +                  # TODO: This nullable is manually added in. We should update controller-gen
@@ -10,7 +10,7 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
 +                  nullable: true
                  type: array
                attributes:
-                 items:
+                 description: Attributes is an array of arbitrary metadata associated
 --- config.orig/crd/crd.projectcalico.org_bgpconfigurations.yaml	2020-09-15 17:41:44.686361905 +0000
 +++ config/crd/crd.projectcalico.org_bgpconfigurations.yaml	2020-09-15 17:43:02.428632997 +0000
 @@ -3,9 +3,6 @@

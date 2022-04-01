@@ -22,7 +22,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/json"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	docopt "github.com/docopt/docopt-go"
@@ -33,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
@@ -120,11 +120,11 @@ Description:
 	if ip := parsedArgs["--ip"]; ip != nil {
 		passedIP := parsedArgs["--ip"].(string)
 		ip := argutils.ValidateIP(passedIP)
-		ips := []net.IP{ip}
+		opt := libipam.ReleaseOptions{Address: ip.IP.String()}
 
 		// Call ReleaseIPs releases the IP and returns an empty slice as unallocatedIPs if
 		// release was successful else it returns back the slice with the IP passed in.
-		unallocatedIPs, err := ipamClient.ReleaseIPs(ctx, ips)
+		unallocatedIPs, err := ipamClient.ReleaseIPs(ctx, opt)
 		if err != nil {
 			return fmt.Errorf("Error: %v", err)
 		}
@@ -199,9 +199,9 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 	}
 
 	// For each address that needs to be released, do so.
-	var notInUse map[string]struct{}
+	var notInUse map[string]libipam.ReleaseOptions
 	for _, report := range reports {
-		merged := make(map[string]struct{})
+		merged := make(map[string]libipam.ReleaseOptions)
 		for _, allocations := range report.Allocations {
 			for _, a := range allocations {
 				if a.InUse {
@@ -210,15 +210,19 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 				if _, ok := notInUse[a.IP]; notInUse != nil && !ok {
 					continue
 				}
-				merged[a.IP] = struct{}{}
+				merged[a.IP] = libipam.ReleaseOptions{
+					Handle:         a.Handle,
+					Address:        a.IP,
+					SequenceNumber: a.SequenceNumber,
+				}
 			}
 		}
 		notInUse = merged
 	}
 
-	ipsToRelease := []net.IP{}
-	for ip := range notInUse {
-		ipsToRelease = append(ipsToRelease, argutils.ValidateIP(ip))
+	ipsToRelease := []libipam.ReleaseOptions{}
+	for _, opts := range notInUse {
+		ipsToRelease = append(ipsToRelease, opts)
 	}
 	if len(ipsToRelease) == 0 {
 		fmt.Println("No addresses need to be released.")
@@ -226,7 +230,7 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 	}
 	fmt.Printf("Releasing %d old IPs\n", len(ipsToRelease))
 
-	unallocated, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease)
+	unallocated, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease...)
 	if err != nil {
 		return err
 	}

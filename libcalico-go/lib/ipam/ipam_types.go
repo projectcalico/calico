@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"fmt"
 	"net"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -171,4 +172,23 @@ type BlockArgs struct {
 
 	// If specified, the attributes of reserved IPv6 addresses in this block.
 	HostReservedAttrIPv6s *HostReservedAttr
+}
+
+type ReleaseOptions struct {
+	// Address to release.
+	Address string
+
+	// If provided, handle and sequence number will be used to
+	// check for race conditions with other users of the IPAM API. It is
+	// highly recommended that both values be set on release requests.
+	Handle         string
+	SequenceNumber *uint64
+}
+
+func (opts *ReleaseOptions) AsNetIP() (*cnet.IP, error) {
+	ip := cnet.ParseIP(opts.Address)
+	if ip != nil {
+		return ip, nil
+	}
+	return nil, fmt.Errorf("failed to parse IP: %s", opts.Address)
 }
