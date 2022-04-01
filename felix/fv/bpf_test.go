@@ -3469,9 +3469,6 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) {
 		lines := strings.Split(conntrack, "\n")
 		for _, line := range lines {
 			line = strings.Trim(line, " ")
-			if len(line) == 0 {
-				continue
-			}
 			if strings.Contains(line, "src=") {
 				// Wheather traffic is generated in host namespace, or involves NAT, each contrack entry should be related to node's address
 				Expect(strings.Contains(line, felix.IP)).To(BeTrue())

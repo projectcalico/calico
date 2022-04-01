@@ -998,7 +998,7 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32, disableConntrack bool) []*Chain {
+func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32, bypassHostConntrack bool) []*Chain {
 	rawPreroutingChain := &Chain{
 		Name: ChainRawPrerouting,
 		Rules: []Rule{
@@ -1020,7 +1020,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 		Rules: []Rule{},
 	}
 
-	if disableConntrack {
+	if bypassHostConntrack {
 		bpfUntrackedFlowChain = &Chain{
 			Name: ChainRawUntrackedFlows,
 			Rules: []Rule{
