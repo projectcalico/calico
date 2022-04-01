@@ -59,6 +59,7 @@ type Converter interface {
 	StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string
 	K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error)
 	EndpointSliceToKVP(svc *discovery.EndpointSlice) (*model.KVPair, error)
+	ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error)
 	ProfileNameToNamespace(profileName string) (string, error)
 	ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KVPair, error)
 	ProfileNameToServiceAccount(profileName string) (ns, sa string, err error)
@@ -251,6 +252,18 @@ func (c converter) EndpointSliceToKVP(slice *discovery.EndpointSlice) (*model.KV
 		},
 		Value:    slice.DeepCopy(),
 		Revision: slice.ResourceVersion,
+	}, nil
+}
+
+func (c converter) ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error) {
+	return &model.KVPair{
+		Key: model.ResourceKey{
+			Name:      service.Name,
+			Namespace: service.Namespace,
+			Kind:      model.KindKubernetesService,
+		},
+		Value:    service.DeepCopy(),
+		Revision: service.ResourceVersion,
 	}, nil
 }
 
