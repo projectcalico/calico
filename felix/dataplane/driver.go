@@ -322,6 +322,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			MaxIPSetSize:                   configParams.MaxIpsetSize,
 			IPv6Enabled:                    configParams.Ipv6Support,
 			BPFIpv6Enabled:                 configParams.BpfIpv6Support,
+			BPFHostConntrackBypass:         configParams.BPFHostConntrackBypass,
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 			XDPRefreshInterval:             configParams.XDPRefreshInterval,
 
