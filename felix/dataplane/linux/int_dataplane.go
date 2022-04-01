@@ -189,6 +189,7 @@ type Config struct {
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
 	BPFIpv6Enabled                     bool
+	BPFEnforceRPF                      string
 	KubeProxyMinSyncPeriod             time.Duration
 
 	SidecarAccelerationEnabled bool
@@ -1336,62 +1337,12 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	}
 
 	for _, t := range d.iptablesRawTables {
-		// Do not RPF check what is marked as to be skipped by RPF check.
-		rpfRules := []iptables.Rule{{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
-			Action: iptables.ReturnAction{},
-		}}
-
-		// For anything we approved for forward, permit accept_local as it is
-		// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
-		rpfRules = append(rpfRules, iptables.Rule{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
-			Action: iptables.ReturnAction{},
-		})
-
-		// Do the full RPF check and dis-allow accept_local for anything else.
-		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
-			rulesConfig.OpenStackSpecialCasesEnabled, false)...)
-
-		rpfChain := []*iptables.Chain{{
-			Name:  rules.ChainNamePrefix + "RPF",
-			Rules: rpfRules,
-		}}
-		t.UpdateChains(rpfChain)
-
-		var rawRules []iptables.Rule
-		if t.IPVersion == 4 && rulesConfig.WireguardEnabled && len(rulesConfig.WireguardInterfaceName) > 0 &&
-			d.config.Wireguard.EncryptHostTraffic {
-			// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
-			// check allows it.
-			log.Debug("Adding Wireguard iptables rule chain")
-			rawRules = append(rawRules, iptables.Rule{
-				Match:  nil,
-				Action: iptables.JumpAction{Target: rules.ChainSetWireguardIncomingMark},
-			})
-			t.UpdateChain(d.ruleRenderer.WireguardIncomingMarkChain())
-		}
-
-		rawRules = append(rawRules, iptables.Rule{
-			Action: iptables.JumpAction{Target: rpfChain[0].Name},
-		})
-
-		rawChains := []*iptables.Chain{{
-			Name:  rules.ChainRawPrerouting,
-			Rules: rawRules,
-		}}
-		t.UpdateChains(rawChains)
-
+		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(
+			t.IPVersion, d.config.Wireguard.EncryptHostTraffic, d.config.BPFEnforceRPF == "Strict"))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
-
 		if t.IPVersion == 4 {
-			// Iptables for untracked policy.
-			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass)))
-			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
-				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
-			}})
 			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
 			}})
