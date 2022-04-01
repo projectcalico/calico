@@ -120,8 +120,8 @@ create:
 		.orig_port = orig_dport,
 	};
 
-	ct_value.flags = ct_ctx->flags;
-	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
+	ct_value_set_flags(&ct_value, ct_ctx->flags);
+	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value_get_flags(&ct_value));
 
 	if (ct_ctx->type == CALI_CT_TYPE_NAT_REV && ct_ctx->tun_ip) {
 		if (ct_ctx->flags & CALI_CT_FLAG_NP_FWD) {
@@ -552,7 +552,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	__u64 now = bpf_ktime_get_ns();
 	v->last_seen = now;
 
-	result.flags = v->flags;
+	result.flags = ct_value_get_flags(v);
 
 	// Return the if_index where the CT state was created.
 	if (v->a_to_b.opener) {
@@ -600,7 +600,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.tun_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
-		result.flags = tracking_v->flags;
+		result.flags = ct_value_get_flags(tracking_v);
 
 		if (ct_ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -639,7 +639,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.tun_ip = v->tun_ip;
 		CALI_CT_DEBUG("tun_ip:%x\n", bpf_ntohl(v->tun_ip));
 
-		result.flags = v->flags;
+		result.flags = ct_value_get_flags(v);
 
 		if (ct_ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
