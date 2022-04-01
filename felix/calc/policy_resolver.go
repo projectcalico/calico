@@ -52,6 +52,7 @@ func init() {
 type PolicyResolver struct {
 	policyIDToEndpointIDs multidict.IfaceToIface
 	endpointIDToPolicyIDs multidict.IfaceToIface
+	allPolicies     	  map[model.PolicyKey]*model.Policy
 	sortedTierData        *tierInfo
 	endpoints             map[model.Key]interface{}
 	dirtyEndpoints        set.Set
@@ -69,6 +70,7 @@ func NewPolicyResolver() *PolicyResolver {
 	return &PolicyResolver{
 		policyIDToEndpointIDs: multidict.NewIfaceToIface(),
 		endpointIDToPolicyIDs: multidict.NewIfaceToIface(),
+		allPolicies:           map[model.PolicyKey]*model.Policy{},
 		sortedTierData:        NewTierInfo("default"),
 		endpoints:             make(map[model.Key]interface{}),
 		dirtyEndpoints:        set.New(),
@@ -96,6 +98,15 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 		gaugeNumActiveEndpoints.Set(float64(len(pr.endpoints)))
 	case model.PolicyKey:
 		log.Debugf("Policy update: %v", key)
+		if update.Value == nil {
+			delete(pr.allPolicies, key)
+		} else {
+			policy := update.Value.(*model.Policy)
+			pr.allPolicies[key] = policy
+		}
+		if !pr.policyIDToEndpointIDs.ContainsKey(key) {
+			return
+		}
 		policiesDirty = pr.policySorter.OnUpdate(update)
 		if policiesDirty {
 			pr.markEndpointsMatchingPolicyDirty(key)
@@ -129,6 +140,12 @@ func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKe
 
 func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey interface{}) {
 	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
+	// If it's first time the policy become matched, add it to the tier
+	if _, ok := pr.policySorter.tier.Policies[policyKey]; !ok {
+		policy := pr.allPolicies[policyKey]
+		pr.policySorter.UpdatePolicy(policyKey, policy)
+		pr.sortRequired = true
+	}
 	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
 	pr.dirtyEndpoints.Add(endpointKey)
@@ -139,6 +156,12 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 	log.Debugf("Deleting policy match %v -> %v", policyKey, endpointKey)
 	pr.policyIDToEndpointIDs.Discard(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Discard(endpointKey, policyKey)
+
+	// This policy is in active anymore, remove it from the tier also
+	if !pr.policyIDToEndpointIDs.ContainsKey(policyKey) {
+		pr.policySorter.UpdatePolicy(policyKey, nil)
+		pr.sortRequired = true
+	}
 	pr.dirtyEndpoints.Add(endpointKey)
 	pr.maybeFlush()
 }

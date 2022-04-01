@@ -76,6 +76,29 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	return
 }
 
+
+func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Policy) (dirty bool) {
+		oldPolicy := poc.tier.Policies[key]
+		if newPolicy != nil {
+			if oldPolicy == nil ||
+				oldPolicy.Order != newPolicy.Order ||
+				oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
+				oldPolicy.PreDNAT != newPolicy.PreDNAT ||
+				oldPolicy.ApplyOnForward != newPolicy.ApplyOnForward ||
+				!policyTypesEqual(oldPolicy, newPolicy) {
+				dirty = true
+			}
+			poc.tier.Policies[key] = newPolicy
+		} else {
+			if oldPolicy != nil {
+				delete(poc.tier.Policies, key)
+				dirty = true
+			}
+		}
+	return
+}
+
+
 func (poc *PolicySorter) Sorted() *tierInfo {
 	tierInfo := poc.tier
 	tierInfo.OrderedPolicies = make([]PolKV, 0, len(tierInfo.Policies))
