@@ -205,6 +205,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		apiv3.KindCalicoNodeStatus,
 		resources.NewCalicoNodeStatusClient(cs, crdClientV1),
 	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		model.KindKubernetesService,
+		resources.NewServiceClient(cs),
+	)
 
 	if !ca.K8sUsePodCIDR {
 		// Using Calico IPAM - use CRDs to back IPAM resources.
