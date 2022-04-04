@@ -33,6 +33,7 @@ Param(
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $InstallOnly="no",
+    [parameter(Mandatory = $false)] $Reinstall="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
     [parameter(Mandatory = $false)] $EtcdEndpoints="",
     [parameter(Mandatory = $false)] $EtcdTlsSecretName="",
@@ -173,7 +174,7 @@ function GetCalicoNamespace() {
     # namespace.
     if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
         $ns = Get-Content -Raw -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/namespace
-        write-host "Install script is running in a HostProcess container. This namespace is {0}" -f $ns
+        write-host ("Install script is running in a HostProcess container. This namespace is {0}" -f $ns)
         return $ns
     }
 
@@ -367,9 +368,15 @@ if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
     PrepareKubernetes
 }
 
+if ($Reinstall -EQ "yes") {
+    if ((Get-Service | where Name -Like 'Calico*') -NE $null) {
+        & 'c:\CalicoWindows\uninstall-calico.ps1'
+    }
+}
+
 if ((Get-Service -exclude 'CalicoUpgrade' | where Name -Like 'Calico*' | where Status -EQ Running) -NE $null) {
-Write-Host "Calico services are still running. In order to re-run the installation script, stop the CalicoNode and CalicoFelix services or uninstall them by running: $RootDir\uninstall-calico.ps1"
-Exit
+    Write-Host "Calico services are still running. In order to re-run the installation script, stop the CalicoNode and CalicoFelix services or uninstall them by running: $RootDir\uninstall-calico.ps1"
+    Exit
 }
 
 Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
