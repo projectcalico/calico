@@ -369,8 +369,12 @@ if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
 }
 
 if ($Reinstall -EQ "yes") {
+    Write-Host "Uninstalling existing Calico services before installing..."
     if ((Get-Service | where Name -Like 'Calico*') -NE $null) {
+        Write-Host "Running c:\CalicoWindows\uninstall-calico.ps1..."
         & 'c:\CalicoWindows\uninstall-calico.ps1'
+    } else {
+        Write-Host "No calico services found."
     }
 }
 
