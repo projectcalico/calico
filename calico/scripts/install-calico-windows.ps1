@@ -32,7 +32,7 @@ Param(
     [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-{{site.data.versions.first.components["calico/node"].version}}.zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
-    [parameter(Mandatory = $false)] $InstallOnly="no",
+    [parameter(Mandatory = $false)] $StartCalico="yes",
     [parameter(Mandatory = $false)] $Reinstall="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
     [parameter(Mandatory = $false)] $EtcdEndpoints="",
@@ -473,7 +473,7 @@ if ($DownloadOnly -EQ "yes") {
 
 InstallCalico
 
-if ($InstallOnly -EQ "no") {
+if ($StartCalico -EQ "yes") {
     Write-Host "Starting Calico..."
     Write-Host "This may take several seconds if the vSwitch needs to be created."
 
