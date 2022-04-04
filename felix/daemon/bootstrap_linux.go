@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,17 @@ func bootstrapWireguard(configParams *config.Config, v3Client clientv3.Interface
 	log.Debug("bootstrapping wireguard host connectivity")
 	return wireguard.BootstrapHostConnectivity(
 		configParams,
+		netlinkshim.NewRealNetlink,
 		netlinkshim.NewRealWireguard,
+		v3Client,
+	)
+}
+
+func bootstrapRemoveWireguard(configParams *config.Config, v3Client clientv3.Interface) error {
+	log.Debug("bootstrapping wireguard host connectivity by removing wireguard config")
+	return wireguard.RemoveWireguardForHostEncryptionBootstrapping(
+		configParams,
+		netlinkshim.NewRealNetlink,
 		v3Client,
 	)
 }
