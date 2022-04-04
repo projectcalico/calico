@@ -330,7 +330,14 @@ function InstallCalico()
 
 $BaseDir="c:\k"
 $RootDir="c:\CalicoWindows"
+
+# If this script is run from a HostProcess container then the installation archive
+# will be in the mount point.
+if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+$CalicoZip="$env:CONTAINER_SANDBOX_MOUNT_POINT\calico-windows.zip"
+} else {
 $CalicoZip="c:\calico-windows.zip"
+}
 
 # Must load the helper modules before doing anything else.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
