@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,5 +20,9 @@ import (
 )
 
 func bootstrapWireguard(_ *config.Config, _ clientv3.Interface) error {
+	return nil
+} // no-op
+
+func bootstrapRemoveWireguard(_ *config.Config, _ clientv3.Interface) error {
 	return nil
 } // no-op

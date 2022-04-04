@@ -369,12 +369,10 @@ configRetry:
 	}
 
 	// We may need to temporarily disable encrypted traffic to this node in order to connect to Typha
-	if configParams.WireguardEnabled {
-		err := bootstrapWireguard(configParams, v3Client)
-		if err != nil {
-			time.Sleep(2 * time.Second) // avoid a tight restart loop
-			log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
-		}
+	err := bootstrapWireguard(configParams, v3Client)
+	if err != nil {
+		time.Sleep(2 * time.Second) // avoid a tight restart loop
+		log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -496,6 +494,7 @@ configRetry:
 		if err != nil {
 			log.WithError(err).Error("Failed to connect to Typha. Retrying...")
 			startTime := time.Now()
+			var deleteWireguardCalled bool
 			for err != nil && time.Since(startTime) < 30*time.Second {
 				// Set Ready to false and Live to true when unable to connect to typha
 				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
@@ -504,6 +503,14 @@ configRetry:
 					break
 				}
 				log.WithError(err).Debug("Retrying Typha connection")
+
+				if !deleteWireguardCalled {
+					if err = bootstrapRemoveWireguard(configParams, v3Client); err != nil {
+						log.WithError(err).Warn("Unable remove wireguard configuration")
+					} else {
+						deleteWireguardCalled = true
+					}
+				}
 				time.Sleep(1 * time.Second)
 			}
 			if err != nil {
