@@ -40,6 +40,7 @@ imageNames:
   dikastes: docker.io/calico/dikastes
   pilot-webhook: docker.io/calico/pilot-webhook
   flexvol: docker.io/calico/pod2daemon-flexvol
+  csi-driver: docker.io/calico/csi
 
 # List of files to exclude. These files won't get included in the deployed site.
 exclude:
@@ -91,3 +92,4 @@ defaults:
         calico/dikastes: calico/dikastes
         pilot-webhook: calico/pilot-webhook
         flexvol: calico/pod2daemon-flexvol
+        csi-driver: calico/csi
