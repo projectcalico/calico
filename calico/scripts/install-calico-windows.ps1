@@ -32,6 +32,7 @@ Param(
     [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-{{site.data.versions.first.components["calico/node"].version}}.zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
+    [parameter(Mandatory = $false)] $InstallOnly="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
     [parameter(Mandatory = $false)] $EtcdEndpoints="",
     [parameter(Mandatory = $false)] $EtcdTlsSecretName="",
@@ -316,15 +317,15 @@ function SetAKSCalicoStaticRules {
 }' | Out-File -encoding ASCII -filepath $fileName
 }
 
-function StartCalico()
+function InstallCalico()
 {
-    Write-Host "`nStart Calico for Windows...`n"
+    Write-Host "`nStart Calico for Windows install...`n"
 
     pushd
     cd $RootDir
     .\install-calico.ps1
     popd
-    Write-Host "`nCalico for Windows Started`n"
+    Write-Host "`nCalico for Windows installed`n"
 }
 
 $BaseDir="c:\k"
@@ -456,7 +457,29 @@ if ($DownloadOnly -EQ "yes") {
     Exit
 }
 
-StartCalico
+InstallCalico
+
+if ($InstallOnly -EQ "no") {
+    Write-Host "Starting Calico..."
+    Write-Host "This may take several seconds if the vSwitch needs to be created."
+
+    Start-Service CalicoNode
+    Wait-ForCalicoInit
+    Start-Service CalicoFelix
+
+    if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
+    {
+        Start-Service CalicoConfd
+    }
+
+    while ((Get-Service | where Name -Like 'Calico*' | where Status -NE Running) -NE $null) {
+        Write-Host "Waiting for the Calico services to be running..."
+        Start-Sleep 1
+    }
+
+    Write-Host "Done, the Calico services are running:"
+    Get-Service | where Name -Like 'Calico*'
+}
 
 if ($Backend -NE "none") {
     New-NetFirewallRule -Name KubectlExec10250 -Description "Enable kubectl exec and log" -Action Allow -LocalPort 10250 -Enabled True -DisplayName "kubectl exec 10250" -Protocol TCP -ErrorAction SilentlyContinue
