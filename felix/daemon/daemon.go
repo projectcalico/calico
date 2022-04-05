@@ -170,7 +170,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var v3Client client.Interface
 	var datastoreConfig apiconfig.CalicoAPIConfig
 	var configParams *config.Config
-	var typhaAddr string
+	var typha discovery.Typha
 	var numClientsCreated int
 	var k8sClientSet *kubernetes.Clientset
 	var kubernetesVersion string
@@ -317,7 +317,7 @@ configRetry:
 		}
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
-		typhaAddr, err = discoverTyphaAddr(configParams, k8sClientSet)
+		typha, err = discoverTyphaAddr(configParams, k8sClientSet)
 		if err != nil {
 			log.WithError(err).Error("Typha discovery enabled but discovery failed.")
 			time.Sleep(1 * time.Second)
@@ -368,13 +368,11 @@ configRetry:
 		simulateDataRace()
 	}
 
-	// We may need to temporarily disable encrypted traffic to this node in order to connect to Typha
-	if configParams.WireguardEnabled {
-		err := bootstrapWireguard(configParams, v3Client)
-		if err != nil {
-			time.Sleep(2 * time.Second) // avoid a tight restart loop
-			log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
-		}
+	// We may need to remove out-of-date wireguard configuration to allow us to connect to Typha.
+	err := bootstrapWireguard(configParams, v3Client)
+	if err != nil {
+		time.Sleep(2 * time.Second) // avoid a tight restart loop
+		log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -457,11 +455,11 @@ configRetry:
 	var syncer Startable
 	var typhaConnection *syncclient.SyncerClient
 	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
-	if typhaAddr != "" {
+	if typha.Addr != "" {
 		// Use a remote Syncer, via the Typha server.
-		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
+		log.WithField("addr", typha.Addr).Info("Connecting to Typha.")
 		typhaConnection = syncclient.New(
-			typhaAddr,
+			typha.Addr,
 			buildinfo.GitVersion,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s",
@@ -496,6 +494,7 @@ configRetry:
 		if err != nil {
 			log.WithError(err).Error("Failed to connect to Typha. Retrying...")
 			startTime := time.Now()
+			var wireguardDeleted bool
 			for err != nil && time.Since(startTime) < 30*time.Second {
 				// Set Ready to false and Live to true when unable to connect to typha
 				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
@@ -504,9 +503,20 @@ configRetry:
 					break
 				}
 				log.WithError(err).Debug("Retrying Typha connection")
+
+				if !wireguardDeleted && typha.NodeName != nil {
+					if wireguardDeleted, err = bootstrapRemoveWireguardIfTyphaNotProgrammed(*typha.NodeName, configParams, v3Client); err != nil {
+						log.WithError(err).Warn("Unable remove wireguard configuration")
+					}
+				}
 				time.Sleep(1 * time.Second)
 			}
 			if err != nil {
+				if !wireguardDeleted {
+					if err = bootstrapRemoveWireguard(configParams, v3Client); err != nil {
+						log.WithError(err).Warn("Unable remove wireguard configuration")
+					}
+				}
 				log.WithError(err).Fatal("Failed to connect to Typha")
 			} else {
 				log.Info("Connected to Typha after retries.")
@@ -1201,7 +1211,7 @@ func (fc *DataplaneConnector) Start() {
 	go fc.handleWireguardStatUpdateFromDataplane()
 }
 
-func discoverTyphaAddr(configParams *config.Config, k8sClientSet kubernetes.Interface) (string, error) {
+func discoverTyphaAddr(configParams *config.Config, k8sClientSet kubernetes.Interface) (discovery.Typha, error) {
 	typhaDiscoveryOpts := configParams.TyphaDiscoveryOpts()
 	typhaDiscoveryOpts = append(typhaDiscoveryOpts, discovery.WithKubeClient(k8sClientSet))
 	return discovery.DiscoverTyphaAddr(typhaDiscoveryOpts...)
