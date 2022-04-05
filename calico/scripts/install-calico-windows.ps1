@@ -285,15 +285,6 @@ function SetupEtcdTlsFiles()
     $script:EtcdCaCert = "$path\ca.crt"
 }
 
-function SetConfigParameters {
-    param(
-        [parameter(Mandatory=$true)] $OldString,
-        [parameter(Mandatory=$true)] $NewString
-    )
-
-    (Get-Content $RootDir\config.ps1).replace($OldString, $NewString) | Set-Content $RootDir\config.ps1 -Force
-}
-
 function SetAKSCalicoStaticRules {
     $fileName  = [Io.path]::Combine("$RootDir", "static-rules.json")
     echo '{
@@ -386,27 +377,27 @@ if ((Get-Service -exclude 'CalicoUpgrade' | where Name -Like 'Calico*' | where S
 Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
 Write-Host "Unzip Calico for Windows release..."
 Expand-Archive -Force $CalicoZip c:\
-ipmo $RootDir\libs\calico\calico.psm1
+ipmo -force $RootDir\libs\calico\calico.psm1
 
 Write-Host "Setup Calico for Windows..."
-SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
-SetConfigParameters -OldString '<your etcd endpoints>' -NewString "$EtcdEndpoints"
+Set-ConfigParameters -var 'CALICO_DATASTORE_TYPE' -value $Datastore
+Set-ConfigParameters -var 'ETCD_ENDPOINTS' -value $EtcdEndpoints
 
 if (-Not [string]::IsNullOrEmpty($EtcdTlsSecretName)) {
     $calicoNs = GetCalicoNamespace
     SetupEtcdTlsFiles -SecretName "$EtcdTlsSecretName" -CalicoNamespace $calicoNs
 }
-SetConfigParameters -OldString '<your etcd key>' -NewString "$EtcdKey"
-SetConfigParameters -OldString '<your etcd cert>' -NewString "$EtcdCert"
-SetConfigParameters -OldString '<your etcd ca cert>' -NewString "$EtcdCaCert"
-SetConfigParameters -OldString '<your service cidr>' -NewString $ServiceCidr
-SetConfigParameters -OldString '<your dns server ips>' -NewString $DNSServerIPs
+Set-ConfigParameters -var 'ETCD_KEY_FILE' -value $EtcdKey
+Set-ConfigParameters -var 'ETCD_CERT_FILE' -value $EtcdCert
+Set-ConfigParameters -var 'ETCD_CA_CERT_FILE' -value $EtcdCaCert
+Set-ConfigParameters -var 'K8S_SERVICE_CIDR' -value $ServiceCidr
+Set-ConfigParameters -var 'DNS_NAME_SERVERS' -value $DNSServerIPs
 
 if ($platform -EQ "aks") {
     Write-Host "Setup Calico for Windows for AKS..."
     $Backend="none"
-    SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
-    SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
+    Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "none"
+    Set-ConfigParameters -var 'KUBE_NETWORK' -value "azure.*"
 
     $calicoNs = "calico-system"
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
@@ -421,9 +412,10 @@ if ($platform -EQ "eks") {
     Write-Host "Setup Calico for Windows for EKS, node name $awsNodeName ..."
     $Backend = "none"
     $awsNodeNameQuote = """$awsNodeName"""
-    SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
-    SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
-    SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "vpc.*"'
+
+    Set-ConfigParameters -var 'NODENAME' -value $awsNodeNameQuote
+    Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "none"
+    Set-ConfigParameters -var 'KUBE_NETWORK' -value "vpc.*"
 
     $calicoNs = GetCalicoNamespace -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
     GetCalicoKubeConfig -CalicoNamespace $calicoNs -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
@@ -433,7 +425,7 @@ if ($platform -EQ "ec2") {
     $awsNodeName = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token" = $token} -Method GET -Uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for AWS, node name $awsNodeName ..."
     $awsNodeNameQuote = """$awsNodeName"""
-    SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
+    Set-ConfigParameters -var 'NODENAME' -value $awsNodeNameQuote
 
     $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
@@ -441,14 +433,14 @@ if ($platform -EQ "ec2") {
 
     Write-Host "Backend networking is $Backend"
     if ($Backend -EQ "bgp") {
-        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+        Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "windows-bgp"
     }
 }
 if ($platform -EQ "gce") {
     $gceNodeName = Invoke-RestMethod -UseBasicParsing -Headers @{"Metadata-Flavor"="Google"} "http://metadata.google.internal/computeMetadata/v1/instance/hostname" -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for GCE, node name $gceNodeName ..."
     $gceNodeNameQuote = """$gceNodeName"""
-    SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$gceNodeNameQuote"
+    Set-ConfigParameters -var 'NODENAME' -value $gceNodeNameQuote
 
     $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
@@ -456,7 +448,7 @@ if ($platform -EQ "gce") {
 
     Write-Host "Backend networking is $Backend"
     if ($Backend -EQ "bgp") {
-        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+        Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "windows-bgp"
     }
 }
 if ($platform -EQ "bare-metal") {
@@ -466,7 +458,7 @@ if ($platform -EQ "bare-metal") {
 
     Write-Host "Backend networking is $Backend"
     if ($Backend -EQ "bgp") {
-        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+        Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "windows-bgp"
     }
 }
 

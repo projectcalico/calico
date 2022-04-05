@@ -92,6 +92,28 @@ function Test-CalicoConfiguration()
     }
 }
 
+function Set-EnvVarIfNotSet {
+    param(
+        [parameter(Mandatory=$true)] $var,
+        [parameter(Mandatory=$true)] $defaultValue
+    )
+    if (-not (Test-Path "env:$var"))
+    {
+        Write-Host "Environment variable $var is not set, setting it to the default value $defaultValue"
+        [Environment]::SetEnvironmentVariable($var, $defaultValue, 'Process')
+    }
+}
+
+function Set-ConfigParameters {
+    param(
+        [parameter(Mandatory=$true)] $var,
+        [parameter(Mandatory=$true)] $value
+    )
+    $OldString='Set-EnvVarIfNotSet -var "{0}".*$' -f $var
+    $NewString='Set-EnvVarIfNotSet -var "{0}" -defaultValue "{1}"' -f $var, $value
+    (Get-Content $baseDir\config.ps1) -replace $OldString, $NewString | Set-Content $baseDir\config.ps1 -Force
+}
+
 function Install-CNIPlugin()
 {
     Write-Host "Copying CNI binaries to $env:CNI_BIN_DIR"
