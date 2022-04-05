@@ -17,7 +17,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 	"net"
 	"net/url"
 	"os"
@@ -27,6 +26,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 
 	"k8s.io/apimachinery/pkg/util/validation"
 
