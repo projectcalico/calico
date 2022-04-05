@@ -30,7 +30,7 @@ var _ = Describe("Typha address discovery", func() {
 		endpoints                     *v1.Endpoints
 		k8sClient                     *fake.Clientset
 		localNodeName, remoteNodeName string
-		noTyphas                      []string
+		noTyphas                      []Typha
 	)
 
 	refreshClient := func() {
@@ -104,7 +104,7 @@ var _ = Describe("Typha address discovery", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal([]Typha{
-			{Addr: "10.0.0.2:8156", NodeName: &localNodeName},
+			{Addr: "10.0.0.2:8156", IP: "10.0.0.2", NodeName: &remoteNodeName},
 		}))
 	})
 
@@ -117,8 +117,8 @@ var _ = Describe("Typha address discovery", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal([]Typha{
-			{Addr: "10.0.0.4:8157", NodeName: &localNodeName},
-			{Addr: "10.0.0.2:8157", NodeName: &remoteNodeName},
+			{Addr: "10.0.0.4:8157", IP: "10.0.0.4", NodeName: &localNodeName},
+			{Addr: "10.0.0.2:8157", IP: "10.0.0.2", NodeName: &remoteNodeName},
 		}))
 	})
 
@@ -131,7 +131,7 @@ var _ = Describe("Typha address discovery", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal([]Typha{
-			{Addr: "[fd5f:65af::2]:8156", NodeName: &remoteNodeName},
+			{Addr: "[fd5f:65af::2]:8156", IP: "fd5f:65af::2", NodeName: &remoteNodeName},
 		}))
 	})
 
