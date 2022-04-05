@@ -117,7 +117,7 @@ func main() {
 	}
 
 	hostname, _ := os.Hostname()
-	client := syncclient.New(addr, buildinfo.GitVersion, hostname, "typha command-line client", callbacks, options)
+	client := syncclient.New([]string{addr}, buildinfo.GitVersion, hostname, "typha command-line client", callbacks, options)
 	err = client.Start(context.Background())
 	if err != nil {
 		log.WithError(err).Panic("Client failed")
