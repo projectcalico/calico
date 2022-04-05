@@ -152,10 +152,10 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously.
 	var connectOk bool
 	for i, addr := range s.addrs {
-		s.logCxt.Info("connecting to typha endpoint %s (%d of %d)", addr, i+1, len(s.addrs))
+		s.logCxt.Infof("connecting to typha endpoint %s (%d of %d)", addr.Addr, i+1, len(s.addrs))
 		err := s.connect(cxt, addr)
 		if err != nil {
-			s.logCxt.WithError(err).Warnf("error connecting to typha endpoint (%d of %d) %s", i+1, len(s.addrs), addr)
+			s.logCxt.WithError(err).Warnf("error connecting to typha endpoint (%d of %d) %s", i+1, len(s.addrs), addr.Addr)
 		} else {
 			connectOk = true
 			break
