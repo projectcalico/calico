@@ -29,6 +29,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
@@ -90,7 +91,7 @@ func (o *Options) validate() (err error) {
 }
 
 func New(
-	addr string,
+	addrs []discovery.Typha,
 	myVersion, myHostname, myInfo string,
 	cbs api.SyncerCallbacks,
 	options *Options,
@@ -110,7 +111,7 @@ func New(
 			"type":   options.SyncerType,
 		}),
 		callbacks: cbs,
-		addr:      addr,
+		addrs:     addrs,
 
 		myVersion:  myVersion,
 		myHostname: myHostname,
@@ -126,7 +127,8 @@ func New(
 type SyncerClient struct {
 	ID                            uint64
 	logCxt                        *log.Entry
-	addr                          string
+	addrs                         []discovery.Typha
+	connInfo                      *discovery.Typha
 	myHostname, myVersion, myInfo string
 	options                       *Options
 
@@ -146,10 +148,22 @@ type handshakeStatus struct {
 }
 
 func (s *SyncerClient) Start(cxt context.Context) error {
+	s.logCxt.WithField("addresses", s.addrs).Info("Syncer started")
 	// Connect synchronously.
-	err := s.connect(cxt)
-	if err != nil {
-		return err
+	var connectOk bool
+	for i, addr := range s.addrs {
+		s.logCxt.Infof("connecting to typha endpoint %s (%d of %d)", addr.Addr, i+1, len(s.addrs))
+		err := s.connect(cxt, addr)
+		if err != nil {
+			s.logCxt.WithError(err).Warnf("error connecting to typha endpoint (%d of %d) %s", i+1, len(s.addrs), addr.Addr)
+		} else {
+			connectOk = true
+			break
+		}
+	}
+	// ran out of addresses with errors
+	if !connectOk {
+		return fmt.Errorf("connection to typhas (%v) failed", s.addrs)
 	}
 
 	// Then start our background goroutines.  We start the main loop and a second goroutine to
@@ -196,12 +210,12 @@ func (s *SyncerClient) SupportsNodeResourceUpdates(timeout time.Duration) (bool,
 	return false, fmt.Errorf("Timed out waiting for handshake to complete")
 }
 
-func (s *SyncerClient) connect(cxt context.Context) error {
+func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) error {
 	log.Info("Starting Typha client")
 	var err error
-	logCxt := s.logCxt.WithField("address", s.addr)
+	logCxt := s.logCxt.WithField("address", typhaAddr)
 
-	var connFunc func() (net.Conn, error)
+	var connFunc func(string) (net.Conn, error)
 	if s.options.requiringTLS() {
 		cert, err := tls.LoadX509KeyPair(s.options.CertFile, s.options.KeyFile)
 		if err != nil {
@@ -236,21 +250,21 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 			s.options.ServerURISAN,
 		)
 
-		connFunc = func() (net.Conn, error) {
+		connFunc = func(addr string) (net.Conn, error) {
 			return tls.DialWithDialer(
 				&net.Dialer{Timeout: 10 * time.Second},
 				"tcp",
-				s.addr,
+				addr,
 				&tlsConfig)
 		}
 	} else {
-		connFunc = func() (net.Conn, error) {
-			return net.DialTimeout("tcp", s.addr, 10*time.Second)
+		connFunc = func(addr string) (net.Conn, error) {
+			return net.DialTimeout("tcp", addr, 10*time.Second)
 		}
 	}
 	if cxt.Err() == nil {
 		logCxt.Info("Connecting to Typha.")
-		s.connection, err = connFunc()
+		s.connection, err = connFunc(typhaAddr.Addr)
 		if err != nil {
 			return err
 		}
@@ -265,6 +279,7 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 		return cxt.Err()
 	}
 	logCxt.Info("Connected to Typha.")
+	s.connInfo = &discovery.Typha{}
 
 	// Log TLS connection details.
 	tlsConn, ok := s.connection.(*tls.Conn)
@@ -297,7 +312,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	defer s.Finished.Done()
 	defer cancelFn()
 
-	logCxt := s.logCxt.WithField("address", s.addr)
+	logCxt := s.logCxt.WithField("connection", s.connInfo)
 	logCxt.Info("Started Typha client main loop")
 
 	s.encoder = gob.NewEncoder(s.connection)
