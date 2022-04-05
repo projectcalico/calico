@@ -15,7 +15,6 @@
 package discovery
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -24,14 +23,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var _ = Describe("Typha address discovery", func() {
 	var (
-		endpoints *v1.Endpoints
-		k8sClient *fake.Clientset
+		endpoints                     *v1.Endpoints
+		k8sClient                     *fake.Clientset
+		localNodeName, remoteNodeName string
+		noTyphas                      []Typha
 	)
 
 	refreshClient := func() {
@@ -39,6 +38,9 @@ var _ = Describe("Typha address discovery", func() {
 	}
 
 	BeforeEach(func() {
+		localNodeName = "felix-local"
+		remoteNodeName = "felix-remote"
+
 		rand.Seed(time.Now().UTC().UnixNano())
 		endpoints = &v1.Endpoints{
 			TypeMeta: metav1.TypeMeta{
@@ -52,7 +54,7 @@ var _ = Describe("Typha address discovery", func() {
 			Subsets: []v1.EndpointSubset{
 				{
 					Addresses: []v1.EndpointAddress{
-						{IP: "10.0.0.4"},
+						{IP: "10.0.0.4", NodeName: &localNodeName},
 					},
 					NotReadyAddresses: []v1.EndpointAddress{},
 					Ports: []v1.EndpointPort{
@@ -61,10 +63,10 @@ var _ = Describe("Typha address discovery", func() {
 				},
 				{
 					Addresses: []v1.EndpointAddress{
-						{IP: "10.0.0.2"},
+						{IP: "10.0.0.2", NodeName: &remoteNodeName},
 					},
 					NotReadyAddresses: []v1.EndpointAddress{
-						{IP: "10.0.0.5"},
+						{IP: "10.0.0.5", NodeName: &remoteNodeName},
 					},
 					Ports: []v1.EndpointPort{
 						{Name: "calico-typha-v2", Port: 8157, Protocol: v1.ProtocolUDP},
@@ -80,19 +82,19 @@ var _ = Describe("Typha address discovery", func() {
 	It("should return address if configured", func() {
 		typhaAddr, err := DiscoverTyphaAddr(WithAddrOverride("10.0.0.1:8080"))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal("10.0.0.1:8080"))
+		Expect(typhaAddr).To(Equal([]Typha{{Addr: "10.0.0.1:8080"}}))
 	})
 
 	It("should return nothing if no service name and no client", func() {
 		typhaAddr, err := DiscoverTyphaAddr()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal(""))
+		Expect(typhaAddr).To(Equal(noTyphas))
 	})
 
 	It("should return nothing if no service name with client", func() {
 		typhaAddr, err := DiscoverTyphaAddr(WithKubeClient(k8sClient))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal(""))
+		Expect(typhaAddr).To(Equal(noTyphas))
 	})
 
 	It("should return IP from endpoints", func() {
@@ -101,17 +103,23 @@ var _ = Describe("Typha address discovery", func() {
 			WithKubeClient(k8sClient),
 		)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal("10.0.0.2:8156"))
+		Expect(typhaAddr).To(Equal([]Typha{
+			{Addr: "10.0.0.2:8156", IP: "10.0.0.2", NodeName: &remoteNodeName},
+		}))
 	})
 
-	It("should return v2 IP from endpoints if port name override is used", func() {
+	It("should return v2 IP from endpoints if port name override is used, ordered with local endpoint first", func() {
 		typhaAddr, err := DiscoverTyphaAddr(
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 			WithKubeServicePortNameOverride("calico-typha-v2"),
+			WithNodeAffinity(localNodeName),
 		)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Or(Equal("10.0.0.4:8157"), Equal("10.0.0.2:8157")))
+		Expect(typhaAddr).To(Equal([]Typha{
+			{Addr: "10.0.0.4:8157", IP: "10.0.0.4", NodeName: &localNodeName},
+			{Addr: "10.0.0.2:8157", IP: "10.0.0.2", NodeName: &remoteNodeName},
+		}))
 	})
 
 	It("should bracket an IPv6 Typha address", func() {
@@ -122,7 +130,9 @@ var _ = Describe("Typha address discovery", func() {
 			WithKubeClient(k8sClient),
 		)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal("[fd5f:65af::2]:8156"))
+		Expect(typhaAddr).To(Equal([]Typha{
+			{Addr: "[fd5f:65af::2]:8156", IP: "fd5f:65af::2", NodeName: &remoteNodeName},
+		}))
 	})
 
 	It("should error if no Typhas", func() {
@@ -133,25 +143,6 @@ var _ = Describe("Typha address discovery", func() {
 			WithKubeClient(k8sClient),
 		)
 		Expect(err).To(HaveOccurred())
-	})
-
-	It("should choose random Typhas", func() {
-		seenAddresses := set.New()
-		expected := set.From("10.0.0.2:8156", "10.0.0.6:8156")
-		endpoints.Subsets[1].Addresses = append(endpoints.Subsets[1].Addresses, v1.EndpointAddress{IP: "10.0.0.6"})
-		refreshClient()
-
-		for i := 0; i < 32; i++ {
-			addr, err := DiscoverTyphaAddr(
-				WithKubeService("kube-system", "calico-typha-service"),
-				WithKubeClient(k8sClient),
-			)
-			Expect(err).NotTo(HaveOccurred())
-			seenAddresses.Add(addr)
-			if seenAddresses.ContainsAll(expected) {
-				return
-			}
-		}
-		Fail(fmt.Sprintf("Didn't get expected values; got %v", seenAddresses))
+		Expect(err).To(Equal(ErrServiceNotReady))
 	})
 })
