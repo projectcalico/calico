@@ -39,7 +39,7 @@ func MustStartSyncerClientIfTyphaConfigured(
 	myVersion, myHostname, myInfo string,
 	cbs api.SyncerCallbacks,
 ) bool {
-	typhaAddr, err := discovery.DiscoverTyphaAddr(
+	typha, err := discovery.DiscoverTyphaAddr(
 		discovery.WithAddrOverride(typhaConfig.Addr),
 		discovery.WithInClusterKubeClient(), /* defer creation of a client until its needed. */
 		discovery.WithKubeService(typhaConfig.K8sNamespace, typhaConfig.K8sServiceName),
@@ -47,15 +47,15 @@ func MustStartSyncerClientIfTyphaConfigured(
 	if err != nil {
 		log.WithError(err).Fatal("Typha discovery enabled but discovery failed.")
 	}
-	if typhaAddr == "" {
+	if typha.Addr == "" {
 		log.Debug("Typha is not configured")
 		return false
 	}
 
 	// Use a remote Syncer, via the Typha server.
-	log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
+	log.WithField("addr", typha.Addr).Info("Connecting to Typha.")
 	typhaConnection := syncclient.New(
-		typhaAddr,
+		typha.Addr,
 		myVersion, myHostname, myInfo,
 		cbs,
 		&syncclient.Options{

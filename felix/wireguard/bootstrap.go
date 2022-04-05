@@ -123,6 +123,99 @@ func BootstrapHostConnectivity(
 	return fmt.Errorf("couldn't determine current wireguard configuration after %d retries", bootstrapMaxRetries)
 }
 
+func IsWireguardKeyProgrammedForTyphaNode(
+	configParams *config.Config,
+	typhaNodeName string,
+	getWireguardHandle func() (netlinkshim.Wireguard, error),
+	calicoClient clientv3.Interface,
+) (bool, error) {
+	logCtx := log.WithField("typhaNodeName", typhaNodeName)
+
+	if !configParams.WireguardHostEncryptionEnabled {
+		// HostEncryption is currently enabled in environments by operator rather than through FelixConfiguration.
+		// This should not change for a given deployment. We only need to handle bootstrapping for clusters where
+		// host encryption is enabled.
+		logCtx.Debug("Host encryption is not enabled - no wireguard bootstrapping required")
+		return true, nil
+	} else if !configParams.WireguardEnabled {
+		// Wireguard is not enabled and so we should have already removed all wireguard config.
+		logCtx.Debug("Wireguard is not enabled - no typha wireguard keys to check")
+		return true, nil
+	}
+
+	logCtx.Debug("Checking typha node wireguard configuration")
+
+	expBackoffMgr := wait.NewExponentialBackoffManager(
+		bootstrapBackoffDuration,
+		bootstrapBackoffMax,
+		time.Minute,
+		bootstrapBackoffExpFactor,
+		bootstrapJitter,
+		clock.RealClock{},
+	)
+	defer expBackoffMgr.Backoff().Stop()
+
+	// Make a few attempts to obtain the public key from the datastore for the typha node.
+	var err error
+	var typhaNode *apiv3.Node
+	for r := 0; r < bootstrapMaxRetries; r++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		typhaNode, err = calicoClient.Nodes().Get(ctx, typhaNodeName, options.GetOptions{})
+		cancel()
+		if err != nil {
+			logCtx.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
+			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
+			continue
+		}
+		break
+	}
+
+	if typhaNode == nil {
+		return false, fmt.Errorf("couldn't determine typha node wireguard public key after %d retries: %v", bootstrapMaxRetries, err)
+	}
+
+	if typhaNode.Status.WireguardPublicKey == "" {
+		// If the typha node does not have a public key then typha is still waiting to have a key assigned. Assume
+		// for now it is programmed.
+		return true, nil
+	}
+
+	// Get the wireguard configuration for the node.
+	wg, err := getWireguardHandle()
+	if err != nil {
+		// Could not get the wireguard handle, assume no wireguard. There should be no associated key for the typha
+		// node, but we know there is one.
+		logCtx.Info("Couldn't acquire wireguard handle, assuming no wireguard")
+		return false, nil
+	}
+	defer func() {
+		err = wg.Close()
+		logCtx.WithError(err).Info("Couldn't close wireguard handle")
+	}()
+
+	// Check the peers across the devices to see if we have the typha wireguard key programmed.
+	devices, err := wg.Devices()
+	if err != nil {
+		// Could not get the wireguard handle, assume no wireguard. here should be no associated key for the typha
+		//		// node, but we know there is one.
+		logCtx.Info("Couldn't acquire wireguard handle, assuming no wireguard")
+		return false, nil
+	}
+	for _, device := range devices {
+		for _, peer := range device.Peers {
+			if peer.PublicKey.String() == typhaNode.Status.WireguardPublicKey {
+				// We have found an entry for the device.
+				return true, nil
+			}
+		}
+	}
+
+	// Could not find a matching device, so our view is incorrect. We'll need to temporarily delete the wireguard config
+	// to allow us to reconnect to typha.
+	return false, nil
+
+}
+
 // RemoveWireguardForHostEncryptionBootstrapping removes all wireguard configuration. This includes:
 // - The wireguard public key
 // - The wireguard device (which in turn will delete all wireguard routing rules).
@@ -144,6 +237,7 @@ func RemoveWireguardForHostEncryptionBootstrapping(
 		// This should not change for a given deployment. We only need to handle bootstrapping for clusters where
 		// host encryption is enabled.
 		logCtx.Debug("Host encryption is not enabled - no wireguard bootstrapping required")
+		return nil
 	}
 
 	// Remove all wireguard configuration that we can.

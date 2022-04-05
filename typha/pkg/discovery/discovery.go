@@ -31,6 +31,12 @@ import (
 
 var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port")
 
+type Typha struct {
+	Addr     string
+	IP       string
+	NodeName *string
+}
+
 type options struct {
 	addrOverride string
 
@@ -83,7 +89,7 @@ func WithKubeServicePortNameOverride(portName string) Option {
 // K8sNamespace fields).
 //
 // Returns "" if typha is not enabled (i.e. fields are empty).
-func DiscoverTyphaAddr(opts ...Option) (string, error) {
+func DiscoverTyphaAddr(opts ...Option) (Typha, error) {
 	options := options{
 		k8sServicePortName: "calico-typha",
 	}
@@ -94,12 +100,14 @@ func DiscoverTyphaAddr(opts ...Option) (string, error) {
 
 	if options.addrOverride != "" {
 		// Explicit address; trumps other sources of config.
-		return options.addrOverride, nil
+		return Typha{
+			Addr: options.addrOverride,
+		}, nil
 	}
 
 	if options.k8sServiceName == "" {
 		// No explicit address, and no service name, not using Typha.
-		return "", nil
+		return Typha{}, nil
 	}
 
 	// If we get here, we need to look up the Typha service using the k8s API.
@@ -108,15 +116,15 @@ func DiscoverTyphaAddr(opts ...Option) (string, error) {
 		k8sConf, err := rest.InClusterConfig()
 		if err != nil {
 			logrus.WithError(err).Error("Unable to create in-cluster Kubernetes config.")
-			return "", err
+			return Typha{}, err
 		}
 		options.k8sClient, err = kubernetes.NewForConfig(k8sConf)
 		if err != nil {
 			logrus.WithError(err).Error("Unable to create Kubernetes client set.")
-			return "", err
+			return Typha{}, err
 		}
 	} else if options.k8sClient == nil {
-		return "", errors.New("failed to look up Typha, no Kubernetes client available")
+		return Typha{}, errors.New("failed to look up Typha, no Kubernetes client available")
 	}
 
 	// If we get here, we need to look up the Typha service endpoints using the k8s API.
@@ -124,7 +132,7 @@ func DiscoverTyphaAddr(opts ...Option) (string, error) {
 	eps, err := epClient.Get(context.Background(), options.k8sServiceName, v1.GetOptions{})
 	if err != nil {
 		logrus.WithError(err).Error("Unable to get Typha service endpoints from Kubernetes.")
-		return "", err
+		return Typha{}, err
 	}
 
 	candidates := set.New()
@@ -145,18 +153,22 @@ func DiscoverTyphaAddr(opts ...Option) (string, error) {
 		// If we get here, this endpoint supports the typha port we're looking for.
 		for _, h := range subset.Addresses {
 			typhaAddr := net.JoinHostPort(h.IP, fmt.Sprint(portForOurVersion))
-			candidates.Add(typhaAddr)
+			candidates.Add(Typha{
+				Addr:     typhaAddr,
+				IP:       h.IP,
+				NodeName: h.NodeName,
+			})
 		}
 	}
 
 	if candidates.Len() == 0 {
 		logrus.Error("Didn't find any ready Typha instances.")
-		return "", ErrServiceNotReady
+		return Typha{}, ErrServiceNotReady
 	}
 
-	var addrs []string
+	var addrs []Typha
 	candidates.Iter(func(item interface{}) error {
-		typhaAddr := item.(string)
+		typhaAddr := item.(Typha)
 		addrs = append(addrs, typhaAddr)
 		return nil
 	})

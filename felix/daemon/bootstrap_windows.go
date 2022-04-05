@@ -23,6 +23,10 @@ func bootstrapWireguard(_ *config.Config, _ clientv3.Interface) error {
 	return nil
 } // no-op
 
+func bootstrapRemoveWireguardIfTyphaNotProgrammed(typhaNodeName string, configParams *config.Config, v3Client clientv3.Interface) (bool, error) {
+	return true, nil
+} //no-op
+
 func bootstrapRemoveWireguard(_ *config.Config, _ clientv3.Interface) error {
 	return nil
 } // no-op
