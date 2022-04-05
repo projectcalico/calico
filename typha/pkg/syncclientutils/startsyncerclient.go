@@ -47,7 +47,7 @@ func MustStartSyncerClientIfTyphaConfigured(
 	if err != nil {
 		log.WithError(err).Fatal("Typha discovery enabled but discovery failed.")
 	}
-	if typhaAddr == "" {
+	if len(typhaAddr) == 0 {
 		log.Debug("Typha is not configured")
 		return false
 	}

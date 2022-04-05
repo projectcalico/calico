@@ -21,6 +21,7 @@ import (
 	"time"
 
 	. "github.com/projectcalico/calico/typha/pkg/daemon"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 
 	"context"
 	"fmt"
@@ -163,9 +164,10 @@ var _ = Describe("Daemon", func() {
 
 				// Get the chosen port then start a real client in a context we can cancel.
 				port := d.Server.Port()
+				addr := fmt.Sprintf("127.0.0.1:%d", port)
 				cbs := fvtests.NewRecorder()
 				client := syncclient.New(
-					fmt.Sprintf("127.0.0.1:%d", port),
+					[]discovery.Typha{{Addr: addr}},
 					"",
 					"",
 					"",
