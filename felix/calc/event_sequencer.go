@@ -956,7 +956,7 @@ func (buf *EventSequencer) flushServices() {
 			Name:      id.Name,
 			Namespace: id.Namespace,
 		}
-		buf.Callback(&msg)
+		buf.Callback(msg)
 		buf.sentServices.Discard(id)
 		return nil
 	})
