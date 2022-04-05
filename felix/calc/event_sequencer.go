@@ -963,7 +963,7 @@ func (buf *EventSequencer) flushServices() {
 	buf.pendingServiceDeletes.Clear()
 	for _, msg := range buf.pendingServiceUpdates {
 		buf.Callback(msg)
-		id := &proto.ServiceRemove{
+		id := serviceID{
 			Name:      msg.Name,
 			Namespace: msg.Namespace,
 		}
