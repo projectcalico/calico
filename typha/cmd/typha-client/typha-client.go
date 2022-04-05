@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/typha/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/config"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/logutils"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
@@ -117,7 +118,7 @@ func main() {
 	}
 
 	hostname, _ := os.Hostname()
-	client := syncclient.New(addr, buildinfo.GitVersion, hostname, "typha command-line client", callbacks, options)
+	client := syncclient.New([]discovery.Typha{{Addr: addr}}, buildinfo.GitVersion, hostname, "typha command-line client", callbacks, options)
 	err = client.Start(context.Background())
 	if err != nil {
 		log.WithError(err).Panic("Client failed")
