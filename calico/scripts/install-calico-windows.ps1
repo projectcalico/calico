@@ -411,9 +411,8 @@ if ($platform -EQ "eks") {
     $awsNodeName = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token" = $token} -Method GET -Uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for EKS, node name $awsNodeName ..."
     $Backend = "none"
-    $awsNodeNameQuote = """$awsNodeName"""
 
-    Set-ConfigParameters -var 'NODENAME' -value $awsNodeNameQuote
+    Set-ConfigParameters -var 'NODENAME' -value $awsNodeName
     Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "none"
     Set-ConfigParameters -var 'KUBE_NETWORK' -value "vpc.*"
 
@@ -424,8 +423,7 @@ if ($platform -EQ "ec2") {
     $token = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token-ttl-seconds" = "300"} -Method PUT -Uri http://169.254.169.254/latest/api/token -ErrorAction Ignore
     $awsNodeName = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token" = $token} -Method GET -Uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for AWS, node name $awsNodeName ..."
-    $awsNodeNameQuote = """$awsNodeName"""
-    Set-ConfigParameters -var 'NODENAME' -value $awsNodeNameQuote
+    Set-ConfigParameters -var 'NODENAME' -value $awsNodeName
 
     $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
