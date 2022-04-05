@@ -15,8 +15,8 @@
 # This script is run from the main Calico folder.
 . .\config.ps1
 
-ipmo .\libs\calico\calico.psm1
-ipmo .\libs\hns\hns.psm1
+ipmo .\libs\calico\calico.psm1 -Force
+ipmo .\libs\hns\hns.psm1 -Force
 
 $lastBootTime = Get-LastBootTime
 $Stored = Get-StoredLastBootTime

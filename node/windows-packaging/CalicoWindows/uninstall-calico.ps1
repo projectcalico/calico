@@ -44,4 +44,5 @@ if (-Not $ExceptUpgradeService) {
     Remove-UpgradeService
 }
 
+Get-Module 'calico' | Remove-Module -Force
 Write-Host "Done."

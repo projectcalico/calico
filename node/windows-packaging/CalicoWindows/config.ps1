@@ -1,5 +1,5 @@
 $baseDir = "$PSScriptRoot"
-ipmo $baseDir\libs\calico\calico.psm1
+ipmo $baseDir\libs\calico\calico.psm1 -Force
 
 Write-Host "Setting environment variables if not set..."
 
