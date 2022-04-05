@@ -50,7 +50,6 @@ type BGPConfiguration struct {
 // BGPConfigurationSpec contains the values of the BGP configuration.
 type BGPConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-	// +kubebuilder:default=Info
 	// +kubebuilder:validation:Enum=Debug;Info;Warning;Error;Fatal
 	// +optional
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel" confignamev1:"loglevel"`
@@ -82,7 +81,6 @@ type BGPConfigurationSpec struct {
 	// ListenPort is the port where BGP protocol should listen. Defaults to 179
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
-	// +kubebuilder:default=179
 	ListenPort uint16 `json:"listenPort,omitempty" validate:"omitempty,gt=0" confignamev1:"listen_port"`
 
 	// Optional BGP password for full node-to-mesh peerings.

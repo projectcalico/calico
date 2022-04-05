@@ -57,14 +57,12 @@ spec:
                   type: object
                 type: array
               listenPort:
-                default: 179
                 description: ListenPort is the port where BGP protocol should listen.
                   Defaults to 179
                 maximum: 65535
                 minimum: 1
                 type: integer
               logSeverityScreen:
-                default: Info
                 description: 'LogSeverityScreen is the log severity above which logs
                   are sent to the stdout. [Default: Info]'
                 enum:

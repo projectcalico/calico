@@ -97,7 +97,6 @@ type BGPPeerSpec struct {
 
 	// Time to allow for software restart.  When specified, this is configured as the graceful
 	// restart timeout.  When not specified, the BIRD default of 120s is used.
-	// +kubebuilder:default="120s"
 	// +optional
 	MaxRestartTime *metav1.Duration `json:"maxRestartTime,omitempty"`
 

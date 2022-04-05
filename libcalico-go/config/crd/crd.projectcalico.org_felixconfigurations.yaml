@@ -42,7 +42,6 @@ spec:
                   [Default: false]'
                 type: boolean
               awsSrcDstCheck:
-                default: DoNothing
                 description: 'Set source-destination-check on AWS EC2 instances. Accepted
                   value must be one of "DoNothing", "Enable" or "Disable". [Default:
                   DoNothing]'
@@ -163,7 +162,6 @@ spec:
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
               chainInsertMode:
-                default: Insert
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s
                   top-level iptables chains by inserting a rule at the top of the
                   chain or by appending a rule at the bottom. insert is the safe default
@@ -195,7 +193,6 @@ spec:
               debugSimulateDataplaneHangAfter:
                 type: string
               defaultEndpointToHostAction:
-                default: Drop
                 description: 'DefaultEndpointToHostAction controls what happens to
                   traffic that goes from a workload endpoint to the host itself (after
                   the traffic hits the endpoint egress policy). By default Calico
@@ -307,7 +304,6 @@ spec:
               healthPort:
                 type: integer
               interfaceExclude:
-                default: kube-ipvs0
                 description: 'InterfaceExclude is a comma-separated list of interfaces
                   that Felix should exclude when monitoring for host endpoints. The
                   default value ensures that Felix ignores Kubernetes'' IPVS dummy
@@ -319,7 +315,6 @@ spec:
                   interface ''veth1''. [Default: kube-ipvs0]'
                 type: string
               interfacePrefix:
-                default: cali
                 description: 'InterfacePrefix is the interface name prefix that identifies
                   workload endpoints and so distinguishes them from host endpoint
                   interfaces. Note: in environments other than bare metal, the orchestrators
@@ -328,7 +323,6 @@ spec:
                   sets the ''tap'' value. [Default: cali]'
                 type: string
               interfaceRefreshInterval:
-                default: 90s
                 description: InterfaceRefreshInterval is the period at which Felix
                   rescans local interfaces to verify their state. The rescan can be
                   disabled by setting the interval to 0.
@@ -340,7 +334,6 @@ spec:
                   set, will be automatically detected.
                 type: integer
               ipsetsRefreshInterval:
-                default: 90s
                 description: 'IpsetsRefreshInterval is the period at which Felix re-checks
                   all iptables state to ensure that no other process has accidentally
                   broken Calico''s rules. Set to 0 to disable iptables refresh. [Default:
@@ -354,7 +347,6 @@ spec:
                 - NFT
                 type: string
               iptablesFilterAllowAction:
-                default: Accept
                 enum:
                 - Accept
                 - Return
@@ -366,7 +358,6 @@ spec:
                   container at a different path). [Default: /run/xtables.lock]'
                 type: string
               iptablesLockProbeInterval:
-                default: 50ms
                 description: 'IptablesLockProbeInterval is the time that Felix will
                   wait between attempts to acquire the iptables lock if it is not
                   available. Lower values make Felix more responsive when the lock
@@ -381,7 +372,6 @@ spec:
                   or calico/felix container. [Default: 0s disabled]'
                 type: string
               iptablesMangleAllowAction:
-                default: Accept
                 enum:
                 - Accept
                 - Return
@@ -396,7 +386,6 @@ spec:
               iptablesNATOutgoingInterfaceFilter:
                 type: string
               iptablesPostWriteCheckInterval:
-                default: 1s
                 description: 'IptablesPostWriteCheckInterval is the period after Felix
                   has done a write to the dataplane that it schedules an extra read
                   back in order to check the write was not clobbered by another process.
@@ -404,7 +393,6 @@ spec:
                   respect the iptables lock. [Default: 1s]'
                 type: string
               iptablesRefreshInterval:
-                default: 90s
                 description: 'IptablesRefreshInterval is the period at which Felix
                   re-checks the IP sets in the dataplane to ensure that no other process
                   has accidentally broken Calico''s rules. Set to 0 to disable IP
@@ -445,7 +433,6 @@ spec:
                   LOG rules. [Default: calico-packet]'
                 type: string
               logSeverityFile:
-                default: Info
                 description: 'LogSeverityFile is the log severity above which logs
                   are sent to the log file. [Default: Info]'
                 enum:
@@ -456,7 +443,6 @@ spec:
                 - Fatal
                 type: string
               logSeverityScreen:
-                default: Info
                 description: 'LogSeverityScreen is the log severity above which logs
                   are sent to the stdout. [Default: Info]'
                 enum:
@@ -467,7 +453,6 @@ spec:
                 - Fatal
                 type: string
               logSeveritySys:
-                default: Info
                 description: 'LogSeveritySys is the log severity above which logs
                   are sent to the syslog. Set to None for no logging to syslog. [Default:
                   Info]'
@@ -575,7 +560,6 @@ spec:
                   status reports. [Default: 90s]'
                 type: string
               routeRefreshInterval:
-                default: 90s
                 description: 'RouteRefreshInterval is the period at which Felix re-checks
                   the routes in the dataplane to ensure that no other process has
                   accidentally broken Calico''s rules. Set to 0 to disable route refresh.
@@ -618,7 +602,6 @@ spec:
                   type: object
                 type: array
               serviceLoopPrevention:
-                default: Drop
                 description: 'When service IP advertisement is enabled, prevent routing
                   loops to service IPs that are not in use, by dropping or rejecting
                   packets that do not get DNAT''d by kube-proxy. Unless set to "Disabled",
@@ -696,7 +679,6 @@ spec:
                   incoming deny rules. [Default: true]'
                 type: boolean
               xdpRefreshInterval:
-                default: 90s
                 description: 'XDPRefreshInterval is the period at which Felix re-checks
                   all XDP state to ensure that no other process has accidentally broken
                   Calico''s BPF maps or attached programs. Set to 0 to disable XDP

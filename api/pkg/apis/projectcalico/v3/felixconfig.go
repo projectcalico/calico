@@ -86,13 +86,11 @@ type FelixConfigurationSpec struct {
 	// RouteRefreshInterval is the period at which Felix re-checks the routes
 	// in the dataplane to ensure that no other process has accidentally broken Calico's rules.
 	// Set to 0 to disable route refresh. [Default: 90s]
-	// +kubebuilder:default="90s"
 	// +optional
 	RouteRefreshInterval *metav1.Duration `json:"routeRefreshInterval,omitempty" configv1timescale:"seconds"`
 
 	// InterfaceRefreshInterval is the period at which Felix rescans local interfaces to verify their state.
 	// The rescan can be disabled by setting the interval to 0.
-	// +kubebuilder:default="90s"
 	// +optional
 	InterfaceRefreshInterval *metav1.Duration `json:"interfaceRefreshInterval,omitempty" configv1timescale:"seconds"`
 
@@ -102,7 +100,6 @@ type FelixConfigurationSpec struct {
 	// other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel
 	// version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value
 	// to reduce Felix CPU usage. [Default: 90s]
-	// +kubebuilder:default="90s"
 	// +optional
 	IptablesRefreshInterval *metav1.Duration `json:"iptablesRefreshInterval,omitempty" configv1timescale:"seconds"`
 
@@ -110,7 +107,6 @@ type FelixConfigurationSpec struct {
 	// to the dataplane that it schedules an extra read back in order to check the write was not
 	// clobbered by another process. This should only occur if another application on the system
 	// doesn't respect the iptables lock. [Default: 1s]
-	// +kubebuilder:default="1s"
 	// +optional
 	IptablesPostWriteCheckInterval *metav1.Duration `json:"iptablesPostWriteCheckInterval,omitempty" configv1timescale:"seconds" confignamev1:"IptablesPostWriteCheckIntervalSecs"`
 
@@ -131,7 +127,6 @@ type FelixConfigurationSpec struct {
 	// IptablesLockProbeInterval is the time that Felix will wait between
 	// attempts to acquire the iptables lock if it is not available. Lower values make Felix more
 	// responsive when the lock is contended, but use more CPU. [Default: 50ms]
-	// +kubebuilder:default="50ms"
 	// +optional
 	IptablesLockProbeInterval *metav1.Duration `json:"iptablesLockProbeInterval,omitempty" configv1timescale:"milliseconds" confignamev1:"IptablesLockProbeIntervalMillis"`
 
@@ -145,7 +140,6 @@ type FelixConfigurationSpec struct {
 	// IpsetsRefreshInterval is the period at which Felix re-checks all iptables
 	// state to ensure that no other process has accidentally broken Calico's rules. Set to 0 to
 	// disable iptables refresh. [Default: 90s]
-	// +kubebuilder:default="90s"
 	// +optional
 	IpsetsRefreshInterval *metav1.Duration `json:"ipsetsRefreshInterval,omitempty" configv1timescale:"seconds"`
 
@@ -160,7 +154,6 @@ type FelixConfigurationSpec struct {
 	// XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no
 	// other process has accidentally broken Calico's BPF maps or attached programs. Set to 0 to
 	// disable XDP refresh. [Default: 90s]
-	// +kubebuilder:default="90s"
 	// +optional
 	XDPRefreshInterval *metav1.Duration `json:"xdpRefreshInterval,omitempty" configv1timescale:"seconds"`
 
@@ -191,7 +184,6 @@ type FelixConfigurationSpec struct {
 	// them from host endpoint interfaces. Note: in environments other than bare metal, the orchestrators
 	// configure this appropriately. For example our Kubernetes and Docker integrations set the 'cali' value,
 	// and our OpenStack integration sets the 'tap' value. [Default: cali]
-	// +kubebuilder:default=cali
 	// +optional
 	InterfacePrefix string `json:"interfacePrefix,omitempty"`
 
@@ -201,7 +193,6 @@ type FelixConfigurationSpec struct {
 	// supports regular expressions. For regular expressions you must wrap the value with '/'. For example
 	// having values '/^kube/,veth1' will exclude all interfaces that begin with 'kube' and also the interface
 	// 'veth1'. [Default: kube-ipvs0]
-	// +kubebuilder:default=kube-ipvs0
 	// +optional
 	InterfaceExclude string `json:"interfaceExclude,omitempty"`
 
@@ -210,7 +201,6 @@ type FelixConfigurationSpec struct {
 	// Calico's rules from being bypassed. If you switch to append mode, be sure that the other rules in the chains
 	// signal acceptance by falling through to the Calico rules, otherwise the Calico policy will be bypassed.
 	// [Default: Insert]
-	// +kubebuilder:default=Insert
 	// +kubebuilder:validation:Enum=Insert;Append
 	// +optional
 	ChainInsertMode string `json:"chainInsertMode,omitempty"`
@@ -222,17 +212,14 @@ type FelixConfigurationSpec struct {
 	// "INPUT" chain; Calico will insert its rules at the top of that chain, then "RETURN" packets to the "INPUT" chain
 	// once it has completed processing workload endpoint egress policy. Use ACCEPT to unconditionally accept packets
 	// from workloads after processing workload endpoint egress policy. [Default: Drop]
-	// +kubebuilder:default=Drop
 	// +kubebuilder:validation:Enum=Drop;Accept;Return
 	// +optional
 	DefaultEndpointToHostAction string `json:"defaultEndpointToHostAction,omitempty" validate:"omitempty,dropAcceptReturn"`
 
-	// +kubebuilder:default=Accept
 	// +kubebuilder:validation:Enum=Accept;Return
 	// +optional
 	IptablesFilterAllowAction string `json:"iptablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 
-	// +kubebuilder:default=Accept
 	// +kubebuilder:validation:Enum=Accept;Return
 	// +optional
 	IptablesMangleAllowAction string `json:"iptablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
@@ -246,20 +233,17 @@ type FelixConfigurationSpec struct {
 	LogFilePath string `json:"logFilePath,omitempty"`
 
 	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
-	// +kubebuilder:default=Info
 	// +kubebuilder:validation:Enum=Debug;Info;Warning;Error;Fatal
 	// +optional
 	LogSeverityFile string `json:"logSeverityFile,omitempty" validate:"omitempty,logLevel"`
 
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-	// +kubebuilder:default=Info
 	// +kubebuilder:validation:Enum=Debug;Info;Warning;Error;Fatal
 	// +optional
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
 
 	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
 	// [Default: Info]
-	// +kubebuilder:default=Info
 	// +kubebuilder:validation:Enum=Debug;Info;Warning;Error;Fatal
 	// +optional
 	LogSeveritySys string `json:"logSeveritySys,omitempty" validate:"omitempty,logLevel"`
@@ -587,7 +571,6 @@ type FelixConfigurationSpec struct {
 
 	// Set source-destination-check on AWS EC2 instances. Accepted value must be one of "DoNothing", "Enable" or "Disable".
 	// [Default: DoNothing]
-	// +kubebuilder:default=DoNothing
 	// +optional
 	AWSSrcDstCheck *AWSSrcDstCheckOption `json:"awsSrcDstCheck,omitempty" validate:"omitempty,oneof=DoNothing Enable Disable"`
 
@@ -595,7 +578,6 @@ type FelixConfigurationSpec struct {
 	// not in use, by dropping or rejecting packets that do not get DNAT'd by kube-proxy.
 	// Unless set to "Disabled", in which case such routing loops continue to be allowed.
 	// [Default: Drop]
-	// +kubebuilder:default=Drop
 	// +kubebuilder:validation:Enum=Drop;Reject;Disabled
 	// +optional
 	ServiceLoopPrevention string `json:"serviceLoopPrevention,omitempty" validate:"omitempty,oneof=Drop Reject Disabled"`

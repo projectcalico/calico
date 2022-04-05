@@ -41,7 +41,6 @@ spec:
                   in the specific branch of the Node on "bird.cfg".
                 type: boolean
               maxRestartTime:
-                default: 120s
                 description: Time to allow for software restart.  When specified,
                   this is configured as the graceful restart timeout.  When not specified,
                   the BIRD default of 120s is used.

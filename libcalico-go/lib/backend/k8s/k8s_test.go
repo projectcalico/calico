@@ -513,7 +513,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 	})
 
 	It("should handle the static default-allow Profile", func() {
-
 		findAllowAllProfileEvent := func(c <-chan api.WatchEvent) bool {
 			found := false
 			for i := 0; i < 10; i++ {
@@ -989,7 +988,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(keys).To(ContainElement(kvp2b.Key))
 			Expect(vals).To(ContainElement(kvp1b.Value.(*apiv3.HostEndpoint).Spec))
 			Expect(vals).To(ContainElement(kvp2b.Value.(*apiv3.HostEndpoint).Spec))
-
 		})
 
 		By("Deleting an existing Host Endpoint", func() {
@@ -1203,8 +1201,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: "10-0-0-1",
 				},
 				Spec: apiv3.BGPPeerSpec{
-					PeerIP:   "10.0.0.1",
-					ASNumber: numorstring.ASNumber(6513),
+					PeerIP:         "10.0.0.1",
+					ASNumber:       numorstring.ASNumber(6513),
+					MaxRestartTime: &metav1.Duration{Duration: 120 * time.Second},
 				},
 			},
 		}
@@ -1223,8 +1222,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: "aa-bb-cc",
 				},
 				Spec: apiv3.BGPPeerSpec{
-					PeerIP:   "aa:bb::cc",
-					ASNumber: numorstring.ASNumber(6514),
+					PeerIP:         "aa:bb::cc",
+					ASNumber:       numorstring.ASNumber(6514),
+					MaxRestartTime: &metav1.Duration{Duration: 120 * time.Second},
 				},
 			},
 		}
@@ -1312,7 +1312,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(keys).To(ContainElement(kvp2b.Key))
 			Expect(vals).To(ContainElement(kvp1b.Value.(*apiv3.BGPPeer).Spec))
 			Expect(vals).To(ContainElement(kvp2b.Value.(*apiv3.BGPPeer).Spec))
-
 		})
 
 		By("Deleting the BGP Peer created by Create", func() {
@@ -2341,7 +2340,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				Key: model.HostConfigKey{
 					Hostname: "127.0.0.1",
 					Name:     "IpInIpTunnelAddr",
-				}}
+				},
+			}
 
 			expectedKeys := []api.Update{
 				api.Update{hostConfigKey, api.UpdateTypeKVNew},
@@ -2706,7 +2706,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
-					"key":      l.KVPairs[i].Key.String()}).Info("[Test] starting watch")
+					"key":      l.KVPairs[i].Key.String(),
+				}).Info("[Test] starting watch")
 				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
@@ -2727,7 +2728,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
-					"key":      l.KVPairs[i].Key.String()}).Info("[Test] starting watch")
+					"key":      l.KVPairs[i].Key.String(),
+				}).Info("[Test] starting watch")
 				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
@@ -2736,7 +2738,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				watch.Stop()
 			}
 		})
-
 	})
 
 	Describe("watching Custom Resources", func() {
@@ -2996,9 +2997,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 })
 
 var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
-	var (
-		c *KubeClient
-	)
+	var c *KubeClient
 
 	ctx := context.Background()
 
