@@ -22,7 +22,7 @@ $baseDir = "$PSScriptRoot\.."
 ipmo -Force $baseDir\libs\hns\hns.psm1
 
 . $baseDir\config.ps1
-ipmo $baseDir\libs\calico\calico.psm1
+ipmo -Force $baseDir\libs\calico\calico.psm1
 
 Write-Host "Running kub-proxy service."
 
