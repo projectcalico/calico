@@ -15,15 +15,12 @@
 package daemon
 
 import (
-	"fmt"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -88,20 +85,22 @@ var _ = Describe("Typha address discovery", func() {
 		configParams.TyphaAddr = "10.0.0.1:8080"
 		typhaAddr, err := discoverTyphaAddr(configParams, nil)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal("10.0.0.1:8080"))
+		Expect(typhaAddr).To(Equal([]discovery.Typha{{Addr: "10.0.0.1:8080"}}))
 	})
 
 	It("should return nothing if no service name", func() {
 		configParams.TyphaK8sServiceName = ""
 		typhaAddr, err := discoverTyphaAddr(configParams, nil)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal(""))
+		Expect(typhaAddr).To(BeNil())
 	})
 
 	It("should return IP from endpoints", func() {
 		typhaAddr, err := discoverTyphaAddr(configParams, k8sClient)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal("10.0.0.2:8156"))
+		Expect(typhaAddr).To(ConsistOf(
+			discovery.Typha{Addr: "10.0.0.2:8156", IP: "10.0.0.2"},
+		))
 	})
 
 	It("should bracket an IPv6 Typha address", func() {
@@ -109,7 +108,9 @@ var _ = Describe("Typha address discovery", func() {
 		refreshClient()
 		typhaAddr, err := discoverTyphaAddr(configParams, k8sClient)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(Equal("[fd5f:65af::2]:8156"))
+		Expect(typhaAddr).To(ConsistOf(
+			discovery.Typha{Addr: "[fd5f:65af::2]:8156", IP: "fd5f:65af::2"},
+		))
 	})
 
 	It("should error if no Typhas", func() {
@@ -120,19 +121,17 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should choose random Typhas", func() {
-		seenAddresses := set.New()
-		expected := set.From("10.0.0.2:8156", "10.0.0.6:8156")
+		// Skip("skip random test")
 		endpoints.Subsets[1].Addresses = append(endpoints.Subsets[1].Addresses, v1.EndpointAddress{IP: "10.0.0.6"})
 		refreshClient()
 
-		for i := 0; i < 32; i++ {
-			addr, err := discoverTyphaAddr(configParams, k8sClient)
-			Expect(err).NotTo(HaveOccurred())
-			seenAddresses.Add(addr)
-			if seenAddresses.ContainsAll(expected) {
-				return
-			}
-		}
-		Fail(fmt.Sprintf("Didn't get expected values; got %v", seenAddresses))
+		addr, err := discoverTyphaAddr(configParams, k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(addr).To(
+			ContainElements(
+				discovery.Typha{Addr: "10.0.0.2:8156", IP: "10.0.0.2"},
+				discovery.Typha{Addr: "10.0.0.6:8156", IP: "10.0.0.6"},
+			),
+		)
 	})
 })

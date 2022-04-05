@@ -170,7 +170,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var v3Client client.Interface
 	var datastoreConfig apiconfig.CalicoAPIConfig
 	var configParams *config.Config
-	var typhaAddr string
+	var typhaAddresses []discovery.Typha
 	var numClientsCreated int
 	var k8sClientSet *kubernetes.Clientset
 	var kubernetesVersion string
@@ -317,7 +317,7 @@ configRetry:
 		}
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
-		typhaAddr, err = discoverTyphaAddr(configParams, k8sClientSet)
+		typhaAddresses, err = discoverTyphaAddr(configParams, k8sClientSet)
 		if err != nil {
 			log.WithError(err).Error("Typha discovery enabled but discovery failed.")
 			time.Sleep(1 * time.Second)
@@ -457,11 +457,12 @@ configRetry:
 	var syncer Startable
 	var typhaConnection *syncclient.SyncerClient
 	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
-	if typhaAddr != "" {
+
+	if len(typhaAddresses) > 0 {
 		// Use a remote Syncer, via the Typha server.
-		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
+		log.WithField("addresses", typhaAddresses).Info("Connecting to Typha.")
 		typhaConnection = syncclient.New(
-			typhaAddr,
+			typhaAddresses,
 			buildinfo.GitVersion,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s",
@@ -1201,8 +1202,15 @@ func (fc *DataplaneConnector) Start() {
 	go fc.handleWireguardStatUpdateFromDataplane()
 }
 
-func discoverTyphaAddr(configParams *config.Config, k8sClientSet kubernetes.Interface) (string, error) {
+func discoverTyphaAddr(configParams *config.Config, k8sClientSet kubernetes.Interface) ([]discovery.Typha, error) {
 	typhaDiscoveryOpts := configParams.TyphaDiscoveryOpts()
-	typhaDiscoveryOpts = append(typhaDiscoveryOpts, discovery.WithKubeClient(k8sClientSet))
-	return discovery.DiscoverTyphaAddr(typhaDiscoveryOpts...)
+	typhaDiscoveryOpts = append(typhaDiscoveryOpts,
+		discovery.WithKubeClient(k8sClientSet),
+		discovery.WithNodeAffinity(configParams.FelixHostname),
+	)
+	res, err := discovery.DiscoverTyphaAddr(typhaDiscoveryOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
