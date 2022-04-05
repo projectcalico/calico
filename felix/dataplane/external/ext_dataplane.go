@@ -199,6 +199,10 @@ func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 		envelope.Payload = &proto.ToDataplane_GlobalBgpConfigUpdate{GlobalBgpConfigUpdate: msg}
 	case *proto.Encapsulation:
 		envelope.Payload = &proto.ToDataplane_Encapsulation{Encapsulation: msg}
+	case *proto.ServiceUpdate:
+		envelope.Payload = &proto.ToDataplane_ServiceUpdate{ServiceUpdate: msg}
+	case *proto.ServiceRemove:
+		envelope.Payload = &proto.ToDataplane_ServiceRemove{ServiceRemove: msg}
 
 	default:
 		log.WithField("msg", msg).Panic("Unknown message type")
