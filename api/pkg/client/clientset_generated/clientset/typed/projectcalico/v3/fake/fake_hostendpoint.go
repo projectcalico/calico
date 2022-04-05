@@ -85,7 +85,7 @@ func (c *FakeHostEndpoints) Update(ctx context.Context, hostEndpoint *v3.HostEnd
 // Delete takes name of the hostEndpoint and deletes it. Returns an error if one occurs.
 func (c *FakeHostEndpoints) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(hostendpointsResource, name), &v3.HostEndpoint{})
+		Invokes(testing.NewRootDeleteActionWithOptions(hostendpointsResource, name, opts), &v3.HostEndpoint{})
 	return err
 }
 

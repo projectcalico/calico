@@ -27,7 +27,6 @@ This how-to guide uses the following Calico features:
 
 The Sidecar acceleration process bypasses several layers of kernel networking, allowing data to flow between the sockets unobstructed. This makes the Envoy proxy (sidecar) to container network path as fast and efficient as possible. 
 
-
 ### Before you begin...
 
 - [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy)
@@ -41,32 +40,31 @@ The sidecar app acceleration feature is disabled by default in Calico because th
 
 To enable sidecar acceleration for Istio-enabled apps using Calico:
 
-1. Get the default Felix configuration. 
+{% tabs %}
+<label:kubectl,active:true>
+<% 
+```bash
+kubectl patch felixconfiguration default --type merge --patch '{"spec":{"sidecarAccelerationEnabled": true}}'
+```
 
-    `calicoctl get felixconfiguration default --export -o yaml > felix-config.yaml`
+You should see an output like below:
+```
+felixconfiguration.projectcalico.org/default patched
+```
+%>
 
-2. Edit felix-config.yaml and add the option, `sidecarAccelerationEnabled: true` to the end.  
+<label:calicoctl>
+<%
 
-   ```yaml
-   apiVersion: projectcalico.org/v3
-   kind: FelixConfiguration
-   metadata:
-     creationTimestamp: null
-     name: default
-   spec:
-     XDPRefreshInterval: null
-     ipipEnabled: true
-     logSeverityScreen: Info
-     policySyncPathPrefix: /var/run/nodeagent
-     reportingInterval: 0s
-     sidecarAccelerationEnabled: true
-   ``` 
+```bash
+calicoctl patch felixconfiguration default  --patch '{"spec":{"sidecarAccelerationEnabled": true}}'
+```
 
-3. Apply the updated configuration.  
-
-   ```bash
-   calicoctl apply -f - < felix-config.yaml 
-   Successfully applied 1 'FelixConfiguration' resource(s)
-   ```
+You should see an output like below:
+```
+Successfully patched 1 'FelixConfiguration' resource
+```
+%>
+{% endtabs %}
 
 That’s it!  Network traffic that is routed between apps and the Envoy sidecar is automatically accelerated at this point. Note that if you have an existing Istio/Calico implementation and you enable sidecar acceleration, existing connections do not benefit from acceleration.

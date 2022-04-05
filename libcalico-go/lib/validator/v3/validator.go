@@ -45,6 +45,9 @@ const (
 	// Maximum size of annotations.
 	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
 
+	// linux can support route-tables with indices up to 0xfffffff
+	routeTableMaxLinux uint32 = 0xffffffff
+
 	globalSelector = "global()"
 )
 
@@ -113,6 +116,9 @@ var (
 		IP:   net.ParseIP("fe80::"),
 		Mask: net.CIDRMask(10, 128),
 	}
+
+	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
+	routeTablesReservedLinux = []int{253, 254, 255}
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -211,6 +217,7 @@ func init() {
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
+	registerStructValidator(validate, validateRouteTableIDRange, api.RouteTableIDRange{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
 }
@@ -771,6 +778,11 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 			structLevel.ReportError(reflect.ValueOf(c.DeviceRouteSourceAddress),
 				"DeviceRouteSourceAddress", "", reason("is not a valid IPv4 address"), "")
 		}
+	}
+
+	if c.RouteTableRange != nil && c.RouteTableRanges != nil {
+		structLevel.ReportError(reflect.ValueOf(c.RouteTableRange),
+			"RouteTableRange", "", reason("cannot be set when `RouteTableRanges` is also set"), "")
 	}
 }
 
@@ -1574,6 +1586,55 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 	}
 }
 
+func validateRouteTableIDRange(structLevel validator.StructLevel) {
+	r := structLevel.Current().Interface().(api.RouteTableIDRange)
+	if r.Min > r.Max {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("min value cannot be greater than max value"),
+			"",
+		)
+	}
+
+	if r.Min <= 0 {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("cannot target indices < 1"),
+			"",
+		)
+	}
+
+	// cast both ints to 64bit as casting the max 32-bit integer to int() would overflow on 32bit systems
+	if int64(r.Max) > int64(routeTableMaxLinux) {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("max index too high"),
+			"",
+		)
+	}
+
+	// check if ranges collide with reserved linux tables
+	includesReserved := false
+	for _, rsrv := range routeTablesReservedLinux {
+		if r.Min <= rsrv && r.Max >= rsrv {
+			includesReserved = false
+		}
+	}
+	if includesReserved {
+		log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
+	}
+
+}
+
 func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 	spec := structLevel.Current().Interface().(api.BGPConfigurationSpec)
 
@@ -1611,6 +1672,16 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 				}
 			}
 		}
+	}
+
+	// Check that node mesh password cannot be set if node to node mesh is disabled.
+	if spec.NodeMeshPassword != nil && spec.NodeToNodeMeshEnabled != nil && !*spec.NodeToNodeMeshEnabled {
+		structLevel.ReportError(reflect.ValueOf(spec), "Spec.NodeMeshPassword", "", reason("spec.NodeMeshPassword cannot be set if spec.NodeToNodeMesh is disabled"), "")
+	}
+
+	// Check that node mesh max restart time cannot be set if node to node mesh is disabled.
+	if spec.NodeMeshMaxRestartTime != nil && spec.NodeToNodeMeshEnabled != nil && !*spec.NodeToNodeMeshEnabled {
+		structLevel.ReportError(reflect.ValueOf(spec), "Spec.NodeMeshMaxRestartTime", "", reason("spec.NodeMeshMaxRestartTime cannot be set if spec.NodeToNodeMesh is disabled"), "")
 	}
 }
 

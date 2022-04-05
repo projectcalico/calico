@@ -9,8 +9,8 @@ CONTAINER_RUNTIME="${CONTAINER_RUNTIME:=docker}"
 pushd ${FV_DIR}
 # Prepare local files
 cp ~/.docker/config.json docker_auth.json
-cp ~/$SEMAPHORE_GIT_DIR/internal/pkg/testutils/private.key private.key
-cp ~/$SEMAPHORE_GIT_DIR/bin/windows/*.exe .
+cp ~/$SEMAPHORE_GIT_DIR/cni-plugin/internal/pkg/testutils/private.key private.key
+cp ~/$SEMAPHORE_GIT_DIR/cni-plugin/bin/windows/*.exe .
 
 # Prepare key for windows fv.
 ssh-keygen -f master_ssh_key -N ''

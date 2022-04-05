@@ -1,5 +1,3 @@
-
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -118,6 +116,37 @@ spec:
                   logs are emitted to the BPF trace pipe, accessible with the command
                   `tc exec bpf debug`. [Default: Off].'
                 type: string
+              bpfMapSizeConntrack:
+                description: 'BPFMapSizeConntrack sets the size for the conntrack
+                  map.  This map must be large enough to hold an entry for each active
+                  connection.  Warning: changing the size of the conntrack map can
+                  cause disruption.'
+                type: integer
+              bpfMapSizeIPSets:
+                description: BPFMapSizeIPSets sets the size for ipsets map.  The IP
+                  sets map must be large enough to hold an entry for each endpoint
+                  matched by every selector in the source/destination matches in network
+                  policy.  Selectors such as "all()" can result in large numbers of
+                  entries (one entry per endpoint in that case).
+                type: integer
+              bpfMapSizeNATAffinity:
+                type: integer
+              bpfMapSizeNATBackend:
+                description: BPFMapSizeNATBackend sets the size for nat back end map.
+                  This is the total number of endpoints. This is mostly more than
+                  the size of the number of services.
+                type: integer
+              bpfMapSizeNATFrontend:
+                description: BPFMapSizeNATFrontend sets the size for nat front end
+                  map. FrontendMap should be large enough to hold an entry for each
+                  nodeport, external IP and each port in each service.
+                type: integer
+              bpfMapSizeRoute:
+                description: BPFMapSizeRoute sets the size for the routes map.  The
+                  routes map should be large enough to hold one entry per workload
+                  and a handful of entries per host (enough to cover its own IPs and
+                  tunnel IPs).
+                type: integer
               bpfPSNATPorts:
                 anyOf:
                 - type: integer
@@ -142,6 +171,15 @@ spec:
                   Calico policy will be bypassed. [Default: insert]'
                 type: string
               dataplaneDriver:
+                description: DataplaneDriver filename of the external dataplane driver
+                  to use.  Only used if UseInternalDataplaneDriver is set to false.
+                type: string
+              dataplaneWatchdogTimeout:
+                description: 'DataplaneWatchdogTimeout is the readiness/liveness timeout
+                  used for Felix''s (internal) dataplane driver. Increase this value
+                  if you experience spurious non-ready or non-live events when Felix
+                  is under heavy load. Decrease the value to get felix to report non-live
+                  or non-ready more quickly. [Default: 90s]'
                 type: string
               debugDisableLogDropping:
                 type: boolean
@@ -283,6 +321,9 @@ spec:
                   disabled by setting the interval to 0.
                 type: string
               ipipEnabled:
+                description: 'IPIPEnabled overrides whether Felix should configure
+                  an IPIP interface on the host. Optional as Felix determines this
+                  based on the existing IP pools. [Default: nil (unset)]'
                 type: boolean
               ipipMTU:
                 description: 'IPIPMTU is the MTU to set on the tunnel device. See
@@ -349,6 +390,8 @@ spec:
                   usage. [Default: 10s]'
                 type: string
               ipv6Support:
+                description: IPv6Support controls whether Felix enables support for
+                  IPv6 (if supported by the in-use dataplane).
                 type: boolean
               kubeNodePortRanges:
                 description: 'KubeNodePortRanges holds list of port ranges used for
@@ -501,9 +544,9 @@ spec:
                   on the route table. Set to true to run in network-policy mode only.
                 type: boolean
               routeTableRange:
-                description: Calico programs additional Linux route tables for various
-                  purposes.  RouteTableRange specifies the indices of the route tables
-                  that Calico should use.
+                description: Deprecated in favor of RouteTableRanges. Calico programs
+                  additional Linux route tables for various purposes. RouteTableRange
+                  specifies the indices of the route tables that Calico should use.
                 properties:
                   max:
                     type: integer
@@ -513,6 +556,21 @@ spec:
                 - max
                 - min
                 type: object
+              routeTableRanges:
+                description: Calico programs additional Linux route tables for various
+                  purposes. RouteTableRanges specifies a set of table index ranges
+                  that Calico should use. Deprecates`RouteTableRange`, overrides `RouteTableRange`.
+                items:
+                  properties:
+                    max:
+                      type: integer
+                    min:
+                      type: integer
+                  required:
+                  - max
+                  - min
+                  type: object
+                type: array
               serviceLoopPrevention:
                 description: 'When service IP advertisement is enabled, prevent routing
                   loops to service IPs that are not in use, by dropping or rejecting
@@ -540,8 +598,14 @@ spec:
                   Felix makes reports. [Default: 86400s]'
                 type: string
               useInternalDataplaneDriver:
+                description: UseInternalDataplaneDriver, if true, Felix will use its
+                  internal dataplane programming logic.  If false, it will launch
+                  an external dataplane driver and communicate with it over protobuf.
                 type: boolean
               vxlanEnabled:
+                description: 'VXLANEnabled overrides whether Felix should create the
+                  VXLAN tunnel device for VXLAN networking. Optional as Felix determines
+                  this based on the existing IP pools. [Default: nil (unset)]'
                 type: boolean
               vxlanMTU:
                 description: 'VXLANMTU is the MTU to set on the tunnel device. See

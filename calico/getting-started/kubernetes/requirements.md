@@ -54,6 +54,9 @@ IP ranges in your network, including:
 - Istio {% include open-new-window.html text='v1.9' url='https://istio.io/about/notes/1.9/' %} or {% include open-new-window.html text='v1.10' url='https://archive.istio.io/v1.10/' %}
 
 Note that Kubernetes version 1.16+ requires Istio version 1.2 or greater.
-Note that Istio version 1.9 requires Kubernetes version 1.17+.
+Note that Istio version 1.9 requires Kubernetes version 1.17-1.20.
+Note that Istio version 1.10 is supported on Kubernetes version 1.18-1.21, but has been tested on Kubernetes version 1.22.
+
+As of Kubernetes v1.23, FlexVolumes have been deprecated in favor of the Container Storage Interface (CSI). Since our current application layer policy integration depends on FlexVolumes, it will not work on Kubernetes v1.23+.
 
 {% include content/reqs-kernel.md %}

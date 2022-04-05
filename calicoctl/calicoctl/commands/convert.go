@@ -97,7 +97,13 @@ Description:
 	// of resources for easier handling.
 	convRes, err := resourceloader.CreateResourcesFromFile(filename)
 	if err != nil {
-		return fmt.Errorf("Failed to execute command: %v", err)
+		return fmt.Errorf("Failed to create resources from file: %w", err)
+	}
+
+	// Unpack list resources (if any) into the slice
+	convRes, err = unpackResourceLists(convRes)
+	if err != nil {
+		return fmt.Errorf("Failed to unpack lists: %w", err)
 	}
 
 	var results []runtime.Object
@@ -105,12 +111,11 @@ Description:
 	for _, convResource := range convRes {
 		v3Resource, err := convertResource(convResource)
 		if err != nil {
-			return fmt.Errorf("Failed to execute command: %w", err)
+			return fmt.Errorf("Failed to convert resource: %w", err)
 		}
 
 		// Remove any extra metadata the object might have.
 		rom := v3Resource.(v1.ObjectMetaAccessor).GetObjectMeta()
-		rom.SetNamespace("")
 		rom.SetUID("")
 		rom.SetResourceVersion("")
 		rom.SetCreationTimestamp(v1.Time{})
@@ -131,9 +136,16 @@ Description:
 
 	log.Infof("results: %+v", results)
 
+	if len(results) > 1 {
+		results, err = createV1List(results)
+		if err != nil {
+			return fmt.Errorf("Failed to create v1.List: %w", err)
+		}
+	}
+
 	err = rp.Print(nil, results)
 	if err != nil {
-		return fmt.Errorf("Failed to execute command: %v", err)
+		return fmt.Errorf("Failed to print results: %w", err)
 	}
 
 	return nil
@@ -238,4 +250,51 @@ func getTypeConverter(resKind string) (converters.Converter, error) {
 	default:
 		return nil, fmt.Errorf("conversion for the resource type '%s' is not supported", resKind)
 	}
+}
+
+func unpackResourceLists(convRes []unversioned.Resource) ([]unversioned.Resource, error) {
+	var unpackedConvRes []unversioned.Resource
+	for _, convResource := range convRes {
+		if strings.EqualFold(convResource.GetTypeMetadata().Kind, resourceloader.KindK8sListV1) && strings.EqualFold(convResource.GetTypeMetadata().APIVersion, resourceloader.VersionK8sListV1) {
+			k8sNPList, ok := convResource.(*resourceloader.K8sNetworkPolicyList)
+			if !ok {
+				return nil, fmt.Errorf("failed to convert resource to K8sNetworkPolicyList")
+			}
+
+			for _, item := range k8sNPList.Items {
+				// Append the items from the list to unpackedConvRes
+				i := item
+				unpackedConvRes = append(unpackedConvRes, &i)
+			}
+		} else {
+			unpackedConvRes = append(unpackedConvRes, convResource)
+		}
+	}
+
+	return unpackedConvRes, nil
+}
+
+func createV1List(results []runtime.Object) ([]runtime.Object, error) {
+	list := v1.List{
+		TypeMeta: v1.TypeMeta{
+			Kind:       resourceloader.KindK8sListV1,
+			APIVersion: resourceloader.VersionK8sListV1,
+		},
+	}
+
+	for _, item := range results {
+		var rawExt runtime.RawExtension
+
+		err := runtime.Convert_runtime_Object_To_runtime_RawExtension(&item, &rawExt, nil)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to convert runtime.Object to runtime.RawExtension: %w", err)
+		}
+
+		list.Items = append(list.Items, rawExt)
+	}
+
+	var obj []runtime.Object
+	obj = append(obj, &list)
+
+	return obj, nil
 }

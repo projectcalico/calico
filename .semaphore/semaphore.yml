@@ -73,6 +73,10 @@ global_job_config:
     # Free up space on the build machine.
     - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
     - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+    # Disable initramfs update to save space on the Semaphore VM (and we don't need it because we're not going to reboot).
+    - sudo apt-get install -y -u crudini
+    - sudo crudini --set /etc/initramfs-tools/update-initramfs.conf '' update_initramfs no
+    - cat /etc/initramfs-tools/update-initramfs.conf
 
 blocks:
 
@@ -87,14 +91,10 @@ blocks:
       commands:
       - cd api
     jobs:
-    - name: "make build"
+    - name: "make build / ci / static-checks"
       commands:
       - make build
-    - name: "make ci"
-      commands:
       - make ci
-    - name: "make static-checks"
-      commands:
       - make static-checks
 
 - name: "apiserver"
@@ -104,6 +104,10 @@ blocks:
     minutes: 30
   dependencies: []
   task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
     prologue:
       commands:
       - cd apiserver
@@ -137,10 +141,6 @@ blocks:
       commands:
       - cd typha
       - make ci EXCEPT=k8sfv-test
-    - name: "Typha: felix k8s-st tests"
-      commands:
-      - cd felix
-      - JUST_A_MINUTE=true USE_TYPHA=true make k8sfv-test
     epilogue:
       always:
         commands:
@@ -167,17 +167,17 @@ blocks:
       machine:
         type: e1-standard-4
         os_image: ubuntu1804
+    prologue:
+      commands:
+      - cd felix
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
     jobs:
     - name: Build and run UT, k8sfv
       execution_time_limit:
         minutes: 60
       commands:
-      - cd felix
-      - cache restore go-pkg-cache
-      - cache restore go-mod-cache
-      - >-
-        make image-all fv/fv.test bin/test-workload bin/test-connection
-        bin/calico-felix
+      - make image fv/fv.test bin/test-workload bin/test-connection bin/calico-felix
       - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
       - cache store go-pkg-cache .go-pkg-cache
       - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
@@ -186,6 +186,12 @@ blocks:
       - make ut
       - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+    - name: make image-all
+      execution_time_limit:
+        minutes: 60
+      commands:
+      - make static-checks
+      - make image-all
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -219,7 +225,7 @@ blocks:
       - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${BACKEND}-${SHORT_WORKFLOW_ID}
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
-      - sudo apt-get install putty-tools
+      - sudo apt-get install -y putty-tools
       - git clone git@github.com:tigera/process.git ~/process
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
@@ -322,28 +328,6 @@ blocks:
     secrets:
     - name: google-service-account-for-gce
 
-- name: "Felix: Static checks on e1-standard-8"
-  run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
-  task:
-    agent:
-      machine:
-        # Linters use a lot of RAM so use a bigger machine type.
-        type: e1-standard-8
-        os_image: ubuntu1804
-    prologue:
-      commands:
-      - cd felix
-      - cache restore go-pkg-cache
-      - cache restore go-mod-cache
-    jobs:
-    - name: Static checks
-      execution_time_limit:
-        minutes: 15
-      commands:
-      - make static-checks
-
 - name: "confd: tests"
   run:
     when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/confd/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -383,6 +367,30 @@ blocks:
         commands:
         - test-results publish ./report/nosetests.xml --name "node-ci" || true
         - test-results publish ./report/k8s-tests.xml --name "node-k8s-test" || true
+
+- name: "Node: build all architectures"
+  run:
+    when: "branch =~ '.*' or change_in(['/felix/', '/confd/', '/node/'])"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - cd node
+    jobs:
+    - name: "Build image"
+      matrix:
+      # TODO: s390x builds of calico/node are not working.
+      - env_var: ARCH
+        values: [ "arm64", "armv7", "ppc64le" ]
+      commands:
+      - make image ARCH=$ARCH
+    - name: "Build Windows archive"
+      commands:
+      - make build-windows-archive
 
 - name: "e2e tests"
   run:
@@ -453,6 +461,71 @@ blocks:
       commands:
       - make ci
 
+- name: "cni-plugin: Windows"
+  run:
+    when: "branch =~ '.*' or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: []
+  task:
+    secrets:
+    - name: banzai-secrets
+    - name: private-repo
+    prologue:
+      commands:
+      # Load the github access secrets.  First fix the permissions.
+      - chmod 0600 ~/.keys/*
+      - ssh-add ~/.keys/*
+      # Prepare aws configuration.
+      - pip install --upgrade --user awscli
+      - export REPORT_DIR=~/report
+      - export LOGS_DIR=~/fv.log
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${CONTAINER_RUNTIME}-${SHORT_WORKFLOW_ID}
+      - export KEYPAIR_NAME=${CLUSTER_NAME}
+      - echo CLUSTER_NAME=${CLUSTER_NAME}
+      - sudo apt-get install -y putty-tools
+      - git clone git@github.com:tigera/process.git ~/process
+      - cd cni-plugin
+      - make bin/windows/calico.exe && make bin/windows/calico-ipam.exe && make bin/windows/win-fv.exe
+    epilogue:
+      always:
+        commands:
+        - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+        - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+        - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+    env_vars:
+    - name: SEMAPHORE_ARTIFACT_EXPIRY
+      value: 2w
+    - name: AWS_DEFAULT_REGION
+      value: us-west-2
+    - name: MASTER_CONNECT_KEY_PUB
+      value: master_ssh_key.pub
+    - name: MASTER_CONNECT_KEY
+      value: master_ssh_key
+    - name: WIN_PPK_KEY
+      value: win_ppk_key
+    - name: K8S_VERSION
+      value: 1.22.6
+    jobs:
+    - name: Docker - Windows FV
+      execution_time_limit:
+        minutes: 60
+      commands:
+      - ./.semaphore/run-win-fv.sh
+      env_vars:
+      - name: CONTAINER_RUNTIME
+        value: docker
+    - name: Containerd - Windows FV
+      execution_time_limit:
+        minutes: 60
+      commands:
+      - ./.semaphore/run-win-fv.sh
+      env_vars:
+      - name: CONTAINER_RUNTIME
+        value: containerd
+      - name: CONTAINERD_VERSION
+        value: 1.4.12
+
 - name: "cni-plugin"
   run:
     when: "branch =~ '.*' or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -465,6 +538,40 @@ blocks:
     - name: "cni-plugin tests"
       commands:
       - make ci
+
+- name: 'networking-calico'
+  run:
+    when: "branch =~ '.*' or change_in(['/networking-calico/'])"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cd networking-calico
+      - sudo apt-get install -y python-all-dev python3-all-dev python3-pip
+      - sudo pip3 install tox
+    jobs:
+      - name: 'Unit and FV tests (tox)'
+        commands:
+          - tox
+      # TODO: Re-enable
+      # - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
+      #   commands:
+      #     - git checkout -b devstack-test
+      #     - export LIBVIRT_TYPE=qemu
+      #     - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/ussuri
+      #     # Use proposed fix at
+      #     # https://review.opendev.org/c/openstack/requirements/+/810859.  See commit
+      #     # message for more context.
+      #     - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
+      #     - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
+      #     - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
+    epilogue:
+      on_fail:
+        commands:
+          - mkdir logs
+          - sudo journalctl > logs/journalctl.txt
+          - artifact push job --expire-in 1d logs
 
 - name: "Documentation"
   run:

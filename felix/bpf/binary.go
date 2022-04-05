@@ -146,6 +146,11 @@ func (b *Binary) PatchPSNATPorts(start, end uint32) {
 	b.patchU32Placeholder("PRTL", end-start+1)
 }
 
+func (b *Binary) PatchSkbMark(mark uint32) {
+	logrus.WithField("mark", mark).Debug("Patching skb mark")
+	b.patchU32Placeholder("SKBM", uint32(mark))
+}
+
 // patchU32Placeholder replaces a placeholder with the given value.
 func (b *Binary) patchU32Placeholder(from string, to uint32) {
 	toBytes := make([]byte, 4)

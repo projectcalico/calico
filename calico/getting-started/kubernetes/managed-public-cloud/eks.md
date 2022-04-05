@@ -22,8 +22,6 @@ The geeky details of what you get:
 
 To enable {{site.prodname}} network policy enforcement on an EKS cluster using the AWS VPC CNI plugin, follow these step-by-step instructions: {% include open-new-window.html text='Installing Calico on Amazon EKS' url='https://docs.aws.amazon.com/eks/latest/userguide/calico.html' %}
 
-{% include /content/install-awscni-routetable-issue.md %}
-
 #### Install EKS with {{site.prodname}} networking
 
 The geeky details of what you get:
@@ -55,6 +53,39 @@ Before you get started, make sure you have downloaded and configured the {% incl
 
 1. Now that you have a cluster configured, you can install {{site.prodname}}.
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+1. Install the operator.
+
+   ```bash
+   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   ```
+
+1. Configure the {{site.prodname}} installation.
+
+   ```bash
+   kubectl create -f - <<EOF
+   kind: Installation
+   apiVersion: operator.tigera.io/v1
+   metadata:
+     name: default
+   spec:
+     kubernetesProvider: EKS
+     cni:
+       type: Calico
+     calicoNetwork:
+       bgp: Disabled
+   EOF
+   ```
+
+%>
+  <label:Manifest>
+<%
+
+1. Install the {{site.prodname}} manifest.
+
    ```bash
    kubectl apply -f {{ "/manifests/calico-vxlan.yaml" | absolute_url }}
    ```
@@ -64,11 +95,13 @@ Before you get started, make sure you have downloaded and configured the {% incl
    ```bash
    kubectl -n kube-system set env daemonset/calico-node FELIX_AWSSRCDSTCHECK=Disable
    ```
+%>
+{% endtabs %}
 
 1. Finally, add nodes to the cluster.
 
    ```bash
-   eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto --max-pods-per-node 100
+   eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --max-pods-per-node 100
    ```
 
    > **Tip**: Without the `--max-pods-per-node` option above, EKS will limit the {% include open-new-window.html text='number of pods based on node-type' url='https://github.com/awslabs/amazon-eks-ami/blob/master/files/eni-max-pods.txt' %}. See `eksctl create nodegroup --help` for the full set of node group options.

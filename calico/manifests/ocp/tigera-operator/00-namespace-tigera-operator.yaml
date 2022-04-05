@@ -1,7 +1,9 @@
----
-layout: null
----
-{% helm tigera-operator --execute templates/tigera-operator/00-namespace-tigera-operator.yaml %}
-installation:
-  kubernetesProvider: openshift
-{% endhelm %}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tigera-operator
+  annotations:
+    openshift.io/node-selector: ""
+  labels:
+    name: tigera-operator
+    openshift.io/run-level: "0"

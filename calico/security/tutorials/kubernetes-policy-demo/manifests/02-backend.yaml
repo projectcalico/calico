@@ -10,13 +10,18 @@ spec:
   selector:
     role: backend 
 ---
-apiVersion: v1
-kind: ReplicationController
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: backend 
   namespace: stars
+  labels:
+    role: backend 
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      role: backend
   template:
     metadata:
       labels:
@@ -24,7 +29,7 @@ spec:
     spec:
       containers:
       - name: backend 
-        image: calico/star-probe:v0.1.0
+        image: calico/star-probe:multiarch
         imagePullPolicy: Always
         command:
         - probe

@@ -61,6 +61,14 @@ func (apiServerStrategy) AllowUnconditionalUpdate() bool {
 	return false
 }
 
+func (apiServerStrategy) WarningsOnCreate(ctx context.Context, obj runtime.Object) []string {
+	return []string{}
+}
+
+func (apiServerStrategy) WarningsOnUpdate(ctx context.Context, obj, old runtime.Object) []string {
+	return []string{}
+}
+
 func (apiServerStrategy) Canonicalize(obj runtime.Object) {
 }
 

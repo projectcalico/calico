@@ -98,7 +98,7 @@ def _test_converter(testname, fail_expected, error_text=None, format="yaml"):
         cleaned_output = yaml.safe_dump(
             clean_calico_data(
                 yaml.safe_load(rc.output),
-                extra_keys_to_remove=['projectcalico.org/orchestrator', 'namespace']
+                extra_keys_to_remove=['projectcalico.org/orchestrator']
             )
         )
         original_resource.assert_data(cleaned_output, format=format)

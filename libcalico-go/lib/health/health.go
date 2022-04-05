@@ -15,19 +15,23 @@
 package health
 
 import (
+	"bytes"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 )
 
 // The HealthReport struct has slots for the levels of health that we monitor and aggregate.
 type HealthReport struct {
-	Live  bool
-	Ready bool
+	Live   bool
+	Ready  bool
+	Detail string
 }
 
 type reporterState struct {
@@ -128,7 +132,6 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 		"lastReport": reporter.latest,
 	})
 
-	logCxt.Debug("New health report")
 	if reporter.latest != *report {
 		logCxt.Info("Health of component changed")
 		reporter.latest = *report
@@ -146,27 +149,30 @@ func NewHealthAggregator() *HealthAggregator {
 	}
 	aggregator.httpServeMux.HandleFunc("/readiness", func(rsp http.ResponseWriter, req *http.Request) {
 		log.Debug("GET /readiness")
-		status := StatusBad
-		if aggregator.Summary().Ready {
-			log.Debug("Health: ready")
-			status = StatusGood
-		} else {
-			log.Warn("Health: not ready")
-		}
-		rsp.WriteHeader(status)
+		summary := aggregator.Summary()
+		genResponse(rsp, "ready", summary.Ready, summary.Detail)
 	})
 	aggregator.httpServeMux.HandleFunc("/liveness", func(rsp http.ResponseWriter, req *http.Request) {
 		log.Debug("GET /liveness")
-		status := StatusBad
-		if aggregator.Summary().Live {
-			log.Debug("Health: live")
-			status = StatusGood
-		} else {
-			log.Warn("Health: not live")
-		}
-		rsp.WriteHeader(status)
+		summary := aggregator.Summary()
+		genResponse(rsp, "live", summary.Live, summary.Detail)
 	})
 	return aggregator
+}
+
+func genResponse(rsp http.ResponseWriter, quality string, state bool, detail string) {
+	status := StatusBad
+	if state {
+		log.Debug("Health: " + quality)
+		status = StatusGood
+		if len(detail) == 0 {
+			status = StatusGoodNoContent
+		}
+	} else {
+		log.Warn("Health: not " + quality)
+	}
+	rsp.WriteHeader(status)
+	rsp.Write([]byte(detail))
 }
 
 // Summary calculates the current overall health for a HealthAggregator.
@@ -177,18 +183,49 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	// In the absence of any reporters, default to indicating that we are both live and ready.
 	summary := &HealthReport{Live: true, Ready: true}
 
+	// Prepare a table to report detail.
+	var buf bytes.Buffer
+	table := tablewriter.NewWriter(&buf)
+	table.SetHeader([]string{"COMPONENT", "TIMEOUT", "LIVENESS", "READINESS", "DETAIL"})
+
 	// Now for each reporter...
 	for _, reporter := range aggregator.reporters {
 		log.WithField("reporter", reporter).Debug("Checking state of reporter")
+		livenessStr := "-"
 		if reporter.HasLivenessProblem() {
 			log.WithField("name", reporter.name).Warn("Reporter is not live.")
 			summary.Live = false
+			if reporter.TimedOut() {
+				livenessStr = "timed out"
+			} else {
+				livenessStr = "reporting non-live"
+			}
+		} else if reporter.reports.Live {
+			livenessStr = "reporting live"
 		}
+		readinessStr := "-"
 		if reporter.HasReadinessProblem() {
 			log.WithField("name", reporter.name).Warn("Reporter is not ready.")
 			summary.Ready = false
+			if reporter.TimedOut() {
+				readinessStr = "timed out"
+			} else {
+				readinessStr = "reporting non-ready"
+			}
+		} else if reporter.reports.Ready {
+			readinessStr = "reporting ready"
 		}
+		table.Append([]string{
+			reporter.name,
+			reporter.timeout.String(),
+			livenessStr,
+			readinessStr,
+			reporter.latest.Detail,
+		})
 	}
+
+	table.Render()
+	summary.Detail = strings.TrimSpace(buf.String())
 
 	// Summary status has changed so update previous status and log.
 	if aggregator.lastReport == nil || *summary != *aggregator.lastReport {
@@ -202,10 +239,14 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 }
 
 const (
-	// The HTTP status that we use for 'ready' or 'live'.  204 means "No Content: The server
-	// successfully processed the request and is not returning any content."  (Kubernetes
+	// The HTTP status that we use for 'ready' or 'live', with detail content.  (Kubernetes
 	// interprets any 200<=status<400 as 'good'.)
-	StatusGood = 204
+	StatusGood = 200
+
+	// The HTTP status that we use for 'ready' or 'live', without any detail content.  204 means
+	// "No Content: The server successfully processed the request and is not returning any
+	// content."  (Kubernetes interprets any 200<=status<400 as 'good'.)
+	StatusGoodNoContent = 204
 
 	// The HTTP status that we use for 'not ready' or 'not live'.  503 means "Service
 	// Unavailable: The server is currently unavailable (because it is overloaded or down for

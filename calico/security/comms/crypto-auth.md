@@ -6,6 +6,16 @@ canonical_url: '/security/comms/crypto-auth'
 
 ## Connections from {{site.prodname}} components to etcd
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+Operator based installations do not required communication to etcd, and so this section does not apply.
+
+%>
+  <label:Manifest>
+<%
+
 If you are using the etcd datastore, we recommend enabling mutual TLS authentication on
 its connections as follows.
 
@@ -25,6 +35,9 @@ its connections as follows.
   - [Neutron plugin or ML2 driver](../../networking/openstack/configuration#neutron-server-etcneutronneutronconf) (OpenStack only)
   - [DHCP agent](../../networking/openstack/configuration#neutron-server-etcneutronneutronconf) (OpenStack only)
 
+%>
+{% endtabs %}
+
 ### Connections from {{site.prodname}} components to kube-apiserver (Kubernetes and OpenShift)
 
 We recommend enabling TLS on kube-apiserver, as well as the client certificate and JSON web token (JWT)
@@ -33,6 +46,17 @@ over TLS. The {{site.prodname}} components present either an X.509 certificate o
 so that kube-apiserver can verify their identities.
 
 ### Connections from Felix to Typha (Kubernetes)
+
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+Operator based installations automatically configure mutual TLS authentication on connections from
+Felix to Typha.
+
+%>
+  <label:Manifest>
+<%
 
 We recommend enabling mutual TLS authentication on connections from Felix to Typha.
 To do so, you must provision Typha with a server certificate and Felix with a client
@@ -113,3 +137,6 @@ For detailed reference information on these parameters, refer to:
 - **Typha**: [Felix-Typha TLS configuration](../../reference/typha/configuration#felix-typha-tls-configuration)
 
 - **Felix**: [Felix-Typha TLS configuration](../../reference/felix/configuration#felix-typha-tls-configuration)
+
+%>
+{% endtabs %}

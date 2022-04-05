@@ -47,13 +47,19 @@ clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf .go-pkg-cache report vendor bin proto/*.pb.go
+	rm -rf .go-pkg-cache report vendor bin
 	-docker rmi $(DIKASTES_IMAGE):latest-$(ARCH)
 	-docker rmi $(DIKASTES_IMAGE):$(VERSION)-$(ARCH)
 ifeq ($(ARCH),amd64)
 	-docker rmi $(DIKASTES_IMAGE):latest
 	-docker rmi $(DIKASTES_IMAGE):$(VERSION)
 endif
+
+.PHONY: clean-generated
+# Delete (checked-in) generated files. Intentionally not part of the main clean target since these files are
+# checked in and deleting them makes the repo "dirty" as far as git is concerned.
+clean-generated:
+	rm -rf $(GENERATED_FILES)
 
 ###############################################################################
 # Building the binary
@@ -130,7 +136,7 @@ sub-image-%:
 
 $(DIKASTES_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/dikastes-$(ARCH) bin/healthz-$(ARCH)
-	docker build -t $(DIKASTES_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

@@ -96,6 +96,10 @@ type BGPPeerSpec struct {
 	// Time to allow for software restart.  When specified, this is configured as the graceful
 	// restart timeout.  When not specified, the BIRD default of 120s is used.
 	MaxRestartTime *metav1.Duration `json:"maxRestartTime,omitempty"`
+	// Maximum number of local AS numbers that are allowed in the AS path for received routes.
+	// This removes BGP loop prevention and should only be used if absolutely necesssary.
+	// +optional
+	NumAllowedLocalASNumbers *int32 `json:"numAllowedLocalASNumbers,omitempty"`
 }
 
 type SourceAddress string

@@ -5,7 +5,7 @@ package calico
 import (
 	"reflect"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 

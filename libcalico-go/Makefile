@@ -4,6 +4,8 @@ PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
 
 LOCAL_CHECKS = goimports check-gen-files
 
+KIND_CONFIG = $(KIND_DIR)/kind-single.config
+
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -21,9 +23,6 @@ UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_gen
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
 APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
-
-# The path, inside libcalico-go, to the cert files required for etcdv3 fv test
-TEST_CERT_PATH := test/etcd-ut-certs/
 
 .PHONY: clean
 clean:
@@ -50,7 +49,10 @@ gen-crds:
 	rm -rf config
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
 	@rm config/crd/_.yaml
+	# Patch in manual tweaks to the generated CRDs.
 	patch -s -p0 < ./config.patch
+	# The first two lines are a newline and a yaml separator - remove them.
+	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i -e 1,2d'
 
 ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
@@ -127,30 +129,39 @@ ut:
 fv: fv-setup
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
-	$(MAKE) stop-etcd-tls
+	$(MAKE) fv-teardown
 
 ## Run the setup required to run the FVs, but don't run any FVs.
 .PHONY:fv-setup
 fv-setup: run-etcd run-etcd-tls cluster-create run-coredns
+
+## Teardown the FVs resources.
+fv-teardown: stop-etcd stop-etcd-tls kind-cluster-destroy stop-coredns
 
 ## Run the FVs without any setup or teardown. Useful when writing FVs.
 .PHONY:fv-fast
 fv-fast:
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 
-## Run etcd, with tls enabled, as a container (calico-etcd-tls)
+# Create a kind cluster, and deploy some resources required for the libcalico-go tests.
+# TODO: Remove the need for this extra target, these should be created by the tests that need them.
+cluster-create: kind-cluster-create
+	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f test/mock-node.yaml
+	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f test/namespaces.yaml
+
+## Run an etcd with TLS enabled, needed for some libcalico-go UTs.
 run-etcd-tls: stop-etcd-tls
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
+	# TODO: We shouldn't need to enable the v2 API, but some of our test code
+	# still relies on it.
 	docker run --detach \
-		-v `pwd`/$(TEST_CERT_PATH):/root/etcd-certificates/ \
+		-v $(CURDIR)/test/etcd-ut-certs:/root/etcd-certificates/ \
 		--net=host \
 		--entrypoint=/usr/local/bin/etcd \
 		--name calico-etcd-tls $(ETCD_IMAGE)  \
@@ -169,61 +180,6 @@ run-etcd-tls: stop-etcd-tls
 ## Stop etcd with name calico-etcd-tls
 stop-etcd-tls:
 	-docker rm -f calico-etcd-tls
-
-## Run etcd as a container (calico-etcd)
-run-etcd: stop-etcd
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
-	docker run --detach \
-	--net=host \
-	--entrypoint=/usr/local/bin/etcd \
-	--name calico-etcd $(ETCD_IMAGE) \
-	--enable-v2 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-## Create a local kind dual stack cluster.
-KUBECONFIG?=kubeconfig.yaml
-cluster-create: $(BINDIR)/kubectl $(BINDIR)/kind
-	# First make sure any previous cluster is deleted
-	make cluster-destroy
-
-	# Create a kind cluster.
-	$(BINDIR)/kind create cluster \
-		--config ./test/kind-config.yaml \
-		--kubeconfig $(KUBECONFIG) \
-		--image kindest/node:$(K8S_VERSION)
-
-	# Deploy resources needed in test env.
-	$(MAKE) deploy-test-resources
-
-	# Wait for controller manager to be running and healthy.
-	while ! KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-
-
-## Deploy resources needed for UTs.
-deploy-test-resources: $(BINDIR)/kubectl
-	@export KUBECONFIG=$(KUBECONFIG) && \
-		./$(BINDIR)/kubectl create -f config/crd && \
-		./$(BINDIR)/kubectl create -f test/mock-node.yaml && \
-		./$(BINDIR)/kubectl create -f test/namespaces.yaml
-
-## Destroy local kind cluster
-cluster-destroy: $(BINDIR)/kind
-	-$(BINDIR)/kind delete cluster
-	rm -f $(KUBECONFIG)
-
-$(BINDIR)/kind:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install sigs.k8s.io/kind"
-
-$(BINDIR)/kubectl:
-	mkdir -p $(BINDIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
-	chmod +x $(BINDIR)/kubectl
-
-## Stop the etcd container (calico-etcd)
-stop-etcd:
-	-docker rm -f calico-etcd
 
 run-coredns: stop-coredns
 	docker run \

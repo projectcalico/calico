@@ -52,6 +52,7 @@ serve: bin/helm
 	docker run --rm -it \
 	  -v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
 	  -v $(CURDIR):/srv/jekyll \
+	  -v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	  -e JEKYLL_DOCKER_TAG="" \
 	  -e JEKYLL_UID=`id -u` \
 	  -p 4000:4000 \
@@ -63,7 +64,8 @@ _site build: bin/helm
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
 	-v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
-	-v $(CURDIR):/srv/jekyll \
+	-v $(CURDIR)/:/srv/jekyll \
+	-v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
 	jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
 
@@ -239,9 +241,9 @@ build-operator-reference:
 	   -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
 	   -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	   -w /go/src/$(PACKAGE_NAME) \
-	   $(CALICO_BUILD) /bin/bash -c 'export GO111MODULE=on && rm -rf builder && mkdir builder && cd builder && \
+	   $(CALICO_BUILD) /bin/bash -c 'rm -rf builder && mkdir builder && cd builder && \
 	           git clone --depth=1 -b $(API_GEN_BRANCH) https://github.com/$(API_GEN_REPO) api-gen && cd api-gen && \
 	           go mod edit -replace github.com/tigera/operator=github.com/$(OPERATOR_REPO)@$(OPERATOR_VERSION) && \
-	           go mod download && go build && \
+	           go mod download all && go build && \
 	           ./gen-crd-api-reference-docs -config /go/src/$(PACKAGE_NAME)/reference/installation/config.json \
 	                   -api-dir github.com/tigera/operator/api -out-file /go/src/$(PACKAGE_NAME)/reference/installation/_api.html'

@@ -40,9 +40,9 @@ type netlinkStub interface {
 type State string
 
 const (
-	StateUnknown = ""
-	StateUp      = "up"
-	StateDown    = "down"
+	StateNotPresent State = ""
+	StateUp         State = "up"
+	StateDown       State = "down"
 )
 
 type InterfaceStateCallback func(ifaceName string, ifaceState State, ifIndex int)
@@ -54,17 +54,27 @@ type Config struct {
 	// ResyncInterval is the interval at which we rescan all the interfaces.  If <0 rescan is disabled.
 	ResyncInterval time.Duration
 }
+
 type InterfaceMonitor struct {
 	Config
 
-	netlinkStub      netlinkStub
-	resyncC          <-chan time.Time
-	upIfaces         map[string]int // Map from interface name to index.
+	netlinkStub netlinkStub
+	resyncC     <-chan time.Time
+
+	ifaceNameToIdx map[string]int
+	ifaceIdxToInfo map[int]*ifaceInfo
+
 	StateCallback    InterfaceStateCallback
 	AddrCallback     AddrStateCallback
-	ifaceName        map[int]string
-	ifaceAddrs       map[int]set.Set
 	fatalErrCallback func(error)
+}
+
+type ifaceInfo struct {
+	Idx        int
+	Name       string
+	State      State
+	TrackAddrs bool
+	Addrs      set.Set
 }
 
 func New(config Config, fatalErrCallback func(error)) *InterfaceMonitor {
@@ -84,9 +94,8 @@ func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Ti
 		Config:           config,
 		netlinkStub:      netlinkStub,
 		resyncC:          resyncC,
-		upIfaces:         map[string]int{},
-		ifaceName:        map[int]string{},
-		ifaceAddrs:       map[int]set.Set{},
+		ifaceNameToIdx:   map[string]int{},
+		ifaceIdxToInfo:   map[int]*ifaceInfo{},
 		fatalErrCallback: fatalErrCallback,
 	}
 }
@@ -186,63 +195,52 @@ func (m *InterfaceMonitor) handleNetlinkUpdate(update netlink.LinkUpdate) {
 
 func (m *InterfaceMonitor) handleNetlinkRouteUpdate(update netlink.RouteUpdate) {
 	ifIndex := update.LinkIndex
-	if ifName, known := m.ifaceName[ifIndex]; known {
-		if m.isExcludedInterface(ifName) {
-			return
-		}
+	info := m.ifaceIdxToInfo[ifIndex]
+
+	// Early check: avoid logging anything for excluded interfaces.
+	if info != nil && !info.TrackAddrs {
+		return
 	}
 
 	addr := update.Dst.IP.String()
 	exists := update.Type == unix.RTM_NEWROUTE
-	log.WithFields(log.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"addr":    addr,
 		"ifIndex": ifIndex,
 		"exists":  exists,
-	}).Info("Netlink address update.")
+	})
 
-	// notifyIfaceAddrs needs m.ifaceName[ifIndex] - because we can only notify when we know the
-	// interface name - so check that we have that.
-	if _, known := m.ifaceName[ifIndex]; !known {
-		// We think this interface does not exist - indicates a race between the link and
-		// address update channels.  Addresses will be notified when we process the link
-		// update.
-		log.WithField("ifIndex", ifIndex).Debug("Link not notified yet.")
+	if info == nil {
+		logCtx.Info("Netlink address update but interface isn't yet known.  Will handle when interface is signalled.")
 		return
-	}
-	if _, known := m.ifaceAddrs[ifIndex]; !known {
-		// m.ifaceAddrs[ifIndex] has exactly the same lifetime as m.ifaceName[ifIndex], so
-		// it should be impossible for m.ifaceAddrs[ifIndex] not to exist if
-		// m.ifaceName[ifIndex] does exist.  However we check anyway and warn in case there
-		// is some possible scenario...
-		log.WithField("ifIndex", ifIndex).Warn("Race for new interface.")
-		return
+	} else {
+		logCtx.Info("Netlink address update for known interface. ")
 	}
 
 	if exists {
-		if !m.ifaceAddrs[ifIndex].Contains(addr) {
-			m.ifaceAddrs[ifIndex].Add(addr)
-			m.notifyIfaceAddrs(ifIndex)
+		if !info.Addrs.Contains(addr) {
+			info.Addrs.Add(addr)
+			m.notifyIfaceAddrs(info)
 		}
 	} else {
-		if m.ifaceAddrs[ifIndex].Contains(addr) {
-			m.ifaceAddrs[ifIndex].Discard(addr)
-			m.notifyIfaceAddrs(ifIndex)
+		if info.Addrs.Contains(addr) {
+			info.Addrs.Discard(addr)
+			m.notifyIfaceAddrs(info)
 		}
 	}
 }
 
-func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
-	log.WithField("ifIndex", ifIndex).Debug("notifyIfaceAddrs")
-	if name, known := m.ifaceName[ifIndex]; known {
-		log.WithField("ifIndex", ifIndex).Debug("Known interface")
-		addrs := m.ifaceAddrs[ifIndex]
-		if addrs != nil {
-			// Take a copy, so that the dataplane's set of addresses is independent of
-			// ours.
-			addrs = addrs.Copy()
-		}
-		m.AddrCallback(name, addrs)
+func (m *InterfaceMonitor) notifyIfaceAddrs(info *ifaceInfo) {
+	logCtx := log.WithFields(log.Fields{
+		"ifIndex": info.Idx,
+		"name":    info.Name,
+	})
+	if !info.TrackAddrs {
+		logCtx.Debug("Skipping notifying addresses for ignored interface")
+		return
 	}
+	logCtx.Debug("Notifying addresses for interface")
+	m.AddrCallback(info.Name, info.Addrs.Copy())
 }
 
 func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Link) {
@@ -251,16 +249,16 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	newName := attrs.Name
 	log.WithFields(log.Fields{
 		"ifaceExists": ifaceExists,
-		"link":        link,
+		"ifIndex":     ifIndex,
+		"name":        newName,
 	}).Debug("storeAndNotifyLink called")
 
-	oldName := m.ifaceName[ifIndex]
-	if oldName != "" && oldName != newName {
+	if info := m.ifaceIdxToInfo[ifIndex]; info != nil && info.Name != newName {
 		log.WithFields(log.Fields{
-			"oldName": oldName,
+			"oldName": info.Name,
 			"newName": newName,
 		}).Info("Interface renamed, simulating deletion of old copy.")
-		m.storeAndNotifyLinkInner(false, oldName, link)
+		m.storeAndNotifyLinkInner(false, info.Name, link)
 	}
 
 	m.storeAndNotifyLinkInner(ifaceExists, newName, link)
@@ -280,75 +278,101 @@ func linkIsOperUp(link netlink.Link) bool {
 }
 
 func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName string, link netlink.Link) {
+	attrs := link.Attrs()
+	ifIndex := attrs.Index
 	log.WithFields(log.Fields{
 		"ifaceExists": ifaceExists,
 		"ifaceName":   ifaceName,
 		"link":        link,
+		"ifIndex":     ifIndex,
 	}).Debug("storeAndNotifyLinkInner called")
 
-	// Store or remove mapping between this interface's index and name.
-	attrs := link.Attrs()
-	ifIndex := attrs.Index
+	// Calculate the old and new states of the interface.
+	oldState := StateNotPresent
+	if info := m.ifaceIdxToInfo[ifIndex]; info != nil {
+		oldState = info.State
+	}
+	newState := StateNotPresent
 	if ifaceExists {
-		m.ifaceName[ifIndex] = ifaceName
-	} else {
-		if !m.isExcludedInterface(ifaceName) {
-			// for excluded interfaces, e.g. kube-ipvs0, we ignore all ip address changes.
-			log.Debug("Notify link non-existence to address callback consumers")
-			delete(m.ifaceAddrs, ifIndex)
-			m.notifyIfaceAddrs(ifIndex)
+		if linkIsOperUp(link) {
+			newState = StateUp
+		} else {
+			newState = StateDown
 		}
-		delete(m.ifaceName, ifIndex)
 	}
 
-	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.  The
-	// IFF_UP flag contains the admin state, which doesn't tell us whether we can program routes
-	// etc.
-	ifaceIsUp := ifaceExists && linkIsOperUp(link)
-	oldIfIndex, ifaceWasUp := m.upIfaces[ifaceName]
-	logCxt := log.WithField("ifaceName", ifaceName)
-	if ifaceIsUp && !ifaceWasUp {
-		logCxt.Debug("Interface now up")
-		m.upIfaces[ifaceName] = ifIndex
-		m.StateCallback(ifaceName, StateUp, ifIndex)
-	} else if ifaceWasUp && !ifaceIsUp {
-		logCxt.Debug("Interface now down")
-		delete(m.upIfaces, ifaceName)
-		m.StateCallback(ifaceName, StateDown, oldIfIndex)
+	// Store or remove the information.
+	trackAddrs := !m.isExcludedInterface(ifaceName)
+	if ifaceExists {
+		if m.ifaceIdxToInfo[ifIndex] == nil {
+			m.ifaceIdxToInfo[ifIndex] = &ifaceInfo{
+				Idx:        ifIndex,
+				Name:       ifaceName,
+				TrackAddrs: trackAddrs,
+				Addrs:      set.New(),
+			}
+		}
+		m.ifaceNameToIdx[ifaceName] = ifIndex
+		m.ifaceIdxToInfo[ifIndex].State = newState
 	} else {
-		logCxt.WithField("ifaceIsUp", ifaceIsUp).Debug("Nothing to notify")
+		delete(m.ifaceIdxToInfo, ifIndex)
+		delete(m.ifaceNameToIdx, ifaceName)
 	}
 
-	// If the link now exists, get addresses for the link and store and notify those too; then
+	logCxt := log.WithFields(log.Fields{
+		"ifaceName": ifaceName,
+		"ifIndex":   ifIndex,
+		"oldState":  oldState,
+		"newState":  newState,
+	})
+	if oldState != newState {
+		logCxt.Debug("Interface changed state")
+		m.StateCallback(ifaceName, newState, ifIndex)
+	} else {
+		logCxt.Debug("Interface state hasn't changed, nothing to notify.")
+	}
+
+	if !trackAddrs {
+		return
+	}
+
+	if newState == StateNotPresent {
+		if oldState != StateNotPresent {
+			// We were tracking addresses for this interface before but now it's gone.  Signal that.
+			log.Debug("Notify link non-existence to address callback consumers")
+			m.AddrCallback(ifaceName, nil)
+		}
+		return
+	}
+
+	// The link now exists; get addresses for the link and store and notify those too; then
 	// we don't have to worry about a possible race between the link and address update
 	// channels.  We deliberately do this regardless of the link state, as in some cases this
 	// will allow us to secure a Host Endpoint interface _before_ it comes up, and so eliminate
 	// a small window of insecurity.
-	if ifaceExists && !m.isExcludedInterface(ifaceName) {
-		// Notify address changes for non excluded interfaces.
-		newAddrs := set.New()
-		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
-			routes, err := m.netlinkStub.ListLocalRoutes(link, family)
-			if err != nil {
-				log.WithError(err).Warn("Netlink route list operation failed.")
-			}
-			for _, route := range routes {
-				if !routeIsLocalUnicast(route) {
-					log.WithField("route", route).Debug("Ignoring non-local route.")
-					continue
-				}
-				newAddrs.Add(route.Dst.IP.String())
-			}
+	newAddrs := set.New()
+	for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
+		routes, err := m.netlinkStub.ListLocalRoutes(link, family)
+		if err != nil {
+			log.WithError(err).Warn("Netlink route list operation failed.")
 		}
-		if (m.ifaceAddrs[ifIndex] == nil) || !m.ifaceAddrs[ifIndex].Equals(newAddrs) {
-			log.WithFields(log.Fields{
-				"old": m.ifaceAddrs[ifIndex],
-				"new": newAddrs,
-			}).Debug("Detected interface address change while notifying link")
-			m.ifaceAddrs[ifIndex] = newAddrs
+		for _, route := range routes {
+			if !routeIsLocalUnicast(route) {
+				log.WithField("route", route).Debug("Ignoring non-local route.")
+				continue
+			}
+			newAddrs.Add(route.Dst.IP.String())
+		}
+	}
+	info := m.ifaceIdxToInfo[ifIndex]
+	if oldState == StateNotPresent || !info.Addrs.Equals(newAddrs) {
+		log.WithFields(log.Fields{
+			"old": info.Addrs,
+			"new": newAddrs,
+		}).Debug("Detected interface address change while notifying link")
+		info.Addrs = newAddrs
 
-			m.notifyIfaceAddrs(ifIndex)
-		}
+		m.notifyIfaceAddrs(info)
 	}
 }
 
@@ -371,16 +395,19 @@ func (m *InterfaceMonitor) resync() error {
 		currentIfaces.Add(attrs.Name)
 		m.storeAndNotifyLink(true, link)
 	}
-	for name, ifIndex := range m.upIfaces {
+	for ifIndex, info := range m.ifaceIdxToInfo {
+		name := info.Name
 		if currentIfaces.Contains(name) {
 			continue
 		}
 		log.WithField("ifaceName", name).Info("Spotted interface removal on resync.")
-		m.StateCallback(name, StateDown, ifIndex)
-		m.AddrCallback(name, nil)
-		delete(m.upIfaces, name)
-		delete(m.ifaceAddrs, ifIndex)
-		delete(m.ifaceName, ifIndex)
+		m.StateCallback(name, StateNotPresent, ifIndex)
+		if info.TrackAddrs {
+			// We were tracking addresses for this interface before but now it's gone.  Signal that.
+			m.AddrCallback(name, nil)
+		}
+		delete(m.ifaceNameToIdx, name)
+		delete(m.ifaceIdxToInfo, ifIndex)
 	}
 	log.Debug("Resync complete")
 	return nil

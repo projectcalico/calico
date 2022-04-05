@@ -122,7 +122,7 @@ The two methods are:
     [leaf/spine](http://bradhedlund.com/2012/10/24/video-a-basic-introduction-to-the-leafspine-data-center-networking-fabric-design/){:target="_blank"}
     architecture, or via a set of spine switches, each of which is also
     a unique AS. We'll refer to this as the *AS per rack* model. This
-    model is detailed in [IETF RFC 7938](https://tools.ietf.org/search/rfc7938){:target="_blank"}.
+    model is detailed in [IETF RFC 7938](https://datatracker.ietf.org/doc/html/rfc7938){:target="_blank"}.
 2.  A BGP fabric where each of the compute servers is a unique AS, and
     the TOR switches make up a transit AS. We'll refer to this as the
     *AS per server* model.
@@ -192,7 +192,7 @@ The designs discussed below address these considerations.
 
 ### The *AS Per Rack* model
 
-This model is the closest to the model suggested by [IETF RFC 7938](https://tools.ietf.org/search/rfc7938){:target="_blank"}.
+This model is the closest to the model suggested by [IETF RFC 7938](https://datatracker.ietf.org/doc/html/rfc7938){:target="_blank"}.
 
 As mentioned earlier, there are two versions of this model, one with an
 set of Ethernet planes interconnecting the ToR switches, and the other
@@ -259,7 +259,7 @@ routes internal to the rack.
 ### The *AS per Compute Server* model
 
 This model takes the concept of an AS per rack to its logical
-conclusion. In the earlier referenced [IETF RFC 7938](https://tools.ietf.org/search/rfc7938){:target="_blank"}
+conclusion. In the earlier referenced [IETF RFC 7938](https://datatracker.ietf.org/doc/html/rfc7938){:target="_blank"}
 the assumption in the overall model is that the ToR is first tier
 aggregating and routing element. In {{site.prodname}}, the ToR, if it is an L3
 router, is actually the second tier. Remember, in {{site.prodname}}, the compute

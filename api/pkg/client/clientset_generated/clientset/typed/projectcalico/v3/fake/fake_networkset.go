@@ -91,7 +91,7 @@ func (c *FakeNetworkSets) Update(ctx context.Context, networkSet *v3.NetworkSet,
 // Delete takes name of the networkSet and deletes it. Returns an error if one occurs.
 func (c *FakeNetworkSets) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(networksetsResource, c.ns, name), &v3.NetworkSet{})
+		Invokes(testing.NewDeleteActionWithOptions(networksetsResource, c.ns, name, opts), &v3.NetworkSet{})
 
 	return err
 }

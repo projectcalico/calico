@@ -5,4 +5,4 @@
 Babel>=2.9.1 # BSD
 eventlet>=0.31.0  # MIT
 six>=1.10.0 # MIT
-etcd3gw>=0.2.2 # Apache-2.0
+etcd3gw>=1.0.1 # Apache-2.0

@@ -83,7 +83,7 @@ module Jekyll
       # Execute helm.
       # Set the default etcd endpoint placeholder for rendering in the docs.
       if @chart == "tigera-operator" then
-        cmd = """bin/helm3 template --include-crds _includes/charts/#{@chart} \
+        cmd = """bin/helm3 --namespace tigera-operator template --include-crds _includes/charts/#{@chart} \
           -f #{tv.path} \
           -f #{t.path}"""
       else

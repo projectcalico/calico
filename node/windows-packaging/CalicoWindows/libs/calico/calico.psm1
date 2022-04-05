@@ -109,7 +109,7 @@ function Install-CNIPlugin()
         $mode = "vxlan"
     }
 
-    $dnsIPs=$env:DNS_NAME_SERVERS.Split(",")
+    $dnsIPs = "$env:DNS_NAME_SERVERS".Split(",")
     $ipList = @()
     foreach ($ip in $dnsIPs) {
         $ipList += "`"$ip`""
@@ -123,12 +123,19 @@ function Install-CNIPlugin()
         $routeType = "SDNROUTE"
     }
 
+    $dsrSupport = "false"
+    if (Get-IsDSRSupported)
+    {
+        $dsrSupport = "true"
+    }
+
     (Get-Content "$baseDir\cni.conf.template") | ForEach-Object {
         $_.replace('__NODENAME_FILE__', $nodeNameFile).
                 replace('__KUBECONFIG__', $kubeconfigFile).
                 replace('__K8S_SERVICE_CIDR__', $env:K8S_SERVICE_CIDR).
                 replace('__DNS_NAME_SERVERS__', $dnsIPList).
                 replace('__DATASTORE_TYPE__', $env:CALICO_DATASTORE_TYPE).
+                replace('__DSR_SUPPORT__', $dsrSupport).
                 replace('__ETCD_ENDPOINTS__', $env:ETCD_ENDPOINTS).
                 replace('__ETCD_KEY_FILE__', $etcdKeyFile).
                 replace('__ETCD_CERT_FILE__', $etcdCertFile).
@@ -520,6 +527,22 @@ function getContainerdPath()
 function Get-IsContainerdRunning()
 {
     return (getContainerdService | Select-Object -ExpandProperty State) -EQ "Running"
+}
+
+function Get-IsDSRSupported()
+{
+    # Determine the windows version and build number for DSR support.
+    # OsHardwareAbstractionLayer is a version string like 10.0.17763.1432
+    $OSInfo = (Get-ComputerInfo  | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer)
+
+    # Windows supports DSR if
+    # - it is 1809 build 1432
+    # - it is 1903 or later
+    $min1809BuildSupportingDSR = (($OSInfo.OsHardwareAbstractionLayer.Split(".") | select-object -Last 1) -as [int]) -GE 1432
+    $windows1809 = (($OSInfo.WindowsVersion -as [int]) -EQ 1809 -And ($OSInfo.OsBuildNumber -as [int]) -GE 17763)
+    $windows1903OrNewer = (($OSInfo.WindowsVersion -as [int]) -GE 1903 -And ($OSInfo.OsBuildNumber -as [int]) -GE 18317)
+
+    return ($windows1809 -And $min1809BuildSupportingDSR) -Or $windows1903OrNewer
 }
 
 Export-ModuleMember -Function 'Test-*'

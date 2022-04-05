@@ -38,8 +38,8 @@
         var search = instantsearch({
             indexName: 'projectcalico',
             searchClient: algoliasearch(
-                'BH4D9OD16A',
-                '99def7ba73ea2430f7f42383148fe57a',
+                'J2N7TY4XD5',
+                '781ae2f698a3b635e37b4703e1b47a1e',
             ),
             routing: false,
         });

@@ -57,7 +57,6 @@ import (
 	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
-	_ "github.com/projectcalico/calico/felix/config"
 	dp "github.com/projectcalico/calico/felix/dataplane"
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -77,6 +76,7 @@ const (
 	// String sent on the failure report channel to indicate we're shutting down for config
 	// change.
 	reasonConfigChanged = "config changed"
+	reasonEncapChanged  = "encapsulation changed"
 	reasonFatalError    = "fatal error"
 	// Process return code used to report a config change.  This is the same as the code used
 	// by SIGHUP, which means that the wrapper script also restarts Felix on a SIGHUP.
@@ -268,6 +268,18 @@ configRetry:
 			continue configRetry
 		}
 
+		// List all IP pools and feed them into an EncapsulationCalculator to determine if
+		// IPIP and/or VXLAN encapsulations should be enabled
+		ippoolKVPList, err := backendClient.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
+		if err != nil {
+			log.WithError(err).Error("Failed to list IP Pools")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
+		encapCalculator := calc.NewEncapsulationCalculator(configParams, ippoolKVPList)
+		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
+		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
+
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
 		// config.  We don't need to re-load the configuration _again_ because the
@@ -367,6 +379,15 @@ configRetry:
 	if configParams.DebugSimulateDataRace {
 		log.Warn("DebugSimulateDataRace is set, will start some racing goroutines!")
 		simulateDataRace()
+	}
+
+	// We may need to temporarily disable encrypted traffic to this node in order to connect to Typha
+	if configParams.WireguardEnabled {
+		err := bootstrapWireguard(configParams, v3Client)
+		if err != nil {
+			time.Sleep(2 * time.Second) // avoid a tight restart loop
+			log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
+		}
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -526,8 +547,7 @@ configRetry:
 	asyncCalcGraph := calc.NewAsyncCalcGraph(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
-		healthAggregator,
-	)
+		healthAggregator)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update
@@ -686,6 +706,13 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	logCxt := log.WithField("reason", reason)
 	logCxt.Warn("Felix is shutting down")
 
+	// Keep draining the report channel so that other goroutines don't block on the channel.
+	go func() {
+		for msg := range failureReportChan {
+			log.WithField("reason", msg).Info("Shutdown request received while already shutting down, ignoring.")
+		}
+	}()
+
 	// Notify other components to stop.  Each notified component must call Done() on the wait
 	// group when it has completed its shutdown.
 	var stopWG sync.WaitGroup
@@ -736,8 +763,12 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		go func() {
 			time.Sleep(2 * time.Second)
 
-			if reason == reasonConfigChanged {
+			switch reason {
+			case reasonConfigChanged:
 				exitWithCustomRC(configChangedRC, "Exiting for config change")
+				return
+			case reasonEncapChanged:
+				exitWithCustomRC(configChangedRC, "Exiting for encapsulation change")
 				return
 			}
 
@@ -1149,7 +1180,7 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				}
 
 				if restartNeeded {
-					fc.shutDownProcess("config changed")
+					fc.shutDownProcess(reasonConfigChanged)
 				}
 			}
 
@@ -1166,6 +1197,11 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 		case *calc.DatastoreNotReady:
 			log.Warn("Datastore became unready, need to restart.")
 			fc.shutDownProcess("datastore became unready")
+		case *proto.Encapsulation:
+			if msg.IpipEnabled != fc.config.Encapsulation.IPIPEnabled || msg.VxlanEnabled != fc.config.Encapsulation.VXLANEnabled {
+				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
+				fc.shutDownProcess(reasonEncapChanged)
+			}
 		}
 		if err := fc.dataplane.SendMessage(msg); err != nil {
 			fc.shutDownProcess("Failed to write to dataplane driver")

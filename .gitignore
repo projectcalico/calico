@@ -3,11 +3,18 @@ report/
 bin/
 *.created*
 .idea
+.vscode
+vendor/
 
 /* Produced as part of release */
 hack/release/release
 node/windows-packaging/CalicoWindows/confd/config-bgp.ps1
 node/windows-packaging/CalicoWindows/confd/config-bgp.psm1
 _output
-hack/release/ghr
 builder.coverprofile
+hack/release/ghr
+
+/* Created by local kind cluster */
+hack/test/kind/kind
+hack/test/kind/kubectl
+hack/test/kind/*kubeconfig.yaml

@@ -19,6 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -773,6 +774,17 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Cha
 		},
 	}
 
+	if r.BPFEnabled {
+		// Prepend a BPF SNAT rule.
+		rules = append([]Rule{
+			{
+				Comment: []string{"BPF loopback SNAT"},
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
+				Action:  MasqAction{},
+			},
+		}, rules...)
+	}
+
 	var tunnelIfaces []string
 
 	if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
@@ -986,15 +998,62 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*Chain {
+func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32, bypassHostConntrack bool) []*Chain {
 	rawPreroutingChain := &Chain{
 		Name: ChainRawPrerouting,
 		Rules: []Rule{
 			Rule{
-				// Return, i.e. no-op, if bypass mark is not set.
-				Match:  Match().NotMarkMatchesWithMask(tcBypassMark, 0xffffffff),
-				Action: ReturnAction{},
+				Match:  Match().NotDestAddrType(AddrTypeLocal),
+				Action: GotoAction{Target: ChainRawUntrackedFlows},
 			},
+			Rule{
+				// Return, i.e. no-op, if bypass mark is not set.
+				Match:   Match().MarkMatchesWithMask(tcBypassMark, 0xffffffff),
+				Action:  GotoAction{Target: ChainRawBPFUntrackedPolicy},
+				Comment: []string{"Jump to target for packets with Bypass mark"},
+			},
+		},
+	}
+
+	bpfUntrackedFlowChain := &Chain{
+		Name:  ChainRawUntrackedFlows,
+		Rules: []Rule{},
+	}
+
+	if bypassHostConntrack {
+		bpfUntrackedFlowChain = &Chain{
+			Name: ChainRawUntrackedFlows,
+			Rules: []Rule{
+				Rule{
+					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
+					Action:  ReturnAction{},
+					Comment: []string{"MarkSeenSkipFIB Mark"},
+				},
+				Rule{
+					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
+					Action:  ReturnAction{},
+					Comment: []string{"MarkSeenFallThrough Mark"},
+				},
+				Rule{
+					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
+					Action:  ReturnAction{},
+					Comment: []string{"MarkSeenMASQ Mark"},
+				},
+				Rule{
+					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
+					Action:  ReturnAction{},
+					Comment: []string{"MarkSeenNATOutgoing Mark"},
+				},
+				Rule{
+					Action: NoTrackAction{},
+				},
+			},
+		}
+	}
+
+	xdpUntrakedPoliciesChain := &Chain{
+		Name: ChainRawBPFUntrackedPolicy,
+		Rules: []Rule{
 			// At this point we know bypass mark is set, which means that the packet has
 			// been explicitly allowed by untracked ingress policy (XDP).  We should
 			// clear the mark so as not to affect any FROM_HOST processing.  (There
@@ -1016,6 +1075,8 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMa
 	}
 	return []*Chain{
 		rawPreroutingChain,
+		xdpUntrakedPoliciesChain,
+		bpfUntrackedFlowChain,
 		r.failsafeOutChain("raw", ipVersion),
 		r.StaticRawOutputChain(tcBypassMark),
 	}

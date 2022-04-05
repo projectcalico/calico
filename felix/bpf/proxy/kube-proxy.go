@@ -60,15 +60,15 @@ type KubeProxy struct {
 
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8s kubernetes.Interface, hostname string,
-	frontendMap, backendMap, affinityMap, ctMap bpf.Map, opts ...Option) (*KubeProxy, error) {
+	bpfMapContext *bpf.MapContext, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
 		k8s:         k8s,
 		hostname:    hostname,
-		frontendMap: frontendMap,
-		backendMap:  backendMap,
-		affinityMap: affinityMap,
-		ctMap:       ctMap,
+		frontendMap: bpfMapContext.FrontendMap,
+		backendMap:  bpfMapContext.BackendMap,
+		affinityMap: bpfMapContext.AffinityMap,
+		ctMap:       bpfMapContext.CtMap,
 		opts:        opts,
 		rt:          NewRTCache(),
 

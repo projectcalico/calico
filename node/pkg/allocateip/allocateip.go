@@ -248,7 +248,7 @@ func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c cli
 
 func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, attrType string) {
 	logCtx := getLogger(attrType)
-	logCtx.WithField("Node", nodename).Debug("Ensure tunnel address is set")
+	logCtx.WithField("node", nodename).Debug("Ensure tunnel address is set")
 
 	// Get the currently configured address.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -377,8 +377,7 @@ func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, 
 	}
 
 	// Release the old allocation.
-	ipsToRelease := []net.IP{*ipAddr}
-	_, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease)
+	_, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()})
 	if err != nil {
 		// If we fail to release the old allocation, we shouldn't continue any further. Just exit.
 		log.WithField("IP", ipAddr.String()).WithError(err).Fatal("Error releasing address")
@@ -498,6 +497,7 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, attrType string) {
 	var updateError error
 	logCtx := getLogger(attrType)
+	logCtx.WithField("node", nodename).Debug("Remove tunnel addresses")
 
 	// If the update fails with ResourceConflict error then retry 5 times with 1 second delay before failing.
 	for i := 0; i < 5; i++ {
@@ -552,22 +552,45 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 				}).Fatal("Error releasing address by handle")
 			}
 
+			// Resource does not exist. This can occur in a few scenarios:
+			//
+			// 1. The IP is genuinely not allocated, and there's nothing for us to do.
+			// 2. The IP pre-dates the use of handles in this code, and so the handle doesn't exist.
+			// 3. We have gotten into an invalid state where the handle has been deleted but the IP is still allocated.
+			//
+			// For scenario #1, there is no more work to do.
+			// We can determine if we're encountering scenario #2 or #3 by inspecting the allocation's attributes.
+			// For scenario #2, we expect no attributes and no handle to be stored with the allocation.
+			// For scenario #3, we expect a handle in the attributes and it should match the expected value.
 			if ipAddr != nil {
 				// There are no addresses with this handle. If there is an IP configured on the node, check to see if it
 				// belongs to us. If it has no handle and no attributes, then we can pretty confidently
 				// say that it belongs to us rather than a pod and should be cleaned up.
 				logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
-				attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
+				attr, storedHandle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
 				if err != nil {
 					if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 						logCtx.WithError(err).Fatal("Failed to query attributes")
 					}
-					// No allocation exists, we don't have anything to do.
-				} else if len(attr) == 0 && handle == nil {
-					// The IP is ours. Release it by passing the exact IP.
-					if _, err := c.IPAM().ReleaseIPs(ctx, []net.IP{*ipAddr}); err != nil {
+					// Scenario #1: The allocation actually doesn't exist, we don't have anything to do.
+				} else if len(attr) == 0 && storedHandle == nil {
+					// Scenario #2: The allocation exists, but has no handle whatsoever.
+					// This is an ancient allocation and can be released.
+					if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
 						logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
 					}
+				} else if storedHandle != nil && *storedHandle == handle {
+					// Scenario #3: The allocation exists, has a handle, and it matches the one we expect.
+					// This means the handle object itself was wrongfully deleted. We can clean it up
+					// by releasing the IP directly with both address and handle specified.
+					if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String(), Handle: handle}); err != nil {
+						logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
+					}
+				} else {
+					// The final scenario: the IP on the node is allocated, but it is allocated to some other handle.
+					// It doesn't belong to us. We can't do anything here but it's worth logging.
+					fields := log.Fields{"attributes": attr, "IP": ipAddr.String()}
+					logCtx.WithFields(fields).Warnf("IP address has been reused by something else")
 				}
 			}
 		}

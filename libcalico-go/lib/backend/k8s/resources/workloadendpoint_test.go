@@ -89,7 +89,8 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Value: wep,
 				}
 
-				_, err = wepClient.Create(context.Background(), kvp)
+				ctxCNI := resources.ContextWithPatchMode(context.Background(), resources.PatchModeCNI)
+				_, err = wepClient.Create(ctxCNI, kvp)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
@@ -139,7 +140,8 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Value: wep,
 				}
 
-				_, err = wepClient.Create(context.Background(), kvp)
+				ctxCNI := resources.ContextWithPatchMode(context.Background(), resources.PatchModeCNI)
+				_, err = wepClient.Create(ctxCNI, kvp)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
@@ -194,7 +196,8 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Value: wep,
 				}
 
-				_, err = wepClient.Update(context.Background(), kvp)
+				ctxCNI := resources.ContextWithPatchMode(context.Background(), resources.PatchModeCNI)
+				_, err = wepClient.Update(ctxCNI, kvp)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
@@ -244,7 +247,8 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Value: wep,
 				}
 
-				_, err = wepClient.Update(context.Background(), kvp)
+				ctxCNI := resources.ContextWithPatchMode(context.Background(), resources.PatchModeCNI)
+				_, err = wepClient.Update(ctxCNI, kvp)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})

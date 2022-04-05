@@ -20,17 +20,21 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/mcuadros/go-version"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -104,6 +108,41 @@ func testConnection() error {
 	return nil
 }
 
+func isEndpointReady(readyEndpoint string, timeout time.Duration) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	c := &http.Client{}
+	req, err := http.NewRequest(http.MethodGet, readyEndpoint, nil)
+	if err != nil {
+		return false, err
+	}
+	req = req.WithContext(ctx)
+	resp, err := c.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return false, fmt.Errorf("Endpoint is not ready, response code returned:%d", resp.StatusCode)
+	}
+	return true, nil
+}
+
+func pollEndpointReadiness(endpoint string, interval, timeout time.Duration) error {
+	return wait.Poll(interval, timeout,
+		func() (bool, error) {
+			if isReady, err := isEndpointReady(endpoint, interval); !isReady {
+				if err != nil {
+					logrus.Errorf("Endpoint may not be ready:%v", err)
+					return false, nil
+				}
+				logrus.Error("Endpoint not ready")
+				return false, nil
+			}
+			return true, nil
+		})
+}
+
 func cmdAdd(args *skel.CmdArgs) (err error) {
 	// Defer a panic recover, so that in case we panic we can still return
 	// a proper error to the runtime.
@@ -126,6 +165,14 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if len(conf.CNIVersion) < 1 {
+		conf.CNIVersion = "0.2.0"
+	}
+
+	if version.Compare(conf.CNIVersion, "1.0.0", ">") {
+		return fmt.Errorf("unsupported CNI version %s", conf.CNIVersion)
 	}
 
 	utils.ConfigureLogging(conf)
@@ -170,6 +217,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
+		err = fmt.Errorf("error creating calico client: %v", err)
 		return
 	}
 
@@ -183,6 +231,17 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		logrus.Info("Upgrade may be in progress, ready flag is not set")
 		err = fmt.Errorf("Calico is currently not ready to process requests")
 		return
+	}
+
+	for _, endpoint := range conf.ReadinessGates {
+		if _, err := url.ParseRequestURI(endpoint); err != nil {
+			return fmt.Errorf("Invalid URL set for ReadinessGates:%s Error:%v",
+				endpoint, err)
+		}
+		err := pollEndpointReadiness(endpoint, 5*time.Second, 30*time.Second)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Remove the endpoint field (IfName) from the wepIDs so we can get a WEP name prefix.
@@ -281,7 +340,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	// Collect the result in this variable - this is ultimately what gets "returned" by this function by printing
 	// it to stdout.
-	var result *current.Result
+	var result *cniv1.Result
 
 	// If running under Kubernetes then branch off into the kubernetes code, otherwise handle everything in this
 	// function.
@@ -345,7 +404,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// IPAM result has a bunch of fields that are optional for an IPAM plugin
 			// but required for a CNI plugin, so this is to populate those fields.
 			// See CNI Spec doc for more details.
-			result, err = current.NewResultFromResult(ipamResult)
+			result, err = cniv1.NewResultFromResult(ipamResult)
 			if err != nil {
 				utils.ReleaseIPAllocation(logger, conf, args)
 				return
@@ -433,7 +492,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		logger.WithField("endpoint", endpoint).Info("Wrote endpoint to datastore")
 
 		// Add the interface created above to the CNI result.
-		result.Interfaces = append(result.Interfaces, &current.Interface{
+		result.Interfaces = append(result.Interfaces, &cniv1.Interface{
 			Name: endpoint.Spec.InterfaceName},
 		)
 	}
@@ -623,6 +682,11 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	return
 }
 
+func cmdDummyCheck(args *skel.CmdArgs) (err error) {
+	fmt.Println("OK")
+	return nil
+}
+
 func Main(version string) {
 	// Set up logging formatting.
 	logrus.SetFormatter(&logutils.Formatter{})
@@ -683,7 +747,7 @@ func Main(version string) {
 		os.Exit(1)
 	}
 
-	skel.PluginMain(cmdAdd, nil, cmdDel,
-		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
+	skel.PluginMain(cmdAdd, cmdDummyCheck, cmdDel,
+		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
 		"Calico CNI plugin "+version)
 }

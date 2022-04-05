@@ -19,9 +19,10 @@ package calc_test
 
 import (
 	v1 "k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1beta1"
+	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -504,7 +505,7 @@ var profileRules1 = ProfileRules{
 		{SrcSelector: allSelector},
 	},
 	OutboundRules: []Rule{
-		{SrcTag: "tag-1"},
+		{SrcSelector: "has(tag-1)"},
 	},
 }
 
@@ -522,7 +523,7 @@ var profileRules1TagUpdate = ProfileRules{
 		{SrcSelector: bEpBSelector},
 	},
 	OutboundRules: []Rule{
-		{SrcTag: "tag-2"},
+		{SrcSelector: "has(tag-2)"},
 	},
 }
 
@@ -531,19 +532,50 @@ var profileRules1NegatedTagSelUpdate = ProfileRules{
 		{NotSrcSelector: bEpBSelector},
 	},
 	OutboundRules: []Rule{
-		{NotSrcTag: "tag-2"},
+		{NotSrcSelector: "has(tag-2)"},
 	},
 }
 
-var profileTags1 = []string{"tag-1"}
-var profileLabels1 = map[string]string{
-	"profile": "prof-1",
+var profileLabels1Tag1 = &v3.Profile{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "prof-1",
+	},
+	Spec: v3.ProfileSpec{
+		LabelsToApply: map[string]string{
+			"profile": "prof-1",
+			"tag-1":   "",
+		},
+	},
 }
-var profileLabels2 = map[string]string{
-	"profile": "prof-2",
+var profileLabels1 = &v3.Profile{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "prof-1",
+	},
+	Spec: v3.ProfileSpec{
+		LabelsToApply: map[string]string{
+			"profile": "prof-1",
+		},
+	},
 }
-var profileLabelsTag1 = map[string]string{
-	"tag-1": "foobar",
+var profileLabels2 = &v3.Profile{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "prof-2",
+	},
+	Spec: v3.ProfileSpec{
+		LabelsToApply: map[string]string{
+			"profile": "prof-2",
+		},
+	},
+}
+var profileLabelsTag1 = &v3.Profile{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "prof-1",
+	},
+	Spec: v3.ProfileSpec{
+		LabelsToApply: map[string]string{
+			"tag-1": "foobar",
+		},
+	},
 }
 
 var tag1LabelID = ipSetIDForTag("tag-1")
@@ -616,6 +648,10 @@ var ipPoolKey = IPPoolKey{
 	CIDR: mustParseNet("10.0.0.0/16"),
 }
 
+var ipPoolKey2 = IPPoolKey{
+	CIDR: mustParseNet("11.0.0.0/16"),
+}
+
 var hostCoveringIPPoolKey = IPPoolKey{
 	CIDR: mustParseNet("192.168.0.0/24"),
 }
@@ -641,6 +677,12 @@ var v6IPPool = IPPool{
 
 var ipPoolWithVXLAN = IPPool{
 	CIDR:       mustParseNet("10.0.0.0/16"),
+	VXLANMode:  encap.Always,
+	Masquerade: true,
+}
+
+var ipPool2WithVXLAN = IPPool{
+	CIDR:       mustParseNet("11.0.0.0/16"),
 	VXLANMode:  encap.Always,
 	Masquerade: true,
 }

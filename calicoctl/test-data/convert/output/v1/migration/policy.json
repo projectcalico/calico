@@ -1,139 +1,144 @@
-[
-  {
-    "kind": "GlobalNetworkPolicy",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "allow-tcp-6379",
-      "creationTimestamp": null,
-      "annotations": {
-        "aname": "avalue"
+{
+  "kind": "List",
+  "apiVersion": "v1",
+  "metadata": {},
+  "items": [
+    {
+      "kind": "GlobalNetworkPolicy",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "allow-tcp-6379",
+        "creationTimestamp": null,
+        "annotations": {
+          "aname": "avalue"
+        }
+      },
+      "spec": {
+        "order": 1234,
+        "ingress": [
+          {
+            "action": "Allow",
+            "protocol": "TCP",
+            "notProtocol": "UDPLite",
+            "source": {
+              "selector": "role == 'frontend' \u0026\u0026 thing not in {'three', 'four'}",
+              "notSelector": "role != 'something' \u0026\u0026 thing in {'one', 'two'}"
+            },
+            "destination": {
+              "ports": [
+                6379
+              ]
+            }
+          },
+          {
+            "action": "Allow",
+            "protocol": "TCP",
+            "source": {
+              "notSelector": "role != 'something' \u0026\u0026 thing in {'one', 'two'}"
+            },
+            "destination": {}
+          },
+          {
+            "action": "Deny",
+            "protocol": "TCP",
+            "source": {},
+            "destination": {
+              "ports": [
+                22,
+                443
+              ],
+              "notPorts": [
+                80
+              ]
+            }
+          },
+          {
+            "action": "Allow",
+            "source": {
+              "nets": [
+                "172.18.18.200/32",
+                "172.18.19.0/24"
+              ]
+            },
+            "destination": {}
+          },
+          {
+            "action": "Allow",
+            "source": {
+              "nets": [
+                "172.18.18.100/32"
+              ]
+            },
+            "destination": {}
+          },
+          {
+            "action": "Deny",
+            "source": {
+              "notNets": [
+                "172.19.19.100/32"
+              ]
+            },
+            "destination": {}
+          },
+          {
+            "action": "Deny",
+            "source": {
+              "notNets": [
+                "172.18.0.0/16"
+              ]
+            },
+            "destination": {}
+          }
+        ],
+        "egress": [
+          {
+            "action": "Allow",
+            "protocol": "ICMP",
+            "icmp": {
+              "type": 25,
+              "code": 25
+            },
+            "source": {},
+            "destination": {}
+          }
+        ],
+        "selector": "role == 'database' \u0026\u0026 !has(demo)",
+        "types": [
+          "Ingress",
+          "Egress"
+        ]
       }
     },
-    "spec": {
-      "order": 1234,
-      "ingress": [
-        {
-          "action": "Allow",
-          "protocol": "TCP",
-          "notProtocol": "UDPLite",
-          "source": {
-            "selector": "role == 'frontend' \u0026\u0026 thing not in {'three', 'four'}",
-            "notSelector": "role != 'something' \u0026\u0026 thing in {'one', 'two'}"
-          },
-          "destination": {
-            "ports": [
-              6379
-            ]
+    {
+      "kind": "GlobalNetworkPolicy",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "allow-tcp-555-donottrack",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "order": 1230,
+        "ingress": [
+          {
+            "action": "Allow",
+            "protocol": "TCP",
+            "source": {
+              "selector": "role == 'cache'"
+            },
+            "destination": {
+              "ports": [
+                555
+              ]
+            }
           }
-        },
-        {
-          "action": "Allow",
-          "protocol": "TCP",
-          "source": {
-            "notSelector": "role != 'something' \u0026\u0026 thing in {'one', 'two'}"
-          },
-          "destination": {}
-        },
-        {
-          "action": "Deny",
-          "protocol": "TCP",
-          "source": {},
-          "destination": {
-            "ports": [
-              22,
-              443
-            ],
-            "notPorts": [
-              80
-            ]
-          }
-        },
-        {
-          "action": "Allow",
-          "source": {
-            "nets": [
-              "172.18.18.200/32",
-              "172.18.19.0/24"
-            ]
-          },
-          "destination": {}
-        },
-        {
-          "action": "Allow",
-          "source": {
-            "nets": [
-              "172.18.18.100/32"
-            ]
-          },
-          "destination": {}
-        },
-        {
-          "action": "Deny",
-          "source": {
-            "notNets": [
-              "172.19.19.100/32"
-            ]
-          },
-          "destination": {}
-        },
-        {
-          "action": "Deny",
-          "source": {
-            "notNets": [
-              "172.18.0.0/16"
-            ]
-          },
-          "destination": {}
-        }
-      ],
-      "egress": [
-        {
-          "action": "Allow",
-          "protocol": "ICMP",
-          "icmp": {
-            "type": 25,
-            "code": 25
-          },
-          "source": {},
-          "destination": {}
-        }
-      ],
-      "selector": "role == 'database' \u0026\u0026 !has(demo)",
-      "types": [
-        "Ingress",
-        "Egress"
-      ]
+        ],
+        "selector": "role == 'database'",
+        "types": [
+          "Ingress"
+        ],
+        "doNotTrack": true,
+        "applyOnForward": true
+      }
     }
-  },
-  {
-    "kind": "GlobalNetworkPolicy",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "allow-tcp-555-donottrack",
-      "creationTimestamp": null
-    },
-    "spec": {
-      "order": 1230,
-      "ingress": [
-        {
-          "action": "Allow",
-          "protocol": "TCP",
-          "source": {
-            "selector": "role == 'cache'"
-          },
-          "destination": {
-            "ports": [
-              555
-            ]
-          }
-        }
-      ],
-      "selector": "role == 'database'",
-      "types": [
-        "Ingress"
-      ],
-      "doNotTrack": true,
-      "applyOnForward": true
-    }
-  }
-]
+  ]
+}

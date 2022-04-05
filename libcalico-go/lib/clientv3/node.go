@@ -16,13 +16,13 @@ package clientv3
 
 import (
 	"context"
-
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -150,7 +150,12 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		}
 	}
 
-	_, err = r.client.IPAM().ReleaseIPs(context.Background(), ips)
+	ropts := []ipam.ReleaseOptions{}
+	for _, ip := range ips {
+		ropts = append(ropts, ipam.ReleaseOptions{Address: ip.String()})
+	}
+
+	_, err = r.client.IPAM().ReleaseIPs(context.Background(), ropts...)
 	switch err.(type) {
 	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
 	default:

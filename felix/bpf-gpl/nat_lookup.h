@@ -37,11 +37,6 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 	struct calico_nat_v4_affinity_key affkey = {};
 	__u64 now = 0;
 
-	if (!CALI_F_TO_HOST) {
-		// Skip NAT lookup for traffic leaving the host namespace.
-		return NULL;
-	}
-
 	nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
 	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",
 		(int)bpf_ntohl(nat_key.addr), (int)dport,
@@ -132,7 +127,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		return NULL;
 	}
 
-	if (nat_lv1_val->affinity_timeo == 0) {
+	if (nat_lv1_val->affinity_timeo == 0 && !affinity_always_timeo) {
 		goto skip_affinity;
 	}
 
@@ -144,7 +139,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 	affkey.nat_key = nat_data;
 	affkey.client_ip = ip_src;
 
-	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo);
+	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo ? : affinity_always_timeo);
 
 	struct calico_nat_v4_affinity_val *affval;
 

@@ -791,17 +791,17 @@ func newTestSyncServer(ctx context.Context) *testSyncServer {
 	return ss
 }
 
-func (this *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) error {
-	ctx, cancel := context.WithCancel(this.context)
-	this.cLock.Lock()
-	this.cancelFns = append(this.cancelFns, cancel)
-	this.cLock.Unlock()
+func (s *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) error {
+	ctx, cancel := context.WithCancel(s.context)
+	s.cLock.Lock()
+	s.cancelFns = append(s.cancelFns, cancel)
+	s.cLock.Unlock()
 	var update proto.ToDataplane
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case update = <-this.updates:
+		case update = <-s.updates:
 			err := stream.Send(&update)
 			if err != nil {
 				return err
@@ -810,39 +810,35 @@ func (this *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_S
 	}
 }
 
-func (this *testSyncServer) SendInSync() {
-	this.updates <- proto.ToDataplane{Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
+func (s *testSyncServer) SendInSync() {
+	s.updates <- proto.ToDataplane{Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
 }
 
-func (this *testSyncServer) Restart() {
-	this.cLock.Lock()
-	for _, c := range this.cancelFns {
+func (s *testSyncServer) Restart() {
+	s.cLock.Lock()
+	for _, c := range s.cancelFns {
 		c()
 	}
-	this.cancelFns = make([]func(), 0)
-	this.cLock.Unlock()
+	s.cancelFns = make([]func(), 0)
+	s.cLock.Unlock()
 
-	err := os.Remove(this.path)
+	err := os.Remove(s.path)
 	Expect(err).ToNot(HaveOccurred())
 
-	this.listen()
+	s.listen()
 }
 
-func (this *testSyncServer) GetTarget() string {
-	return this.path
+func (s *testSyncServer) GetTarget() string {
+	return s.path
 }
 
-func (this *testSyncServer) listen() {
+func (s *testSyncServer) listen() {
 	var err error
-	var wg sync.WaitGroup
-	wg.Add(1)
 
-	this.listener = openListener(this.path)
+	s.listener = openListener(s.path)
 	go func() {
-		err = this.gRPCServer.Serve(this.listener)
-		wg.Done()
+		err = s.gRPCServer.Serve(s.listener)
 	}()
-	wg.Wait()
 	Expect(err).ToNot(HaveOccurred())
 }
 

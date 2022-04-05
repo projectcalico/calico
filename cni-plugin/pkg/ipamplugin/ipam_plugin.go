@@ -27,7 +27,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/gofrs/flock"
 	"github.com/prometheus/common/log"
@@ -60,7 +60,6 @@ func Main(version string) {
 	versionFlag := flagSet.Bool("v", false, "Display version")
 	upgradeFlag := flagSet.Bool("upgrade", false, "Upgrade from host-local")
 	err := flagSet.Parse(os.Args[1:])
-
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -108,7 +107,7 @@ func Main(version string) {
 	}
 
 	skel.PluginMain(cmdAdd, nil, cmdDel,
-		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
+		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
 		"Calico CNI IPAM "+version)
 }
 
@@ -169,7 +168,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
-	r := &current.Result{}
+	r := &cniv1.Result{}
 	if ipamArgs.IP != nil {
 		logger.Infof("Calico CNI IPAM request IP: %v", ipamArgs.IP)
 
@@ -195,8 +194,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if ipamArgs.IP.To4() == nil {
 			// It's an IPv6 address.
 			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(128, 128)}
-			r.IPs = append(r.IPs, &current.IPConfig{
-				Version: "6",
+			r.IPs = append(r.IPs, &cniv1.IPConfig{
 				Address: ipNetwork,
 			})
 
@@ -204,8 +202,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		} else {
 			// It's an IPv4 address.
 			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
-			r.IPs = append(r.IPs, &current.IPConfig{
-				Version: "4",
+			r.IPs = append(r.IPs, &cniv1.IPConfig{
 				Address: ipNetwork,
 			})
 
@@ -292,11 +289,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) > 0 {
 				logger.Infof("Assigned IPv6 addresses but failed to assign IPv4 addresses. Releasing %d IPv6 addresses", len(v6Assignments.IPs))
 				// Free the assigned IPv6 addresses when v4 address assignment fails.
-				v6IPs := []cnet.IP{}
+				v6IPs := []ipam.ReleaseOptions{}
 				for _, v6 := range v6Assignments.IPs {
-					v6IPs = append(v6IPs, *cnet.ParseIP(v6.IP.String()))
+					v6IPs = append(v6IPs, ipam.ReleaseOptions{Address: v6.IP.String()})
 				}
-				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs)
+				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs...)
 				if err != nil {
 					log.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
 				}
@@ -308,11 +305,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) > 0 {
 				logger.Infof("Assigned IPv4 addresses but failed to assign IPv6 addresses. Releasing %d IPv4 addresses", len(v4Assignments.IPs))
 				// Free the assigned IPv4 addresses when v4 address assignment fails.
-				v4IPs := []cnet.IP{}
+				v4IPs := []ipam.ReleaseOptions{}
 				for _, v4 := range v4Assignments.IPs {
-					v4IPs = append(v4IPs, *cnet.ParseIP(v4.IP.String()))
+					v4IPs = append(v4IPs, ipam.ReleaseOptions{Address: v4.IP.String()})
 				}
-				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs)
+				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs...)
 				if err != nil {
 					log.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
 				}
@@ -324,8 +321,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("failed to request IPv4 addresses: %w", err)
 			}
 			ipV4Network := net.IPNet{IP: v4Assignments.IPs[0].IP, Mask: v4Assignments.IPs[0].Mask}
-			r.IPs = append(r.IPs, &current.IPConfig{
-				Version: "4",
+			r.IPs = append(r.IPs, &cniv1.IPConfig{
 				Address: ipV4Network,
 			})
 		}
@@ -335,8 +331,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("failed to request IPv6 addresses: %w", err)
 			}
 			ipV6Network := net.IPNet{IP: v6Assignments.IPs[0].IP, Mask: v6Assignments.IPs[0].Mask}
-			r.IPs = append(r.IPs, &current.IPConfig{
-				Version: "6",
+			r.IPs = append(r.IPs, &cniv1.IPConfig{
 				Address: ipV6Network,
 			})
 		}

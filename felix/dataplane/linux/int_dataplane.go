@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,14 +37,13 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/arp"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
-	"github.com/projectcalico/calico/felix/bpf/routes"
-	"github.com/projectcalico/calico/felix/bpf/state"
+
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -56,6 +55,7 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
@@ -107,6 +107,8 @@ var (
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
+
+	maxCleanupRetries = 5
 )
 
 func init() {
@@ -160,6 +162,7 @@ type Config struct {
 
 	PostInSyncCallback func()
 	HealthAggregator   *health.HealthAggregator
+	WatchdogTimeout    time.Duration
 	RouteTableManager  *idalloc.IndexAllocator
 
 	DebugSimulateDataplaneHangAfter time.Duration
@@ -180,8 +183,15 @@ type Config struct {
 	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
 	BPFPSNATPorts                      numorstring.Port
+	BPFMapSizeRoute                    int
+	BPFMapSizeConntrack                int
+	BPFMapSizeNATFrontend              int
+	BPFMapSizeNATBackend               int
+	BPFMapSizeNATAffinity              int
+	BPFMapSizeIPSets                   int
+	BPFIpv6Enabled                     bool
+	BPFHostConntrackBypass             bool
 	KubeProxyMinSyncPeriod             time.Duration
-	KubeProxyEndpointSlicesEnabled     bool
 
 	SidecarAccelerationEnabled bool
 
@@ -234,8 +244,8 @@ type UpdateBatchResolver interface {
 // The internal dataplane does not do consistency checks on the incoming data (as the
 // old Python-based driver used to do).  It expects to be told about dependent resources
 // before they are needed and for their lifetime to exceed that of the resources that
-// depend on them.  For example, it is important the the datastore layer send an
-// IP set create event before it sends a rule that references that IP set.
+// depend on them. For example, it is important that the datastore layer sends an IP set
+// create event before it sends a rule that references that IP set.
 type InternalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
@@ -259,6 +269,7 @@ type InternalDataplane struct {
 
 	allManagers             []Manager
 	managersWithRouteTables []ManagerWithRouteTables
+	managersWithRouteRules  []ManagerWithRouteRules
 	ruleRenderer            rules.RuleRenderer
 
 	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
@@ -440,7 +451,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
-				dp.loopSummarizer)
+				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableVXLAN = &routetable.DummyTable{}
@@ -456,7 +467,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
-		cleanUpVXLANDevice()
+		// Start a cleanup goroutine not to block felix if it needs to retry
+		go cleanUpVXLANDevice()
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -555,9 +567,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
 		interfaceRegexes[i] = "^" + r + ".*"
 	}
-	bpfMapContext := &bpf.MapContext{
-		RepinningEnabled: config.BPFMapRepin,
-	}
+	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
+		config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeRoute, config.BPFMapSizeConntrack, config.BPFMapRepin)
 
 	var (
 		bpfEndpointManager *bpfEndpointManager
@@ -565,19 +576,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
+		err := bpfmap.CreateBPFMaps(bpfMapContext)
+		if err != nil {
+			log.WithError(err).Panic("error creating bpf maps")
+		}
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
-		ipSetsMap := bpfipsets.Map(bpfMapContext)
-		err := ipSetsMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create ipsets BPF map.")
-		}
 		ipSetsV4 := bpfipsets.NewBPFIPSets(
 			ipSetsConfigV4,
 			ipSetIDAllocator,
-			ipSetsMap,
+			bpfMapContext.IpsetsMap,
 			dp.loopSummarizer,
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
@@ -588,27 +598,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
-		stateMap := state.Map(bpfMapContext)
-		err = stateMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create state BPF map.")
-		}
-
-		arpMap := arp.Map(bpfMapContext)
-		err = arpMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create ARP BPF map.")
-		}
-
-		// The failsafe manager sets up the failsafe port map.  It's important that it is registered before the
-		// endpoint managers so that the map is brought up to date before they run for the first time.
-		failsafesMap := failsafes.Map(bpfMapContext)
-		err = failsafesMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create failsafe port BPF map.")
-		}
 		failsafeMgr := failsafes.NewManager(
-			failsafesMap,
+			bpfMapContext.FailsafesMap,
 			config.RulesConfig.FailsafeInboundHostPorts,
 			config.RulesConfig.FailsafeOutboundHostPorts,
 			dp.loopSummarizer,
@@ -618,11 +609,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		bpfEndpointManager = newBPFEndpointManager(
 			&config,
+			bpfMapContext,
 			fibLookupEnabled,
 			workloadIfaceRegex,
 			ipSetIDAllocator,
-			ipSetsMap,
-			stateMap,
 			ruleRenderer,
 			filterTableV4,
 			dp.reportHealth,
@@ -630,36 +620,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.RegisterManager(bpfEndpointManager)
 
-		// Pre-create the NAT maps so that later operations can assume access.
-		frontendMap := nat.FrontendMap(bpfMapContext)
-		err = frontendMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create NAT frontend BPF map.")
-		}
-		backendMap := nat.BackendMap(bpfMapContext)
-		err = backendMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create NAT backend BPF map.")
-		}
-		backendAffinityMap := nat.AffinityMap(bpfMapContext)
-		err = backendAffinityMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create NAT backend affinity BPF map.")
-		}
-
-		routeMap := routes.Map(bpfMapContext)
-		err = routeMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create routes BPF map.")
-		}
-
-		ctMap := conntrack.Map(bpfMapContext)
-		err = ctMap.EnsureExists()
-		if err != nil {
-			log.WithError(err).Panic("Failed to create conntrack BPF map.")
-		}
-
-		conntrackScanner := conntrack.NewScanner(ctMap,
+		conntrackScanner := conntrack.NewScanner(bpfMapContext.CtMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
 
 		// Before we start, scan for all finished / timed out connections to
@@ -671,10 +632,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 		}
 
-		if config.KubeProxyEndpointSlicesEnabled {
-			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithEndpointsSlices())
-		}
-
 		if config.BPFNodePortDSREnabled {
 			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithDSREnabled())
 		}
@@ -684,10 +641,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			kp, err := bpfproxy.StartKubeProxy(
 				config.KubeClientSet,
 				config.Hostname,
-				frontendMap,
-				backendMap,
-				backendAffinityMap,
-				ctMap,
+				bpfMapContext,
 				bpfproxyOpts...,
 			)
 			if err != nil {
@@ -704,7 +658,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFConnTimeLBEnabled {
 			// Activate the connect-time load balancer.
 			err = nat.InstallConnectTimeLoadBalancer(
-				config.BPFCgroupV2, config.BPFLogLevel, config.BPFConntrackTimeouts.UDPLastSeen)
+				config.BPFCgroupV2, config.BPFLogLevel, config.BPFConntrackTimeouts.UDPLastSeen, bpfMapContext)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
@@ -723,7 +677,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Debug("RouteSyncDisabled is false.")
 		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-			dp.loopSummarizer)
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 	} else {
 		log.Info("RouteSyncDisabled is true, using DummyTable.")
 		routeTableV4 = &routetable.DummyTable{}
@@ -748,9 +702,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
-		// Add a manger to keep the all-hosts IP set up to date.
+		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
+	} else {
+		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
+		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
+			// Start a cleanup goroutine not to block felix if it needs to retry
+			go cleanUpIPIPAddrs()
+		}
 	}
 
 	// Add a manager for wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -818,7 +778,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6 = routetable.New(
 				interfaceRegexes, 6, false, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-				dp.loopSummarizer)
+				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
 			log.Debug("RouteSyncDisabled is true, using DummyTable.")
 			routeTableV6 = &routetable.DummyTable{}
@@ -860,10 +820,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Register that we will report liveness and readiness.
 	if config.HealthAggregator != nil {
 		log.Info("Registering to report health.")
+		timeout := config.WatchdogTimeout
+		if timeout < healthInterval*2 {
+			log.Warnf("Dataplane watchdog timeout (%v) too low, defaulting to %v", timeout, healthInterval*2)
+			timeout = healthInterval * 2
+		}
 		config.HealthAggregator.RegisterReporter(
 			healthName,
 			&health.HealthReport{Live: true, Ready: true},
-			healthInterval*2,
+			timeout,
 		)
 	}
 
@@ -988,20 +953,91 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 	}
 }
 
+func cleanUpIPIPAddrs() {
+	// If IPIP is not enabled, check to see if there is are addresses in the IPIP device and delete them if there are.
+	log.Debug("Checking if we need to clean up the IPIP device")
+
+	var errFound bool
+
+cleanupRetry:
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+		}
+		link, err := netlink.LinkByName("tunl0")
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				log.Debug("IPIP disabled and no IPIP device found")
+				return
+			}
+			log.WithError(err).Warn("IPIP disabled and failed to query IPIP device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		if err != nil {
+			log.WithError(err).Warn("IPIP disabled and failed to list addresses, will be unable to remove any old addresses from the device should they exist.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		for _, oldAddr := range addrs {
+			if err := netlink.AddrDel(link, &oldAddr); err != nil {
+				log.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s.", oldAddr.IPNet)
+				errFound = true
+
+				// Sleep for 1 second before retrying
+				time.Sleep(1 * time.Second)
+				continue cleanupRetry
+			}
+		}
+	}
+	if errFound {
+		log.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", maxCleanupRetries)
+	}
+}
+
 func cleanUpVXLANDevice() {
 	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
 	log.Debug("Checking if we need to clean up the VXLAN device")
-	link, err := netlink.LinkByName("vxlan.calico")
-	if err != nil {
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
-			log.Debug("VXLAN disabled and no VXLAN device found")
-			return
+
+	var errFound bool
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		log.WithError(err).Warnf("VXLAN disabled and failed to query VXLAN device.  Ignoring.")
-		return
+		link, err := netlink.LinkByName("vxlan.calico")
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				log.Debug("VXLAN disabled and no VXLAN device found")
+				return
+			}
+			log.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if err = netlink.LinkDel(link); err != nil {
+			log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
 	}
-	if err = netlink.LinkDel(link); err != nil {
-		log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device. Ignoring.")
+	if errFound {
+		log.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
 	}
 }
 
@@ -1021,6 +1057,26 @@ type ManagerWithRouteTables interface {
 	GetRouteTableSyncers() []routeTableSyncer
 }
 
+type ManagerWithRouteRules interface {
+	Manager
+	GetRouteRules() []routeRules
+}
+
+// routeTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
+// interface state changes, hooks to queue a full resync and apply routing updates.
+type routeTableSyncer interface {
+	OnIfaceStateChanged(string, ifacemonitor.State)
+	QueueResync()
+	Apply() error
+}
+
+type routeRules interface {
+	SetRule(rule *routerule.Rule)
+	RemoveRule(rule *routerule.Rule)
+	QueueResync()
+	Apply() error
+}
+
 func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 	var rts []routeTableSyncer
 	for _, mrts := range d.managersWithRouteTables {
@@ -1030,13 +1086,28 @@ func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 	return rts
 }
 
+func (d *InternalDataplane) routeRules() []routeRules {
+	var rrs []routeRules
+	for _, mrrs := range d.managersWithRouteRules {
+		rrs = append(rrs, mrrs.GetRouteRules()...)
+	}
+
+	return rrs
+}
+
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
-	switch mgr := mgr.(type) {
-	case ManagerWithRouteTables:
+	tableMgr, ok := mgr.(ManagerWithRouteTables)
+	if ok {
 		// Used to log the whole manager out here but if we do that then we cause races if the manager has
 		// other threads or locks.
 		log.WithField("manager", reflect.TypeOf(mgr).Name()).Debug("registering ManagerWithRouteTables")
-		d.managersWithRouteTables = append(d.managersWithRouteTables, mgr)
+		d.managersWithRouteTables = append(d.managersWithRouteTables, tableMgr)
+	}
+
+	rulesMgr, ok := mgr.(ManagerWithRouteRules)
+	if ok {
+		log.WithField("manager", mgr).Debug("registering ManagerWithRouteRules")
+		d.managersWithRouteRules = append(d.managersWithRouteRules, rulesMgr)
 	}
 	d.allManagers = append(d.allManagers, mgr)
 }
@@ -1072,16 +1143,17 @@ type ifaceUpdate struct {
 	Index int
 }
 
-// Check if current felix ipvs config is correct when felix gets an kube-ipvs0 interface update.
+// Check if current felix ipvs config is correct when felix gets a kube-ipvs0 interface update.
 // If KubeIPVSInterface is UP and felix ipvs support is disabled (kube-proxy switched from iptables to ipvs mode),
 // or if KubeIPVSInterface is DOWN and felix ipvs support is enabled (kube-proxy switched from ipvs to iptables mode),
 // restart felix to pick up correct ipvs support mode.
 func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.State) {
-	if (!d.config.RulesConfig.KubeIPVSSupportEnabled && state == ifacemonitor.StateUp) ||
-		(d.config.RulesConfig.KubeIPVSSupportEnabled && state == ifacemonitor.StateDown) {
+	ipvsIfacePresent := state != ifacemonitor.StateNotPresent
+	ipvsSupportEnabled := d.config.RulesConfig.KubeIPVSSupportEnabled
+	if ipvsSupportEnabled != ipvsIfacePresent {
 		log.WithFields(log.Fields{
 			"ipvsIfaceState": state,
-			"ipvsSupport":    d.config.RulesConfig.KubeIPVSSupportEnabled,
+			"ipvsSupport":    ipvsSupportEnabled,
 		}).Info("kube-proxy mode changed. Restart felix.")
 		d.config.ConfigChangedRestartCallback()
 	}
@@ -1340,7 +1412,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 		if t.IPVersion == 4 {
 			// Iptables for untracked policy.
-			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass)))
+			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass), d.config.BPFHostConntrackBypass))
 			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 			}})
@@ -1812,6 +1884,10 @@ func (d *InternalDataplane) apply() {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
+		for _, r := range d.routeRules() {
+			// Queue a resync on the next Apply().
+			r.QueueResync()
+		}
 		d.forceRouteRefresh = false
 	}
 
@@ -1852,6 +1928,22 @@ func (d *InternalDataplane) apply() {
 		}(r)
 	}
 
+	// Update the routing rules in parallel with the other updates.  We'll wait for it to finish
+	// before we return.
+	var rulesWG sync.WaitGroup
+	for _, r := range d.routeRules() {
+		rulesWG.Add(1)
+		go func(r routeRules) {
+			err := r.Apply()
+			if err != nil {
+				log.Warn("Failed to synchronize routing rules, will retry...")
+				d.dataplaneNeedsSync = true
+			}
+			d.reportHealth()
+			rulesWG.Done()
+		}(r)
+	}
+
 	// Wait for the IP sets update to finish.  We can't update iptables until it has.
 	ipSetsWG.Wait()
 
@@ -1888,6 +1980,9 @@ func (d *InternalDataplane) apply() {
 
 	// Wait for the route updates to finish.
 	routesWG.Wait()
+
+	// Wait for the rule updates to finish.
+	rulesWG.Wait()
 
 	// And publish and status updates.
 	d.endpointStatusCombiner.Apply()

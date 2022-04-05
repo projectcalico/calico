@@ -3,15 +3,16 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER = v0.65
+GO_BUILD_VER = v0.70
 
 # Version of Kubernetes to use for tests.
-K8S_VERSION     = v1.23.0
-KUBECTL_VERSION = v1.23.0
+K8S_VERSION     = v1.23.3
+# This is used for lachlanevenson/k8s-kubectl and kubectl binary release.
+KUBECTL_VERSION = v1.23.2
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-ETCD_VERSION=v3.3.7
+ETCD_VERSION=v3.5.1
 PROTOC_VER=v0.1
 UBI_VERSION=8.5
 

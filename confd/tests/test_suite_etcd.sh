@@ -25,7 +25,7 @@ export LOGPATH=/tests/logs/etcd
 export ETCDCTL_API=3
 export DATASTORE_TYPE=etcdv3
 export ETCD_ENDPOINTS=http://127.0.0.2:2379
-export KUBECONFIG=/tests/confd_kubeconfig
+export KUBECONFIG=/home/user/certs/kubeconfig
 
 # Clean etcd of all data
 echo "Cleaning out etcd and deleting old logs"

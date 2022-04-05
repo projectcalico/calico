@@ -154,6 +154,28 @@ The following options allow configuration of settings within the container names
 }
 ```
 
+### Readiness Gates
+
+The following option makes CNI plugin wait for specified endpoint(s) to be ready before configuring pod networking.
+
+* `readiness_gates`
+
+This is an optional property that takes an array of URLs. Each URL specified will be polled for readiness and pod networking will continue startup once all readiness_gates are ready.
+
+Example CNI config:
+
+```json
+{
+    "name": "any_name",
+    "cniVersion": "0.1.0",
+    "type": "calico",
+    "ipam": {
+        "type": "calico-ipam"
+    },
+    "readiness_gates": ["http://localhost:9099/readiness", "http://localhost:8888/status"],
+}
+```
+
 ## Kubernetes specific
 
 When using the {{site.prodname}} CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.

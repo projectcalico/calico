@@ -61,7 +61,7 @@ E2E_FOCUS ?= "sig-network.*Conformance"
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
-	KUBECONFIG=./node/kubeconfig.yaml ./e2e/bin/e2e.test -ginkgo.focus=$(E2E_FOCUS)
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/e2e.test -ginkgo.focus=$(E2E_FOCUS)
 
 ###############################################################################
 # Release logic below

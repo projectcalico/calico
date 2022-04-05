@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1beta1"
+	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -155,12 +155,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 		eps.Ports = []discovery.EndpointPort{
 			{Port: &eighty, Protocol: &tcp},
 		}
-		eps, err = kc.DiscoveryV1beta1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
+		eps, err = kc.DiscoveryV1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			err = kc.DiscoveryV1beta1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
+			err = kc.DiscoveryV1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -192,7 +192,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 		// Update the endpoint slice to include the address of w0. Traffic should then be allowed in the reverse direction,
 		// but still only to port 80.
 		eps.Endpoints = append(eps.Endpoints, discovery.Endpoint{Addresses: []string{w[0].IP}})
-		_, err = kc.DiscoveryV1beta1().EndpointSlices("default").Update(utils.Ctx, eps, metav1.UpdateOptions{})
+		_, err = kc.DiscoveryV1().EndpointSlices("default").Update(utils.Ctx, eps, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		cc.ResetExpectations()
 		cc.ExpectSome(w[0], w[1].Port(80))
@@ -238,12 +238,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 		eps.Ports = []discovery.EndpointPort{
 			{Port: &eighty, Protocol: &tcp},
 		}
-		_, err := kc.DiscoveryV1beta1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
+		_, err := kc.DiscoveryV1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			err = kc.DiscoveryV1beta1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
+			err = kc.DiscoveryV1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -322,12 +322,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 		eps.Ports = []discovery.EndpointPort{
 			{Port: &eighty, Protocol: &tcp},
 		}
-		eps, err = kc.DiscoveryV1beta1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
+		eps, err = kc.DiscoveryV1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			err = kc.DiscoveryV1beta1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
+			err = kc.DiscoveryV1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -396,7 +396,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 
 		// Update the endpoint slice to include the address of w0. Traffic should then be allowed in the reverse direction on port 80.
 		eps.Endpoints = append(eps.Endpoints, discovery.Endpoint{Addresses: []string{w[0].IP}})
-		_, err = kc.DiscoveryV1beta1().EndpointSlices("default").Update(utils.Ctx, eps, metav1.UpdateOptions{})
+		_, err = kc.DiscoveryV1().EndpointSlices("default").Update(utils.Ctx, eps, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		cc.ResetExpectations()
 		cc.ExpectSome(w[0], w[1].Port(80))
@@ -454,12 +454,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 		eps.Ports = []discovery.EndpointPort{
 			{Port: &eighty, Protocol: &tcp},
 		}
-		_, err := kc.DiscoveryV1beta1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
+		_, err := kc.DiscoveryV1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			err = kc.DiscoveryV1beta1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
+			err = kc.DiscoveryV1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}()
 

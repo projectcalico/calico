@@ -20,7 +20,7 @@ spec:
       containers:
         # Writes basic flannel configuration to etcd.
         - name: configure-flannel
-          image: quay.io/coreos/etcd:v3.1.5
+          image: quay.io/coreos/etcd:v3.5.1
           command:
           - "etcdctl"
           # Uncomment the following lines if using TLS to etcd.

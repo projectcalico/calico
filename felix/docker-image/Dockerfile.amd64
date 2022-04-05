@@ -16,11 +16,21 @@
 # NOTE: This Dockerfile should be kept in-sync with the one in calico/node.
 # This ensures that testing of Felix in this repository is done in the same
 # userspace environment as it will be deployed in calico/node.
+
+FROM ubuntu:focal as wgtool
+
+RUN apt-get update && \
+    apt-get install --no-install-recommends wireguard-tools -y
+
 FROM calico/bpftool:v5.3-amd64 as bpftool
 
 FROM debian:10-slim
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
+# Binary to execute as "felix". This allows us to swap out
+# alternative builds for the tests.
+# TODO: We should just mount this in from the host.
+ARG FV_BINARY=bin/calico-felix-amd64
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \
@@ -41,7 +51,14 @@ RUN apt-get update && apt-get install -y \
     netbase \
     # Also needed (provides utilities for browsing procfs like ps)
     procps \
-    ca-certificates
+    ca-certificates \
+    # Felix FV tests require these
+    wget \
+    ethtool \
+    tcpdump
+
+# Copy in wg tool from stage 1.
+COPY --from=wgtool /usr/bin/wg /usr/bin/wg
 
 # Default to the xtables backend of iptables.
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
@@ -54,9 +71,10 @@ ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-stati
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin
 
-# Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
-# to more easily extract the Felix build artefacts from the container.
-ADD bin/calico-felix-amd64 /code/calico-felix
+ADD bin/test-connection bin/test-workload bin/pktgen /
+
+# Add the felix and calico-bpf binaries from the host.
+ADD $FV_BINARY /code/calico-felix
 ADD bin/calico-bpf /usr/bin/calico-bpf
 
 ADD bpf/bin/* /usr/lib/calico/bpf/

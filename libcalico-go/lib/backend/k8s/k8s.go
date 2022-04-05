@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -204,6 +205,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		apiv3.KindCalicoNodeStatus,
 		resources.NewCalicoNodeStatusClient(cs, crdClientV1),
 	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		model.KindKubernetesService,
+		resources.NewServiceClient(cs),
+	)
 
 	if !ca.K8sUsePodCIDR {
 		// Using Calico IPAM - use CRDs to back IPAM resources.
@@ -316,6 +323,9 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 	if err != nil {
 		return nil, nil, resources.K8sErrorToCalico(err, nil)
 	}
+
+	config.AcceptContentTypes = strings.Join([]string{runtime.ContentTypeProtobuf, runtime.ContentTypeJSON}, ",")
+	config.ContentType = runtime.ContentTypeProtobuf
 
 	// Overwrite the QPS if provided. Default QPS is 5.
 	if ca.K8sClientQPS != float32(0) {

@@ -31,8 +31,7 @@ summaries, and an {% include open-new-window.html text='etcd'
 url='https://github.com/coreos/etcd' %} datastore.
 
 ```bash
-kubectl apply -f \
-{{ "/security/tutorials/app-layer-policy/manifests/10-yaobank.yaml" | absolute_url }}
+kubectl apply -f {{ "/security/tutorials/app-layer-policy/manifests/10-yaobank.yaml" | absolute_url }}
 ```
 
 > **Note**: You can also

@@ -38,6 +38,7 @@ func PollK8sForConnectionLimit(
 	tickerC <-chan time.Time,
 	k8sAPI K8sAPI,
 	server MaxConnsAPI,
+	numSyncerTypes int,
 ) {
 	logCxt := log.WithField("thread", "k8s-poll")
 	logCxt.Info("Kubernetes poll goroutine started.")
@@ -63,15 +64,16 @@ func PollK8sForConnectionLimit(
 			target := configParams.MaxConnectionsUpperLimit
 			reason := "error"
 			if tErr == nil && nErr == nil {
-				target, reason = CalculateMaxConnLimit(configParams, numTyphas, numNodes)
+				target, reason = CalculateMaxConnLimit(configParams, numTyphas, numNodes, numSyncerTypes)
 			}
 
 			if target != activeTarget {
 				logCxt.WithFields(log.Fields{
-					"numTyphas": numTyphas,
-					"numNodes":  numNodes,
-					"newLimit":  target,
-					"reason":    reason,
+					"numTyphas":      numTyphas,
+					"numNodes":       numNodes,
+					"numSyncerTypes": numSyncerTypes,
+					"newLimit":       target,
+					"reason":         reason,
 				}).Info("Calculated new connection limit.")
 				server.SetMaxConns(target)
 				activeTarget = target
@@ -83,7 +85,7 @@ func PollK8sForConnectionLimit(
 	}
 }
 
-func CalculateMaxConnLimit(configParams *config.Config, numTyphas, numNodes int) (target int, reason string) {
+func CalculateMaxConnLimit(configParams *config.Config, numTyphas, numNodes, numSyncerTypes int) (target int, reason string) {
 	reason = "configured lower limit"
 	target = configParams.MaxConnectionsLowerLimit
 	if numTyphas <= 1 {
@@ -93,9 +95,9 @@ func CalculateMaxConnLimit(configParams *config.Config, numTyphas, numNodes int)
 	}
 	// We subtract 1 from the number of Typhas when calculating the fraction to allow for one Typha
 	// dying during a rolling upgrade, for example.  That does mean our load will be less even but
-	// it reduces the number of expensive disconnections.  We add 20% to give some further headroom, this
-	// is multiplied by three since confd and the node IP allocater also use Typha.
-	candidate := 3 * (1 + numNodes*120/(numTyphas-1)/100)
+	// it reduces the number of expensive disconnections.  We add 20% to give some further headroom.
+	const headroomPercent = 20
+	candidate := numSyncerTypes * (1 + numNodes*(100+headroomPercent)/(numTyphas-1)/100)
 	if candidate > target {
 		reason = "fraction+20%"
 		target = candidate

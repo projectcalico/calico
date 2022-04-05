@@ -37,6 +37,16 @@ VERSIONS_WITHOUT_IMAGE_LIST = [
     "v1.0",
 ]
 
+VPP_IMAGES = ["calicovpp/agent", "calicovpp/vpp", "calicovpp/init-eks"]
+with open("%s/_config.yml" % DOCS_PATH) as configFile:
+    config = yaml.safe_load(configFile)
+    VPP_RELEASE = config["defaults"][0]["values"]["vppbranch"]
+
+def test_vpp_branch():
+    assert VPP_RELEASE != "master", "vppbranch cannot be 'master' for a release"
+
+VPP_EXPECTED_ARCHS = ["amd64"]
+
 VERSIONS_WITHOUT_FLANNEL_MIGRATION = [
     "v3.8",
     "v3.7",
@@ -145,11 +155,20 @@ def test_docker_release_tag_present():
                 req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
                 metadata = json.loads(req.stdout.read())
                 found_archs = []
+                print("[INFO] metadata: %s" % metadata)
                 for platform in metadata["manifests"]:
                     found_archs.append(platform["platform"]["architecture"])
 
                 assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
+        for image in VPP_IMAGES:
+            print("[INFO] checking %s:%s" % (image_name, RELEASE_VERSION))
+            image_name = "%s:%s-calico%s" % (image, VPP_RELEASE, RELEASE_VERSION,)
+            cmd = 'docker manifest inspect %s | jq -r "."' % image_name
+            req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+            assert not req.stdout.read().startswith("no such manifest"), (
+                "Got 'no such manifest' looking for VPP image %s" % image_name
+            )
 
 def test_operator_images():
     with open("%s/_data/versions.yml" % DOCS_PATH) as versionsFile:

@@ -8,18 +8,7 @@ assert os.environ.get('GITHUB_TOKEN')
 g = Github(os.environ.get('GITHUB_TOKEN'))
 
 # Orgs to filter on.
-REPOSITORIES = [
-        "calico",
-        "libcalico-go",
-        "felix",
-        "typha",
-        "cni-plugin",
-        "kube-controllers",
-        "app-policy",
-        "pod2daemon",
-        "calico-bgp-daemon",
-        "calico-upgrade",
-        "node"]
+REPOSITORIES = ["calico"]
 
 login_exists = {}
 logins_by_name = {}

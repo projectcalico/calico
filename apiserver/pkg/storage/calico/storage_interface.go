@@ -5,7 +5,7 @@ package calico
 import (
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // NewStorage creates a new libcalico-based storage.Interface implementation

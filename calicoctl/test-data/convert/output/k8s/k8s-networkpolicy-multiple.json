@@ -1,114 +1,120 @@
-[
-  {
-    "kind": "NetworkPolicy",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "test-network-policy1",
-      "creationTimestamp": null
-    },
-    "spec": {
-      "order": 1000,
-      "ingress": [
-        {
-          "action": "Allow",
-          "protocol": "TCP",
-          "source": {
-            "nets": [
-              "172.17.0.0/16"
-            ],
-            "notNets": [
-              "172.17.1.0/24"
-            ]
+{
+  "kind": "List",
+  "apiVersion": "v1",
+  "metadata": {},
+  "items": [
+    {
+      "kind": "NetworkPolicy",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "test-network-policy1",
+        "namespace": "test-ns",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "order": 1000,
+        "ingress": [
+          {
+            "action": "Allow",
+            "protocol": "TCP",
+            "source": {
+              "nets": [
+                "172.17.0.0/16"
+              ],
+              "notNets": [
+                "172.17.1.0/24"
+              ]
+            },
+            "destination": {
+              "ports": [
+                6379
+              ]
+            }
           },
-          "destination": {
-            "ports": [
-              6379
-            ]
-          }
-        },
-        {
-          "action": "Allow",
-          "protocol": "TCP",
-          "source": {
-            "selector": "projectcalico.org/orchestrator == 'k8s'",
-            "namespaceSelector": "project == 'myproject'"
+          {
+            "action": "Allow",
+            "protocol": "TCP",
+            "source": {
+              "selector": "projectcalico.org/orchestrator == 'k8s'",
+              "namespaceSelector": "project == 'myproject'"
+            },
+            "destination": {
+              "ports": [
+                6379
+              ]
+            }
           },
-          "destination": {
-            "ports": [
-              6379
-            ]
+          {
+            "action": "Allow",
+            "protocol": "TCP",
+            "source": {
+              "selector": "projectcalico.org/orchestrator == 'k8s' \u0026\u0026 role == 'frontend'"
+            },
+            "destination": {
+              "ports": [
+                6379
+              ]
+            }
           }
-        },
-        {
-          "action": "Allow",
-          "protocol": "TCP",
-          "source": {
-            "selector": "projectcalico.org/orchestrator == 'k8s' \u0026\u0026 role == 'frontend'"
-          },
-          "destination": {
-            "ports": [
-              6379
-            ]
+        ],
+        "egress": [
+          {
+            "action": "Allow",
+            "protocol": "TCP",
+            "source": {},
+            "destination": {
+              "nets": [
+                "10.0.0.0/24"
+              ],
+              "ports": [
+                5978
+              ]
+            }
           }
-        }
-      ],
-      "egress": [
-        {
-          "action": "Allow",
-          "protocol": "TCP",
-          "source": {},
-          "destination": {
-            "nets": [
-              "10.0.0.0/24"
-            ],
-            "ports": [
-              5978
-            ]
-          }
-        }
-      ],
-      "selector": "projectcalico.org/orchestrator == 'k8s' \u0026\u0026 role == 'db'",
-      "types": [
-        "Ingress",
-        "Egress"
-      ]
-    }
-  },
-  {
-    "kind": "NetworkPolicy",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "default-deny-ingress",
-      "creationTimestamp": null
+        ],
+        "selector": "projectcalico.org/orchestrator == 'k8s' \u0026\u0026 role == 'db'",
+        "types": [
+          "Ingress",
+          "Egress"
+        ]
+      }
     },
-    "spec": {
-      "order": 1000,
-      "selector": "projectcalico.org/orchestrator == 'k8s'",
-      "types": [
-        "Ingress"
-      ]
-    }
-  },
-  {
-    "kind": "NetworkPolicy",
-    "apiVersion": "projectcalico.org/v3",
-    "metadata": {
-      "name": "allow-all-egress",
-      "creationTimestamp": null
+    {
+      "kind": "NetworkPolicy",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "default-deny-ingress",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "order": 1000,
+        "selector": "projectcalico.org/orchestrator == 'k8s'",
+        "types": [
+          "Ingress"
+        ]
+      }
     },
-    "spec": {
-      "order": 1000,
-      "egress": [
-        {
-          "action": "Allow",
-          "source": {},
-          "destination": {}
-        }
-      ],
-      "selector": "projectcalico.org/orchestrator == 'k8s'",
-      "types": [
-        "Egress"
-      ]
+    {
+      "kind": "NetworkPolicy",
+      "apiVersion": "projectcalico.org/v3",
+      "metadata": {
+        "name": "allow-all-egress",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "order": 1000,
+        "egress": [
+          {
+            "action": "Allow",
+            "source": {},
+            "destination": {}
+          }
+        ],
+        "selector": "projectcalico.org/orchestrator == 'k8s'",
+        "types": [
+          "Egress"
+        ]
+      }
     }
-  }
-]
+  ]
+}

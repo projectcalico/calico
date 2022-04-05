@@ -1,4 +1,4 @@
-// Copyright (c) 2018,2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018,2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ var _ = Describe("profileDecoder", func() {
 			uut.RegisterWith(disp)
 		})
 
-		It("should Register for ProfileLabels only", func() {
+		It("should Register for Profile only", func() {
 			disp.OnUpdate(api.Update{
 				KVPair:     model.KVPair{Key: model.HostEndpointKey{}},
 				UpdateType: api.UpdateTypeKVNew,
@@ -182,12 +182,27 @@ func (p *passthruCallbackRecorder) OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
 	Fail("OnGlobalBGPConfigUpdate received")
 }
 
-func labelsKV(name string, labels interface{}) model.KVPair {
-	return model.KVPair{
-		Key: model.ProfileLabelsKey{
-			ProfileKey: model.ProfileKey{Name: name}},
-		Value: labels,
+func labelsKV(name string, labels map[string]string) model.KVPair {
+	var value interface{}
+	if labels != nil {
+		value = &v3.Profile{
+			Spec: v3.ProfileSpec{
+				LabelsToApply: labels,
+			},
+		}
 	}
+	return model.KVPair{
+		Key:   model.ResourceKey{Name: name, Kind: v3.KindProfile},
+		Value: value,
+	}
+}
+
+func (p *passthruCallbackRecorder) OnServiceUpdate(_ *proto.ServiceUpdate) {
+	Fail("OnServiceUpdate received")
+}
+
+func (p *passthruCallbackRecorder) OnServiceRemove(_ *proto.ServiceRemove) {
+	Fail("OnServiceRemove received")
 }
 
 func addUpdate(name string, labels map[string]string) api.Update {

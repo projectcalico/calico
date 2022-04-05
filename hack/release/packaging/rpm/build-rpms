@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+set -x
+set -e
+
+if [ -z "${EL_VERSION}" ]; then
+  echo "EL_VERSION variable should be set"
+  exit 1
+fi
+
+repo=`pwd`
+pkg=`basename $repo`
+: "${RPM_TAR_ARGS:=}"
+
+mkdir -p /tmp/rpmbuild/BUILD \
+         /tmp/rpmbuild/RPMS \
+         /tmp/rpmbuild/SOURCES \
+         /tmp/rpmbuild/SPECS\
+         /tmp/rpmbuild/SRPMS
+
+# Copy the package spec into SPECS.
+spec=`basename ${repo}/rpm/*.spec`
+cp -a ${repo}/rpm/$spec /tmp/rpmbuild/SPECS/
+
+# Link patches into ../SOURCES.
+cd /tmp/rpmbuild/SOURCES
+for f in ${repo}/rpm/*; do ln -sf $f; done
+
+# Infer the version that the spec wants to build.
+version=`grep Version: $spec | head -1 | awk '{print $2;}'`
+
+case ${pkg} in
+    felix | networking-calico | dnsmasq )
+	# Tar up the Git source, with the naming that rpmbuild expects.
+	dir=${pkg}-${version}
+	cp -a ${repo} /tmp/$dir
+	tar -C /tmp \
+	    --exclude-vcs \
+	    ${RPM_TAR_ARGS} \
+	    -czf /tmp/rpmbuild/SOURCES/${dir}.tar.gz $dir
+	;;
+    etcd3gw)
+	t=`mktemp -d -t etcd3gw.XXXXXX`
+	curl -L https://github.com/dims/etcd3-gateway/archive/5a3157a122368c2314c7a961f61722e47355f981.zip -o $t/${pkg}-${version}.zip
+	pushd $t
+	unzip ${pkg}-${version}.zip
+	mv etcd3-gateway-5a3157a122368c2314c7a961f61722e47355f981 ${pkg}-${version}
+	tar zcf /tmp/rpmbuild/SOURCES/${pkg}-${version}.tar.gz ${pkg}-${version}
+	popd
+	export PBR_VERSION=${version}
+	;;
+esac
+
+# Build, and fix centos7 putting always '.centos7' in the rpm-name
+cd /tmp/rpmbuild
+rpmbuild --target=$(uname -m) --define '_topdir '`pwd` --define "dist .${EL_VERSION}" -ba SPECS/${spec}
+mkdir -p /code/hack/release/packaging/output/dist/rpms-${EL_VERSION}/src
+cp -r /tmp/rpmbuild/RPMS/* /code/hack/release/packaging/output/dist/rpms-${EL_VERSION}/
+cp -r /tmp/rpmbuild/SRPMS/* /code/hack/release/packaging/output/dist/rpms-${EL_VERSION}/src/

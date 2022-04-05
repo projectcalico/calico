@@ -18,7 +18,7 @@ Because the Kubernetes and {{site.prodname}} control components do not run on Wi
   - Kubernetes, on-premises: Calico CNI with BGP or VXLAN
   - OpenShift: Calico CNI with BGP or VXLAN
   - Rancher Kubernetes Engine: Calico CNI with BGP or VXLAN
-  - EKS: VPC CNI, or Calico CNI with BGP or VXLAN
+  - EKS: VPC CNI
   - AKS: Azure CNI
 
 ### Requirements
@@ -42,11 +42,11 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 #### Kubernetes version 
 
-- Versions 1.20, 1.19, or 1.18
-
+See the [Kubernetes requirements]({{site.baseurl}}/getting-started/kubernetes/requirements#kubernetes-requirements).
+  
 Earlier versions may work, but we do not actively test {{site.prodnameWindows}} against them, and they may have known issues and incompatibilities.
 
-#### Linux platform 
+#### Linux platform requirements
 
 - At least one Linux Kubernetes worker node to run {{site.prodname}}'s cluster-wide components that meets [Linux system requirements]({{site.baseurl}}/getting-started/kubernetes/requirements), and is installed with {{site.prodname}} v3.12+.
 - VXLAN or BGP without encapsulation is supported if using {{site.prodname}} CNI. IPIP ({{site.prodname}}'s default encapsulation mode) is not supported. Use the following command to turn off IPIP.
@@ -61,20 +61,34 @@ calicoctl ipam configure --strictaffinity=true
 >**Note**: For operator-managed Linux {{site.prodname}} clusters, three Linux worker nodes are required in order to meet high-availability requirements for Typha.
 {: .alert .alert-info}
 
-#### Windows platform 
+#### Windows platform requirements
 
 - Windows versions:
   - Windows Server 1809 (build Build 17763.1432 or greater)
-  - Windows Server 2004 (build 19041)
   - Windows Server 20H2 (build 19042)
-- PowerShell for the installer
-- Make sure {% include open-new-window.html text='Docker' url='https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server' %} or {% include open-new-window.html text='containerd' url='https://kubernetes.io/docs/setup/production-environment/container-runtimes/#containerd' %} is installed and running.
+
+  > **Note**: Windows Server version support differs for each Kubernetes version. Review the {% include open-new-window.html text='Windows OS Version Support' url='https://kubernetes.io/docs/setup/production-environment/windows/intro-windows-in-kubernetes/#windows-os-version-support' %} table for the Windows Server versions supported by each Kubernetes version.
+  {: .alert .alert-info}
+
+- Be able to run commands as Administrator using PowerShell.
+- Container runtime: {% include open-new-window.html text='Docker' url='https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server' %} or {% include open-new-window.html text='containerd' url='https://kubernetes.io/docs/setup/production-environment/container-runtimes/#containerd' %} is installed and running. If containerd is running, it will be used as the container runtime otherwise Docker is assumed.
+- Remote access to the Windows node via Remote Desktop Protocol (RDP) or Windows Remote Management (WinRM)
 - If you are using {{site.prodname}} BGP networking, the RemoteAccess service must be installed for the Windows BGP Router.
 - Windows nodes support only a single IP pool type (so, if using a VXLAN pool, you should only use VXLAN throughout the cluster).
 - TLS v1.2 enabled. For example:
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 ```
+
+#### EKS requirements
+
+- The VPC controllers must be installed to run Windows pods.
+- An instance role on the Windows instance must have permissions to get `namespaces` and get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
+
+#### AKS requirements
+
+- {{site.prodnameWindows}} can be enabled only on newly created clusters.
+- Available with Kubernetes version 1.20 or later
 
 ### Next steps
 

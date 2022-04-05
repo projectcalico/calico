@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_BPF_H__
@@ -9,6 +9,7 @@
 #include <linux/bpf.h>
 #include <bpf_helpers.h>   /* For bpf_xxx helper functions. */
 #include <bpf_endian.h>    /* For bpf_ntohX etc. */
+#include <bpf_core_read.h>
 #include <stddef.h>
 #include <linux/ip.h>
 #include "globals.h"
@@ -183,7 +184,10 @@ enum calico_skb_mark {
 	 * do SNAT for this flow.  Subsequent packets will also be allowed to fall through to the host
 	 * netns. */
 	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_BYPASS  | 0x00800000,
-
+	/* CALI_SKB_MARK_MASQ enforces MASQ on the connection. */
+	CALI_SKB_MARK_MASQ                   = CALI_SKB_MARK_BYPASS  | 0x00600000,
+	/* CALI_SKB_MARK_SKIP_FIB is used for packets that should pass through host IP stack. */
+	CALI_SKB_MARK_SKIP_FIB               = CALI_SKB_MARK_SEEN | 0x00100000,
 	/* CT_ESTABLISHED is used by iptables to tell the BPF programs that the packet is part of an
 	 * established Linux conntrack flow. This allows the BPF program to let through pre-existing
 	 * flows at start of day. */
@@ -247,7 +251,6 @@ static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
 
 #endif /* loader */
 
-
 CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* be 0x54534f48 = ASCII(HOST) */
 CALI_CONFIGURABLE_DEFINE(tunnel_mtu, 0x55544d54) /* be 0x55544d54 = ASCII(TMTU) */
 CALI_CONFIGURABLE_DEFINE(vxlan_port, 0x52505856) /* be 0x52505856 = ASCII(VXPR) */
@@ -255,6 +258,8 @@ CALI_CONFIGURABLE_DEFINE(intf_ip, 0x46544e49) /*be 0x46544e49 = ASCII(INTF) */
 CALI_CONFIGURABLE_DEFINE(ext_to_svc_mark, 0x4b52414d) /*be 0x4b52414d = ASCII(MARK) */
 CALI_CONFIGURABLE_DEFINE(psnat_start, 0x53545250) /* be 0x53545250 = ACSII(PRTS) */
 CALI_CONFIGURABLE_DEFINE(psnat_len, 0x4c545250) /* be 0x4c545250 = ACSII(PRTL) */
+CALI_CONFIGURABLE_DEFINE(flags, 0x00000001)
+
 
 #define HOST_IP		CALI_CONFIGURABLE(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
@@ -263,6 +268,12 @@ CALI_CONFIGURABLE_DEFINE(psnat_len, 0x4c545250) /* be 0x4c545250 = ACSII(PRTL) *
 #define EXT_TO_SVC_MARK	CALI_CONFIGURABLE(ext_to_svc_mark)
 #define PSNAT_START	CALI_CONFIGURABLE(psnat_start)
 #define PSNAT_LEN	CALI_CONFIGURABLE(psnat_len)
+#define GLOBAL_FLAGS 	CALI_CONFIGURABLE(flags)
+
+#ifdef UNITTEST
+CALI_CONFIGURABLE_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
+#define SKB_MARK	CALI_CONFIGURABLE(__skb_mark)
+#endif
 
 #define MAP_PIN_GLOBAL	2
 

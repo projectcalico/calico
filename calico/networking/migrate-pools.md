@@ -9,13 +9,13 @@ Migrate pods from one IP pool to another on a running cluster without network di
 
 ### Value
 
-Pods are assigned IP addresses from IP pools that you configure in {{site.prodname}}. As the number of pods increase, you may need to increase the number of addresses available for pods to use. Or, you may need to move pods from a CIDR that was used by mistake. {{site.prodname}} lets you migrate from one IP pool to another one on a running cluster without network disruption. 
+Pods are assigned IP addresses from IP pools that you configure in {{site.prodname}}. As the number of pods increase, you may need to increase the number of addresses available for pods to use. Or, you may need to move pods from a CIDR that was used by mistake. {{site.prodname}} lets you migrate from one IP pool to another one on a running cluster without network disruption.
 
 ### Features
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- **IPPool** resource 
+- **IPPool** resource
 
 ### Concepts
 
@@ -25,50 +25,44 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-**Verify that you are using {{site.prodname}} IPAM**. 
+**Verify that you are using {{site.prodname}} IPAM**.
 
-To verify, ssh to one of your Kubernetes nodes and view the CNI configuration.  
-
-```bash
-cat /etc/cni/net.d/10-calico.conflist
-
-```
-
-Look for the "type" entry:
-
-<pre>
-   "ipam": {
-         "type": "calico-ipam"
-    }, 
-</pre>
-
-If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+{% include content/determine-ipam.md %}
 
 **Verify orchestrator support for changing the pod network CIDR**.
 
-Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in {% include open-new-window.html text='`osm_cluster_network_cidr configuration`' url='https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables' %}. Check your orchestrator documentation to verify. 
+Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in {% include open-new-window.html text='`osm_cluster_network_cidr configuration`' url='https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables' %}. Check your orchestrator documentation to verify.
 
 ### How to
 
 #### Migrate from one IP pool to another
 
-Follow these steps to migrate pods from one IP pool to another pool. 
+Follow these steps to migrate pods from one IP pool to another pool.
 
-> **Important!** If you follow these steps, existing pod connectivity will not be affected. (If you delete the old IP pool before you create and verify the new pool, existing pods will be affected.) When pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly. 
+> **Important!** If you follow these steps, existing pod connectivity will not be affected. (If you delete the old IP pool before you create and verify the new pool, existing pods will be affected.) When pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly.
 {: .alert .alert-danger }
 
-1. Add a new IP pool.  
-   **Note**: The new IP pool must be within the same cluster CIDR.
-1. Disable the old IP pool.  
-   **Note**: Disabling an IP pool only prevents new IP address allocations; it does not affect the networking of existing pods.
-1. Delete pods from the old IP pool.  
-   This includes any new pods that may have been created with the old IP pool prior to disabling the pool.
+1. Add a new IP pool.
+
+> **Note**: It is highly recommended that your Calico IP pools are within the Kubernetes cluster CIDR. If pods IPs are allocated
+> from outside of the Kubernetes cluster CIDR, some traffic flows may have NAT applied unnecessarily causing unexpected behavior.
+{: .alert .alert-info}
+
+1. Disable the old IP pool.
+
+> **Note**: Disabling an IP pool only prevents new IP address allocations; it does not affect the networking of existing pods.
+{: .alert .alert-info}
+
+1. Delete pods from the old IP pool. This includes any new pods that may have been created with the old IP pool prior to disabling the pool.
+
 1. Verify that new pods get an address from the new IP pool.
+
 1. Delete the old IP pool.
 
 ### Tutorial
 
-In the following example, we created a Kubernetes cluster using **kubeadm**. But we accidentially assigned the CIDR for pods to be: **192.168.0.0/16**. We now want to change the CIDR to: **10.0.0.0/16** (within the cluster CIDR). 
+In the following example, we created a Kubernetes cluster using **kubeadm**. But the IP pool CIDR we configured (192.168.0.0/16) doesn't match the
+Kubernetes cluster CIDR. Let's change the CIDR to **10.0.0.0/16**, which for the purposes of this example falls within the cluster CIDR.
 
 Let’s run `calicoctl get ippool -o wide` to see the IP pool, **default-ipv4-ippool**.
 
@@ -118,7 +112,7 @@ new-pool              10.0.0.0/16      true   Always     false
 List the existing IP pool definition.
 
 ```bash
-calicoctl get ippool -o yaml > pool.yaml
+calicoctl get ippool -o yaml > pools.yaml
 
 ```
 
@@ -143,7 +137,7 @@ items:
     natOutgoing: true
 </pre>
 
-Edit pool.yaml.
+Edit pools.yaml.
 
 Disable this IP pool by setting: `disabled: true`
 
@@ -159,20 +153,18 @@ spec:
   disabled: true
 </pre>
 
-Apply the changes. 
+Apply the changes.
 
 Remember, disabling a pool only affects new IP allocations; networking for existing pods is not affected.
 
 ```bash
-calicoctl apply -f pool.yaml
-
+calicoctl apply -f pools.yaml
 ```
 
 Verify the changes.
 
 ```bash
 calicoctl get ippool -o wide
-
 ```
 
 <pre>
@@ -187,37 +179,32 @@ Next, we delete all of the existing pods from the old IP pool. (In our example, 
 
 ```bash
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
-
 ```
 
 #### Step 4: Verify that new pods get an address from the new IP pool
 
-1. Create a test namespace and nginx pod. 
- 
+1. Create a test namespace and nginx pod.
+
    ```bash
    kubectl create ns ippool-test
-
    ```
 
-1. Create an nginx pod. 
-  
+1. Create an nginx pod.
+ 
    ```bash
    kubectl -n ippool-test create deployment nginx --image nginx
-
    ```
 
 1. Verify that the new pod gets an IP address from the new range.
-    
+   
    ```bash
    kubectl -n ippool-test get pods -l app=nginx -o wide
-
    ```
 
-1. Clean up the ippool-test namespace.  
- 
+1. Clean up the ippool-test namespace. 
+
    ```bash
    kubectl delete ns ippool-test
-
    ```
 
 #### Step 5: Delete the old IP pool
@@ -226,7 +213,6 @@ Now that you've verified that pods are getting IPs from the new range, you can s
 
 ```bash
 calicoctl delete pool default-ipv4-ippool
-
 ```
 
 ### Above and beyond

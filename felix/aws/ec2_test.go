@@ -25,7 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go"
-	"k8s.io/apimachinery/pkg/util/clock"
+	clock "k8s.io/utils/clock/testing"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 

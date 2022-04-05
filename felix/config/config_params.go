@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -156,8 +156,9 @@ func newProvider(s string) (Provider, error) {
 // We use tags to control the parsing and validation.
 type Config struct {
 	// Configuration parameters.
-	UseInternalDataplaneDriver bool   `config:"bool;true"`
-	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
+	UseInternalDataplaneDriver bool          `config:"bool;true"`
+	DataplaneDriver            string        `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
+	DataplaneWatchdogTimeout   time.Duration `config:"seconds;90"`
 
 	// Wireguard configuration
 	WireguardEnabled               bool          `config:"bool;false"`
@@ -176,9 +177,16 @@ type Config struct {
 	BPFExternalServiceMode             string           `config:"oneof(tunnel,dsr);tunnel;non-zero"`
 	BPFKubeProxyIptablesCleanupEnabled bool             `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration    `config:"seconds;1"`
-	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;false"`
+	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;true"`
 	BPFExtToServiceConnmark            int              `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port `config:"portrange;20000:29999"`
+	BPFMapSizeNATFrontend              int              `config:"int;65536;non-zero"`
+	BPFMapSizeNATBackend               int              `config:"int;262144;non-zero"`
+	BPFMapSizeNATAffinity              int              `config:"int;65536;non-zero"`
+	BPFMapSizeRoute                    int              `config:"int;262144;non-zero"`
+	BPFMapSizeConntrack                int              `config:"int;512000;non-zero"`
+	BPFMapSizeIPSets                   int              `config:"int;1048576;non-zero"`
+	BPFHostConntrackBypass             bool             `config:"bool;true"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but hte root cgroup v2 from working so this is only useful
@@ -216,7 +224,8 @@ type Config struct {
 	TyphaCN       string `config:"string;;local"`
 	TyphaURISAN   string `config:"string;;local"`
 
-	Ipv6Support bool `config:"bool;true"`
+	Ipv6Support    bool `config:"bool;true"`
+	BpfIpv6Support bool `config:"bool;false"`
 
 	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);auto"`
 	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
@@ -262,14 +271,16 @@ type Config struct {
 	// to Debug level logs.
 	LogDebugFilenameRegex *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
-	VXLANEnabled        bool   `config:"bool;false"`
+	// Optional: VXLAN encap is now determined by the existing IP pools (Encapsulation struct)
+	VXLANEnabled        *bool  `config:"*bool;"`
 	VXLANPort           int    `config:"int;4789"`
 	VXLANVNI            int    `config:"int;4096"`
 	VXLANMTU            int    `config:"int;0"`
 	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
 	VXLANTunnelMACAddr  string `config:"string;"`
 
-	IpInIpEnabled    bool   `config:"bool;false"`
+	// Optional: IPIP encap is now determined by the existing IP pools (Encapsulation struct)
+	IpInIpEnabled    *bool  `config:"*bool;"`
 	IpInIpMtu        int    `config:"int;0"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
 
@@ -331,8 +342,10 @@ type Config struct {
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
-	RouteTableRange   idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
-	RouteSyncDisabled bool               `config:"bool;false"`
+	// RouteTableRange is deprecated in favor of RouteTableRanges,
+	RouteTableRange   idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
+	RouteTableRanges  []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
+	RouteSyncDisabled bool                 `config:"bool;false"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
@@ -344,6 +357,9 @@ type Config struct {
 
 	// Configures MTU auto-detection.
 	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)"`
+
+	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
+	Encapsulation Encapsulation
 
 	// State tracking.
 
@@ -627,7 +643,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
-	if !(config.IpInIpEnabled || config.VXLANEnabled || config.BPFEnabled) {
+	if !(config.Encapsulation.IPIPEnabled || config.Encapsulation.VXLANEnabled || config.BPFEnabled) {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
@@ -704,6 +720,8 @@ func loadParams() {
 		switch kind {
 		case "bool":
 			param = &BoolParam{}
+		case "*bool":
+			param = &BoolPtrParam{}
 		case "int":
 			min := minInt
 			max := maxInt
@@ -787,6 +805,8 @@ func loadParams() {
 			param = &CIDRListParam{}
 		case "route-table-range":
 			param = &RouteTableRangeParam{}
+		case "route-table-ranges":
+			param = &RouteTableRangesParam{}
 		case "keyvaluelist":
 			param = &KeyValueListParam{}
 		default:
@@ -856,6 +876,27 @@ func (config *Config) TyphaDiscoveryOpts() []discovery.Option {
 	}
 }
 
+// RouteTableIndices compares provided args for the deprecated RoutTableRange arg
+// and the newer RouteTableRanges arg, giving precedence to the newer arg if it's explicitly-set
+func (config *Config) RouteTableIndices() []idalloc.IndexRange {
+	if config.RouteTableRanges == nil || len(config.RouteTableRanges) == 0 {
+		if config.RouteTableRange != (idalloc.IndexRange{}) {
+			log.Warn("Proceeding with `RouteTableRange` config option. This field has been deprecated in favor of `RouteTableRanges`.")
+			return []idalloc.IndexRange{
+				config.RouteTableRange,
+			}
+		}
+
+		// default RouteTableRanges val
+		return []idalloc.IndexRange{
+			{Min: 1, Max: 250},
+		}
+	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
+		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
+	}
+	return config.RouteTableRanges
+}
+
 func New() *Config {
 	if knownParams == nil {
 		loadParams()
@@ -884,4 +925,9 @@ type param interface {
 	GetMetadata() *Metadata
 	Parse(raw string) (result interface{}, err error)
 	setDefault(*Config)
+}
+
+type Encapsulation struct {
+	IPIPEnabled  bool
+	VXLANEnabled bool
 }

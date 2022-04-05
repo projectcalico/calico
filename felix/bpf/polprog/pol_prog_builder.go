@@ -274,9 +274,11 @@ const (
 	jumpIdxPolicy = iota
 	jumpIdxAllowed
 	jumpIdxICMP
+	jumpIdxDrop
 
 	_ = jumpIdxPolicy
 	_ = jumpIdxICMP
+	_ = jumpIdxDrop
 )
 
 func (p *Builder) writeJumpIfToOrFromHost(label string) {
@@ -303,6 +305,13 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		p.b.LabelNextInsn("exit")
 		p.b.MovImm64(R0, 1 /* XDP_DROP */)
 	} else {
+		// Execute the tail call to drop program
+		p.b.Mov64(R1, R6)                      // First arg is the context.
+		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
+		p.b.MovImm32(R3, jumpIdxDrop)          // Third arg is the index (rather than a pointer to the index).
+		p.b.Call(HelperTailCall)
+
+		// Fall through if tail call fails.
 		p.b.LabelNextInsn("exit")
 		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
 	}

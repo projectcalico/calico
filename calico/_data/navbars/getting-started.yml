@@ -34,7 +34,7 @@ section:
     section:
     - title: Install Calico for on-premises deployments
       path: /getting-started/kubernetes/self-managed-onprem/onpremises  
-    - title: Customize manifests
+    - title: Customize Calico
       path: /getting-started/kubernetes/installation/config-options
   - title: OpenShift
     path: /getting-started/openshift/

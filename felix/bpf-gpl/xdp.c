@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include <linux/if_ether.h>
@@ -20,7 +20,6 @@
 #include "routes.h"
 #include "reasons.h"
 #include "icmp.h"
-#include "fib.h"
 #include "parsing.h"
 #include "failsafe.h"
 #include "jump.h"
@@ -92,7 +91,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 
 	// Jump to the policy program
 	CALI_DEBUG("About to jump to policy program.\n");
-	bpf_tail_call(xdp, &cali_jump, PROG_INDEX_POLICY);
+	CALI_JUMP_TO(xdp, PROG_INDEX_POLICY);
 
 allow:
 	return XDP_PASS;

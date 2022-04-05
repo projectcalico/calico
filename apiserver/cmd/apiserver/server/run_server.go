@@ -26,7 +26,7 @@ import (
 	gpath "path"
 
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )

@@ -24,10 +24,12 @@ execute_test_suite() {
     rm $LOGPATH/rendered/*.cfg || true
 
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        run_extra_test test_node_mesh_bgp_password
         run_extra_test test_bgp_password_deadlock
     fi
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+        run_extra_test test_node_mesh_bgp_password
         run_extra_test test_bgp_password
         run_extra_test test_bgp_sourceaddr_gracefulrestart
         run_extra_test test_node_deletion
@@ -570,6 +572,7 @@ execute_tests_daemon() {
         run_individual_test 'mesh/static-routes'
         run_individual_test 'mesh/static-routes-exclude-node'
         run_individual_test 'mesh/communities'
+        run_individual_test 'mesh/restart-time'
     done
 
     # Turn the node-mesh off.
@@ -578,11 +581,15 @@ execute_tests_daemon() {
     # Run the explicit peering tests.
     for i in $(seq 1 2); do
         run_individual_test 'explicit_peering/global'
+        run_individual_test 'explicit_peering/global-external'
+        run_individual_test 'explicit_peering/global-ipv6'
         run_individual_test 'explicit_peering/specific_node'
         run_individual_test 'explicit_peering/selectors'
         run_individual_test 'explicit_peering/route_reflector'
         run_individual_test 'explicit_peering/keepnexthop'
         run_individual_test 'explicit_peering/keepnexthop-global'
+	run_individual_test 'explicit_peering/local-as'
+	run_individual_test 'explicit_peering/local-as-global'
     done
 
     # Turn the node-mesh back on.
@@ -616,6 +623,7 @@ execute_tests_oneshot() {
         run_individual_test_oneshot 'mesh/static-routes'
         run_individual_test_oneshot 'mesh/static-routes-exclude-node'
         run_individual_test_oneshot 'mesh/communities'
+        run_individual_test_oneshot 'mesh/restart-time'
         run_individual_test_oneshot 'explicit_peering/keepnexthop'
         run_individual_test_oneshot 'explicit_peering/keepnexthop-global'
         export CALICO_ROUTER_ID=10.10.10.10
@@ -663,7 +671,7 @@ run_individual_test() {
 
     # Populate Kubernetes API with data if it exists for this test.
     if [[ -f /tests/mock_data/calicoctl/${testdir}/kubectl-input.yaml ]]; then
-            KUBECONFIG=/tests/confd_kubeconfig kubectl apply -f /tests/mock_data/calicoctl/${testdir}/kubectl-input.yaml
+            KUBECONFIG=/home/user/certs/kubeconfig kubectl apply -f /tests/mock_data/calicoctl/${testdir}/kubectl-input.yaml
     fi
 
     # Check the confd templates are updated.
@@ -684,7 +692,7 @@ run_individual_test() {
     # limitations.
     echo "Preparing Calico data for next test"
     if [[ -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml ]]; then
-            KUBECONFIG=/tests/confd_kubeconfig kubectl delete -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml
+            KUBECONFIG=/home/user/certs/kubeconfig kubectl delete -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml
     fi
 
     if [ -f /tests/mock_data/calicoctl/${testdir}/step2/delete.yaml ]; then
@@ -706,7 +714,7 @@ run_individual_test_oneshot() {
 
     # Populate Kubernetes API with data if it exists for this test.
     if [[ -f /tests/mock_data/calicoctl/${testdir}/kubectl-input.yaml ]]; then
-            KUBECONFIG=/tests/confd_kubeconfig kubectl apply -f /tests/mock_data/calicoctl/${testdir}/kubectl-input.yaml
+            KUBECONFIG=/home/user/certs/kubeconfig kubectl apply -f /tests/mock_data/calicoctl/${testdir}/kubectl-input.yaml
     fi
 
     # For KDD, run Typha.
@@ -732,7 +740,7 @@ run_individual_test_oneshot() {
     # limitations.
     echo "Preparing Calico data for next test"
     if [[ -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml ]]; then
-            KUBECONFIG=/tests/confd_kubeconfig kubectl delete -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml
+            KUBECONFIG=/home/user/certs/kubeconfig kubectl delete -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml
     fi
     $CALICOCTL delete -f /tests/mock_data/calicoctl/${testdir}/delete.yaml
 }
@@ -740,7 +748,7 @@ run_individual_test_oneshot() {
 start_typha() {
     echo "Starting Typha"
     TYPHA_DATASTORETYPE=kubernetes \
-        KUBECONFIG=/tests/confd_kubeconfig \
+        KUBECONFIG=/home/user/certs/kubeconfig \
         TYPHA_LOGSEVERITYSCREEN=debug \
         TYPHA_LOGSEVERITYSYS=none \
         TYPHA_LOGFILEPATH=none \
@@ -926,4 +934,169 @@ EOF
     # Delete remaining resources.
     $CALICOCTL delete node node1
     $CALICOCTL delete node node2
+}
+
+test_node_mesh_bgp_password() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Create 3 nodes and enable node mesh BGP password
+    $CALICOCTL apply -f - <<EOF
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  logSeverityScreen: Info
+  nodeToNodeMeshEnabled: true
+  nodeMeshPassword:
+    secretKeyRef:
+      name: my-secrets-1
+      key: a
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-1
+spec:
+  cidr: 192.168.0.0/16
+  ipipMode: Never
+  natOutgoing: true
+---
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-2
+spec:
+  cidr: 2002::/64
+  ipipMode: Never
+  vxlanMode: Never
+  natOutgoing: true
+EOF
+
+    # Expect 3 peerings, all with no password because we haven't
+    # created the secrets yet.
+    test_confd_templates mesh/password/step1
+
+    # Create my-secrets-1 secret with only one of the required keys.
+    kubectl create -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-1
+  namespace: kube-system
+type: Opaque
+stringData:
+  a: password-a
+EOF
+
+    # Expect the password now on all the peerings using my-secrets-1/a.
+    test_confd_templates mesh/password/step2
+
+    # Change the passwords in the other secret.
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-1
+  namespace: kube-system
+type: Opaque
+stringData:
+  a: new-password-a
+EOF
+
+    # Expect peerings to have new passwords.
+    test_confd_templates mesh/password/step3
+
+    # Change the password to an unreferenced key.
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-1
+  namespace: kube-system
+type: Opaque
+stringData:
+  b: password-b
+EOF
+
+    # Expect the password to have disappeared
+    test_confd_templates mesh/password/step1
+
+    # Delete a secret.
+    kubectl delete secret my-secrets-1 -n kube-system
+
+    # Expect password-a to still be gone.
+    test_confd_templates mesh/password/step1
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Delete remaining resources.
+    # Only delete the ippools in KDD mode since calicoctl cannot remove the nodes
+    $CALICOCTL delete ippool ippool-1
+    $CALICOCTL delete ippool ippool-2
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+
+    # Revert BGPConfig changes
+    $CALICOCTL apply -f - <<EOF
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+EOF
+
+    # Check that passwords were not logged.
+    password_logs="`grep 'password-' $LOGPATH/logd1 || true`"
+    echo "$password_logs"
+    if [ "$password_logs"  ]; then
+        echo "ERROR: passwords were logged"
+        return 1
+    fi
 }

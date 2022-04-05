@@ -7,6 +7,9 @@
 filename=$1 # Example: from_wep_host_drop_fib_info.o
 args=()
 
+if [[ "${filename}" =~ .*co-re.* ]]; then
+  args+=("-DBPF_CORE_SUPPORTED")
+fi
 if [[ "${filename}" =~ .*debug.* ]]; then
   args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG")
 elif [[ "${filename}" =~ .*info.* ]]; then
@@ -30,16 +33,11 @@ else
   args+=("-DCALI_FIB_LOOKUP_ENABLED=false")
 fi
 
-if [[ "${filename}" =~ .*skb([0-9a-fA-Fx]+).* ]]; then
-  args+=("-DCALI_SET_SKB_MARK=${BASH_REMATCH[1]}")
-  args+=("-DUNITTEST")
-fi
-
 if [[ "${filename}" =~ test_.* ]]; then
   args+=("-D__BPFTOOL_LOADER__")
 fi
 
-if [[ "${filename}" =~ test_xdp_.* ]]; then
+if [[ "${filename}" =~ test_.* ]]; then
   args+=("-DUNITTEST")
 fi
 

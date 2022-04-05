@@ -1,24 +1,37 @@
 # This manifest installs the Calico etcd on the kubeadm master.  This uses a DaemonSet
 # to force it to run on the master even when the master isn't schedulable, and uses
 # nodeSelector to ensure it only runs on the master.
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: calico-etcd
-  namespace: kube-system
+  annotations:
+    deprecated.daemonset.template.generation: "0"
+  creationTimestamp: null
   labels:
     k8s-app: calico-etcd
+  name: calico-etcd
+  namespace: kube-system
 spec:
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      k8s-app: calico-etcd
   template:
     metadata:
-      labels:
-        k8s-app: calico-etcd
       annotations:
         # Mark this pod as a critical add-on; when enabled, the critical add-on scheduler
         # reserves resources for critical add-on pods so that they can be rescheduled after
         # a failure.  This annotation works in tandem with the toleration below.
-        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/critical-pod: ""
+      creationTimestamp: null
+      labels:
+        k8s-app: calico-etcd
     spec:
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: { }
+      terminationGracePeriodSeconds: 30
       tolerations:
         # This taint is set by all kubelets running `--cloud-provider=external`
         # so we should tolerate it to schedule the Calico pods
@@ -37,30 +50,42 @@ spec:
         node-role.kubernetes.io/master: ""
       hostNetwork: true
       containers:
-        - name: calico-etcd
-          image: quay.io/coreos/etcd:v3.3.9
+        - args:
+            - --name=calico
+            - --data-dir=/var/etcd/calico-data
+            - --advertise-client-urls=http://$(CALICO_ETCD_IP):6666
+            - --listen-client-urls=http://0.0.0.0:6666
+            - --listen-peer-urls=http://0.0.0.0:6667
+            - --auto-compaction-retention=1
+          command:
+            - /usr/local/bin/etcd
           env:
             - name: CALICO_ETCD_IP
               valueFrom:
                 fieldRef:
+                  apiVersion: v1
                   fieldPath: status.podIP
-          command:
-          - /usr/local/bin/etcd
-          args:
-          - --name=calico
-          - --data-dir=/var/etcd/calico-data
-          - --advertise-client-urls=http://$(CALICO_ETCD_IP):6666
-          - --listen-client-urls=http://0.0.0.0:6666
-          - --listen-peer-urls=http://0.0.0.0:6667
-          - --auto-compaction-retention=1
+          image: quay.io/coreos/etcd:v3.5.1
+          imagePullPolicy: IfNotPresent
+          name: calico-etcd
+          resources: { }
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
           volumeMounts:
-            - name: var-etcd
-              mountPath: /var/etcd
+            - mountPath: /var/etcd
+              name: var-etcd
       volumes:
         - name: var-etcd
           hostPath:
             path: /var/etcd
-
+            type: ""
+  updateStrategy:
+    type: OnDelete
+status:
+  currentNumberScheduled: 0
+  desiredNumberScheduled: 0
+  numberMisscheduled: 0
+  numberReady: 0
 ---
 
 # This manifest installs the Service which gets traffic to the Calico

@@ -117,8 +117,13 @@ type NetConf struct {
 	// If WindowsDisableDefaultBlockAllPolicy = true, then the default policy is disabled and pod network
 	// is created without "block all traffic" policy.
 	WindowsDisableDefaultDenyAllPolicy bool `json:"windows_disable_default_deny_all_policy"`
+	// WindowsLoopbackDSR indicates if the running platform supports loopback DSR.
+	WindowsLoopbackDSR bool `json:"windows_loopback_DSR,omitempty"`
 
 	RuntimeConfig RuntimeConfig
+
+	// The CNI plugin waits until all the endpoints specified in ReadinessGates are ready
+	ReadinessGates []string `json:"readiness_gates"`
 
 	// Options below here are deprecated.
 	EtcdAuthority string `json:"etcd_authority"`

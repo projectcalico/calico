@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,11 @@ package libbpf
 import (
 	"fmt"
 	"os"
+	"syscall"
 	"time"
 	"unsafe"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
 // #include "libbpf_api.h"
@@ -60,9 +61,18 @@ func (m *Map) Type() int {
 func (m *Map) SetPinPath(path string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	err := C.bpf_map__set_pin_path(m.bpfMap, cPath)
-	if err != 0 {
+	errno := C.bpf_map__set_pin_path(m.bpfMap, cPath)
+	if errno != 0 {
+		err := syscall.Errno(errno)
 		return fmt.Errorf("pinning map failed %w", err)
+	}
+	return nil
+}
+
+func (m *Map) SetMapSize(size uint32) error {
+	_, err := C.bpf_map_set_max_entries(m.bpfMap, C.uint(size))
+	if err != nil {
+		return fmt.Errorf("setting %s map size failed %w", m.Name(), err)
 	}
 	return nil
 }
@@ -72,7 +82,7 @@ func (m *Map) IsMapInternal() bool {
 }
 
 func OpenObject(filename string) (*Obj, error) {
-	bpf.IncreaseLockedMemoryQuota()
+	bpfutils.IncreaseLockedMemoryQuota()
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 	obj, err := C.bpf_obj_open(cFilename)
@@ -218,11 +228,21 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 
 	link, err := C.bpf_program_attach_cgroup(o.obj, C.int(fd), cProgName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to attach %s to cgroup %s: %w", progName, cgroup, err)
+		link = nil
+		_, err2 := C.bpf_program_attach_cgroup_legacy(o.obj, C.int(fd), cProgName)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to attach %s to cgroup %s (legacy try %s): %w",
+				progName, cgroup, err2, err)
+		}
 	}
 
 	return &Link{link: link}, nil
 }
+
+const (
+	// Set when IPv6 is enabled to configure bpf dataplane accordingly
+	GlobalsIPv6Enabled uint32 = C.CALI_GLOBALS_IPV6_ENABLED
+)
 
 func TcSetGlobals(
 	m *Map,
@@ -233,6 +253,7 @@ func TcSetGlobals(
 	vxlanPort uint16,
 	psNatStart uint16,
 	psNatLen uint16,
+	flags uint32,
 ) error {
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
 		C.uint(hostIP),
@@ -241,7 +262,8 @@ func TcSetGlobals(
 		C.ushort(tmtu),
 		C.ushort(vxlanPort),
 		C.ushort(psNatStart),
-		C.ushort(psNatLen))
+		C.ushort(psNatLen),
+		C.uint(flags))
 
 	return err
 }
@@ -251,4 +273,12 @@ func CTLBSetGlobals(m *Map, udpNotSeen time.Duration) error {
 	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen))
 
 	return err
+}
+
+func NumPossibleCPUs() (int, error) {
+	ncpus := int(C.num_possible_cpu())
+	if ncpus < 0 {
+		return ncpus, fmt.Errorf("Invalid number of CPUs: %d", ncpus)
+	}
+	return ncpus, nil
 }

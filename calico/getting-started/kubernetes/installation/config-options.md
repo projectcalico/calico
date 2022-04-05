@@ -1,25 +1,87 @@
 ---
-title: Customize the manifests
-description: Optionally customize manifests prior to installing Calico.
+title: Customize Calico configuration
+description: Optionally customize Calico prior to installation.
 canonical_url: '/getting-started/kubernetes/installation/config-options'
 ---
 
-## About customizing manifests
+### Big picture
+
+Perform common customizations of a {{site.prodname}} installation.
+
+### Concepts
+
+#### {{site.prodname}} operator
+
+{{site.prodname}} is installed by an operator which manages the installation, upgrade, and general lifecycle of a {{site.prodname}} cluster. The operator is
+installed directly on the cluster as a Deployment, and is configured through one or more custom Kubernetes API resources.
+
+#### {{site.prodname}} manifests
+
+{{site.prodname}} can also be installed using raw manifests as an alternative to the operator. The manifests contain the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. Using manifests is not recommended as they cannot automatically manage the lifecycle of the {{site.prodname}} as the operator does. However, manifests may be useful for clusters that require highly specific modifications to the underlying Kubernetes resources.
+
+### How to
+
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+#### About customizing an operator install
+
+Operator installations read their configuration from a specific set of Kubernetes APIs. These APIs are installed on the cluster
+as part of `tigera-operator.yaml` in the `operator.tigera.io/v1` API group.
+
+- [Installation]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation): a singleton resource with name "default" that
+  configures common installation parameters for a {{site.prodname}} cluster.
+- [APIServer]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation): a singleton resource with name "default" that
+  configures installation of the {{site.prodname}} API server extension.
+
+#### Configure the pod IP range
+
+For many environments, {{site.prodname}} will auto-detect the correct pod IP range to use, or select an unused range on the cluster.
+
+You can select a specific pod IP range by modifying the `spec.calicoNetwork.ipPools` array in the Installation API resource.
+
+```yaml
+kind: Installation
+apiVersion: operator.tigera.io/v1
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+    - cidr: 198.51.100.0/24
+```
+
+> **Note**: The the ipPools array can take at most one IPv4 and one IPv6 CIDR, and only takes effect when installing {{site.prodname}} for the first
+> time on a given cluster. To add additional pools, see [the IPPool API]({{site.baseurl}}/reference/resources/ippool).
+{: .alert .alert-info}
+
+#### Use VXLAN
+
+You can enable VXLAN in a cluster by setting the option on your IPv4 pool. You can also disable BGP via the `spec.calicoNetwork.bgp` field.
+
+```yaml
+kind: Installation
+apiVersion: operator.tigera.io/v1
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    bgp: Disabled
+    ipPools:
+    - cidr: 198.51.100.0/24
+      encapsulation: VXLAN
+```
+
+%>
+  <label:Manifest>
+<%
 
 We provide a number of manifests to make deployment of {{site.prodname}} easy. You can optionally
 modify the manifests before applying them. Or you can modify the manifest and reapply it to change
 settings as needed.
 
-Refer to the section that corresponds to the manifest you wish to modify for more details.
-
-- [Customizing {{site.prodname}} manifests](#customizing-calico-manifests)
-
-- [Customizing application layer policy manifests](#customizing-application-layer-policy-manifests)
-
-
-## Customizing {{site.prodname}} manifests
-
-### About customizing {{site.prodname}} manifests
+#### About customizing {{site.prodname}} manifests
 
 Each manifest contains all the necessary resources for installing {{site.prodname}}
 on each node in your Kubernetes cluster.
@@ -27,17 +89,14 @@ on each node in your Kubernetes cluster.
 It installs the following Kubernetes resources:
 
 - Installs the `{{site.nodecontainer}}` container on each host using a DaemonSet.
-- Installs the {{site.prodname}} CNI binaries and network config on each host using
-  a DaemonSet.
+- Installs the {{site.prodname}} CNI binaries and network config on each host using a DaemonSet.
 - Runs `calico/kube-controllers` as a deployment.
-- The `calico-etcd-secrets` secret, which optionally allows for providing etcd
-  TLS assets.
-- The `calico-config` ConfigMap, which contains parameters for configuring
-  the install.
+- The `calico-etcd-secrets` secret, which optionally allows for providing etcd TLS assets.
+- The `calico-config` ConfigMap, which contains parameters for configuring the install.
 
 The sections that follow discuss the configurable parameters in greater depth.
 
-### Configuring the pod IP range
+#### Configure the pod IP range
 
 {{site.prodname}} IPAM assigns IP addresses from [IP pools]({{ site.baseurl }}/reference/resources/ippool).
 
@@ -211,16 +270,12 @@ be filled in automatically by the `calico/cni` container:
 | `__ETCD_CA_CERT_FILE__`               | The path to the etcd certificate authority file installed to the host. Empty if no certificate authority is present.
 
 
-## Customizing application layer policy manifests
-
 ### About customizing application layer policy manifests
 
 Instead of installing from our pre-modified Istio manifests, you may wish to
 customize your Istio install or use a different Istio version.  This section
 walks you through the necessary changes to a generic Istio install manifest to
 allow application layer policy to operate.
-
-### Sidecar injector
 
 The standard Istio manifests for the sidecar injector include a ConfigMap that
 contains the template used when adding pods to the cluster. The template adds an
@@ -259,3 +314,6 @@ channel. The volumes are not used for any kind of stateful storage on disk.
 Refer to the
 [Calico ConfigMap manifest](/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
 example with the above changes.
+
+%>
+{% endtabs %}

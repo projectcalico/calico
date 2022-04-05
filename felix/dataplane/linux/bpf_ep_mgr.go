@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
@@ -146,9 +147,7 @@ type bpfEndpointManager struct {
 	dsrEnabled              bool
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
-
-	ipSetMap bpf.Map
-	stateMap bpf.Map
+	bpfMapContext           *bpf.MapContext
 
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable iptablesTable
@@ -172,6 +171,9 @@ type bpfEndpointManager struct {
 
 	// XDP
 	xdpModes []bpf.XDPMode
+
+	// IPv6 Support
+	ipv6Enabled bool
 }
 
 type bpfAllowChainRenderer interface {
@@ -180,11 +182,10 @@ type bpfAllowChainRenderer interface {
 
 func newBPFEndpointManager(
 	config *Config,
+	bpfMapContext *bpf.MapContext,
 	fibLookupEnabled bool,
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
-	ipSetMap bpf.Map,
-	stateMap bpf.Map,
 	iptablesRuleRenderer bpfAllowChainRenderer,
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
@@ -215,8 +216,7 @@ func newBPFEndpointManager(
 		dsrEnabled:              config.BPFNodePortDSREnabled,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
-		ipSetMap:                ipSetMap,
-		stateMap:                stateMap,
+		bpfMapContext:           bpfMapContext,
 		ruleRenderer:            iptablesRuleRenderer,
 		iptablesFilterTable:     iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
@@ -227,6 +227,10 @@ func newBPFEndpointManager(
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		ifaceToIpMap:     map[string]net.IP{},
 		opReporter:       opReporter,
+		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
+		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
+		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
+		ipv6Enabled: config.BPFIpv6Enabled,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -369,7 +373,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
-	if update.State == ifacemonitor.StateUnknown {
+	if update.State == ifacemonitor.StateNotPresent {
 		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
 			log.WithError(err).Errorf("Error in removing interface %s json file. err=%v", update.Name, err)
 		}
@@ -526,7 +530,8 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.happyWEPsDirty = false
 	}
 	bpfHappyEndpointsGauge.Set(float64(len(m.happyWEPs)))
-
+	// Copy data from old map to the new map
+	bpfmap.MigrateDataFromOldMap(m.bpfMapContext)
 	return nil
 }
 
@@ -1002,6 +1007,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.VXLANPort = m.vxlanPort
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
+	ap.IPv6Enabled = m.ipv6Enabled
+	ap.MapSizes = m.bpfMapContext.MapSizes
 
 	return ap
 }
@@ -1418,7 +1425,7 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 }
 
 func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error {
-	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.ipSetMap.MapFD(), m.stateMap.MapFD(), jumpMapFD)
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD)
 	insns, err := pg.Instructions(rules)
 	if err != nil {
 		return fmt.Errorf("failed to generate policy bytecode: %w", err)

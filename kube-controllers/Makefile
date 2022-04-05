@@ -22,7 +22,7 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 
 include ../lib.Makefile
 
-SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
+SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
 
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
@@ -45,9 +45,6 @@ clean:
 	-docker rmi $(FLANNEL_MIGRATION_IMAGE):latest-amd64
 	rm -f tests/fv/fv.test
 	rm -f report/*.xml
-	rm -f tests/crds.yaml
-	rm -rf tests/crds
-	rm -rf vendor
 
 ###############################################################################
 # Building the binary
@@ -83,17 +80,10 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH)
-	docker build -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
-	docker build -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-images/flannel-migration/Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-images/flannel-migration/Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
-
-.PHONY: remote-deps
-remote-deps: mod-download
-	@mkdir -p tests/crds/
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		cp ../libcalico-go/config/crd/* tests/crds/; \
-		chmod +w tests/crds/*'
 
 ###############################################################################
 # Static checks
@@ -116,16 +106,15 @@ ut:
 
 .PHONY: fv
 ## Build and run the FV tests.
-fv: remote-deps tests/fv/fv.test image
+fv: tests/fv/fv.test image
 	@echo Running Go FVs.
 	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) \
 		KUBE_IMAGE=$(CALICO_BUILD) \
 		CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
 		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
-		CRDS=$(CURDIR)/tests/crds \
-		CERTS=$(CURDIR)/tests/certs \
-		GO111MODULE=on \
+		CRDS=$(CURDIR)/../libcalico-go/config/crd \
+		CERTS_PATH=$(CERTS_PATH) \
 		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
 
 tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)

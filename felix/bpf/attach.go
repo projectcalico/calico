@@ -75,6 +75,19 @@ func AlreadyAttachedProg(a AttachPointInfo, object, id string) (bool, error) {
 		return false, err
 	}
 
+	if log.GetLevel() >= log.DebugLevel {
+		log.WithFields(log.Fields{
+			"iface":  a.IfaceName(),
+			"hook":   a.HookName(),
+			"hash":   progInfo.Hash == hash,
+			"object": progInfo.Object == object,
+			"id":     progInfo.ID == id,
+			"config": progInfo.Config == a.Config(),
+		}).Debugf("AlreadyAttachedProg result %t", progInfo.Hash == hash &&
+			progInfo.Object == object && progInfo.ID == id &&
+			progInfo.Config == a.Config())
+	}
+
 	return progInfo.Hash == hash &&
 			progInfo.Object == object &&
 			progInfo.ID == id &&

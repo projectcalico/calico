@@ -5,13 +5,18 @@ metadata:
   labels:
     role: client
 ---
-apiVersion: v1
-kind: ReplicationController
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: client 
   namespace: client
+  labels:
+    role: client 
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      role: client
   template:
     metadata:
       labels:
@@ -19,7 +24,7 @@ spec:
     spec:
       containers:
       - name: client 
-        image: calico/star-probe:v0.1.0
+        image: calico/star-probe:multiarch
         imagePullPolicy: Always
         command:
         - probe

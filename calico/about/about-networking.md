@@ -124,7 +124,7 @@ typically want to use well known names to identify network destinations that rem
 underlying IP addresses change. For example, to map `google.com` to `216.58.210.46`. This translation from name to IP
 address is handled by {% include open-new-window.html text='DNS' url='https://en.wikipedia.org/wiki/Domain_Name_System'
 %}. DNS runs on top of the base networking described so far. Each device connected to a network is typically configured
-with the IP addresses one or more DNS servers. When an application wants to connect to a domain name, a DNS message is
+with the IP addresses of one or more DNS servers. When an application wants to connect to a domain name, a DNS message is
 sent to the DNS server, which then responds with information about which IP address(es) the domain name maps to. The
 application can then initiate its connection to the chosen IP address.
 
@@ -144,7 +144,7 @@ packets flow end-to-end in both directions, with neither source or destination b
 same technique is commonly used to allow devices connected to an overlay network to connect with devices outside of the
 overlay network.
 
-Another common use case for NAT for load balancing. In this case the load balancer performs DNAT (Destination Network
+Another common use case for NAT is load balancing. In this case the load balancer performs DNAT (Destination Network
 Address Translation) to change the destination IP address of the incoming connection to the IP address of the chosen
 device it is load balancing to. The load balancer then reverses this NAT on response packets so neither source or
 destination device is aware the mapping is happening.

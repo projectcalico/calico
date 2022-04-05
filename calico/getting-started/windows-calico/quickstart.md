@@ -14,39 +14,9 @@ Install {{site.prodnameWindows}} on your Kubernetes cluster in approximately 5 m
 
 ### Before you begin
 
-Review the requirements below and setup a {{site.prodname}} cluster on Linux nodes and provision Windows machines.
+Review the [Linux requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) and the [{{site.prodnameWindows}} requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements).
 
-**Datastore requirements**
-
-Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in a {{site.prodnameWindows}} implementation.)
-
-**Kubernetes cluster requirements**
-- Kubernetes clusters with versions 1.20, 1.19, or 1.18
-
-**Windows node requirements**
-- Versions:
-  - Windows Server 1809 (build 17763.1432 or greater)
-  - Windows Server 2004 (build 19041)
-  - Windows Server 20H2 (build 19042)
-
-  > **Note**: Windows Server version support differs for each Kubernetes version. Review the {% include open-new-window.html text='Windows OS Version Support' url='https://kubernetes.io/docs/setup/production-environment/windows/intro-windows-in-kubernetes/#windows-os-version-support' %} table for the Windows Server versions supported by each Kubernetes version.
-  {: .alert .alert-info}
-  
-- Container runtime: Docker or containerd installed and running. If containerd is running, it will be used as the container runtime otherwise Docker is assumed.
-- Remote access to the Windows node via Remote Desktop Protocol (RDP) or Windows Remote Management (WinRM)
-- Be able to run a command as Administrator using PowerShell.
-- Additionally, for EKS:
-  - The VPC controllers must be installed to run Windows pods.
-  - An instance role on the Windows instance must have permissions to get `namespaces` and get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
-- Additionally, for AKS:
-    - {{site.prodnameWindows}} can be enabled only on newly created clusters.
-    - Kubernetes version 1.20+
-    
-**Linux control node requirements**
-- A Linux cluster installed with {{site.prodname}} v3.12+
-- If {{site.prodname}} networking is being used:
-    - Networking must be VXLAN or BGP without encapsulation. (Note: for EKS, networking is set to none since AWS VPC networking is used.)
-    - Strict affinity must be set to `true`
+Before beginning the quickstart, setup a {{site.prodname}} cluster on Linux nodes and provision Windows machines.
 
 ### How to
 
@@ -267,64 +237,6 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
   <label:EKS>
   <%
-1. Enable Direct Server Return (DSR) in the kube-proxy add-on. DSR is required for network policy enforcement for service cluster IPs.
-
-   - Begin editing the kube-proxy configmap:
-
-     ```bash
-     kubectl edit cm -n kube-system kube-proxy-config
-     ```
-
-   - Add the following data under `data.config`:
-
-     ```
-     winkernel:
-       enableDSR: true
-     featureGates:
-       WinDSR: true
-     ```
-
-   - Save your changes to the kube-proxy-config configmap. An example config might look like:
-
-     ```
-     apiVersion: v1
-     kind: ConfigMap
-     data:
-       config: |-
-         apiVersion: kubeproxy.config.k8s.io/v1alpha1
-         winkernel:
-           enableDSR: true
-         featureGates:
-           WinDSR: true
-         bindAddress: 0.0.0.0
-         ...
-     ```
-
-   - Trigger a rolling restart of the kube-proxy daemonset and watch the rollout.
-
-     ```bash
-     kubectl -n kube-system rollout restart ds kube-proxy
-     kubectl -n kube-system rollout status daemonset/kube-proxy
-     ```
-
-     An example of a successful kube-proxy rollout:
-
-     ```
-     $ kubectl rollout restart ds kube-proxy -n kube-system
-     daemonset.apps/kube-proxy restarted
-     $ kubectl rollout status -n kube-system daemonset/kube-proxy
-     Waiting for daemon set "kube-proxy" rollout to finish: 0 out of 3 new pods have been updated...
-     Waiting for daemon set "kube-proxy" rollout to finish: 1 out of 3 new pods have been updated...
-     Waiting for daemon set "kube-proxy" rollout to finish: 1 out of 3 new pods have been updated...
-     Waiting for daemon set "kube-proxy" rollout to finish: 1 out of 3 new pods have been updated...
-     Waiting for daemon set "kube-proxy" rollout to finish: 1 out of 3 new pods have been updated...
-     Waiting for daemon set "kube-proxy" rollout to finish: 2 out of 3 new pods have been updated...
-     Waiting for daemon set "kube-proxy" rollout to finish: 2 out of 3 new pods have been updated...
-     Waiting for daemon set "kube-proxy" rollout to finish: 2 out of 3 new pods have been updated...
-     Waiting for daemon set "kube-proxy" rollout to finish: 2 of 3 updated pods are available...
-     daemon set "kube-proxy" successfully rolled out
-     ```
-
 1. Ensure that a Windows instance role has permissions to get `namespaces` and to get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
    One way to do this is by running the following comands to install the required permissions temporarily. Before running the commands, replace `<eks_node_name>` with the Kubernetes node name of the EKS Windows node, for example `ip-192-168-42-34.us-west-2.compute.internal`.
    > **Note**: If you are using a non operator-managed {{site.prodname}} installation, replace the namespace `calico-system` with `kube-system` in the commands below.
@@ -462,8 +374,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
     --node-vm-size Standard_D2s_v3
    ```
 %>
-
-  {% endtabs %}
+{% endtabs %}
 
 #### Configure installation parameters
 

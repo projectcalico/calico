@@ -45,8 +45,8 @@ func init() {
 	_ = AllSelector.String()
 }
 
-// RuleScanner scans the rules sent to it by the ActiveRulesCalculator, looking for tags and
-// selectors. It calculates the set of active tags and selectors and emits events when they become
+// RuleScanner scans the rules sent to it by the ActiveRulesCalculator, looking for
+// selectors. It calculates the set of active selectors and emits events when they become
 // active/inactive.
 //
 // Previously, Felix tracked tags and selectors separately, with a separate tag and label index.
@@ -175,7 +175,7 @@ func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
 func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked, preDNAT bool, origNamespace string) (parsedRules *ParsedRules) {
 	log.Debugf("Scanning rules (%v in, %v out) for key %v",
 		len(inbound), len(outbound), key)
-	// Extract all the new selectors/tags/named ports.
+	// Extract all the new selectors/named ports.
 	currentUIDToIPSet := make(map[string]*IPSetData)
 	parsedInbound := make([]*ParsedRule, len(inbound))
 	for ii, rule := range inbound {
@@ -260,9 +260,9 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 
 // ParsedRules holds our intermediate representation of either a policy's rules or a profile's
 // rules.  As part of its processing, the RuleScanner converts backend rules into ParsedRules.
-// Where backend rules contain selectors, tags and named ports, ParsedRules only contain
+// Where backend rules contain selectors and named ports, ParsedRules only contain
 // IPSet IDs.  The RuleScanner calculates the relevant IDs as it processes the rules and diverts
-// the details of the active tags, selectors and named ports to the named port index, which
+// the details of the active selectors and named ports to the named port index, which
 // figures out the members that should be in those IP sets.
 type ParsedRules struct {
 	// For NetworkPolicies, Namespace is set to the original namespace of the NetworkPolicy.
@@ -279,7 +279,7 @@ type ParsedRules struct {
 	PreDNAT bool
 }
 
-// ParsedRule is like a backend.model.Rule, except the tag and selector matches and named ports are
+// ParsedRule is like a backend.model.Rule, except the selector matches and named ports are
 // replaced with pre-calculated ipset IDs.
 type ParsedRule struct {
 	Action string
@@ -338,7 +338,7 @@ type ParsedRule struct {
 }
 
 func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IPSetData) {
-	srcSel, dstSel, notSrcSels, notDstSels := extractTagsAndSelectors(rule)
+	srcSel, dstSel, notSrcSels, notDstSels := extractSelectors(rule)
 
 	// In the datamodel, named ports are included in the list of ports as an "or" match; i.e. the
 	// list of ports matches the packet if either one of the numeric ports matches, or one of the
@@ -528,19 +528,18 @@ func splitNamedAndNumericPorts(ports []numorstring.Port) (numericPorts []numorst
 	return
 }
 
-// extractTagsAndSelectors extracts the tag and selector matches from the rule and converts them
+// extractSelectors extracts the selector matches from the rule and converts them
 // to selector.Selector objects.  Where it is likely to make the resulting IP sets smaller (or
 // fewer in number), it tries to combine multiple match criteria into a single selector.
 //
 // Returns at most one positive src/dst selector in src/dst.  The named port logic above relies on
 // this.  We still return a slice for those values in order to make it easier to use the utility
 // functions uniformly.
-func extractTagsAndSelectors(rule *model.Rule) (src, dst, notSrc, notDst []selector.Selector) {
-	// Calculate a minimal set of selectors.  We can always combine a positive match on selector
-	// and tag. combineMatchesIfPossible will also try to combine the negative matches into that
-	// single selector, if possible.
-	srcRawSel, notSrcSel, notSrcTag := combineMatchesIfPossible(rule.SrcSelector, rule.SrcTag, rule.NotSrcSelector, rule.NotSrcTag)
-	dstRawSel, notDstSel, notDstTag := combineMatchesIfPossible(rule.DstSelector, rule.DstTag, rule.NotDstSelector, rule.NotDstTag)
+func extractSelectors(rule *model.Rule) (src, dst, notSrc, notDst []selector.Selector) {
+	// Calculate a minimal set of selectors.  combineMatchesIfPossible will try to combine the
+	// negative matches into that single selector, if possible.
+	srcRawSel, notSrcSel := combineMatchesIfPossible(rule.SrcSelector, rule.NotSrcSelector)
+	dstRawSel, notDstSel := combineMatchesIfPossible(rule.DstSelector, rule.NotDstSelector)
 
 	parseAndAppendSelectorIfNonZero := func(slice []selector.Selector, rawSelector string) []selector.Selector {
 		if rawSelector == "" {
@@ -557,19 +556,15 @@ func extractTagsAndSelectors(rule *model.Rule) (src, dst, notSrc, notDst []selec
 	src = parseAndAppendSelectorIfNonZero(src, srcRawSel)
 	dst = parseAndAppendSelectorIfNonZero(dst, dstRawSel)
 	notSrc = parseAndAppendSelectorIfNonZero(notSrc, notSrcSel)
-	notSrc = parseAndAppendSelectorIfNonZero(notSrc, tagToSelector(notSrcTag))
 	notDst = parseAndAppendSelectorIfNonZero(notDst, notDstSel)
-	notDst = parseAndAppendSelectorIfNonZero(notDst, tagToSelector(notDstTag))
 
 	return
 }
 
-func combineMatchesIfPossible(positiveSel, positiveTag, negatedSel, negatedTag string) (string, string, string) {
-	// Combine any positive tag and selector into a single selector.
-	positiveSel = combineSelectorAndTag(positiveSel, positiveTag)
+func combineMatchesIfPossible(positiveSel, negatedSel string) (string, string) {
 	if positiveSel == "" {
 		// There were no positive matches, we can't do any further optimization.
-		return positiveSel, negatedSel, negatedTag
+		return positiveSel, negatedSel
 	}
 
 	// We have a positive selector so the rule is limited to matching known endpoints.
@@ -583,26 +578,5 @@ func combineMatchesIfPossible(positiveSel, positiveTag, negatedSel, negatedTag s
 		positiveSel = fmt.Sprintf("(%s) && (!(%s))", positiveSel, negatedSel)
 		negatedSel = ""
 	}
-	if negatedTag != "" {
-		positiveSel = fmt.Sprintf("(%s) && (!has(%s))", positiveSel, negatedTag)
-		negatedTag = ""
-	}
-	return positiveSel, negatedSel, negatedTag
-}
-
-func combineSelectorAndTag(sel string, tag string) string {
-	if tag == "" {
-		return sel
-	}
-	if sel == "" {
-		return tagToSelector(tag)
-	}
-	return fmt.Sprintf("(%s) && has(%s)", sel, tag)
-}
-
-func tagToSelector(tag string) string {
-	if tag == "" {
-		return ""
-	}
-	return fmt.Sprintf("has(%s)", tag)
+	return positiveSel, negatedSel
 }

@@ -1,0 +1,36 @@
+version: v1.0
+name: Publish openstack packages
+agent:
+  machine:
+    type: e1-standard-4
+    os_image: ubuntu1804
+
+execution_time_limit:
+  minutes: 60
+
+global_job_config:
+  secrets:
+  - name: google-service-account-for-tigera-infra
+  - name: launchpad-secret-key
+  prologue:
+    commands:
+    - checkout
+    - git config --global user.email marvin@tigera.io
+    - git config --global user.name Marvin
+    - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json
+    - gcloud config set project tigera-wp-tcp-redirect
+    - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+    - export SECRET_KEY=$HOME/secrets/marvin.txt
+    - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
+    - export HOST=ubuntu@binaries-projectcalico-org
+
+blocks:
+  - name: 'Publish openstack packages'
+    skip:
+      # Only run on master.
+      when: "branch != 'master'"
+    task:
+      jobs:
+      - name: 'packages'
+        commands:
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; make release-publish; fi

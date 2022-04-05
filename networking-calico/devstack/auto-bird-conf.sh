@@ -37,7 +37,7 @@ while true; do
     # IPs that are in etcd now.
     peer_ips=
     peer_ipv6s=
-    for key in `$ETCDCTL ls ${MY_ETCD_DIR}`; do
+    for key in `$ETCDCTL get ${MY_ETCD_DIR} --prefix --keys-only`; do
         key=`basename $key`
         case $key in
             *:* )

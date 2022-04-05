@@ -22,6 +22,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	. "github.com/projectcalico/calico/felix/labelindex"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -157,18 +159,18 @@ func benchmarkParentUpdates(b *testing.B, numSels, numEndpoints int) {
 	updates = nil
 	for n := 0; n < b.N; n++ {
 		name := fmt.Sprintf("namespace-%d", n%b.N)
-		key := model.ProfileLabelsKey{
-			ProfileKey: model.ProfileKey{
-				Name: name,
-			},
-		}
+		key := model.ResourceKey{Kind: v3.KindProfile, Name: name}
 		updates = append(updates, api.Update{
 			KVPair: model.KVPair{
 				Key: key,
-				Value: map[string]string{
-					"projectcalico.org/name": name,
-					"update-idx":             fmt.Sprint(n),
-					"something-shared":       "foo",
+				Value: &v3.Profile{
+					Spec: v3.ProfileSpec{
+						LabelsToApply: map[string]string{
+							"projectcalico.org/name": name,
+							"update-idx":             fmt.Sprint(n),
+							"something-shared":       "foo",
+						},
+					},
 				},
 			},
 		})

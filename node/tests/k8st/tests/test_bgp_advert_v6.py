@@ -511,7 +511,7 @@ spec:
         ports:
         - containerPort: 80
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
         kubernetes.io/hostname: %s
 ---
 apiVersion: v1

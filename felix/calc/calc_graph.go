@@ -35,14 +35,9 @@ var (
 		Name: "felix_active_local_selectors",
 		Help: "Number of active selectors on this host.",
 	})
-	gaugeNumActiveTags = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_active_local_tags",
-		Help: "Number of active tags on this host.",
-	})
 )
 
 func init() {
-	prometheus.MustRegister(gaugeNumActiveTags)
 	prometheus.MustRegister(gaugeNumActiveSelectors)
 }
 
@@ -71,6 +66,10 @@ type configCallbacks interface {
 	OnDatastoreNotReady()
 }
 
+type encapCallbacks interface {
+	OnEncapUpdate(encap config.Encapsulation)
+}
+
 type passthruCallbacks interface {
 	OnHostIPUpdate(hostname string, ip *net.IP)
 	OnHostIPRemove(hostname string)
@@ -83,6 +82,8 @@ type passthruCallbacks interface {
 	OnWireguardUpdate(string, *model.Wireguard)
 	OnWireguardRemove(string)
 	OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
+	OnServiceUpdate(*proto.ServiceUpdate)
+	OnServiceRemove(*proto.ServiceRemove)
 }
 
 type routeCallbacks interface {
@@ -98,6 +99,7 @@ type vxlanCallbacks interface {
 type PipelineCallbacks interface {
 	ipSetUpdateCallbacks
 	rulesUpdateCallbacks
+	encapCallbacks
 	endpointCallbacks
 	configCallbacks
 	passthruCallbacks
@@ -175,8 +177,8 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 
 	// The active rules calculator only figures out which rules are active, it doesn't extract
 	// any information from the rules.  The rule scanner takes the output from the active rules
-	// calculator and scans the individual rules for selectors, tags, and named ports.  It
-	// generates events when a new selector/tag/named port starts/stops being used.
+	// calculator and scans the individual rules for selectors and named ports.  It
+	// generates events when a new selector/named port starts/stops being used.
 	//
 	//             ...
 	//     Active Rules Calculator
@@ -185,7 +187,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//              |
 	//         Rule scanner
 	//          |    \
-	//          |     \ Locally active tags/selectors/named ports
+	//          |     \ Locally active selectors/named ports
 	//          |      \
 	//          |      ...
 	//          |
@@ -222,10 +224,10 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 		callbacks.OnIPSetMemberRemoved(ipSetID, member)
 	}
 
-	// The rule scanner only goes as far as figuring out which tags/selectors/named ports are
+	// The rule scanner only goes as far as figuring out which selectors/named ports are
 	// active. Next we need to figure out which endpoints (and hence which IP addresses/ports) are
 	// in each tag/selector/named port. The IP set member index calculates the set of IPs and named
-	// ports that should be in each IP set.  To do that, it matches the active selectors/tags/named
+	// ports that should be in each IP set.  To do that, it matches the active selectors/named
 	// ports extracted by the rule scanner against all the endpoints. The service index does the same
 	// for service based rules, building IP set contributions from endpoint slices.
 	//
@@ -237,7 +239,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//      |       ...
 	//      |    Rule scanner
 	//      |     |       \
-	//      |    ...       \ Locally active tags/selectors/named ports
+	//      |    ...       \ Locally active selectors/named ports
 	//       \              |
 	//        \_____        |
 	//              \       |
@@ -334,7 +336,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
-	if conf.BPFEnabled || conf.VXLANEnabled || conf.WireguardEnabled {
+	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.WireguardEnabled {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)
@@ -363,7 +365,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//         |
 	//      <dataplane>
 	//
-	if conf.VXLANEnabled {
+	if conf.Encapsulation.VXLANEnabled {
 		vxlanResolver := NewVXLANResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
 		vxlanResolver.RegisterWith(allUpdDispatcher)
 	}
@@ -400,6 +402,20 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//
 	profileDecoder := NewProfileDecoder(callbacks)
 	profileDecoder.RegisterWith(allUpdDispatcher)
+
+	// Register for IP Pool updates. EncapsulationResolver will send a message to the
+	// dataplane so that Felix is restarted if IPIP and/or VXLAN encapsulation changes
+	// due to IP pool changes, so that it is recalculated at Felix startup.
+	//
+	//        ...
+	//     Dispatcher (all updates)
+	//         |
+	//         | IP pools
+	//         |
+	//       encapsulation resolver
+	//
+	encapsulationResolver := NewEncapsulationResolver(conf, callbacks)
+	encapsulationResolver.RegisterWith(allUpdDispatcher)
 
 	return &CalcGraph{
 		AllUpdDispatcher:      allUpdDispatcher,

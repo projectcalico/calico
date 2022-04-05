@@ -96,7 +96,7 @@ func (c *FakeKubeControllersConfigurations) UpdateStatus(ctx context.Context, ku
 // Delete takes name of the kubeControllersConfiguration and deletes it. Returns an error if one occurs.
 func (c *FakeKubeControllersConfigurations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(kubecontrollersconfigurationsResource, name), &v3.KubeControllersConfiguration{})
+		Invokes(testing.NewRootDeleteActionWithOptions(kubecontrollersconfigurationsResource, name, opts), &v3.KubeControllersConfiguration{})
 	return err
 }
 

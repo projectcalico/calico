@@ -55,7 +55,7 @@ endif
 ###############################################################################
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64
+build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64
 .PHONY: build
 ## Build the binary for the current architecture and platform
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
@@ -65,7 +65,8 @@ bin/calicoctl-%-armv7: ARCH=armv7
 bin/calicoctl-%-arm64: ARCH=arm64
 bin/calicoctl-%-ppc64le: ARCH=ppc64le
 bin/calicoctl-%-s390x: ARCH=s390x
-bin/calicoctl-darwin-amd64: BUILDOS=darwin
+bin/calicoctl-darwin-amd64: BUILDOS=darwin ARCH=amd64
+bin/calicoctl-darwin-arm64: BUILDOS=darwin ARCH=arm64
 bin/calicoctl-windows-amd64: BUILDOS=windows
 bin/calicoctl-linux-%: BUILDOS=linux
 # We reinvoke make here to re-evaluate BUILDOS and ARCH so the correct values
@@ -96,7 +97,7 @@ gen-crds:
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
 $(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH) register
-	docker buildx build --pull -t $(CALICOCTL_IMAGE):latest-$(ARCH) --platform=linux/$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) -t $(CALICOCTL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -130,7 +131,7 @@ ut: bin/calicoctl-linux-amd64
 .PHONY: fv
 ## Run the tests in a container. Useful for CI, Mac dev.
 fv: bin/calicoctl-linux-amd64 version-helper
-	$(MAKE) run-etcd-host
+	$(MAKE) run-etcd
 
 	# We start two API servers in order to test multiple kubeconfig support
 	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6443 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
@@ -149,7 +150,6 @@ fv: bin/calicoctl-linux-amd64 version-helper
 ###############################################################################
 # STs
 ###############################################################################
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 # To run a specific test, set ST_TO_RUN to testfile.py:class.method
 # e.g. ST_TO_RUN="tests/st/calicoctl/test_crud.py:TestCalicoctlCommands.test_get_delete_multiple_names"
 ST_TO_RUN?=tests/st/calicoctl/
@@ -159,7 +159,7 @@ ST_OPTIONS?=
 .PHONY: st
 ## Run the STs in a container
 st: bin/calicoctl-linux-amd64 version-helper
-	$(MAKE) run-etcd-host
+	$(MAKE) run-etcd
 	$(MAKE) run-kubernetes-master
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
@@ -169,7 +169,7 @@ st: bin/calicoctl-linux-amd64 version-helper
 	docker run --net=host --privileged \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
 		   --rm -t \
-		   -v $(CURDIR)/tests/certs:/home/user/certs \
+		   -v $(CERTS_PATH):/home/user/certs \
 		   -v $(CURDIR):/code \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
@@ -177,32 +177,17 @@ st: bin/calicoctl-linux-amd64 version-helper
 	$(MAKE) stop-etcd
 	$(MAKE) stop-kubernetes-master
 
-.PHONY: run-etcd-host
-run-etcd-host:
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code 
-	# still relies on it. 
-	@-docker rm -f calico-etcd
-	docker run --detach \
-	--net=host \
-	--name calico-etcd \
-	$(ETCD_IMAGE) \
-	etcd \
-	--enable-v2 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
-
-.PHONY: stop-etcd
-stop-etcd:
-	@-docker rm -f calico-etcd
-
 ## Run a local kubernetes master with API
+# TODO: Commonize this with the functions in lib.Makefile. 
+# For now, these tests do something special and launch two apiserver on different ports, so it makes sense
+# to keep them separate.
 run-kubernetes-master: stop-kubernetes-master
 	# Run a Kubernetes apiserver using Docker.
 	docker run --net=host --detach \
 		--name st-apiserver-${KUBE_APISERVER_PORT} \
 		-v $(CURDIR):/code \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
-		-v $(CURDIR)/tests/certs:/home/user/certs \
+		-v $(CERTS_PATH):/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		${CALICO_BUILD} kube-apiserver \
 			--secure-port=${KUBE_APISERVER_PORT} \
@@ -228,7 +213,7 @@ run-kubernetes-master: stop-kubernetes-master
 	# And run the controller manager.
 	docker run --detach --net=host \
 	  --name st-controller-manager-${KUBE_APISERVER_PORT} \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
+	  -v $(CERTS_PATH):/home/user/certs \
 	  $(CALICO_BUILD) kube-controller-manager \
 	    --master=https://127.0.0.1:${KUBE_APISERVER_PORT} \
             --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \

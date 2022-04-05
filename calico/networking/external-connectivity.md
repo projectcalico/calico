@@ -19,24 +19,34 @@ to destinations outside the cluster.
 The easiest way to get outbound connectivity is to turn on NAT Outgoing on all
 {{site.prodname}} pools you want to be able to access the internet.
 
-```bash
-calicoctl get ipPool
-```
-
 ### For each pool that needs connectivity:
+
+{% tabs %}
+<label:kubectl,active:true>
+<% 
 ```bash
-cat <<EOF | calicoctl apply -f -
-- apiVersion: projectcalico.org/v3
-  kind: IPPool
-  metadata:
-    name: ippool-ext-1
-  spec:
-    cidr: 192.168.0.0/16
-    natOutgoing: true
-EOF
+kubectl patch ippool <name> --type merge --patch '{"spec":{"natOutgoing": true}}'
 ```
 
-[set `ipipMode: Always` if needed]
+You should see an output like below:
+```
+ippool.projectcalico.org/<name> patched
+```
+%>
+
+<label:calicoctl>
+<%
+
+```bash
+calicoctl patch ippool <name> --patch '{"spec":{"natOutgoing": true}}'
+```
+
+You should see an output like below:
+```
+Successfully patched 1 'IPPool' resource
+```
+%>
+{% endtabs %}
 
 Please note that many solutions for inbound connectivity will also provide
 outbound connectivity.

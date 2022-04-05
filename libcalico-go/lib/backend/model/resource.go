@@ -22,7 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	discovery "k8s.io/api/discovery/v1beta1"
+	kapiv1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -148,6 +149,11 @@ func init() {
 		apiv3.KindKubeControllersConfiguration,
 		"kubecontrollersconfigurations",
 		reflect.TypeOf(apiv3.KubeControllersConfiguration{}))
+	registerResourceInfo(
+		KindKubernetesService,
+		"kubernetesservice",
+		reflect.TypeOf(kapiv1.Service{}),
+	)
 }
 
 type ResourceKey struct {

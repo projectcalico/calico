@@ -27,7 +27,7 @@ import (
 	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/buger/jsonparser"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/juju/clock"
 	"github.com/juju/errors"
@@ -136,7 +136,7 @@ func (d *windowsDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
 	args *skel.CmdArgs,
-	result *current.Result,
+	result *cniv1.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
 	endpoint *api.WorkloadEndpoint,
@@ -682,7 +682,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	affineBlockSubnet *net.IPNet,
 	allIPAMPools []*net.IPNet,
 	natOutgoing bool,
-	result *current.Result,
+	result *cniv1.Result,
 	n *hns.NetConf) (*hcsshim.HNSEndpoint, *hcn.HostComputeEndpoint, error) {
 
 	var gatewayAddress string
@@ -757,6 +757,25 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		v2pols = append(v2pols, hcnPol)
 	}
 
+	// if supported add loopback DSR
+	if d.conf.WindowsLoopbackDSR {
+		// v1
+		v1pols = append(v1pols, []json.RawMessage{
+			[]byte(fmt.Sprintf(`{"Type":"OutBoundNAT","Destinations":["%s"]}`, epIP.String())),
+		}...)
+
+		// v2
+		loopBackPol := hcn.EndpointPolicy{
+			Type: hcn.OutBoundNAT,
+			Settings: json.RawMessage(
+				fmt.Sprintf(`{"Destinations":["%s"]}`, epIP.String()),
+			),
+		}
+		v2pols = append(v2pols, loopBackPol)
+	} else {
+		d.logger.Info("DSR not supported")
+	}
+
 	isDockerV1 := cri.IsDockershimV1(args.Netns)
 	attempts := 3
 	for {
@@ -768,7 +787,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		// For remote runtimes, we use the V2 API.
 		if isDockerV1 {
 			d.logger.Infof("Attempting to create HNS endpoint name: %s for container", endpointName)
-			_, err = hns.ProvisionEndpoint(endpointName, hnsNetwork.Id, args.ContainerID, args.Netns, func() (*hcsshim.HNSEndpoint, error) {
+			_, err = hns.AddHnsEndpoint(endpointName, hnsNetwork.Id, args.ContainerID, args.Netns, func() (*hcsshim.HNSEndpoint, error) {
 				hnsEP := &hcsshim.HNSEndpoint{
 					Name:           endpointName,
 					VirtualNetwork: hnsNetwork.Id,
@@ -983,7 +1002,7 @@ func CreateNetworkName(netName string, subnet *net.IPNet) string {
 }
 
 // SetupRoutes sets up the routes for the host side of the veth pair.
-func SetupRoutes(hostVeth interface{}, result *current.Result) error {
+func SetupRoutes(hostVeth interface{}, result *cniv1.Result) error {
 
 	// Go through all the IPs and add routes for each IP in the result.
 	for _, ipAddr := range result.IPs {
@@ -1005,7 +1024,7 @@ func (d *windowsDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	d.logger.Infof("Attempting to delete HNS endpoint name : %s for container", epName)
 
 	if cri.IsDockershimV1(args.Netns) {
-		err = hns.DeprovisionEndpoint(epName, args.Netns, args.ContainerID)
+		err = hns.RemoveHnsEndpoint(epName, args.Netns, args.ContainerID)
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			d.logger.WithError(err).Warn("Endpoint not found during delete, assuming it's already been cleaned up")
 			return nil

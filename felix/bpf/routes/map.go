@@ -182,7 +182,7 @@ var MapParameters = bpf.MapParameters{
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
-	MaxEntries: 1024 * 1024,
+	MaxEntries: 256 * 1024,
 	Name:       "cali_v4_routes",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }

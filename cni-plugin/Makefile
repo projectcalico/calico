@@ -18,29 +18,38 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 include ../lib.Makefile
 
 ###############################################################################
-BIN=bin/$(ARCH)
 SRC_FILES=$(shell find pkg cmd internal -name '*.go')
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 # fail if unable to download
 CURL=curl -C - -sSf
 
-CNI_VERSION=v1.0.0
+CNI_VERSION=v1.0.1
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
 
-DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
+# Markers for various images we produce.
+DEPLOY_CONTAINER_STATIC_MARKER=cni_deploy_container-$(ARCH).created
+DEPLOY_CONTAINER_FIPS_MARKER=cni_deploy_container-$(ARCH)-fips.created
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
+# Set FIPS to true to enable a FIPS compliant build using BoringSSL and CGO.
+# Note that this produces binaries that are dynamically linked, and so have dependencies
+# on the host machine.
+FIPS ?= false
+
+ifeq ($(FIPS), true)
 CGO_ENABLED=1
 CHECK_BORINGSSL=go tool nm $(BIN)/install > $(BIN)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BIN)/tags.txt 1> /dev/null
+BIN=bin/$(ARCH)-fips
+DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_FIPS_MARKER)
+VALIDARCHES=amd64
 else
 CGO_ENABLED=0
-CHECK_BORINGSSL=echo 'Skipping boringSSL check for $(ARCH)'
+CHECK_BORINGSSL=echo 'Skipping boringSSL check'
+BIN=bin/$(ARCH)
+DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_STATIC_MARKER)
 endif
 
 .PHONY: clean
@@ -50,13 +59,11 @@ clean:
 	find . -name '.*.published*' -type f -delete
 	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test 
 	rm -f *.created
-	rm -f crds.yaml
 	rm -rf config/
 
 ###############################################################################
 # Building the binary
 ###############################################################################
-BIN=bin/$(ARCH)
 build: $(BIN)/install $(BIN)/calico $(BIN)/calico-ipam
 ifeq ($(ARCH),amd64)
 # Go only supports amd64 for Windows builds.
@@ -76,7 +83,7 @@ endif
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
-	
+
 ## Build the Calico network plugin and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
 	-mkdir -p .go-pkg-cache
@@ -99,13 +106,22 @@ $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*
 
-$(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
-	docker build -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+# Builds the statically compiled binaries into a container.
+$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
+	touch $@
+
+# Builds the FIPS binaries into a container.
+$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 .PHONY: fetch-cni-bins
@@ -116,17 +132,15 @@ $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
 
 $(BIN)/flannel:
-	# Flannel was removed from v1.0.0 CNI plugins, but doesn't yet have its own release.
-	# For now, just pull the older version of the binary hosted at containernetworking/plugins.
-	# Eventually, replace with a release from https://github.com/flannel-io/cni-plugin
 	mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/v0.9.1/cni-plugins-linux-$(subst v7,,$(ARCH))-v0.9.1.tgz | tar -xz -C $(BIN) ./flannel
+	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(CNI_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./flannel-$(subst v7,,$(ARCH))
+	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $(BIN)/flannel
 
 ###############################################################################
 # Unit Tests
 ###############################################################################
 ## Run the unit tests.
-ut: run-k8s-controller $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
@@ -152,17 +166,17 @@ ut-datastore:
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e KUBECONFIG=/home/user/certs/kubeconfig \
 	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	-v $(CURDIR)/tests/certs:/home/user/certs \
+	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
 
-ut-etcd: run-k8s-controller build $(BIN)/host-local
+ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	make stop-etcd
 	make stop-k8s-controller
 
-ut-kdd: run-k8s-controller build $(BIN)/host-local
+ut-kdd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 	make stop-etcd
 	make stop-k8s-controller
@@ -179,74 +193,6 @@ test-cni-versions:
 			exit 1; \
 		fi; \
 	done
-
-config/crd: mod-download
-	mkdir -p config/crd
-	$(DOCKER_GO_BUILD) sh -c ' \
-		cp -r ../libcalico-go/config/crd/* config/crd; \
-		chmod +w config/crd/*'
-
-## Kubernetes apiserver used for tests
-run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
-	docker run --detach --net=host \
-	  --name calico-k8s-apiserver \
-	  -v $(CURDIR)/config:/config \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
-	  -e KUBECONFIG=/home/user/certs/kubeconfig \
-	  $(CALICO_BUILD) kube-apiserver \
-	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-	    --service-cluster-ip-range=10.101.0.0/16 \
-            --authorization-mode=RBAC \
-            --service-account-key-file=/home/user/certs/service-account.pem \
-            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
-            --service-account-issuer=https://localhost:443 \
-            --api-audiences=kubernetes.default \
-            --client-ca-file=/home/user/certs/ca.pem \
-            --tls-cert-file=/home/user/certs/kubernetes.pem \
-            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
-            --enable-priority-and-fairness=false \
-            --max-mutating-requests-inflight=0 \
-            --max-requests-inflight=0
-
-	# Wait until the apiserver is accepting requests.
-	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-	while ! docker exec calico-k8s-apiserver kubectl apply -f /config/crd; do echo "Waiting for CRDs..."; sleep 2; done
-
-## Kubernetes controller manager used for tests
-run-k8s-controller: stop-k8s-controller run-k8s-apiserver
-	docker run --detach --net=host \
-	  --name calico-k8s-controller \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
-	  $(CALICO_BUILD) kube-controller-manager \
-            --master=https://127.0.0.1:6443 \
-            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
-            --min-resync-period=3m \
-            --allocate-node-cidrs=true \
-            --cluster-cidr=192.168.0.0/16 \
-            --v=5 \
-            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
-            --root-ca-file=/home/user/certs/ca.pem
-
-## Stop Kubernetes apiserver
-stop-k8s-apiserver:
-	@-docker rm -f calico-k8s-apiserver
-
-## Stop Kubernetes controller manager
-stop-k8s-controller:
-	@-docker rm -f calico-k8s-controller
-
-## Etcd is used by the tests
-run-etcd: stop-etcd
-	docker run --detach \
-	  -p 2379:2379 \
-	  --name calico-etcd $(ETCD_IMAGE) \
-	  etcd \
-	  --advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	  --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-## Stops calico-etcd containers
-stop-etcd:
-	@-docker rm -f calico-etcd
 
 ###############################################################################
 # Install test
@@ -285,21 +231,37 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) release-verify
 	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	docker run --rm $(CNI_PLUGIN_IMAGE):$(VERSION)-$(ARCH) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(CNI_PLUGIN_IMAGE):$(VERSION)-$(ARCH) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm $(CNI_PLUGIN_IMAGE):$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(CNI_PLUGIN_IMAGE):$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+	$(MAKE) release-verify-version IMAGE=calico/cni:$(VERSION)-$(ARCH)
+	$(MAKE) release-verify-version IMAGE=calico/cni:$(VERSION)-fips-$(ARCH)
+	$(MAKE) release-verify-version IMAGE=quay.io/calico/cni:$(VERSION)-$(ARCH)
+	$(MAKE) release-verify-version IMAGE=quay.io/calico/cni:$(VERSION)-fips-$(ARCH)
+	# Check that the FIPS binaries have the correct symbols.
+	$(MAKE) release-verify-fips IMAGE=calico/cni:$(VERSION)-fips-$(ARCH)
+	$(MAKE) release-verify-fips IMAGE=quay.io/calico/cni:$(VERSION)-fips-$(ARCH)
 
-	# TODO: Some sort of quick validation of the produced binaries.
+release-verify-version:
+	docker run --rm $(IMAGE) calico -v | grep -x $(VERSION) || ( echo "Reported version does not match" && exit 1 )
+	docker run --rm $(IMAGE) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version does not match" && exit 1 )
+
+release-verify-fips:
+	rm -rf .tmp && mkdir -p .tmp
+	# Copy binaries from the image so we can analyze them.
+	sh -c "docker create --name calico-cni-verify $(IMAGE); docker cp calico-cni-verify:/opt/cni/bin/install .tmp/calico; docker rm -f calico-cni-verify"
+	go tool nm .tmp/calico | grep '_Cfunc__goboringcrypto_' 1> /dev/null || echo "ERROR: Binary in image '$(IMAGE)' is missing expected goboring symbols"
+	rm -rf .tmp
 
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT

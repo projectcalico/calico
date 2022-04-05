@@ -527,7 +527,7 @@ func isExternallyControlled(key model.Key) bool {
 		return true
 	case model.ResourceKey:
 		switch key.(model.ResourceKey).Kind {
-		case libapiv3.KindNode, model.KindKubernetesEndpointSlice:
+		case libapiv3.KindNode, model.KindKubernetesEndpointSlice, model.KindKubernetesService:
 			return true
 		}
 	}
@@ -639,6 +639,13 @@ func kvpsEqual(actual, expected model.KVPair) bool {
 
 		// Finally compare the structs.
 		return reflect.DeepEqual(actualCopy, expectedCopy)
+	case model.BlockKey:
+		// For blocks, the value contains a field that is calculated based on timestamp.
+		// We should ignore the actual value of the field.
+		actual.Value.(*model.AllocationBlock).SequenceNumber = 0
+		actual.Value.(*model.AllocationBlock).SequenceNumberForAllocation = nil
+
+		return reflect.DeepEqual(actual.Value, expected.Value)
 	default:
 		// For non-resource stuff we can always just compare the values.
 		return reflect.DeepEqual(actual.Value, expected.Value)

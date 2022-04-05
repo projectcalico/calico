@@ -274,7 +274,7 @@ var FrontendMapParameters = bpf.MapParameters{
 	Type:       "lpm_trie",
 	KeySize:    frontendKeySize,
 	ValueSize:  frontendValueSize,
-	MaxEntries: 511000,
+	MaxEntries: 64 * 1024,
 	Name:       "cali_v4_nat_fe",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 	Version:    3,
@@ -289,7 +289,7 @@ var BackendMapParameters = bpf.MapParameters{
 	Type:       "hash",
 	KeySize:    backendKeySize,
 	ValueSize:  backendValueSize,
-	MaxEntries: 510000,
+	MaxEntries: 256 * 1024,
 	Name:       "cali_v4_nat_be",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
@@ -416,6 +416,10 @@ type AffinityKey [affinityKeySize]byte
 
 type FrontEndAffinityKey [frontendAffKeySize]byte
 
+func (k FrontEndAffinityKey) AsBytes() []byte {
+	return k[:]
+}
+
 // NewAffinityKey create a new AffinityKey from a clientIP and FrontendKey
 func NewAffinityKey(clientIP net.IP, fEndKey FrontendKey) AffinityKey {
 	var k AffinityKey
@@ -506,7 +510,7 @@ var AffinityMapParameters = bpf.MapParameters{
 	Type:       "lru_hash",
 	KeySize:    affinityKeySize,
 	ValueSize:  affinityValueSize,
-	MaxEntries: 510000,
+	MaxEntries: 64 * 1024,
 	Name:       "cali_v4_nat_aff",
 }
 

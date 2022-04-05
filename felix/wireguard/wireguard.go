@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 package wireguard
 
 import (
@@ -269,7 +271,7 @@ func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Sta
 			w.ifaceUp = true
 			w.inSyncWireguard = false
 		}
-	case ifacemonitor.StateDown:
+	default: /* StateDown or StateNotPresent */
 		logCxt.Debug("Interface down")
 		w.ifaceUp = false
 	}

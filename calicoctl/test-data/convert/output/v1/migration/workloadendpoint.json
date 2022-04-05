@@ -3,6 +3,7 @@
   "apiVersion": "projectcalico.org/v3",
   "metadata": {
     "name": "rack1--host1-k8s-frontend--5gs43-eth0",
+    "namespace": "default",
     "creationTimestamp": null,
     "labels": {
       "app": "frontend",

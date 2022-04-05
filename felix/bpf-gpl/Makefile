@@ -43,8 +43,8 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang-11
-LD := llc-11
+CC := clang-12
+LD := llc-12
 
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
@@ -98,6 +98,10 @@ bin/connect_time_%v4.o: connect_time_%v4.ll | bin
 	$(LINK)
 bin/connect_time_%v6.o: connect_time_%v6.ll | bin
 	$(LINK)
+bin/connect_time_%v4_co-re.o: connect_time_%v4.ll | bin
+	$(LINK)
+bin/connect_time_%v6_co-re.o: connect_time_%v6.ll | bin
+	$(LINK)
 ut/%.o: ut/%.ll
 	$(LINK)
 
@@ -117,3 +121,8 @@ include $(D_FILES)
 
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll
+
+# Fixes an issue where make thinks these .h files are dependencies that need
+# to be built. Just include them as a noop in order to trick make.
+/usr/include/%.h:
+	@echo "No need to build $@"

@@ -85,7 +85,7 @@ func (c *FakeFelixConfigurations) Update(ctx context.Context, felixConfiguration
 // Delete takes name of the felixConfiguration and deletes it. Returns an error if one occurs.
 func (c *FakeFelixConfigurations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(felixconfigurationsResource, name), &v3.FelixConfiguration{})
+		Invokes(testing.NewRootDeleteActionWithOptions(felixconfigurationsResource, name, opts), &v3.FelixConfiguration{})
 	return err
 }
 

@@ -1217,7 +1217,6 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.nodeLocalInternal = sport.NodeLocalInternal()
 	sinfo.hintsAnnotation = sport.HintsAnnotation()
 	sinfo.internalTrafficPolicy = sport.InternalTrafficPolicy()
-	sinfo.topologyKeys = sport.TopologyKeys()
 
 	return sinfo
 }
@@ -1235,14 +1234,8 @@ type serviceInfo struct {
 	healthCheckNodePort      int
 	nodeLocalExternal        bool
 	nodeLocalInternal        bool
-	topologyKeys             []string
 	hintsAnnotation          string
 	internalTrafficPolicy    *v1.ServiceInternalTrafficPolicyType
-}
-
-// TopologyKeys is part of ServicePort interface.
-func (info *serviceInfo) TopologyKeys() []string {
-	return info.topologyKeys
 }
 
 // String is part of ServicePort interface.
@@ -1357,8 +1350,7 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		a.InternalTrafficPolicy() == b.InternalTrafficPolicy() &&
 		stringsEqual(a.ExternalIPStrings(), b.ExternalIPStrings()) &&
 		stringsEqual(a.LoadBalancerIPStrings(), b.LoadBalancerIPStrings()) &&
-		stringsEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges()) &&
-		stringsEqual(a.TopologyKeys(), b.TopologyKeys())
+		stringsEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges())
 }
 
 func stringsEqual(a, b []string) bool {

@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
@@ -133,8 +134,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		vxlanMTU             int
 		nodePortDSR          bool
 		bpfMapContext        *bpf.MapContext
-		ipSetsMap            bpf.Map
-		stateMap             bpf.Map
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
 		filterTableV4        iptablesTable
@@ -151,8 +150,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		bpfMapContext = &bpf.MapContext{
 			RepinningEnabled: true,
 		}
-		ipSetsMap = bpfipsets.Map(bpfMapContext)
-		stateMap = state.Map(bpfMapContext)
+		bpfMapContext.IpsetsMap = bpfipsets.Map(bpfMapContext)
+		bpfMapContext.StateMap = state.Map(bpfMapContext)
+		bpfMapContext.CtMap = conntrack.Map(bpfMapContext)
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
@@ -188,11 +188,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				},
 				BPFExtToServiceConnmark: 0,
 			},
+			bpfMapContext,
 			fibLookupEnabled,
 			regexp.MustCompile(workloadIfaceRegex),
 			ipSetIDAllocator,
-			ipSetsMap,
-			stateMap,
 			ruleRenderer,
 			filterTableV4,
 			nil,
@@ -459,6 +458,17 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			Context("with eth0 down", func() {
 				JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateDown, 10))
+
+				It("clears host endpoint for eth0", func() {
+					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
+					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+						Tier: "default",
+						Name: "mypolicy",
+					}]).NotTo(HaveKey("eth0"))
+				})
+			})
+			Context("with eth0 deleted", func() {
+				JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateNotPresent, 10))
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())

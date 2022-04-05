@@ -605,6 +605,5 @@ As the final step you can clean up all of the demo resources:
 kubectl delete namespace calico-demo
 ```
 
-  %>
-  
+  %> 
   {% endtabs %}

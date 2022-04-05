@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 package winupgrade
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
@@ -40,9 +38,6 @@ const (
 var _ = DescribeTable("verifyImagesShareRegistryPath",
 	func(upgradeImage string, nodeImage string, noError bool) {
 		err := verifyImagesSharePathPrefix(upgradeImage, nodeImage)
-		if err != nil {
-			fmt.Println(err)
-		}
 		Expect(err == nil).To(Equal(noError))
 	},
 	Entry("same prefix, tag", windowsDockerImageTag, nodeDockerImageTag, true),

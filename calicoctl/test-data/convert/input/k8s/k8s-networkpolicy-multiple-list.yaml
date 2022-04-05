@@ -1,0 +1,60 @@
+apiVersion: v1
+items:
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-all-egress
+    namespace: default
+  spec:
+    egress:
+    - {}
+    podSelector: {}
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: default-deny-ingress
+    namespace: default
+  spec:
+    podSelector: {}
+    policyTypes:
+    - Ingress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: test-network-policy1
+    namespace: test-ns
+  spec:
+    egress:
+    - ports:
+      - port: 5978
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 10.0.0.0/24
+    ingress:
+    - from:
+      - ipBlock:
+          cidr: 172.17.0.0/16
+          except:
+          - 172.17.1.0/24
+      - namespaceSelector:
+          matchLabels:
+            project: myproject
+      - podSelector:
+          matchLabels:
+            role: frontend
+      ports:
+      - port: 6379
+        protocol: TCP
+    podSelector:
+      matchLabels:
+        role: db
+    policyTypes:
+    - Ingress
+    - Egress
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""

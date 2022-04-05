@@ -43,6 +43,10 @@ func init() {
 	var Vffffffff = 0xffffffff
 	var V100000000 = 0x100000000
 
+	// We need pointers to bools, so define the values here.
+	var Vtrue = true
+	var Vfalse = false
+
 	// Set up some values we use in various tests.
 	ipv4_1 := "1.2.3.4"
 	ipv4_2 := "100.200.0.0"
@@ -442,6 +446,44 @@ func init() {
 		Entry("should reject invalid BGP externalIPs: x.x.x.x", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{CIDR: "y.y.y.y"}}}, false),
 		Entry("should accept valid IPv6 BGP clusterIP", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{CIDR: "fdf5:1234::102:304"}}}, true),
 		Entry("should accept valid IPv6 BGP externalIP", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{CIDR: "fdf5:1234::808:808"}}}, true),
+		Entry("should accept a node mesh BGP password if node to node mesh is enabled",
+			api.BGPConfigurationSpec{
+				NodeToNodeMeshEnabled: &Vtrue,
+				NodeMeshPassword: &api.BGPPassword{
+					SecretKeyRef: &k8sv1.SecretKeySelector{
+						LocalObjectReference: k8sv1.LocalObjectReference{
+							Name: "test-secret",
+						},
+						Key: "bgp-password",
+					},
+				},
+			}, true,
+		),
+		Entry("should reject a node mesh BGP password if node to node mesh is disabled",
+			api.BGPConfigurationSpec{
+				NodeToNodeMeshEnabled: &Vfalse,
+				NodeMeshPassword: &api.BGPPassword{
+					SecretKeyRef: &k8sv1.SecretKeySelector{
+						LocalObjectReference: k8sv1.LocalObjectReference{
+							Name: "test-secret",
+						},
+						Key: "bgp-password",
+					},
+				},
+			}, false,
+		),
+		Entry("should accept a node mesh max restart time if node to node mesh is enabled",
+			api.BGPConfigurationSpec{
+				NodeToNodeMeshEnabled:  &Vtrue,
+				NodeMeshMaxRestartTime: &v1.Duration{Duration: 200 * time.Second},
+			}, true,
+		),
+		Entry("should reject a node mesh max restart time if node to node mesh is disabled",
+			api.BGPConfigurationSpec{
+				NodeToNodeMeshEnabled:  &Vfalse,
+				NodeMeshMaxRestartTime: &v1.Duration{Duration: 200 * time.Second},
+			}, false,
+		),
 
 		// (API) IP version.
 		Entry("should accept IP version 4", api.Rule{Action: "Allow", IPVersion: &V4}, true),
@@ -673,6 +715,23 @@ func init() {
 		Entry("should reject route table range max < min", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 50, Max: 45}}, false),
 		Entry("should reject route table range max too large", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 1, Max: 253}}, false),
 		Entry("should accept route table range with min == max", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 8, Max: 8}}, true),
+
+		Entry("should accept valid route table ranges", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 10000}}}, true),
+		Entry("should accept route table ranges with min == max", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 8, Max: 8}}}, true),
+		Entry("should accept multiple route table ranges with min == max", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 8, Max: 8}, {Min: 7, Max: 7}}}, true),
+		Entry("should reject route table ranges min too small", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 0, Max: 250}}}, false),
+		Entry("should reject route table ranges min negative", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: -5, Max: 250}}}, false),
+		Entry("should reject route table ranges max < min", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 50, Max: 45}}}, false),
+		Entry("should reject route table ranges max too large", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0xf00000000}}}, false),
+
+		Entry("should reject spec with both RouteTableRanges and RouteTableRange set", api.FelixConfigurationSpec{
+			RouteTableRanges: &api.RouteTableRanges{
+				{Min: 1, Max: 250},
+			},
+			RouteTableRange: &api.RouteTableRange{
+				Min: 1, Max: 250,
+			},
+		}, false),
 
 		Entry("should reject an invalid MTUIfacePattern value '*'", api.FelixConfigurationSpec{MTUIfacePattern: "*"}, false),
 		Entry("should accept a valid MTUIfacePattern value 'eth.*'", api.FelixConfigurationSpec{MTUIfacePattern: "eth.*"}, true),

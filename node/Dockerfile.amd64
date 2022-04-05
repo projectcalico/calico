@@ -26,14 +26,14 @@ FROM ${BIRD_IMAGE} as bird
 # Use this build stage to build iptables rpm and runit binaries.
 # We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
 # We need to build runit because there aren't any rpms for it in CentOS or ubi repositories.
-FROM centos:8 as centos
+FROM quay.io/centos/centos:stream8 as centos
 
 ARG ARCH
 ARG IPTABLES_VER
 ARG LIBNFTNL_VER
 ARG IPSET_VER
 ARG RUNIT_VER
-ARG CENTOS_MIRROR_BASE_URL=https://vault.centos.org/8.4.2105
+ARG CENTOS_MIRROR_BASE_URL=http://linuxsoft.cern.ch/centos-vault/8.4.2105
 ARG LIBNFTNL_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/libnftnl-${LIBNFTNL_VER}.el8.src.rpm
 ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/iptables-${IPTABLES_VER}.el8.src.rpm
 ARG STREAM9_MIRROR_BASE_URL=https://iad.mirror.rackspace.com/centos-stream/9-stream
@@ -185,17 +185,17 @@ COPY --from=bird /bird* /bin/
 RUN chmod u+s /bin/bird
 RUN chmod u+s /bin/bird6
 
-# Copy in the filesystem - this contains felix, calico-bgp-daemon, licenses, etc...
-COPY filesystem/ /
+# Copy in the filesystem - this contains licenses, etc...
+COPY filesystem/etc/ /etc
+COPY filesystem/included-source/ /included-source
+COPY filesystem/licenses/ /licenses
+COPY filesystem/usr/ /usr
+COPY filesystem/sbin/* /usr/sbin/
 
 # Change permissions to make confd templates and output available in /etc/calico
 # to all container users.
 RUN chgrp -R 0 /etc/calico && \
     chmod -R g=u /etc/calico
-
-# On UBI, /sbin/ is a symlink so the above copy clobbers it; restore /sbin as symlinks (some binaries and
-# scripts hard-code /sbin/xyz, for example.
-RUN ln -s /usr/sbin/* /sbin/
 
 COPY --from=bpftool /bpftool /bin
 

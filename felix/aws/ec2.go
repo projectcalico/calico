@@ -27,8 +27,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/clock"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 

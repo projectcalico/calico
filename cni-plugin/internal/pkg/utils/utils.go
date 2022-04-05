@@ -30,10 +30,10 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
-	lumberjack "gopkg.in/natefinch/lumberjack.v2"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
@@ -126,7 +126,7 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, wep *api.Workl
 
 // AddIPAM calls through to the configured IPAM plugin.
 // It also contains IPAM plugin specific logic based on the configured plugin.
-func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*current.Result, error) {
+func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 	// Check if we're configured to use the Azure IPAM plugin.
 	var an *azure.AzureNetwork
 	if conf.IPAM.Type == "azure-vnet-ipam" {
@@ -151,7 +151,7 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cur
 	logger.Debugf("IPAM plugin returned: %+v", ipamResult)
 
 	// Convert the IPAM result into the current version.
-	result, err := current.NewResultFromResult(ipamResult)
+	result, err := cniv1.NewResultFromResult(ipamResult)
 	if err != nil {
 		return nil, err
 	}
@@ -343,12 +343,6 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 		ipamData["subnet"] = ipv4Cidr
 		subnet = ipv4Cidr
 		logger.Infof("Calico CNI passing podCidr to host-local IPAM: %s", ipv4Cidr)
-
-		// updateHostLocalIPAMDataForOS is only required for Windows and only ipv4 is supported
-		err = updateHostLocalIPAMDataForOS(subnet, ipamData)
-		if err != nil {
-			return err
-		}
 	}
 
 	if strings.EqualFold(subnet, "usePodCidrIPv6") {
@@ -363,6 +357,13 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 
 		ipamData["subnet"] = ipv6Cidr
 		logger.Infof("Calico CNI passing podCidrv6 to host-local IPAM: %s", ipv6Cidr)
+		return nil
+	}
+
+	// updateHostLocalIPAMDataForOS is only required for Windows and only ipv4 is supported
+	err := updateHostLocalIPAMDataForOS(subnet, ipamData)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -529,23 +530,17 @@ func AddIgnoreUnknownArgs() error {
 
 // CreateResultFromEndpoint takes a WorkloadEndpoint, extracts IP information
 // and populates that into a CNI Result.
-func CreateResultFromEndpoint(wep *api.WorkloadEndpoint) (*current.Result, error) {
-	result := &current.Result{}
+func CreateResultFromEndpoint(wep *api.WorkloadEndpoint) (*cniv1.Result, error) {
+	result := &cniv1.Result{}
 	for _, v := range wep.Spec.IPNetworks {
-		parsedIPConfig := current.IPConfig{}
+		parsedIPConfig := cniv1.IPConfig{}
 
-		ipAddr, ipNet, err := net.ParseCIDR(v)
+		_, ipNet, err := net.ParseCIDR(v)
 		if err != nil {
 			return nil, err
 		}
 
 		parsedIPConfig.Address = *ipNet
-
-		if ipAddr.To4() != nil {
-			parsedIPConfig.Version = "4"
-		} else {
-			parsedIPConfig.Version = "6"
-		}
 
 		result.IPs = append(result.IPs, &parsedIPConfig)
 	}
@@ -555,7 +550,7 @@ func CreateResultFromEndpoint(wep *api.WorkloadEndpoint) (*current.Result, error
 
 // PopulateEndpointNets takes a WorkloadEndpoint and a CNI Result, extracts IP address and mask
 // and populates that information into the WorkloadEndpoint.
-func PopulateEndpointNets(wep *api.WorkloadEndpoint, result *current.Result) error {
+func PopulateEndpointNets(wep *api.WorkloadEndpoint, result *cniv1.Result) error {
 	var copyIpNet net.IPNet
 	if len(result.IPs) == 0 {
 		return errors.New("IPAM plugin did not return any IP addresses")
@@ -563,7 +558,7 @@ func PopulateEndpointNets(wep *api.WorkloadEndpoint, result *current.Result) err
 
 	for _, ipNet := range result.IPs {
 		copyIpNet = net.IPNet{IP: ipNet.Address.IP, Mask: ipNet.Address.Mask}
-		if ipNet.Version == "4" {
+		if ipNet.Address.IP.To4() != nil {
 			copyIpNet.Mask = net.CIDRMask(32, 32)
 		} else {
 			copyIpNet.Mask = net.CIDRMask(128, 128)

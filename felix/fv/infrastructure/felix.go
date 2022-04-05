@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ func (f *Felix) TriggerDelayedStart() {
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
+	bpfEnableIPv6 := fmt.Sprint(options.BPFEnableIPv6)
 
 	args := infra.GetDockerArgs()
 	args = append(args, "--privileged")
@@ -98,6 +99,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"FELIX_BPFLOGLEVEL":              "debug",
 		"FELIX_USAGEREPORTINGENABLED":    "false",
 		"FELIX_IPV6SUPPORT":              ipv6Enabled,
+		"FELIX_BPFIPV6SUPPORT":           bpfEnableIPv6,
 		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
 	}

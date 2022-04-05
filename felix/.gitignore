@@ -12,7 +12,6 @@
 .project
 /.noseids
 /nosetests.xml
-/release-notes-*
 
 # Build directories.
 /bin/
@@ -20,9 +19,9 @@
 /build/
 /dist/
 .go-pkg-cache/
-/.glide/
-/vendor/
 /artifacts/
+/bpf-gpl/include/libbpf/src/amd64/
+/bpf-gpl/include/libbpf/src/arm64/
 
 # IDE files.
 /.idea/
@@ -47,8 +46,6 @@ htmlcov/
 /version.txt
 /.dir-locals.el
 /report/*.xml
-# Old go sub-dir, used to be where we kept go source.
-/go/
 
 /k8sfv/prometheus/data
 /k8sfv/prometheus/prometheus.yml
@@ -63,7 +60,5 @@ htmlcov/
 *.ll
 *.d
 
-# CRDs used in the FV tests, pulled from libcalico.
-fv/infrastructure/crds.yaml
-fv/infrastructure/crds
-Makefile.common*
+# produced as part of openstack packaging build
+debian/files

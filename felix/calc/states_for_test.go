@@ -20,6 +20,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 
@@ -600,7 +602,7 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 	// Two local endpoints with overlapping IPs.
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 	KVPair{Key: localWlEpKey2, Value: &localWlEp2},
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels1},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{},
@@ -647,7 +649,7 @@ var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlapp
 
 // Add a second profile with the same labels so that both endpoints now match.
 var localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs = localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-2"}}, Value: profileLabels1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-2"}, Value: profileLabels1},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	"10.0.0.1,tcp:8080", // ep1
 	"fc00:fe11::1,tcp:8080",
@@ -681,7 +683,7 @@ var localEpsAndNamedPortPolicyDuplicatePorts = localEpsAndNamedPortPolicyMatchin
 
 // Then, change the label on EP2 so it no-longer matches.
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-2"}}, Value: profileLabels2},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-2"}, Value: profileLabels2},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	"10.0.0.1,tcp:8080", // ep1
 	"fc00:fe11::1,tcp:8080",
@@ -692,7 +694,7 @@ var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndN
 
 // Then, change the label on EP1 so it no-longer matches.
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1 = localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels2},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels2},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	// No longer any matches.
 }).withName("2 local WEPs with policy not matching inherited labels")
@@ -766,8 +768,7 @@ var localEpsWithPolicyUpdatedIPs = localEpsWithPolicy.withKVUpdates(
 // withProfile adds a profile to the initialised state.
 var withProfile = initialisedStore.withKVUpdates(
 	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRules1},
-	KVPair{Key: ProfileTagsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileTags1},
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels1Tag1},
 ).withName("profile")
 
 // localEpsWithProfile contains a pair of overlapping IP endpoints and a profile
@@ -856,8 +857,7 @@ var localEpsWithUpdatedProfileNegatedTags = localEpsWithUpdatedProfile.withKVUpd
 // tags as labels.  I.e. a tag of name foo should be equivalent to label foo=""
 var withProfileTagInherit = initialisedStore.withKVUpdates(
 	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
-	KVPair{Key: ProfileTagsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileTags1},
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabels1Tag1},
 ).withName("profile")
 
 var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
@@ -889,8 +889,7 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 
 var withProfileTagOverriden = initialisedStore.withKVUpdates(
 	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
-	KVPair{Key: ProfileTagsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileTags1},
-	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabelsTag1},
+	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabelsTag1},
 ).withName("profile")
 
 // localEpsWithTagOverriddenProfile Checks that tags-inherited labels can be
@@ -988,6 +987,14 @@ var routeUpdateIPPoolVXLAN = proto.RouteUpdate{
 	NatOutgoing: ipPoolWithVXLAN.Masquerade,
 }
 
+// RouteUpdate expected for ipPool2WithVXLAN.
+var routeUpdateIPPool2VXLAN = proto.RouteUpdate{
+	Type:        proto.RouteType_CIDR_INFO,
+	IpPoolType:  proto.IPPoolType_VXLAN,
+	Dst:         ipPool2WithVXLAN.CIDR.String(),
+	NatOutgoing: ipPool2WithVXLAN.Masquerade,
+}
+
 // RouteUpdate expected for ipPoolWithVXLANSlash32.
 var routeUpdateIPPoolVXLANSlash32 = proto.RouteUpdate{
 	Type:        proto.RouteType_CIDR_INFO,
@@ -1047,6 +1054,8 @@ var vxlanWithWEPIPs = empty.withKVUpdates(
 ).withRoutes(
 	routeUpdateIPPoolVXLAN,
 	routeUpdateRemoteHost2,
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 // Adds in an workload on remoteHost2 and expected route.
@@ -1113,6 +1122,8 @@ var vxlanWithBlock = empty.withKVUpdates(
 		Ipv4Addr:       remoteHostVXLANTunnelIP,
 		ParentDeviceIp: remoteHostIP.String(),
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 ).withRoutes(vxlanWithBlockRoutes...)
 
 var vxlanWithBlockRoutes = []proto.RouteUpdate{
@@ -1355,6 +1366,8 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 var localVXLANWep1Route1 = proto.RouteUpdate{
@@ -1553,6 +1566,8 @@ var vxlanToIPIPSwitch = vxlanWithBlock.withKVUpdates(
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIP.String(),
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: true, VxlanEnabled: false},
 )
 
 var vxlanBlockDelete = vxlanWithBlock.withKVUpdates(
@@ -1608,6 +1623,8 @@ var vxlanSlash32 = empty.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 var vxlanSlash32NoBlock = empty.withKVUpdates(
@@ -1625,6 +1642,8 @@ var vxlanSlash32NoBlock = empty.withKVUpdates(
 ).withRoutes(
 	routeUpdateIPPoolVXLANSlash32,
 	routeUpdateRemoteHost,
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 var vxlanSlash32NoPool = empty.withKVUpdates(
@@ -1679,6 +1698,8 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
 )
 
 // we start from vxlan setup as the test framework expects vxlan enabled
@@ -1870,6 +1891,32 @@ var endpointSliceActive = endpointSliceAndLocalWorkload.withKVUpdates(
 		{Name: "default", EgressPolicyNames: []string{"svc-policy"}},
 	},
 )
+
+var encapWithIPIPPool = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithIPIP},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: true, VxlanEnabled: false},
+).withRoutes(
+	routeUpdateIPPoolIPIP,
+).withName("Encap with IPIP Pool")
+
+var encapWithVXLANPool = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
+).withRoutes(
+	routeUpdateIPPoolVXLAN,
+).withName("Encap with VXLAN Pool")
+
+var encapWithIPIPAndVXLANPool = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithIPIP},
+	KVPair{Key: ipPoolKey2, Value: &ipPool2WithVXLAN},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: true, VxlanEnabled: true},
+).withRoutes(
+	routeUpdateIPPoolIPIP,
+	routeUpdateIPPool2VXLAN,
+).withName("Encap with IPIP and VXLAN Pools")
 
 type StateList []State
 

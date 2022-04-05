@@ -1,6 +1,16 @@
 ---
 layout: null
 ---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tigera-operator
+  labels:
+    name: tigera-operator
+
+---
+
 {% helm tigera-operator %}
 installation:
   enabled: false

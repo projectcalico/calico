@@ -116,7 +116,7 @@ func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapCo
 		dirtyCIDRs:        dirtyCIDRs,
 
 		desiredRoutes: map[routes.Key]routes.Value{},
-		routeMap:      routes.Map(mc),
+		routeMap:      mc.RouteMap,
 
 		dirtyRoutes:     set.New(),
 		resyncScheduled: true,
@@ -149,8 +149,6 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfRouteManager) CompleteDeferredWork() error {
-	m.ensureDataplaneInitialised()
-
 	startTime := time.Now()
 
 	// Step 1: calculate any updates to the _desired_ state of the BPF map.
@@ -177,13 +175,6 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 	}
 
 	return nil
-}
-
-func (m *bpfRouteManager) ensureDataplaneInitialised() {
-	err := m.routeMap.EnsureExists()
-	if err != nil {
-		log.WithError(err).Panic("Failed to create route map")
-	}
 }
 
 func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {

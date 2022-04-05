@@ -87,22 +87,9 @@ Because the `blockSize` field cannot be edited directly after {{site.prodname}} 
 
 **Required**
 
-- Verify that you are using {{site.prodname}} IPAM.   
-  This guide is relevant only if you are using Calico IPAM.
+Verify that you are using {{site.prodname}} IPAM.   
 
-  ssh to one of your Kubernetes nodes and view the CNI configuration.  
-
-    ```bash
-    cat /etc/cni/net.d/10-calico.conflist
-     ```
-  Look for the "type" entry:
-  <pre>
-     "ipam": {
-           "type": "calico-ipam"
-      }, 
-  </pre>
-
-  If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+{% include content/determine-ipam.md %}
 
 ### How to
 

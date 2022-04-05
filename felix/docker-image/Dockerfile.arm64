@@ -6,6 +6,11 @@ FROM calico/bpftool:v5.0-arm64 as bpftool
 FROM arm64v8/alpine:3.8 as base
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
+# Binary to execute as "felix". This allows us to swap out
+# alternative builds for the tests.
+# TODO: We should just mount this in from the host.
+ARG FV_BINARY=bin/calico-felix-arm64
+
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 # we only need this for the intermediate "base" image, so we can run all the apk and other commands
@@ -20,7 +25,7 @@ ADD calico-felix-wrapper /usr/bin
 
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the Felix build artefacts from the container.
-ADD bin/calico-felix-arm64 /code/calico-felix
+ADD $FV_BINARY /code/calico-felix
 RUN ln -s /code/calico-felix /usr/bin
 COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code

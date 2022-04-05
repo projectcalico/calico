@@ -51,11 +51,9 @@ For step-by-step instructions, refer to the section that corresponds to your des
 <!--- Change download URL to latest release if user browsing master branch.  --->
 <!--- For master, we hard-code a version since we don't host master releases of calicoctl.  --->
 {%- if page.version == "master" -%}
-{% assign version = "master" %}
 {% assign url = "https://github.com/projectcalico/calico/releases/latest/download" %}
 {% else %}
-{% assign version = site.data.versions.first.components.calicoctl.version %}
-{% assign url = "https://github.com/projectcalico/calico/releases/download/{{ version }}" %}
+{% assign url = "https://github.com/projectcalico/calico/releases/download/" | append: site.data.versions.first.components.calicoctl.version %}
 {% endif %}
 
 
@@ -211,7 +209,7 @@ you want to install the binary.
 1. Use the following command to download the `calicoctl` binary.
 
    ```bash
-   curl -L {{ url }}/calicoctl-linux-arm64 -o kubectl-calico
+   curl -L {{ url }}/calicoctl-linux-amd64 -o kubectl-calico
    ```
 
 1. Set the file to be executable.

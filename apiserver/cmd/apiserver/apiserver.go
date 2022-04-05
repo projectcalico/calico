@@ -23,7 +23,7 @@ import (
 	"runtime"
 
 	"k8s.io/component-base/logs"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 )

@@ -166,6 +166,14 @@ template bgp bgp_template {
   {{if gt $onode_ip $node_ip6 }}
   passive on; # Mesh is unidirectional, peer will connect to us.
   {{- end}}
+  {{- if exists "/global/node_mesh_restart_time"}}{{$node_mesh_restart_time := getv "/global/node_mesh_restart_time"}}
+  {{- if ne ($node_mesh_restart_time) ""}}
+  graceful restart time {{$node_mesh_restart_time}};
+  {{- end}}{{end}}
+  {{- if exists "/global/node_mesh_password"}}{{$node_mesh_password := getv "/global/node_mesh_password"}}
+  {{- if ne ($node_mesh_password) ""}}
+  password "{{$node_mesh_password}}";
+  {{- end}}{{end}}
 }{{end}}{{end}}{{end}}
 {{else}}
 # Node-to-node mesh disabled
@@ -189,6 +197,9 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip6}};  # The local address we use for the TCP connection
 {{- end}}
+{{- if and ($data.calico_node) (gt $data.ip $node_ip6)}}
+  passive on; # Peering is unidirectional, peer will connect to us.
+{{- end}}
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
 {{- end}}
@@ -201,6 +212,9 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- end}}
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
   next hop keep;
+{{- end}}
+{{- if $data.num_allow_local_as}}
+  allow local as {{$data.num_allow_local_as}};
 {{- end}}
 }
 {{- end}}
@@ -237,6 +251,9 @@ protocol bgp Node_{{$id}} from bgp_template {
 {{- end}}
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
   next hop keep;
+{{- end}}
+{{- if $data.num_allow_local_as}}
+  allow local as {{$data.num_allow_local_as}};
 {{- end}}
 }
 {{- end}}

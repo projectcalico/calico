@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -26,6 +25,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 
 	"golang.org/x/sys/unix"
 )
@@ -73,7 +74,7 @@ const maxLogSize = 128 * 1024 * 1024
 
 func LoadBPFProgramFromInsns(insns asm.Insns, license string, progType uint32) (fd ProgFD, err error) {
 	log.Debugf("LoadBPFProgramFromInsns(%v, %v, %v)", insns, license, progType)
-	IncreaseLockedMemoryQuota()
+	bpfutils.IncreaseLockedMemoryQuota()
 
 	// Occasionally see retryable errors here, retry silently a few times before going into log-collection mode.
 	backoff := 1 * time.Millisecond
@@ -150,17 +151,6 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, p
 		return 0, errno
 	}
 	return ProgFD(fd), nil
-}
-
-var memLockOnce sync.Once
-
-func IncreaseLockedMemoryQuota() {
-	memLockOnce.Do(func() {
-		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{Cur: unix.RLIM_INFINITY, Max: unix.RLIM_INFINITY})
-		if err != nil {
-			log.WithError(err).Error("Failed to increase RLIMIT_MEMLOCK, loading BPF programs may fail")
-		}
-	})
 }
 
 func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err error) {
@@ -259,16 +249,29 @@ func GetMapEntry(mapFD MapFD, k []byte, valueSize int) ([]byte, error) {
 }
 
 func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
-	if log.GetLevel() >= log.DebugLevel {
-		mapInfo, err := GetMapInfo(mapFD)
+	if log.GetLevel() < log.DebugLevel {
+		return nil
+	}
+	mapInfo, err := GetMapInfo(mapFD)
+	if err != nil {
+		log.WithError(err).Error("Failed to read map information")
+		return err
+	}
+	log.WithField("mapInfo", mapInfo).Debug("Map metadata")
+	if keySize != mapInfo.KeySize {
+		log.WithField("mapInfo", mapInfo).WithField("keyLen", keySize).Panic("Incorrect key length")
+	}
+	switch mapInfo.Type {
+	case unix.BPF_MAP_TYPE_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_ARRAY, unix.BPF_MAP_TYPE_LRU_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE:
+		// The actual size of per cpu maps is equal to the value size * number of cpu
+		ncpus, err := libbpf.NumPossibleCPUs()
 		if err != nil {
-			log.WithError(err).Error("Failed to read map information")
-			return err
+			log.WithError(err).Panic("Failed to get number of possible cpus")
 		}
-		log.WithField("mapInfo", mapInfo).Debug("Map metadata")
-		if keySize != mapInfo.KeySize {
-			log.WithField("mapInfo", mapInfo).WithField("keyLen", keySize).Panic("Incorrect key length")
+		if valueSize >= 0 && valueSize != mapInfo.ValueSize*ncpus {
+			log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length for per-CPU map")
 		}
+	default:
 		if valueSize >= 0 && valueSize != mapInfo.ValueSize {
 			log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length")
 		}
@@ -289,9 +292,10 @@ func GetMapInfo(fd MapFD) (*MapInfo, error) {
 		return nil, errno
 	}
 	return &MapInfo{
-		Type:      int(bpfMapInfo._type),
-		KeySize:   int(bpfMapInfo.key_size),
-		ValueSize: int(bpfMapInfo.value_size),
+		Type:       int(bpfMapInfo._type),
+		KeySize:    int(bpfMapInfo.key_size),
+		ValueSize:  int(bpfMapInfo.value_size),
+		MaxEntries: int(bpfMapInfo.max_entries),
 	}, nil
 }
 

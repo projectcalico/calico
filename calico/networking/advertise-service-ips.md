@@ -98,7 +98,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    Patch the BGPConfiguration using the following command, using your own service cluster IP CIDR in place of "10.0.0.0/24":
 
    ```bash
-   calicoctl patch BGPConfig default --patch \
+   calicoctl patch bgpconfig default --patch \
       '{"spec": {"serviceClusterIPs": [{"cidr": "10.0.0.0/24"}]}}'
    ```
 
@@ -141,7 +141,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    Patch the BGPConfiguration using the following command, adding your own service external IP CIDRs:
 
    ```bash
-   calicoctl patch BGPConfig default --patch \
+   calicoctl patch bgpconfig default --patch \
       '{"spec": {"serviceExternalIPs": [{"cidr": "x.x.x.x"}, {"cidr": "y.y.y.y"}]}}'
    ```
 
@@ -181,7 +181,7 @@ The following steps will configure {{site.prodname}} to advertise Service `statu
    Patch the BGPConfiguration using the following command, adding your own service load balancer IP CIDRs:
 
    ```bash
-   calicoctl patch BGPConfig default --patch '{"spec": {"serviceLoadBalancerIPs": [{"cidr": "x.x.x.x/16"}]}}'
+   calicoctl patch bgpconfig default --patch '{"spec": {"serviceLoadBalancerIPs": [{"cidr": "x.x.x.x/16"}]}}'
    ```
 
    **Create default BGPConfiguration**

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019,2021-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -151,12 +152,6 @@ func (d *endpointData) Get(labelName string) (value string, present bool) {
 		if value, present = parent.labels[labelName]; present {
 			return
 		}
-		for _, tag := range parent.tags {
-			if tag == labelName {
-				present = true
-				return
-			}
-		}
 	}
 	return
 }
@@ -176,7 +171,8 @@ func (d *endpointData) Equals(other *endpointData) bool {
 	}
 
 	for k, v := range d.labels {
-		if other.labels[k] != v {
+		otherLabel, exists := other.labels[k]
+		if !exists || otherLabel != v {
 			return false
 		}
 	}
@@ -200,12 +196,11 @@ func (d *endpointData) Equals(other *endpointData) bool {
 }
 
 // npParentData holds the data that we know about each parent (i.e. each security profile).  Since,
-// profiles consist of multiple resources in our data-model, the labels or tags fields may be nil
+// profiles consist of multiple resources in our data-model, the labels fields may be nil
 // if we have partial information.
 type npParentData struct {
 	id          string
 	labels      map[string]string
-	tags        []string
 	endpointIDs set.Set
 }
 
@@ -259,8 +254,7 @@ func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 }
 
 func (idx *SelectorAndNamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
-	allUpdDispatcher.Register(model.ProfileTagsKey{}, idx.OnUpdate)
-	allUpdDispatcher.Register(model.ProfileLabelsKey{}, idx.OnUpdate)
+	allUpdDispatcher.Register(model.ResourceKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.HostEndpointKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.NetworkSetKey{}, idx.OnUpdate)
@@ -317,23 +311,17 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Deleting network set %v from NamedPortIndex", key)
 			idx.DeleteEndpoint(key)
 		}
-	case model.ProfileLabelsKey:
+	case model.ResourceKey:
+		if key.Kind != v3.KindProfile {
+			return
+		}
 		if update.Value != nil {
 			log.Debugf("Updating NamedPortIndex for profile labels %v", key)
-			labels := update.Value.(map[string]string)
+			labels := update.Value.(*v3.Profile).Spec.LabelsToApply
 			idx.UpdateParentLabels(key.Name, labels)
 		} else {
 			log.Debugf("Removing profile labels %v from NamedPortIndex", key)
 			idx.DeleteParentLabels(key.Name)
-		}
-	case model.ProfileTagsKey:
-		if update.Value != nil {
-			log.Debugf("Updating NamedPortIndex for profile tags %v", key)
-			labels := update.Value.([]string)
-			idx.UpdateParentTags(key.Name, labels)
-		} else {
-			log.Debugf("Removing profile tags %v from NamedPortIndex", key)
-			idx.DeleteParentTags(key.Name)
 		}
 	}
 	return
@@ -676,26 +664,6 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 	)
 }
 
-func (idx *SelectorAndNamedPortIndex) UpdateParentTags(parentID string, tags []string) {
-	parentData := idx.getOrCreateParent(parentID)
-	if reflect.DeepEqual(parentData.tags, tags) {
-		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
-		return
-	}
-	oldTags := parentData.tags
-	idx.updateParent(
-		parentData,
-		// Function to apply the update.
-		func() {
-			parentData.tags = tags
-		},
-		// Function to back out the update.
-		func() {
-			parentData.tags = oldTags
-		},
-	)
-}
-
 func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, applyUpdate, revertUpdate func()) {
 	parentData.IterEndpointIDs(func(id interface{}) error {
 		epData := idx.endpointDataByID[id]
@@ -766,11 +734,6 @@ func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpoint
 	return contrib
 }
 
-func (idx *SelectorAndNamedPortIndex) DeleteParentTags(parentID string) {
-	idx.UpdateParentTags(parentID, nil)
-	idx.discardParentIfEmpty(parentID)
-}
-
 func (idx *SelectorAndNamedPortIndex) getOrCreateParent(id string) *npParentData {
 	parent := idx.parentDataByParentID[id]
 	if parent == nil {
@@ -787,7 +750,7 @@ func (idx *SelectorAndNamedPortIndex) discardParentIfEmpty(id string) {
 	if parent == nil {
 		return
 	}
-	if parent.endpointIDs == nil && parent.labels == nil && parent.tags == nil {
+	if parent.endpointIDs == nil && parent.labels == nil {
 		delete(idx.parentDataByParentID, id)
 	}
 }

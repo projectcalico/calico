@@ -3,6 +3,7 @@ kind: NetworkPolicy
 metadata:
   creationTimestamp: null
   name: test-network-policy
+  namespace: default
 spec:
   egress:
   - action: Allow

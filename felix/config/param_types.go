@@ -81,6 +81,22 @@ func (p *BoolParam) Parse(raw string) (interface{}, error) {
 	return nil, p.parseFailed(raw, "invalid boolean")
 }
 
+type BoolPtrParam struct {
+	Metadata
+}
+
+func (p *BoolPtrParam) Parse(raw string) (interface{}, error) {
+	t := true
+	f := false
+	switch strings.ToLower(raw) {
+	case "true", "1", "yes", "y", "t":
+		return &t, nil
+	case "false", "0", "no", "n", "f":
+		return &f, nil
+	}
+	return nil, p.parseFailed(raw, "invalid boolean")
+}
+
 type IntParam struct {
 	Metadata
 	Min int
@@ -554,6 +570,10 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 	return raw, nil
 }
 
+// linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
+const routeTableMaxLinux = 0xffffffff
+const routeTableRangeMaxTables = 0xffff
+
 type RouteTableRangeParam struct {
 	Metadata
 }
@@ -576,6 +596,69 @@ func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error)
 		result = idalloc.IndexRange{Min: min, Max: max}
 		err = nil
 	}
+	return
+}
+
+type RouteTableRangesParam struct {
+	Metadata
+}
+
+// reserved linux kernel routing tables (will be ignored if targeted by routetablerange)
+var routeTablesReservedLinux = []int{253, 254, 255}
+
+func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error) {
+	match := regexp.MustCompile(`(\d+)-(\d+)`).FindAllStringSubmatch(raw, -1)
+	if match == nil {
+		err = p.parseFailed(raw, "must be a list of route-table ranges")
+		return
+	}
+
+	tablesTargeted := 0
+	ranges := make([]idalloc.IndexRange, 0)
+	for _, r := range match {
+		// first match is the whole matching string - we only care about submatches
+		min, serr := strconv.Atoi(r[1])
+		if serr != nil || min <= 0 {
+			err = p.parseFailed(raw, "min value is not a valid number")
+			return
+		}
+		max, serr := strconv.Atoi(r[2])
+		if serr != nil {
+			err = p.parseFailed(raw, "max value is not a valid number")
+			return
+		}
+		// max val must be greater than min val
+		if min > max {
+			err = p.parseFailed(raw, "min value is greater than max value")
+			return
+		}
+
+		if int64(max) > int64(routeTableMaxLinux) {
+			err = p.parseFailed(raw, "max value is too high")
+			return
+		}
+
+		tablesTargeted += max - min
+		if tablesTargeted > routeTableRangeMaxTables {
+			err = p.parseFailed(raw, "targets too many tables")
+			return
+		}
+
+		// check if ranges collide with reserved linux tables
+		includesReserved := false
+		for _, rsrv := range routeTablesReservedLinux {
+			if min <= rsrv && max >= rsrv {
+				includesReserved = true
+			}
+		}
+		if includesReserved {
+			log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
+		}
+
+		ranges = append(ranges, idalloc.IndexRange{Min: min, Max: max})
+	}
+
+	result = ranges
 	return
 }
 

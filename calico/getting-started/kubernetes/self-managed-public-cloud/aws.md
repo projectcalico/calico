@@ -76,8 +76,6 @@ Then install {{site.prodname}} for network policy only after the cluster is up a
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
-{% include /content/install-awscni-routetable-issue.md %}
-
 ##### Kubespray
 
 {% include open-new-window.html text='Kubespray' url='https://kubespray.io/' %} is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the {% include open-new-window.html text='Kubespray docs' url='https://kubespray.io/#/?id=network-plugins' %} for more details.

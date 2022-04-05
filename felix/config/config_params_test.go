@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,9 +60,14 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"loadClientConfigFromEnvironment",
 		"useNodeResourceUpdates",
 		"internalOverrides",
+		"BPFHostConntrackBypass",
+
+		// Temporary field to implement and test IPv6 in BPF dataplane
+		"BpfIpv6Support",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",
+		"VXLANEnabled":                       "VXLANEnabled",
 		"IpInIpMtu":                          "IPIPMTU",
 		"Ipv6Support":                        "IPv6Support",
 		"IptablesLockTimeoutSecs":            "IptablesLockTimeout",
@@ -99,6 +104,9 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 				continue
 			}
 			if strings.Contains(string(f.Tag), "local") {
+				continue
+			}
+			if n == "Encapsulation" {
 				continue
 			}
 			Expect(fcFields).To(HaveKey(n))
@@ -180,6 +188,8 @@ var _ = Describe("Config override empty", func() {
 		})
 	})
 })
+
+var t bool = true
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
@@ -302,9 +312,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", "", (*regexp.Regexp)(nil)),
 	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", ".*", regexp.MustCompile(".*")),
 
-	Entry("IpInIpEnabled", "IpInIpEnabled", "true", true),
-	Entry("IpInIpEnabled", "IpInIpEnabled", "y", true),
-	Entry("IpInIpEnabled", "IpInIpEnabled", "True", true),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "true", &t),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "y", &t),
+	Entry("IpInIpEnabled", "IpInIpEnabled", "True", &t),
 
 	Entry("IpInIpMtu", "IpInIpMtu", "1234", int(1234)),
 	Entry("IpInIpTunnelAddr", "IpInIpTunnelAddr",
@@ -539,7 +549,9 @@ var _ = Describe("DatastoreConfig tests", func() {
 		BeforeEach(func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
-			c.IpInIpEnabled = true
+			t := true
+			c.IpInIpEnabled = &t
+			c.Encapsulation.IPIPEnabled = true
 		})
 		It("should leave node polling enabled", func() {
 			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeFalse())
@@ -549,7 +561,9 @@ var _ = Describe("DatastoreConfig tests", func() {
 		BeforeEach(func() {
 			c = config.New()
 			c.DatastoreType = "k8s"
-			c.IpInIpEnabled = false
+			f := false
+			c.IpInIpEnabled = &f
+			c.Encapsulation.IPIPEnabled = false
 		})
 		It("should leave node polling enabled", func() {
 			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeTrue())
@@ -705,8 +719,19 @@ var _ = DescribeTable("Config validation",
 	Entry("invalid RouteTableRange", map[string]string{
 		"RouteTableRange": "1-255",
 	}, false),
-	Entry("invalid RouteTableRange", map[string]string{
-		"RouteTableRange": "abcde",
+	Entry("valid RouteTableRanges", map[string]string{
+		"RouteTableRanges": "1-10000",
+	}, true),
+	// 0xFFFFFFFF + 1
+	Entry("overflowing RouteTableRanges", map[string]string{
+		"RouteTableRanges": "4294967295-4294967296",
+	}, false),
+	// exceeds max allowed number of individual tables
+	Entry("excessive RouteTableRanges", map[string]string{
+		"RouteTableRanges": "1-100000000",
+	}, false),
+	Entry("invalid RouteTableRanges", map[string]string{
+		"RouteTableRanges": "abcde",
 	}, false),
 )
 

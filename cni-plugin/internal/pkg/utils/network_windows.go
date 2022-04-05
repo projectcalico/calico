@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
@@ -204,9 +204,9 @@ func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 	conf types.NetConf,
 	epIDs WEPIdentifiers,
 	endpoint *api.WorkloadEndpoint,
-	logger *logrus.Entry) (*current.Result, error) {
+	logger *logrus.Entry) (*cniv1.Result, error) {
 	var err error
-	var result *current.Result
+	var result *cniv1.Result
 
 	logger.Debugf("CheckForSpuriousDockerAdd: containerID: %v, ifName: %v, netns: %v, epIDs: %+v, ep: %+v", args.ContainerID, args.IfName, args.Netns, epIDs, endpoint)
 

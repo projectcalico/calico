@@ -188,7 +188,16 @@ type RouteTable struct {
 	conntrack         conntrackIface
 	time              timeshim.Interface
 
-	opReporter logutils.OpRecorder
+	opReporter       logutils.OpRecorder
+	livenessCallback func()
+}
+
+type RouteTableOpt func(table *RouteTable)
+
+func WithLivenessCB(cb func()) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.livenessCallback = cb
+	}
 }
 
 func New(
@@ -201,6 +210,7 @@ func New(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
+	opts ...RouteTableOpt,
 ) *RouteTable {
 	return NewWithShims(
 		interfaceRegexes,
@@ -216,6 +226,7 @@ func New(
 		removeExternalRoutes,
 		tableIndex,
 		opReporter,
+		opts...,
 	)
 }
 
@@ -234,6 +245,7 @@ func NewWithShims(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
+	opts ...RouteTableOpt,
 ) *RouteTable {
 	var filteredRegexes []string
 	includeNoOIF := false
@@ -273,7 +285,7 @@ func NewWithShims(
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
 
-	return &RouteTable{
+	rt := &RouteTable{
 		logCxt:                         logCxt,
 		ipVersion:                      ipVersion,
 		netlinkFamily:                  family,
@@ -298,7 +310,14 @@ func NewWithShims(
 		removeExternalRoutes:           removeExternalRoutes,
 		tableIndex:                     tableIndex,
 		opReporter:                     opReporter,
+		livenessCallback:               func() {},
 	}
+
+	for _, o := range opts {
+		o(rt)
+	}
+
+	return rt
 }
 
 func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
@@ -489,6 +508,7 @@ func (r *RouteTable) Apply() error {
 			// route deletions then the delta processing for those interfaces will ensure conntrack entries are deleted.
 			seen := set.New()
 			for _, link := range links {
+				r.livenessCallback()
 				attrs := link.Attrs()
 				if attrs == nil {
 					continue
@@ -535,6 +555,7 @@ func (r *RouteTable) Apply() error {
 	ifaceLoop:
 		for ifaceName, ia := range r.ifaceNameToUpdateType {
 			logCxt := r.logCxt.WithField("ifaceName", ifaceName)
+			r.livenessCallback()
 			firstTry := retry == 0
 			lastTry := retry == maxApplyRetries-1
 			fullResync := ia == updateTypeFullResync || lastTry
@@ -578,7 +599,7 @@ func (r *RouteTable) Apply() error {
 			}
 		}
 	}
-
+	r.livenessCallback()
 	r.cleanUpPendingConntrackDeletions()
 
 	// Don't return a failure if there are only interfaces in the cleanup grace period.
@@ -639,6 +660,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 		for _, target := range r.ifaceNameToTargets[ifaceName] {
 			if r.ipVersion == 4 && target.DestMAC != nil {
 				// TODO(smc) clean up/sync old ARP entries
+				r.livenessCallback()
 				err := r.addStaticARPEntry(target.CIDR, target.DestMAC, ifaceName)
 				if err != nil {
 					logCxt.WithError(err).Warn("Failed to set ARP entry")
@@ -670,6 +692,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 
 	// Delete the combined set of routes.
 	for _, route := range routesToDelete {
+		r.livenessCallback()
 		if err := nl.RouteDel(&route); err != nil {
 			logCxt.WithError(err).Warn("Failed to delete route")
 			updatesFailed = true
@@ -678,6 +701,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 
 	// Now add target routes.
 	for _, target := range targetsToCreate {
+		r.livenessCallback()
 		route := r.createL3Route(linkAttrs, target)
 
 		// In case this IP is being re-used, wait for any previous conntrack entry
@@ -825,6 +849,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 		routeFilter.LinkIndex = linkAttrs.Index
 	}
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+	r.livenessCallback()
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.

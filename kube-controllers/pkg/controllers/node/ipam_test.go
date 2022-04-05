@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/tools/cache"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -80,7 +83,6 @@ func assertConsistentState(c *ipamController) {
 	for cidr, n := range c.nodesByBlock {
 		ExpectWithOffset(1, c.blocksByNode[n][cidr]).To(BeTrue(), fmt.Sprintf("Block %s not present in blocksByNode", cidr))
 	}
-
 }
 
 var _ = Describe("IPAM controller UTs", func() {
@@ -88,6 +90,7 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *ipamController
 	var cli client.Interface
 	var cs kubernetes.Interface
+	var ni cache.Indexer
 	var stopChan chan struct{}
 
 	BeforeEach(func() {
@@ -96,6 +99,10 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a fake Calico client.
 		cli = NewFakeCalicoClient()
+
+		// Create a node indexer with the fake clientset
+		factory := informers.NewSharedInformerFactory(cs, 0)
+		ni = factory.Core().V1().Nodes().Informer().GetIndexer()
 
 		// Config for the test.
 		cfg := config.NodeControllerConfig{
@@ -107,7 +114,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs)
+		c = NewIPAMController(cfg, cli, cs, ni)
 	})
 
 	AfterEach(func() {
@@ -165,11 +172,34 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Send a delete for the node, which should remove the entry from the cache.
 		update.KVPair.Value = nil
 		c.onUpdate(update)
-		Eventually(func() string {
+		Eventually(func() map[string]string {
 			done := c.pause()
 			defer done()
-			return c.kubernetesNodesByCalicoName[n.Name]
-		}, 1*time.Second, 100*time.Millisecond).Should(Equal(""), "Cache not updated after DELETE")
+			return c.kubernetesNodesByCalicoName
+		}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveKey(n.Name), "Cache not updated after DELETE")
+
+		// Recreate the Calico node as a non-Kubernetes node.
+		n.Spec.OrchRefs[0].Orchestrator = apiv3.OrchestratorOpenStack
+		update.KVPair.Value = &n
+		update.UpdateType = bapi.UpdateTypeKVNew
+		c.onUpdate(update)
+
+		// Expect the cache to be updated, mapping the Calico name to "".
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			kname, ok := c.kubernetesNodesByCalicoName[n.Name]
+			return ok && kname == ""
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Cache not updated as expected after ADD of non-k8s node")
+
+		// Send a delete for the non-Kubernetes node, which should remove the entry from the cache.
+		update.KVPair.Value = nil
+		c.onUpdate(update)
+		Eventually(func() map[string]string {
+			done := c.pause()
+			defer done()
+			return c.kubernetesNodesByCalicoName
+		}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveKey(n.Name), "Cache not updated after DELETE")
 	})
 
 	It("should handle adding and deleting blocks", func() {
@@ -231,6 +261,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			ip:     "10.0.0.0",
 			handle: handle,
 			attrs:  b.Attributes[0].AttrSecondary,
+			block:  "10.0.0.0/30",
 		}
 
 		// Unique ID we expect for this allocation.
@@ -317,6 +348,190 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 	})
 
+	It("should maintain pool and block mappings", func() {
+		// Start the controller.
+		c.Start(stopChan)
+
+		// Add first block with no pools established.
+		firstBlockCIDR := net.MustParseCIDR("192.168.0.0/30")
+		firstBlockAff := "host:cnode"
+		firstBlockKey := model.BlockKey{CIDR: firstBlockCIDR}
+		firstBlock := model.AllocationBlock{
+			CIDR:        firstBlockCIDR,
+			Affinity:    &firstBlockAff,
+			Allocations: []*int{nil, nil, nil, nil},
+			Unallocated: []int{0, 1, 2, 3},
+			Attributes:  []model.AllocationAttribute{},
+		}
+		firstBlockKVP := model.KVPair{
+			Key:   firstBlockKey,
+			Value: &firstBlock,
+		}
+		firstBlockUpdate := bapi.Update{KVPair: firstBlockKVP, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(firstBlockUpdate)
+
+		// Expect new entries in the pool manager maps under unknown pool.
+		Eventually(func() string {
+			done := c.pause()
+			defer done()
+			return c.poolManager.poolsByBlock[firstBlockCIDR.String()]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(unknownPoolLabel))
+		Eventually(func() map[string]bool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.blocksByPool[unknownPoolLabel]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(map[string]bool{firstBlockCIDR.String(): true}))
+		Eventually(func() map[string]*apiv3.IPPool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.allPools
+		}, 1*time.Second, 100*time.Millisecond).Should(BeEmpty())
+
+		// Establish first pool for the first block.
+		firstIPPoolName := "ippool-1"
+		firstIPPoolKey := model.ResourceKey{Name: firstIPPoolName, Kind: apiv3.KindIPPool}
+		firstIPPool := apiv3.IPPool{}
+		firstIPPool.Name = firstIPPoolName
+		firstIPPool.Spec.CIDR = "192.168.0.0/24"
+		firstIPPool.Spec.BlockSize = 30
+		firstIPPool.Spec.NodeSelector = "all()"
+		firstIPPool.Spec.Disabled = false
+		firstPoolKVP := model.KVPair{
+			Key:   firstIPPoolKey,
+			Value: &firstIPPool,
+		}
+		firstPoolUpdate := bapi.Update{
+			KVPair:     firstPoolKVP,
+			UpdateType: bapi.UpdateTypeKVNew,
+		}
+		c.onUpdate(firstPoolUpdate)
+
+		// Expect first block to be associated with first pool.
+		Eventually(func() string {
+			done := c.pause()
+			defer done()
+			return c.poolManager.poolsByBlock[firstBlockCIDR.String()]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(firstIPPoolName))
+		Eventually(func() map[string]bool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.blocksByPool[firstIPPoolName]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(map[string]bool{firstBlockCIDR.String(): true}))
+		Eventually(func() *apiv3.IPPool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.allPools[firstIPPoolName]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(&firstIPPool))
+
+		// Create a second pool and a second block immediately associated to it.
+		secondIPPoolName := "ippool-2"
+		secondIPPoolKey := model.ResourceKey{Name: secondIPPoolName, Kind: apiv3.KindIPPool}
+		secondIPPool := apiv3.IPPool{}
+		secondIPPool.Name = secondIPPoolName
+		secondIPPool.Spec.CIDR = "10.16.0.0/24"
+		secondIPPool.Spec.BlockSize = 30
+		secondIPPool.Spec.NodeSelector = "all()"
+		secondIPPool.Spec.Disabled = false
+		secondIPPoolKVP := model.KVPair{
+			Key:   secondIPPoolKey,
+			Value: &secondIPPool,
+		}
+		secondPoolUpdate := bapi.Update{
+			KVPair:     secondIPPoolKVP,
+			UpdateType: bapi.UpdateTypeKVNew,
+		}
+		c.onUpdate(secondPoolUpdate)
+
+		secondBlockCIDR := net.MustParseCIDR("10.16.0.0/30")
+		secondBlockAff := "host:cnode"
+		secondBlockKey := model.BlockKey{CIDR: secondBlockCIDR}
+		secondBlock := model.AllocationBlock{
+			CIDR:        secondBlockCIDR,
+			Affinity:    &secondBlockAff,
+			Allocations: []*int{nil, nil, nil, nil},
+			Unallocated: []int{0, 1, 2, 3},
+			Attributes:  []model.AllocationAttribute{},
+		}
+		secondBlockKVP := model.KVPair{
+			Key:   secondBlockKey,
+			Value: &secondBlock,
+		}
+		secondBlockUpdate := bapi.Update{KVPair: secondBlockKVP, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(secondBlockUpdate)
+
+		// Expect second block to be associated with second pool.
+		Eventually(func() string {
+			done := c.pause()
+			defer done()
+			return c.poolManager.poolsByBlock[secondBlockCIDR.String()]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(secondIPPoolName))
+		Eventually(func() map[string]bool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.blocksByPool[secondIPPoolName]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(map[string]bool{secondBlockCIDR.String(): true}))
+		Eventually(func() *apiv3.IPPool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.allPools[secondIPPoolName]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(&secondIPPool))
+
+		// Delete second block (associated with second pool). Expect block to be removed from pool maps.
+		secondBlockUpdate.KVPair.Value = nil
+		c.onUpdate(secondBlockUpdate)
+		Eventually(func() string {
+			done := c.pause()
+			defer done()
+			return c.poolManager.poolsByBlock[secondBlockCIDR.String()]
+		}, 1*time.Second, 100*time.Millisecond).Should(BeEmpty())
+		Eventually(func() map[string]bool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.blocksByPool[secondIPPoolName]
+		}, 1*time.Second, 100*time.Millisecond).Should(BeEmpty())
+
+		// Delete first pool. Expect first block to be associated with unknown pool, and pool removed from pool cache.
+		firstPoolUpdate.KVPair.Value = nil
+		c.onUpdate(firstPoolUpdate)
+		Eventually(func() string {
+			done := c.pause()
+			defer done()
+			return c.poolManager.poolsByBlock[firstBlockCIDR.String()]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(unknownPoolLabel))
+		Eventually(func() map[string]bool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.blocksByPool[unknownPoolLabel]
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(map[string]bool{firstBlockCIDR.String(): true}))
+		Eventually(func() *apiv3.IPPool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.allPools[firstIPPoolName]
+		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
+
+		// Delete first block (unassociated with a pool). Expect block to be removed from pool maps.
+		firstBlockUpdate.KVPair.Value = nil
+		c.onUpdate(firstBlockUpdate)
+		Eventually(func() string {
+			done := c.pause()
+			defer done()
+			return c.poolManager.poolsByBlock[firstBlockCIDR.String()]
+		}, 1*time.Second, 100*time.Millisecond).Should(BeEmpty())
+		Eventually(func() map[string]bool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.blocksByPool[firstIPPoolName]
+		}, 1*time.Second, 100*time.Millisecond).Should(BeEmpty())
+
+		// The unknown pool has no more blocks, it should be removed from the blocksByPool map.
+		// The second pool has no more blocks, it should remain from the blocksByPool map since it is an active pool.
+		Eventually(func() map[string]map[string]bool {
+			done := c.pause()
+			defer done()
+			return c.poolManager.blocksByPool
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(map[string]map[string]bool{"ippool-2": {}}))
+	})
+
 	It("should handle node deletion properly", func() {
 		// Start the controller.
 		c.Start(stopChan)
@@ -374,6 +589,52 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			return fakeClient.affinityReleased("cnode")
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+	})
+
+	It("should handle clusterinformation updates and maintain its clusterinformation datastoreReady cache", func() {
+		// Start the controller.
+		c.Start(stopChan)
+
+		calicoNodeName := "cname"
+		isReady := false
+
+		key := model.ResourceKey{Name: calicoNodeName, Kind: apiv3.KindClusterInformation}
+		ci := apiv3.ClusterInformation{}
+		ci.Name = calicoNodeName
+		ci.Spec.DatastoreReady = &isReady
+		kvp := model.KVPair{
+			Key:   key,
+			Value: &ci,
+		}
+		update := bapi.Update{
+			KVPair:     kvp,
+			UpdateType: bapi.UpdateTypeKVNew,
+		}
+
+		// Send a new ClusterInformation update.
+		c.onUpdate(update)
+
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(false), "Cache not updated after UPDATE")
+
+		isReady = true
+		c.onUpdate(update)
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(true), "Cache not updated after ADD")
+
+		update.KVPair.Value = nil
+		c.onUpdate(update)
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return c.datastoreReady
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(false), "Cache not updated after DELETE")
 	})
 
 	It("should clean up leaked IP addresses", func() {

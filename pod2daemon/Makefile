@@ -15,12 +15,9 @@ include ../lib.Makefile
 
 ###############################################################################
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
+# We need CGO to leverage Boring SSL.  However, pod2daemon doesn't perform any crypto,
+# so we can disable it across the board.
 CGO_ENABLED=0
-endif
 
 SRC_FILES=$(shell find -name '*.go')
 
@@ -71,7 +68,7 @@ sub-image-%:
 
 $(FLEXVOL_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
-	docker build -t $(FLEXVOL_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg UBI_IMAGE=$(UBI_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

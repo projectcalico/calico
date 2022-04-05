@@ -60,15 +60,6 @@ func WithImmediateSync() Option {
 	return WithMinSyncPeriod(0)
 }
 
-// WithEndpointsSlices enables using EndpointSlices
-func WithEndpointsSlices() Option {
-	return makeOption(func(p *proxy) error {
-		p.endpointSlicesEnabled = true
-		log.Infof("proxy.WithEndpointsSlices()")
-		return nil
-	})
-}
-
 // WithDSREnabled sets the DSR mode
 func WithDSREnabled() Option {
 	return makeKubeProxyOption(func(kp *KubeProxy) error {

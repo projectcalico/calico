@@ -28,8 +28,9 @@ import (
 	"syscall"
 	"time"
 
-	docopt "github.com/docopt/docopt-go"
+	"github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 
@@ -419,7 +420,7 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 		ticker := jitter.NewTicker(
 			t.ConfigParams.K8sServicePollIntervalSecs,
 			t.ConfigParams.K8sServicePollIntervalSecs/10)
-		go k8s.PollK8sForConnectionLimit(cxt, t.ConfigParams, ticker.C, k8sAPI, t.Server)
+		go k8s.PollK8sForConnectionLimit(cxt, t.ConfigParams, ticker.C, k8sAPI, t.Server, len(t.CachesBySyncerType))
 	}
 	log.Info("Started the datastore Syncer/cache layer/server.")
 
@@ -549,11 +550,11 @@ func servePrometheusMetrics(configParams *config.Config) {
 		} else {
 			if !configParams.PrometheusGoMetricsEnabled {
 				log.Info("Discarding Golang metrics")
-				prometheus.Unregister(prometheus.NewGoCollector())
+				prometheus.Unregister(collectors.NewGoCollector())
 			}
 			if !configParams.PrometheusProcessMetricsEnabled {
 				log.Info("Discarding process metrics")
-				prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+				prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 			}
 		}
 		http.Handle("/metrics", promhttp.Handler())

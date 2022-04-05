@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
 
@@ -57,6 +58,8 @@ type AttachPoint struct {
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
+	IPv6Enabled          bool
+	MapSizes             map[string]uint32
 }
 
 var tcLock sync.RWMutex
@@ -127,7 +130,6 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	defer tcLock.RUnlock()
 	logCxt.Debug("AttachProgram got lock.")
 
-	//nolint
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
 		return "", err
@@ -150,7 +152,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 			continue
 		}
 		subDir := "globals"
-		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), "cali_jump") {
+		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
 			// Remove period in the interface name if any
 			ifName := strings.ReplaceAll(ap.Iface, ".", "")
 			if ap.Hook == HookIngress {
@@ -158,6 +160,9 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 			} else {
 				subDir = ifName + "_egr/"
 			}
+		}
+		if err := ap.setMapSize(m); err != nil {
+			return "", fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
 		pinPath := path.Join(baseDir, subDir, m.Name())
 		if err := m.SetPinPath(pinPath); err != nil {
@@ -183,7 +188,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		isHost = true
 	}
 
-	err = updateJumpMap(obj, isHost)
+	err = updateJumpMap(obj, isHost, ap.IPv6Enabled)
 	if err != nil {
 		return "", fmt.Errorf("error updating jump map %v", err)
 	}
@@ -362,7 +367,7 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 
 // FileName return the file the AttachPoint will load the program from
 func (ap AttachPoint) FileName() string {
-	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel)
+	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, bpfutils.BTFEnabled)
 }
 
 func (ap AttachPoint) IsAttached() (bool, error) {
@@ -399,7 +404,7 @@ func CleanUpJumpMaps() {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), "cali_jump") {
+		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) {
 			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
@@ -611,30 +616,73 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		return err
 	}
 
+	var flags uint32
+	if ap.IPv6Enabled {
+		flags |= libbpf.GlobalsIPv6Enabled
+	}
+
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, flags)
 }
 
-// nolint
-func updateJumpMap(obj *libbpf.Obj, isHost bool) error {
-	if !isHost {
-		err := obj.UpdateJumpMap("cali_jump", string(policyProgram), PolicyProgramIndex)
-		if err != nil {
-			return fmt.Errorf("error updating policy program %v", err)
-		}
-	}
-	err := obj.UpdateJumpMap("cali_jump", string(allowProgram), AllowProgramIndex)
-	if err != nil {
-		return fmt.Errorf("error updating epilogue program %v", err)
-	}
-	err = obj.UpdateJumpMap("cali_jump", string(icmpProgram), IcmpProgramIndex)
-	if err != nil {
-		return fmt.Errorf("error updating icmp program %v", err)
+func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
+	if size, ok := ap.MapSizes[m.Name()]; ok {
+		return m.SetMapSize(size)
 	}
 	return nil
 }
 
-// nolint
+func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
+	ipVersions := []string{"IPv4"}
+	if ipv6Enabled {
+		ipVersions = append(ipVersions, "IPv6")
+	}
+
+	for _, ipFamily := range ipVersions {
+		// Since in IPv4, we don't add prologue to the jump map, and hence the first
+		// program is policy, the base index should be set to -1 to properly offset the
+		// policy program (base+1) to the first entry in the jump map, i.e. 0. However,
+		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
+		base := -1
+		if ipFamily == "IPv6" {
+			base = 4
+		}
+
+		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
+		// of execution, and we don't need to add it into the jump map
+		if ipFamily == "IPv6" {
+			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[base]), base)
+			if err != nil {
+				return fmt.Errorf("error updating %v proglogue program: %v", ipFamily, err)
+			}
+		}
+		pIndex := base + 1
+		if !isHost {
+			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
+			if err != nil {
+				return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
+			}
+		}
+		eIndex := base + 2
+		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
+		}
+		iIndex := base + 3
+		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
+		}
+		dIndex := base + 4
+		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
+		}
+	}
+
+	return nil
+}
+
 func convertIPToUint32(ip net.IP) (uint32, error) {
 	ipv4 := ip.To4()
 	if ipv4 == nil {

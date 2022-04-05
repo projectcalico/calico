@@ -85,7 +85,7 @@ func (c *FakeBGPPeers) Update(ctx context.Context, bGPPeer *v3.BGPPeer, opts v1.
 // Delete takes name of the bGPPeer and deletes it. Returns an error if one occurs.
 func (c *FakeBGPPeers) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(bgppeersResource, name), &v3.BGPPeer{})
+		Invokes(testing.NewRootDeleteActionWithOptions(bgppeersResource, name, opts), &v3.BGPPeer{})
 	return err
 }
 

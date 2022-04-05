@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,10 +87,18 @@ func (m *Map) IsMapInternal() bool {
 	panic("LIBBPF syscall stub")
 }
 
-func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16) error {
+const (
+	GlobalsIPv6Enabled uint32 = 1
+)
+
+func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16, _ uint32) error {
 	panic("LIBBPF syscall stub")
 }
 
 func CTLBSetGlobals(_ *Map, _ time.Duration) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (m *Map) SetMapSize(size uint32) error {
 	panic("LIBBPF syscall stub")
 }

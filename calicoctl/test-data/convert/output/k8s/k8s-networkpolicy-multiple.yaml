@@ -1,8 +1,11 @@
+apiVersion: v1
+items:
 - apiVersion: projectcalico.org/v3
   kind: NetworkPolicy
   metadata:
     creationTimestamp: null
     name: test-network-policy1
+    namespace: test-ns
   spec:
     egress:
     - action: Allow
@@ -68,3 +71,5 @@
     selector: projectcalico.org/orchestrator == 'k8s'
     types:
     - Egress
+kind: List
+metadata: {}

@@ -91,7 +91,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
 		infra.Stop()

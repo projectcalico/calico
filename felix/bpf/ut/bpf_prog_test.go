@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -216,7 +216,7 @@ outter:
 
 		log.WithField("hostIP", hostIP).Info("Host IP")
 		log.WithField("intfIP", intfIP).Info("Intf IP")
-		obj += fmt.Sprintf("fib_%s_skb0x%x", loglevel, skbMark)
+		obj += fmt.Sprintf("fib_%s", loglevel)
 
 		if strings.Contains(section, "_dsr") {
 			obj += "_dsr"
@@ -238,6 +238,7 @@ outter:
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
+	bin.PatchSkbMark(skbMark)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -432,10 +433,24 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 				return errors.Wrap(err, "failed to update jump map (policy program)")
 			}
 		}
+		if !forXDP {
+			polProgPathv6 := path.Join(bpfFsDir, "classifier_tc_policy_v6")
+			_, err = os.Stat(polProgPathv6)
+			if err == nil {
+				_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0", "value", "pinned", polProgPathv6)
+				if err != nil {
+					return errors.Wrap(err, "failed to update jump map (policy_v6 program)")
+				}
+			}
+		}
 	} else {
 		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0")
 		if err != nil {
 			log.WithError(err).Info("failed to update jump map (deleting policy program)")
+		}
+		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0")
+		if err != nil {
+			log.WithError(err).Info("failed to update jump map (deleting policy_v6 program)")
 		}
 	}
 	polProgPath := "1_1"
@@ -451,6 +466,26 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "2", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "3", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (drop program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (prologue_v6)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "6", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_accept_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (accept_v6 program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "7", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (icmp_v6 program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "8", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (drop_v6 program)")
 		}
 	}
 
@@ -836,96 +871,177 @@ var ipv4Default = &layers.IPv4{
 	Protocol: layers.IPProtocolUDP,
 }
 
+var srcIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+var dstIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2})
+
+var ipv6Default = &layers.IPv6{
+	Version:    6,
+	HopLimit:   64,
+	SrcIP:      srcIPv6,
+	DstIP:      dstIPv6,
+	NextHeader: layers.IPProtocolUDP,
+}
+
 var udpDefault = &layers.UDP{
 	SrcPort: 1234,
 	DstPort: 5678,
 }
 
-func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.Layer, payloadAlt []byte) (
+func testPacket(eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket.Layer, payload []byte) (
 	*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+	pkt := Packet{
+		eth:     eth,
+		l3:      l3,
+		l4:      l4,
+		payload: payload,
+	}
+	err := pkt.Generate()
+	return pkt.eth, pkt.ipv4, pkt.l4, pkt.payload, pkt.bytes, err
+}
 
-	var (
-		eth     *layers.Ethernet
-		ipv4    *layers.IPv4
-		udp     *layers.UDP
-		tcp     *layers.TCP
-		icmp    *layers.ICMPv4
-		payload []byte
-	)
+type Packet struct {
+	eth        *layers.Ethernet
+	l3         gopacket.Layer
+	ipv4       *layers.IPv4
+	ipv6       *layers.IPv6
+	l4         gopacket.Layer
+	udp        *layers.UDP
+	tcp        *layers.TCP
+	icmp       *layers.ICMPv4
+	icmpv6     *layers.ICMPv6
+	payload    []byte
+	bytes      []byte
+	layers     []gopacket.SerializableLayer
+	length     int
+	l4Protocol layers.IPProtocol
+	l3Protocol layers.EthernetType
+}
 
-	if ethAlt != nil {
-		eth = ethAlt
-	} else {
-		eth = ethDefault
+func (pkt *Packet) handlePayload() {
+	if pkt.payload == nil {
+		pkt.payload = payloadDefault
+	}
+	pkt.length = len(pkt.payload)
+	pkt.layers = []gopacket.SerializableLayer{gopacket.Payload(pkt.payload)}
+}
+
+func (pkt *Packet) handleL4() error {
+	if pkt.l4 == nil {
+		pkt.l4 = udpDefault
 	}
 
-	if ipv4Alt != nil {
-		ipv4 = ipv4Alt
-	} else {
-		// Make a copy so that we do not mangle the default if we set the
-		// protocol below.
-		ipv4 = new(layers.IPv4)
-		*ipv4 = *ipv4Default
+	switch v := pkt.l4.(type) {
+	case *layers.UDP:
+		pkt.udp = v
+		pkt.length += 8
+		pkt.l4Protocol = layers.IPProtocolUDP
+		pkt.layers = append(pkt.layers, pkt.udp)
+	case *layers.TCP:
+		pkt.tcp = v
+		pkt.length += 20
+		pkt.l4Protocol = layers.IPProtocolTCP
+		pkt.layers = append(pkt.layers, pkt.tcp)
+	case *layers.ICMPv4:
+		pkt.icmp = v
+		pkt.length += 8
+		pkt.l4Protocol = layers.IPProtocolICMPv4
+		pkt.layers = append(pkt.layers, pkt.icmp)
+	case *layers.ICMPv6:
+		pkt.icmpv6 = v
+		pkt.length += 8
+		pkt.l4Protocol = layers.IPProtocolICMPv6
+		pkt.layers = append(pkt.layers, pkt.icmpv6)
+	default:
+		return errors.Errorf("unrecognized l4 layer type %t", pkt.l4)
+	}
+	return nil
+}
+
+func (pkt *Packet) handleL3() error {
+	if pkt.l3 == nil {
+		pkt.l3 = ipv4Default
 	}
 
-	if l4Alt != nil {
-		switch v := l4Alt.(type) {
-		case *layers.UDP:
-			udp = v
-			ipv4.Protocol = layers.IPProtocolUDP
-		case *layers.TCP:
-			tcp = v
-			ipv4.Protocol = layers.IPProtocolTCP
-		case *layers.ICMPv4:
-			icmp = v
-			ipv4.Protocol = layers.IPProtocolICMPv4
-		default:
-			return nil, nil, nil, nil, nil, errors.Errorf("unrecognized l4 layer type %t", l4Alt)
+	switch v := pkt.l3.(type) {
+	case *layers.IPv4:
+		pkt.ipv4 = v
+		pkt.l3Protocol = layers.EthernetTypeIPv4
+		pkt.ipv4.Protocol = pkt.l4Protocol
+		pkt.ipv4.Length = uint16(pkt.length + 5*4)
+		pkt.layers = append(pkt.layers, pkt.ipv4)
+	case *layers.IPv6:
+		pkt.ipv6 = v
+		pkt.l3Protocol = layers.EthernetTypeIPv6
+		pkt.ipv6.NextHeader = pkt.l4Protocol
+		pkt.ipv6.Length = uint16(pkt.length)
+		pkt.layers = append(pkt.layers, pkt.ipv6)
+	default:
+		return errors.Errorf("unrecognized l3 layer type %t", pkt.l3)
+	}
+	return nil
+}
+
+func (pkt *Packet) handleEthernet() {
+	if pkt.eth == nil {
+		pkt.eth = ethDefault
+	}
+	pkt.eth.EthernetType = pkt.l3Protocol
+	pkt.layers = append(pkt.layers, pkt.eth)
+}
+
+func (pkt *Packet) setChecksum() {
+	switch pkt.l4Protocol {
+	case layers.IPProtocolUDP:
+		if pkt.l3Protocol == layers.EthernetTypeIPv6 {
+			_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv6)
+		} else {
+			_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv4)
 		}
-	} else {
-		udp = udpDefault
-	}
-
-	if payloadAlt != nil {
-		payload = payloadAlt
-	} else {
-		payload = payloadDefault
-	}
-
-	switch {
-	case udp != nil:
-		ipv4.Length = uint16(5*4 + 8 + len(payload))
-		udp.Length = uint16(8 + len(payload))
-		_ = udp.SetNetworkLayerForChecksum(ipv4)
-
-		pkt := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-			eth, ipv4, udp, gopacket.Payload(payload))
-
-		return eth, ipv4, udp, payload, pkt.Bytes(), err
-	case tcp != nil:
-		if tcp == nil {
-			return nil, nil, nil, nil, nil, errors.Errorf("tcp default not implemented yet")
+	case layers.IPProtocolTCP:
+		if pkt.l3Protocol == layers.EthernetTypeIPv6 {
+			_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv6)
+		} else {
+			_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv4)
 		}
-		ipv4.Length = uint16(5*4 + 8 + len(payload))
-		_ = tcp.SetNetworkLayerForChecksum(ipv4)
+	}
+}
 
-		pkt := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-			eth, ipv4, tcp, gopacket.Payload(payload))
-
-		return eth, ipv4, tcp, payload, pkt.Bytes(), err
-	case icmp != nil:
-		ipv4.Length = uint16(5*4 + 8 + len(payload))
-
-		pkt := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-			eth, ipv4, icmp, gopacket.Payload(payload))
-
-		return eth, ipv4, icmp, payload, pkt.Bytes(), err
+func (pkt *Packet) Generate() error {
+	pkt.handlePayload()
+	err := pkt.handleL4()
+	if err != nil {
+		return err
 	}
 
-	panic("UNREACHABLE")
+	err = pkt.handleL3()
+	if err != nil {
+		return err
+	}
+
+	pkt.handleEthernet()
+	pkt.setChecksum()
+	pkt.bytes, err = generatePacket(pkt.layers)
+	return err
+}
+
+func generatePacket(layers []gopacket.SerializableLayer) ([]byte, error) {
+	pkt := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to init packet buffer: %w", err)
+	}
+
+	for i, layer := range layers {
+		log.Infof("Layer %d: %v", i, layer)
+		if layer == nil {
+			continue
+		}
+		err = layer.SerializeTo(pkt, gopacket.SerializeOptions{ComputeChecksums: true})
+		if err != nil {
+			return nil, fmt.Errorf("Failed to serialize packet: %w", err)
+		}
+	}
+	return pkt.Bytes(), nil
 }
 
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
@@ -947,6 +1063,8 @@ func resetBPFMaps() {
 	resetCTMap(ctMap)
 	resetRTMap(rtMap)
 	resetMap(fsafeMap)
+	resetMap(natMap)
+	resetMap(natBEMap)
 }
 
 func TestMapIterWithDelete(t *testing.T) {

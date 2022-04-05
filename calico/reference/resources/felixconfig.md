@@ -38,6 +38,7 @@ spec:
 |------------------------------------|-----------------------------|-------------------|--------|------------|
 | awsSrcDstCheck                     | Controls automatically setting {% include open-new-window.html text='source-destination-check' url='https://docs.aws.amazon.com/vpc/latest/userguide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck' %} on an AWS EC2 instance running Felix. Setting the value to `Enable` will set the check value in the instance description to `true`. For `Disable`, the check value will be `false`. Setting must be `Disable` if you want the EC2 instance to process traffic not matching the host interface IP address. For example, EKS cluster using Calico CNI with `VXLANMode=CrossSubnet`. Check [IAM role and profile configuration](#aws-iam-rolepolicy-for-source-destination-check-configuration) for setting the necessary permission for this setting to work.| DoNothing, Enable, Disable | string | `DoNothing` |
 | chainInsertMode                    | Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule at the top of the chain or by appending a rule at the bottom. `Insert` is the safe default since it prevents {{site.prodname}}'s rules from being bypassed.  If you switch to `Append` mode, be sure that the other rules in the chains signal acceptance by falling through to the {{site.prodname}} rules, otherwise the {{site.prodname}} policy will be bypassed. | Insert, Append | string | `Insert` |
+| dataplaneWatchdogTimeout | Timeout before the main dataplane goroutine is determined to have hung and Felix will report non-live and non-ready.  Can be increased if the liveness check incorrectly fails (for example if Felix is running slowly on a heavily loaded system). | `90s`, `120s`, `10m` etc. | duration | `90s` |
 | defaultEndpointToHostAction        | This parameter controls what happens to traffic that goes from a workload endpoint to the host itself (after the traffic hits the endpoint egress policy).  By default {{site.prodname}} blocks traffic from workload endpoints to the host itself with an iptables "DROP" action. If you want to allow some or all traffic from endpoint to host, set this parameter to `Return` or `Accept`.  Use `Return` if you have your own rules in the iptables "INPUT" chain; {{site.prodname}} will insert its rules at the top of that chain, then `Return` packets to the "INPUT" chain once it has completed processing workload endpoint egress policy.  Use `Accept` to unconditionally accept packets from workloads after processing workload endpoint egress policy. | Drop, Return, Accept | string | `Drop` |
 | deviceRouteSourceAddress           | IPv4 address to set as the source hint for routes programmed by Felix. When not set the source address for local traffic from host to workload will be determined by the kernel. | IPv4 | string | `""` |
 | deviceRouteProtocol                | This defines the route protocol added to programmed device routes. | Protocol | int | RTPROT_BOOT |
@@ -47,7 +48,7 @@ spec:
 | genericXDPEnabled                  | When enabled, Felix can fallback to the non-optimized `generic` XDP mode. This should only be used for testing since it doesn't improve performance over the non-XDP mode. | true,false | boolean | `false` |
 | interfaceExclude                   | A comma-separated list of interface names that should be excluded when Felix is resolving host endpoints.  The default value ensures that Felix ignores Kubernetes' internal `kube-ipvs0` device. If you want to exclude multiple interface names using a single value, the list supports regular expressions. For regular expressions you must wrap the value with `/`. For example having values `/^kube/,veth1` will exclude all interfaces that begin with `kube` and also the interface `veth1`. | string | string | `kube-ipvs0` |
 | interfacePrefix                    | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces.  Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the 'cali' value, and our OpenStack integration sets the 'tap' value. | string | string | `cali` |
-| ipipEnabled                        | Whether Felix should configure an IPinIP interface on the host. Set automatically to `true` by `{{site.nodecontainer}}` or `calicoctl` when you create an IPIP-enabled pool. | boolean | `false` |
+| ipipEnabled                        | Optional, you shouldn't need to change this setting as Felix calculates if IPIP should be enabled based on the existing IP Pools. When set, this overrides whether Felix should configure an IPinIP interface on the host. When explicitly disabled in FelixConfiguration, Felix will not clean up addresses from the `tunl0` interface (use this if you need to add addresses to that interface and don't want to have them removed). | `true`, `false`, unset | optional boolean | unset |
 | ipipMTU                            | The MTU to set on the tunnel device. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu) | int | int | `0` |
 | ipsetsRefreshInterval              | Period at which Felix re-checks the IP sets in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable IP sets refresh.  Note: the default for this value is lower than the other refresh intervals as a workaround for a [Linux kernel bug](https://github.com/projectcalico/felix/issues/1347){:target="_blank"} that was fixed in kernel version 4.11. If you are using v4.11 or greater you may want to set this to a higher value to reduce Felix CPU usage. | `5s`, `10s`, `1m` etc. | duration | `10s` |
 | iptablesFilterAllowAction          | This parameter controls what happens to traffic that is accepted by a Felix policy chain in the iptables filter table (i.e. a normal policy chain). The default will immediately `Accept` the traffic. Use `Return` to send the traffic back up to the system chains for further processing.| Accept, Return |  string | `Accept` |
@@ -67,7 +68,7 @@ spec:
 | logSeverityScreen                  | The log severity above which logs are sent to the stdout. | Same as LogSeveritySys | string | `Info` |
 | logSeveritySys                     | The log severity above which logs are sent to the syslog. Set to `none` for no logging to syslog. | Debug, Info, Warning, Error, Fatal | string | `Info` |
 | logDebugFilenameRegex              | controls which source code files have their Debug log output included in the logs.  Only logs from files with names that match the given regular expression are included.  The filter only applies to Debug level logs. | regex | string | `""` |
-| maxIpsetSize                       | Maximum size for the ipsets used by Felix to implement tags. Should be set to a number that is greater than the maximum number of IP addresses that are ever expected in a tag. | int | int | `1048576` |
+| maxIpsetSize                       | Maximum size for the ipsets used by Felix. Should be set to a number that is greater than the maximum number of IP addresses that are ever expected in a selector. | int | int | `1048576` |
 | metadataAddr                       | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of `none` (case insensitive) means that Felix should not set up any NAT rule for the metadata path.  | IPv4, hostname, none | string | `127.0.0.1` |
 | metadataPort                       | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed. | int | int | `8775` |
 | natOutgoingAddress                 | The source address to use for outgoing NAT. By default an iptables MASQUERADE rule determines the source address which will use the address on the host interface the traffic leaves on. | IPV4 | string | `""` |
@@ -82,13 +83,14 @@ spec:
 | reportingInterval                  | Interval at which Felix reports its status into the datastore, or 0 to disable.  Must be non-zero in OpenStack deployments. | `5s`, `10s`, `1m` etc. | duration | `30s` |
 | reportingTTL                       | Time-to-live setting for process-wide status reports. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | routeRefreshInterval               | Period at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
-| routeTableRange                    | Calico programs additional Linux route tables for various purposes.  `RouteTableRange` specifies the indices of the route tables that Calico should use. |  | [RouteTableRange](#routetablerange) | `{Min: 1, Max: 250}` |
+| routeTableRange                    | *deprecated in favor of `RouteTableRanges`* Calico programs additional Linux route tables for various purposes. `RouteTableRange` specifies the indices of the route tables that Calico should use. |  | [RouteTableRanges](#routetablerange) | `""` |
+| routeTableRanges                    | Calico programs additional Linux route tables for various purposes. `RouteTableRanges` specifies a set of table index ranges that Calico should use. Deprecates `RouteTableRange`, overrides `RouteTableRange` |  | [RouteTableRanges](#routetableranges) | `[{"Min": 1, "Max": 250}]` |
 | serviceLoopPrevention              | When [service IP advertisement is enabled]({{ site.baseurl }}/networking/advertise-service-ips), prevent routing loops to service IPs that are not in use, by dropping or rejecting packets that do not get DNAT'd by kube-proxy.  Unless set to "Disabled", in which case such routing loops continue to be allowed. | `Drop`, `Reject`, `Disabled` | string | `Drop` |
 | sidecarAccelerationEnabled         | Enable experimental acceleration between application and proxy sidecar when using [application layer policy]({{ site.baseurl }}/security/app-layer-policy). [Default: `false`] | boolean | boolean | `false` |
 | usageReportingEnabled              | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. | boolean | boolean | `true` |
 | usageReportingInitialDelay         | Minimum initial delay before first usage report. | `5s`, `10s`, `1m` etc. | duration | `300s` |
 | usageReportingInterval             | The interval at which Felix does usage reports.  The default is 1 day.  | `5s`, `10s`, `1m` etc. | duration | `24h` |
-| vxlanEnabled                       | Automatically set when needed, you shouldn't need to change this setting: whether Felix should create the VXLAN tunnel device for VXLAN networking. | boolean | boolean | `false` |
+| vxlanEnabled                       | Optional, you shouldn't need to change this setting as Felix calculates if VXLAN should be enabled based on the existing IP Pools. When set, this overrides whether Felix should create the VXLAN tunnel device for VXLAN networking. | `true`, `false`, unset | optional boolean | unset |
 | vxlanMTU                           | MTU to use for the VXLAN tunnel device. Zero value means auto-detect. Also controls NodePort MTU when eBPF enabled. | int | int | `0` |
 | vxlanPort                          | Port to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4789` |
 | vxlanVNI                           | Virtual network ID to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4096` |
@@ -112,6 +114,12 @@ spec:
 | bpfKubeProxyIptablesCleanupEnabled | In eBPF dataplane mode, controls whether Felix will clean up the iptables rules created by the Kubernetes `kube-proxy`; should only be enabled if `kube-proxy` is not running. | true,false| boolean | true |
 | bpfKubeProxyMinSyncPeriod          | In eBPF dataplane mode, controls the minimum time between dataplane updates for Felix's embedded `kube-proxy` implementation. | `5s`, `10s`, `1m` etc. | duration | `1s` |
 | BPFKubeProxyEndpointSlicesEnabled  | In eBPF dataplane mode, controls whether Felix's embedded kube-proxy derives its services from Kubernetes' EndpointSlices resources. Using EndpointSlices is more efficient but it requires EndpointSlices support to be enabled at the Kubernetes API server. | true,false | boolean | false |
+| bpfMapSizeConntrack | In eBPF dataplane mode, controls the size of the conntrack map. | int | int | 512000 |
+| bpfMapSizeIPSets | In eBPF dataplane mode, controls the size of the ipsets map. | int | int | 1048576 |
+| bpfMapSizeNATAffinity | In eBPF dataplane mode, controls the size of the NAT affinity map. | int | int | 65536 |
+| bpfMapSizeNATFrontend | In eBPF dataplane mode, controls the size of the NAT front end map. | int | int | 65536 |
+| bpfMapSizeNATBackend | In eBPF dataplane mode, controls the size of the NAT back end map. | int | int | 262144 |
+| bpfMapSizeRoute | In eBPF dataplane mode, controls the size of the route map. | int | int | 262144 |
 | routeSource                        | Where Felix gets is routing information from for VXLAN and the BPF dataplane. The CalicoIPAM setting is more efficient because it supports route aggregation, but it only works when Calico's IPAM or host-local IPAM is in use. Use the WorkloadIPs setting if you are using Calico's VXLAN or BPF dataplane and not using Calico IPAM or host-local IPAM. | CalicoIPAM,WorkloadIPs | string | `CalicoIPAM` |
 | mtuIfacePattern                    | Pattern used to discover the host's interface for MTU auto-detection. | regex | string | `^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)` |
 
@@ -132,12 +140,32 @@ policy is always accelerated, using the best available BPF technology.
 | protocol | The protocol match   | tcp, udp, sctp                       | string |
 | net      | The CIDR match       | any valid CIDR (e.g. 192.168.0.0/16) | string |
 
+
 #### RouteTableRange
+The `RouteTableRange` option is now deprecated in favor of [RouteTableRanges](#routetableranges).
 
 | Field    | Description          | Accepted Values   | Schema |
 |----------|----------------------|-------------------|--------|
 | min      | Minimum index to use | 1-250             | int    |
 | max      | Maximum index to use | 1-250             | int    |
+
+#### RouteTableRanges
+`RouteTableRanges` is a list of `RouteTableRange` objects:
+
+| Field    | Description          | Accepted Values | Schema |
+|----------|----------------------|-----------------|--------|
+| min      | Minimum index to use | 1 - 4294967295  | int    |
+| max      | Maximum index to use | 1 - 4294967295  | int    |
+
+Each item in the `RouteTableRanges` list designates a range of routing tables available to Calico. By default, Calico will use a single range of `1-250`.  If a range spans Linux's reserved table range (`253-255`) then those tables are automatically excluded from the list. It's possible that other table ranges may also be reserved by third-party systems unknown to Calico. In that case, multiple ranges can be defined to target tables below and above the sensitive ranges:
+```sh
+# target tables 65-99, and 256-1000, skipping 100-255
+calicoctl patch felixconfig default --type=merge -p '{"spec":{"routeTableRanges": [{"Min": 65, "Max": 99}, {"Min": 256, "Max": 1000}] }}
+```
+
+*Note*, for performance reasons, the maximum total number of routing tables that Felix will accept is 65535 (or 2*16).
+
+If both `RouteTableRanges` and `RouteTableRange` are set, `RouteTableRanges` takes precedence and `RouteTableRange` is ignored.
 
 #### AWS IAM Role/Policy for source-destination-check configuration
 
@@ -160,7 +188,7 @@ For an EKS cluster, the necessary IAM role and policy is available by default. N
 
 ### Supported operations
 
-| Datastore type        | Create  | Delete | Delete (Global `default`)  |  Update  | Get/List | Notes
-|-----------------------|---------|--------|----------------------------|----------|----------|------
-| etcdv3                | Yes     | Yes    | No                         | Yes      | Yes      |
-| Kubernetes API server | Yes     | Yes    | No                         | Yes      | Yes      |
+| Datastore type        | Create | Delete | Delete (Global `default`) | Update | Get/List | Notes |
+|-----------------------|--------|--------|---------------------------|--------|----------|-------|
+| etcdv3                | Yes    | Yes    | No                        | Yes    | Yes      |       |
+| Kubernetes API server | Yes    | Yes    | No                        | Yes    | Yes      |       |

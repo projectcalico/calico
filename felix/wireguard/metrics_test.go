@@ -79,6 +79,7 @@ func mustNewMockPeer(ipAddr string, port int) *mockPeerInfo {
 func (w *wireguardDevicesOnly) Close() error {
 	return nil
 }
+
 func (w *wireguardDevicesOnly) DeviceByName(name string) (*wgtypes.Device, error) {
 	dev := &wgtypes.Device{
 		Name:         name,
@@ -95,13 +96,16 @@ func (w *wireguardDevicesOnly) DeviceByName(name string) (*wgtypes.Device, error
 
 	return dev, nil
 }
+
 func (w *wireguardDevicesOnly) Devices() ([]*wgtypes.Device, error) {
 	dev, _ := w.DeviceByName(w.name)
 	return []*wgtypes.Device{dev}, nil
 }
+
 func (w *wireguardDevicesOnly) ConfigureDevice(_ string, _ wgtypes.Config) error {
 	return nil
 }
+
 func (w *wireguardDevicesOnly) generatePeerTraffic(rx, tx int64) time.Time {
 	ts := time.Now()
 	for _, peer := range w.peers {
@@ -113,7 +117,6 @@ func (w *wireguardDevicesOnly) generatePeerTraffic(rx, tx int64) time.Time {
 }
 
 var _ = Describe("wireguard metrics", func() {
-
 	var wgStats *wireguard.Metrics
 	var wgClient *wireguardDevicesOnly
 	var mockPeers []*mockPeerInfo
@@ -141,8 +144,7 @@ var _ = Describe("wireguard metrics", func() {
 		)
 	})
 
-	It("should be yield metrics", func() {
-
+	It("should yield metrics", func() {
 		By("checking if it's constructable")
 		Expect(wgStats).ToNot(BeNil())
 
@@ -224,7 +226,6 @@ wireguard_meta{hostname="{{.hostname}}",iface="{{.iface}}",listen_port="{{.liste
 
 		By("checking if there are no metrics at all since it is unregistered")
 		Expect(mfs).To(HaveLen(0))
-
 	})
 
 	AfterEach(func() {

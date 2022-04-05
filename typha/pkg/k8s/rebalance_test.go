@@ -35,7 +35,7 @@ var _ = DescribeTable("CalculateMaxConnLimit tests",
 			MaxConnectionsLowerLimit: 11,
 			MaxConnectionsUpperLimit: 101,
 		}
-		num, reason := CalculateMaxConnLimit(configParams, numTyphas, numNodes)
+		num, reason := CalculateMaxConnLimit(configParams, numTyphas, numNodes, 3)
 		Expect(num).To(Equal(expectedNumber))
 		Expect(reason).To(Equal(expectedReason))
 	},
@@ -69,7 +69,7 @@ var _ = Describe("Poll loop tests", func() {
 		server = &dummyServer{}
 		go func() {
 			defer GinkgoRecover()
-			PollK8sForConnectionLimit(cxt, configParams, tickerC, k8sAPI, server)
+			PollK8sForConnectionLimit(cxt, configParams, tickerC, k8sAPI, server, 3)
 		}()
 	})
 

@@ -44,6 +44,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
+const (
+	controlPlaneNodeName = "kind-single-control-plane"
+)
+
 // calculateDefaultFelixSyncerEntries determines the expected set of Felix configuration for the currently configured
 // cluster.
 func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.DatastoreType) (expected []model.KVPair) {
@@ -74,7 +78,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			Expect(err).NotTo(HaveOccurred())
 			expected = append(expected, *cnodekv)
 
-			if node.Name == "kind-control-plane" {
+			if node.Name == controlPlaneNodeName {
 				for _, ip := range cnodekv.Value.(*libapiv3.Node).Spec.Addresses {
 					if ip.Type == libapiv3.InternalIP {
 						expected = append(expected, model.KVPair{
@@ -89,7 +93,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 		}
 
 		// Add endpoint slices.
-		epss, err := cs.DiscoveryV1beta1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
+		epss, err := cs.DiscoveryV1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		for _, eps := range epss.Items {
 			// Endpoints slices get updated frequently, so don't include the revision info.
@@ -97,6 +101,17 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			epskv, err := converter.EndpointSliceToKVP(&eps)
 			Expect(err).NotTo(HaveOccurred())
 			expected = append(expected, *epskv)
+		}
+
+		// Add services.
+		svcs, err := cs.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, svc := range svcs.Items {
+			// Endpoints slices get updated frequently, so don't include the revision info.
+			svc.ResourceVersion = ""
+			svckv, err := converter.ServiceToKVP(&svc)
+			Expect(err).NotTo(HaveOccurred())
+			expected = append(expected, *svckv)
 		}
 
 		// Add resources for the namespaces we expect in the cluster.
@@ -188,7 +203,6 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 }
 
 var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	var ctx context.Context
 	var c clientv3.Interface
 	var be api.Client
@@ -399,7 +413,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Key:   model.WireguardKey{NodeName: "127.0.0.1"},
 					Value: &model.Wireguard{InterfaceIPv4Addr: &wip, PublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="},
 				})
-				//add one for the node resource
+				// add one for the node resource
 				expectedCacheSize += 6
 			}
 
@@ -429,9 +443,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			// The pool will add as single entry ( +1 ), plus will also create the default
-			// Felix config with IPIP enabled.
-			expectedCacheSize += 2
+			// The pool will add as single entry ( +1 )
+			expectedCacheSize += 1
 			syncTester.ExpectData(model.KVPair{
 				Key: model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")},
 				Value: &model.IPPool{
@@ -443,10 +456,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Disabled:      false,
 				},
 				Revision: pool.ResourceVersion,
-			})
-			syncTester.ExpectData(model.KVPair{
-				Key:   model.GlobalConfigKey{"IpInIpEnabled"},
-				Value: "true",
 			})
 			syncTester.ExpectCacheSize(expectedCacheSize)
 

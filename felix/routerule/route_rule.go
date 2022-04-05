@@ -30,6 +30,7 @@ import (
 
 const (
 	maxConnFailures = 3
+	linuxRTTableMax = 0xffffffff
 )
 
 var (
@@ -96,7 +97,11 @@ func New(
 	indexOK := true
 	tableIndexSet.Iter(func(item interface{}) error {
 		i := item.(int)
-		if (i == 0) || (i >= unix.RT_TABLE_COMPAT) {
+		if (i == 0) ||
+			int64(i) >= int64(linuxRTTableMax) ||
+			i == unix.RT_TABLE_DEFAULT ||
+			i == unix.RT_TABLE_LOCAL ||
+			i == unix.RT_TABLE_MAIN {
 			indexOK = false
 			return set.StopIteration
 		}

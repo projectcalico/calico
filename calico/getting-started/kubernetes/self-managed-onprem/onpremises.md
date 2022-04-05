@@ -11,18 +11,16 @@ Install {{site.prodname}} to provide both networking and network policy for self
 
 **{{site.prodname}} networking** and **network policy** are a powerful choice for a CaaS implementation. If you have the networking infrastructure and resources to manage Kubernetes on-premises, installing the full {{site.prodname}} product provides the most customization and control.
 
-### Features
-
-This how-to guide uses the following {{site.prodname}} features:
-
-- **calico/node**
-- **Typha**
-
 ### Concepts
+
+#### {{site.prodname}} operator
+
+{{site.prodname}} is installed by an operator which manages the installation, upgrade, and general lifecycle of a {{site.prodname}} cluster. The operator is
+installed directly on the cluster as a Deployment, and is configured through one or more custom Kubernetes API resources.
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. You may want to [customize the {{site.prodname}} manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options) before installing {{site.prodname}} on nodes.
+{{site.prodname}} can also be installed using raw manifests as an alternative to the operator. The manifests contain the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. Using manifests is not recommended as they cannot automatically manage the lifecycle of the {{site.prodname}} as the operator does. However, manifests may be useful for clusters that require highly specific modifications to the underlying Kubernetes resources.
 
 ### Before you begin...
 
@@ -31,17 +29,39 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to
 
-- [Determine your datastore](#determine-your-datastore)
-- [Install Calico on nodes](#install-calico-on-nodes)
+- [Install Calico](#install-calico)
 
-#### Determine your datastore
+#### Install Calico
 
-The **Kubernetes API datastore** is the recommended datastore for Kubernetes workloads.
+{% tabs %}
+  <label:Operator,active:true>
+<%
 
->**Note**: The **etcd** database is not recommended for new installs. However, it is an option if you are running {{site.prodname}} as the network plugin for both OpenStack and Kubernetes.
-{: .alert .alert-info}
+1. First, install the operator on your cluster.
 
-#### Install Calico on nodes
+   ```
+   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   ```
+
+1. Download the custom resources necessary to configure {{site.prodname}}
+
+   ```
+   curl {{ "/manifests/custom-resources.yaml" | absolute_url}} -O
+   ```
+   
+   If you wish to customize the {{site.prodname}} install, customize the downloaded custom-resources.yaml manifest locally.
+
+1. Create the manifest in order to install {{site.prodname}}.
+   
+   ```
+   kubectl create -f custom-resources.yaml
+   ```
+
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}
+
+%>
+  <label:Manifest>
+<%
 
 Based on your datastore and number of nodes, select a link below to install {{site.prodname}}.
 
@@ -136,6 +156,9 @@ The geeky details of what you get:
 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:etcd' %}
+
+%>
+{% endtabs %}
 
 ### Next steps
 

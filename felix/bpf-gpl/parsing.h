@@ -1,13 +1,14 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_PARSING_H__
 #define __CALI_PARSING_H__
 
 #define PARSING_OK 0
+#define PARSING_OK_V6 1
+#define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
-#define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY -2
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
@@ -38,11 +39,16 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		CALI_DEBUG("ARP: allowing packet\n");
 		goto allow_no_fib;
 	case ETH_P_IPV6:
+		// If IPv6 is supported and enabled, handle the packet
+		if (GLOBAL_FLAGS & CALI_GLOBALS_IPV6_ENABLED) {
+			CALI_DEBUG("IPv6 packet, continue with parsing it.\n");
+			goto ipv6_packet;
+		}
+		// otherwise, drop if the packet is from workload
 		if (CALI_F_WEP) {
 			CALI_DEBUG("IPv6 from workload: drop\n");
 			goto deny;
-		} else {
-			// FIXME: support IPv6.
+		} else { // or allow, it the packet is on host interface
 			CALI_DEBUG("IPv6 on host interface: allow\n");
 			goto allow_no_fib;
 		}
@@ -86,6 +92,10 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	}
 
 	return PARSING_OK;
+
+ipv6_packet:
+	// Parse IPv6 header, and perform necessary checks here
+	return PARSING_OK_V6;
 
 allow_no_fib:
 	return PARSING_ALLOW_WITHOUT_ENFORCING_POLICY;

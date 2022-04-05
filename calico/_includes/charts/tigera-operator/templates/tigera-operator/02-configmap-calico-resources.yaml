@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: calico-resources
-  namespace: tigera-operator
+  namespace: {{.Release.Namespace}}
 data:
   # To create Calico resources before Calico components are started add
   # an entry here and the contents of the resource under the entry.

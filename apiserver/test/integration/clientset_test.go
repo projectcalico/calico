@@ -460,12 +460,13 @@ func testNetworkSetClient(client calicoclient.Interface, name string) error {
 // TestHostEndpointClient exercises the HostEndpoint client.
 func TestHostEndpointClient(t *testing.T) {
 	const name = "test-hostendpoint"
+	client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+		return &v3.HostEndpoint{}
+	})
+	defer shutdownServer()
+	defer deleteHostEndpointClient(client, name)
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
-			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &v3.HostEndpoint{}
-			})
-			defer shutdownServer()
 			if err := testHostEndpointClient(client, name); err != nil {
 				t.Fatal(err)
 			}
@@ -485,6 +486,13 @@ func createTestHostEndpoint(name string, ip string, node string) *v3.HostEndpoin
 	hostEndpoint.Spec.Node = node
 
 	return hostEndpoint
+}
+
+func deleteHostEndpointClient(client calicoclient.Interface, name string) error {
+	hostEndpointClient := client.ProjectcalicoV3().HostEndpoints()
+	ctx := context.Background()
+
+	return hostEndpointClient.Delete(ctx, name, v1.DeleteOptions{})
 }
 
 func testHostEndpointClient(client calicoclient.Interface, name string) error {
