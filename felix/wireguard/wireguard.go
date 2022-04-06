@@ -671,6 +671,9 @@ func (w *Wireguard) Apply() (err error) {
 			log.Info("Waiting for wireguard link to come up...")
 			return nil
 		}
+
+		// The link is now sync'd.
+		w.inSyncLink = true
 	}
 
 	// Get the wireguard client. This may not always be possible.
