@@ -32,6 +32,16 @@ Unblock-File $PSScriptRoot\*.ps1
 
 Test-CalicoConfiguration
 
+# TODO: should we add a separate flag to enable a HostProcess installation?
+#       Using CONTAINER_SANDBOX_MOUNT_POINT means we do not allow users to use
+#       a hostprocess container to install/run CalicoWindows using the current
+#       installation method.
+# TODO: maybe move checking CONTAINER_SANDBOX_MOUNT_POINT to calico.psm1
+if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+   write-host "CONTAINER_SANDBOX_MOUNT_POINT is set, skipping service installation"
+   exit $lastexitcode
+}
+
 Install-NodeService
 Install-FelixService
 if ($env:CALICO_NETWORKING_BACKEND -EQ "vxlan")
