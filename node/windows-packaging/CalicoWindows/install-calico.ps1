@@ -38,6 +38,9 @@ Test-CalicoConfiguration
 #       installation method.
 # TODO: maybe move checking CONTAINER_SANDBOX_MOUNT_POINT to calico.psm1
 if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+   if ($env:CALICO_NETWORKING_BACKEND -NE "none") {
+      Install-CNIPlugin
+   }
    write-host "CONTAINER_SANDBOX_MOUNT_POINT is set, skipping service installation"
    exit $lastexitcode
 }
