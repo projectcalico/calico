@@ -34,7 +34,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		Kind: libapiv3.KindNode,
 		Name: "mynode",
 	}
-	numFelixConfigs := 6
+	numFelixConfigs := 8
 	up := updateprocessors.NewFelixNodeUpdateProcessor(false)
 
 	BeforeEach(func() {
@@ -253,6 +253,91 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			numFelixConfigs,
 			expected,
 		)
+
+		By("converting a Node with IPv4 address and an IPv4 VXLAN tunnel address and MAC")
+		res = libapiv3.NewNode()
+		res.Name = "mynode"
+		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+			IPv4Address: "192.100.100.100",
+		}
+		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200"
+		res.Spec.VXLANTunnelMACAddr = "00:11:22:33:44:55"
+		ip = net.MustParseIP("192.100.100.100")
+		expected = map[string]interface{}{
+			hostIPMarker:          &ip,
+			nodeMarker:            res,
+			"IPv4VXLANTunnelAddr": "192.200.200.200",
+			"VXLANTunnelMACAddr":  "00:11:22:33:44:55",
+		}
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
+
+		By("converting a Node with IPv6 address and an IPv6 VXLAN tunnel address and MAC")
+		res = libapiv3.NewNode()
+		res.Name = "mynode"
+		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+			IPv6Address: "fd10:10::10",
+		}
+		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
+		res.Spec.IPv6VXLANTunnelMACAddr = "55:44:33:22:11:00"
+		expected = map[string]interface{}{
+			hostIPMarker:             nil,
+			nodeMarker:               res,
+			"IPv6VXLANTunnelAddr":    "fd10:11::11",
+			"IPv6VXLANTunnelMACAddr": "55:44:33:22:11:00",
+		}
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
+
+		By("converting a Node with both IPv4 and IPv6 addresses and both IPv4 and IPv6 VXLAN tunnel addresses and MACs")
+		res = libapiv3.NewNode()
+		res.Name = "mynode"
+		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+			IPv4Address: "192.100.100.100",
+			IPv6Address: "fd10:10::10",
+		}
+		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200"
+		res.Spec.VXLANTunnelMACAddr = "00:11:22:33:44:55"
+		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
+		res.Spec.IPv6VXLANTunnelMACAddr = "55:44:33:22:11:00"
+		ip = net.MustParseIP("192.100.100.100")
+		expected = map[string]interface{}{
+			hostIPMarker:             &ip,
+			nodeMarker:               res,
+			"IPv4VXLANTunnelAddr":    "192.200.200.200",
+			"VXLANTunnelMACAddr":     "00:11:22:33:44:55",
+			"IPv6VXLANTunnelAddr":    "fd10:11::11",
+			"IPv6VXLANTunnelMACAddr": "55:44:33:22:11:00",
+		}
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
 	})
 
 	It("should fail to convert an invalid resource", func() {
@@ -341,6 +426,91 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 		}
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
+
+		By("trying to convert a Node with IPv4 address as a network and an IPv4 VXLAN tunnel address as a network and no MAC - expect delete for those keys")
+		res = libapiv3.NewNode()
+		res.Name = "mynode"
+		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+			IPv4Address: "192.100.100.100/24",
+		}
+		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200/32"
+		res.Spec.VXLANTunnelMACAddr = ""
+		ip = net.MustParseIP("192.100.100.100")
+		expected = map[string]interface{}{
+			hostIPMarker:          &ip,
+			nodeMarker:            res,
+			"IPv4VXLANTunnelAddr": nil,
+			"VXLANTunnelMACAddr":  nil,
+		}
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).To(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
+
+		By("trying to convert a Node with IPv6 address as a network and an IPv6 VXLAN tunnel address as a network and no MAC - expect delete for those keys")
+		res = libapiv3.NewNode()
+		res.Name = "mynode"
+		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+			IPv6Address: "fd10:10::10/122",
+		}
+		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/122"
+		res.Spec.IPv6VXLANTunnelMACAddr = ""
+		expected = map[string]interface{}{
+			hostIPMarker:             nil,
+			nodeMarker:               res,
+			"IPv6VXLANTunnelAddr":    nil,
+			"IPv6VXLANTunnelMACAddr": nil,
+		}
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).To(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
+
+		By("trying to convert a Node with both IPv4 and IPv6 addresses as networks and both IPv4 and IPv6 VXLAN tunnel addresses as networks and no MACs - expect delete for those keys")
+		res = libapiv3.NewNode()
+		res.Name = "mynode"
+		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+			IPv4Address: "192.100.100.100/24",
+			IPv6Address: "fd10:10::10/122",
+		}
+		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200/24"
+		res.Spec.VXLANTunnelMACAddr = ""
+		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/112"
+		res.Spec.IPv6VXLANTunnelMACAddr = ""
+		ip = net.MustParseIP("192.100.100.100")
+		expected = map[string]interface{}{
+			hostIPMarker:             &ip,
+			nodeMarker:               res,
+			"IPv4VXLANTunnelAddr":    nil,
+			"VXLANTunnelMACAddr":     nil,
+			"IPv6VXLANTunnelAddr":    nil,
+			"IPv6VXLANTunnelMACAddr": nil,
+		}
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).To(HaveOccurred())
 		checkExpectedConfigs(
 			kvps,
 			isNodeFelixConfig,
