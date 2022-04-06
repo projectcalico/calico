@@ -23,7 +23,7 @@ enum cali_globals_flags {
 	 * like other l3 devices, where only the inner ip header is seen by bpf programs.
 	 * This behavior started in kernel 5.14. Before 5.14, bpf programs attached to IPIP
 	 * tunnels saw ethernet, outer ip header, inner ip header and payload */
-	CALI_GLOBALS_IPIP_NO_OUTER_HEADERS = 0x00000002,
+	CALI_GLOBALS_IPIP_DEV_L3 = 0x00000002,
 };
 
 struct cali_ctlb_globals {
