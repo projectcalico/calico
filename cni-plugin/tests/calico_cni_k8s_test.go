@@ -3,6 +3,7 @@
 package main_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -161,6 +163,21 @@ func getKubernetesClient() *kubernetes.Clientset {
 	return clientset
 }
 
+func dockerLogs(name string) {
+	cmd := exec.Command("docker", "logs", name)
+	var outb, errb bytes.Buffer
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+	err := cmd.Run()
+	if err != nil {
+		logrus.WithError(err).WithField("stderr", errb.String()).Errorf("error gathering logs for %s", name)
+	} else {
+		logrus.Warnf("=== START LOGS - %s === ", name)
+		logrus.Warnf(outb.String())
+		logrus.Warnf("=== END LOGS - %s === ", name)
+	}
+}
+
 var _ = Describe("Kubernetes CNI tests", func() {
 	// Create a random seed
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -188,6 +205,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			// If the test failed, emit some extra diagnostics.
+			dockerLogs("calico-local-controller-manager")
+			dockerLogs("calico-local-apiserver")
+		}
+
 		// Delete the node.
 		name, err := names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
