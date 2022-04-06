@@ -243,7 +243,7 @@ const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
 	GlobalsIPv6Enabled uint32 = C.CALI_GLOBALS_IPV6_ENABLED
 	// Set for kernel 5.14 and newers where IPIP tunnels act like other l3 devices.
-	// A l3 device normally does not see etherner and the outer IP header. Only the inner
+	// A l3 device normally does not see ethernet and the outer IP header. Only the inner
 	// IP header is visible.
 	GlobalsIPIPNoOuterHeaders uint32 = C.CALI_GLOBALS_IPIP_NO_OUTER_HEADERS
 )
