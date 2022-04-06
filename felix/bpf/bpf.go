@@ -2234,7 +2234,7 @@ func SupportsBPFDataplane() error {
 	return nil
 }
 
-func SupportIPIPAsL3Device() bool {
+func IPIPDeviceIsL3() bool {
 	err := isAtLeastKernel(v4Dot18Dot0)
 	if err != nil && versionparse.GetDistributionName() == "rhel" {
 		return false
