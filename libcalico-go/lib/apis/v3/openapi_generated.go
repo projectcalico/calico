@@ -2801,6 +2801,20 @@ func schema_libcalico_go_lib_apis_v3_NodeSpec(ref common.ReferenceCallback) comm
 							Format:      "",
 						},
 					},
+					"ipv6VXLANTunnelAddr": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPv6VXLANTunnelAddr is the address of the IPv6 VXLAN tunnel.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ipv6VXLANTunnelMACAddr": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPv6VXLANTunnelMACAddr is the MAC address of the IPv6 VXLAN tunnel.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"orchRefs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "OrchRefs for this node.",
