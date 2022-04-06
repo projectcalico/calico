@@ -19,6 +19,11 @@ struct cali_tc_globals {
 enum cali_globals_flags {
 	/* CALI_GLOBALS_IPV6_ENABLED is set when IPv6 is enabled by Felix */
 	CALI_GLOBALS_IPV6_ENABLED = 0x00000001,
+	/* CALI_GLOBALS_IPIP_NO_OUTER_HEADERS is set for kernels in which IPIP tunnels acts
+	 * like other l3 devices, where only inner ip header is seen by bpf programs. This
+	 * behaviour started in kernel 5.14. Before 5.14, bpf programs attached to IPIP
+	 * tunnels saw ethernet, outer ip header, inner ip header and payload */
+	CALI_GLOBALS_IPIP_NO_OUTER_HEADERS = 0x00000002,
 };
 
 struct cali_ctlb_globals {

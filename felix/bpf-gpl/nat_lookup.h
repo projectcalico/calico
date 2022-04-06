@@ -11,7 +11,6 @@
 #include <linux/udp.h>
 
 #include "bpf.h"
-#include "skb.h"
 #include "routes.h"
 #include "nat_types.h"
 
