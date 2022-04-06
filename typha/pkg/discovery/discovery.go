@@ -87,14 +87,15 @@ func WithNodeAffinity(nodeName string) Option {
 	}
 }
 
-// DiscoverTyphaAddr tries to discover the best address(es) to use to connect to Typha.
+// DiscoverTyphaAddrs tries to discover the best address(es) to use to connect to Typha.
 //
-// If an AddrOverride is supplied then that takes precedence, otherwise, DiscoverTyphaAddr will
+// If an AddrOverride is supplied then that takes precedence, otherwise, DiscoverTyphaAddrs will
 // try to lookup one of the backend endpoints of the typha service (using the K8sServiceName and
 // K8sNamespace fields).
 //
-// Returns "" if typha is not enabled (i.e. fields are empty).
-func DiscoverTyphaAddr(opts ...Option) ([]Typha, error) {
+// Returns nil if typha is not enabled (i.e. fields are empty). If typha is enabled, this will return a non-empty slice
+// or an error.
+func DiscoverTyphaAddrs(opts ...Option) ([]Typha, error) {
 	options := options{
 		k8sServicePortName: "calico-typha",
 	}
