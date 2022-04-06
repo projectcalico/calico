@@ -2233,7 +2233,7 @@ func SupportsBPFDataplane() error {
 	return nil
 }
 
-func SupportIPIPAsL3Device() bool {
+func IPIPDeviceIsL3() bool {
 	if err := isAtLeastKernel(v5Dot14Dot0); err != nil {
 		return false
 	}
