@@ -15,6 +15,7 @@ package testutils
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -23,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/onsi/ginkgo"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -72,11 +74,13 @@ func WipeDatastore() {
 
 // MustCreateNewIPPool creates a new Calico IPAM IP Pool.
 func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipam bool) string {
+	ginkgo.By(fmt.Sprintf("Creating IP pool %s", cidr))
 	return MustCreateNewIPPoolBlockSize(c, cidr, ipip, natOutgoing, ipam, 0)
 }
 
 // MustCreateNewIPPoolBlockSize creates a new Calico IPAM IP Pool with support for setting the block size.
 func MustCreateNewIPPoolBlockSize(c client.Interface, cidr string, ipip, natOutgoing, ipam bool, blockSize int) string {
+	ginkgo.By(fmt.Sprintf("Creating IP pool %s with blocksize %d", cidr, blockSize))
 	name := strings.Replace(cidr, ".", "-", -1)
 	name = strings.Replace(name, ":", "-", -1)
 	name = strings.Replace(name, "/", "-", -1)
@@ -103,6 +107,7 @@ func MustCreateNewIPPoolBlockSize(c client.Interface, cidr string, ipip, natOutg
 }
 
 func MustDeleteIPPool(c client.Interface, cidr string) {
+	ginkgo.By(fmt.Sprintf("Deleting IP pool %s", cidr))
 	name := strings.Replace(cidr, ".", "-", -1)
 	name = strings.Replace(name, ":", "-", -1)
 	name = strings.Replace(name, "/", "-", -1)
@@ -125,7 +130,8 @@ func (c *cniArgs) AsEnv() []string {
 func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 	var err error
 	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-		// create the node in Kubernetes.
+		// Create the node in Kubernetes.
+		ginkgo.By(fmt.Sprintf("Creating node %s in the Kubernetes API", host))
 		n := corev1.Node{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Node",
@@ -145,6 +151,7 @@ func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 		log.WithField("node", host).WithError(err).Info("Node created")
 	} else {
 		// Otherwise, create it in Calico.
+		ginkgo.By(fmt.Sprintf("Creating node %s in the Calico API", host))
 		n := libapi.NewNode()
 		n.Name = host
 		_, err = c.Nodes().Create(context.Background(), n, options.SetOptions{})
