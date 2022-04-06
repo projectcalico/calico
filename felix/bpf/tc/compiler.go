@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -101,7 +102,11 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 	case EpTypeHost:
 		epTypeShort = "hep"
 	case EpTypeTunnel:
-		epTypeShort = "tnl"
+		if bpf.SupportIPIPAsL3Device() {
+			epTypeShort = "wep"
+		} else {
+			epTypeShort = "tnl"
+		}
 	case EpTypeWireguard:
 		epTypeShort = "wg"
 	}
