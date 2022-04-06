@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,13 @@ package daemon
 import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-func bootstrapWireguard(_ *config.Config, _ clientv3.Interface) error {
+func bootstrapWireguard(_ *config.Config, _ clientv3.Interface) (set.Set, error) {
+	return nil
+} // no-op
+
+func bootstrapRemoveWireguard(_ *config.Config, _ clientv3.Interface) error {
 	return nil
 } // no-op
