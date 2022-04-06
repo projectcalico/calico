@@ -115,10 +115,11 @@ func GetVersionFromString(s string) (*Version, error) {
 }
 
 func GetDistFromString(s string) string {
+	redhatRegexp := regexp.MustCompile(`el(\d+\_\d+)`)
 	distName := "default"
 	if strings.Contains(s, "Ubuntu") {
 		distName = "ubuntu"
-	} else if strings.Contains(s, "Red Hat") {
+	} else if strings.Contains(s, "Red Hat") || redhatRegexp.MatchString(s) {
 		distName = "rhel"
 	}
 	return distName
