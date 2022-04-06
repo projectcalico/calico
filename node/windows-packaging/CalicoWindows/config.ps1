@@ -37,15 +37,15 @@ Set-EnvVarIfNotSet -var "ETCD_CA_CERT_FILE" -defaultValue "<your etcd ca cert>"
 
 ## CNI configuration, only used for the "vxlan" networking backends.
 
-# Place to install the CNI plugin to.  Should match kubelet's --cni-bin-dir.
-Set-EnvVarIfNotSet -var "CNI_BIN_DIR" -defaultValue "c:\k\cni"
-# Place to install the CNI config to.  Should be located in kubelet's --cni-conf-dir.
-Set-EnvVarIfNotSet -var "CNI_CONF_DIR" -defaultValue "c:\k\cni\config"
-
 if (Get-IsContainerdRunning)
 {
     Set-EnvVarIfNotSet -var "CNI_BIN_DIR" -defaultValue (Get-ContainerdCniBinDir)
     Set-EnvVarIfNotSet -var "CNI_CONF_DIR" -defaultValue (Get-ContainerdCniConfDir)
+} else {
+    # Place to install the CNI plugin to. For docker, this should match kubelet's --cni-bin-dir.
+    Set-EnvVarIfNotSet -var "CNI_BIN_DIR" -defaultValue "c:\k\cni"
+    # Place to install the CNI config to. For docker, this hould be located in kubelet's --cni-conf-dir.
+    Set-EnvVarIfNotSet -var "CNI_CONF_DIR" -defaultValue "c:\k\cni\config"
 }
 
 Set-EnvVarIfNotSet -var "CNI_CONF_FILENAME" -defaultValue "10-calico.conf"
