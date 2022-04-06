@@ -121,6 +121,9 @@ message ToDataplane {
     GlobalBGPConfigUpdate global_bgp_config_update = 29;
 
     Encapsulation encapsulation = 30;
+
+    ServiceUpdate service_update = 31;
+    ServiceRemove service_remove = 32;
   }
 }
 

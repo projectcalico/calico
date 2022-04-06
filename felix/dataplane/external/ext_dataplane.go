@@ -19,6 +19,7 @@ package extdataplane
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -134,12 +135,46 @@ func (c *extDataplaneConn) RecvMessage() (msg interface{}, err error) {
 
 func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 	log.Debugf("Writing msg (%v) to felix: %#v", fc.nextSeqNumber, msg)
+
+	envelope, err := WrapPayloadWithEnvelope(msg, fc.nextSeqNumber)
+	if err != nil {
+		log.WithError(err).Panic("Cannot wrap message to dataplane")
+	}
+	fc.nextSeqNumber += 1
+
+	data, err := pb.Marshal(envelope)
+
+	if err != nil {
+		log.WithError(err).WithField("msg", msg).Panic(
+			"Failed to marshal data to front end")
+	}
+
+	lengthBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(lengthBytes, uint64(len(data)))
+	var messageBuf bytes.Buffer
+	messageBuf.Write(lengthBytes)
+	messageBuf.Write(data)
+	for {
+		_, err := messageBuf.WriteTo(fc.toDataplane)
+		if err == io.ErrShortWrite {
+			log.Warn("Short write to dataplane driver; buffer full?")
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		log.Debug("Wrote message to dataplane driver")
+		break
+	}
+	return nil
+}
+
+func WrapPayloadWithEnvelope(msg interface{}, seqNo uint64) (*proto.ToDataplane, error) {
 	// Wrap the payload message in an envelope so that protobuf takes care of deserialising
 	// it as the correct type.
 	envelope := &proto.ToDataplane{
-		SequenceNumber: fc.nextSeqNumber,
+		SequenceNumber: seqNo,
 	}
-	fc.nextSeqNumber += 1
 	switch msg := msg.(type) {
 	case *proto.ConfigUpdate:
 		envelope.Payload = &proto.ToDataplane_ConfigUpdate{ConfigUpdate: msg}
@@ -199,33 +234,14 @@ func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 		envelope.Payload = &proto.ToDataplane_GlobalBgpConfigUpdate{GlobalBgpConfigUpdate: msg}
 	case *proto.Encapsulation:
 		envelope.Payload = &proto.ToDataplane_Encapsulation{Encapsulation: msg}
+	case *proto.ServiceUpdate:
+		envelope.Payload = &proto.ToDataplane_ServiceUpdate{ServiceUpdate: msg}
+	case *proto.ServiceRemove:
+		envelope.Payload = &proto.ToDataplane_ServiceRemove{ServiceRemove: msg}
 
 	default:
-		log.WithField("msg", msg).Panic("Unknown message type")
-	}
-	data, err := pb.Marshal(envelope)
-
-	if err != nil {
-		log.WithError(err).WithField("msg", msg).Panic(
-			"Failed to marshal data to front end")
+		return nil, fmt.Errorf("Unknown message type: %T", msg)
 	}
 
-	lengthBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(lengthBytes, uint64(len(data)))
-	var messageBuf bytes.Buffer
-	messageBuf.Write(lengthBytes)
-	messageBuf.Write(data)
-	for {
-		_, err := messageBuf.WriteTo(fc.toDataplane)
-		if err == io.ErrShortWrite {
-			log.Warn("Short write to dataplane driver; buffer full?")
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		log.Debug("Wrote message to dataplane driver")
-		break
-	}
-	return nil
+	return envelope, nil
 }
