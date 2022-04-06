@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,19 +15,55 @@
 package daemon
 
 import (
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 )
 
-func bootstrapWireguard(configParams *config.Config, v3Client clientv3.Interface) error {
+// bootstrapWireguard performs some start-up single shot bootstrapping of wireguard configuration. This returns the
+// currently programmed peer public keys that need verifying for typha connectivity. Verification of the peers will be
+// required when host encryption is enabled with wireguard. In this mode, an asymmetric view of the routing config will
+// prevent connectivity to typha.
+func bootstrapWireguard(configParams *config.Config, v3Client clientv3.Interface) (set.Set, error) {
 	log.Debug("bootstrapping wireguard host connectivity")
 	return wireguard.BootstrapHostConnectivity(
 		configParams,
+		netlinkshim.NewRealNetlink,
 		netlinkshim.NewRealWireguard,
+		v3Client,
+	)
+}
+
+// bootstrapFilterTyphaForWireguard filters the supplied set of typha endpoints to improve the likelihood of connections
+// succeeding. This is required when host encryption is enabled with wireguard. In this mode, an asymmetric view of the
+// routing config will prevent connectivity to typha.
+func bootstrapFilterTyphaForWireguard(
+	configParams *config.Config,
+	v3Client clientv3.Interface,
+	typhas []discovery.Typha,
+	peersToValidate set.Set,
+) ([]discovery.Typha, error) {
+	log.Debug("filtering typha endpoints for wireguard")
+	return wireguard.FilterTyphaEndpoints(
+		configParams,
+		v3Client,
+		typhas,
+		peersToValidate,
+	)
+}
+
+// bootstrapRemoveWireguard removes the local wireguard configuration to force unencrypted traffic. This is a last
+// resort used when failing to connect to typha.
+func bootstrapRemoveWireguard(configParams *config.Config, v3Client clientv3.Interface) error {
+	log.Debug("bootstrapping wireguard host connectivity by removing wireguard config")
+	return wireguard.RemoveWireguardForHostEncryptionBootstrapping(
+		configParams,
+		netlinkshim.NewRealNetlink,
 		v3Client,
 	)
 }
