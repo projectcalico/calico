@@ -175,9 +175,7 @@ func CreateContainer(netconf, podName, podNamespace, ip string) (containerID str
 		return "", nil, nil, nil, nil, nil, err
 	}
 
-	ginkgo.By("running the CNI plugin against the namespace", func() {
-		result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
-	})
+	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
 	return
 }
 
@@ -248,6 +246,8 @@ func RunCNIPluginWithId(
 	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
+
+	ginkgo.By("running the CNI plugin against the namespace")
 	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, customExec)
 	if err != nil {
 		log.Debugf("config is: %s", netconf)
