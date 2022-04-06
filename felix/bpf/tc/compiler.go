@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/bpf"
 )
 
 // TCHook is the hook to which a BPF program should be attached.  This is relative to the host namespace
