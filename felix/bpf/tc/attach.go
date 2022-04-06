@@ -620,9 +620,6 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	if ap.IPv6Enabled {
 		flags |= libbpf.GlobalsIPv6Enabled
 	}
-	if bpf.IPIPDeviceIsL3() {
-		flags |= libbpf.GlobalsIPIPNoOuterHeaders
-	}
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
 		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, flags)
