@@ -138,7 +138,7 @@ func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 
 	envelope, err := WrapPayloadWithEnvelope(msg, fc.nextSeqNumber)
 	if err != nil {
-		log.Panic("Cannot wrap message to dataplane: %v", err)
+		log.WithError(err).Panic("Cannot wrap message to dataplane")
 	}
 	fc.nextSeqNumber += 1
 
