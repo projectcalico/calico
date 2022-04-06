@@ -99,7 +99,8 @@ var (
 	// v5Dot3Dot0 is the first kernel version that has all the
 	// required features we use for BPF dataplane mode
 	v5Dot3Dot0 = versionparse.MustParseVersion("5.3.0")
-
+	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels
+	// acts like other L3 devices where bpf programs only see inner IP header
 	v5Dot14Dot0 = versionparse.MustParseVersion("5.14.0")
 )
 
@@ -2232,7 +2233,7 @@ func SupportsBPFDataplane() error {
 	return nil
 }
 
-func SupportIPIPAsFullL3Device() bool {
+func SupportIPIPAsL3Device() bool {
 	if err := isAtLeastKernel(v5Dot14Dot0); err != nil {
 		return false
 	}
