@@ -620,7 +620,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	if ap.IPv6Enabled {
 		flags |= libbpf.GlobalsIPv6Enabled
 	}
-	if bpf.SupportIPIPAsL3Device() {
+	if bpf.IPIPDeviceIsL3() {
 		flags |= libbpf.GlobalsIPIPNoOuterHeaders
 	}
 

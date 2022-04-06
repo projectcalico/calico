@@ -68,7 +68,7 @@ static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
 static CALI_BPF_INLINE long skb_iphdr_offset(void)
 {
 	if (CALI_F_IPIP_ENCAPPED) {
-		if (GLOBAL_FLAGS & CALI_GLOBALS_IPIP_NO_OUTER_HEADERS) {
+		if (GLOBAL_FLAGS & CALI_GLOBALS_IPIP_DEV_L3) {
 			// In kernel 5.14 and newer, Ingress on IPIP tunnel: skb is [inner IP|payload]
 			return 0;
 		}
