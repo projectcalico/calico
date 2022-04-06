@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -187,6 +188,8 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	var buf bytes.Buffer
 	table := tablewriter.NewWriter(&buf)
 	table.SetHeader([]string{"COMPONENT", "TIMEOUT", "LIVENESS", "READINESS", "DETAIL"})
+	componentData := map[string][]string{}
+	componentNames := []string(nil)
 
 	// Now for each reporter...
 	for _, reporter := range aggregator.reporters {
@@ -215,15 +218,21 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		} else if reporter.reports.Ready {
 			readinessStr = "reporting ready"
 		}
-		table.Append([]string{
+		componentNames = append(componentNames, reporter.name)
+		componentData[reporter.name] = []string{
 			reporter.name,
 			reporter.timeout.String(),
 			livenessStr,
 			readinessStr,
 			reporter.latest.Detail,
-		})
+		}
 	}
 
+	// Render the component data ordered by name.
+	sort.Strings(componentNames)
+	for _, name := range componentNames {
+		table.Append(componentData[name])
+	}
 	table.Render()
 	summary.Detail = strings.TrimSpace(buf.String())
 
