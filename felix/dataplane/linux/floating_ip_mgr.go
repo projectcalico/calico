@@ -76,12 +76,14 @@ type floatingIPManager struct {
 	activeSNATChains []*iptables.Chain
 	natInfo          map[proto.WorkloadEndpointID][]*proto.NatInfo
 	dirtyNATInfo     bool
+	enabled          bool
 }
 
 func newFloatingIPManager(
 	natTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
+	enabled bool,
 ) *floatingIPManager {
 	return &floatingIPManager{
 		natTable:     natTable,
@@ -92,6 +94,7 @@ func newFloatingIPManager(
 		activeSNATChains: []*iptables.Chain{},
 		natInfo:          map[proto.WorkloadEndpointID][]*proto.NatInfo{},
 		dirtyNATInfo:     true,
+		enabled:          enabled,
 	}
 }
 
@@ -114,23 +117,28 @@ func (m *floatingIPManager) CompleteDeferredWork() error {
 	if m.dirtyNATInfo {
 		// Collate required DNATs as a map from external IP to internal IP.
 		dnats := map[string]string{}
-		for _, natInfos := range m.natInfo {
-			for _, natInfo := range natInfos {
-				log.WithFields(log.Fields{
-					"ExtIP": natInfo.ExtIp,
-					"IntIP": natInfo.IntIp,
-				}).Debug("NAT mapping")
+		if m.enabled {
+			// We only perform nat if the feature is explicitly enabled, otherwise
+			// we will simply remove any programmed floating IP NAT fules.
+			for _, natInfos := range m.natInfo {
+				for _, natInfo := range natInfos {
+					log.WithFields(log.Fields{
+						"ExtIP": natInfo.ExtIp,
+						"IntIP": natInfo.IntIp,
+					}).Debug("NAT mapping")
 
-				// We shouldn't ever have the same floating IP mapping to multiple
-				// workload IPs, but if we do we'll program the mapping to the
-				// alphabetically earlier one.
-				existingIntIP := dnats[natInfo.ExtIp]
-				if existingIntIP == "" || natInfo.IntIp < existingIntIP {
-					log.Debug("Wanted NAT mapping")
-					dnats[natInfo.ExtIp] = natInfo.IntIp
+					// We shouldn't ever have the same floating IP mapping to multiple
+					// workload IPs, but if we do we'll program the mapping to the
+					// alphabetically earlier one.
+					existingIntIP := dnats[natInfo.ExtIp]
+					if existingIntIP == "" || natInfo.IntIp < existingIntIP {
+						log.Debug("Wanted NAT mapping")
+						dnats[natInfo.ExtIp] = natInfo.IntIp
+					}
 				}
 			}
 		}
+
 		// Collate required SNATs as a map from internal IP to external IP.
 		snats := map[string]string{}
 		for extIP, intIP := range dnats {
