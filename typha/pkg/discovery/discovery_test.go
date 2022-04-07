@@ -217,8 +217,8 @@ var _ = Describe("Typha address discovery", func() {
 			Expect(newTyphaAddr[:3]).To(ConsistOf(typhaAddr[:3]))
 			Expect(newTyphaAddr[3:]).To(ConsistOf(typhaAddr[3:]))
 
-			shuffledLocal = !reflect.DeepEqual(newTyphaAddr[:3], typhaAddr[:3])
-			shuffledRemote = !reflect.DeepEqual(newTyphaAddr[3:], typhaAddr[3:])
+			shuffledLocal = shuffledLocal || !reflect.DeepEqual(newTyphaAddr[:3], typhaAddr[:3])
+			shuffledRemote = shuffledRemote || !reflect.DeepEqual(newTyphaAddr[3:], typhaAddr[3:])
 		}
 
 		Expect(shuffledLocal).To(BeTrue())
