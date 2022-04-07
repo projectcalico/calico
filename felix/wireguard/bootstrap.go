@@ -64,26 +64,27 @@ import (
 // -  Typha discovery returns the set of available typhas, randomized but with a preference to use the local typha.
 //    In most cases, felix will connect to the local typha first. The upshot is that the routing for typha nodes
 //    should be (relatively) stable. [**ALL**]
-// -  The dataplane daemon during start-up will call into BootstrapHostConnectivity to do the following:
+// -  The dataplane daemon during start-up will call into BootstrapAndFilterTyphaAddresses to do the
+//    following:
 //    -  If wireguard is disabled, remove the wireguard interface and publish an empty key. Typha will pick this up
 //       and can distribute the fact that this node is now not running wireguard. With the interface deleted
 //       normal routing will resume on this node. Once the typha nodes have fixed up their routing to be direct to this
 //       node, this node will then be able to connect to the typha nodes. [**ALL**]
 //    -  If wireguard is enabled and the published key does not match the kernel then remove the wireguard interface and
 //       publish an empty key (see previous bullet).
-// - The dataplane daemon will later call into FilterTyphaEndpoints to filter the set of typha endpoints removing any
-//   where we know routing will be broken. This only applies on HostEncryptionEnabled.
-//    -  If there is no wireguard routing on this node, or if HostEncryptionEnabled is false, then no endpoints will be
-//       filtered out.
-//    -  Otherwise, we remove any typha endpoint that is on a node where the node public key is not currently configured
-//       in our wireguard routing table. We know this is very unlikely(*) to work because the node with typha will be
-//       know our public key and use that to route to us over wireguard. However, we will be routing to typha directly.
-//       (*) If typha is on a node whose felix is unable to connect to typha, then it is possible the typha node will
-//           not know about our nodes public key and therefore be routing to us directly. In that case including the
-//           endpoint would be (transiently) useful. However, since we favor felix connecting to local typha this should
-//           be less common.
-//       In general it is better to attempt all nodes, but removing nodes that we really should not be able to attach to
-//       should decrease the time to successful connection.
+//    -  Filter the supplied set of typha addresses to removes addresses where connectivity will be broken:
+//       -  If there is no wireguard routing on this node, or if HostEncryptionEnabled is false, then no endpoints will
+//          be filtered out.
+//       -  Otherwise, we remove any typha endpoint that is on a node where the node public key is not currently
+//          configured in our wireguard routing table. We know this is very unlikely(*) to work because the node with
+//          typha will be know our public key and use that to route to us over wireguard. However, we will be routing to
+//          typha directly.
+//          (*) If typha is on a node whose felix is unable to connect to typha, then it is possible the typha node will
+//              not know about our nodes public key and therefore be routing to us directly. In that case including the
+//              endpoint would be (transiently) useful. However, since we favor felix connecting to local typha this
+//              should be less common.
+//          In general it is better to attempt all nodes, but removing nodes that we really should not be able to attach
+//          to should decrease the time to successful connection.
 // - The dataplane driver has a filtered set of typha endpoints to use.  If it fails to connect to typha then remove all
 //   wireguard configuration (interface and published key) before restarting felix.
 //
@@ -101,19 +102,27 @@ const (
 	boostrapK8sClientTimeout    = 10 * time.Second
 )
 
-// BootstrapHostConnectivityAndFilterTyphaAddresses performs wireguard boostrap processing and filtering of typha
-// addresses primarily to handle the fact that Host Encryption can cause routing asymmetry due to timing windows
-// resulting in felixes being locked out from typhas.
+// BootstrapAndFilterTyphaAddresses performs wireguard boostrap processing and filtering of typha addresses. This is
+// primarily to handle the fact that Host Encryption can cause routing asymmetry due to timing windows. This results in
+// felixes being locked out from typhas.
 // - If wireguard is disabled then just remove all wireguard configuration from the node (kernel and published key).
+//   We do this whether host encryption is enabled or not.
+//
+// For host encryption only:
 // - If the published key and the kernel key don't match remove all wireguard configuraton from the node.
 // - If the kernel has no programmed peers then remove all wireguard configuration from the node (since we can't
 //   be talking over wireguard yet anyways).
+// -  If a set of typha endpoints has been supplied, filter them to exclude endpoints that we know we cannot reach
+//    due to asymmetric routing.  This will be the case if this node currently has a published wireguard key and:
+//    - Typha node does not have a public key, but the typha IP address programmed in the kernel as a wireguard peer.
+//    - Typha node has a public key but the key does not match any of the peer keys programmed in the kernel.
 //
-// If a set of typha endpoints has been supplied, filter them to exclude endpoints that we know we cannot reach
-// due to asymmetric routing.  This will be the case if this node currently has a published wireguard key and:
-// - Typha node does not have a public key, but the typha IP address programmed in the kernel as a wireguard peer.
-// - Typha node has a public key but the key does not match any of the peer keys programmed in the kernel.
-func BootstrapHostConnectivityAndFilterTyphaAddresses(
+// -----
+//
+// Note that if a non-empty slice of typha endpoints has been supplied this will *always* return a non-empty slice of
+// endpoints. In the scenario where all typha addresses would be filtered out, wireguard configuration is removed from
+// the node and then all typha addresses are returned.
+func BootstrapAndFilterTyphaAddresses(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	getWireguardHandle func() (netlinkshim.Wireguard, error),
@@ -144,7 +153,7 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 	// Get the local public key and the peer public keys currently programmed in the kernel.
 	kernelPublicKey, kernelPeerKeys := getWireguardDeviceInfo(logCxt, wgDeviceName, getWireguardHandle)
 
-	// If there is no valid wireguard configuration in the kernel then remove all traces of wireguard.
+	// If there is no useful wireguard configuration in the kernel then remove all traces of wireguard.
 	if kernelPublicKey == "" || kernelPeerKeys.Len() == 0 {
 		logCxt.Info("No valid wireguard kernel routing - removing wireguard configuration completely")
 		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
@@ -166,7 +175,7 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 	// The configured and stored wireguard key match.
 	logCxt.WithField("peerKeys", kernelPeerKeys).Info("Wireguard public key matches kernel")
 
-	// If we have any typha endpoints then filter them based on whether wireguard asymetry will prevent access.
+	// If we have any typha endpoints then filter them based on whether wireguard asymmetry will prevent access.
 	if len(typhas) > 0 {
 		filtered := filterTyphaEndpoints(configParams, calicoClient, typhas, kernelPeerKeys)
 
@@ -184,24 +193,24 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 	return typhas, nil
 }
 
-// RemoveWireguardConditionallyOnBootstrap removes all wireguard configuration based on
-// configuration conditions. This includes:
+// RemoveWireguardConditionallyOnBootstrap removes all wireguard configuration based on configuration conditions. This
+// is called as a last resort after failing to connect to typha.
+//
+// The following wireguard conifguration will be removed if HostEncryptionEnabled is true:
 // - The wireguard public key
 // - The wireguard device (which in turn will delete all wireguard routing rules).
+//
+// It is assumed that BootstrapAndFilterTyphaAddresses was called prior to calling this function.
 func RemoveWireguardConditionallyOnBootstrap(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	calicoClient clientv3.Interface,
 ) error {
-	/*
-		| WireguardEnabled | WireguardHostEncryptionEnabled | Clear Wireguard PK + Device? |
-		|------------------|--------------------------------|------------------------------|
-		| YES			   | NO								| NO						   |
-		| YES			   | YES							| NO						   |
-		| NO			   | NO								| YES						   |
-		| NO			   | YES							| YES						   |
-	*/
-	if !configParams.WireguardEnabled || !configParams.WireguardHostEncryptionEnabled {
+	if !configParams.WireguardEnabled {
+		log.Debug("Wireguard is not enabled - configuration will have been removed in initial bootstrap")
+		return nil
+	}
+	if !configParams.WireguardHostEncryptionEnabled {
 		log.Debug("No host encryption - not necessary to remove wireguard configuration")
 		return nil
 	}
