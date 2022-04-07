@@ -31,6 +31,7 @@ import (
 
 func init() {
 	natCmd.AddCommand(natDumpCmd)
+	natCmd.AddCommand(natAffDumpCmd)
 
 	natSetCmd.AddCommand(newNatSetFrontend())
 	natSetCmd.AddCommand(newNatSetBackend())
@@ -61,6 +62,16 @@ var natDumpCmd = &cobra.Command{
 	},
 }
 
+var natAffDumpCmd = &cobra.Command{
+	Use:   "aff",
+	Short: "dumps the affinity table",
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := dumpAff(cmd); err != nil {
+			log.WithError(err).Error("Failed to dump affinity map")
+		}
+	},
+}
+
 var natSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "sets an entry in the NAT tables",
@@ -69,6 +80,27 @@ var natSetCmd = &cobra.Command{
 var natDelCmd = &cobra.Command{
 	Use:   "del",
 	Short: "deletes an entry from the NAT tables",
+}
+
+func dumpAff(cmd *cobra.Command) (err error) {
+	defer func() {
+		// If map does not exist, loading the map panics
+		if r := recover(); r != nil {
+			err = errors.Errorf("failed to access affinity map")
+		}
+	}()
+
+	mc := &bpf.MapContext{}
+	affMap, err := nat.LoadAffinityMap(nat.AffinityMap(mc))
+	if err != nil {
+		return err
+	}
+
+	for k, v := range affMap {
+		cmd.Printf("%-40s %s", k, v)
+	}
+
+	return nil
 }
 
 func dump(cmd *cobra.Command) error {
