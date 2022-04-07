@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Copyright (c) 2020  All rights reserved.
-
 package tc
 
 import (
@@ -109,8 +107,10 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		} else {
 			epTypeShort = "tnl"
 		}
+		logrus.Infof("marmar: %v", epTypeShort)
 	case EpTypeIPIP:
 		epTypeShort = "ipip"
+		logrus.Infof("nina: %v", epTypeShort)
 	case EpTypeWireguard:
 		epTypeShort = "wg"
 	}
