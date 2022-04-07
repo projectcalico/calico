@@ -370,22 +370,12 @@ configRetry:
 
 	// Perform wireguard bootstrap processing. This may remove wireguard configuration if wireguard is disabled or
 	// if the configuration is obviously broken. This also filters the typha addresses based on whether routing is
-	// obviously broken to the typha node (due to wireguard routing asymmetry). If we end up filtering out all of the
-	// typha addresses then we will need to remove our wireguard configuration to proceed.
+	// obviously broken to the typha node (due to wireguard routing asymmetry). If all typhas would be filtered out then
+	// wireguard is removed from the node and all typhas are returned (unfiltered).
 	typhaAddresses, err := bootstrapWireguardAndFilterTyphaAddresses(configParams, v3Client, typhaAddresses)
 	if err != nil {
 		time.Sleep(2 * time.Second) // avoid a tight restart loop
 		log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
-	}
-
-	felixConfiguredToUseTypha := configParams.TyphaK8sServiceName != ""
-	if felixConfiguredToUseTypha && len(typhaAddresses) == 0 {
-		// typha configured but with zero available typhas filtered, for now
-		log.WithFields(log.Fields{
-			"subject":     "felix-typha-config",
-			"namespace":   configParams.TyphaK8sNamespace,
-			"servicename": configParams.TyphaK8sServiceName,
-		}).Fatal("No valid Typha candidates in spite of being configured to use Typha")
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
