@@ -42,7 +42,7 @@ func bootstrapWireguardAndFilterTyphaAddresses(
 // resort used when failing to connect to typha.
 func bootstrapRemoveWireguard(configParams *config.Config, v3Client clientv3.Interface) error {
 	log.Debug("bootstrapping wireguard host connectivity by removing wireguard config")
-	return wireguard.RemoveWireguardForHostEncryptionBootstrapping(
+	return wireguard.RemoveWireguardConditionallyOnBootstrap(
 		configParams,
 		netlinkshim.NewRealNetlink,
 		v3Client,
