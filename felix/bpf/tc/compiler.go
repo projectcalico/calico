@@ -47,6 +47,7 @@ const (
 	EpTypeWorkload  EndpointType = "workload"
 	EpTypeHost      EndpointType = "host"
 	EpTypeTunnel    EndpointType = "tunnel"
+	EpTypeIPIP      EndpointType = "ipip"
 	EpTypeWireguard EndpointType = "wireguard"
 )
 
@@ -104,10 +105,12 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		epTypeShort = "hep"
 	case EpTypeTunnel:
 		if bpf.IPIPDeviceIsL3() {
-			epTypeShort = "hep"
+			epTypeShort = "ipip"
 		} else {
 			epTypeShort = "tnl"
 		}
+	case EpTypeIPIP:
+		epTypeShort = "ipip"
 	case EpTypeWireguard:
 		epTypeShort = "wg"
 	}
