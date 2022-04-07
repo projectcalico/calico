@@ -41,7 +41,7 @@ var _ = infrastructure.DatastoreDescribe(
 	func(getInfra infrastructure.InfraFactory) {
 
 		// Only BPF mode enforces strict RPF by default.
-		if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+		if true || os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
 			// Non-BPF run.
 			return
 		}
