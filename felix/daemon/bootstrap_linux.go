@@ -21,39 +21,20 @@ import (
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 )
 
-// bootstrapWireguard performs some start-up single shot bootstrapping of wireguard configuration. This returns the
-// currently programmed peer public keys that need verifying for typha connectivity. Verification of the peers will be
-// required when host encryption is enabled with wireguard. In this mode, an asymmetric view of the routing config will
-// prevent connectivity to typha.
-func bootstrapWireguard(configParams *config.Config, v3Client clientv3.Interface) (set.Set, error) {
+// bootstrapWireguard performs some start-up single shot bootstrapping of wireguard configuration.
+func bootstrapWireguardAndFilterTyphaAddresses(
+	configParams *config.Config, v3Client clientv3.Interface, typhas []discovery.Typha,
+) ([]discovery.Typha, error) {
 	log.Debug("bootstrapping wireguard host connectivity")
-	return wireguard.BootstrapHostConnectivity(
+	return wireguard.BootstrapHostConnectivityAndFilterTyphaAddresses(
 		configParams,
 		netlinkshim.NewRealNetlink,
 		netlinkshim.NewRealWireguard,
 		v3Client,
-	)
-}
-
-// bootstrapFilterTyphaForWireguard filters the supplied set of typha endpoints to improve the likelihood of connections
-// succeeding. This is required when host encryption is enabled with wireguard. In this mode, an asymmetric view of the
-// routing config will prevent connectivity to typha.
-func bootstrapFilterTyphaForWireguard(
-	configParams *config.Config,
-	v3Client clientv3.Interface,
-	typhas []discovery.Typha,
-	peersToValidate set.Set,
-) []discovery.Typha {
-	log.Debug("filtering typha endpoints for wireguard")
-	return wireguard.FilterTyphaEndpoints(
-		configParams,
-		v3Client,
 		typhas,
-		peersToValidate,
 	)
 }
 

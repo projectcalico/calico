@@ -368,35 +368,14 @@ configRetry:
 		simulateDataRace()
 	}
 
-	// We may need to temporarily disable encrypted traffic to this node in order to connect to Typha
-	var wireguardPeersToValidate set.Set
-	if configParams.WireguardEnabled {
-		var err error
-		wireguardPeersToValidate, err = bootstrapWireguard(configParams, v3Client)
-		if err != nil {
-			time.Sleep(2 * time.Second) // avoid a tight restart loop
-			log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
-		}
-	}
-
-	if len(typhaAddresses) > 0 {
-		// If we have some typha addresses then we may need to filter which ones we attempt to connect to due to
-		// transient wireguard routing asymmetry.
-		filteredAddresses := bootstrapFilterTyphaForWireguard(configParams, v3Client, typhaAddresses, wireguardPeersToValidate)
-		if len(filteredAddresses) == 0 {
-			// We have filtered out all of the typha endpoints, i.e. with our current wireguard configuration none of
-			// the typhas will be accessible due to asymmetric routing. Best thing to do is just delete our wireguard
-			// configuration after which all of the typha endpoints should eventually become acceessible.
-			log.Warning("None of the typhas will be accessible due to wireguard routing asymmetry - remove wireguard")
-			if err := bootstrapRemoveWireguard(configParams, v3Client); err != nil {
-				time.Sleep(2 * time.Second) // avoid a tight restart loop
-				log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
-			}
-		} else {
-			// We have a filtered set of addresses to use.
-			log.WithField("filteredTyphaAddresses", filteredAddresses).Debug("Using filtered typha addresses")
-			typhaAddresses = filteredAddresses
-		}
+	// Perform wireguard bootstrap processing. This may remove wireguard configuration if wireguard is disabled or
+	// if the configuration is obviously broken. This also filters the typha addresses based on whether routing is
+	// obviously broken to the typha node (due to wireguard routing asymmetry). If we end up filtering out all of the
+	// typha addresses then we will need to remove our wireguard configuration to proceed.
+	typhaAddresses, err := bootstrapWireguardAndFilterTyphaAddresses(configParams, v3Client, typhaAddresses)
+	if err != nil {
+		time.Sleep(2 * time.Second) // avoid a tight restart loop
+		log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external

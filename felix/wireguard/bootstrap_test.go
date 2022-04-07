@@ -22,8 +22,6 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
 	"github.com/projectcalico/calico/felix/config"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	. "github.com/projectcalico/calico/felix/wireguard"
@@ -156,24 +154,12 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			}
 		})
 
-		It("no-ops for BootstrapHostConnectivity", func() {
-			v, err := BootstrapHostConnectivity(
-				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient,
+		It("no-ops for BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, nil,
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v).To(BeNil())
-			Expect(nodeClient.numGets).To(BeZero())
-			Expect(nodeClient.numUpdates).To(BeZero())
-			Expect(netlinkDataplane.NumNewNetlinkCalls).To(BeZero())
-			Expect(netlinkDataplane.NumNewWireguardCalls).To(BeZero())
-		})
-
-		It("no-ops for FilterTyphaEndpoints", func() {
-			typhas := []discovery.Typha{typha1, typha2, typha3, typha4}
-			filtered := FilterTyphaEndpoints(
-				configParams, nodeClient, typhas, nil,
-			)
-			Expect(filtered).To(Equal(typhas))
+			Expect(f).To(BeNil())
 			Expect(nodeClient.numGets).To(BeZero())
 			Expect(nodeClient.numUpdates).To(BeZero())
 			Expect(netlinkDataplane.NumNewNetlinkCalls).To(BeZero())
@@ -223,29 +209,92 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			nodeClient.nodes[nodeName3] = node3.DeepCopy()
 		})
 
-		It("returns the set of programmed peers when calling BootstrapHostConnectivity", func() {
-			v, err := BootstrapHostConnectivity(
-				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient,
+		It("returns the correct filtered typhas when calling BootstrapHostConnectivity", func() {
+			typhas := []discovery.Typha{typha1, typha2, typha3, typha4}
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v).NotTo(BeNil())
-			Expect(v.Len()).To(Equal(1))
-			Expect(v.Contains(node2PrivateKey.PublicKey().String())).To(BeTrue())
-			Expect(nodeClient.numGets).To(Equal(1))
+
+			// We expect all typhas:
+			// typha1 (local), typha2 (key is in kernel), typha3 (no key and IP not in kernel), typha4 (missing in client)
+			Expect(f).To(Equal(typhas))
+
+			// Get for local node and the two remote typhas with node names.
+			Expect(nodeClient.numGets).To(Equal(3))
+
+			// No updates made.
 			Expect(nodeClient.numUpdates).To(Equal(0))
 			Expect(netlinkDataplane.NumNewNetlinkCalls).To(Equal(0))
 			Expect(netlinkDataplane.NumNewWireguardCalls).To(Equal(1))
+		})
+
+		It("returns the correct filtered typhas (filters out missing key) when calling BootstrapHostConnectivity", func() {
+			typhas := []discovery.Typha{typha1, typha2, typha3, typha4}
+			delete(link.WireguardPeers, node2PrivateKey.PublicKey())
+			pvt, _ := wgtypes.GeneratePrivateKey()
+			link.WireguardPeers[pvt.PublicKey()] = wgtypes.Peer{
+				PublicKey: pvt.PublicKey(),
+			}
+
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			// We expect typhas:
+			// typha1 (local), typha3 (no key and IP not in kernel), typha4 (missing in client)
+			// Filtered:
+			// typha2 (key is not in kernel)
+			Expect(f).To(Equal([]discovery.Typha{typha1, typha3, typha4}))
+
+			// Get for local node and the two remote typhas with node names.
+			Expect(nodeClient.numGets).To(Equal(3))
+
+			// No updates.
+			Expect(nodeClient.numUpdates).To(Equal(0))
+			Expect(netlinkDataplane.NumNewNetlinkCalls).To(Equal(0))
+			Expect(netlinkDataplane.NumNewWireguardCalls).To(Equal(1))
+		})
+
+		It("returns all typhas and deletes wireguard if all typhas would be filtered when calling BootstrapHostConnectivity", func() {
+			typhas := []discovery.Typha{typha2}
+			delete(link.WireguardPeers, node2PrivateKey.PublicKey())
+			pvt, _ := wgtypes.GeneratePrivateKey()
+			link.WireguardPeers[pvt.PublicKey()] = wgtypes.Peer{
+				PublicKey: pvt.PublicKey(),
+			}
+
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			// All typhas would be filtered out (missing key and Ip in kernel). Therefore wireguard will be deleted and
+			// no typhas will be filtered out.
+			Expect(f).To(Equal(typhas))
+
+			// Get for local node, one remote node for typha, local node for deleting WG.
+			Expect(nodeClient.numGets).To(Equal(3))
+			Expect(nodeClient.numUpdates).To(Equal(1))
+
+			// Device will be deleted.
+			Expect(netlinkDataplane.NumNewNetlinkCalls).To(Equal(1))
+			Expect(netlinkDataplane.NumNewWireguardCalls).To(Equal(1))
+			Expect(netlinkDataplane.NameToLink).ToNot(HaveKey("wireguard.cali"))
+			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).To(Equal(""))
 		})
 
 		It("deletes all wireguard from node 1 if public key does not match kernel when calling BootstrapHostConnectivity", func() {
 			otherKey, _ := wgtypes.GeneratePrivateKey()
 			link.WireguardPrivateKey = otherKey
 			link.WireguardPublicKey = otherKey.PublicKey()
-			v, err := BootstrapHostConnectivity(
-				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient,
+			typhas := []discovery.Typha{typha2, typha3}
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v).To(BeNil())
+			Expect(f).To(Equal(typhas)) // Should be unchanged.
 			// Two gets - once for the check, once for the update.
 			Expect(nodeClient.numGets).To(Equal(2))
 			Expect(nodeClient.numUpdates).To(Equal(1))
@@ -352,14 +401,15 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).ToNot(Equal(""))
 		})
 
-		It("deletes all wireguard from node 1 if wireguard is disabled when calling BootstrapHostConnectivity", func() {
+		It("deletes all wireguard from node 1 if wireguard is disabled when calling BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
 			configParams.WireguardHostEncryptionEnabled = false
 			configParams.WireguardEnabled = false
-			v, err := BootstrapHostConnectivity(
-				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient,
+			typhas := []discovery.Typha{typha2, typha3}
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v).To(BeNil())
+			Expect(f).To(Equal(typhas))
 			Expect(nodeClient.numGets).To(Equal(1))
 			Expect(nodeClient.numUpdates).To(Equal(1))
 			Expect(netlinkDataplane.NumNewNetlinkCalls).To(Equal(1))
@@ -370,13 +420,14 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).To(Equal(""))
 		})
 
-		It("deletes wireguard key from node 1 if wireguard intface is empty when calling BootstrapHostConnectivity", func() {
+		It("deletes wireguard key from node 1 if wireguard intface is empty when calling BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
 			configParams.WireguardInterfaceName = ""
-			v, err := BootstrapHostConnectivity(
-				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient,
+			typhas := []discovery.Typha{typha2, typha3}
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v).To(BeNil())
+			Expect(f).To(Equal(typhas))
 			Expect(nodeClient.numGets).To(Equal(1))
 			Expect(nodeClient.numUpdates).To(Equal(1))
 			Expect(netlinkDataplane.NumNewNetlinkCalls).To(BeZero())
@@ -384,13 +435,14 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).To(Equal(""))
 		})
 
-		It("deletes wireguard key from node 1 if wireguard interface is not present when calling BootstrapHostConnectivity", func() {
+		It("deletes wireguard key from node 1 if wireguard interface is not present when calling BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
 			delete(netlinkDataplane.NameToLink, "wireguard.cali")
-			v, err := BootstrapHostConnectivity(
-				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient,
+			typhas := []discovery.Typha{typha2, typha3}
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v).To(BeNil())
+			Expect(f).To(Equal(typhas))
 			Expect(nodeClient.numGets).To(Equal(1))
 			Expect(nodeClient.numUpdates).To(Equal(1))
 			Expect(netlinkDataplane.NumNewNetlinkCalls).To(Equal(1))
@@ -398,68 +450,20 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).To(Equal(""))
 		})
 
-		It("deletes wireguard key from node 1 if wireguard interface has no peers when calling BootstrapHostConnectivity", func() {
+		It("deletes wireguard key from node 1 if wireguard interface has no peers when calling BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
 			link.WireguardPeers = nil
-			v, err := BootstrapHostConnectivity(
-				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient,
+			typhas := []discovery.Typha{typha2, typha3}
+			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v).To(BeNil())
+			Expect(f).To(Equal(typhas))
 			Expect(nodeClient.numGets).To(Equal(1))
 			Expect(nodeClient.numUpdates).To(Equal(1))
 			Expect(netlinkDataplane.NumNewNetlinkCalls).To(Equal(1))
 			Expect(netlinkDataplane.NumNewWireguardCalls).To(Equal(1))
 			Expect(netlinkDataplane.NameToLink).ToNot(HaveKey("wireguard.cali"))
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).To(Equal(""))
-		})
-
-		It("includes all typha endpoints when calling FilterTyphaEndpoints if keys are correct, name is not known, or is local", func() {
-			// Typha1 is local, Typha2 has public key, Typha3 does not and Typha4 is on an unknown node.
-			// Should have 2 queries for nodes 2 and 3.
-			peersToValidate := set.From(node2PrivateKey.PublicKey().String())
-			typhas := []discovery.Typha{typha1, typha2, typha3, typha4}
-			filtered := FilterTyphaEndpoints(
-				configParams, nodeClient, typhas, peersToValidate,
-			)
-			Expect(filtered).To(Equal(typhas))
-			Expect(nodeClient.numGets).To(Equal(2))
-			Expect(nodeClient.numUpdates).To(BeZero())
-			Expect(netlinkDataplane.NumNewNetlinkCalls).To(BeZero())
-			Expect(netlinkDataplane.NumNewWireguardCalls).To(BeZero())
-		})
-
-		It("omits any typha endpoint with a public key that is not in local wireguard when calling FilterTyphaEndpoints", func() {
-			// Typha1 is local, Typha2 has public key, Typha3 does not and Typha4 is on an unknown node.
-			// We omit the key for node 2.
-			// Should have 2 queries for nodes 2 and 3.
-			peersToValidate := set.From(node1PrivateKey.PublicKey())
-			typhas := []discovery.Typha{typha1, typha2, typha3, typha4}
-			filtered := FilterTyphaEndpoints(
-				configParams, nodeClient, typhas, peersToValidate,
-			)
-			Expect(filtered).To(Equal([]discovery.Typha{typha1, typha3, typha4}))
-			Expect(nodeClient.numGets).To(Equal(2))
-			Expect(nodeClient.numUpdates).To(BeZero())
-			Expect(netlinkDataplane.NumNewNetlinkCalls).To(BeZero())
-			Expect(netlinkDataplane.NumNewWireguardCalls).To(BeZero())
-		})
-
-		It("includes all endpoints if unable to lookup the key FilterTyphaEndpoints", func() {
-			// Typha1 is local, Typha2 has public key, Typha3 does not and Typha4 is on an unknown node.
-			// We omit the key for node 2.
-			// Should have 2 queries for nodes 2 and 3.
-			peersToValidate := set.From(node1PrivateKey.PublicKey())
-			typhas := []discovery.Typha{typha1, typha2, typha3, typha4}
-			nodeClient.numGetErrors = 10
-			filtered := FilterTyphaEndpoints(
-				configParams, nodeClient, typhas, peersToValidate,
-			)
-			Expect(filtered).To(Equal(typhas))
-			// Filter queries only retry twice.
-			Expect(nodeClient.numGets).To(Equal(4))
-			Expect(nodeClient.numUpdates).To(BeZero())
-			Expect(netlinkDataplane.NumNewNetlinkCalls).To(BeZero())
-			Expect(netlinkDataplane.NumNewWireguardCalls).To(BeZero())
 		})
 	})
 })

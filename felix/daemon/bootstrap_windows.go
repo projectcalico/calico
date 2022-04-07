@@ -17,21 +17,13 @@ package daemon
 import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 )
 
-func bootstrapWireguard(_ *config.Config, _ clientv3.Interface) (set.Set, error) {
-	return nil, nil
-} // no-op
-
-func bootstrapFilterTyphaForWireguard(
-	_ *config.Config,
-	_ clientv3.Interface,
-	typhas []discovery.Typha,
-	_ set.Set,
-) []discovery.Typha {
-	return typhas
+func bootstrapWireguardAndFilterTyphaAddresses(
+	_ *config.Config, _ clientv3.Interface, typhas []discovery.Typha,
+) ([]discovery.Typha, error) {
+	return typhas, nil
 } // no filtering
 
 func bootstrapRemoveWireguard(_ *config.Config, _ clientv3.Interface) error {
