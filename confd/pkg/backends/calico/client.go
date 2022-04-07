@@ -1016,6 +1016,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 	if resName == globalConfigName {
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
+		c.getBindModeKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getASNumberKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getServiceExternalIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getServiceClusterIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
@@ -1144,6 +1145,18 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interfac
 		}
 		*updateReasons = append(*updateReasons, "listenPort deleted.")
 		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(listenPortKey))
+	}
+	*updatePeersV1 = true
+}
+
+func (c *client) getBindModeKVPair(v3res *apiv3.BGPConfiguration, key interface{}, updatePeersV1 *bool, updateReasons *[]string) {
+	bindMode := getBGPConfigKey("bind_mode", key)
+	if v3res != nil && v3res.Spec.BindMode != "" {
+		*updateReasons = append(*updateReasons, "bindMode updated.")
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(bindMode, v3res.Spec.BindMode))
+	} else {
+		*updateReasons = append(*updateReasons, "bindMode deleted.")
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(bindMode))
 	}
 	*updatePeersV1 = true
 }

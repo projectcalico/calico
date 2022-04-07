@@ -36,6 +36,11 @@ spec:
                   64512]'
                 format: int32
                 type: integer
+              bindMode:
+                description: BindMode indicates whether to listen for BGP connections
+                  on all addresses (None) or only on the node's canonical IP address
+                  Node.Spec.BGP.IPvXAddress (NodeIP).
+                type: string
               communities:
                 description: Communities is a list of BGP community values and their
                   arbitrary names for tagging routes.
