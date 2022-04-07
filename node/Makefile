@@ -10,7 +10,8 @@ DEV_TAG_SUFFIX        ?=0.dev
 NODE_IMAGE            ?=node
 WINDOWS_UPGRADE_IMAGE ?=windows-upgrade
 
-WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
+#WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
+WINDOWS_VERSIONS?=1809
 BUILD_IMAGES ?=$(NODE_IMAGE)
 
 # Paths within the build container for BPF source.
@@ -67,6 +68,7 @@ WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 
 # Variables for the Windows packaging.
 # Name of the Windows release ZIP archive.
+WINDOWS_PACKAGING_ROOT := windows-packaging
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
 WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
@@ -111,6 +113,8 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 
 WINDOWS_UPGRADE_ROOT         ?= windows-upgrade
 WINDOWS_UPGRADE_DIST          = dist/windows-upgrade
+WINDOWS_PACKAGING_DIST        = dist/windows-packaging
+WINDOWS_PACKAGING_DIST_STAGE = $(WINDOWS_PACKAGING_DIST)/stage
 
 # The directory that holds temporary files used to build the windows upgrade zip
 # archive.
@@ -597,6 +601,31 @@ else
 CRANE_BINDMOUNT = echo [DRY RUN] $(CRANE_BINDMOUNT_CMD)
 DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
+
+proto-build-image: build-windows-archive proto-image-tar-windows-all
+proto-image-tar-windows-all: setup-windows-builder $(addprefix proto-sub-image-tar-windows-,$(WINDOWS_VERSIONS))
+# Copied from the other target for window-upgrade
+# TODO: merge these targets.
+proto-sub-image-tar-windows-%:
+	# ensure dir for windows image tars
+	-mkdir -p $(WINDOWS_PACKAGING_DIST)
+	# ensure docker build dir exists
+	-mkdir -p $(WINDOWS_PACKAGING_DIST_STAGE)
+	# copy dockerfile to staging dir
+	cp $(WINDOWS_PACKAGING_ROOT)/Dockerfile $(WINDOWS_PACKAGING_DIST_STAGE)
+	# build and copy install script to staging dir
+	make -C ../calico build
+	cp ../calico/_site/scripts/install-calico-windows.ps1 $(WINDOWS_PACKAGING_DIST_STAGE)
+	# copy calico install zip file to staging dir
+	cp dist/calico-windows-$(GIT_VERSION).zip $(WINDOWS_PACKAGING_DIST_STAGE)/calico-windows.zip
+	cd $(WINDOWS_PACKAGING_DIST_STAGE) && \
+	docker buildx build \
+		--platform windows/amd64 \
+		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_PACKAGING_DIST)/image-$(GIT_VERSION)-$*.tar \
+		--pull \
+		--build-arg=WINDOWS_VERSION=$* .
+	# TODO: push image manually for now
+	# crane push dist/windows-packaging/image-*.tar <image_tag>
 
 # Uses the docker builder to create a Windows image tarball for a single Windows
 # version.

@@ -40,6 +40,8 @@ Param(
     [parameter(Mandatory = $false)] $EtcdCaCert="",
     [parameter(Mandatory = $false)] $ServiceCidr="10.96.0.0/12",
     [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10",
+    # If this script is run from a HostProcess container then KubeAPIServerIPAndPort must be provided.
+    [parameter(Mandatory = $false)] $KubeAPIServerIPAndPort="",
     [parameter(Mandatory = $false)] $CalicoBackend=""
 )
 
@@ -166,6 +168,14 @@ function GetCalicoNamespace() {
       [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 
+    # If we are running inside a HostProcess container then return our
+    # namespace.
+    if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+        $ns = Get-Content -Raw -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/namespace
+        write-host "Install script is running in a HostProcess container. This namespace is {0}" -f $ns
+        return $ns
+    }
+
     $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get ns calico-system
     if ([string]::IsNullOrEmpty($name)) {
         write-host "Calico running in kube-system namespace"
@@ -190,15 +200,33 @@ function GetCalicoKubeConfig()
         Import-Module $eksAWSToolsModulePath
     }
 
-    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
-    if ([string]::IsNullOrEmpty($name)) {
-        throw "$SecretName service account does not exist."
-    }
-    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
-    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n $CalicoNamespace
-    $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
+    # If we are running inside a HostProcess container then we already have
+    # access to the serviceaccount token and ca cert and do not need the
+    # kubeconfig.
+    if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+        write-host "Install script is running in a HostProcess container. Getting token and ca.crt directly..."
+        # CA needs to be base64-encoded.
+        $ca = Get-Content -Raw -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        $ca = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($ca))
+        # But not the token.
+        $token = Get-Content -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/token
 
-    $server=findstr https:// $KubeConfigPath
+        # TODO: check kubeadm config for controlPlaneEndpoint?
+        $server = "server: https://{0}" -f $KubeAPIServerIPAndPort
+
+    } else {
+        $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
+        if ([string]::IsNullOrEmpty($name)) {
+            throw "$SecretName service account does not exist."
+        }
+        # CA from the k8s secret is already base64-encoded.
+        $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
+        # Token from the k8s secret is base64-encoded but we need the jwt token.
+        $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n $CalicoNamespace
+        $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
+
+        $server=findstr https:// $KubeConfigPath
+    }
 
     (Get-Content $RootDir\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content $RootDir\calico-kube-config -Force
 }
