@@ -572,7 +572,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 			cc.ExpectSome(wls[0], wls[1])
 			cc.ExpectSome(wls[1], wls[0])
-			cc.CheckConnectivity()
+			cc.CheckConnectivity()  //RLB <<< Flaking
 
 			By("verifying tunnelled packet count is non-zero")
 			for i := range felixes {
