@@ -63,8 +63,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 						tc.EpTypeWorkload,
 						tc.EpTypeHost,
 						tc.EpTypeTunnel,
-						tc.EpTypeIPIP,
-						tc.EpTypeWireguard,
+						tc.EpTypeL3Device,
 					}
 					for _, epType := range epTypes {
 						epType := epType
