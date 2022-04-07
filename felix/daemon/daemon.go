@@ -391,6 +391,16 @@ configRetry:
 		log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
 	}
 
+	felixConfiguredToUseTypha := configParams.TyphaK8sServiceName != ""
+	if felixConfiguredToUseTypha && len(typhaAddresses) == 0 {
+		// typha configured but with zero available typhas filtered, for now
+		log.WithFields(log.Fields{
+			"subject":     "felix-typha-config",
+			"namespace":   configParams.TyphaK8sNamespace,
+			"servicename": configParams.TyphaK8sServiceName,
+		}).Fatal("No valid Typha candidates in spite of being configured to use Typha")
+	}
+
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
 	var dpDriver dp.DataplaneDriver
