@@ -60,7 +60,7 @@ struct bpf_map_def_extended {
 #define CALI_TC_WIREGUARD	(1<<5)
 // CALI_XDP_PROG is set for programs attached to the XDP hook
 #define CALI_XDP_PROG 	(1<<6)
-// CALI_L3_IPIP is set to IPIP tunnel that acts fully at layer 3. In kernerls before 5.14
+// CALI_L3_IPIP is set for IPIP tunnels that act fully at layer 3. In kernerls before 5.14
 // (rhel 4.18.0-330) IPIP tunnels on inbound direction were acting differently, where they
 // could see outer ethernet and ip headers.
 #define CALI_L3_IPIP	(1<<7)

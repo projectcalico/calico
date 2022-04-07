@@ -107,10 +107,8 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		} else {
 			epTypeShort = "tnl"
 		}
-		logrus.Infof("marmar: %v", epTypeShort)
 	case EpTypeIPIP:
 		epTypeShort = "ipip"
-		logrus.Infof("nina: %v", epTypeShort)
 	case EpTypeWireguard:
 		epTypeShort = "wg"
 	}
