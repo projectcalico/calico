@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Project Calico BPF dataplane build scripts.
-# Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 # Generate the cross-product of all the compile options, excluding some cases that don't make sense.
@@ -29,7 +29,7 @@ for core_support in co-re legacy;do
         # The workload-to-host drop setting only applies to the from-workload hook.
         ep_types="wep"
       else
-        ep_types="wep hep tnl wg"
+        ep_types="wep hep tnl ipip wg"
       fi
       for fib in "" "fib_"; do
         for ep_type in $ep_types; do

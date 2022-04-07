@@ -21,6 +21,8 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/bpf"
 )
 
 // TCHook is the hook to which a BPF program should be attached.  This is relative to the host namespace
@@ -45,6 +47,7 @@ const (
 	EpTypeWorkload  EndpointType = "workload"
 	EpTypeHost      EndpointType = "host"
 	EpTypeTunnel    EndpointType = "tunnel"
+	EpTypeIPIP      EndpointType = "ipip"
 	EpTypeWireguard EndpointType = "wireguard"
 )
 
@@ -101,7 +104,13 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 	case EpTypeHost:
 		epTypeShort = "hep"
 	case EpTypeTunnel:
-		epTypeShort = "tnl"
+		if bpf.IPIPDeviceIsL3() {
+			epTypeShort = "ipip"
+		} else {
+			epTypeShort = "tnl"
+		}
+	case EpTypeIPIP:
+		epTypeShort = "ipip"
 	case EpTypeWireguard:
 		epTypeShort = "wg"
 	}
