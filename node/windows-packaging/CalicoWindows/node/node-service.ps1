@@ -118,7 +118,10 @@ if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_
     }
 }
 
-$env:CALICO_NODENAME_FILE = ".\nodename"
+# For Windows, we expect the nodename file to exist in the root directory of the
+# Calico for Windows installation. The CNI config field 'nodename_file' will
+# always be $RootDir\nodename
+$env:CALICO_NODENAME_FILE = "$RootDir\nodename"
 
 # We use this setting as a trigger for the other scripts to proceed.
 Set-StoredLastBootTime $lastBootTime
