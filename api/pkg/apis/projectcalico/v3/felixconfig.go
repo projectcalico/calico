@@ -60,6 +60,14 @@ const (
 	AWSSrcDstCheckOptionDisable                        = "Disable"
 )
 
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type FloatingIPType string
+
+const (
+	FloatingIPsEnabled  FloatingIPType = "Enabled"
+	FloatingIPsDisabled FloatingIPType = "Disabled"
+)
+
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	UseInternalDataplaneDriver *bool  `json:"useInternalDataplaneDriver,omitempty"`
@@ -398,6 +406,12 @@ type FelixConfigurationSpec struct {
 	// This should not match workload interfaces (usually named cali...).
 	// +optional
 	MTUIfacePattern string `json:"mtuIfacePattern,omitempty" validate:"omitempty,regexp"`
+
+	// FloatingIPs configures whether or not Felix will program floating IP addresses.
+	//
+	// +kubebuilder:default=Disabled
+	// +optional
+	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 }
 
 type RouteTableRange struct {

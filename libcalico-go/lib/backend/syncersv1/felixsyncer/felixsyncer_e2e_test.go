@@ -182,6 +182,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 				})
 			}
 		}
+
 	}
 
 	return
@@ -429,8 +430,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			)
 			Expect(err).NotTo(HaveOccurred())
 			// The pool will add as single entry ( +1 ), plus will also create the default
-			// Felix config with IPIP enabled.
-			expectedCacheSize += 2
+			// Felix config with IPIP enabled, and FloatingIPs.
+			expectedCacheSize += 3
 			syncTester.ExpectData(model.KVPair{
 				Key: model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")},
 				Value: &model.IPPool{

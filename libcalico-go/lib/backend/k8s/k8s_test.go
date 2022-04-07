@@ -2002,6 +2002,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 	})
 
 	It("should support setting and getting FelixConfig", func() {
+		enabled := apiv3.FloatingIPsEnabled
 		fc := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "myfelixconfig",
@@ -2017,6 +2018,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				},
 				Spec: apiv3.FelixConfigurationSpec{
 					InterfacePrefix: "xali-",
+					FloatingIPs:     &enabled,
 				},
 			},
 		}
