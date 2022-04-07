@@ -144,6 +144,16 @@ var _ = infrastructure.DatastoreDescribe(
 			}
 		})
 
+		AfterEach(func() {
+			log.Info("AfterEach starting")
+			for _, f := range felixes {
+				f.Exec("calico-bpf", "connect-time", "clean")
+				f.Stop()
+			}
+			infra.Stop()
+			log.Info("AfterEach done")
+		})
+
 		Context("With BPFEnforceRPF=Strict", func() {
 			BeforeEach(func() {
 				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Strict"
