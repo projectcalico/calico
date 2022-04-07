@@ -61,10 +61,6 @@ var _ = infrastructure.DatastoreDescribe(
 			options = infrastructure.DefaultTopologyOptions()
 		})
 
-		AfterEach(func() {
-			infra.Stop()
-		})
-
 		JustBeforeEach(func() {
 			felixes, calicoClient = infrastructure.StartNNodeTopology(1, options, infra)
 
@@ -142,6 +138,16 @@ var _ = infrastructure.DatastoreDescribe(
 					felix.Exec("ip", "route")
 				}
 			}
+		})
+
+		AfterEach(func() {
+			log.Info("AfterEach starting")
+			for _, f := range felixes {
+				f.Exec("calico-bpf", "connect-time", "clean")
+				f.Stop()
+			}
+			infra.Stop()
+			log.Info("AfterEach done")
 		})
 
 		Context("With BPFEnforceRPF=Strict", func() {
