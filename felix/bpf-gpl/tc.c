@@ -184,7 +184,6 @@ deny:
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 {
-	__u64 cookie;
 	/* Now we've got as far as the UDP header, check if this is one of our VXLAN packets, which we
 	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
@@ -217,6 +216,20 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 
 	/* Do conntrack lookup before anything else */
 	ctx->state->ct_result = calico_ct_v4_lookup(ctx);
+
+	calico_tc_process_ct_lookup(ctx);
+
+allow:
+finalize:
+	return forward_or_drop(ctx);
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+}
+
+
+static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
+{
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
 
 	/* Check if someone is trying to spoof a tunnel packet */
@@ -311,9 +324,13 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 
 	/* No conntrack entry, check if we should do NAT */
 	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
-	ctx->nat_dest = calico_v4_nat_lookup2(ctx->state->ip_src, ctx->state->ip_dst,
-					     ctx->state->ip_proto, ctx->state->dport,
-					     ctx->state->tun_ip != 0, &nat_res);
+
+	/* Skip NAT lookup for traffic leaving the host namespace. */
+	if (CALI_F_TO_HOST) {
+		ctx->nat_dest = calico_v4_nat_lookup2(ctx->state->ip_src, ctx->state->ip_dst,
+						      ctx->state->ip_proto, ctx->state->dport,
+						      ctx->state->tun_ip != 0, &nat_res);
+	}
 
 	if (nat_res == NAT_FE_LOOKUP_DROP) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
@@ -414,7 +431,7 @@ syn_force_policy:
 	// sending socket's cookie, so we can reverse a DNAT that the CTLB may have done.
 	// This allows us to give the policy program the pre-DNAT destination as well as
 	// the post-DNAT destination in all cases.
-	cookie = bpf_get_socket_cookie(ctx->skb);
+	__u64 cookie = bpf_get_socket_cookie(ctx->skb);
 	if (cookie) {
 		CALI_DEBUG("Socket cookie: %x\n", cookie);
 		struct ct_nats_key ct_nkey = {
@@ -474,12 +491,11 @@ skip_policy:
 	/* should not reach here */
 	goto deny;
 
-allow:
 finalize:
-	return forward_or_drop(ctx);
+	return;
+
 deny:
 	ctx->fwd.res = TC_ACT_SHOT;
-	goto finalize;
 }
 
 SEC("classifier/tc/accept")
@@ -567,15 +583,16 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		// to trigger that and leave the fib lookup disabled.
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {
+		seen_mark = CALI_SKB_MARK_SEEN;
 		if (state->flags & CALI_ST_SKIP_FIB) {
 			fib = false;
+			seen_mark = CALI_SKB_MARK_SKIP_FIB;
 		} else if (CALI_F_TO_HOST && !ct_result_rpf_failed(state->ct_result.rc)) {
 			// Non-SNAT case, allow FIB lookup only if RPF check passed.
 			// Note: tried to pass in the calculated value from calico_tc but
 			// hit verifier issues so recalculate it here.
 			fib = true;
 		}
-		seen_mark = CALI_SKB_MARK_SEEN;
 	}
 
 	/* We check the ttl here to avoid needing complicated handling of
@@ -1198,12 +1215,16 @@ deny:
 SEC("classifier/tc/drop")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
-	CALI_DEBUG("Entering calico_tc_skb_drop\n");
+	CALI_DEBUG("Entering calico_tc_skb_drop - DENY\n");
 
-	struct cali_tc_state *state = state_get();
-	if (!state) {
-		CALI_DEBUG("State map lookup failed: no event generated\n");
-		goto drop;
+	struct cali_tc_state *state;
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
+		state = state_get();
+		if (!state) {
+			CALI_DEBUG("State map lookup failed: no event generated\n");
+			return TC_ACT_SHOT;
+		}
 	}
 
 	CALI_DEBUG("proto=%d\n", state->ip_proto);
@@ -1216,7 +1237,6 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	CALI_DEBUG("flags=0x%x\n", state->flags);
 	CALI_DEBUG("ct_rc=%d\n", state->ct_result.rc);
 
-drop:
 	return TC_ACT_SHOT;
 }
 

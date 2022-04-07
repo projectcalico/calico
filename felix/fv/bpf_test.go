@@ -432,6 +432,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectNone(w[1], hostW)
 					cc.ExpectSome(hostW, w[0])
 					cc.CheckConnectivity()
+					checkNodeConntrack(felixes)
 				})
 			})
 
@@ -474,6 +475,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1], hostW)
 					cc.ExpectSome(hostW, w[0])
 					cc.CheckConnectivity()
+					checkNodeConntrack(felixes)
 				})
 			})
 
@@ -904,6 +906,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("SNATting outgoing traffic with the flag set")
 					cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
 					cc.CheckConnectivity()
+					checkNodeConntrack(felixes)
 
 					if testOpts.tunnel == "none" {
 						By("Leaving traffic alone with the flag clear")
@@ -915,6 +918,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 						cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 
 						By("SNATting again with the flag set")
 						pool.Spec.NATOutgoing = true
@@ -923,6 +927,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 						cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 					}
 				})
 
@@ -931,6 +936,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1][0], w[0][0])
 					cc.ExpectSome(w[1][1], w[0][0])
 					cc.CheckConnectivity()
+					checkNodeConntrack(felixes)
 				})
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
@@ -1511,6 +1517,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[1][0], TargetIP(ip), port)
 						cc.ExpectSome(w[1][1], TargetIP(ip), port)
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 					})
 
 					/* Below Context handles the following transitions.
@@ -1533,6 +1540,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.ExpectSome(w[0][1], TargetIP(ip[0]), port)
 							cc.ExpectSome(w[1][1], TargetIP(ip[0]), port)
 							cc.CheckConnectivity()
+							checkNodeConntrack(felixes)
 						})
 						Context("change service type from external IP to LoadBalancer", func() {
 							srcIPRange := []string{}
@@ -1549,6 +1557,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.ExpectSome(w[1][1], TargetIP(ip[0]), port)
 								cc.ExpectSome(w[0][1], TargetIP(ip[0]), port)
 								cc.CheckConnectivity()
+								checkNodeConntrack(felixes)
 							})
 						})
 
@@ -1905,6 +1914,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.ExpectSome(w[1][0], TargetIP(ip), port)
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 
 						By("Checking timestamps on conntrack entries are sane")
 						// This test verifies that we correctly interpret conntrack entry timestamps by reading them back
@@ -1914,6 +1924,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						re := regexp.MustCompile(`LastSeen:\s*(\d+)`)
 						matches := re.FindAllStringSubmatch(ctDump, -1)
 						Expect(matches).ToNot(BeEmpty(), "didn't find any conntrack entries")
+						checkNodeConntrack(felixes)
 						for _, match := range matches {
 							lastSeenNanos, err := strconv.ParseInt(match[1], 10, 64)
 							Expect(err).NotTo(HaveOccurred())
@@ -2855,12 +2866,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
 
+						flx := felixes[1]
+						if testOpts.connTimeEnabled {
+							flx = felixes[0] // Because the ctlb uses the table created at 0 across all nodes.
+						}
+
 						// sync with NAT table being applied
-						natFtKey := nat.NewNATKey(net.ParseIP(felixes[1].IP), npPort, numericProto)
+						natFtKey := nat.NewNATKey(net.ParseIP(flx.IP), npPort, numericProto)
+
 						Eventually(func() bool {
-							m := dumpNATMap(felixes[1])
+							m := dumpNATMap(flx)
 							v, ok := m[natFtKey]
-							return ok && v.Count() > 0
+							if !ok || v.Count() == 0 {
+								return false
+							}
+
+							beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+							be := dumpEPMap(flx)
+							_, ok = be[beKey]
+							return ok
 						}, 5*time.Second).Should(BeTrue())
 
 						// Sync with policy
@@ -2964,7 +2989,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							cc.ExpectNone(w[1][1], TargetIP(felixes[1].IP), npPort)
 							cc.CheckConnectivity()
-							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }, 10*time.Second, 200*time.Millisecond).
 								Should(BeNumerically(">", 0), matcher)
 						})
 					})
@@ -3002,6 +3027,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.Expect(Some, felixes[0], hostW[1])
 							cc.Expect(Some, felixes[1], hostW[0])
 							cc.CheckConnectivity()
+							checkNodeConntrack(felixes)
 						})
 
 						By("checking pod-pod connectivity fails", func() {
@@ -3023,6 +3049,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.Expect(Some, w[1][0], w[0][0])
 							cc.Expect(Some, w[1][1], w[0][0])
 							cc.CheckConnectivity()
+							checkNodeConntrack(felixes)
 						})
 					})
 				})
@@ -3175,12 +3202,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[1][1], w[0][0])
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
+						checkNodeConntrack(felixes)
 					})
 
 					By("checking connectivity to the external workload", func() {
 						cc.Expect(Some, w[0][0], extWorkload, ExpectWithPorts(4321), ExpectWithSrcIPs(felixes[0].IP))
 						cc.Expect(Some, w[1][0], extWorkload, ExpectWithPorts(4321), ExpectWithSrcIPs(felixes[1].IP))
 						cc.CheckConnectivity()
+						checkNodeConntrack(felixes)
 					})
 				})
 
@@ -3431,4 +3460,19 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
 		"Service endpoints didn't get created? Is controller-manager happy?")
 	return testSvc
+}
+
+func checkNodeConntrack(felixes []*infrastructure.Felix) {
+	for _, felix := range felixes {
+		conntrack, err := felix.ExecOutput("conntrack", "-L")
+		Expect(err).NotTo(HaveOccurred())
+		lines := strings.Split(conntrack, "\n")
+		for _, line := range lines {
+			line = strings.Trim(line, " ")
+			if strings.Contains(line, "src=") {
+				// Wheather traffic is generated in host namespace, or involves NAT, each contrack entry should be related to node's address
+				Expect(strings.Contains(line, felix.IP)).To(BeTrue())
+			}
+		}
+	}
 }

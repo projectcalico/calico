@@ -22,7 +22,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Kubernetes kube-proxy
 
-Kube-proxy process handles everything related to Services on each node. It ensures that connections to the service cluster IP and port go to a pod that backs the service. If backed by more than one service, kube-proxy load-balances traffic across pods.
+Kube-proxy process handles everything related to Services on each node. It ensures that connections to the service cluster IP and port go to a pod that backs the service. If backed by more than one pod, kube-proxy load-balances traffic across pods.
 
 Kube-proxy runs in three modes: **userspace**, **iptables**, and **ipvs**. (Userspace is old, slow and not recommended.) Here’s a quick summary of iptables and ipvs modes.
 

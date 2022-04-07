@@ -42,8 +42,10 @@ const (
 	ChainFilterForward = ChainNamePrefix + "FORWARD"
 	ChainFilterOutput  = ChainNamePrefix + "OUTPUT"
 
-	ChainRawPrerouting = ChainNamePrefix + "PREROUTING"
-	ChainRawOutput     = ChainNamePrefix + "OUTPUT"
+	ChainRawPrerouting         = ChainNamePrefix + "PREROUTING"
+	ChainRawOutput             = ChainNamePrefix + "OUTPUT"
+	ChainRawUntrackedFlows     = ChainNamePrefix + "untracked-flows"
+	ChainRawBPFUntrackedPolicy = ChainNamePrefix + "untracked-policy"
 
 	ChainFailsafeIn  = ChainNamePrefix + "failsafe-in"
 	ChainFailsafeOut = ChainNamePrefix + "failsafe-out"
@@ -167,7 +169,7 @@ type RuleRenderer interface {
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATPostroutingChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
-	StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*iptables.Chain
+	StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32, disableConntrack bool) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 	StaticFilterForwardAppendRules() []iptables.Rule
 
@@ -279,7 +281,8 @@ type Config struct {
 	VXLANPort    int
 	VXLANVNI     int
 
-	IPIPEnabled bool
+	IPIPEnabled            bool
+	FelixConfigIPIPEnabled *bool
 	// IPIPTunnelAddress is an address chosen from an IPAM pool, used as a source address
 	// by the host when sending traffic to a workload over IPIP.
 	IPIPTunnelAddress net.IP

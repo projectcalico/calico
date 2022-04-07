@@ -20,7 +20,6 @@
 #include "routes.h"
 #include "reasons.h"
 #include "icmp.h"
-#include "fib.h"
 #include "parsing.h"
 #include "failsafe.h"
 #include "jump.h"

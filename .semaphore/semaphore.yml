@@ -374,7 +374,7 @@ blocks:
 
 - name: "Node: build all architectures"
   run:
-    when: "change_in(['/felix/', '/confd/', '/node/'])"
+    when: "branch =~ '.*' or change_in(['/felix/', '/confd/', '/node/'])"
   dependencies: []
   task:
     agent:
@@ -545,7 +545,7 @@ blocks:
 
 - name: 'networking-calico'
   run:
-    when: "change_in(['/networking-calico/'])"
+    when: "branch =~ '.*' or change_in(['/networking-calico/'])"
   dependencies: []
   task:
     prologue:
