@@ -15,10 +15,12 @@
 package config_test
 
 import (
-	"github.com/projectcalico/calico/felix/config"
+	"net"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/config"
 )
 
 var _ = DescribeTable("Endpoint list parameter parsing",
@@ -82,4 +84,44 @@ var _ = DescribeTable("KeyValue list parameter parsing",
 		"key": "value",
 		"v2":  " x ",
 	}),
+)
+
+var _ = DescribeTable("IPv4 list parameter parsing",
+	func(raw string, expected string, expectSuccess bool) {
+		p := config.Ipv4Param{config.Metadata{
+			Name: "IPv4",
+		}}
+		actual, err := p.Parse(raw)
+		if expectSuccess {
+			Expect(err).To(BeNil())
+			ipStr := actual.(net.IP)
+			Expect(ipStr.String()).To(Equal(expected))
+		} else {
+			Expect(err).NotTo(BeNil())
+		}
+	},
+
+	Entry("Empty", " ", "", false),
+	Entry("IPv4 address", "10.1.1.2", "10.1.1.2", true),
+	Entry("IPv6 address", "aabc::1111", "", false),
+)
+
+var _ = DescribeTable("IPv6 list parameter parsing",
+	func(raw string, expected string, expectSuccess bool) {
+		p := config.Ipv6Param{config.Metadata{
+			Name: "IPv6",
+		}}
+		actual, err := p.Parse(raw)
+		if expectSuccess {
+			Expect(err).To(BeNil())
+			ipStr := actual.(net.IP)
+			Expect(ipStr.String()).To(Equal(expected))
+		} else {
+			Expect(err).NotTo(BeNil())
+		}
+	},
+
+	Entry("Empty", " ", "", false),
+	Entry("IPv4 address", "10.1.1.2", "", false),
+	Entry("IPv6 address", "aabc::1111", "aabc::1111", true),
 )

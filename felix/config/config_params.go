@@ -231,6 +231,7 @@ type Config struct {
 	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
 	InterfaceRefreshInterval           time.Duration     `config:"seconds;90"`
 	DeviceRouteSourceAddress           net.IP            `config:"ipv4;"`
+	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;90"`
@@ -773,6 +774,8 @@ func loadParams() {
 				Msg: "invalid URL authority"}
 		case "ipv4":
 			param = &Ipv4Param{}
+		case "ipv6":
+			param = &Ipv6Param{}
 		case "endpoint-list":
 			param = &EndpointListParam{}
 		case "port-list":
