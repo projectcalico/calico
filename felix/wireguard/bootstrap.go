@@ -135,7 +135,7 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 	if !configParams.WireguardEnabled || configParams.WireguardInterfaceName == "" {
 		// Always remove wireguard configuration if not enabled.
 		logCxt.Info("Wireguard is not enabled - ensure no wireguard config")
-		return typhas, removeWireguardForHostEncryptionBootstrapping(configParams, getNetlinkHandle, calicoClient)
+		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
 	}
 
 	// FELIX_DBG_WGBOOTSTRAP provides a backdoor way to execute the remaining code without enabling host encryption -
@@ -144,7 +144,6 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 
 	if !configParams.WireguardHostEncryptionEnabled && !dbgBootstrapExists {
 		// The remaining of the bootstrap processing is only required on clusters that have host encryption enabled
-		// (even if wireguard is not).
 		logCxt.Debug("Host encryption is not enabled - no wireguard bootstrapping required")
 		return typhas, nil
 	}
@@ -155,7 +154,7 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 	// If there is no valid wireguard configuration in the kernel then remove all traces of wireguard.
 	if kernelPublicKey == "" || kernelPeerKeys.Len() == 0 {
 		logCxt.Info("No valid wireguard kernel routing - removing wireguard configuration completely")
-		return typhas, removeWireguardForHostEncryptionBootstrapping(configParams, getNetlinkHandle, calicoClient)
+		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
 	}
 
 	// Get the published public key for this node.
@@ -168,7 +167,7 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 		// The public key configured in the kernel differs from the value stored in the node. Remove all wireguard
 		// configuration.
 		logCxt.Info("Found mismatch between kernel and datastore wireguard keys - removing wireguard configuration")
-		return typhas, removeWireguardForHostEncryptionBootstrapping(configParams, getNetlinkHandle, calicoClient)
+		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
 	}
 
 	// The configured and stored wireguard key match.
@@ -183,7 +182,7 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 			// the typhas will be accessible due to asymmetric routing. Best thing to do is just delete our wireguard
 			// configuration after which all of the typha endpoints should eventually become acceessible.
 			log.Warning("None of the typhas will be accessible due to wireguard routing asymmetry - remove wireguard")
-			return typhas, removeWireguardForHostEncryptionBootstrapping(configParams, getNetlinkHandle, calicoClient)
+			return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
 		}
 
 		return filtered, nil
@@ -192,22 +191,29 @@ func BootstrapHostConnectivityAndFilterTyphaAddresses(
 	return typhas, nil
 }
 
-// RemoveWireguardForHostEncryptionBootstrapping removes all wireguard configuration. This includes:
+// RemoveWireguardConditionallyOnBootstrap removes all wireguard configuration based on
+// configuration conditions. This includes:
 // - The wireguard public key
 // - The wireguard device (which in turn will delete all wireguard routing rules).
-func RemoveWireguardForHostEncryptionBootstrapping(
+func RemoveWireguardConditionallyOnBootstrap(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	calicoClient clientv3.Interface,
 ) error {
-	if !configParams.WireguardHostEncryptionEnabled {
-		// HostEncryption is currently enabled in environments by operator rather than through FelixConfiguration.
-		// This should not change for a given deployment. Only host encryption should impact typha connectivity.
+	/*
+		| WireguardEnabled | WireguardHostEncryptionEnabled | Clear Wireguard PK + Device? |
+		|------------------|--------------------------------|------------------------------|
+		| YES			   | NO								| NO						   |
+		| YES			   | YES							| NO						   |
+		| NO			   | NO								| YES						   |
+		| NO			   | YES							| YES						   |
+	*/
+	if !configParams.WireguardEnabled || !configParams.WireguardHostEncryptionEnabled {
 		log.Debug("No host encryption - not necessary to remove wireguard configuration")
 		return nil
 	}
 
-	return removeWireguardForHostEncryptionBootstrapping(configParams, getNetlinkHandle, calicoClient)
+	return removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
 }
 
 // filterTyphaEndpoints filters the supplied set of typha endpoints to the set where wireguard routing is most likely
@@ -270,23 +276,26 @@ func filterTyphaEndpoints(
 	return filtered
 }
 
-// removeWireguardForHostEncryptionBootstrapping unconditionally removes all wireguard configuration. This includes:
+// removeWireguardForBootstrapping unconditionally removes all wireguard configuration. This includes:
 // - The wireguard public key
 // - The wireguard device (which in turn will delete all wireguard routing rules).
-func removeWireguardForHostEncryptionBootstrapping(
+func removeWireguardForBootstrapping(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	calicoClient clientv3.Interface,
 ) error {
+	var errors []error
 	// Remove all wireguard configuration that we can.
-	err1 := removeWireguardDevice(configParams, getNetlinkHandle)
-	err2 := removeWireguardPublicKey(configParams, calicoClient)
-
-	if err1 != nil {
-		return err1
-	} else if err2 != nil {
-		return err2
+	if err := removeWireguardDevice(configParams, getNetlinkHandle); err != nil {
+		errors = append(errors, fmt.Errorf("cannot remove wireguard device: %w", err))
 	}
+	if err2 := removeWireguardPublicKey(configParams, calicoClient); err2 != nil {
+		errors = append(errors, fmt.Errorf("cannot remove wireguard public key: %w", err2))
+	}
+	if len(errors) > 0 {
+		return fmt.Errorf("encountered errors during wireguard device bootstrap: %v", errors)
+	}
+
 	return nil
 }
 
