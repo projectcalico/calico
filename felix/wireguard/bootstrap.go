@@ -271,15 +271,18 @@ func removeWireguardForHostEncryptionBootstrapping(
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	calicoClient clientv3.Interface,
 ) error {
+	var errors []error
 	// Remove all wireguard configuration that we can.
-	err1 := removeWireguardDevice(configParams, getNetlinkHandle)
-	err2 := removeWireguardPublicKey(configParams, calicoClient)
-
-	if err1 != nil {
-		return err1
-	} else if err2 != nil {
-		return err2
+	if err := removeWireguardDevice(configParams, getNetlinkHandle); err != nil {
+		errors = append(errors, fmt.Errorf("cannot remove wireguard device: %w", err))
 	}
+	if err2 := removeWireguardPublicKey(configParams, calicoClient); err2 != nil {
+		errors = append(errors, fmt.Errorf("cannot remove wireguard public key: %w", err2))
+	}
+	if len(errors) > 0 {
+		return fmt.Errorf("encountered errors during wireguard device bootstrap: %v", errors)
+	}
+
 	return nil
 }
 
