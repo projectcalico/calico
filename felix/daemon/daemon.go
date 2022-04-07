@@ -379,18 +379,23 @@ configRetry:
 		}
 	}
 
-	// If we have wireguard peers that we need to validate against our typha nodes then do that now. We do this because
-	// in host encryption mode a mismatch between the key configured on the typha node and the wireguard routing table
-	// on this node will result in broken routing to that node. We either need to choose typhas that we believe match
-	// the local routing config, or we need to delete our wireguard config so that we won't route via wireguard.
-	typhaAddresses = bootstrapFilterTyphaForWireguard(configParams, v3Client, typhaAddresses, wireguardPeersToValidate)
-	if len(typhaAddresses) == 0 {
-		// We have filtered out all of the typha addresses - i.e. all of the nodes that typha is running on have
-		// wireguard public keys that are not in the local wireguard routing table.
-		log.Warning("All typhas are running on nodes with wireguard keys that are not in local routing - remove wireguard")
-		if err := bootstrapRemoveWireguard(configParams, v3Client); err != nil {
-			time.Sleep(2 * time.Second) // avoid a tight restart loop
-			log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
+	if len(typhaAddresses) > 0 {
+		// If we have some typha addresses then we may need to filter which ones we attempt to connect to due to
+		// transient wireguard routing asymmetry.
+		filteredAddresses := bootstrapFilterTyphaForWireguard(configParams, v3Client, typhaAddresses, wireguardPeersToValidate)
+		if len(filteredAddresses) == 0 {
+			// We have filtered out all of the typha addresses - i.e. all of the nodes that typha is running on have
+			// wireguard public keys that are not in the local wireguard routing table.  Once we ave successfully
+			// removed wireguard we can use the unfiltered set of typha addresses.
+			log.Warning("All typhas are running on nodes with wireguard keys that are not in local routing - remove wireguard")
+			if err := bootstrapRemoveWireguard(configParams, v3Client); err != nil {
+				time.Sleep(2 * time.Second) // avoid a tight restart loop
+				log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
+			}
+		} else {
+			// We have a filtered set of addresses to use.
+			log.WithField("filteredTyphaAddresses", filteredAddresses).Debug("Using filtered typha addresses")
+			typhaAddresses = filteredAddresses
 		}
 	}
 

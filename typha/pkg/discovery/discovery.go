@@ -93,7 +93,8 @@ func WithNodeAffinity(nodeName string) Option {
 // try to lookup one of the backend endpoints of the typha service (using the K8sServiceName and
 // K8sNamespace fields).
 //
-// Returns "" if typha is not enabled (i.e. fields are empty).
+// Returns nil if typha is not enabled (i.e. fields are empty). If typha is enabled, this will return a non-empty slice
+// or an error.
 func DiscoverTyphaAddrs(opts ...Option) ([]Typha, error) {
 	options := options{
 		k8sServicePortName: "calico-typha",
