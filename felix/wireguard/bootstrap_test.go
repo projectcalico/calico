@@ -167,7 +167,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 		})
 
 		It("no-ops for RemoveWireguardForHostEncryptionBootstrapping", func() {
-			err := RemoveWireguardForHostEncryptionBootstrapping(
+			err := RemoveWireguardOnBootstrap(
 				configParams,
 				netlinkDataplane.NewMockNetlink,
 				nodeClient,
@@ -307,7 +307,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 		})
 
 		It("RemoveWireguardForHostEncryptionBootstrapping deletes all wireguard configuration", func() {
-			err := RemoveWireguardForHostEncryptionBootstrapping(
+			err := RemoveWireguardOnBootstrap(
 				configParams,
 				netlinkDataplane.NewMockNetlink,
 				nodeClient,
@@ -325,7 +325,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 
 		It("RemoveWireguardForHostEncryptionBootstrapping deletes key from node even if device is not found", func() {
 			delete(netlinkDataplane.NameToLink, "wireguard.cali")
-			err := RemoveWireguardForHostEncryptionBootstrapping(
+			err := RemoveWireguardOnBootstrap(
 				configParams,
 				netlinkDataplane.NewMockNetlink,
 				nodeClient,
@@ -346,7 +346,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			nodeClient.numGetErrors = 2
 			nodeClient.numUpdateErrors = 1
 
-			err := RemoveWireguardForHostEncryptionBootstrapping(
+			err := RemoveWireguardOnBootstrap(
 				configParams,
 				netlinkDataplane.NewMockNetlink,
 				nodeClient,
@@ -366,7 +366,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 		It("RemoveWireguardForHostEncryptionBootstrapping deletes public key but leaves link with permanent netlink errors", func() {
 			netlinkDataplane.FailuresToSimulate = mocknetlink.FailNextLinkByName | mocknetlink.FailNextLinkDel
 			netlinkDataplane.PersistFailures = true
-			err := RemoveWireguardForHostEncryptionBootstrapping(
+			err := RemoveWireguardOnBootstrap(
 				configParams,
 				netlinkDataplane.NewMockNetlink,
 				nodeClient,
@@ -385,7 +385,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 
 		It("RemoveWireguardForHostEncryptionBootstrapping deletes device but leaves key with too many client errors", func() {
 			nodeClient.numGetErrors = 5
-			err := RemoveWireguardForHostEncryptionBootstrapping(
+			err := RemoveWireguardOnBootstrap(
 				configParams,
 				netlinkDataplane.NewMockNetlink,
 				nodeClient,
