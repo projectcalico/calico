@@ -33,12 +33,72 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 )
 
+// This file implements a set of functions that are called as part of the felix-start up processing. The purpose is
+// primarily focussed on deployments that have HostEncryptionEnabled set to true, and is to fix up routing issues that
+// may arise from mismatched routing configuration between nodes.
+//
+// Note that even when routing is broken between nodes, all nodes should still be able to reach the API server because
+// the HostEncryptionEnabled option should only be used for clusters where the control plane nodes are not running
+// Calico.
+//
+// The problem:                          - Turn on wireguard
+//                                       - Felix1 and Felix2 restart, install wireguard and publish a public key
+// ┌────────────┐        ┌────────────┐  - Felix1 gets a response from Typha1 about the key update for Node2, and
+// │     Node1  │        │     Node2  │    programs routing to route to Node2 via Wireguard (since we will encrypt
+// │ ┌────────┐ │        │            │    node to node traffic for supporting nodes)
+// │ │ Typha1 ◄─┼────────┼──────┐     │  - Felix2 has not yet had an update from Typha1 about the public key for
+// │ └────▲───┘ │        │      │     │    Node1, therefore routing to Node1 is still direct and not via Wireguard.
+// │ ┌────┴───┐ │        │ ┌────┴───┐ │
+// │ │ Felix1 │ │        │ │ Felix2 │ │  We now have broken routing:
+// │ └────────┘ │        │ └────────┘ │  - Packets routed over Wireguard from Node1 to Node2 will be dropped by the
+// └────────────┘        └────────────┘    Wireguard device on Node2 because Node1 is not one of its known peers.
+//                                       - Packets routed direct from Node2 to Node1 will be dropped because of RPF
+//                                         checks since the reverse path would be via Wireguard.
+//
+// With routing broken to typha, Felix2 is then unable to get updated configuration for Node1 to fix its routing.
+//
+// Since Felix1 does not necessarily connect to its local typha, there can be a chain, or circular mismatched routing.
+//
+// The current solution. For the most part, most of the following is only valid when HostEncrytpionEnabled is set to
+// true. There are some exceptions which are marked in the text below with [**ALL**].
+// -  Typha discovery returns the set of available typhas, randomized but with a preference to use the local typha.
+//    In most cases, felix will connect to the local typha first. The upshot is that the routing for typha nodes
+//    should be (relatively) stable. [**ALL**]
+// -  The dataplane daemon during start-up will call into BootstrapHostConnectivity to do the following:
+//    -  If wireguard is disabled, remove the wireguard interface and publish an empty key. Typha will pick this up
+//       and can distribute the fact that this node is now not running wireguard. With the interface deleted
+//       normal routing will resume on this node. Once the typha nodes have fixed up their routing to be direct to this
+//       node, this node will then be able to connect to the typha nodes. [**ALL**]
+//    -  If wireguard is enabled and the published key does not match the kernel then remove the wireguard interface and
+//       publish an empty key (see previous bullet).
+// - The dataplane daemon will later call into FilterTyphaEndpoints to filter the set of typha endpoints removing any
+//   where we know routing will be broken. This only applies on HostEncryptionEnabled.
+//    -  If there is no wireguard routing on this node, or if HostEncryptionEnabled is false, then no endpoints will be
+//       filtered out.
+//    -  Otherwise, we remove any typha endpoint that is on a node where the node public key is not currently configured
+//       in our wireguard routing table. We know this is very unlikely(*) to work because the node with typha will be
+//       know our public key and use that to route to us over wireguard. However, we will be routing to typha directly.
+//       (*) If typha is on a node whose felix is unable to connect to typha, then it is possible the typha node will
+//           not know about our nodes public key and therefore be routing to us directly. In that case including the
+//           endpoint would be (transiently) useful. However, since we favor felix connecting to local typha this should
+//           be less common.
+//       In general it is better to attempt all nodes, but removing nodes that we really should not be able to attach to
+//       should decrease the time to successful connection.
+// - The dataplane driver has a filtered set of typha endpoints to use.  If it fails to connect to typha then remove all
+//   wireguard configuration (interface and published key) before restarting felix.
+//
+// It's possible that there are multiple flaps before things settle down, but with the local typha preference, things
+// seems to settle extremely quickly, with the worst case scenario being a full startup timeout (minimum 40s and will
+// scale with the number of typhas) before the local wireguard configuration is removed and felix tries again.
+
 const (
-	bootstrapBackoffDuration  = 200 * time.Millisecond
-	bootstrapBackoffExpFactor = 2
-	bootstrapBackoffMax       = 2 * time.Second
-	bootstrapJitter           = 0.2
-	bootstrapMaxRetries       = 5
+	bootstrapBackoffDuration    = 200 * time.Millisecond
+	bootstrapBackoffExpFactor   = 2
+	bootstrapBackoffMax         = 2 * time.Second
+	bootstrapJitter             = 0.2
+	bootstrapMaxRetriesFailFast = 2
+	bootstrapMaxRetries         = 5
+	boostrapK8sClientTimeout    = 10 * time.Second
 )
 
 // BootstrapHostConnectivity forces WireGuard peers with host encryption to communicate with this node unencrypted.
@@ -69,15 +129,14 @@ func BootstrapHostConnectivity(
 	}
 
 	if !configParams.WireguardHostEncryptionEnabled {
-		// HostEncryption is currently enabled in environments by operator rather than through FelixConfiguration.
-		// This should not change for a given deployment. We only need to handle bootstrapping for clusters where
-		// host encryption is enabled.
+		// The remaining of the bootstrap processing is only required on clusters that have host encryption enabled
+		// (even if wireguard is not).
 		logCxt.Debug("Host encryption is not enabled - no wireguard bootstrapping required")
 		return nil, nil
 	}
 
 	// Get the local public key and the peer public keys currently programmed in the kernel.
-	kernelPublicKey, kernelPeerKeys := getWireguardInfo(logCxt, wgDeviceName, getWireguardHandle)
+	kernelPublicKey, kernelPeerKeys := getWireguardDeviceInfo(logCxt, wgDeviceName, getWireguardHandle)
 
 	// If there is no valid wireguard configuration in the kernel then remove all traces of wireguard.
 	if kernelPublicKey == "" || kernelPeerKeys.Len() == 0 {
@@ -85,10 +144,10 @@ func BootstrapHostConnectivity(
 		return nil, removeWireguardForHostEncryptionBootstrapping(configParams, getNetlinkHandle, calicoClient)
 	}
 
-	storedPublicKey, err := getPublicKeyForNode(logCxt, nodeName, calicoClient)
+	// Get the published public key for this node.
+	storedPublicKey, err := getPublicKeyForNode(logCxt, nodeName, calicoClient, bootstrapMaxRetries)
 	if err != nil {
-		// Could not determine the public key for this node.
-		return nil, fmt.Errorf("couldn't determine current wireguard configuration after %d retries: %v", bootstrapMaxRetries, err)
+		return nil, err
 	}
 
 	if storedPublicKey != kernelPublicKey {
@@ -105,6 +164,11 @@ func BootstrapHostConnectivity(
 
 // FilterTyphaEndpoints filters the supplied set of typha endpoints to the set where wireguard routing is most likely
 // to succeed. Any errors encountered are swallowed and the associated peer is just included.
+//
+// The set of peersToValidate will have been determined by enumerating the peers on the wireguard device (see
+// BootstrapHostConnectivity). A non-nil value therefore implies wireguard is currently enabled and configured in the
+// dataplane. A nil value either means wireguard is disabled, was not configured in the kernel, or has just been removed
+// by the bootstrap processing above.
 func FilterTyphaEndpoints(
 	configParams *config.Config,
 	v3Client clientv3.Interface,
@@ -112,8 +176,7 @@ func FilterTyphaEndpoints(
 	peersToValidate set.Set,
 ) []discovery.Typha {
 	if !configParams.WireguardHostEncryptionEnabled {
-		// HostEncryption is currently enabled in environments by operator rather than through FelixConfiguration.
-		// This should not change for a given deployment. Only host encryption should impact typha connectivity.
+		// Filtering of typhas is only required on clusters that have host encryption enabled (even if wireguard is not).
 		log.Debug("No host encryption - all typhas should be accessible")
 		return typhas
 	}
@@ -130,7 +193,7 @@ func FilterTyphaEndpoints(
 	for _, typha := range typhas {
 		logCxt := log.WithField("typhaAddr", typha.Addr)
 		if typha.NodeName == nil {
-			logCxt.Info("Typha endpoint has no node information - include typha endpoint")
+			logCxt.Debug("Typha endpoint has no node information - include typha endpoint")
 			filtered = append(filtered, typha)
 			continue
 		}
@@ -144,8 +207,9 @@ func FilterTyphaEndpoints(
 			continue
 		}
 
-		// Get the public key configured for the typha node.
-		typhaNodeKey, err := getPublicKeyForNode(logCxt, typhaNodeName, v3Client)
+		// Get the public key configured for the typha node. Better to just include more typha nodes than we think will
+		// work, so fail fast when getting the node.
+		typhaNodeKey, err := getPublicKeyForNode(logCxt, typhaNodeName, v3Client, bootstrapMaxRetriesFailFast)
 		if err != nil {
 			// If we were unable to determine the public key then just include the endpoint.
 			logCxt.WithError(err).Info("Unable to determine public key for node")
@@ -160,7 +224,7 @@ func FilterTyphaEndpoints(
 			filtered = append(filtered, typha)
 		} else if peersToValidate.Contains(typhaNodeKey) {
 			// The public key on the typha node is configured in the local routing table. Include this typha.
-			logCxt.Info("Typha node has a wireguard key that is in the local wireguard routing table - include typha endpoint")
+			logCxt.Debug("Typha node has a wireguard key that is in the local wireguard routing table - include typha endpoint")
 			filtered = append(filtered, typha)
 		} else {
 			// The public key on the typha node is not configured in the local routing table. There is no point in
@@ -213,7 +277,7 @@ func removeWireguardForHostEncryptionBootstrapping(
 }
 
 // getPublicKeyForNode returns the configured wireguard public key for a given node.
-func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient clientv3.Interface) (string, error) {
+func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient clientv3.Interface, maxRetries int) (string, error) {
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
 		bootstrapBackoffMax,
@@ -226,8 +290,8 @@ func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient client
 
 	var err error
 	var node *apiv3.Node
-	for r := 0; r < bootstrapMaxRetries; r++ {
-		cxt, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	for r := 0; r < maxRetries; r++ {
+		cxt, cancel := context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
 		node, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
 		if err != nil {
@@ -239,13 +303,13 @@ func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient client
 		return node.Status.WireguardPublicKey, nil
 	}
 
-	return "", err
+	return "", fmt.Errorf("couldn't determine public key configured for node after %d retries: %v", maxRetries, err)
 }
 
-// getWireguardInfo attempts to fetch the current wireguard state:
+// getWireguardDeviceInfo attempts to fetch the current wireguard state from the kernel:
 // - Public key
 // - Set of peer public keys
-func getWireguardInfo(
+func getWireguardDeviceInfo(
 	logCxt *log.Entry, wgIfaceName string, getWireguardHandle func() (netlinkshim.Wireguard, error),
 ) (string, set.Set) {
 	wg, err := getWireguardHandle()
@@ -361,7 +425,7 @@ func removeWireguardPublicKey(
 	var err error
 	var thisNode *apiv3.Node
 	for r := 0; r < bootstrapMaxRetries; r++ {
-		cxt, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cxt, cancel := context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
 		thisNode, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
 		if err != nil {
@@ -374,7 +438,7 @@ func removeWireguardPublicKey(
 		if thisNode.Status.WireguardPublicKey != "" {
 			logCxt.Info("Wireguard key set on node - removing")
 			thisNode.Status.WireguardPublicKey = ""
-			cxt, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+			cxt, cancel = context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
 			_, err = calicoClient.Nodes().Update(cxt, thisNode, options.SetOptions{})
 			cancel()
 			if err != nil {

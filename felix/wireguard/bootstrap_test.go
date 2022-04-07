@@ -455,7 +455,8 @@ var _ = Describe("Wireguard bootstrapping", func() {
 				configParams, nodeClient, typhas, peersToValidate,
 			)
 			Expect(filtered).To(Equal(typhas))
-			Expect(nodeClient.numGets).To(Equal(10))
+			// Filter queries only retry twice.
+			Expect(nodeClient.numGets).To(Equal(4))
 			Expect(nodeClient.numUpdates).To(BeZero())
 			Expect(netlinkDataplane.NumNewNetlinkCalls).To(BeZero())
 			Expect(netlinkDataplane.NumNewWireguardCalls).To(BeZero())
