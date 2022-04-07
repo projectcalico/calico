@@ -154,8 +154,8 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			}
 		})
 
-		It("no-ops for BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+		It("no-ops for BootstrapAndFilterTyphaAddresses", func() {
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, nil,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -211,7 +211,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 
 		It("returns the correct filtered typhas when calling BootstrapHostConnectivity", func() {
 			typhas := []discovery.Typha{typha1, typha2, typha3, typha4}
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -237,7 +237,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 				PublicKey: pvt.PublicKey(),
 			}
 
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -265,7 +265,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 				PublicKey: pvt.PublicKey(),
 			}
 
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -290,7 +290,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			link.WireguardPrivateKey = otherKey
 			link.WireguardPublicKey = otherKey.PublicKey()
 			typhas := []discovery.Typha{typha2, typha3}
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -401,11 +401,11 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).ToNot(Equal(""))
 		})
 
-		It("deletes all wireguard from node 1 if wireguard is disabled when calling BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
+		It("deletes all wireguard from node 1 if wireguard is disabled when calling BootstrapAndFilterTyphaAddresses", func() {
 			configParams.WireguardHostEncryptionEnabled = false
 			configParams.WireguardEnabled = false
 			typhas := []discovery.Typha{typha2, typha3}
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -420,10 +420,10 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).To(Equal(""))
 		})
 
-		It("deletes wireguard key from node 1 if wireguard intface is empty when calling BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
+		It("deletes wireguard key from node 1 if wireguard intface is empty when calling BootstrapAndFilterTyphaAddresses", func() {
 			configParams.WireguardInterfaceName = ""
 			typhas := []discovery.Typha{typha2, typha3}
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -435,10 +435,10 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).To(Equal(""))
 		})
 
-		It("deletes wireguard key from node 1 if wireguard interface is not present when calling BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
+		It("deletes wireguard key from node 1 if wireguard interface is not present when calling BootstrapAndFilterTyphaAddresses", func() {
 			delete(netlinkDataplane.NameToLink, "wireguard.cali")
 			typhas := []discovery.Typha{typha2, typha3}
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -450,10 +450,10 @@ var _ = Describe("Wireguard bootstrapping", func() {
 			Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKey).To(Equal(""))
 		})
 
-		It("deletes wireguard key from node 1 if wireguard interface has no peers when calling BootstrapHostConnectivityAndFilterTyphaAddresses", func() {
+		It("deletes wireguard key from node 1 if wireguard interface has no peers when calling BootstrapAndFilterTyphaAddresses", func() {
 			link.WireguardPeers = nil
 			typhas := []discovery.Typha{typha2, typha3}
-			f, err := BootstrapHostConnectivityAndFilterTyphaAddresses(
+			f, err := BootstrapAndFilterTyphaAddresses(
 				configParams, netlinkDataplane.NewMockNetlink, netlinkDataplane.NewMockWireguard, nodeClient, typhas,
 			)
 			Expect(err).ToNot(HaveOccurred())
