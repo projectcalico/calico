@@ -34,8 +34,8 @@ var _ = Describe("Constructor test", func() {
 	var configParams *config.Config
 	var dpConfig intdataplane.Config
 	var healthAggregator *health.HealthAggregator
-	var kubernetesProvider = config.ProviderNone
-	var routeSource = "CalicoIPAM"
+	kubernetesProvider := config.ProviderNone
+	routeSource := "CalicoIPAM"
 	var wireguardEncryptHostTraffic bool
 
 	JustBeforeEach(func() {
@@ -43,6 +43,7 @@ var _ = Describe("Constructor test", func() {
 		_, err := configParams.UpdateFrom(map[string]string{"InterfaceExclude": "/^kube.*/,/veth/,eth2"}, config.EnvironmentVariable)
 		Expect(err).NotTo(HaveOccurred())
 		dpConfig = intdataplane.Config{
+			FloatingIPsEnabled: true,
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 				ResyncInterval:    configParams.RouteRefreshInterval,
@@ -98,24 +99,22 @@ var _ = Describe("Constructor test", func() {
 	})
 
 	It("should be constructable", func() {
-		var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
+		dp := intdataplane.NewIntDataplaneDriver(dpConfig)
 		Expect(dp).ToNot(BeNil())
 	})
 
 	Context("with health aggregator", func() {
-
 		BeforeEach(func() {
 			healthAggregator = health.NewHealthAggregator()
 		})
 
 		It("should be constructable", func() {
-			var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
+			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
 			Expect(dp).ToNot(BeNil())
 		})
 	})
 
 	Context("with Wireguard on AKS", func() {
-
 		BeforeEach(func() {
 			kubernetesProvider = config.ProviderAKS
 			routeSource = "WorkloadIPs"
@@ -129,7 +128,6 @@ var _ = Describe("Constructor test", func() {
 	})
 
 	Context("with Wireguard on non-managed provider", func() {
-
 		BeforeEach(func() {
 			kubernetesProvider = config.ProviderNone
 			routeSource = "CalicoIPAM"
