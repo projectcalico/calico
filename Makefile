@@ -89,3 +89,10 @@ release-publish: hack/release/release hack/release/ghr
 # Create a release branch.
 create-release-branch: hack/release/release
 	@hack/release/release -new-branch
+
+gen-semaphore-yaml:
+	cd .semaphore && ./generate-semaphore-yaml.sh
+
+check-dirty:
+	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
+	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
