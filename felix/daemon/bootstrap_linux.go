@@ -25,11 +25,13 @@ import (
 )
 
 // bootstrapWireguard performs some start-up single shot bootstrapping of wireguard configuration.
+//
+// See wireguard.BootstrapAndFilterTyphaAddresses for details.
 func bootstrapWireguardAndFilterTyphaAddresses(
 	configParams *config.Config, v3Client clientv3.Interface, typhas []discovery.Typha,
 ) ([]discovery.Typha, error) {
 	log.Debug("bootstrapping wireguard host connectivity")
-	return wireguard.BootstrapHostConnectivityAndFilterTyphaAddresses(
+	return wireguard.BootstrapAndFilterTyphaAddresses(
 		configParams,
 		netlinkshim.NewRealNetlink,
 		netlinkshim.NewRealWireguard,
