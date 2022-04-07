@@ -27,9 +27,7 @@ To enable {{site.prodname}} network policy enforcement, follow these step-by-ste
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
-> **Note**: {{site.prodname}} networking can only be installed when the tunnel pod includes `hostNetwork: true`
-
-1. Create an Azure AKS cluster with Kubernetes network plugin set to `none`
+1. Create an Azure AKS cluster with no Kubernetes CNI pre-installed. Please refer to [Bring your own CNI with AKS](https://docs.microsoft.com/en-us/azure/aks/use-byo-cni?tabs=azure-cli) for details.
 
   ```bash
   # Install aks-preview extension
