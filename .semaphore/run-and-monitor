@@ -88,6 +88,7 @@ trap cleanup EXIT
 
 echo "==== Filtered output to screen, full output in artifacts/${log_file_name} (main PID=$pid, filter PID=$mon_pid)"
 if wait "$pid"; then
+  sleep 1 # so tail can finish
   echo "==== Command ${cmd_escaped}SUCCEEDED (PID=$pid).  Full command output in artifacts/${log_file_name}."
 else
   echo "==== Command ${cmd_escaped}FAILED (PID=$pid).  Full command output in artifacts/${log_file_name}."
