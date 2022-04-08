@@ -136,6 +136,7 @@ type endpointManager struct {
 	ipVersion              uint8
 	wlIfacesRegexp         *regexp.Regexp
 	kubeIPVSSupportEnabled bool
+	floatingIPsEnabled     bool
 
 	// Our dependencies.
 	rawTable     iptablesTable
@@ -222,6 +223,7 @@ func newEndpointManager(
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
+	floatingIPsEnabled bool,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		rawTable,
@@ -239,6 +241,7 @@ func newEndpointManager(
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
+		floatingIPsEnabled,
 	)
 }
 
@@ -258,6 +261,7 @@ func newEndpointManagerWithShims(
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
+	floatingIPsEnabled bool,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -268,6 +272,7 @@ func newEndpointManagerWithShims(
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
 		bpfEndpointManager:     bpfEndpointManager,
+		floatingIPsEnabled:     floatingIPsEnabled,
 
 		rawTable:     rawTable,
 		mangleTable:  mangleTable,
@@ -388,7 +393,6 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 }
 
 func (m *endpointManager) CompleteDeferredWork() error {
-
 	m.resolveWorkloadEndpoints()
 
 	if m.hostEndpointsDirty {
@@ -627,7 +631,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					natInfos = workload.Ipv6Nat
 					addrSuffix = "/128"
 				}
-				if len(natInfos) != 0 {
+				if m.floatingIPsEnabled && len(natInfos) != 0 {
+					// Include any floating IP NATs if the feature is enabled.
 					old := ipStrings
 					ipStrings = make([]string, len(old)+len(natInfos))
 					copy(ipStrings, old)
@@ -744,7 +749,6 @@ func (m *endpointManager) resolveEndpointMarks() {
 }
 
 func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID {
-
 	// Host endpoint resolution
 	// ------------------------
 	//
@@ -867,7 +871,6 @@ func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID
 }
 
 func (m *endpointManager) updateHostEndpoints() {
-
 	// Calculate filtered name/id maps for untracked and pre-DNAT policy, and a reverse map from
 	// each active host endpoint to the interfaces it is in use for.
 	newIfaceNameToHostEpID := m.newIfaceNameToHostEpID

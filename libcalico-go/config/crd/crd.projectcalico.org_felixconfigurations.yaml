@@ -246,6 +246,14 @@ spec:
                   "true" or "false" will force the feature, empty or omitted values
                   are auto-detected.
                 type: string
+              floatingIPs:
+                default: Disabled
+                description: FloatingIPs configures whether or not Felix will program
+                  floating IP addresses.
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               genericXDPEnabled:
                 description: 'GenericXDPEnabled enables Generic XDP so network cards
                   that don''t support XDP offload or driver modes can use XDP. This
