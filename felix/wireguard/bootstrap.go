@@ -17,6 +17,7 @@ package wireguard
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -144,7 +145,11 @@ func BootstrapAndFilterTyphaAddresses(
 		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
 	}
 
-	if !configParams.WireguardHostEncryptionEnabled {
+	// FELIX_DBG_WGBOOTSTRAP provides a backdoor way to execute the remaining code without enabling host encryption -
+	// used for FV testing.
+	_, dbgBootstrapExists := os.LookupEnv("FELIX_DBG_WGBOOTSTRAP")
+
+	if !configParams.WireguardHostEncryptionEnabled && !dbgBootstrapExists {
 		// The remaining of the bootstrap processing is only required on clusters that have host encryption enabled
 		logCxt.Debug("Host encryption is not enabled - no wireguard bootstrapping required")
 		return typhas, nil
@@ -324,7 +329,11 @@ func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient client
 		cxt, cancel := context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
 		node, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
-		if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			// If the node does not exist then it's not going ot have a wireguard public key configured.
+			logCxt.Info("Node does not exist - no published wireguard key")
+			return "", nil
+		} else if err != nil {
 			logCxt.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
 			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
 			continue
@@ -458,7 +467,11 @@ func removeWireguardPublicKey(
 		cxt, cancel := context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
 		thisNode, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
-		if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			// If the node does not exist then it's not going ot have a wireguard public key configured.
+			logCxt.Info("Node does not exist - no published wireguard key to remove")
+			return nil
+		} else if err != nil {
 			logCxt.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
 			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
 			continue
