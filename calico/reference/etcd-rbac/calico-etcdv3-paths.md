@@ -4,6 +4,18 @@ description: Prefixes to configure Calico components to access the etcd datastor
 canonical_url: '/reference/etcd-rbac/calico-etcdv3-paths'
 ---
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+This document does not apply to operator installations of Calico.
+
+%>
+
+  <label:Manifest>
+<%
+
+
 The paths listed here are the key or path prefixes that a particular {{site.prodname}}
 component needs access to in etcd to function successfully.
 
@@ -113,3 +125,7 @@ component needs access to in etcd to function successfully.
 |-------------------------------------------|--------|
 | /calico/ipam/v2/\*                        |   RW   |
 | /calico/resources/v3/projectcalico.org/\* |   RW   |
+
+%>
+
+{% endtabs %}
