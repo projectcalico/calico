@@ -4,7 +4,7 @@ description: Customize calico/node using environment variables.
 canonical_url: '/reference/node/configuration'
 ---
 
-The `{{site.nodecontainer}}` container is deployed to every node (on Kubernetes, by a DaemonSet), and runs three daemons:
+The `{{site.nodecontainer}}` container is deployed to every node (on Kubernetes, by a DaemonSet), and runs three internal daemons:
 
 * Felix, the Calico daemon that runs on every node and provides endpoints.
 * BIRD, the BGP daemon that distributes routing information to other nodes.
@@ -16,6 +16,18 @@ custom resource. `{{site.nodecontainer}}` can also be configured through the Cal
 
 The rest of this page lists the available configuration options, and is followed by specific considerations for
 various settings.
+
+
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+TODO
+
+%>
+
+  <label:Manifest>
+<%
 
 ## Environment variables
 
@@ -301,3 +313,8 @@ in the cluster, see [decomissioning a node]({{site.baseurl}}/maintenance/decommi
 ### Setting `CALICO_ROUTER_ID` for IPv6 only system
 
 Setting CALICO_ROUTER_ID to value `hash` will use a hash of the configured nodename for the router ID.  This should only be used in IPv6-only systems with no IPv4 address to use for the router ID.  Since each node chooses its own router ID in isolation, it is possible for two nodes to pick the same ID resulting in a clash.  The probability of such a clash grows with cluster size so this feature should not be used in a large cluster (500+ nodes).
+
+%>
+
+{% endtabs %}
+

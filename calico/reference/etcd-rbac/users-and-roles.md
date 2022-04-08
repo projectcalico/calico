@@ -4,6 +4,18 @@ description: Provide role-based access control to etcd datastore.
 canonical_url: '/reference/etcd-rbac/users-and-roles'
 ---
 
+
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+This document does not apply to operator installations of Calico.
+
+%>
+
+  <label:Manifest>
+<%
+
 Providing role based access control within etcd requires the following:
 -  Creation of etcd roles which provide appropriate access to the specific set
    of etcd keys required by the role
@@ -40,3 +52,7 @@ commands used in the below guides.
   you have created your root users.
 - Ensure your usernames match the Common Name set in your certificates to allow
   access without specifying the username to your components.
+
+%>
+
+{% endtabs %}

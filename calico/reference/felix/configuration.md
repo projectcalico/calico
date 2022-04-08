@@ -1,14 +1,21 @@
 ---
 title: Configuring Felix
-description: Configure Felix, the daemon that runs on every machine the provide endpoints.
+description: Configure Felix, the daemon that runs on every machine that provides endpoints.
 canonical_url: '/reference/felix/configuration'
 ---
 
-> **Note**: If you have installed Calico using the operator, you cannot modify the environment provided to felix directly. To configure felix, see the [FelixConfiguration](../resources/felixconfig) resource instead.
-{: .alert .alert-info}
+{% tabs %}
+  <label:Operator,active:true>
+<%
 
-Configuration for Felix is read from one of four possible locations, in
-order, as follows.
+If you have installed Calico using the operator, you cannot modify the environment provided to felix directly. To configure felix, see the [FelixConfiguration](../resources/felixconfig) resource instead.
+
+%>
+
+  <label:Manifest>
+<%
+
+Configuration for Felix is read from one of four possible locations, in order, as follows.
 
 1.  Environment variables.
 2.  The Felix configuration file.
@@ -287,3 +294,7 @@ a global setting and a per-host override.
    ```
 
 For more information, see [Felix Configuration Resource](../resources/felixconfig).
+
+%>
+
+{% endtabs %}
