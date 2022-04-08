@@ -41,7 +41,7 @@ While the routing table may look a little odd to someone who is used to
 configuring LAN networking, using explicit routes rather than
 subnet-local gateways is fairly common in WAN networking.
 
-## Why isn't {{site.prodname}} working on CoreOS Container Linux / hyperkube?
+## Why isn't {{site.prodname}} working with a containerized Kubelet?
 
 {{site.prodname}} hosted install places the necessary CNI binaries and config on each
 Kubernetes node in a directory on the host as specified in the manifest.  By
@@ -69,6 +69,8 @@ depend on how your kubelet is configured.  For deployments using `systemd`, you 
 
 The log level can be configured via the CNI network configuration file, by changing the value of the
 key `log_level`.  See [Configuring the {{site.prodname}} CNI plugins]({{ site.baseurl }}/reference/cni-plugin/configuration) for more information.
+
+CNI plugin logs can also be found in `/var/log/calico/cni`.
 
 ## How do I configure the pod IP range?
 

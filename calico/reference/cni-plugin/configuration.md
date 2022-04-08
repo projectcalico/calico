@@ -4,6 +4,18 @@ description: Details for configuring the Calico CNI plugins.
 canonical_url: '/reference/cni-plugin/configuration'
 ---
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+TODO
+
+%>
+
+  <label:Manifest>
+<%
+
+
 The {{site.prodname}} CNI plugin is configured through the standard CNI
 [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration){:target="_blank"}
 
@@ -565,3 +577,7 @@ For example:
   "num_queues": 3,
 }
 ```
+
+%>
+
+{% endtabs %}
