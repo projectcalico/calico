@@ -10,7 +10,8 @@ coming from (or going to) external, non-{{site.prodname}}, networks.
 
 The metadata for each network set includes a set of labels.  When {{site.prodname}} is calculating the set of
 IPs that should match a source/destination selector within a
-[global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) rule, it includes
+[global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) rule, or within a
+[network policy]({{ site.baseurl }}/reference/resources/networkpolicy) rule whose `namespaceSelector` includes `global()`, it includes
 the CIDRs from any network sets that match the selector.
 
 > **Important**: Since {{site.prodname}} matches packets based on their source/destination IP addresses,
