@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -176,7 +177,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		failsafeInboundHostPorts := configParams.FailsafeInboundHostPorts
 		failsafeOutboundHostPorts := configParams.FailsafeOutboundHostPorts
 		if configParams.WireguardEnabled {
-			var found = false
+			found := false
 			for _, i := range failsafeInboundHostPorts {
 				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
 					log.WithFields(log.Fields{
@@ -222,7 +223,8 @@ func StartDataplaneDriver(configParams *config.Config,
 		}
 
 		dpConfig := intdataplane.Config{
-			Hostname: configParams.FelixHostname,
+			Hostname:           configParams.FelixHostname,
+			FloatingIPsEnabled: strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 				ResyncInterval:    configParams.InterfaceRefreshInterval,
