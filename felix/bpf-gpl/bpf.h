@@ -56,8 +56,10 @@ struct bpf_map_def_extended {
 // ports is encapped on the "request" leg but the response is returned directly from the
 // node with the backing workload.
 #define CALI_TC_DSR		(1<<4)
-// CALI_TC_WIREGUARD is set for the programs attached to the wireguard interface.
-#define CALI_TC_WIREGUARD	(1<<5)
+// CALI_L3_DEV is set for any L3 device such as wireguard and IPIP tunnels that act fully
+// at layer 3. In kernerls before 5.14 (rhel 4.18.0-330) IPIP tunnels on inbound
+// direction were acting differently, where they could see outer ethernet and ip headers.
+#define CALI_L3_DEV 	(1<<5)
 // CALI_XDP_PROG is set for programs attached to the XDP hook
 #define CALI_XDP_PROG 	(1<<6)
 
@@ -75,7 +77,7 @@ struct bpf_map_def_extended {
 #define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP)
 #define CALI_F_WEP     	 (!CALI_F_HEP)
 #define CALI_F_TUNNEL  	 ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
-#define CALI_F_WIREGUARD ((CALI_COMPILE_FLAGS) & CALI_TC_WIREGUARD)
+#define CALI_F_L3_DEV ((CALI_COMPILE_FLAGS) & CALI_L3_DEV)
 
 #define CALI_F_XDP ((CALI_COMPILE_FLAGS) & CALI_XDP_PROG)
 
@@ -87,9 +89,9 @@ struct bpf_map_def_extended {
 
 #define CALI_F_TO_HOST       (CALI_F_FROM_HEP || CALI_F_FROM_WEP)
 #define CALI_F_FROM_HOST     (!CALI_F_TO_HOST)
-#define CALI_F_L3            ((CALI_F_TO_HEP && CALI_F_TUNNEL) || CALI_F_WIREGUARD)
-#define CALI_F_IPIP_ENCAPPED (CALI_F_INGRESS && CALI_F_TUNNEL)
-#define CALI_F_WG_INGRESS    (CALI_F_INGRESS && CALI_F_WIREGUARD)
+#define CALI_F_L3            ((CALI_F_TO_HEP && CALI_F_TUNNEL) || CALI_F_L3_DEV)
+#define CALI_F_IPIP_ENCAPPED ((CALI_F_INGRESS && CALI_F_TUNNEL))
+#define CALI_F_L3_INGRESS    (CALI_F_INGRESS && CALI_F_L3_DEV)
 
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	(CALI_COMPILE_FLAGS & CALI_TC_DSR)
