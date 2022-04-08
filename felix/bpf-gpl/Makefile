@@ -117,7 +117,10 @@ bin:
 		rm -f $@.$$$$
 
 D_FILES=$(C_FILES:.c=.d)
+
+ifneq ($(MAKECMDGOALS),clean)
 include $(D_FILES)
+endif
 
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll
