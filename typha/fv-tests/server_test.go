@@ -45,6 +45,7 @@ import (
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	. "github.com/projectcalico/calico/typha/fv-tests"
 	"github.com/projectcalico/calico/typha/pkg/calc"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
@@ -186,8 +187,9 @@ var _ = Describe("With an in-process Server", func() {
 	createClient := func(id interface{}, syncType syncproto.SyncerType) clientState {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
 		recorder := NewRecorder()
+		serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
 		client := syncclient.New(
-			fmt.Sprintf("127.0.0.1:%d", server.Port()),
+			[]discovery.Typha{{Addr: serverAddr}},
 			"test-version",
 			fmt.Sprintf("test-host-%v", id),
 			"test-info",
@@ -690,7 +692,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
 		recorder := NewRecorder()
 		client := syncclient.New(
-			serverAddr,
+			[]discovery.Typha{{Addr: serverAddr}},
 			"test-version",
 			"test-host",
 			"test-info",
@@ -724,7 +726,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		recorder := NewRecorder()
 
 		client := syncclient.New(
-			serverAddr,
+			[]discovery.Typha{{Addr: serverAddr}},
 			"test-version",
 			"test-host",
 			"test-info",
@@ -945,7 +947,7 @@ var _ = Describe("With an in-process Server with long ping interval", func() {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
 		recorder := NewRecorder()
 		client := syncclient.New(
-			serverAddr,
+			[]discovery.Typha{{Addr: serverAddr}},
 			"test-version",
 			"test-host",
 			"test-info",
@@ -1090,7 +1092,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			recorder.BlockAfterNUpdates(1, 2500*time.Millisecond)
 
 			client := syncclient.New(
-				serverAddr,
+				[]discovery.Typha{{Addr: serverAddr}},
 				"test-version",
 				"test-host",
 				"test-info",
@@ -1139,7 +1141,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			recorder.BlockAfterNUpdates(initialSnapshotSize+1, 2500*time.Millisecond)
 
 			client := syncclient.New(
-				serverAddr,
+				[]discovery.Typha{{Addr: serverAddr}},
 				"test-version",
 				"test-host",
 				"test-info",
@@ -1323,8 +1325,9 @@ var _ = Describe("with server requiring TLS", func() {
 	createClient := func(options *syncclient.Options) clientState {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
 		recorder := NewRecorder()
+		serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
 		client := syncclient.New(
-			fmt.Sprintf("127.0.0.1:%d", server.Port()),
+			[]discovery.Typha{{Addr: serverAddr}},
 			"test-version",
 			"test-host-1",
 			"test-info",
