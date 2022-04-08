@@ -293,6 +293,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
+					felix.Exec("calico-bpf", "nat", "aff")
 					felix.Exec("calico-bpf", "conntrack", "dump")
 					felix.Exec("calico-bpf", "arp", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
@@ -2145,7 +2146,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							affKV := func() (nat.AffinityKey, nat.AffinityValue) {
 								aff := dumpAffMap(felixes[0])
-								Expect(aff).To(HaveLen(1))
+								ExpectWithOffset(1, aff).To(HaveLen(1))
 
 								// get the only key
 								for k, v := range aff {
