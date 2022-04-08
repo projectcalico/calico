@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -671,6 +671,9 @@ func (w *Wireguard) Apply() (err error) {
 			log.Info("Waiting for wireguard link to come up...")
 			return nil
 		}
+
+		// The link is now sync'd.
+		w.inSyncLink = true
 	}
 
 	// Get the wireguard client. This may not always be possible.
