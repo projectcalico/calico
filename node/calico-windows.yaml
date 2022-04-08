@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: calico-node-windows
+  namespace: calico-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: calico-node-windows
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-node-windows
+    spec:
+      serviceAccountName: calico-node
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\system"
+      hostNetwork: true
+      tolerations:
+        # Make sure calico-node gets scheduled on all nodes.
+        - effect: NoSchedule
+          operator: Exists
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      initContainers:
+      - name: install
+        image: laurenceman/calico:latest
+        args:
+          - "$env:CONTAINER_SANDBOX_MOUNT_POINT\\install-calico-windows.ps1"
+          - "-Reinstall yes"
+          - "-StartCalico no"
+          - "-KubeAPIServerIPAndPort 172.16.101.222:6443"
+        imagePullPolicy: Always
+        env:
+        # Specify the CNI bin dir configured in containerd (under
+        # [plugins."io.containerd.grpc.v1.cri".cni])
+        - name: CNI_BIN_DIR
+          value: "c:\\Program Files\\containerd\\cni\\bin"
+        - name: CNI_CONF_DIR
+          value: "c:\\Program Files\\containerd\\cni\\conf"
+        securityContext:
+          windowsOptions:
+            hostProcess: true
+            runAsUserName: "NT AUTHORITY\\system"
+      containers:
+      - name: node
+        image: laurenceman/calico:latest
+        imagePullPolicy: Always
+        args:
+          - "c:\\CalicoWindows\\node\\node-service.ps1"
+        # The node container's working dir is in c:\CalicoWindows on the host,
+        # which is two-levels up from the CONTAINER_SANDBOX_MOUNT_POINT.
+        workingDir: "$env:CONTAINER_SANDBOX_MOUNT_POINT\\..\\..\\CalicoWindows"
+        env:
+        - name: CALICO_STARTUP_LOGLEVEL
+          value: "debug"
+        securityContext:
+          windowsOptions:
+            hostProcess: true
+            runAsUserName: "NT AUTHORITY\\system"
+      - name: felix
+        image: laurenceman/calico:latest
+        imagePullPolicy: Always
+        args:
+        - "c:\\CalicoWindows\\felix\\felix-service.ps1"
+        # The felix container's working dir is in c:\CalicoWindows on the host,
+        # which is two-levels up from the CONTAINER_SANDBOX_MOUNT_POINT.
+        workingDir: "$env:CONTAINER_SANDBOX_MOUNT_POINT\\..\\..\\CalicoWindows"
+        env:
+        - name: FELIX_HEALTHENABLED
+          value: "true"
+        livenessProbe:
+          exec:
+            command:
+            - c:\\CalicoWindows\\calico-node.exe
+            - -felix-live
+          # - -bird-live
+          periodSeconds: 10
+          initialDelaySeconds: 10
+          failureThreshold: 6
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - c:\\CalicoWindows\\calico-node.exe
+            - -felix-ready
+          # - -bird-ready
+          periodSeconds: 10
+          timeoutSeconds: 10
+        securityContext:
+          windowsOptions:
+            hostProcess: true
+            runAsUserName: "NT AUTHORITY\\system"
+      nodeSelector:
+        kubernetes.io/os: windows
