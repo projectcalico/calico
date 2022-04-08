@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,10 +115,11 @@ func GetVersionFromString(s string) (*Version, error) {
 }
 
 func GetDistFromString(s string) string {
+	redhatRegexp := regexp.MustCompile(`el(\d+\_\d+)`)
 	distName := "default"
 	if strings.Contains(s, "Ubuntu") {
 		distName = "ubuntu"
-	} else if strings.Contains(s, "Red Hat") {
+	} else if strings.Contains(s, "Red Hat") || redhatRegexp.MatchString(s) {
 		distName = "rhel"
 	}
 	return distName
