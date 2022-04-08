@@ -272,6 +272,9 @@ type Config struct {
 	IpInIpMtu        int    `config:"int;0"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
 
+	// Feature enablement. Can be either "Enabled" or "Disabled".
+	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
+
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
 	// from workloads. We always add them unless explicitly requested not to add them.
 	AllowVXLANPacketsFromWorkloads bool `config:"bool;false"`
