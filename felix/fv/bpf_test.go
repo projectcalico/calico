@@ -293,6 +293,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
+					felix.Exec("calico-bpf", "nat", "aff")
 					felix.Exec("calico-bpf", "conntrack", "dump")
 					felix.Exec("calico-bpf", "arp", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
@@ -988,6 +989,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 					It("should not be able to spoof TCP", func() {
+						By("Disabling dev RPF")
+						setRPF(felixes, testOpts.tunnel, 0, 0)
 						// Make sure the workload is up and has configured its routes.
 						By("Having basic connectivity")
 						cc.Expect(Some, w[0][0], w[1][0])
@@ -1082,6 +1085,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "udp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 					It("should not be able to spoof UDP", func() {
+						By("Disabling dev RPF")
+						setRPF(felixes, testOpts.tunnel, 0, 0)
+						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf."+w[1][0].InterfaceName+".rp_filter=0")
+						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf."+w[1][1].InterfaceName+".rp_filter=0")
+
 						By("allowing any traffic", func() {
 							pol.Spec.Ingress = []api.Rule{
 								{
@@ -2145,7 +2153,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							affKV := func() (nat.AffinityKey, nat.AffinityValue) {
 								aff := dumpAffMap(felixes[0])
-								Expect(aff).To(HaveLen(1))
+								ExpectWithOffset(1, aff).To(HaveLen(1))
 
 								// get the only key
 								for k, v := range aff {
@@ -3473,6 +3481,24 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) {
 				// Wheather traffic is generated in host namespace, or involves NAT, each contrack entry should be related to node's address
 				Expect(strings.Contains(line, felix.IP)).To(BeTrue())
 			}
+		}
+	}
+}
+
+func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
+	for _, felix := range felixes {
+		// N.B. we only support environment with not so strict RPF - can be
+		// strict per iface, but not for all.
+		felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+strconv.Itoa(all))
+		switch tunnel {
+		case "none":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+strconv.Itoa(main))
+		case "ipip":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+strconv.Itoa(main))
+		case "wireguard":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+strconv.Itoa(main))
+		case "vxlan":
+			felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+strconv.Itoa(main))
 		}
 	}
 }
