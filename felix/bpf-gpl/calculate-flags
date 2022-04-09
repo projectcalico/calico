@@ -49,8 +49,9 @@ flags=0
 ((CALI_TC_TUNNEL = 1 << 2))
 ((CALI_CGROUP = 1 << 3))
 ((CALI_TC_DSR = 1 << 4))
-((CALI_L3_DEV = 1 << 5))
+((CALI_TC_L3_DEV = 1 << 5))
 ((CALI_XDP_PROG = 1 << 6))
+((CALI_TC_NAT_IF = 1 << 7))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
@@ -64,7 +65,7 @@ elif [[ "${filename}" =~ .*tnl.* ]]; then
   ep_type="tunnel"
 elif [[ "${filename}" =~ .*l3.* ]]; then
   # Any l3 device.
-  ((flags |= CALI_L3_DEV | CALI_TC_HOST_EP))
+  ((flags |= CALI_TC_L3_DEV | CALI_TC_HOST_EP))
   args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
   ep_type="l3dev"
 elif [[ "${filename}" =~ .*connect.* ]]; then
@@ -81,6 +82,11 @@ elif [[ "${filename}" =~ .*xdp.* ]]; then
   ((flags |= CALI_XDP_PROG))
   args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO" "-D__IPTOOL_LOADER__")
   ep_type="host"
+elif [[ "${filename}" =~ .*nat.* ]]; then
+  ((flags |= CALI_TC_HOST_EP))
+  ((flags |= CALI_TC_NAT_IF))
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
+  ep_type="nat"
 else
   echo "Can't recognise endpoint type"
   exit 2
