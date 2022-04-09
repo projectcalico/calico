@@ -3463,15 +3463,17 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 }
 
 func checkNodeConntrack(felixes []*infrastructure.Felix) {
-	for _, felix := range felixes {
+	for i, felix := range felixes {
 		conntrack, err := felix.ExecOutput("conntrack", "-L")
-		Expect(err).NotTo(HaveOccurred())
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "conntrack -L failed")
 		lines := strings.Split(conntrack, "\n")
 		for _, line := range lines {
 			line = strings.Trim(line, " ")
 			if strings.Contains(line, "src=") {
-				// Wheather traffic is generated in host namespace, or involves NAT, each contrack entry should be related to node's address
-				Expect(strings.Contains(line, felix.IP)).To(BeTrue())
+				// Wheather traffic is generated in host namespace, or involves NAT, each
+				// contrack entry should be related to node's address
+				ExpectWithOffset(1, strings.Contains(line, felix.IP)).
+					To(BeTrue(), fmt.Sprintf("unexpected conntrack not from host (felix[%d]): %s", i, line))
 			}
 		}
 	}
