@@ -810,7 +810,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	// * We do encap on the veths, and there's a bogus kernel MTU check in the BPF helper
 	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
 	//   when we cannot encap the packet - non-GSO & too close to veth MTU
-	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
+	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.IntfIP = calicoRouterIP
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 
