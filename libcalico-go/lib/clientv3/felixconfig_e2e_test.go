@@ -15,14 +15,13 @@
 package clientv3_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"context"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -35,7 +34,6 @@ import (
 )
 
 var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	name1 := "felixconfig-1"
 	name2 := "felixconfig-2"
@@ -44,16 +42,20 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 	ptrInt1 := 1432
 	ptrInt2 := 6341
 	hostString := "localhost"
+	fipDisabled := apiv3.FloatingIPsDisabled
+	fipEnabled := apiv3.FloatingIPsEnabled
 	spec1 := apiv3.FelixConfigurationSpec{
 		UseInternalDataplaneDriver: &ptrTrue,
 		DataplaneDriver:            "test-dataplane-driver1",
 		MetadataPort:               &ptrInt1,
+		FloatingIPs:                &fipDisabled,
 	}
 	spec2 := apiv3.FelixConfigurationSpec{
 		UseInternalDataplaneDriver: &ptrFalse,
 		DataplaneDriver:            "test-dataplane-driver2",
 		HealthHost:                 &hostString,
 		HealthPort:                 &ptrInt2,
+		FloatingIPs:                &fipEnabled,
 	}
 
 	DescribeTable("FelixConfiguration e2e CRUD tests",
