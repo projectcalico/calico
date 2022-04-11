@@ -99,11 +99,6 @@ var (
 	// v5Dot3Dot0 is the first kernel version that has all the
 	// required features we use for BPF dataplane mode
 	v5Dot3Dot0 = versionparse.MustParseVersion("5.3.0")
-	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels acts like other L3
-	// devices where bpf programs only see inner IP header. In RHEL based distros,
-	// kernel 4.18.0 (v4Dot18Dot0_330) is the first one with this behavior.
-	v5Dot14Dot0     = versionparse.MustParseVersion("5.14.0")
-	v4Dot18Dot0_330 = versionparse.MustParseVersion("4.18.0-330")
 )
 
 var distToVersionMap = map[string]*versionparse.Version{
