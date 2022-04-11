@@ -27,7 +27,7 @@ runTests() {
     # Run etcd only if the storage type is default for the apiserver.
     kube::etcd::start
   fi
-  go test -v github.com/projectcalico/apiserver/test/integration/... --args -v 10 -logtostderr
+  go test -v github.com/projectcalico/calico/apiserver/test/integration/... --args -v 10 -logtostderr
 }
 
 # Run cleanup to stop etcd on interrupt or other kill signal.
