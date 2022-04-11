@@ -89,6 +89,18 @@ blocks:
       - make gen-semaphore-yaml
       - make check-dirty
 
+- name: gosec
+  dependencies: []
+  task:
+    jobs:
+    - name: gosec
+      commands:
+      - make gosec-scan-results.xml
+    epilogue:
+      always:
+        commands:
+        - test-results publish gosec-scan-results.xml --name "calico-gosec-analysis" || true
+
 - name: "API"
   run:
     when: "false or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"

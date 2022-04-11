@@ -1,3 +1,4 @@
+.PHONY: gosec-scan-results.xml
 PACKAGE_NAME = github.com/projectcalico/calico
 
 include metadata.mk 
@@ -96,3 +97,10 @@ gen-semaphore-yaml:
 check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
 	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
+
+gosec-scan-results.xml:
+	-docker run \
+		--rm -it -w / \
+		-v $(CURDIR):/calico:rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
+		securego/gosec -fmt junit-xml -out /calico/${@} /calico/...
