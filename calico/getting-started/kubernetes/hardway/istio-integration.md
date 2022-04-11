@@ -8,31 +8,31 @@ canonical_url: '/getting-started/kubernetes/hardway/istio-integration'
 application layer attributes like HTTP methods or paths as well as against cryptographically secure identities. In this
 lab we will enable this integration and test it out.
 
-## Install FlexVolume driver
+## Install CSI driver
 
-{{site.prodname}} uses a FlexVolume driver to enable secure connectivity between Felix and the Dikastes container
+{{site.prodname}} uses a Container Storage Interface (CSI) driver to enable secure connectivity between Felix and the Dikastes container
 running in each pod.  It mounts a shared volume into which Felix inserts a Unix Domain Socket.
 
-On each node in the cluster, execute the following commands to install the FlexVolume driver binary.
+Execute the following command to install the CSI driver.
 
 ```bash
-sudo mkdir -p /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
-sudo docker run --rm \
-  -v /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds:/host/driver \
-  calico/pod2daemon-flexvol:v3.20.0
+kubectl apply -f {{ site.baseurl }}/manifests/csi-driver.yaml
 ```
 
-Verify the `uds` binary is present
+Verify the `csi-node-driver` pods are running.
 
 ```bash
-ls -lh /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
+kubectl get pods -n kube-system
 ```
 
-Result
+You should see something similar to the following:
 
 ```
-total 5.2M
--r-xr-x--- 1 root root 5.2M Jul 25 22:31 uds
+csi-node-driver-gk9mq                              2/2     Running   0             2m9s
+csi-node-driver-jhngv                              2/2     Running   0             2m9s
+csi-node-driver-kcqnj                              2/2     Running   0             2m9s
+csi-node-driver-n78lx                              2/2     Running   0             2m9s
+csi-node-driver-nrbvd                              2/2     Running   0             2m9s
 ```
 {: .no-select-button}
 

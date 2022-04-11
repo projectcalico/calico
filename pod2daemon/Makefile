@@ -5,7 +5,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 FLEXVOL_IMAGE  ?=pod2daemon-flexvol
-CSI_IMAGE ?=calico/calico-csi
+CSI_IMAGE ?=calico/csi
 BUILD_IMAGES ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE)
 
 ###############################################################################
