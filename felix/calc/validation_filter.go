@@ -20,20 +20,23 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	v1v "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 	v3v "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
-func NewValidationFilter(sink api.SyncerCallbacks) *ValidationFilter {
+func NewValidationFilter(sink api.SyncerCallbacks, felixConfig *config.Config) *ValidationFilter {
 	return &ValidationFilter{
-		sink: sink,
+		sink:   sink,
+		config: felixConfig,
 	}
 }
 
 type ValidationFilter struct {
-	sink api.SyncerCallbacks
+	sink   api.SyncerCallbacks
+	config *config.Config
 }
 
 func (v *ValidationFilter) OnStatusUpdated(status api.SyncStatus) {
@@ -68,10 +71,11 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 				}
 			}
 
-			switch v := update.Value.(type) {
+			switch value := update.Value.(type) {
 			case *model.WorkloadEndpoint:
-				if v.Name == "" {
-					logCxt.WithError(errors.New("Missing name")).Warn("Validation failed; treating as missing")
+				err := v.validateWorkloadEndpoint(value)
+				if err != nil {
+					logCxt.WithError(err).Warn("Validation failed; treating as missing")
 					update.Value = nil
 				}
 			}
@@ -79,4 +83,15 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 		filteredUpdates[i] = update
 	}
 	v.sink.OnUpdates(filteredUpdates)
+}
+
+func (v *ValidationFilter) validateWorkloadEndpoint(value *model.WorkloadEndpoint) error {
+	if value.Name == "" {
+		return errors.New("Missing workload endpoint name")
+	}
+	if len(value.AllowSpoofedSourcePrefixes) > 0 && v.config.WorkloadSourceSpoofing != "Any" {
+		return errors.New("source IP spoofing requested but not enabled in Felix configuration")
+	}
+
+	return nil
 }
