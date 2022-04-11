@@ -166,7 +166,7 @@ skip_redir_ifindex:
 #ifdef BPF_CORE_SUPPORTED
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
-				CALI_DEBUG("FIB lookup succeeded - not neigh - gw %x\n", fib_params.ipv4_dst);
+				CALI_DEBUG("FIB lookup succeeded - not neigh - gw %x\n", bpf_ntohl(fib_params.ipv4_dst));
 				struct bpf_redir_neigh nh_params = {};
 
 				nh_params.nh_family = fib_params.family;
