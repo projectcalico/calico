@@ -113,7 +113,7 @@ echo "client and webserver pods are running."
 echo
 
 echo "Deploy Calico apiserver"
-${kubectl} create -f https://docs.projectcalico.org/master/manifests/apiserver.yaml
+${kubectl} create -f https://docs.projectcalico.org/archive/v3.21/manifests/apiserver.yaml
 openssl req -x509 -nodes -newkey rsa:4096 -keyout apiserver.key -out apiserver.crt -days 365 -subj "/" -addext "subjectAltName = DNS:calico-api.calico-apiserver.svc"
 ${kubectl} create secret -n calico-apiserver generic calico-apiserver-certs --from-file=apiserver.key --from-file=apiserver.crt
 ${kubectl} patch apiservice v3.projectcalico.org -p \
