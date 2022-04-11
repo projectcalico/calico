@@ -32,6 +32,8 @@ The geeky details of what you get:
   ```bash
   # Install aks-preview extension
   az extension add --name aks-preview
+  # Update aks-preview to ensure latest version is installed
+  az extension update --name aks-preview
 
   # Create a resource group
   az group create --name $RESOURCE_GROUP_NAME --location $LOCATION
