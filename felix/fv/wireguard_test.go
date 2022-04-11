@@ -151,6 +151,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				felix.Exec("ip", "route", "show", "table", "all")
 				felix.Exec("ip", "route", "show", "cached")
 				felix.Exec("wg")
+				felix.Exec("wg", "show", "all", "private-key")
 			}
 		}
 
