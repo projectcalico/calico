@@ -115,8 +115,8 @@ type Config struct {
 	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
 
 	ServerMaxMessageSize                 int           `config:"int(1,);100"`
-	ServerMaxFallBehindSecs              time.Duration `config:"seconds;90"`
-	ServerNewClientFallBehindGracePeriod time.Duration `config:"seconds;90"`
+	ServerMaxFallBehindSecs              time.Duration `config:"seconds;300"`
+	ServerNewClientFallBehindGracePeriod time.Duration `config:"seconds;300"`
 	ServerMinBatchingAgeThresholdSecs    time.Duration `config:"seconds;0.01"`
 	ServerPingIntervalSecs               time.Duration `config:"seconds;10"`
 	ServerPongTimeoutSecs                time.Duration `config:"seconds;60"`

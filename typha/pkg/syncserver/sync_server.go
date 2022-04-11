@@ -110,8 +110,8 @@ func init() {
 
 const (
 	defaultMaxMessageSize                 = 100
-	defaultMaxFallBehind                  = 90 * time.Second
-	defaultNewClientFallBehindGracePeriod = 90 * time.Second
+	defaultMaxFallBehind                  = 300 * time.Second
+	defaultNewClientFallBehindGracePeriod = 300 * time.Second
 	defaultBatchingAgeThreshold           = 100 * time.Millisecond
 	defaultPingInterval                   = 10 * time.Second
 	defaultDropInterval                   = 1 * time.Second
