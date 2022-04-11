@@ -2392,6 +2392,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"floatingIPs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FloatingIPs configures whether or not Felix will program floating IP addresses.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
