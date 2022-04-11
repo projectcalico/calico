@@ -26,9 +26,6 @@ import (
 )
 
 var (
-	// Linux kernel versions:
-	// v3Dot10Dot0 is the oldest version we support at time of writing.
-	v3Dot10Dot0 = versionparse.MustParseVersion("3.10.0")
 	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels acts like other L3
 	// devices where bpf programs only see inner IP header. In RHEL based distros,
 	// kernel 4.18.0 (v4Dot18Dot0_330) is the first one with this behavior.
@@ -37,7 +34,7 @@ var (
 )
 
 type Features struct {
-	// IPIPDeviceIsL3 .....
+	// IPIPDeviceIsL3 represent if ipip tunnels acts like other l3 devices
 	IPIPDeviceIsL3 bool
 }
 
@@ -81,17 +78,10 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	log.Debug("Refreshing detected bpf features")
 
 	kerV := d.getKernelVersion()
-	distro := versionparse.GetDistributionName()
 
-	// Calculate the features based on distro name.
+	// Calculate features.
 	features := Features{
-		IPIPDeviceIsL3: kerV.Compare(v5Dot14Dot0) >= 0,
-	}
-
-	if distro == "rhel" {
-		features = Features{
-			IPIPDeviceIsL3: kerV.Compare(v4Dot18Dot0_330) >= 0,
-		}
+		IPIPDeviceIsL3: ipipDeviceIsL3(),
 	}
 
 	for k, v := range d.featureOverride {
@@ -144,4 +134,19 @@ func (d *FeatureDetector) getKernelVersion() *versionparse.Version {
 		return v3Dot10Dot0
 	}
 	return kernVersion
+}
+
+func ipipDeviceIsL3() bool {
+	switch versionparse.GetDistributionName() {
+	case "rhel":
+		if err := isAtLeastKernel(v4Dot18Dot0_330); err != nil {
+			return false
+		}
+		return true
+	default:
+		if err := isAtLeastKernel(v5Dot14Dot0); err != nil {
+			return false
+		}
+		return true
+	}
 }

@@ -175,6 +175,7 @@ type bpfEndpointManager struct {
 	// IPv6 Support
 	ipv6Enabled bool
 
+	// Detected features
 	features *bpf.Features
 }
 
