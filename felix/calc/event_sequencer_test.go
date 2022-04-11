@@ -62,7 +62,22 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 				IntIp: "10.28.0.13",
 			},
 		},
-		Ipv6Nat: []*proto.NatInfo{},
+		Ipv6Nat:                    []*proto.NatInfo{},
+		AllowSpoofedSourcePrefixes: []string{},
+	}),
+	Entry("workload endpoint with source IP spoofing configured", model.WorkloadEndpoint{
+		State:                      "up",
+		Name:                       "bill",
+		AllowSpoofedSourcePrefixes: []net.IPNet{net.MustParseCIDR("8.8.8.8/32")},
+	}, proto.WorkloadEndpoint{
+		State:                      "up",
+		Name:                       "bill",
+		Ipv4Nets:                   []string{},
+		Ipv6Nets:                   []string{},
+		Tiers:                      []*proto.TierInfo{},
+		Ipv4Nat:                    []*proto.NatInfo{},
+		Ipv6Nat:                    []*proto.NatInfo{},
+		AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32"},
 	}),
 )
 
