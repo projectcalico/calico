@@ -119,7 +119,7 @@ kubectl create clusterrolebinding calico-cni --clusterrole=calico-cni --user=cal
 
 ## Install the plugin
 
-Do these steps on each node in your cluster.
+**Do these steps on each node in your cluster**.
 
 Run these commands as root.
 
