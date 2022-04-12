@@ -34,14 +34,14 @@ func TestFeatureDetection(t *testing.T) {
 	}
 	for _, tst := range []test{
 		{
-			"Linux version 5.10.0",
+			"Linux version 5.10.0 - ubuntu",
 			Features{
 				IPIPDeviceIsL3: false,
 			},
 			map[string]string{},
 		},
 		{
-			"Linux version 5.14.0",
+			"Linux version 5.14.0 - something else",
 			Features{
 				IPIPDeviceIsL3: true,
 			},
@@ -55,7 +55,7 @@ func TestFeatureDetection(t *testing.T) {
 			map[string]string{},
 		},
 		{
-			"Linux version 5.10.0",
+			"Linux version 5.10.0 - Default",
 			Features{
 				IPIPDeviceIsL3: true,
 			},
@@ -73,7 +73,55 @@ func TestFeatureDetection(t *testing.T) {
 			},
 		},
 		{
-			"Linux version 5.16.0",
+			"Linux version 5.16.0 - Ubuntu",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+		{
+			"Linux version 4.18.0 - Red Hat",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.18.0-330 - Red Hat",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.18.0-420 - Red hat",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.17.0 - el8_3",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "true",
+			},
+		},
+		{
+			"Linux version 4.18.0-330 - el8_5",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+		{
+			"Linux version 4.18.0-390 - el9_7",
 			Features{
 				IPIPDeviceIsL3: false,
 			},
