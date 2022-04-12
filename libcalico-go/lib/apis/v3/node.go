@@ -56,7 +56,7 @@ type NodeSpec struct {
 	VXLANTunnelMACAddr string `json:"vxlanTunnelMACAddr,omitempty" validate:"omitempty,mac"`
 
 	// IPv6VXLANTunnelAddr is the address of the IPv6 VXLAN tunnel.
-	IPv6VXLANTunnelAddr string `json:"ipv6VXLANTunnelAddr,omitempty" validate:"omitempty,ipv4"`
+	IPv6VXLANTunnelAddr string `json:"ipv6VXLANTunnelAddr,omitempty" validate:"omitempty,ipv6"`
 
 	// VXLANTunnelMACAddrV6 is the MAC address of the IPv6 VXLAN tunnel.
 	VXLANTunnelMACAddrV6 string `json:"vxlanTunnelMACAddrV6,omitempty" validate:"omitempty,mac"`
