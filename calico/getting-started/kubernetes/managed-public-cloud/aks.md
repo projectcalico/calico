@@ -36,15 +36,15 @@ The geeky details of what you get:
   az extension update --name aks-preview
 
   # Create a resource group
-  az group create --name $RESOURCE_GROUP_NAME --location $LOCATION
+  az group create --name my-calico-rg --location westcentralus
 
-  az aks create --resource-group $RESOURCE_GROUP_NAME --name my-calico-cluster --location $LOCATION --network-plugin none
+  az aks create --resource-group my-calico-rg --name my-calico-cluster --location westcentralus --network-plugin none
 
   ```
 
 1. Get credentials to allow you to access the cluster with `kubectl`:
     ```
-    az aks get-credentials --resource-group $RESOURCE_GROUP_NAME  --name my-calico-cluster
+    az aks get-credentials --resource-group my-calico-rg --name my-calico-cluster
     ```
 
 1. Now that you have a cluster configured, you can install {{site.prodname}}.
