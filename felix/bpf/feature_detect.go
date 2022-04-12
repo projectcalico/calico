@@ -143,13 +143,13 @@ func (d *FeatureDetector) getDistributionName() string {
 	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
 		log.Errorf("failed to get kernel version reader: %v", err)
-		return "default"
+		return versionparse.DefaultDistro
 	}
 
 	kernVersion, err := ioutil.ReadAll(versionReader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to read kernel version from reader")
-		return "default"
+		return versionparse.DefaultDistro
 	}
 
 	return versionparse.GetDistFromString(string(kernVersion))
@@ -157,7 +157,7 @@ func (d *FeatureDetector) getDistributionName() string {
 
 func (d *FeatureDetector) ipipDeviceIsL3() bool {
 	switch d.getDistributionName() {
-	case "rhel":
+	case versionparse.RedHat:
 		if err := d.isAtLeastKernel(v4Dot18Dot0_330); err != nil {
 			return false
 		}

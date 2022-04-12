@@ -31,6 +31,12 @@ var (
 	splitRe             = regexp.MustCompile(`[\.-]`)
 )
 
+const (
+	Ubuntu        string = "ubuntu"
+	RedHat        string = "rhel"
+	DefaultDistro string = "default"
+)
+
 type Version struct {
 	versionSlice []int
 	versionStr   string
@@ -117,11 +123,11 @@ func GetVersionFromString(s string) (*Version, error) {
 func GetDistFromString(s string) string {
 	sLower := strings.ToLower(s)
 	redhatRegexp := regexp.MustCompile(`el(\d+\_\d+)`)
-	distName := "default"
+	distName := DefaultDistro
 	if strings.Contains(sLower, "ubuntu") {
-		distName = "ubuntu"
+		distName = Ubuntu
 	} else if strings.Contains(sLower, "red hat") || redhatRegexp.MatchString(sLower) {
-		distName = "rhel"
+		distName = RedHat
 	}
 	return distName
 }
@@ -140,12 +146,12 @@ func GetDistributionName() string {
 	reader, err := GetKernelVersionReader()
 	if err != nil {
 		log.WithError(err).Warn("Failed to get kernel version reader")
-		return "default"
+		return DefaultDistro
 	}
 	kernVersion, err := ioutil.ReadAll(reader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to read kernel version from reader")
-		return "default"
+		return DefaultDistro
 	}
 	s := string(kernVersion)
 

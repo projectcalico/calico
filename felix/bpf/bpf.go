@@ -102,9 +102,9 @@ var (
 )
 
 var distToVersionMap = map[string]*versionparse.Version{
-	"ubuntu":  v5Dot3Dot0,
-	"rhel":    v4Dot18Dot0,
-	"default": v5Dot3Dot0,
+	versionparse.Ubuntu:        v5Dot3Dot0,
+	versionparse.RedHat:        v4Dot18Dot0,
+	versionparse.DefaultDistro: v5Dot3Dot0,
 }
 
 func (m XDPMode) String() string {
