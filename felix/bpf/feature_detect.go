@@ -28,6 +28,9 @@ import (
 )
 
 var (
+	// Linux kernel versions:
+	// v3Dot10Dot0 is the oldest version we support at time of writing.
+	v3Dot10Dot0 = versionparse.MustParseVersion("3.10.0")
 	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels acts like other L3
 	// devices where bpf programs only see inner IP header. In RHEL based distros,
 	// kernel 4.18.0 (v4Dot18Dot0_330) is the first one with this behavior.
@@ -116,6 +119,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	if d.featureCache == nil || *d.featureCache != features {
 		log.WithFields(log.Fields{
 			"features": features,
+			"kernel":   d.getKernelVersion(),
 		}).Info("Updating detected bpf features")
 		d.featureCache = &features
 	}
@@ -139,6 +143,20 @@ func (d *FeatureDetector) isAtLeastKernel(v *versionparse.Version) error {
 	return nil
 }
 
+func (d *FeatureDetector) getKernelVersion() *versionparse.Version {
+	reader, err := d.GetKernelVersionReader()
+	if err != nil {
+		log.WithError(err).Warn("Failed to get the kernel version reader, assuming old version with no optional features")
+		return v3Dot10Dot0
+	}
+	kernVersion, err := versionparse.GetKernelVersion(reader)
+	if err != nil {
+		log.WithError(err).Warn("Failed to get kernel version, assuming old version with no optional features")
+		return v3Dot10Dot0
+	}
+	return kernVersion
+}
+
 func (d *FeatureDetector) getDistributionName() string {
 	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
@@ -151,7 +169,6 @@ func (d *FeatureDetector) getDistributionName() string {
 		log.WithError(err).Warn("Failed to read kernel version from reader")
 		return versionparse.DefaultDistro
 	}
-
 	return versionparse.GetDistFromString(string(kernVersion))
 }
 
