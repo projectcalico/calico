@@ -68,7 +68,7 @@ The geeky details of what you get:
        type: Calico
      calicoNetwork:
        bgp: Disabled
-       ipPools
+       ipPools:
         - cidr: 10.244.0.0/16
           encapsulation: VXLAN
    EOF
