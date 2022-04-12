@@ -288,12 +288,12 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			IPv6Address: "fd10:10::10",
 		}
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
-		res.Spec.IPv6VXLANTunnelMACAddr = "55:44:33:22:11:00"
+		res.Spec.VXLANTunnelMACAddrV6 = "55:44:33:22:11:00"
 		expected = map[string]interface{}{
-			hostIPMarker:             nil,
-			nodeMarker:               res,
-			"IPv6VXLANTunnelAddr":    "fd10:11::11",
-			"IPv6VXLANTunnelMACAddr": "55:44:33:22:11:00",
+			hostIPMarker:           nil,
+			nodeMarker:             res,
+			"IPv6VXLANTunnelAddr":  "fd10:11::11",
+			"VXLANTunnelMACAddrV6": "55:44:33:22:11:00",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -317,15 +317,15 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200"
 		res.Spec.VXLANTunnelMACAddr = "00:11:22:33:44:55"
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
-		res.Spec.IPv6VXLANTunnelMACAddr = "55:44:33:22:11:00"
+		res.Spec.VXLANTunnelMACAddrV6 = "55:44:33:22:11:00"
 		ip = net.MustParseIP("192.100.100.100")
 		expected = map[string]interface{}{
-			hostIPMarker:             &ip,
-			nodeMarker:               res,
-			"IPv4VXLANTunnelAddr":    "192.200.200.200",
-			"VXLANTunnelMACAddr":     "00:11:22:33:44:55",
-			"IPv6VXLANTunnelAddr":    "fd10:11::11",
-			"IPv6VXLANTunnelMACAddr": "55:44:33:22:11:00",
+			hostIPMarker:           &ip,
+			nodeMarker:             res,
+			"IPv4VXLANTunnelAddr":  "192.200.200.200",
+			"VXLANTunnelMACAddr":   "00:11:22:33:44:55",
+			"IPv6VXLANTunnelAddr":  "fd10:11::11",
+			"VXLANTunnelMACAddrV6": "55:44:33:22:11:00",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -467,12 +467,12 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			IPv6Address: "fd10:10::10/122",
 		}
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/122"
-		res.Spec.IPv6VXLANTunnelMACAddr = ""
+		res.Spec.VXLANTunnelMACAddrV6 = ""
 		expected = map[string]interface{}{
-			hostIPMarker:             nil,
-			nodeMarker:               res,
-			"IPv6VXLANTunnelAddr":    nil,
-			"IPv6VXLANTunnelMACAddr": nil,
+			hostIPMarker:           nil,
+			nodeMarker:             res,
+			"IPv6VXLANTunnelAddr":  nil,
+			"VXLANTunnelMACAddrV6": nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -496,15 +496,15 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200/24"
 		res.Spec.VXLANTunnelMACAddr = ""
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/112"
-		res.Spec.IPv6VXLANTunnelMACAddr = ""
+		res.Spec.VXLANTunnelMACAddrV6 = ""
 		ip = net.MustParseIP("192.100.100.100")
 		expected = map[string]interface{}{
-			hostIPMarker:             &ip,
-			nodeMarker:               res,
-			"IPv4VXLANTunnelAddr":    nil,
-			"VXLANTunnelMACAddr":     nil,
-			"IPv6VXLANTunnelAddr":    nil,
-			"IPv6VXLANTunnelMACAddr": nil,
+			hostIPMarker:           &ip,
+			nodeMarker:             res,
+			"IPv4VXLANTunnelAddr":  nil,
+			"VXLANTunnelMACAddr":   nil,
+			"IPv6VXLANTunnelAddr":  nil,
+			"VXLANTunnelMACAddrV6": nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,

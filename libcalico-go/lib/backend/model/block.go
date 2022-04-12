@@ -35,6 +35,7 @@ const (
 	IPAMBlockAttributeType          = "type"
 	IPAMBlockAttributeTypeIPIP      = "ipipTunnelAddress"
 	IPAMBlockAttributeTypeVXLAN     = "vxlanTunnelAddress"
+	IPAMBlockAttributeTypeVXLANV6   = "vxlanV6TunnelAddress"
 	IPAMBlockAttributeTypeWireguard = "wireguardTunnelAddress"
 	IPAMBlockAttributeTimestamp     = "timestamp"
 )
