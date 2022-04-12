@@ -2737,16 +2737,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									hostIfaceMTU    = 1500
 									podIfaceMTU     = 1450
 									sendLen         = hostIfaceMTU
-									recvLen         = podIfaceMTU - npEncapOverhead
+									recvLen         = podIfaceMTU
 								)
 
 								Context("with TCP, tx/rx close to MTU size on NP via node1->node0 ", func() {
 
 									negative := ""
-									adjusteMTU := podIfaceMTU - npEncapOverhead
 									if testOpts.dsr {
 										negative = "not "
-										adjusteMTU = 0
 									}
 
 									It("should "+negative+"adjust MTU on workload side", func() {
@@ -2770,7 +2768,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 										pmtu, err = w[0][0].PathMTU(externalClient.IP)
 										Expect(err).NotTo(HaveOccurred())
-										Expect(pmtu).To(Equal(adjusteMTU))
+										Expect(pmtu).To(Equal(0))
 									})
 
 									It("should not adjust MTU on client side if GRO off on nodes", func() {
