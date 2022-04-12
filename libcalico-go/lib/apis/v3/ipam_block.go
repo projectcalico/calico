@@ -64,6 +64,9 @@ type IPAMBlockSpec struct {
 	// When releasing an IP, passing the sequence number associated with the allocation allows us
 	// to protect against a race condition and ensure the IP hasn't been released and re-allocated
 	// since the release request.
+	//
+	// +kubebuilder:default=0
+	// +optional
 	SequenceNumber uint64 `json:"sequenceNumber"`
 
 	// Map of allocated ordinal within the block to sequence number of the block at
