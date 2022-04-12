@@ -33,7 +33,6 @@ Param(
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $StartCalico="yes",
-    [parameter(Mandatory = $false)] $Reinstall="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
     [parameter(Mandatory = $false)] $EtcdEndpoints="",
     [parameter(Mandatory = $false)] $EtcdTlsSecretName="",
@@ -367,27 +366,6 @@ $platform=GetPlatformType
 
 if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
     PrepareKubernetes
-}
-
-if ($Reinstall -EQ "yes") {
-    Write-Host "Uninstalling any existing Calico install before proceeding with installation..."
-    if ((Get-Service | where Name -Like 'Calico*') -NE $null) {
-        Write-Host "Running c:\CalicoWindows\uninstall-calico.ps1..."
-        & 'c:\CalicoWindows\uninstall-calico.ps1'
-    }
-    # If this is a hostprocess install, and the root install dir exists, try
-    # removing any Calico CNI config install
-    elseif ($env:CONTAINER_SANDBOX_MOUNT_POINT -and (Test-Path $RootDir)) {
-        # Load existing config and check if Calico CNI was configured.
-        . $RootDir\config.ps1
-        if ($env:CALICO_NETWORKING_BACKEND -NE "none") {
-            Write-Host "Removing Calico CNI plugin if installed..."
-            ipmo -force $RootDir\libs\calico\calico.psm1
-            Remove-CNIPlugin
-        }
-    } else {
-        Write-Host "No Calico services found."
-    }
 }
 
 if ((Get-Service -exclude 'CalicoUpgrade' | where Name -Like 'Calico*' | where Status -EQ Running) -NE $null) {
