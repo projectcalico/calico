@@ -52,6 +52,7 @@ const (
 	AttributeType          = model.IPAMBlockAttributeType
 	AttributeTypeIPIP      = model.IPAMBlockAttributeTypeIPIP
 	AttributeTypeVXLAN     = model.IPAMBlockAttributeTypeVXLAN
+	AttributeTypeVXLANV6   = model.IPAMBlockAttributeTypeVXLANV6
 	AttributeTypeWireguard = model.IPAMBlockAttributeTypeWireguard
 )
 
