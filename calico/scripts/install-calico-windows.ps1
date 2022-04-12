@@ -42,8 +42,6 @@ Param(
     [parameter(Mandatory = $false)] $EtcdCaCert="",
     [parameter(Mandatory = $false)] $ServiceCidr="10.96.0.0/12",
     [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10",
-    # If this script is run from a HostProcess container then KubeAPIServerIPAndPort must be provided.
-    [parameter(Mandatory = $false)] $KubeAPIServerIPAndPort="",
     [parameter(Mandatory = $false)] $CalicoBackend=""
 )
 
@@ -206,16 +204,28 @@ function GetCalicoKubeConfig()
     # access to the serviceaccount token and ca cert and do not need the
     # kubeconfig.
     if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
-        write-host "Install script is running in a HostProcess container. Getting token and ca.crt directly..."
+        write-host "Install script is running in a HostProcess container, setting kubeconfig"
         # CA needs to be base64-encoded.
         $ca = Get-Content -Raw -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
         $ca = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($ca))
         # But not the token.
         $token = Get-Content -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/token
 
-        # TODO: check kubeadm config for controlPlaneEndpoint?
-        $server = "server: https://{0}" -f $KubeAPIServerIPAndPort
+        $k8sHost = "KUBERNETES_SERVICE_HOST"
+        $k8sPort = "KUBERNETES_SERVICE_PORT"
+        $envVars = @(
+            $k8sHost,
+            $k8sPort
+        )
 
+        ForEach ($envVar in $envVars) {
+            if (-not (Test-Path "env:$envVar")) {
+                Write-Host "$envVar is not defined, please add $envVar to the calico-windows-config configmap"
+                exit 1
+            }
+        }
+
+        $server = "server: https://{0}:{1}" -f (gci env:$k8sHost | select -expand Value), (gci env:$k8sPort | select -expand Value)
     } else {
         $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
         if ([string]::IsNullOrEmpty($name)) {
