@@ -26,6 +26,7 @@ ENV PATH="C:\Program Files\PowerShell;C:\utils;C:\Windows\system32;C:\Windows;"
 
 COPY install-calico-windows.ps1 /
 COPY calico-windows.zip /
+COPY host-process-install.ps1 /
 
 # The nanoserver image does not have powershell but this works because
 # this container will be running on the host.

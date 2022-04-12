@@ -613,6 +613,8 @@ proto-sub-image-tar-windows-%:
 	-mkdir -p $(WINDOWS_PACKAGING_DIST_STAGE)
 	# copy dockerfile to staging dir
 	cp $(WINDOWS_PACKAGING_ROOT)/Dockerfile $(WINDOWS_PACKAGING_DIST_STAGE)
+	# copy install entrypoint script to staging dir
+	cp $(WINDOWS_PACKAGING_ROOT)/host-process-install.ps1 $(WINDOWS_PACKAGING_DIST_STAGE)
 	# build and copy install script to staging dir
 	make -C ../calico build
 	cp ../calico/_site/scripts/install-calico-windows.ps1 $(WINDOWS_PACKAGING_DIST_STAGE)
