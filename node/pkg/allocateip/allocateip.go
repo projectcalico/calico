@@ -514,13 +514,14 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 		if err != nil {
-			log.WithField("node", node.Name).WithError(err).Info("Error updating node")
 			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 				// Wait for a second and try again if there was a conflict during the resource update.
 				log.WithField("node", node.Name).Info("Resource update conflict error updating node, retrying.")
 				time.Sleep(1 * time.Second)
 				continue
 			}
+
+			log.WithField("node", node.Name).WithError(err).Warning("Error updating node")
 		}
 
 		return nil

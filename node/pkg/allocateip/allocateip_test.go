@@ -453,32 +453,28 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		// pool1CIDR, _, pool2CIDR, _ = getEnsureCIDRAndExpectedAddrForIPVersion(6)
+		pool1CIDR, _, pool2CIDR, _ = getEnsureCIDRAndExpectedAddrForIPVersion(6)
 
 		//create IPPool which has only one ip available.
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		// _, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", pool1CIDR, 128, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
-		// Expect(err).NotTo(HaveOccurred())
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", pool1CIDR, 128, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
 
 		//create IPPool which has only two ips available.
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		// _, err = c.IPPools().Create(ctx, makeIPPool("pool2-v6", pool2CIDR, 127, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
-		// Expect(err).NotTo(HaveOccurred())
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool2-v6", pool2CIDR, 127, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Pre-allocate a WEP ip on 2001:db8::0. This will force tunnel address to use 2001:db8::1
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		// wepAttr = map[string]string{
-		// 	ipam.AttributeNode: "test.node",
-		// 	ipam.AttributeType: ipam.AttributePod,
-		// }
-		// err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
-		// 	IP:       net.IP{IP: gnet.ParseIP("2001:db8::0")},
-		// 	Hostname: "test.node",
-		// 	HandleID: &handle,
-		// 	Attrs:    wepAttr,
-		// })
-		// Expect(err).NotTo(HaveOccurred())
+		wepAttr = map[string]string{
+			ipam.AttributeNode: "test.node",
+			ipam.AttributeType: ipam.AttributePod,
+		}
+		err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+			IP:       net.IP{IP: gnet.ParseIP("2001:db8::0")},
+			Hostname: "test.node",
+			HandleID: &handle,
+			Attrs:    wepAttr,
+		})
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	DescribeTable("should add tunnel address to node", func(tunnelType string) {
@@ -497,8 +493,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should add tunnel address to node without BGP Spec or Wireguard Spec", func(tunnelType string) {
@@ -519,8 +514,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should release old tunnel address and assign new one on ippool update", func(tunnelType string) {
@@ -551,8 +545,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should assign new tunnel address to node on ippool update if old address been occupied", func(tunnelType string) {
@@ -592,8 +585,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should assign new tunnel address and do nothing if node restarts", func(tunnelType string) {
@@ -620,8 +612,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should assign new tunnel address to node on unassigned address", func(tunnelType string) {
@@ -645,8 +636,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should assign new tunnel address to node on pre-allocated address", func(tunnelType string) {
@@ -685,8 +675,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should panic on datastore errors", func(tunnelType string) {
@@ -714,8 +703,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 })
 
@@ -744,10 +732,9 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v4", poolCIDR, 26, api.IPIPModeAlways, api.VXLANModeNever), options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		// poolCIDR, _, _, _ = getRemoveCIDRAndAddrForIPVersion(6)
-		// _, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", poolCIDR, 122, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
-		// Expect(err).ToNot(HaveOccurred())
+		poolCIDR, _, _, _ = getRemoveCIDRAndAddrForIPVersion(6)
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", poolCIDR, 122, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	DescribeTable("should remove tunnel address from node", func(tunnelType string) {
@@ -769,8 +756,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should not panic on node without BGP Spec", func(tunnelType string) {
@@ -789,8 +775,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should release IP address allocations", func(tunnelType string) {
@@ -824,8 +809,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should release old-style IP address allocations", func(tunnelType string) {
@@ -856,8 +840,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
 	DescribeTable("should not release old-style IP address allocations belonging to someone else", func(tunnelType string) {
@@ -890,8 +873,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
 		Entry("Wireguard", ipam.AttributeTypeWireguard),
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		XEntry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 })
 
@@ -921,9 +903,8 @@ var _ = Describe("Running as daemon", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Create /128 IPv6 IPPool so that there is only one address to be assigned
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		// _, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", "2001:db8::/128", 128, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
-		// Expect(err).ToNot(HaveOccurred())
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", "2001:db8::/128", 128, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("should handle adding and removing the tunnel IP after config updates", func() {
@@ -962,8 +943,7 @@ var _ = Describe("Running as daemon", func() {
 		expectTunnelAddressForNode(c, ipam.AttributeTypeWireguard, "test.node", "172.16.0.0")
 
 		// Verify that IPv6 address is assigned from the only one available in the VXLAN IPv6 IPPool
-		//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-		// expectTunnelAddressForNode(c, ipam.AttributeTypeVXLANV6, "test.node", "2001:db8::")
+		expectTunnelAddressForNode(c, ipam.AttributeTypeVXLANV6, "test.node", "2001:db8::")
 
 		// Modify the node so that the wireguard status has a different public key - the IP address should not change.
 		By("changing the wireguard public key")
@@ -1100,8 +1080,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 	})
 
-	//TODO: enable when libcalico-go validator no longer gives an error for VXLAN IPv6 IPPools
-	XContext("IPv6 VXLAN tests", func() {
+	Context("IPv6 VXLAN tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
 			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
