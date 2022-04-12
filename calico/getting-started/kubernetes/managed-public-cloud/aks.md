@@ -42,6 +42,11 @@ The geeky details of what you get:
 
   ```
 
+1. Get credentials to allow you to access the cluster with `kubectl`:
+    ```
+    az aks get-credentials --resource-group $RESOURCE_GROUP_NAME  --name my-calico-cluster
+    ```
+
 1. Now that you have a cluster configured, you can install {{site.prodname}}.
 
 {% tabs %}
