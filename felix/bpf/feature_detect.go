@@ -15,7 +15,9 @@
 package bpf
 
 import (
+	"fmt"
 	"io"
+	"io/ioutil"
 	"reflect"
 	"strconv"
 	"sync"
@@ -77,11 +79,9 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	// Get the versions.  If we fail to detect a version for some reason, we use a safe default.
 	log.Debug("Refreshing detected bpf features")
 
-	kerV := d.getKernelVersion()
-
 	// Calculate features.
 	features := Features{
-		IPIPDeviceIsL3: ipipDeviceIsL3(),
+		IPIPDeviceIsL3: d.ipipDeviceIsL3(),
 	}
 
 	for k, v := range d.featureOverride {
@@ -115,36 +115,55 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 
 	if d.featureCache == nil || *d.featureCache != features {
 		log.WithFields(log.Fields{
-			"features":      features,
-			"kernelVersion": kerV,
+			"features": features,
 		}).Info("Updating detected bpf features")
 		d.featureCache = &features
 	}
 }
 
-func (d *FeatureDetector) getKernelVersion() *versionparse.Version {
-	reader, err := d.GetKernelVersionReader()
+func (d *FeatureDetector) isAtLeastKernel(v *versionparse.Version) error {
+	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
-		log.WithError(err).Warn("Failed to get the kernel version reader, assuming old version with no optional features")
-		return v3Dot10Dot0
+		return fmt.Errorf("failed to get kernel version reader: %v", err)
 	}
-	kernVersion, err := versionparse.GetKernelVersion(reader)
+
+	kernelVersion, err := versionparse.GetKernelVersion(versionReader)
 	if err != nil {
-		log.WithError(err).Warn("Failed to get kernel version, assuming old version with no optional features")
-		return v3Dot10Dot0
+		return fmt.Errorf("failed to get kernel version: %v", err)
 	}
-	return kernVersion
+
+	if kernelVersion.Compare(v) < 0 {
+		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v)
+	}
+
+	return nil
 }
 
-func ipipDeviceIsL3() bool {
-	switch versionparse.GetDistributionName() {
+func (d *FeatureDetector) getDistributionName() string {
+	versionReader, err := d.GetKernelVersionReader()
+	if err != nil {
+		log.Errorf("failed to get kernel version reader: %v", err)
+		return "default"
+	}
+
+	kernVersion, err := ioutil.ReadAll(versionReader)
+	if err != nil {
+		log.WithError(err).Warn("Failed to read kernel version from reader")
+		return "default"
+	}
+
+	return versionparse.GetDistFromString(string(kernVersion))
+}
+
+func (d *FeatureDetector) ipipDeviceIsL3() bool {
+	switch d.getDistributionName() {
 	case "rhel":
-		if err := isAtLeastKernel(v4Dot18Dot0_330); err != nil {
+		if err := d.isAtLeastKernel(v4Dot18Dot0_330); err != nil {
 			return false
 		}
 		return true
 	default:
-		if err := isAtLeastKernel(v5Dot14Dot0); err != nil {
+		if err := d.isAtLeastKernel(v5Dot14Dot0); err != nil {
 			return false
 		}
 		return true
