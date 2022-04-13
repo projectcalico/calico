@@ -14,10 +14,14 @@
 
 package iptables
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/projectcalico/calico/felix/versionparse"
+)
 
 type Action interface {
-	ToFragment(features *Features) string
+	ToFragment(features *versionparse.Features) string
 }
 
 type Referrer interface {
@@ -29,7 +33,7 @@ type GotoAction struct {
 	TypeGoto struct{}
 }
 
-func (g GotoAction) ToFragment(features *Features) string {
+func (g GotoAction) ToFragment(features *versionparse.Features) string {
 	return "--goto " + g.Target
 }
 
@@ -48,7 +52,7 @@ type JumpAction struct {
 	TypeJump struct{}
 }
 
-func (g JumpAction) ToFragment(features *Features) string {
+func (g JumpAction) ToFragment(features *versionparse.Features) string {
 	return "--jump " + g.Target
 }
 
@@ -66,7 +70,7 @@ type ReturnAction struct {
 	TypeReturn struct{}
 }
 
-func (r ReturnAction) ToFragment(features *Features) string {
+func (r ReturnAction) ToFragment(features *versionparse.Features) string {
 	return "--jump RETURN"
 }
 
@@ -78,7 +82,7 @@ type DropAction struct {
 	TypeDrop struct{}
 }
 
-func (g DropAction) ToFragment(features *Features) string {
+func (g DropAction) ToFragment(features *versionparse.Features) string {
 	return "--jump DROP"
 }
 
@@ -90,7 +94,7 @@ type RejectAction struct {
 	TypeReject struct{}
 }
 
-func (g RejectAction) ToFragment(features *Features) string {
+func (g RejectAction) ToFragment(features *versionparse.Features) string {
 	return "--jump REJECT"
 }
 
@@ -103,7 +107,7 @@ type LogAction struct {
 	TypeLog struct{}
 }
 
-func (g LogAction) ToFragment(features *Features) string {
+func (g LogAction) ToFragment(features *versionparse.Features) string {
 	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, g.Prefix)
 }
 
@@ -115,7 +119,7 @@ type AcceptAction struct {
 	TypeAccept struct{}
 }
 
-func (g AcceptAction) ToFragment(features *Features) string {
+func (g AcceptAction) ToFragment(features *versionparse.Features) string {
 	return "--jump ACCEPT"
 }
 
@@ -129,7 +133,7 @@ type DNATAction struct {
 	TypeDNAT struct{}
 }
 
-func (g DNATAction) ToFragment(features *Features) string {
+func (g DNATAction) ToFragment(features *versionparse.Features) string {
 	if g.DestPort == 0 {
 		return fmt.Sprintf("--jump DNAT --to-destination %s", g.DestAddr)
 	} else {
@@ -146,7 +150,7 @@ type SNATAction struct {
 	TypeSNAT struct{}
 }
 
-func (g SNATAction) ToFragment(features *Features) string {
+func (g SNATAction) ToFragment(features *versionparse.Features) string {
 	fullyRand := ""
 	if features.SNATFullyRandom {
 		fullyRand = " --random-fully"
@@ -163,7 +167,7 @@ type MasqAction struct {
 	TypeMasq struct{}
 }
 
-func (g MasqAction) ToFragment(features *Features) string {
+func (g MasqAction) ToFragment(features *versionparse.Features) string {
 	fullyRand := ""
 	if features.MASQFullyRandom {
 		fullyRand = " --random-fully"
@@ -183,7 +187,7 @@ type ClearMarkAction struct {
 	TypeClearMark struct{}
 }
 
-func (c ClearMarkAction) ToFragment(features *Features) string {
+func (c ClearMarkAction) ToFragment(features *versionparse.Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark 0/%#x", c.Mark)
 }
 
@@ -196,7 +200,7 @@ type SetMarkAction struct {
 	TypeSetMark struct{}
 }
 
-func (c SetMarkAction) ToFragment(features *Features) string {
+func (c SetMarkAction) ToFragment(features *versionparse.Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mark)
 }
 
@@ -210,7 +214,7 @@ type SetMaskedMarkAction struct {
 	TypeSetMaskedMark struct{}
 }
 
-func (c SetMaskedMarkAction) ToFragment(features *Features) string {
+func (c SetMaskedMarkAction) ToFragment(features *versionparse.Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mask)
 }
 
@@ -222,7 +226,7 @@ type NoTrackAction struct {
 	TypeNoTrack struct{}
 }
 
-func (g NoTrackAction) ToFragment(features *Features) string {
+func (g NoTrackAction) ToFragment(features *versionparse.Features) string {
 	return "--jump NOTRACK"
 }
 
@@ -235,7 +239,7 @@ type SaveConnMarkAction struct {
 	TypeConnMark struct{}
 }
 
-func (c SaveConnMarkAction) ToFragment(features *Features) string {
+func (c SaveConnMarkAction) ToFragment(features *versionparse.Features) string {
 	var mask uint32
 	if c.SaveMask == 0 {
 		// If Mask field is ignored, save full mark.
@@ -255,7 +259,7 @@ type RestoreConnMarkAction struct {
 	TypeConnMark struct{}
 }
 
-func (c RestoreConnMarkAction) ToFragment(features *Features) string {
+func (c RestoreConnMarkAction) ToFragment(features *versionparse.Features) string {
 	var mask uint32
 	if c.RestoreMask == 0 {
 		// If Mask field is ignored, restore full mark.
@@ -276,7 +280,7 @@ type SetConnMarkAction struct {
 	TypeConnMark struct{}
 }
 
-func (c SetConnMarkAction) ToFragment(features *Features) string {
+func (c SetConnMarkAction) ToFragment(features *versionparse.Features) string {
 	var mask uint32
 	if c.Mask == 0 {
 		// If Mask field is ignored, default to full mark.

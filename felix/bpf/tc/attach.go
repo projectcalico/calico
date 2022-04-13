@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/versionparse"
 )
 
 type AttachPoint struct {
@@ -58,7 +59,7 @@ type AttachPoint struct {
 	PSNATEnd             uint16
 	IPv6Enabled          bool
 	MapSizes             map[string]uint32
-	Features             bpf.Features
+	Features             versionparse.Features
 }
 
 var tcLock sync.RWMutex

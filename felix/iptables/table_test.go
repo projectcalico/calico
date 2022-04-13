@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/versionparse"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,7 +44,7 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 			"OUTPUT":  {},
 		}, "legacy")
 		iptLock := &mockMutex{}
-		featureDetector := NewFeatureDetector(nil)
+		featureDetector := versionparse.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.newCmd
 		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table := NewTable(
@@ -75,7 +76,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 	var dataplane *mockDataplane
 	var table *Table
 	var iptLock *mockMutex
-	var featureDetector *FeatureDetector
+	var featureDetector *versionparse.FeatureDetector
 	BeforeEach(func() {
 		dataplane = newMockDataplane("filter", map[string][]string{
 			"FORWARD": {},
@@ -83,7 +84,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			"OUTPUT":  {},
 		}, dataplaneMode)
 		iptLock = &mockMutex{}
-		featureDetector = NewFeatureDetector(nil)
+		featureDetector = versionparse.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.newCmd
 		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table = NewTable(
@@ -966,7 +967,7 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
 		}
-		featureDetector := NewFeatureDetector(nil)
+		featureDetector := versionparse.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.newCmd
 		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table = NewTable(
@@ -1169,7 +1170,7 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 		if appendMode {
 			insertMode = "append"
 		}
-		featureDetector := NewFeatureDetector(nil)
+		featureDetector := versionparse.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.newCmd
 		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table = NewTable(
@@ -1592,7 +1593,7 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 			"non-calico": {"-m comment \"foo\""},
 		}, dataplaneMode)
 		iptLock = &mockMutex{}
-		featureDetector := NewFeatureDetector(nil)
+		featureDetector := versionparse.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.newCmd
 		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table = NewTable(
