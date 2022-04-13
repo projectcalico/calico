@@ -38,7 +38,7 @@ The following platforms using only IPv4:
   > **Note**: Some node operating systems do not support Wireguard, or do not have it installed by default. Enabling {{site.prodname}} Wireguard encryption does not require all nodes to be installed with Wireguard. However, traffic to or from a node that does not have Wireguard installed, will not be encrypted.
   {: .alert .alert-info}
 
-- IP addresses for every node in the cluster. This is required to establish secure tunnels between the nodes. {{site.prodname}} can automatically do this using [IP Setting]({{site.baseurl}}/reference/node/configuration#ip-setting) and [IP autodetection methods]({{site.baseurl}}/reference/node/configuration#ip-autodetection-methods) available under [calico/node]({{site.baseurl}}/reference/node/configuration) resource.
+- IP addresses for every node in the cluster. This is required to establish secure tunnels between the nodes. {{site.prodname}} can automatically do this using [IP autodetection methods]({{site.baseurl}}/networking/ip-autodetection).
 
 ### How to
 
