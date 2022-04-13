@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables
+package versionparse
 
 import (
 	"fmt"
@@ -32,6 +32,8 @@ type CmdIface interface {
 	StdoutPipe() (io.ReadCloser, error)
 	String() string
 }
+
+type CmdFactory func(name string, arg ...string) CmdIface
 
 func NewRealCmd(name string, arg ...string) CmdIface {
 	cmd := exec.Command(name, arg...)

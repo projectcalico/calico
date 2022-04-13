@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables
+package versionparse
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -25,8 +27,6 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/versionparse"
 )
 
 var (
@@ -34,19 +34,24 @@ var (
 
 	// iptables versions:
 	// v1Dot4Dot7 is the oldest version we've ever supported.
-	v1Dot4Dot7 = versionparse.MustParseVersion("1.4.7")
+	v1Dot4Dot7 = MustParseVersion("1.4.7")
 	// v1Dot6Dot0 added --random-fully to SNAT.
-	v1Dot6Dot0 = versionparse.MustParseVersion("1.6.0")
+	v1Dot6Dot0 = MustParseVersion("1.6.0")
 	// v1Dot6Dot2 added --random-fully to MASQUERADE and the xtables lock to iptables-restore.
-	v1Dot6Dot2 = versionparse.MustParseVersion("1.6.2")
+	v1Dot6Dot2 = MustParseVersion("1.6.2")
 
 	// Linux kernel versions:
 	// v3Dot10Dot0 is the oldest version we support at time of writing.
-	v3Dot10Dot0 = versionparse.MustParseVersion("3.10.0")
+	v3Dot10Dot0 = MustParseVersion("3.10.0")
 	// v3Dot14Dot0 added the random-fully feature on the iptables interface.
-	v3Dot14Dot0 = versionparse.MustParseVersion("3.14.0")
+	v3Dot14Dot0 = MustParseVersion("3.14.0")
 	// v5Dot7Dot0 contains a fix for checksum offloading.
-	v5Dot7Dot0 = versionparse.MustParseVersion("5.7.0")
+	v5Dot7Dot0 = MustParseVersion("5.7.0")
+	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels acts like other L3
+	// devices where bpf programs only see inner IP header. In RHEL based distros,
+	// kernel 4.18.0 (v4Dot18Dot0_330) is the first one with this behavior.
+	v5Dot14Dot0     = MustParseVersion("5.14.0")
+	v4Dot18Dot0_330 = MustParseVersion("4.18.0-330")
 )
 
 type Features struct {
@@ -61,6 +66,8 @@ type Features struct {
 	// ports. See https://github.com/projectcalico/calico/issues/3145.  On such kernels we disable checksum offload
 	// on our VXLAN device.
 	ChecksumOffloadBroken bool
+	// IPIPDeviceIsL3 represent if ipip tunnels acts like other l3 devices
+	IPIPDeviceIsL3 bool
 }
 
 type FeatureDetector struct {
@@ -71,13 +78,13 @@ type FeatureDetector struct {
 
 	// Path to file with kernel version
 	GetKernelVersionReader func() (io.Reader, error)
-	// Factory for making commands, used by UTs to shim exec.Command().
-	NewCmd cmdFactory
+	// Factory for making commands, used by iptables UTs to shim exec.Command().
+	NewCmd CmdFactory
 }
 
 func NewFeatureDetector(overrides map[string]string) *FeatureDetector {
 	return &FeatureDetector{
-		GetKernelVersionReader: versionparse.GetKernelVersionReader,
+		GetKernelVersionReader: GetKernelVersionReader,
 		NewCmd:                 NewRealCmd,
 		featureOverride:        overrides,
 	}
@@ -114,6 +121,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		MASQFullyRandom:       iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
 		RestoreSupportsLock:   iptV.Compare(v1Dot6Dot2) >= 0,
 		ChecksumOffloadBroken: kerV.Compare(v5Dot7Dot0) < 0,
+		IPIPDeviceIsL3:        d.ipipDeviceIsL3(),
 	}
 
 	for k, v := range d.featureOverride {
@@ -155,7 +163,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	}
 }
 
-func (d *FeatureDetector) getIptablesVersion() *versionparse.Version {
+func (d *FeatureDetector) getIptablesVersion() *Version {
 	cmd := d.NewCmd("iptables", "--version")
 	out, err := cmd.Output()
 	if err != nil {
@@ -170,7 +178,7 @@ func (d *FeatureDetector) getIptablesVersion() *versionparse.Version {
 			"Failed to parse iptables version, assuming old version with no optional features")
 		return v1Dot4Dot7
 	}
-	parsedVersion, err := versionparse.NewVersion(matches[1])
+	parsedVersion, err := NewVersion(matches[1])
 	if err != nil {
 		log.WithField("rawVersion", s).WithError(err).Warn(
 			"Failed to parse iptables version, assuming old version with no optional features")
@@ -180,13 +188,13 @@ func (d *FeatureDetector) getIptablesVersion() *versionparse.Version {
 	return parsedVersion
 }
 
-func (d *FeatureDetector) getKernelVersion() *versionparse.Version {
+func (d *FeatureDetector) getKernelVersion() *Version {
 	reader, err := d.GetKernelVersionReader()
 	if err != nil {
 		log.WithError(err).Warn("Failed to get the kernel version reader, assuming old version with no optional features")
 		return v3Dot10Dot0
 	}
-	kernVersion, err := versionparse.GetKernelVersion(reader)
+	kernVersion, err := GetKernelVersion(reader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to get kernel version, assuming old version with no optional features")
 		return v3Dot10Dot0
@@ -209,9 +217,9 @@ func countRulesInIptableOutput(in []byte) int {
 // https://github.com/kubernetes/kubernetes/blob/623b6978866b5d3790d17ff13601ef9e7e4f4bf0/build/debian-iptables/iptables-wrapper#L28
 // If there is a specifiedBackend then it is used but if it does not match the detected
 // backend then a warning is logged.
-func DetectBackend(lookPath func(file string) (string, error), newCmd cmdFactory, specifiedBackend string) string {
-	ip6LgcySave := findBestBinary(lookPath, 6, "legacy", "save")
-	ip4LgcySave := findBestBinary(lookPath, 4, "legacy", "save")
+func DetectBackend(lookPath func(file string) (string, error), newCmd CmdFactory, specifiedBackend string) string {
+	ip6LgcySave := FindBestBinary(lookPath, 6, "legacy", "save")
+	ip4LgcySave := FindBestBinary(lookPath, 4, "legacy", "save")
 	ip6l, _ := newCmd(ip6LgcySave).Output()
 	ip4l, _ := newCmd(ip4LgcySave).Output()
 	log.WithField("ip6l", string(ip6l)).Debug("Ip6tables legacy save out")
@@ -221,8 +229,8 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdFactory
 	if legacyLines >= 10 {
 		detectedBackend = "legacy"
 	} else {
-		ip6NftSave := findBestBinary(lookPath, 6, "nft", "save")
-		ip4NftSave := findBestBinary(lookPath, 4, "nft", "save")
+		ip6NftSave := FindBestBinary(lookPath, 6, "nft", "save")
+		ip4NftSave := FindBestBinary(lookPath, 4, "nft", "save")
 		ip6n, _ := newCmd(ip6NftSave).Output()
 		log.WithField("ip6n", string(ip6n)).Debug("Ip6tables save out")
 		ip4n, _ := newCmd(ip4NftSave).Output()
@@ -246,10 +254,10 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdFactory
 	return detectedBackend
 }
 
-// findBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
+// FindBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
 // of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
 // Panics if no binary can be found.
-func findBestBinary(lookPath func(file string) (string, error), ipVersion uint8, backendMode, saveOrRestore string) string {
+func FindBestBinary(lookPath func(file string) (string, error), ipVersion uint8, backendMode, saveOrRestore string) string {
 	if lookPath == nil {
 		lookPath = exec.LookPath
 	}
@@ -279,4 +287,52 @@ func findBestBinary(lookPath func(file string) (string, error), ipVersion uint8,
 
 	logCxt.Panic("Failed to find iptables command")
 	return ""
+}
+
+func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
+	versionReader, err := d.GetKernelVersionReader()
+	if err != nil {
+		return fmt.Errorf("failed to get kernel version reader: %v", err)
+	}
+
+	kernelVersion, err := GetKernelVersion(versionReader)
+	if err != nil {
+		return fmt.Errorf("failed to get kernel version: %v", err)
+	}
+
+	if kernelVersion.Compare(v) < 0 {
+		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v)
+	}
+
+	return nil
+}
+
+func (d *FeatureDetector) getDistributionName() string {
+	versionReader, err := d.GetKernelVersionReader()
+	if err != nil {
+		log.Errorf("failed to get kernel version reader: %v", err)
+		return DefaultDistro
+	}
+
+	kernVersion, err := ioutil.ReadAll(versionReader)
+	if err != nil {
+		log.WithError(err).Warn("Failed to read kernel version from reader")
+		return DefaultDistro
+	}
+	return GetDistFromString(string(kernVersion))
+}
+
+func (d *FeatureDetector) ipipDeviceIsL3() bool {
+	switch d.getDistributionName() {
+	case RedHat:
+		if err := d.isAtLeastKernel(v4Dot18Dot0_330); err != nil {
+			return false
+		}
+		return true
+	default:
+		if err := d.isAtLeastKernel(v5Dot14Dot0); err != nil {
+			return false
+		}
+		return true
+	}
 }

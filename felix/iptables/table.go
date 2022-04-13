@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/versionparse"
 )
 
 const (
@@ -189,7 +190,7 @@ type Table struct {
 	IPVersion uint8
 
 	// featureDetector detects the features of the dataplane.
-	featureDetector *FeatureDetector
+	featureDetector *versionparse.FeatureDetector
 
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
@@ -269,7 +270,7 @@ type Table struct {
 	restoreInputBuffer RestoreInputBuilder
 
 	// Factory for making commands, used by UTs to shim exec.Command().
-	newCmd cmdFactory
+	newCmd versionparse.CmdFactory
 	// Shims for time.XXX functions:
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
@@ -294,7 +295,7 @@ type TableOptions struct {
 	LockProbeInterval time.Duration
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
-	NewCmdOverride cmdFactory
+	NewCmdOverride versionparse.CmdFactory
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
@@ -312,7 +313,7 @@ func NewTable(
 	ipVersion uint8,
 	hashPrefix string,
 	iptablesWriteLock sync.Locker,
-	detector *FeatureDetector,
+	detector *versionparse.FeatureDetector,
 	options TableOptions,
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
@@ -367,7 +368,7 @@ func NewTable(
 	}
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
-	newCmd := NewRealCmd
+	newCmd := versionparse.NewRealCmd
 	if options.NewCmdOverride != nil {
 		newCmd = options.NewCmdOverride
 	}
@@ -448,8 +449,8 @@ func NewTable(
 		table.nftablesMode = true
 	}
 
-	table.iptablesRestoreCmd = findBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
-	table.iptablesSaveCmd = findBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
+	table.iptablesRestoreCmd = versionparse.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
+	table.iptablesSaveCmd = versionparse.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
 
 	return table
 }
@@ -1383,7 +1384,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	return strings.Replace(rule, "-A", "-D", 1), nil
 }
 
-func calculateRuleHashes(chainName string, rules []Rule, features *Features) []string {
+func calculateRuleHashes(chainName string, rules []Rule, features *versionparse.Features) []string {
 	chain := Chain{
 		Name:  chainName,
 		Rules: rules,

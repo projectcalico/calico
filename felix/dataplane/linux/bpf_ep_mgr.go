@@ -39,6 +39,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/versionparse"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
@@ -174,6 +175,9 @@ type bpfEndpointManager struct {
 
 	// IPv6 Support
 	ipv6Enabled bool
+
+	// Detected features
+	features *versionparse.Features
 }
 
 type bpfAllowChainRenderer interface {
@@ -232,6 +236,9 @@ func newBPFEndpointManager(
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
 		ipv6Enabled: config.BPFIpv6Enabled,
 	}
+
+	featureDetector := versionparse.NewFeatureDetector(config.FeatureDetectOverrides)
+	m.features = featureDetector.GetFeatures()
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
 	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
@@ -1009,6 +1016,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
+	ap.Features = *m.features
 
 	return ap
 }
