@@ -164,6 +164,7 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for step
 | BPFMapSizeIPSets / <br/> FELIX_BPFMapSizeIPSets | Controls the size of the IPSets map. The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors such as "all()" can result in large numbers of entries (one entry per endpoint in that case). | int | 1048576 |
 | BPFMapSizeRoute / <br/> FELIX_BPFMapSizeRoute | Controls the size of the route map. The routes map should be large enough to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and tunnel IPs). | int | 262144 |
 | BPFHostConntrackBypass / <br/> FELIX_BPFHostConntrackBypass | Controls whether to bypass Linux conntrack in BPF mode for workloads and services. | true,false | true |
+| FeatureDetectOverride / <br> FELIX_FEATUREDETECTOVERRIDE | Is used to override the feature detection. Values are specified in a comma separated list with no spaces, example; "IPIPDeviceIsL3=true". "true" or "false" will force the feature, empty or omitted values are auto-detected. | string | "" |
 
 #### Kubernetes-specific configuration
 
