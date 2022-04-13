@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -33,6 +34,7 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 	"k8s.io/client-go/rest"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
@@ -117,6 +119,9 @@ func loadConfig() config {
 }
 
 func Install() error {
+	// Configure logging before anything else.
+	logrus.SetFormatter(&logutils.Formatter{Component: "cni-installer"})
+
 	// Clean up any existing binaries / config / assets.
 	if err := os.Remove("/host/opt/cni/bin/calico"); err != nil && !os.IsNotExist(err) {
 		logrus.WithError(err).Warnf("Error removing old plugin")
@@ -193,8 +198,6 @@ func Install() error {
 			logrus.Infof("%s is not writeable, skipping", d)
 			continue
 		}
-		// Binaries were placed into at least one directory
-		binsWritten = true
 
 		// Iterate through each binary we might want to install.
 		files, err := ioutil.ReadDir("/opt/cni/bin/")
@@ -218,15 +221,19 @@ func Install() error {
 			logrus.Infof("Installed %s", target)
 		}
 
+		// Binaries were placed into at least one directory
 		logrus.Infof("Wrote Calico CNI binaries to %s\n", d)
+		binsWritten = true
 
-		// Print CNI plugin version
+		// Print CNI plugin version to confirm that the binary was actually written.
+		// If this fails, it means something has gone wrong so we should retry.
 		cmd := exec.Command(d+"/calico", "-v")
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		err = cmd.Run()
 		if err != nil {
-			logrus.WithError(err).Warnf("Failed getting CNI plugin version")
+			logrus.WithError(err).Warnf("Failed getting CNI plugin version from installed binary, exiting")
+			return err
 		}
 		logrus.Infof("CNI plugin version: %s", out.String())
 	}
@@ -420,6 +427,16 @@ func writeCNIConfig(c config) {
 
 // copyFileAndPermissions copies file permission
 func copyFileAndPermissions(src, dst string) (err error) {
+	// If the source and destination are the same, we can simply return.
+	equal, err := filesEqual(src, dst)
+	if err != nil {
+		return err
+	}
+	if equal {
+		logrus.WithField("file", dst).Info("File is already up to date, skipping")
+		return nil
+	}
+
 	// Make a temporary file at the destination.
 	dstTmp := fmt.Sprintf("%s.tmp", dst)
 	if err := cp.CopyFile(src, dstTmp); err != nil {
@@ -495,4 +512,73 @@ func setSuidBit(file string) error {
 	}
 
 	return nil
+}
+
+// filesEqual compares the bytes within the given files and returns
+// whether or not they contain exactly equal contents.
+func filesEqual(file1, file2 string) (bool, error) {
+	// First, compare the files sizes and modes. No point in comparing contents if they
+	// differ here.
+	f1info, err := os.Stat(file1)
+	if err != nil {
+		return false, err
+	}
+	f2info, err := os.Stat(file1)
+	if err != nil {
+		return false, err
+	}
+	if f1info.Size() != f2info.Size() {
+		return false, nil
+	}
+	if f1info.Mode() != f2info.Mode() {
+		return false, nil
+	}
+
+	// Files have the same exact size and mode, check the actual contents.
+	f1, err := os.Open(file1)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f1.Close()
+
+	f2, err := os.Open(file2)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f2.Close()
+
+	// Iterate the files until we reach the end. If we spot a difference,
+	// we know that the files are not the same. Otherwise, if we reach the
+	// end of the file before seeing a difference, the files are identical.
+	for {
+		b1 := make([]byte, 64000)
+		_, err1 := f1.Read(b1)
+
+		b2 := make([]byte, 64000)
+		_, err2 := f2.Read(b2)
+
+		if err1 != nil || err2 != nil {
+			if err1 == io.EOF && err2 == io.EOF {
+				// Reached the end of both files.
+				return true, nil
+			} else if err1 == io.EOF || err2 == io.EOF {
+				// Reached the end of one file, but not the other. They are different.
+				return false, nil
+			} else if err1 != nil {
+				// Other error - return it.
+				return false, err1
+			} else if err2 != nil {
+				// Other error - return it.
+				return false, err2
+			}
+		}
+
+		if !bytes.Equal(b1, b2) {
+			// The slice of bytes we read from each file are not equal.
+			return false, nil
+		}
+
+		// The slice of bytes we read from each file are equal. Loop again, checking the next
+		// slice of bytes.
+	}
 }
