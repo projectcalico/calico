@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables_test
+package detector_test
 
 import (
 	"bytes"
@@ -27,8 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/detector"
-	. "github.com/projectcalico/calico/felix/iptables"
+	. "github.com/projectcalico/calico/felix/detector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -87,7 +86,7 @@ func (d *mockDataplane) ResetCmds() {
 	d.CmdNames = nil
 }
 
-func (d *mockDataplane) newCmd(name string, arg ...string) detector.CmdIface {
+func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	log.WithFields(log.Fields{
 		"name":                   name,
 		"args":                   arg,
@@ -398,16 +397,6 @@ func (d *restoreCmd) Run() error {
 	return nil
 }
 
-func prependLine(src []string, line string) []string {
-	// Make space for the line - the value doesn't matter.
-	src = append(src, "")
-	// "Shift" the elements to the right
-	copy(src[1:], src[0:])
-
-	src[0] = line
-	return src
-}
-
 type saveCmd struct {
 	Dataplane  *mockDataplane
 	stdoutPipe *closableBuffer
@@ -593,4 +582,8 @@ func (b *closableBuffer) Close() error {
 	}
 	b.Closed = true
 	return b.CloseErr
+}
+
+func lookPathAll(p string) (string, error) {
+	return p, nil
 }

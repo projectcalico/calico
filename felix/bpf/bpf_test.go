@@ -31,8 +31,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/detector"
 	"github.com/projectcalico/calico/felix/labelindex"
-	"github.com/projectcalico/calico/felix/versionparse"
 )
 
 var (
@@ -765,9 +765,9 @@ func TestVersionParse(t *testing.T) {
 	}
 
 	versionStrTest := func(versionStr, distStr string, expected int) {
-		distName := versionparse.GetDistFromString(versionStr)
+		distName := detector.GetDistFromString(versionStr)
 		Expect(distName).To(Equal(distStr))
-		parsedVer, err := versionparse.GetVersionFromString(versionStr)
+		parsedVer, err := detector.GetVersionFromString(versionStr)
 		Expect(err).NotTo(HaveOccurred())
 		expVer := GetMinKernelVersionForDistro(distName)
 		Expect(parsedVer.Compare(expVer)).To(Equal(expected))
@@ -777,7 +777,7 @@ func TestVersionParse(t *testing.T) {
 	versionStrTest(rhelVersionStr, "rhel", 0)
 	versionStrTest(fedVersionStr, "default", 1)
 
-	// Tests to verify the compare function in versionparse
+	// Tests to verify the compare function in detector
 	tests := []comparisonTest{
 		{a: "4.18.0-193", b: "4.18.0-194", expected: -1},
 		{a: "4.18.0-193", b: "4.18.0-192", expected: 1},
@@ -789,8 +789,8 @@ func TestVersionParse(t *testing.T) {
 
 	for _, test := range tests {
 		t.Log("Comparing ", test.a, " to ", test.b)
-		ver1 := versionparse.MustParseVersion(test.a)
-		ver2 := versionparse.MustParseVersion(test.b)
+		ver1 := detector.MustParseVersion(test.a)
+		ver2 := detector.MustParseVersion(test.b)
 		Expect(ver1.Compare(ver2)).To(Equal(test.expected))
 	}
 }
