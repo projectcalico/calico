@@ -2,7 +2,7 @@ version: v1.0
 name: Publish official release
 agent:
   machine:
-    type: e1-standard-8
+    type: e1-standard-4
     os_image: ubuntu1804
 
 execution_time_limit:
@@ -18,8 +18,12 @@ blocks:
       - name: quay-robot-calico+semaphoreci
       - name: docker
       - name: oss-release-secrets
+      - name: google-service-account-for-gce
       prologue:
         commands:
+        # Load the github access secrets.  First fix the permissions.
+        - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
+        - ssh-add /home/semaphore/.keys/git_ssh_rsa
         # Checkout the code and unshallow it.
         - checkout
         - git fetch --unshallow
@@ -34,12 +38,18 @@ blocks:
         # Log in to container registries needed for release.
         - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
         - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
-        - cat ~/secrets/gcr-credentials.json | docker login -u _json_key --password-stdin https://gcr.io
-        - cat ~/secrets/gcr-credentials.json | docker login -u _json_key --password-stdin https://us.gcr.io
-        - cat ~/secrets/gcr-credentials.json | docker login -u _json_key --password-stdin https://eu.gcr.io
-        - cat ~/secrets/gcr-credentials.json | docker login -u _json_key --password-stdin https://asia.gcr.io
+        # Credentials for accessing gcloud, needed to create a GCP VM.
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       jobs:
-      - name: "Release"
+      - name: "Release on GCP VM"
+        env_vars:
+        - name: VAR_FILE
+          value: /home/semaphore/secrets/release.tfvars
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make release; fi
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make release-publish; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release-publish; fi
+      epilogue:
+        always:
+          commands:
+          - make VAR_FILE=/home/semaphore/secrets/release.tfvars -C hack/release destroy
