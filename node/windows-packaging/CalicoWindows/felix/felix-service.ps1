@@ -13,8 +13,7 @@
 # limitations under the License.
 
 # This script is run from the main Calico folder.
-# TODO: env vars will be set in the daemonset template spec.
-#. .\config.ps1
+. .\config.ps1
 
 ipmo .\libs\calico\calico.psm1 -Force
 
