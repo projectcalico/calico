@@ -4,6 +4,18 @@ description: Protect your etcd datastore by restricting operation permissions.
 canonical_url: '/reference/etcd-rbac/index'
 ---
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+This document does not apply to operator installations of Calico.
+
+%>
+
+  <label:Manifest>
+<%
+
+
 When using etcd it is a good idea to protect the data stored there. This is
 even more true when you have multiple components using a common etcd cluster.
 This set of tutorials guides you through the process of locking down and
@@ -53,3 +65,7 @@ that allow access to the appropriate data in etcd.
 4. Configure components. For example:
    - [Setting up Kubernetes with {{site.prodname}} utilizing etcd RBAC](kubernetes).
    - [Advanced Kubernetes set ups utilizing etcd RBAC](kubernetes-advanced).
+
+%>
+
+{% endtabs %}
