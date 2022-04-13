@@ -33,7 +33,64 @@ This is required to prevent Linux nodes from borrowing IP addresses from Windows
 calicoctl ipam configure --strictaffinity=true
 ```
 
-#### Install {{site.prodnameWindows}}
+#### Install {{site.prodnameWindows}} using DaemonSet
+
+> **Note**: This installation method is a tech preview and should not be used for production clusters. Upgrades a tech preview version of this
+> installation method to the GA version might not be seamless.
+{: .alert .alert-info}
+
+In addition to the [{{site.prodnameWindows}} requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements), this installation method uses [Windows HostProcess containers](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/) which requires:
+
+- Kubernetes v1.22+
+- HostProcess containers support enabled: for v1.22, HostProcess containers support has to be [enabled](https://v1-22.docs.kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#before-you-begin-version-check). For Kubernetes v1.23+, HostProcess containers are enabled by default.
+- ContainerD 1.6.1
+
+Before beginning, ensure that the Windows nodes have [joined the cluster](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/adding-windows-nodes/#joining-a-windows-worker-node).
+
+1. Download the {{site.prodnameWindows}} installation manifest.
+
+   ```bash
+   curl {{ "/manifests/calico-windows-vxlan.yaml" | absolute_url }} -O calico-windows.yaml
+   ```
+
+1. Get the cluster's Kubernetes API server host and port.
+
+   {% include content/kube-apiserver-host-port.md %}
+
+1. Edit the `calico-windows-config` configmap in the downloaded manifest and ensure the required variables are correct for your cluster:
+   - `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`: The Kubernetes API server host and port (discovered in the previous step).
+   - `K8S_SERVICE_CIDR`: The Kubernetes service clusterIP range configured in your cluster. This must match the service-cluster-ip-range used by kube-apiserver.
+   - `CNI_BIN_DIR`: Path where Calico CNI binaries will be installed. The this must match the CNI bin values in the ContainerD service configuration.
+   - `CNI_CONF_DIR`: Path where Calico CNI configuration will be installed. this must match the CNI conf values in the ContainerD service configuration.
+   - `DNS_NAME_SERVERS`: The DNS nameservers that will be used in the CNI configuration.
+
+1. Apply the {{site.prodnameWindows}} installation manifest.
+
+   ```bash
+   kubectl create -f calico-windows.yaml
+   ```
+
+1. Monitor the installation.
+
+   ```bash
+   kubectl logs -f -n calico-system -l k8s-app=calico-node-windows -c install
+   ```
+
+   Once the log `Calico for Windows installed` appears, installation is complete.
+   Next, the {{site.prodnameWindows}} services are started in separate containers:
+
+   ```bash
+   kubectl logs -f -n calico-system -l k8s-app=calico-node-windows -c node
+   kubectl logs -f -n calico-system -l k8s-app=calico-node-windows -c felix
+   ```
+
+1. Install kube-proxy
+
+   Depending on your platform, you may already have kube-proxy running. If it is not, you must install and run kube-proxy on each of the Windows nodes
+   in your cluster.
+
+
+#### Install {{site.prodnameWindows}} manually
 
 The following steps install a Kubernetes cluster on a single Windows node, with a Linux control node.
 
@@ -143,15 +200,15 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 1. Enable BGP service on Windows node (instead of VXLAN).
    Install the RemoteAccess service using the following Powershell commands:
-   
+
    ```powershell
    Install-WindowsFeature RemoteAccess
    Install-WindowsFeature RSAT-RemoteAccess-PowerShell
    Install-WindowsFeature Routing
    ```
-   
+
    Then restart the computer:
-   
+
    ```powershell
    Restart-Computer -Force
    ```
@@ -247,7 +304,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    kubectl create role calico-install-token --verb=get,list --resource=secrets --namespace calico-system
    kubectl create rolebinding calico-install-token --role=calico-install-token --user=system:node:<eks_node_name> --namespace calico-system
    ```
-  
+
 1. Prepare the directory for Kubernetes files on the Windows node.
 
    ```powershell
@@ -264,7 +321,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
    The PowerShell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
-   
+
    You do not need to pass a parameter if the default value of the parameter is correct for your cluster.
 
    **Kubernetes datastore (default)**
@@ -300,7 +357,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Get-Service -Name kubelet
    Get-Service -Name kube-proxy
    ```
-   
+
 1. If you installed temporary RBAC in the first step, remove the permissions by running the following commands.
    > **Note**: If you are using a non operator-managed {{site.prodname}} installation, replace the namespace `calico-system` with `kube-system` in the commands below.
    {: .alert .alert-info}
@@ -332,7 +389,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Name                                               State
    -------------------------------------------------  ----------
    Microsoft.ContainerService/EnableAKSWindowsCalico  Registered
-   ```   
+   ```
 
 1. Refresh the registration of the `Microsoft.ContainerService` resource provider. Execute the following command.
 
