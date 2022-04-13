@@ -27,8 +27,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/detector"
 	. "github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/versionparse"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -87,7 +87,7 @@ func (d *mockDataplane) ResetCmds() {
 	d.CmdNames = nil
 }
 
-func (d *mockDataplane) newCmd(name string, arg ...string) versionparse.CmdIface {
+func (d *mockDataplane) newCmd(name string, arg ...string) detector.CmdIface {
 	log.WithFields(log.Fields{
 		"name":                   name,
 		"args":                   arg,

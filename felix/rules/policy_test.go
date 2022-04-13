@@ -15,8 +15,8 @@
 package rules_test
 
 import (
+	"github.com/projectcalico/calico/felix/detector"
 	. "github.com/projectcalico/calico/felix/rules"
-	"github.com/projectcalico/calico/felix/versionparse"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -316,7 +316,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
-				s := ir.RenderAppend("test", "", &versionparse.Features{})
+				s := ir.RenderAppend("test", "", &detector.Features{})
 				rendered = append(rendered, s)
 			}
 			Expect(rendered).To(Equal(expected))
@@ -432,7 +432,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
-				s := ir.RenderAppend("test", "", &versionparse.Features{})
+				s := ir.RenderAppend("test", "", &detector.Features{})
 				rendered = append(rendered, s)
 			}
 			Expect(rendered).To(Equal(expected))

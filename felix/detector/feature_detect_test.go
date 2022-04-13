@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package versionparse_test
+package detector_test
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/calico/felix/versionparse"
+	. "github.com/projectcalico/calico/felix/detector"
 )
 
 func TestFeatureDetection(t *testing.T) {
