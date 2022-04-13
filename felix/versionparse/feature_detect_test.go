@@ -465,28 +465,32 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 4.18.0 - Red Hat",
 			Features{
-				IPIPDeviceIsL3: false,
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 4.18.0-330 - Red Hat",
 			Features{
-				IPIPDeviceIsL3: true,
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 4.18.0-420 - Red hat",
 			Features{
-				IPIPDeviceIsL3: true,
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 4.17.0 - el8_3",
 			Features{
-				IPIPDeviceIsL3: true,
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "true",
@@ -495,7 +499,8 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 4.18.0-330 - el8_5",
 			Features{
-				IPIPDeviceIsL3: false,
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -504,7 +509,8 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 4.18.0-390 - el9_7",
 			Features{
-				IPIPDeviceIsL3: false,
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
