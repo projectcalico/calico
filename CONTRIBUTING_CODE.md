@@ -62,10 +62,28 @@ Once your reviewer agrees the patch is valid for cherry-picking, perform the fol
 1. Notify your original reviewer on the PR.
 1. Once your PR is merged, remove the `cherry-pick-candidate` label from the original PR and replace it with `cherry-pick-completed`.
 
-### Release notes
+### Release notes and documentation
 
-Some PRs warrant release notes. These are typically important bug fixes or new features that users may be interested in. If unsure if your PR warrants
+Most PRs warrant release notes - any bug fixes or new features that users may be interested in. If you are unsure if your PR warrants
 a release note in the description, ask your reviewer.
+
+You or your reviewer should make sure that your PR has the correct labels and milestone set.
+
+Every PR needs one `docs-*` label.
+
+- `docs-pr-required`: This change requires a change to the documentation that has not been completed yet.
+- `docs-completed`: This change has all necessary documentation completed.
+- `docs-not-required`: This change has no user-facing impact and requires no docs.
+
+Every PR needs one `release-note-*` label.
+
+- `release-note-required`: This PR has user-facing changes. Most PRs should have this label.
+- `release-note-not-required`: This PR has no user-facing changes.
+
+Other optional labels:
+
+- `cherry-pick-candidate`: This PR should be cherry-picked to an earlier release. For bug fixes only.
+- `needs-operator-pr`: This PR is related to install and requires a corresponding change to the operator.
 
 ## Contributor Agreements
 
