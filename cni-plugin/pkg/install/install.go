@@ -428,11 +428,11 @@ func writeCNIConfig(c config) {
 // copyFileAndPermissions copies file permission
 func copyFileAndPermissions(src, dst string) (err error) {
 	// If the source and destination are the same, we can simply return.
-	equal, err := filesEqual(src, dst)
+	skip, err := destinationUptoDate(src, dst)
 	if err != nil {
 		return err
 	}
-	if equal {
+	if skip {
 		logrus.WithField("file", dst).Info("File is already up to date, skipping")
 		return nil
 	}
@@ -514,19 +514,31 @@ func setSuidBit(file string) error {
 	return nil
 }
 
-// filesEqual compares the bytes within the given files and returns
-// whether or not they contain exactly equal contents.
-func filesEqual(file1, file2 string) (bool, error) {
-	// First, compare the files sizes and modes. No point in comparing contents if they
-	// differ here.
-	f1info, err := os.Stat(file1)
-	if err != nil {
+// destinationUptoDate compares the given files and returns
+// whether or not the destination file needs to be updated with the
+// contents of the source file.
+func destinationUptoDate(src, dst string) (bool, error) {
+	// Stat the src file.
+	f1info, err := os.Stat(src)
+	if os.IsNotExist(err) {
+		// If the source file doesn't exist, that's an unrecoverable problem.
+		return false, err
+	} else if err != nil {
 		return false, err
 	}
-	f2info, err := os.Stat(file1)
-	if err != nil {
+
+	// Stat the dst file.
+	f2info, err := os.Stat(src)
+	if os.IsNotExist(err) {
+		// If the destination file doesn't exist, it means the
+		// two files are not equal.
+		return false, nil
+	} else if err != nil {
 		return false, err
 	}
+
+	// First, compare the files sizes and modes. No point in comparing
+	// file contents if they differ in size or file mode.
 	if f1info.Size() != f2info.Size() {
 		return false, nil
 	}
@@ -535,13 +547,13 @@ func filesEqual(file1, file2 string) (bool, error) {
 	}
 
 	// Files have the same exact size and mode, check the actual contents.
-	f1, err := os.Open(file1)
+	f1, err := os.Open(src)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer f1.Close()
 
-	f2, err := os.Open(file2)
+	f2, err := os.Open(dst)
 	if err != nil {
 		log.Fatal(err)
 	}
