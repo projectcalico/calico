@@ -149,6 +149,48 @@ func (r *ReleaseBuilder) PublishRelease() error {
 	return nil
 }
 
+func (r *ReleaseBuilder) NewBranch() error {
+	// Check that we're on the master branch. We always cut branches from master.
+	branch := r.determineBranch()
+	if branch != "master" {
+		return fmt.Errorf("Release branches can only be cut from master")
+	}
+
+	// Determine the version for the branch. We can get this from the previous dev tag.
+	out, err := r.git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to git describe")
+	}
+	logrus.WithField("out", out).Info("Current git describe")
+	if !strings.Contains(out, "-0.dev") {
+		return fmt.Errorf("Unable to determine release branch name from tag: %s", out)
+	}
+
+	// Determine the name of the new branch.
+	nextBranchVersion := strings.Split(out, "-0.dev")[0]
+	sv, err := semver.NewVersion(strings.TrimPrefix(nextBranchVersion, "v"))
+	branchName := fmt.Sprintf("release-v%d.%d", sv.Major, sv.Minor)
+	logrus.WithField("branch", branchName).Info("Next release branch")
+
+	// Determine the next -0.dev tag.
+	nextVersion := fmt.Sprintf("v%d.%d.0", sv.Major, sv.Minor+1)
+	newDevTag := fmt.Sprintf("%s-0.dev", nextVersion)
+	logrus.WithField("tag", newDevTag).Info("Next dev tag")
+
+	// Create a new branch from the current master.
+	r.gitOrFail("checkout", "-b", branchName)
+	r.gitOrFail("push", origin, branchName)
+
+	// Create the new dev tag on master and push it.
+	r.gitOrFail("checkout", "master")
+	r.gitOrFail("commit", "--allow-empty", "-m", fmt.Sprintf("Begin development on %s", nextVersion))
+	r.gitOrFail("tag", newDevTag)
+	r.gitOrFail("push", origin, "master")
+	r.gitOrFail("push", origin, newDevTag)
+
+	return nil
+}
+
 // Check general prerequisites for cutting and publishing a release.
 func (r *ReleaseBuilder) releasePrereqs() error {
 	// Check that we're not on the master branch. We never cut releases from master.
@@ -204,8 +246,11 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 
-	// Add in the already-buily windows zip archive and helm chart.
+	// Add in the already-built windows zip archive, the Windows install script, and the helm chart.
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
+		return err
+	}
+	if _, err := r.runner.Run("cp", []string{"calico/_site/scripts/install-calico-windows.ps1", uploadDir}, nil); err != nil {
 		return err
 	}
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
@@ -353,7 +398,7 @@ Attached to this release are the following artifacts:
 		ver,
 		r.uploadDir(ver),
 	}
-	_, err = r.runner.Run("ghr", args, nil)
+	_, err = r.runner.Run("./hack/release/ghr", args, nil)
 	return err
 }
 
@@ -445,6 +490,13 @@ func (r *ReleaseBuilder) archiveContainerImage(out, image string) error {
 
 func (r *ReleaseBuilder) git(args ...string) (string, error) {
 	return r.runner.Run("git", args, nil)
+}
+
+func (r *ReleaseBuilder) gitOrFail(args ...string) {
+	_, err := r.runner.Run("git", args, nil)
+	if err != nil {
+		logrus.WithError(err).Fatal("git command failed")
+	}
 }
 
 func (r *ReleaseBuilder) makeInDirectory(dir, target string, env ...string) error {
