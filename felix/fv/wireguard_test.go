@@ -124,7 +124,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			routeEntries[i] = fmt.Sprintf("10.65.%d.0/26 dev %s scope link", i, wireguardInterfaceNameDefault)
 
 			wgBootstrapEvents = felixes[i].WatchStdoutFor(
-				regexp.MustCompile(".*Cleared WireGuard public key from datastore.+"),
+				regexp.MustCompile(".*(Cleared wireguard public key from datastore|Wireguard public key not set in datastore).+"),
 			)
 			felixes[i].TriggerDelayedStart()
 		}
@@ -151,6 +151,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				felix.Exec("ip", "route", "show", "table", "all")
 				felix.Exec("ip", "route", "show", "cached")
 				felix.Exec("wg")
+				felix.Exec("wg", "show", "all", "private-key")
 			}
 		}
 

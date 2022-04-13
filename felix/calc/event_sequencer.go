@@ -956,14 +956,14 @@ func (buf *EventSequencer) flushServices() {
 			Name:      id.Name,
 			Namespace: id.Namespace,
 		}
-		buf.Callback(&msg)
+		buf.Callback(msg)
 		buf.sentServices.Discard(id)
 		return nil
 	})
 	buf.pendingServiceDeletes.Clear()
 	for _, msg := range buf.pendingServiceUpdates {
 		buf.Callback(msg)
-		id := &proto.ServiceRemove{
+		id := serviceID{
 			Name:      msg.Name,
 			Namespace: msg.Namespace,
 		}

@@ -187,6 +187,7 @@ type Config struct {
 	BPFMapSizeConntrack                int              `config:"int;512000;non-zero"`
 	BPFMapSizeIPSets                   int              `config:"int;1048576;non-zero"`
 	BPFHostConntrackBypass             bool             `config:"bool;true"`
+	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict);Strict;non-zero"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but hte root cgroup v2 from working so this is only useful
@@ -231,6 +232,7 @@ type Config struct {
 	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
 	InterfaceRefreshInterval           time.Duration     `config:"seconds;90"`
 	DeviceRouteSourceAddress           net.IP            `config:"ipv4;"`
+	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;90"`
@@ -283,6 +285,9 @@ type Config struct {
 	IpInIpEnabled    *bool  `config:"*bool;"`
 	IpInIpMtu        int    `config:"int;0"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
+
+	// Feature enablement. Can be either "Enabled" or "Disabled".
+	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
 
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
 	// from workloads. We always add them unless explicitly requested not to add them.
@@ -774,6 +779,8 @@ func loadParams() {
 				Msg: "invalid URL authority"}
 		case "ipv4":
 			param = &Ipv4Param{}
+		case "ipv6":
+			param = &Ipv6Param{}
 		case "endpoint-list":
 			param = &EndpointListParam{}
 		case "port-list":

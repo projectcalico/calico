@@ -137,6 +137,7 @@ type Config struct {
 	IPSetsRefreshInterval          time.Duration
 	RouteRefreshInterval           time.Duration
 	DeviceRouteSourceAddress       net.IP
+	DeviceRouteSourceAddressIPv6   net.IP
 	DeviceRouteProtocol            netlink.RouteProtocol
 	RemoveExternalRoutes           bool
 	IptablesRefreshInterval        time.Duration
@@ -146,6 +147,8 @@ type Config struct {
 	IptablesLockTimeout            time.Duration
 	IptablesLockProbeInterval      time.Duration
 	XDPRefreshInterval             time.Duration
+
+	FloatingIPsEnabled bool
 
 	Wireguard wireguard.Config
 
@@ -191,6 +194,7 @@ type Config struct {
 	BPFMapSizeIPSets                   int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
+	BPFEnforceRPF                      string
 	KubeProxyMinSyncPeriod             time.Duration
 
 	SidecarAccelerationEnabled bool
@@ -570,9 +574,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
 		config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeRoute, config.BPFMapSizeConntrack, config.BPFMapRepin)
 
-	var (
-		bpfEndpointManager *bpfEndpointManager
-	)
+	var bpfEndpointManager *bpfEndpointManager
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
@@ -696,10 +698,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		config.BPFEnabled,
 		bpfEndpointManager,
-		callbacks)
+		callbacks,
+		config.FloatingIPsEnabled,
+	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
-	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
+	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
 		// Add a manager to keep the all-hosts IP set up to date.
@@ -806,8 +810,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			config.BPFEnabled,
 			nil,
-			callbacks))
-		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
+			callbacks,
+			config.FloatingIPsEnabled,
+		))
+		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
 	}
@@ -1360,62 +1366,14 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	}
 
 	for _, t := range d.iptablesRawTables {
-		// Do not RPF check what is marked as to be skipped by RPF check.
-		rpfRules := []iptables.Rule{{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
-			Action: iptables.ReturnAction{},
-		}}
-
-		// For anything we approved for forward, permit accept_local as it is
-		// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
-		rpfRules = append(rpfRules, iptables.Rule{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
-			Action: iptables.ReturnAction{},
-		})
-
-		// Do the full RPF check and dis-allow accept_local for anything else.
-		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
-			rulesConfig.OpenStackSpecialCasesEnabled, false)...)
-
-		rpfChain := []*iptables.Chain{{
-			Name:  rules.ChainNamePrefix + "RPF",
-			Rules: rpfRules,
-		}}
-		t.UpdateChains(rpfChain)
-
-		var rawRules []iptables.Rule
-		if t.IPVersion == 4 && rulesConfig.WireguardEnabled && len(rulesConfig.WireguardInterfaceName) > 0 &&
-			d.config.Wireguard.EncryptHostTraffic {
-			// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
-			// check allows it.
-			log.Debug("Adding Wireguard iptables rule chain")
-			rawRules = append(rawRules, iptables.Rule{
-				Match:  nil,
-				Action: iptables.JumpAction{Target: rules.ChainSetWireguardIncomingMark},
-			})
-			t.UpdateChain(d.ruleRenderer.WireguardIncomingMarkChain())
-		}
-
-		rawRules = append(rawRules, iptables.Rule{
-			Action: iptables.JumpAction{Target: rpfChain[0].Name},
-		})
-
-		rawChains := []*iptables.Chain{{
-			Name:  rules.ChainRawPrerouting,
-			Rules: rawRules,
-		}}
-		t.UpdateChains(rawChains)
-
+		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion,
+			d.config.Wireguard.EncryptHostTraffic, d.config.BPFHostConntrackBypass,
+			d.config.BPFEnforceRPF == "Strict",
+		))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
-
 		if t.IPVersion == 4 {
-			// Iptables for untracked policy.
-			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass), d.config.BPFHostConntrackBypass))
-			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
-				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
-			}})
 			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
 			}})
@@ -2067,9 +2025,7 @@ func (d *InternalDataplane) reportHealth() {
 type dummyLock struct{}
 
 func (d dummyLock) Lock() {
-
 }
 
 func (d dummyLock) Unlock() {
-
 }

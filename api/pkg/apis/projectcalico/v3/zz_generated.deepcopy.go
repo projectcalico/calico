@@ -1176,6 +1176,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(AWSSrcDstCheckOption)
 		**out = **in
 	}
+	if in.FloatingIPs != nil {
+		in, out := &in.FloatingIPs, &out.FloatingIPs
+		*out = new(FloatingIPType)
+		**out = **in
+	}
 	return
 }
 

@@ -8,6 +8,8 @@ This guide is broken into the following main sections:
 - [Deploying your code on Kubernetes](#deploying-your-code-on-kubernetes)
 - [Running automated tests](#running-automated-tests)
 
+Additional developer docs can be found in [hack/docs](hack/docs).
+
 ## Prerequisites:
 
 These build instructions assume you have a Linux build environment
