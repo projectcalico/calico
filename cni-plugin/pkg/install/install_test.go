@@ -60,7 +60,7 @@ var expectedAlternateConfig string = `{
 }`
 
 // runCniContainer will run the install binary within the CNI container.
-func runCniContainer(tempDir string, extraArgs ...string) error {
+func runCniContainer(tempDir string, binFolderWriteable bool, extraArgs ...string) error {
 	name := "cni"
 
 	// Ensure the install cni container was not left over from another run.
@@ -72,13 +72,17 @@ func runCniContainer(tempDir string, extraArgs ...string) error {
 	}
 
 	// Assemble our arguments.
+	binFolder := "/host/opt/cni/bin"
+	if !binFolderWriteable {
+		binFolder += ":ro"
+	}
 	args := []string{
 		"run", "--rm", "--name", name,
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=6443",
 		"-e", "KUBERNETES_NODE_NAME=my-node",
-		"-v", tempDir + "/bin:/host/opt/cni/bin",
+		"-v", tempDir + "/bin:" + binFolder,
 		"-v", tempDir + "/net.d:/host/etc/cni/net.d",
 		"-v", tempDir + "/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
 	}
@@ -158,7 +162,7 @@ PuB/TL+u2y+iQUyXxLy3
 
 	Context("Install with default values", func() {
 		It("Should install bins and config", func() {
-			err := runCniContainer(tempDir)
+			err := runCniContainer(tempDir, true)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get a list of files in the default CNI bin location.
@@ -182,20 +186,45 @@ PuB/TL+u2y+iQUyXxLy3
 		})
 
 		It("Should parse and output a templated config", func() {
-			err := runCniContainer(tempDir)
+			err := runCniContainer(tempDir, true)
 			Expect(err).NotTo(HaveOccurred())
 			expectFileContents(tempDir+"/net.d/10-calico.conflist", expectedDefaultConfig)
 		})
 	})
 
+	It("should fail on read-only folder install", func() {
+		err := runCniContainer(tempDir, false)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should not fail on one of the folders being read-only", func() {
+		err := runCniContainer(tempDir, false, "-v", tempDir+"/secondary-bin-dir:/host/secondary-bin-dir")
+		Expect(err).NotTo(HaveOccurred())
+
+		files, err := ioutil.ReadDir(tempDir + "/secondary-bin-dir")
+		Expect(err).NotTo(HaveOccurred())
+
+		names := []string{}
+		for _, file := range files {
+			names = append(names, file.Name())
+		}
+		Expect(names).To(ContainElement("calico"))
+		Expect(names).To(ContainElement("calico-ipam"))
+	})
+
+	It("should fail when no directory is writeable", func() {
+		err := runCniContainer(tempDir, false, "-v", tempDir+"/secondary-bin-dir:/host/secondary-bin-dir:ro")
+		Expect(err).To(HaveOccurred())
+	})
+
 	It("should support CNI_CONF_NAME", func() {
-		err := runCniContainer(tempDir, "-e", "CNI_CONF_NAME=20-calico.conflist")
+		err := runCniContainer(tempDir, true, "-e", "CNI_CONF_NAME=20-calico.conflist")
 		Expect(err).NotTo(HaveOccurred())
 		expectFileContents(tempDir+"/net.d/20-calico.conflist", expectedDefaultConfig)
 	})
 
 	It("should support a custom CNI_NETWORK_CONFIG", func() {
-		err := runCniContainer(tempDir, "-e", "CNI_NETWORK_CONFIG={}")
+		err := runCniContainer(tempDir, true, "-e", "CNI_NETWORK_CONFIG={}")
 		Expect(err).NotTo(HaveOccurred())
 		actual, err := ioutil.ReadFile(tempDir + "/net.d/10-calico.conflist")
 		Expect(err).NotTo(HaveOccurred())
@@ -203,7 +232,7 @@ PuB/TL+u2y+iQUyXxLy3
 	})
 
 	It("should check if the custom CNI_NETWORK_CONFIG is valid json", func() {
-		err := runCniContainer(tempDir, "-e", "CNI_NETWORK_CONFIG={\"missing quote}")
+		err := runCniContainer(tempDir, true, "-e", "CNI_NETWORK_CONFIG={\"missing quote}")
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -214,7 +243,7 @@ PuB/TL+u2y+iQUyXxLy3
 		err := ioutil.WriteFile(altConfigFile, []byte(expectedAlternateConfig), 0755)
 		Expect(err).NotTo(HaveOccurred())
 		err = runCniContainer(
-			tempDir,
+			tempDir, true,
 			"-e", "CNI_NETWORK_CONFIG='oops, I used the CNI_NETWORK_CONFIG'",
 			"-e", "CNI_NETWORK_CONFIG_FILE=/host/etc/cni/net.d/alternate-config",
 		)
@@ -224,7 +253,7 @@ PuB/TL+u2y+iQUyXxLy3
 
 	It("should copy even if plugin is opened", func() {
 		// Install the CNI plugin.
-		err := runCniContainer(tempDir)
+		err := runCniContainer(tempDir, true)
 		Expect(err).NotTo(HaveOccurred())
 
 		done := make(chan bool)
@@ -244,7 +273,7 @@ PuB/TL+u2y+iQUyXxLy3
 		}()
 
 		// Install the CNI plugin again. It should succeed.
-		err = runCniContainer(tempDir)
+		err = runCniContainer(tempDir, true)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -258,7 +287,7 @@ PuB/TL+u2y+iQUyXxLy3
 		It("Should not crash or copy when having a hidden file", func() {
 			err = ioutil.WriteFile(tempDir+"/certs/.hidden", []byte("doesn't matter"), 0644)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
-			err = runCniContainer(tempDir, "-v", tempDir+"/certs:/calico-secrets")
+			err = runCniContainer(tempDir, true, "-v", tempDir+"/certs:/calico-secrets")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = os.Open(tempDir + "/net.d/calico-tls/.hidden")
 			Expect(err).To(HaveOccurred())
@@ -266,7 +295,7 @@ PuB/TL+u2y+iQUyXxLy3
 		It("Should copy a non-hidden file", func() {
 			err = ioutil.WriteFile(tempDir+"/certs/etcd-cert", []byte("doesn't matter"), 0644)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-			err = runCniContainer(tempDir, "-v", tempDir+"/certs:/calico-secrets", "-e", "CNI_NETWORK_CONFIG={\"etcd_cert\": \"__ETCD_CERT_FILE__\"}")
+			err = runCniContainer(tempDir, true, "-v", tempDir+"/certs:/calico-secrets", "-e", "CNI_NETWORK_CONFIG={\"etcd_cert\": \"__ETCD_CERT_FILE__\"}")
 			Expect(err).NotTo(HaveOccurred())
 			file, err := os.Open(tempDir + "/net.d/calico-tls/etcd-cert")
 			Expect(err).NotTo(HaveOccurred())
