@@ -54,9 +54,7 @@ var _ = Describe("RouteTable v6", func() {
 	BeforeEach(func() {
 		dataplane = mocknetlink.New()
 		t = mocktime.New()
-		// Setting an auto-increment greater than the route cleanup delay effectively
-		// disables the grace period for these tests.
-		t.SetAutoIncrement(11 * time.Second)
+		// No grace period set, so invalid routes should be deleted immediately on apply.
 		rt = NewWithShims(
 			[]string{"^cali.*"},
 			6,
@@ -93,10 +91,22 @@ var _ = Describe("RouteTable v6", func() {
 		})
 		dataplane.AddMockRoute(&noopRoute)
 
+		// Route that should be deleted.
+		deleteLink := dataplane.AddIface(5, "cali5", true, true)
+		deleteRoute := netlink.Route{
+			LinkIndex: deleteLink.LinkAttrs.Index,
+			Dst:       mustParseCIDR("10.0.0.1/32"),
+			Type:      syscall.RTN_UNICAST,
+			Protocol:  FelixRouteProtocol,
+			Scope:     netlink.SCOPE_LINK,
+		}
+		dataplane.AddMockRoute(&deleteRoute)
+
 		err := rt.Apply()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dataplane.DeletedRouteKeys).ToNot(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
 		Expect(dataplane.UpdatedRouteKeys).ToNot(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
+		Expect(dataplane.DeletedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&deleteRoute)))
 	})
 })
 
@@ -125,6 +135,7 @@ var _ = Describe("RouteTable", func() {
 			true,
 			0,
 			logutils.NewSummarizer("test"),
+			WithRouteCleanupGracePeriod(10*time.Second),
 		)
 	})
 
@@ -999,6 +1010,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			true,
 			0,
 			logutils.NewSummarizer("test"),
+			WithRouteCleanupGracePeriod(10*time.Second),
 		)
 	})
 
@@ -1098,6 +1110,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			true,
 			100,
 			logutils.NewSummarizer("test"),
+			WithRouteCleanupGracePeriod(10*time.Second),
 		)
 	})
 
