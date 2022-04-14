@@ -992,7 +992,6 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	return []*Chain{
 		r.failsafeInChain("raw", ipVersion),
 		r.failsafeOutChain("raw", ipVersion),
-		r.rpfSkipChainInit(),
 		r.StaticRawPreroutingChain(ipVersion),
 		r.WireguardIncomingMarkChain(),
 		r.StaticRawOutputChain(0),
@@ -1278,13 +1277,6 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *Chain {
 	return &Chain{
 		Name:  ChainSetWireguardIncomingMark,
 		Rules: rules,
-	}
-}
-
-func (r *DefaultRuleRenderer) rpfSkipChainInit() *Chain {
-	return &Chain{
-		Name:  ChainRpfSkip,
-		Rules: []Rule{},
 	}
 }
 

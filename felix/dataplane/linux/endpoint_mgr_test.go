@@ -547,6 +547,15 @@ func chainsForIfaces(ifaceMetadata []string,
 		)
 	}
 
+	if tableKind == "untracked" {
+		chains = append(chains,
+			&iptables.Chain{
+				Name:  rules.ChainRpfSkip,
+				Rules: []iptables.Rule{},
+			},
+		)
+	}
+
 	if tableKind == "preDNAT" {
 		chains = append(chains,
 			&iptables.Chain{
@@ -811,6 +820,10 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 				rawTable.checkChains([][]*iptables.Chain{
 					hostDispatchEmptyNormal,
+					[]*iptables.Chain{{
+						Name:  "cali-rpf-skip",
+						Rules: []iptables.Rule{},
+					}},
 				})
 				mangleTable.checkChains([][]*iptables.Chain{
 					fromHostDispatchEmpty,

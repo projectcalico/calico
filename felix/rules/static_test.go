@@ -477,12 +477,8 @@ var _ = Describe("Static", func() {
 					It("Should return expected raw failsafe out chain", func() {
 						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-out")).To(Equal(expRawFailsafeOut))
 					})
-					It("Should initialize raw rpf skip chain with no rules", func() {
-						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-rpf-skip")).To(Equal(&Chain{
-							Name: ChainRpfSkip, Rules: []Rule{}}))
-					})
 					It("should return only the expected raw chains", func() {
-						Expect(len(rr.StaticRawTableChains(ipVersion))).To(Equal(6))
+						Expect(len(rr.StaticRawTableChains(ipVersion))).To(Equal(5))
 					})
 				})
 			}
