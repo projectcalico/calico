@@ -2445,6 +2445,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange"),
 						},
 					},
+					"routeSyncDisabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RouteSyncDisabled will disable all operations performed on the route table. Set to true to run in network-policy mode only.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"wireguardEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WireguardEnabled controls whether Wireguard is enabled. [Default: false]",

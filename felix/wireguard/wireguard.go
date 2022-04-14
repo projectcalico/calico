@@ -152,7 +152,7 @@ type Wireguard struct {
 	cidrToNodeName map[ip.CIDR]string
 
 	// Wireguard routing table and rule managers
-	routetable *routetable.RouteTable
+	routetable routeTable
 	routerule  *routerule.RouteRules
 
 	// Callback function used to notify of public key updates for the local nodeData
@@ -197,22 +197,31 @@ func NewWithShims(
 	statusCallback func(publicKey wgtypes.Key) error,
 	opRecorder logutils.OpRecorder,
 ) *Wireguard {
+
+	var rt routeTable
+	if !config.RouteSyncDisabled {
+		log.Debug("RouteSyncDisabled is false.")
+		rt = routetable.NewWithShims(
+			[]string{"^" + config.InterfaceName + "$", routetable.InterfaceNone},
+			ipVersion,
+			newRoutetableNetlink,
+			false, // vxlan
+			netlinkTimeout,
+			func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
+			&noOpConnTrack{},
+			timeShim,
+			nil, // deviceRouteSourceAddress
+			deviceRouteProtocol,
+			true, // removeExternalRoutes
+			config.RoutingTableIndex,
+			opRecorder,
+		)
+	} else {
+		log.Info("RouteSyncDisabled is true, using DummyTable.")
+		rt = &routetable.DummyTable{}
+	}
 	// Create routetable. We provide dummy callbacks for ARP and conntrack processing.
-	rt := routetable.NewWithShims(
-		[]string{"^" + config.InterfaceName + "$", routetable.InterfaceNone},
-		ipVersion,
-		newRoutetableNetlink,
-		false, // vxlan
-		netlinkTimeout,
-		func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
-		&noOpConnTrack{},
-		timeShim,
-		nil, // deviceRouteSourceAddress
-		deviceRouteProtocol,
-		true, // removeExternalRoutes
-		config.RoutingTableIndex,
-		opRecorder,
-	)
+
 	// Create routerule.
 	rr, err := routerule.New(
 		ipVersion,
