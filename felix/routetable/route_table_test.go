@@ -71,6 +71,7 @@ var _ = Describe("RouteTable v6", func() {
 			true,
 			0,
 			logutils.NewSummarizer("test"),
+			WithRouteCleanupGracePeriod(10*time.Second),
 		)
 	})
 
@@ -108,9 +109,6 @@ var _ = Describe("RouteTable", func() {
 	BeforeEach(func() {
 		dataplane = mocknetlink.New()
 		t = mocktime.New()
-		// Setting an auto-increment greater than the route cleanup delay effectively
-		// disables the grace period for these tests.
-		t.SetAutoIncrement(11 * time.Second)
 		rt = NewWithShims(
 			[]string{"^cali.*"},
 			4,
@@ -982,9 +980,6 @@ var _ = Describe("RouteTable (main table)", func() {
 	BeforeEach(func() {
 		dataplane = mocknetlink.New()
 		t = mocktime.New()
-		// Setting an auto-increment greater than the route cleanup delay effectively
-		// disables the grace period for these tests.
-		t.SetAutoIncrement(11 * time.Second)
 		rt = NewWithShims(
 			[]string{"^cali.*"},
 			4,
@@ -1081,9 +1076,6 @@ var _ = Describe("RouteTable (table 100)", func() {
 	BeforeEach(func() {
 		dataplane = mocknetlink.New()
 		t = mocktime.New()
-		// Setting an auto-increment greater than the route cleanup delay effectively
-		// disables the grace period for these tests.
-		t.SetAutoIncrement(11 * time.Second)
 		rt = NewWithShims(
 			[]string{"^cali$", InterfaceNone}, // exact interface match
 			4,
