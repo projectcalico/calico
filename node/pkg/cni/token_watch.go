@@ -1,56 +1,41 @@
 package cni
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/fsnotify/fsnotify.v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
-var serviceaccountDirectory string = "/var/run/secrets/kubernetes.io/serviceaccount/"
+const defaultCNITokenValiditySeconds = 3600
+
 var kubeconfigPath string = "/host/etc/cni/net.d/calico-kubeconfig"
+
+var tokenSupported = false
+var tokenOnce = &sync.Once{}
 
 func Run() {
 	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
 	// fluentd's default configuration.
 	logrus.SetOutput(os.Stdout)
 
-	// Create a watcher for file changes.
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		panic(err)
-	}
-	defer watcher.Close()
+	ticker := time.NewTicker(defaultCNITokenValiditySeconds / 3)
+	defer ticker.Stop()
 
-	// Watch for changes to the serviceaccount directory. Rety if necessary.
 	for {
-		if err := watcher.Add(serviceaccountDirectory); err != nil {
-			// Error watching the file - retry
-			logrus.WithError(err).Error("Failed to watch Kubernetes serviceaccount files.")
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		// Successfully watched the file. Break from the retry loop.
-		logrus.WithField("directory", serviceaccountDirectory).Info("Watching contents for changes.")
-		break
-	}
-
-	// Handle events from the watcher.
-	for {
-		// To prevent tight looping, add a sleep here.
-		time.Sleep(1 * time.Second)
-
 		select {
-		case event := <-watcher.Events:
-			// We've received a notification that the Kubernetes secrets files have changed.
-			// Update the kubeconfig file on disk to match.
-			logrus.WithField("event", event).Info("Notified of change to serviceaccount files.")
+		case <-ticker.C:
+			logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
 			cfg, err := rest.InClusterConfig()
 			if err != nil {
 				logrus.WithError(err).Error("Error generating kube config.")
@@ -62,10 +47,6 @@ func Run() {
 				continue
 			}
 			writeKubeconfig(cfg)
-
-		case err := <-watcher.Errors:
-			// We've received an error - log it out but don't exit.
-			logrus.WithError(err).Error("Error watching serviceaccount files.")
 		}
 	}
 }
@@ -92,7 +73,7 @@ contexts:
 current-context: calico-context`
 
 	// Replace the placeholders.
-	data := fmt.Sprintf(template, cfg.Host, base64.StdEncoding.EncodeToString(cfg.CAData), cfg.BearerToken)
+	data := fmt.Sprintf(template, cfg.Host, base64.StdEncoding.EncodeToString(cfg.CAData), createCNIToken(cfg))
 
 	// Write the filled out config to disk.
 	if err := ioutil.WriteFile(kubeconfigPath, []byte(data), 0600); err != nil {
@@ -100,4 +81,48 @@ current-context: calico-context`
 		return
 	}
 	logrus.WithField("path", kubeconfigPath).Info("Wrote updated CNI kubeconfig file.")
+}
+
+func createCNIToken(kubecfg *rest.Config) string {
+	clientset, err := kubernetes.NewForConfig(kubecfg)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create clientset for CNI kubeconfig")
+		return "invalid-token"
+	}
+
+	tokenRequestSupported := func() bool {
+		tokenOnce.Do(func() {
+			resources, err := clientset.Discovery().ServerResourcesForGroupVersion("v1")
+			if err != nil {
+				return
+			}
+			for _, resource := range resources.APIResources {
+				if resource.Name == "serviceaccounts/token" {
+					tokenSupported = true
+					return
+				}
+			}
+		})
+		return tokenSupported
+	}
+
+	validity := int64(defaultCNITokenValiditySeconds)
+	tr := &authenticationv1.TokenRequest{
+		Spec: authenticationv1.TokenRequestSpec{
+			Audiences:         []string{"kubernetes"},
+			ExpirationSeconds: &validity,
+		},
+	}
+
+	tokenRequest, err := clientset.CoreV1().ServiceAccounts(metav1.NamespaceSystem).CreateToken(context.TODO(), "calico-node", tr, metav1.CreateOptions{})
+	if apierrors.IsNotFound(err) && !tokenRequestSupported() {
+		logrus.WithError(err).Error("Unable to create token for CNI kubeconfig as token request api is not supported")
+		return "invalid-token"
+	}
+	if err != nil {
+		logrus.WithError(err).Error("Unable to create token for CNI kubeconfig")
+		return "invalid-token"
+	}
+
+	return tokenRequest.Status.Token
 }
