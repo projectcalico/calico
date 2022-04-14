@@ -56,3 +56,4 @@ for core_support in co-re legacy;do
     done
   done
 done
+echo "bin/bpf_check_mtu.o"

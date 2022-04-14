@@ -174,6 +174,9 @@ type bpfEndpointManager struct {
 
 	// IPv6 Support
 	ipv6Enabled bool
+
+	// Check MTU support
+	mtuCheckSupported bool
 }
 
 type bpfAllowChainRenderer interface {
@@ -231,6 +234,7 @@ func newBPFEndpointManager(
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
 		ipv6Enabled: config.BPFIpv6Enabled,
+		mtuCheckSupported: bpf.BPFHelperSupported("bpf_check_mtu"),
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -811,6 +815,9 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
 	//   when we cannot encap the packet - non-GSO & too close to veth MTU
 	ap.TunnelMTU = uint16(m.vxlanMTU)
+	if !m.mtuCheckSupported {
+		ap.TunnelMTU = ap.TunnelMTU - 50
+	}
 	ap.IntfIP = calicoRouterIP
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 
