@@ -140,6 +140,11 @@ func (in *BGPConfigurationSpec) DeepCopyInto(out *BGPConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.BindMode != nil {
+		in, out := &in.BindMode, &out.BindMode
+		*out = new(BindMode)
+		**out = **in
+	}
 	return
 }
 
