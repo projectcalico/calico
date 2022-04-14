@@ -1,14 +1,26 @@
 ---
 title: Configuring Felix
-description: Configure Felix, the daemon that runs on every machine the provide endpoints.
+description: Configure Felix, the daemon that runs on every machine that provides endpoints.
 canonical_url: '/reference/felix/configuration'
 ---
 
-> **Note**: If you have installed Calico using the operator, you cannot modify the environment provided to felix directly. To configure felix, see the [FelixConfiguration](../resources/felixconfig) resource instead.
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+If you have installed Calico using the operator, you cannot modify the environment provided to felix directly. To configure felix, see the [FelixConfiguration](../resources/felixconfig) resource instead.
+
+%>
+
+  <label:Manifest>
+<%
+
+> **Note**: The following tables detail the configuration file and
+> environment variable parameters. For `FelixConfiguration` resource settings,
+> refer to [Felix Configuration Resource](../resources/felixconfig).
 {: .alert .alert-info}
 
-Configuration for Felix is read from one of four possible locations, in
-order, as follows.
+Configuration for Felix is read from one of four possible locations, in order, as follows.
 
 1.  Environment variables.
 2.  The Felix configuration file.
@@ -22,20 +34,11 @@ contains a value, it takes top precedence.
 If not set in any of these locations, most configuration parameters have
 defaults, and it should be rare to have to explicitly set them.
 
-When creating a host-specific `FelixConfiguration` resource called `node.<nodename>`,
-the `<nodename>` part must match the value for the nodename in the calico
-datastore - i.e. it must be present in the output of `calicoctl get nodes`
-
 The full list of parameters which can be set is as follows.
-
-> **Note**: The following tables detail the configuration file and
-> environment variable parameters. For `FelixConfiguration` resource settings,
-> refer to [Felix Configuration Resource](../resources/felixconfig).
-{: .alert .alert-info}
 
 #### General configuration
 
-| Configuration parameter           | Environment variable                    | Description  | Schema |
+| Configuration file parameter      | Environment variable                    | Description  | Schema |
 | --------------------------------- | --------------------------------------- | -------------| ------ |
 | `DataplaneWatchdogTimeout` | `FELIX_DATAPLANEWATCHDOGTIMEOUT` | Timeout before the main dataplane goroutine is determined to have hung and Felix will report non-live and non-ready. Can be increased if the liveness check incorrectly fails (for example if Felix is running slowly on a heavily loaded system). [Default: `90`] | int |
 | `AwsSrcDstCheck`                  | `FELIX_AWSSRCDSTCHECK`                  | Set the {% include open-new-window.html text='source-destination-check' url='https://docs.aws.amazon.com/vpc/latest/userguide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck' %} when using AWS EC2 instances. Check [IAM role and profile configuration]({{ site.baseurl }}/reference/resources/felixconfig#aws-iam-rolepolicy-for-source-destination-check-configuration) for setting the necessary permission for this setting to work. [Default: `DoNothing`] | `DoNothing`, `Disable`, `Enable` |
@@ -287,3 +290,7 @@ a global setting and a per-host override.
    ```
 
 For more information, see [Felix Configuration Resource](../resources/felixconfig).
+
+%>
+
+{% endtabs %}

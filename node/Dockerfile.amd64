@@ -44,9 +44,9 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
     # Enable PowerTools repo for '-devel' packages
     dnf config-manager --set-enabled powertools && \
     # Install required packages for building rpms. yum-utils is not required but it gives us yum-builddep to easily install build deps.
-    yum install -y rpm-build yum-utils make && \
+    yum install --allowerasing -y rpm-build yum-utils make && \
     # Need these to build runit.
-    yum install -y wget glibc-static gcc && \
+    yum install --allowerasing  -y wget glibc-static gcc && \
     # Ensure security updates are installed.
     yum -y update-minimal --security --sec-severity=Important --sec-severity=Critical
 
