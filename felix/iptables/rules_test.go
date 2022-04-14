@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 )
 
 var (
@@ -70,12 +73,12 @@ var _ = Describe("Hash extraction tests", func() {
 	var table *Table
 
 	BeforeEach(func() {
-		fd := NewFeatureDetector(nil)
+		fd := detector.NewFeatureDetector(nil)
 		fd.GetKernelVersionReader = func() (io.Reader, error) {
 			return nil, errors.New("not implemented")
 		}
-		fd.NewCmd = func(name string, arg ...string) CmdIface {
-			return NewRealCmd("echo", "iptables v1.4.7")
+		fd.NewCmd = func(name string, arg ...string) cmdshim.CmdIface {
+			return cmdshim.NewRealCmd("echo", "iptables v1.4.7")
 		}
 		table = NewTable(
 			"filter",
@@ -213,7 +216,7 @@ var _ = Describe("rule comments", func() {
 		}
 
 		It("should render rule including multiple comments", func() {
-			render := rule.RenderAppend("test", "TEST", &Features{})
+			render := rule.RenderAppend("test", "TEST", &detector.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"boz\""))
 			Expect(render).To(ContainSubstring("-m comment --comment \"fizz\""))
 		})
@@ -229,7 +232,7 @@ fizz`},
 		}
 
 		It("should render rule with newline escaped", func() {
-			render := rule.RenderAppend("test", "TEST", &Features{})
+			render := rule.RenderAppend("test", "TEST", &detector.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"boz_fizz\""))
 		})
 	})
@@ -243,7 +246,7 @@ fizz`},
 		}
 
 		It("should render rule with comment truncated", func() {
-			render := rule.RenderAppend("test", "TEST", &Features{})
+			render := rule.RenderAppend("test", "TEST", &detector.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"" + strings.Repeat("a", 256) + "\""))
 		})
 	})
@@ -269,5 +272,5 @@ func calculateHashes(chainName string, rules []Rule) []string {
 		Name:  chainName,
 		Rules: rules,
 	}
-	return chain.RuleHashes(&Features{})
+	return chain.RuleHashes(&detector.Features{})
 }
