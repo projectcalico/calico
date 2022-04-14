@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
@@ -270,7 +271,7 @@ type Table struct {
 	restoreInputBuffer RestoreInputBuilder
 
 	// Factory for making commands, used by UTs to shim exec.Command().
-	newCmd detector.CmdFactory
+	newCmd cmdshim.CmdFactory
 	// Shims for time.XXX functions:
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
@@ -295,7 +296,7 @@ type TableOptions struct {
 	LockProbeInterval time.Duration
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
-	NewCmdOverride detector.CmdFactory
+	NewCmdOverride cmdshim.CmdFactory
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
@@ -368,7 +369,7 @@ func NewTable(
 	}
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
-	newCmd := detector.NewRealCmd
+	newCmd := cmdshim.NewRealCmd
 	if options.NewCmdOverride != nil {
 		newCmd = options.NewCmdOverride
 	}

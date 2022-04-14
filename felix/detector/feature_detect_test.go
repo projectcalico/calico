@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 )
 
 func TestFeatureDetection(t *testing.T) {
@@ -340,7 +341,7 @@ type ipOutputFactory struct {
 	Ip4Nft    int
 }
 
-func (f *ipOutputFactory) NewCmd(name string, arg ...string) CmdIface {
+func (f *ipOutputFactory) NewCmd(name string, arg ...string) cmdshim.CmdIface {
 	switch name {
 	case "iptables-legacy-save":
 		return &ipOutputCmd{out: f.Ip4legacy}

@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 )
 
 var (
@@ -76,8 +77,8 @@ var _ = Describe("Hash extraction tests", func() {
 		fd.GetKernelVersionReader = func() (io.Reader, error) {
 			return nil, errors.New("not implemented")
 		}
-		fd.NewCmd = func(name string, arg ...string) detector.CmdIface {
-			return NewRealCmd("echo", "iptables v1.4.7")
+		fd.NewCmd = func(name string, arg ...string) cmdshim.CmdIface {
+			return cmdshim.NewRealCmd("echo", "iptables v1.4.7")
 		}
 		table = NewTable(
 			"filter",

@@ -27,6 +27,8 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 )
 
 var (
@@ -79,13 +81,13 @@ type FeatureDetector struct {
 	// Path to file with kernel version
 	GetKernelVersionReader func() (io.Reader, error)
 	// Factory for making commands, used by iptables UTs to shim exec.Command().
-	NewCmd CmdFactory
+	NewCmd cmdshim.CmdFactory
 }
 
 func NewFeatureDetector(overrides map[string]string) *FeatureDetector {
 	return &FeatureDetector{
 		GetKernelVersionReader: GetKernelVersionReader,
-		NewCmd:                 NewRealCmd,
+		NewCmd:                 cmdshim.NewRealCmd,
 		featureOverride:        overrides,
 	}
 }
@@ -217,7 +219,7 @@ func countRulesInIptableOutput(in []byte) int {
 // https://github.com/kubernetes/kubernetes/blob/623b6978866b5d3790d17ff13601ef9e7e4f4bf0/build/debian-iptables/iptables-wrapper#L28
 // If there is a specifiedBackend then it is used but if it does not match the detected
 // backend then a warning is logged.
-func DetectBackend(lookPath func(file string) (string, error), newCmd CmdFactory, specifiedBackend string) string {
+func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.CmdFactory, specifiedBackend string) string {
 	ip6LgcySave := FindBestBinary(lookPath, 6, "legacy", "save")
 	ip4LgcySave := FindBestBinary(lookPath, 4, "legacy", "save")
 	ip6l, _ := newCmd(ip6LgcySave).Output()

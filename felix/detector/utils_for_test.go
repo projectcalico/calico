@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	. "github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -60,7 +60,7 @@ type mockDataplane struct {
 	FlushedChains                  set.Set
 	ChainMods                      set.Set
 	DeletedChains                  set.Set
-	Cmds                           []CmdIface
+	Cmds                           []cmdshim.CmdIface
 	CmdNames                       []string
 	FailNextRestore                bool
 	FailAllRestores                bool
@@ -86,7 +86,7 @@ func (d *mockDataplane) ResetCmds() {
 	d.CmdNames = nil
 }
 
-func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
+func (d *mockDataplane) newCmd(name string, arg ...string) cmdshim.CmdIface {
 	log.WithFields(log.Fields{
 		"name":                   name,
 		"args":                   arg,
@@ -100,7 +100,7 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 		"FailAllSaves":           d.FailAllSaves,
 	}).Info("Simulating new command.")
 
-	var cmd CmdIface
+	var cmd cmdshim.CmdIface
 	d.CmdNames = append(d.CmdNames, name)
 
 	if d.NftablesMode && name != "iptables" {

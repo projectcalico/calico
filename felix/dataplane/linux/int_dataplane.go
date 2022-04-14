@@ -34,6 +34,7 @@ import (
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -357,7 +358,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
-	backendMode := detector.DetectBackend(config.LookPathOverride, detector.NewRealCmd, config.IptablesBackend)
+	backendMode := detector.DetectBackend(config.LookPathOverride, cmdshim.NewRealCmd, config.IptablesBackend)
 
 	// Most iptables tables need the same options.
 	iptablesOptions := iptables.TableOptions{
