@@ -74,6 +74,9 @@ const (
 
 	// Interface name used by kube-proxy to bind service ips.
 	KubeIPVSInterface = "kube-ipvs0"
+
+	// Route cleanup grace period. Used for workload routes only.
+	routeCleanupGracePeriod = 10 * time.Second
 )
 
 var (
@@ -667,7 +670,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
 		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+		routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -763,7 +767,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(
 			interfaceRegexes, 6, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))
