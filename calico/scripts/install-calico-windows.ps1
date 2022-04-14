@@ -1,4 +1,7 @@
-# Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+---
+layout: null
+---
+# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,17 +14,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 <#
 .DESCRIPTION
-    This script installs and starts Calico services on a Windows node.
+    This script installs and starts {{site.prodname}} services on a Windows node.
 
     Note: EKS requires downloading kubectl.exe to c:\k before running this script: https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html
 #>
 
 Param(
-    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/v3.22.1/",
-    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-v3.22.1.zip",
+    # Note: we don't publish a release artifact for the "master" branch. To test
+    # against master, build calico-windows.zip from projectcalico/node.
+{%- if site.url contains "projectcalico" %}
+    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/{{site.data.versions.first.components["calico/node"].version}}/",
+{%- else %}
+    [parameter(Mandatory = $false)] $ReleaseBaseURL="{{site.url}}/files/windows/",
+{%- endif %}
+    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-{{site.data.versions.first.components["calico/node"].version}}.zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
@@ -136,7 +144,7 @@ function GetBackendType()
     if ($Datastore -EQ "kubernetes") {
         $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
         if ($encap -EQ "true") {
-            throw "Calico on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
+            throw "{{site.prodname}} on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
         }
 
         $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
@@ -331,6 +339,7 @@ Exit
 Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
 Write-Host "Unzip Calico for Windows release..."
 Expand-Archive -Force $CalicoZip c:\
+ipmo $RootDir\libs\calico\calico.psm1
 
 Write-Host "Setup Calico for Windows..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
@@ -415,7 +424,7 @@ if ($platform -EQ "bare-metal") {
 }
 
 if ($DownloadOnly -EQ "yes") {
-    Write-Host "Downloaded Calico for Windows. Update c:\CalicoWindows\config.ps1 and run c:\CalicoWindows\install-calico.ps1"
+    Write-Host "Downloaded Calico for Windows installation zip file."
     Exit
 }
 
