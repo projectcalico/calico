@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables
+package cmdshim
 
 import (
 	"fmt"
@@ -33,7 +33,7 @@ type CmdIface interface {
 	String() string
 }
 
-type cmdFactory func(name string, arg ...string) CmdIface
+type CmdFactory func(name string, arg ...string) CmdIface
 
 func NewRealCmd(name string, arg ...string) CmdIface {
 	cmd := exec.Command(name, arg...)

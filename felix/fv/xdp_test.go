@@ -29,10 +29,10 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/detector"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
-	"github.com/projectcalico/calico/felix/versionparse"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -442,13 +442,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			})
 
 			It("should have expected no dropped packets in iptables in TCP", func() {
-				versionReader, err := versionparse.GetKernelVersionReader()
+				versionReader, err := detector.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
-				kernelVersion, err := versionparse.GetKernelVersion(versionReader)
+				kernelVersion, err := detector.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(versionparse.MustParseVersion("4.19.0")) < 0 {
+				if kernelVersion.Compare(detector.MustParseVersion("4.19.0")) < 0 {
 					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}
@@ -588,13 +588,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			})
 
 			It("should have expected no dropped packets in iptables in TCP", func() {
-				versionReader, err := versionparse.GetKernelVersionReader()
+				versionReader, err := detector.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
-				kernelVersion, err := versionparse.GetKernelVersion(versionReader)
+				kernelVersion, err := detector.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(versionparse.MustParseVersion("4.19.0")) < 0 {
+				if kernelVersion.Compare(detector.MustParseVersion("4.19.0")) < 0 {
 					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}
