@@ -16,6 +16,7 @@ package install
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/howeyc/fsnotify"
@@ -31,10 +33,16 @@ import (
 	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
+	authenticationv1 "k8s.io/api/authentication/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
+
+const defaultCNITokenValiditySeconds = 3600
 
 type config struct {
 	// Location on the host where CNI network configs are stored.
@@ -466,7 +474,7 @@ contexts:
     user: calico
 current-context: calico-context`
 
-	data = strings.Replace(data, "TOKEN", kubecfg.BearerToken, 1)
+	data = strings.Replace(data, "TOKEN", createCNIToken(kubecfg), 1)
 	data = strings.Replace(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"), -1)
 	data = strings.Replace(data, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""), -1)
 	data = strings.Replace(data, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""), -1)
@@ -495,4 +503,47 @@ func setSuidBit(file string) error {
 	}
 
 	return nil
+}
+
+func createCNIToken(kubecfg *rest.Config) string {
+	clientset, err := kubernetes.NewForConfig(kubecfg)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create clientset for CNI kubeconfig")
+	}
+
+	supported := false
+	once := &sync.Once{}
+	tokenRequestSupported := func() bool {
+		once.Do(func() {
+			resources, err := clientset.Discovery().ServerResourcesForGroupVersion("v1")
+			if err != nil {
+				return
+			}
+			for _, resource := range resources.APIResources {
+				if resource.Name == "serviceaccounts/token" {
+					supported = true
+					return
+				}
+			}
+		})
+		return supported
+	}
+
+	validity := int64(defaultCNITokenValiditySeconds)
+	tr := &authenticationv1.TokenRequest{
+		Spec: authenticationv1.TokenRequestSpec{
+			Audiences:         []string{"kubernetes"},
+			ExpirationSeconds: &validity,
+		},
+	}
+
+	tokenRequest, err := clientset.CoreV1().ServiceAccounts(metav1.NamespaceSystem).CreateToken(context.TODO(), "calico-node", tr, metav1.CreateOptions{})
+	if apierrors.IsNotFound(err) && !tokenRequestSupported() {
+		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig as token request api is not supported")
+	}
+	if err != nil {
+		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
+	}
+
+	return tokenRequest.Status.Token
 }
