@@ -42,6 +42,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/versionparse"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
 
 type XDPMode int
@@ -2264,4 +2265,19 @@ const jumpMapVersion = 2
 
 func JumpMapName() string {
 	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
+}
+
+func BPFHelperSupported(helper string) bool {
+	filename := helper + ".o"
+        preCompiledBinary := path.Join(ObjectDir, filename)
+        obj, err := libbpf.OpenObject(preCompiledBinary)
+        if err != nil {
+                return false
+        }
+        defer obj.Close()
+
+        if err := obj.Load(); err != nil {
+                return false
+        }
+	return true
 }

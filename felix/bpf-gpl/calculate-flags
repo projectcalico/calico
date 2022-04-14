@@ -16,6 +16,8 @@ elif [[ "${filename}" =~ .*info.* ]]; then
   args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_INFO")
 elif [[ "${filename}" =~ .*no_log.* ]]; then
   args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_OFF")
+elif [[ "${filename}" =~ bpf_check_mtu.* ]]; then
+  args+=("")
 else
   echo "No log level in filename"
   exit 1
@@ -81,6 +83,8 @@ elif [[ "${filename}" =~ .*xdp.* ]]; then
   ((flags |= CALI_XDP_PROG))
   args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO" "-D__IPTOOL_LOADER__")
   ep_type="host"
+elif [[ "${filename}" =~ bpf_check_mtu.* ]]; then
+  args+=("-DCALI_BPF_CHECK_MTU")
 else
   echo "Can't recognise endpoint type"
   exit 2
