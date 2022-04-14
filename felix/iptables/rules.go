@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/detector"
 )
 
 const (
@@ -37,31 +39,31 @@ type Rule struct {
 	Comment []string
 }
 
-func (r Rule) RenderAppend(chainName, prefixFragment string, features *Features) string {
+func (r Rule) RenderAppend(chainName, prefixFragment string, features *detector.Features) string {
 	fragments := make([]string, 0, 6)
 	fragments = append(fragments, "-A", chainName)
 	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) RenderInsert(chainName, prefixFragment string, features *Features) string {
+func (r Rule) RenderInsert(chainName, prefixFragment string, features *detector.Features) string {
 	fragments := make([]string, 0, 6)
 	fragments = append(fragments, "-I", chainName)
 	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) RenderInsertAtRuleNumber(chainName string, ruleNum int, prefixFragment string, features *Features) string {
+func (r Rule) RenderInsertAtRuleNumber(chainName string, ruleNum int, prefixFragment string, features *detector.Features) string {
 	fragments := make([]string, 0, 7)
 	fragments = append(fragments, "-I", chainName, fmt.Sprintf("%d", ruleNum))
 	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string, features *Features) string {
+func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string, features *detector.Features) string {
 	fragments := make([]string, 0, 7)
 	fragments = append(fragments, "-R", chainName, fmt.Sprintf("%d", ruleNum))
 	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) renderInner(fragments []string, prefixFragment string, features *Features) string {
+func (r Rule) renderInner(fragments []string, prefixFragment string, features *detector.Features) string {
 	if prefixFragment != "" {
 		fragments = append(fragments, prefixFragment)
 	}
@@ -113,7 +115,7 @@ type Chain struct {
 	Rules []Rule
 }
 
-func (c *Chain) RuleHashes(features *Features) []string {
+func (c *Chain) RuleHashes(features *detector.Features) []string {
 	if c == nil {
 		return nil
 	}
