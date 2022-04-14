@@ -571,10 +571,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		interfaceRegexes[i] = "^" + r + ".*"
 	}
 
-	defaultRpFilter, err := os.ReadFile("/proc/sys/net/ipv4/conf/default/rp_filter")
+	defaultRPFilter, err := os.ReadFile("/proc/sys/net/ipv4/conf/default/rp_filter")
 	if err != nil {
 		log.Warn("could not determine default rp_filter setting, defaulting to strict")
-		defaultRpFilter = []byte{'1'}
+		defaultRPFilter = []byte{'1'}
 	}
 
 	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
@@ -697,7 +697,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.KubeIPVSSupportEnabled,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
-		string(defaultRpFilter),
+		string(defaultRPFilter),
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
