@@ -118,25 +118,6 @@ func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string
 }
 
 func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
-	// Check if node exists first.
-	_, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
-	if kerrors.IsNotFound(err) {
-		// Node has been deleted already. Do nothing.
-		return
-	}
-	Expect(err).NotTo(HaveOccurred())
-
-	// Delete node immediately.
-	fg := metav1.DeletePropagationForeground
-	zero := int64(0)
-	err = clientset.CoreV1().Nodes().Delete(context.Background(),
-		nodeName,
-		metav1.DeleteOptions{
-			PropagationPolicy:  &fg,
-			GracePeriodSeconds: &zero,
-		})
-	Expect(err).NotTo(HaveOccurred())
-
 	// Wait for node to disappear.
 	Eventually(func() error {
 		_, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
@@ -146,8 +127,26 @@ func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 		if err != nil {
 			return err
 		}
+
+		// Delete node immediately.
+		fg := metav1.DeletePropagationForeground
+		zero := int64(0)
+		err = clientset.CoreV1().Nodes().Delete(context.Background(),
+			nodeName,
+			metav1.DeleteOptions{
+				PropagationPolicy:  &fg,
+				GracePeriodSeconds: &zero,
+			})
+		if kerrors.IsNotFound(err) {
+			// That's what we want.
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("failed to delete node: %w", err)
+		}
+
 		return fmt.Errorf("Node %s still exists", nodeName)
-	}, "5s", "200ms").Should(BeNil())
+	}, "10s", "200ms").Should(BeNil())
 }
 
 func getKubernetesClient() *kubernetes.Clientset {
