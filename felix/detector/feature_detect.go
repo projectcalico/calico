@@ -165,6 +165,54 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	}
 }
 
+func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
+	versionReader, err := d.GetKernelVersionReader()
+	if err != nil {
+		return fmt.Errorf("failed to get kernel version reader: %v", err)
+	}
+
+	kernelVersion, err := GetKernelVersion(versionReader)
+	if err != nil {
+		return fmt.Errorf("failed to get kernel version: %v", err)
+	}
+
+	if kernelVersion.Compare(v) < 0 {
+		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v)
+	}
+
+	return nil
+}
+
+func (d *FeatureDetector) getDistributionName() string {
+	versionReader, err := d.GetKernelVersionReader()
+	if err != nil {
+		log.Errorf("failed to get kernel version reader: %v", err)
+		return DefaultDistro
+	}
+
+	kernVersion, err := ioutil.ReadAll(versionReader)
+	if err != nil {
+		log.WithError(err).Warn("Failed to read kernel version from reader")
+		return DefaultDistro
+	}
+	return GetDistFromString(string(kernVersion))
+}
+
+func (d *FeatureDetector) ipipDeviceIsL3() bool {
+	switch d.getDistributionName() {
+	case RedHat:
+		if err := d.isAtLeastKernel(v4Dot18Dot0_330); err != nil {
+			return false
+		}
+		return true
+	default:
+		if err := d.isAtLeastKernel(v5Dot14Dot0); err != nil {
+			return false
+		}
+		return true
+	}
+}
+
 func (d *FeatureDetector) getIptablesVersion() *Version {
 	cmd := d.NewCmd("iptables", "--version")
 	out, err := cmd.Output()
@@ -289,52 +337,4 @@ func FindBestBinary(lookPath func(file string) (string, error), ipVersion uint8,
 
 	logCxt.Panic("Failed to find iptables command")
 	return ""
-}
-
-func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
-	versionReader, err := d.GetKernelVersionReader()
-	if err != nil {
-		return fmt.Errorf("failed to get kernel version reader: %v", err)
-	}
-
-	kernelVersion, err := GetKernelVersion(versionReader)
-	if err != nil {
-		return fmt.Errorf("failed to get kernel version: %v", err)
-	}
-
-	if kernelVersion.Compare(v) < 0 {
-		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v)
-	}
-
-	return nil
-}
-
-func (d *FeatureDetector) getDistributionName() string {
-	versionReader, err := d.GetKernelVersionReader()
-	if err != nil {
-		log.Errorf("failed to get kernel version reader: %v", err)
-		return DefaultDistro
-	}
-
-	kernVersion, err := ioutil.ReadAll(versionReader)
-	if err != nil {
-		log.WithError(err).Warn("Failed to read kernel version from reader")
-		return DefaultDistro
-	}
-	return GetDistFromString(string(kernVersion))
-}
-
-func (d *FeatureDetector) ipipDeviceIsL3() bool {
-	switch d.getDistributionName() {
-	case RedHat:
-		if err := d.isAtLeastKernel(v4Dot18Dot0_330); err != nil {
-			return false
-		}
-		return true
-	default:
-		if err := d.isAtLeastKernel(v5Dot14Dot0); err != nil {
-			return false
-		}
-		return true
-	}
 }

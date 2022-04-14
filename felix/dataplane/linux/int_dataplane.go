@@ -390,10 +390,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	featureDetector := detector.NewFeatureDetector(config.FeatureDetectOverrides)
-	iptablesFeatures := featureDetector.GetFeatures()
+	dataplaneFeatures := featureDetector.GetFeatures()
 
 	var iptablesLock sync.Locker
-	if iptablesFeatures.RestoreSupportsLock {
+	if dataplaneFeatures.RestoreSupportsLock {
 		log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
 			"iptables-restore will use its own implementation).")
 		iptablesLock = dummyLock{}
@@ -462,7 +462,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 		)
-		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
+		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
@@ -615,6 +615,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.RegisterManager(bpfEndpointManager)
+
+		bpfEndpointManager.Features = dataplaneFeatures
 
 		conntrackScanner := conntrack.NewScanner(bpfMapContext.CtMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
