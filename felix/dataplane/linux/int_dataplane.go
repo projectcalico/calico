@@ -29,6 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
 
@@ -74,6 +75,9 @@ const (
 
 	// Interface name used by kube-proxy to bind service ips.
 	KubeIPVSInterface = "kube-ipvs0"
+
+	// Route cleanup grace period. Used for workload routes only.
+	routeCleanupGracePeriod = 10 * time.Second
 )
 
 var (
@@ -450,7 +454,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.RulesConfig.VXLANEnabled {
 		routeTableVXLAN := routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
 			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 		vxlanManager := newVXLANManager(
@@ -666,8 +670,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_UNSPEC,
+		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+		routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -762,8 +767,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		routeTableV6 := routetable.New(
 			interfaceRegexes, 6, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
+			unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))

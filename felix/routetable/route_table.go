@@ -40,8 +40,7 @@ import (
 )
 
 const (
-	cleanupGracePeriod = 10 * time.Second
-	maxConnFailures    = 3
+	maxConnFailures = 3
 )
 
 var (
@@ -190,6 +189,9 @@ type RouteTable struct {
 
 	opReporter       logutils.OpRecorder
 	livenessCallback func()
+
+	// The route deletion grace period.
+	routeCleanupGracePeriod time.Duration
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -197,6 +199,12 @@ type RouteTableOpt func(table *RouteTable)
 func WithLivenessCB(cb func()) RouteTableOpt {
 	return func(table *RouteTable) {
 		table.livenessCallback = cb
+	}
+}
+
+func WithRouteCleanupGracePeriod(routeCleanupGracePeriod time.Duration) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.routeCleanupGracePeriod = routeCleanupGracePeriod
 	}
 }
 
@@ -530,7 +538,7 @@ func (r *RouteTable) Apply() error {
 					// Interface still present.
 					continue
 				}
-				if r.time.Since(firstSeen) < cleanupGracePeriod {
+				if r.time.Since(firstSeen) < r.routeCleanupGracePeriod {
 					// Interface first seen recently.
 					continue
 				}
@@ -831,7 +839,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	// before learning about the endpoint, we give each interface a grace period after we first
 	// see it before we remove routes that we're not expecting.  Check whether the grace period
 	// applies to this interface.
-	ifaceInGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < cleanupGracePeriod
+	ifaceInGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < r.routeCleanupGracePeriod
 
 	// Got the link; try to sync its routes.  Note: We used to check if the interface
 	// was oper down before we tried to do the sync but that prevented us from removing
@@ -912,8 +920,8 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 			alreadyCorrectCIDRs.Add(dest)
 			continue
 		}
-		if ifaceInGracePeriod && !routeExpected && !r.vxlan {
-			// Don't remove unexpected routes from interfaces created recently. VXLAN routes don't have a grace period.
+		if ifaceInGracePeriod && !routeExpected {
+			// Don't remove unexpected routes from interfaces created recently.
 			logCxt.Info("Syncing routes: found unexpected route; ignoring due to grace period.")
 			leaveDirty = true
 			continue
