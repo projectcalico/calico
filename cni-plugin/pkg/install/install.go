@@ -105,7 +105,6 @@ func mkdir(path string) {
 	if err := os.MkdirAll(path, 0777); err != nil {
 		logrus.WithError(err).Fatalf("Failed to create directory %s", path)
 	}
-
 }
 
 func loadConfig() config {
@@ -123,12 +122,6 @@ func Install() error {
 	logrus.SetFormatter(&logutils.Formatter{Component: "cni-installer"})
 
 	// Clean up any existing binaries / config / assets.
-	if err := os.Remove("/host/opt/cni/bin/calico"); err != nil && !os.IsNotExist(err) {
-		logrus.WithError(err).Warnf("Error removing old plugin")
-	}
-	if err := os.Remove("/host/opt/cni/bin/calico-ipam"); err != nil && !os.IsNotExist(err) {
-		logrus.WithError(err).Warnf("Error removing old IPAM plugin")
-	}
 	if err := os.RemoveAll("/host/etc/cni/net.d/calico-tls"); err != nil && !os.IsNotExist(err) {
 		logrus.WithError(err).Warnf("Error removing old TLS directory")
 	}
