@@ -237,7 +237,8 @@ endif
 DOCKER_BUILD=docker buildx build --pull \
 	     --build-arg QEMU_IMAGE=$(CALICO_BUILD) \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
+	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM) \
+	     --build-arg TARGET_ARCH=$(ARCH)
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \

@@ -19,8 +19,9 @@ ARG RUNIT_VER=2.1.2
 ARG QEMU_IMAGE
 ARG BIRD_IMAGE=calico/bird:latest
 ARG UBI_IMAGE
+ARG TARGET_ARCH
 
-FROM calico/bpftool:v5.0-arm64 as bpftool
+FROM calico/bpftool:v5.0-$TARGET_ARCH as bpftool
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
@@ -92,22 +93,27 @@ RUN sed -i '/%files$/a \
 RUN rpmbuild -bb /root/rpmbuild/SPECS/iptables.spec
 
 # runit is not available in ubi or CentOS repos so build it.
-RUN wget -P /tmp http://smarden.org/runit/runit-${RUNIT_VER}.tar.gz && \
-    gunzip /tmp/runit-${RUNIT_VER}.tar.gz && \
-    tar -xpf /tmp/runit-${RUNIT_VER}.tar -C /tmp && \
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+
+RUN wget -P /tmp https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz && \
+    gunzip /tmp/runit_${RUNIT_VER}.orig.tar.gz && \
+    tar -xpf /tmp/runit_${RUNIT_VER}.orig.tar -C /tmp && \
     cd /tmp/admin/runit-${RUNIT_VER}/ && \
     # runit compilation trigger a false positive error halting the process.
-    sed -i "s/runit-init/\/tmp\/admin\/runit-2.1.2\/compile\/runit-init/" src/runit-init.dist && \
-    sed -i "s/runsv/\/tmp\/admin\/runit-2.1.2\/compile\/runsv/" src/runsv.dist && \
-    sed -i "s/runsvchdir/\/tmp\/admin\/runit-2.1.2\/compile\/runsvchdir/" src/runsvchdir.dist && \
-    sed -i "s/runsvdir/\/tmp\/admin\/runit-2.1.2\/compile\/runsvdir/" src/runsvdir.dist && \
-    sed -i "s/svlogd/\/tmp\/admin\/runit-2.1.2\/compile\/svlogd/" src/svlogd.dist && \
-    sed -i "s/utmpset/\/tmp\/admin\/runit-2.1.2\/compile\/utmpset/" src/utmpset.dist && \
+    if [[ "$BUILDPLATFORM" != "$TARGETPLATFORM" ]]; then \
+      sed -i "s/runit-init/\/tmp\/admin\/runit-2.1.2\/compile\/runit-init/" src/runit-init.dist &&  \
+      sed -i "s/runsv/\/tmp\/admin\/runit-2.1.2\/compile\/runsv/" src/runsv.dist && \
+      sed -i "s/runsvchdir/\/tmp\/admin\/runit-2.1.2\/compile\/runsvchdir/" src/runsvchdir.dist && \
+      sed -i "s/runsvdir/\/tmp\/admin\/runit-2.1.2\/compile\/runsvdir/" src/runsvdir.dist && \
+      sed -i "s/svlogd/\/tmp\/admin\/runit-2.1.2\/compile\/svlogd/" src/svlogd.dist && \
+      sed -i "s/utmpset/\/tmp\/admin\/runit-2.1.2\/compile\/utmpset/" src/utmpset.dist;  \
+    fi && \
     package/install
 
 ARG UBI_DIGEST
 
-FROM --platform=linux/arm64 ${UBI_IMAGE} as ubi
+FROM --platform=$TARGETPLATFORM ${UBI_IMAGE} as ubi
 
 ARG ARCH
 ARG GIT_VERSION
