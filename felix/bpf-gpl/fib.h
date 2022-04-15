@@ -211,7 +211,7 @@ skip_fib:
 		 * XXX We should check ourselves that we got our tunnel packets only from
 		 * XXX those devices where we expect them before we even decap.
 		 */
-		if (CALI_F_FROM_HEP && state->tun_ip != 0) {
+		if (CALI_F_FROM_HEP && state->tun_ip != 0 && ctx->fwd.mark != CALI_SKB_MARK_BYPASS_FWD) {
 			ctx->fwd.mark = CALI_SKB_MARK_SKIP_RPF;
 		}
 		/* Packet is towards host namespace, mark it so that downstream
