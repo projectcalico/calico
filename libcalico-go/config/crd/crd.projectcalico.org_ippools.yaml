@@ -38,7 +38,7 @@ spec:
                 type: array
               blockSize:
                 description: The block size to use for IP address assignments from
-                  this pool. Defaults to 26 for IPv4 and 112 for IPv6.
+                  this pool. Defaults to 26 for IPv4 and 122 for IPv6.
                 type: integer
               cidr:
                 description: The pool CIDR.
