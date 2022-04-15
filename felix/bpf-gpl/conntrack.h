@@ -61,9 +61,6 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct
 	bool syn = false;
 	__u64 now;
 
-	/* Make sure we have the right port in case we change it. */
-	ct_ctx->orig_sport = ct_ctx->sport;
-
 	if (ct_ctx->tcp) {
 		seq = ct_ctx->tcp->seq;
 		syn = ct_ctx->tcp->syn;
@@ -123,6 +120,11 @@ create:
 	ct_value_set_flags(&ct_value, ct_ctx->flags);
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value_get_flags(&ct_value));
 
+	ct_value.orig_sip = ct_ctx->orig_src;
+	ct_value.orig_sport = ct_ctx->orig_sport;
+	CALI_DEBUG("CT-ALL SNAT orig %x:%d\n", bpf_htonl(ct_ctx->orig_src),  ct_ctx->orig_sport);
+
+
 	if (ct_ctx->type == CALI_CT_TYPE_NAT_REV && ct_ctx->tun_ip) {
 		if (ct_ctx->flags & CALI_CT_FLAG_NP_FWD) {
 			CALI_DEBUG("CT-ALL nat tunneled to %x\n", bpf_ntohl(ct_ctx->tun_ip));
@@ -159,6 +161,7 @@ create:
 		CALI_VERB("CT-ALL src_to_dst B->A\n");
 		src_to_dst = &ct_value.b_to_a;
 		dst_to_src = &ct_value.a_to_b;
+		ct_value_set_flags(&ct_value, CALI_CT_FLAG_BA);
 	}
 
 	dump_ct_key(k);
@@ -191,6 +194,10 @@ create:
 		}
 		CALI_DEBUG("CT-ALL Whitelisted source side - from HEP tun allow_return=%d\n",
 				ct_ctx->allow_return);
+	} else if (CALI_F_TO_HEP && !skb_seen(ct_ctx->skb) && (ct_ctx->type == CALI_CT_TYPE_NAT_REV)) {
+		src_to_dst->whitelisted = 1;
+		dst_to_src->whitelisted = 1;
+		CALI_DEBUG("CT-ALL Whitelisted both due to host source port conflict resolution.\n");
 	} else if (CALI_F_FROM_HOST) {
 		/* dst is to the EP, policy whitelisted this side */
 		dst_to_src->whitelisted = 1;
@@ -199,7 +206,7 @@ create:
 
 	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
-	if (err == -17 /* EEXIST */) {
+	if (CALI_F_HEP && err == -17 /* EEXIST */) {
 		int i;
 
 		CALI_DEBUG("Source collision for 0x%x:%d\n", bpf_htonl(ip_src), sport);
@@ -218,11 +225,11 @@ create:
 				ct_ctx->sport = sport;
 				break;
 			}
+		}
 
-			if (i == PSNAT_RETRIES) {
-				CALI_INFO("Source collision unresolved 0x%x:%d\n",
-						bpf_htonl(ip_src), ct_value.orig_sport);
-			}
+		if (i == PSNAT_RETRIES) {
+			CALI_INFO("Source collision unresolved 0x%x:%d\n",
+					bpf_htonl(ip_src), ct_value.orig_sport);
 		}
 	}
 
@@ -235,14 +242,25 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 						       struct calico_ct_key *rk)
 {
 	__u8 ip_proto = ct_ctx->proto;
-	__be32 ip_src = ct_ctx->src;
+	__be32 ip_src = ct_ctx->orig_src;
 	__be32 ip_dst = ct_ctx->orig_dst;
 	__u16 sport = ct_ctx->orig_sport;
 	__u16 dport = ct_ctx->orig_dport;
 
+	if (CALI_F_TO_HEP && !CALI_F_NAT_IF && sport != ct_ctx->sport &&
+			!(ct_ctx->skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
+		/* This entry is being created because we have a source port
+		 * conflict on a connection from host. We did psnat so we mak
+		 * such an entry with a 0 sport.
+		 */
+		sport = 0;
+		CALI_DEBUG("FWD for psnat host conflict\n");
+	}
+
 	__u64 now = bpf_ktime_get_ns();
 
 	CALI_DEBUG("CT-%d Creating FWD entry at %llu.\n", ip_proto, now);
+	CALI_DEBUG("FWD %x -> %x\n", bpf_ntohl(ip_src), bpf_ntohl(ip_dst));
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
@@ -580,23 +598,36 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			cali_v4_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
 		}
-		result.nat_sport = v->nat_sport ? : sport;
+
 		// Record timestamp.
 		tracking_v->last_seen = now;
 
-		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
+		if (!(ct_value_get_flags(tracking_v) & CALI_CT_FLAG_BA)) {
 			CALI_VERB("CT-ALL FWD-REV src_to_dst A->B\n");
 			src_to_dst = &tracking_v->a_to_b;
 			dst_to_src = &tracking_v->b_to_a;
 			result.nat_ip = v->nat_rev_key.addr_b;
 			result.nat_port = v->nat_rev_key.port_b;
+			result.nat_sip = v->nat_rev_key.addr_a;
+			result.nat_sport = v->nat_rev_key.port_a;
 		} else {
 			CALI_VERB("CT-ALL FWD-REV src_to_dst B->A\n");
 			src_to_dst = &tracking_v->b_to_a;
 			dst_to_src = &tracking_v->a_to_b;
 			result.nat_ip = v->nat_rev_key.addr_a;
 			result.nat_port = v->nat_rev_key.port_a;
+			result.nat_sip = v->nat_rev_key.addr_b;
+			result.nat_sport = v->nat_rev_key.port_b;
 		}
+
+		if (v->nat_sport) {
+			/* This would override the host SNAT, but those two features are
+			 * mutually exclusive. One happens for nodeport only (psnat) the
+			 * other for host -> service only (full SNAT)
+			 */
+			result.nat_sport = v->nat_sport;
+		}
+
 		result.tun_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
@@ -645,6 +676,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
 			result.nat_port = v->orig_port;
+			result.nat_sip = v->orig_sip;
+			result.nat_sport = v->orig_sport;
 			break;
 		}
 
@@ -663,12 +696,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		snat = CALI_F_FROM_HOST;
 		/* if returning packet into a tunnel */
 		snat |= (dnat_return_should_encap() && v->tun_ip);
+		snat |= result.flags & CALI_CT_FLAG_VIA_NAT_IF;
+		snat |= result.flags & CALI_CT_FLAG_HOST_PSNAT;
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
 			CALI_CT_DEBUG("Hit! NAT REV entry at ingress to connection opener: SNAT.\n");
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
+			result.nat_sip = v->orig_sip;
 			result.nat_port = v->orig_port;
 			result.nat_sport = v->orig_sport;
 		} else {
@@ -744,7 +780,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 	if (ret_from_tun) {
 		CALI_DEBUG("Packet returned from tunnel %x\n", bpf_ntohl(tc_ctx->state->tun_ip));
-	} else if (CALI_F_TO_HOST) {
+	} else if (CALI_F_TO_HOST || (skb_from_host(tc_ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
 		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {
 			CALI_CT_VERB("Packet whitelisted by this workload's policy.\n");
@@ -757,8 +793,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (TH).\n");
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
-	}
-	if (CALI_F_FROM_HOST) {
+	} else if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest whitelist. */
 		if (dst_to_src->whitelisted) {
 			// Packet was whitelisted by the policy attached to this endpoint.
