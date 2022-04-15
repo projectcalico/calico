@@ -141,6 +141,14 @@ function GetBackendType()
         return $CalicoBackend
     }
 
+    # For hostprocess installs, if CALICO_NETWORKING_BACKEND is set to a valid value, try to use it.
+    if ($env:CONTAINER_SANDBOX_MOUNT_POINT -and $env:CALICO_NETWORKING_BACKEND) {
+        $backend = $env:CALICO_NETWORKING_BACKEND
+        if (($backend -eq "vxlan") -or ($backend -eq "windows-bgp")) {
+            return $backend
+        }
+    }
+
     # Auto detect backend type
     if ($Datastore -EQ "kubernetes") {
         $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
@@ -328,6 +336,8 @@ function InstallCalico()
     popd
     Write-Host "`nCalico for Windows installed`n"
 }
+
+$ErrorActionPreference = "Stop"
 
 $BaseDir="c:\k"
 $RootDir="c:\CalicoWindows"
