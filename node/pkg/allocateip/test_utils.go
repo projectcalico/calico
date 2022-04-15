@@ -50,16 +50,17 @@ func makeNode(ipv4 string, ipv6 string) *libapi.Node {
 	return n
 }
 
-func makeIPv4Pool(name string, ipv4cidr string, blockSize int) *api.IPPool {
+func makeIPPool(name string, cidr string, blockSize int, ipipMode api.IPIPMode, vxlanMode api.VXLANMode) *api.IPPool {
 	return &api.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 		Spec: api.IPPoolSpec{
-			CIDR:        ipv4cidr,
+			CIDR:        cidr,
 			BlockSize:   blockSize,
 			NATOutgoing: true,
-			IPIPMode:    api.IPIPModeAlways,
+			IPIPMode:    ipipMode,
+			VXLANMode:   vxlanMode,
 		},
 	}
 }
