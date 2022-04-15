@@ -335,7 +335,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		// known VTEPs.
 		var l2routes []routetable.L2Target
 		for _, u := range m.vtepsByNode {
-			mac, err := net.ParseMAC(u.Mac)
+			mac, err := net.ParseMAC(u.MacV4)
 			if err != nil {
 				// Don't block programming of other VTEPs if somehow we receive one with a bad mac.
 				logrus.WithError(err).Warn("Failed to parse VTEP mac address")
@@ -344,9 +344,9 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 			l2routes = append(l2routes, routetable.L2Target{
 				VTEPMAC: mac,
 				GW:      ip.FromString(u.Ipv4Addr),
-				IP:      ip.FromString(u.ParentDeviceIp),
+				IP:      ip.FromString(u.ParentDeviceIpv4),
 			})
-			allowedVXLANSources = append(allowedVXLANSources, u.ParentDeviceIp)
+			allowedVXLANSources = append(allowedVXLANSources, u.ParentDeviceIpv4)
 		}
 		logrus.WithField("l2routes", l2routes).Debug("VXLAN manager sending L2 updates")
 		m.routeTable.SetL2Routes(m.vxlanDevice, l2routes)
@@ -487,13 +487,13 @@ func (m *vxlanManager) getParentInterface(localVTEP *proto.VXLANTunnelEndpointUp
 			return nil, err
 		}
 		for _, addr := range addrs {
-			if addr.IPNet.IP.String() == localVTEP.ParentDeviceIp {
+			if addr.IPNet.IP.String() == localVTEP.ParentDeviceIpv4 {
 				logrus.Debugf("Found parent interface: %s", link)
 				return link, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Unable to find parent interface with address %s", localVTEP.ParentDeviceIp)
+	return nil, fmt.Errorf("Unable to find parent interface with address %s", localVTEP.ParentDeviceIpv4)
 }
 
 // configureVXLANDevice ensures the VXLAN tunnel device is up and configured correctly.
@@ -504,7 +504,7 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 	if err != nil {
 		return err
 	}
-	mac, err := net.ParseMAC(localVTEP.Mac)
+	mac, err := net.ParseMAC(localVTEP.MacV4)
 	if err != nil {
 		return err
 	}
@@ -516,7 +516,7 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 		VxlanId:      m.vxlanID,
 		Port:         m.vxlanPort,
 		VtepDevIndex: parent.Attrs().Index,
-		SrcAddr:      ip.FromString(localVTEP.ParentDeviceIp).AsNetIP(),
+		SrcAddr:      ip.FromString(localVTEP.ParentDeviceIpv4).AsNetIP(),
 	}
 
 	// Try to get the device.
