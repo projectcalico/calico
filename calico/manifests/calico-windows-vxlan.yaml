@@ -64,6 +64,13 @@ spec:
         envFrom:
         - configMapRef:
             name: calico-windows-config
+        # Calico needs to know the name of the node on which it is running.
+        env:
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
       containers:
       - name: node
         image: docker.io/calico/calico-windows:latest
@@ -76,6 +83,13 @@ spec:
         envFrom:
         - configMapRef:
             name: calico-windows-config
+        # Calico needs to know the name of the node on which it is running.
+        env:
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
       - name: felix
         image: docker.io/calico/calico-windows:latest
         imagePullPolicy: Always
@@ -87,6 +101,13 @@ spec:
         envFrom:
         - configMapRef:
             name: calico-windows-config
+        # Calico needs to know the name of the node on which it is running.
+        env:
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
         livenessProbe:
           exec:
             command:
