@@ -79,7 +79,7 @@ eBPF mode has the following pre-requisites:
   while preserving source IP.  eBPF mode honours the Felix `VXLANMTU` setting (see [Configuring MTU]({{ site.baseurl }}/networking/mtu)).
 - A stable way to address the Kubernetes API server. Since eBPF mode takes over from kube-proxy, {{site.prodname}}
   needs a way to reach the API server directly.
-- The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
+- The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements.md) also apply.
 
 > **Note**: The default kernel used by EKS is not compatible with eBPF mode.  If you wish to try eBPF mode with EKS,
 > follow the [Creating an EKS cluster for eBPF mode](./ebpf-and-eks.md) guide, which explain how to set up a suitable cluster.
