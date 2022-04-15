@@ -154,6 +154,14 @@ func TestNATPodPodXNode(t *testing.T) {
 	Expect(v.Type()).To(Equal(conntrack.TypeNormal))
 	Expect(v.Flags()).To(Equal(uint16(0)))
 
+	// Insert the reverse route for backend for RPF check.
+	resetRTMap(rtMap)
+	beV4CIDR := ip.CIDRFromNetIP(natIP).(ip.V4CIDR)
+	bertKey := routes.NewKey(beV4CIDR).AsBytes()
+	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	err = rtMap.Update(bertKey, bertVal)
+	Expect(err).NotTo(HaveOccurred())
+
 	// Arriving at workload at node 2
 	skbMark = tcdefs.MarkSeen // CALI_SKB_MARK_SEEN
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -521,6 +529,14 @@ func TestNATNodePort(t *testing.T) {
 
 	skbMark = tcdefs.MarkSeenBypassSkipRPF // CALI_SKB_MARK_SKIP_RPF
 
+	// Insert the reverse route for backend for RPF check.
+	resetRTMap(rtMap)
+	beV4CIDR := ip.CIDRFromNetIP(natIP).(ip.V4CIDR)
+	bertKey := routes.NewKey(beV4CIDR).AsBytes()
+	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	err = rtMap.Update(bertKey, bertVal)
+	Expect(err).NotTo(HaveOccurred())
+
 	// Arriving at workload at node 2
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(recvPkt)
@@ -885,11 +901,6 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	wCIDR := net.IPNet{
-		IP:   natIP,
-		Mask: net.IPv4Mask(255, 255, 255, 0),
-	}
-
 	ctMap := conntrack.Map(mc)
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
@@ -906,10 +917,11 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMap)
 	// backend it is a local workload
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&wCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsLocalWorkload).AsBytes(),
-	)
+	resetRTMap(rtMap)
+	beV4CIDR := ip.CIDRFromNetIP(natIP).(ip.V4CIDR)
+	bertKey := routes.NewKey(beV4CIDR).AsBytes()
+	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	err = rtMap.Update(bertKey, bertVal)
 	Expect(err).NotTo(HaveOccurred())
 	dumpRTMap(rtMap)
 
@@ -1918,6 +1930,14 @@ func TestNATSourceCollision(t *testing.T) {
 
 	skbMark = 0
 	var newSPort uint16
+
+	// Insert the reverse route for backend for RPF check.
+	resetRTMap(rtMap)
+	beV4CIDR := ip.CIDRFromNetIP(podIP).(ip.V4CIDR)
+	bertKey := routes.NewKey(beV4CIDR).AsBytes()
+	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	err = rtMap.Update(bertKey, bertVal)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Arriving at node2 HEP
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
