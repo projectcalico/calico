@@ -50,7 +50,7 @@ Before beginning, ensure that the Windows nodes have [joined the cluster](https:
 1. Download the {{site.prodnameWindows}} installation manifest.
 
    ```bash
-   curl {{ "/manifests/calico-windows-vxlan.yaml" | absolute_url }} -O calico-windows.yaml
+   curl {{ "/manifests/calico-windows-vxlan.yaml" | absolute_url }} -o calico-windows.yaml
    ```
 
 1. Get the cluster's Kubernetes API server host and port.
