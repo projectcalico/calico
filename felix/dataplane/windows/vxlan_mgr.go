@@ -154,8 +154,8 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 
 		networkPolicySettings := hcn.RemoteSubnetRoutePolicySetting{
 			IsolationId:                 uint16(m.vxlanID),
-			DistributedRouterMacAddress: macToWindowsFormat(vtep.Mac),
-			ProviderAddress:             vtep.ParentDeviceIp,
+			DistributedRouterMacAddress: macToWindowsFormat(vtep.MacV4),
+			ProviderAddress:             vtep.ParentDeviceIpv4,
 			DestinationPrefix:           route.Dst,
 		}
 
