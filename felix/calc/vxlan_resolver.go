@@ -196,7 +196,7 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 			newIPv4 := update.Value.(string)
 			currIPv4 := c.nodeNameToVXLANTunnelAddr[nodeName]
 			logCtx = logCtx.WithFields(logrus.Fields{"newIPv4": newIPv4, "currIPv4": currIPv4})
-			logCtx.Debug("IPv6VXLANTunnelAddr update")
+			logCtx.Debug("IPv4VXLANTunnelAddr update")
 			// Try sending a VTEP update.
 			c.nodeNameToVXLANTunnelAddr[nodeName] = newIPv4
 		} else {
@@ -242,14 +242,14 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 	case "VXLANTunnelMACAddrV6":
 		nodeName := update.Key.(model.HostConfigKey).Hostname
 		logCtx := logrus.WithField("node", nodeName).WithField("value", update.Value)
-		logCtx.Debug("VXLANTunnelMACAddr update")
+		logCtx.Debug("VXLANTunnelMACAddrV6 update")
 		if update.Value != nil {
 			// Update for a VXLAN tunnel MAC address.
-			newMAC := update.Value.(string)
-			currMAC := c.vtepMACForHost(nodeName, 6)
-			logCtx = logCtx.WithFields(logrus.Fields{"newMAC": newMAC, "currMAC": currMAC})
+			newMACV6 := update.Value.(string)
+			currMACV6 := c.vtepMACForHost(nodeName, 6)
+			logCtx = logCtx.WithFields(logrus.Fields{"newMACV6": newMACV6, "currMAC": currMACV6})
 			logCtx.Debug("VXLANTunnelMACAddrV6 update")
-			c.nodeNameToVXLANMacV6[nodeName] = newMAC
+			c.nodeNameToVXLANMacV6[nodeName] = newMACV6
 		} else {
 			logCtx.Info("Update the VTEP with the system generated MAC address and send it to dataplane")
 			delete(c.nodeNameToVXLANMacV6, nodeName)
@@ -370,20 +370,19 @@ func (c *VXLANResolver) vtepMACForHost(nodename string, ipVersion int) string {
 	switch ipVersion {
 	case 4:
 		mac = c.nodeNameToVXLANMac[nodename]
-		if mac != "" {
-			return mac
-		}
 	case 6:
 		mac = c.nodeNameToVXLANMacV6[nodename]
-		if mac != "" {
-			return mac
-		}
-
 		nodename += "-v6"
 	default:
 		logCtx.Panic("Invalid IP version")
 	}
 
+	// Return stored MAC address if present
+	if mac != "" {
+		return mac
+	}
+
+	// Otherwise generate a MAC address
 	hasher := sha1.New()
 	_, err := hasher.Write([]byte(nodename))
 	if err != nil {
