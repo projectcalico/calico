@@ -4,6 +4,9 @@ metadata:
   name: calico-windows-config
   namespace: calico-system
 data:
+  # Valid values for Calico networking are: "vxlan", "windows-bgp"
+  # For non-Calico networking, the only value is "none".
+  CALICO_NETWORKING_BACKEND: "vxlan"
   # The Kubernetes API server host and port. This is required to
   # bootstrap Calico for Windows.  
   KUBERNETES_SERVICE_HOST: ""
@@ -14,9 +17,10 @@ data:
   # The DNS nameservers that will be used in the CNI configuration.
   DNS_NAME_SERVERS: "10.96.0.10"
   # The CNI bin dir configured in containerd (in containerd
-  # configuration, under [plugins."io.containerd.grpc.v1.cri".cni])
-  CNI_BIN_DIR: "c:\\Program Files\\containerd\\cni\\bin"
-  CNI_CONF_DIR: "c:\\Program Files\\containerd\\cni\\conf"
+  # configuration, under [plugins."io.containerd.grpc.v1.cri".cni]).
+  # These values must match the containerd configuration on the Windows nodes.
+  CNI_BIN_DIR: "c:\\opt\\cni\\bin"
+  CNI_CONF_DIR: "c:\\etc\\cni\\net.d"
   # Felix health must be enabled.
   FELIX_HEALTHENABLED: "true"
 

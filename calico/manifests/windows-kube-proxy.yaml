@@ -29,7 +29,7 @@ data:
     ((Get-Content -Path ./var/lib/kube-proxy/kubeconfig.conf -Raw) -replace '/var',"$env:CONTAINER_SANDBOX_MOUNT_POINT/var") | Set-Content -Path $kubeConfigPath 
 
     # Download kube-proxy service script
-    #
+    # TODO: replace url with url to file in projectcalico/calico
     curl https://raw.githubusercontent.com/projectcalico/calico/4cceb3a2a865d3d150b931b921caa03b90d3ac8b/node/windows-packaging/CalicoWindows/kubernetes/kube-proxy-service.ps1 -o $PSScriptRoot/kube-proxy-service.ps1
 
     & "$PSScriptRoot/kube-proxy-service.ps1" -CalicoWindowsDir "/CalicoWindows" -Kubeconfig $kubeConfigPath -KubeProxy $kubeProxyPath
