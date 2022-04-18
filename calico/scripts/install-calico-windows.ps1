@@ -32,6 +32,7 @@ Param(
     [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-{{site.data.versions.first.components["calico/node"].version}}.zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
+    [parameter(Mandatory = $false)] $StartCalico="yes",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
     [parameter(Mandatory = $false)] $EtcdEndpoints="",
     [parameter(Mandatory = $false)] $EtcdTlsSecretName="",
@@ -140,6 +141,14 @@ function GetBackendType()
         return $CalicoBackend
     }
 
+    # For hostprocess installs, if CALICO_NETWORKING_BACKEND is set to a valid value, try to use it.
+    if ($env:CONTAINER_SANDBOX_MOUNT_POINT -and $env:CALICO_NETWORKING_BACKEND) {
+        $backend = $env:CALICO_NETWORKING_BACKEND
+        if (($backend -eq "vxlan") -or ($backend -eq "windows-bgp")) {
+            return $backend
+        }
+    }
+
     # Auto detect backend type
     if ($Datastore -EQ "kubernetes") {
         $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
@@ -166,6 +175,14 @@ function GetCalicoNamespace() {
       [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 
+    # If we are running inside a HostProcess container then return our
+    # namespace.
+    if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+        $ns = Get-Content -Raw -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/namespace
+        write-host ("Install script is running in a HostProcess container. This namespace is {0}" -f $ns)
+        return $ns
+    }
+
     $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get ns calico-system
     if ([string]::IsNullOrEmpty($name)) {
         write-host "Calico running in kube-system namespace"
@@ -190,15 +207,45 @@ function GetCalicoKubeConfig()
         Import-Module $eksAWSToolsModulePath
     }
 
-    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
-    if ([string]::IsNullOrEmpty($name)) {
-        throw "$SecretName service account does not exist."
-    }
-    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
-    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n $CalicoNamespace
-    $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
+    # If we are running inside a HostProcess container then we already have
+    # access to the serviceaccount token and ca cert and do not need the
+    # kubeconfig.
+    if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+        write-host "Install script is running in a HostProcess container, setting kubeconfig"
+        # CA needs to be base64-encoded.
+        $ca = Get-Content -Raw -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        $ca = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($ca))
+        # But not the token.
+        $token = Get-Content -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/token
 
-    $server=findstr https:// $KubeConfigPath
+        $k8sHost = "KUBERNETES_SERVICE_HOST"
+        $k8sPort = "KUBERNETES_SERVICE_PORT"
+        $envVars = @(
+            $k8sHost,
+            $k8sPort
+        )
+
+        ForEach ($envVar in $envVars) {
+            if (-not (Test-Path "env:$envVar")) {
+                Write-Host "$envVar is not defined, please add $envVar to the calico-windows-config configmap"
+                exit 1
+            }
+        }
+
+        $server = "server: https://{0}:{1}" -f (gci env:$k8sHost | select -expand Value), (gci env:$k8sPort | select -expand Value)
+    } else {
+        $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
+        if ([string]::IsNullOrEmpty($name)) {
+            throw "$SecretName service account does not exist."
+        }
+        # CA from the k8s secret is already base64-encoded.
+        $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
+        # Token from the k8s secret is base64-encoded but we need the jwt token.
+        $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n $CalicoNamespace
+        $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
+
+        $server=findstr https:// $KubeConfigPath
+    }
 
     (Get-Content $RootDir\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content $RootDir\calico-kube-config -Force
 }
@@ -255,15 +302,6 @@ function SetupEtcdTlsFiles()
     $script:EtcdCaCert = "$path\ca.crt"
 }
 
-function SetConfigParameters {
-    param(
-        [parameter(Mandatory=$true)] $OldString,
-        [parameter(Mandatory=$true)] $NewString
-    )
-
-    (Get-Content $RootDir\config.ps1).replace($OldString, $NewString) | Set-Content $RootDir\config.ps1 -Force
-}
-
 function SetAKSCalicoStaticRules {
     $fileName  = [Io.path]::Combine("$RootDir", "static-rules.json")
     echo '{
@@ -288,20 +326,29 @@ function SetAKSCalicoStaticRules {
 }' | Out-File -encoding ASCII -filepath $fileName
 }
 
-function StartCalico()
+function InstallCalico()
 {
-    Write-Host "`nStart Calico for Windows...`n"
+    Write-Host "`nStart Calico for Windows install...`n"
 
     pushd
     cd $RootDir
     .\install-calico.ps1
     popd
-    Write-Host "`nCalico for Windows Started`n"
+    Write-Host "`nCalico for Windows installed`n"
 }
+
+$ErrorActionPreference = "Stop"
 
 $BaseDir="c:\k"
 $RootDir="c:\CalicoWindows"
+
+# If this script is run from a HostProcess container then the installation archive
+# will be in the mount point.
+if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+$CalicoZip="$env:CONTAINER_SANDBOX_MOUNT_POINT\calico-windows.zip"
+} else {
 $CalicoZip="c:\calico-windows.zip"
+}
 
 # Must load the helper modules before doing anything else.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -332,34 +379,34 @@ if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
 }
 
 if ((Get-Service -exclude 'CalicoUpgrade' | where Name -Like 'Calico*' | where Status -EQ Running) -NE $null) {
-Write-Host "Calico services are still running. In order to re-run the installation script, stop the CalicoNode and CalicoFelix services or uninstall them by running: $RootDir\uninstall-calico.ps1"
-Exit
+    Write-Host "Calico services are still running. In order to re-run the installation script, stop the CalicoNode and CalicoFelix services or uninstall them by running: $RootDir\uninstall-calico.ps1"
+    Exit
 }
 
 Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
 Write-Host "Unzip Calico for Windows release..."
 Expand-Archive -Force $CalicoZip c:\
-ipmo $RootDir\libs\calico\calico.psm1
+ipmo -force $RootDir\libs\calico\calico.psm1
 
 Write-Host "Setup Calico for Windows..."
-SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
-SetConfigParameters -OldString '<your etcd endpoints>' -NewString "$EtcdEndpoints"
+Set-ConfigParameters -var 'CALICO_DATASTORE_TYPE' -value $Datastore
+Set-ConfigParameters -var 'ETCD_ENDPOINTS' -value $EtcdEndpoints
 
 if (-Not [string]::IsNullOrEmpty($EtcdTlsSecretName)) {
     $calicoNs = GetCalicoNamespace
     SetupEtcdTlsFiles -SecretName "$EtcdTlsSecretName" -CalicoNamespace $calicoNs
 }
-SetConfigParameters -OldString '<your etcd key>' -NewString "$EtcdKey"
-SetConfigParameters -OldString '<your etcd cert>' -NewString "$EtcdCert"
-SetConfigParameters -OldString '<your etcd ca cert>' -NewString "$EtcdCaCert"
-SetConfigParameters -OldString '<your service cidr>' -NewString $ServiceCidr
-SetConfigParameters -OldString '<your dns server ips>' -NewString $DNSServerIPs
+Set-ConfigParameters -var 'ETCD_KEY_FILE' -value $EtcdKey
+Set-ConfigParameters -var 'ETCD_CERT_FILE' -value $EtcdCert
+Set-ConfigParameters -var 'ETCD_CA_CERT_FILE' -value $EtcdCaCert
+Set-ConfigParameters -var 'K8S_SERVICE_CIDR' -value $ServiceCidr
+Set-ConfigParameters -var 'DNS_NAME_SERVERS' -value $DNSServerIPs
 
 if ($platform -EQ "aks") {
     Write-Host "Setup Calico for Windows for AKS..."
     $Backend="none"
-    SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
-    SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
+    Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "none"
+    Set-ConfigParameters -var 'KUBE_NETWORK' -value "azure.*"
 
     $calicoNs = "calico-system"
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
@@ -373,10 +420,10 @@ if ($platform -EQ "eks") {
     $awsNodeName = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token" = $token} -Method GET -Uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for EKS, node name $awsNodeName ..."
     $Backend = "none"
-    $awsNodeNameQuote = """$awsNodeName"""
-    SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
-    SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
-    SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "vpc.*"'
+
+    Set-ConfigParameters -var 'NODENAME' -value $awsNodeName
+    Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "none"
+    Set-ConfigParameters -var 'KUBE_NETWORK' -value "vpc.*"
 
     $calicoNs = GetCalicoNamespace -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
     GetCalicoKubeConfig -CalicoNamespace $calicoNs -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
@@ -385,8 +432,7 @@ if ($platform -EQ "ec2") {
     $token = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token-ttl-seconds" = "300"} -Method PUT -Uri http://169.254.169.254/latest/api/token -ErrorAction Ignore
     $awsNodeName = Invoke-RestMethod -Headers @{"X-aws-ec2-metadata-token" = $token} -Method GET -Uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for AWS, node name $awsNodeName ..."
-    $awsNodeNameQuote = """$awsNodeName"""
-    SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
+    Set-ConfigParameters -var 'NODENAME' -value $awsNodeName
 
     $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
@@ -394,14 +440,14 @@ if ($platform -EQ "ec2") {
 
     Write-Host "Backend networking is $Backend"
     if ($Backend -EQ "bgp") {
-        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+        Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "windows-bgp"
     }
 }
 if ($platform -EQ "gce") {
     $gceNodeName = Invoke-RestMethod -UseBasicParsing -Headers @{"Metadata-Flavor"="Google"} "http://metadata.google.internal/computeMetadata/v1/instance/hostname" -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for GCE, node name $gceNodeName ..."
     $gceNodeNameQuote = """$gceNodeName"""
-    SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$gceNodeNameQuote"
+    Set-ConfigParameters -var 'NODENAME' -value $gceNodeNameQuote
 
     $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
@@ -409,7 +455,7 @@ if ($platform -EQ "gce") {
 
     Write-Host "Backend networking is $Backend"
     if ($Backend -EQ "bgp") {
-        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+        Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "windows-bgp"
     }
 }
 if ($platform -EQ "bare-metal") {
@@ -419,7 +465,7 @@ if ($platform -EQ "bare-metal") {
 
     Write-Host "Backend networking is $Backend"
     if ($Backend -EQ "bgp") {
-        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+        Set-ConfigParameters -var 'CALICO_NETWORKING_BACKEND' -value "windows-bgp"
     }
 }
 
@@ -428,7 +474,29 @@ if ($DownloadOnly -EQ "yes") {
     Exit
 }
 
-StartCalico
+InstallCalico
+
+if ($StartCalico -EQ "yes") {
+    Write-Host "Starting Calico..."
+    Write-Host "This may take several seconds if the vSwitch needs to be created."
+
+    Start-Service CalicoNode
+    Wait-ForCalicoInit
+    Start-Service CalicoFelix
+
+    if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
+    {
+        Start-Service CalicoConfd
+    }
+
+    while ((Get-Service | where Name -Like 'Calico*' | where Status -NE Running) -NE $null) {
+        Write-Host "Waiting for the Calico services to be running..."
+        Start-Sleep 1
+    }
+
+    Write-Host "Done, the Calico services are running:"
+    Get-Service | where Name -Like 'Calico*'
+}
 
 if ($Backend -NE "none") {
     New-NetFirewallRule -Name KubectlExec10250 -Description "Enable kubectl exec and log" -Action Allow -LocalPort 10250 -Enabled True -DisplayName "kubectl exec 10250" -Protocol TCP -ErrorAction SilentlyContinue
