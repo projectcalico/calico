@@ -227,6 +227,27 @@ deny:
 	goto finalize;
 }
 
+static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
+{
+	CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n",
+			bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex);
+	if (!r) {
+		CALI_INFO("Workload RPF fail: missing route.\n");
+		return false;
+	}
+	if (!cali_rt_flags_local_workload(r->flags)) {
+		CALI_INFO("Workload RPF fail: not a local workload.\n");
+		return false;
+	}
+	if (r->if_index != ctx->skb->ifindex) {
+		CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n",
+				ctx->skb->ifindex, r->if_index);
+		return false;
+	}
+
+	return true;
+}
+
 
 static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 {
@@ -242,11 +263,15 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
 
-	/* We are possibly past (D)NAT, but that is ok, we need to let the IP
-	 * stack do the RPF check on the source, dest is not important.
-	 */
 	if (ct_result_rpf_failed(ctx->state->ct_result.rc)) {
-		fwd_fib_set(&ctx->fwd, false);
+		if (!CALI_F_FROM_WEP) {
+			/* We are possibly past (D)NAT, but that is ok, we need to let the
+			 * IP stack do the RPF check on the source, dest is not important.
+			 */
+			fwd_fib_set(&ctx->fwd, false);
+		} else if (!wep_rpf_check(ctx, cali_rt_lookup(ctx->state->ip_src))) {
+			goto deny;
+		}
 	}
 
 	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
@@ -373,21 +398,9 @@ syn_force_policy:
 	}
 
 	if (CALI_F_FROM_WEP) {
-		/* Do RPF check since it's our responsibility to police that. */
-		CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n",
-				bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex);
 		struct cali_rt *r = cali_rt_lookup(ctx->state->ip_src);
-		if (!r) {
-			CALI_INFO("Workload RPF fail: missing route.\n");
-			goto deny;
-		}
-		if (!cali_rt_flags_local_workload(r->flags)) {
-			CALI_INFO("Workload RPF fail: not a local workload.\n");
-			goto deny;
-		}
-		if (r->if_index != ctx->skb->ifindex) {
-			CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n",
-					ctx->skb->ifindex, r->if_index);
+		/* Do RPF check since it's our responsibility to police that. */
+		if (!wep_rpf_check(ctx, r)) {
 			goto deny;
 		}
 
