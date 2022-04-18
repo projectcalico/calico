@@ -36,12 +36,16 @@ calicoctl ipam configure --strictaffinity=true
 
 #### Install {{site.prodnameWindows}} using HostProcess containers
 
-With Kubernetes v1.22, a new type of Windows container named "HostProcess" can run directly on the host with access to the host network namespace,
-storage and devices. {{site.prodnameWindows}} can now be installed from manifests.
+With Kubernetes v1.22, a new Windows container type called "HostProcess containers" can run directly on the host with access to the host network namespace,
+storage and devices. With this feature, {{site.prodnameWindows}} can now be installed and managed using Kubernetes resources such as Daemonsets and ConfigMaps,
+instead of needing to configure and install {{site.prodnameWindows}} manually on each node. Using this installation method, the {{site.prodnameWindows}}
+services are no longer registered on the host. Instead, the services are run directly within HostProcess containers.
 
 > **Note**: This installation method is a tech preview and should not be used for production clusters. Upgrades from a tech preview version of this
 > installation method to the GA version might not be seamless.
 {: .alert .alert-info}
+
+**Requirements**
 
 In addition to the [{{site.prodnameWindows}} requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements),
 this installation method has [additional requirements](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/):
@@ -50,7 +54,18 @@ this installation method has [additional requirements](https://kubernetes.io/doc
 - HostProcess containers support enabled: for v1.22, HostProcess containers support has to be [enabled](https://v1-22.docs.kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#before-you-begin-version-check). For Kubernetes v1.23+, HostProcess containers are enabled by default.
 - ContainerD 1.6.0+
 
-Before beginning, ensure that the Windows nodes have [joined the cluster](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/adding-windows-nodes/#joining-a-windows-worker-node).
+**Migrating from {{site.prodnameWindows}} installed manually**
+
+If your Windows nodes already have {{site.prodnameWindows}} installed using the manual installation method, you can continue this quickstart guide
+to migrate to a manifest-based installation. This installation process will uninstall any existing {{site.prodnameWindows}} services and overwrite the {{site.prodnameWindows}} installation files with those included in the `calico/windows` image. If `kubelet` and `kube-proxy` were installed using `{{site.rootDirWindows}}\kubernetes\install-kube-services.ps1`, those services will updated in-place and remain installed. If those services were running they are restarted so the services
+run with the updated service files.
+
+> **Note**: Before proceeding, take note of the configuration parameters in `{{site.rootDirWindows}}\config.ps1`. These configuration parameters will be needed during the install.
+{: .alert .alert-info}
+
+**Install**
+
+Before beginning, ensure that the Windows nodes have [joined the cluster](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/adding-windows-nodes/#joining-a-windows-worker-node). If you have an existing {{site.prodnameWindows}} installation using the manual method, your Windows nodes may have already joined the cluster.
 
 1. Download the {{site.prodnameWindows}} installation manifest.
 
@@ -58,13 +73,17 @@ Before beginning, ensure that the Windows nodes have [joined the cluster](https:
    curl {{ "/manifests/calico-windows-vxlan.yaml" | absolute_url }} -o calico-windows.yaml
    ```
 
-1. Get the cluster's Kubernetes API server host and port.
+1. Get the cluster's Kubernetes API server host and port, which will be used to update the {{site.prodnameWindows}} config map.
+   The API server host and port is required so that the {{site.prodnameWindows}} installation script can create a kubeconfig file for Calico services.
+   If your Windows nodes already have {{site.prodnameWindows}} installed manually, skip this step. The installation script will
+   use the API server host and port from your node's existing kubeconfig file if the `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT` variables
+   are not provided in the `calico-windows-config` configmap.
 
    {% include content/kube-apiserver-host-port.md %}
 
 1. Edit the `calico-windows-config` configmap in the downloaded manifest and ensure the required variables are correct for your cluster:
    - `CALICO_NETWORKING_BACKEND`: This should be set to "vxlan".
-   - `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`: The Kubernetes API server host and port (discovered in the previous step).
+   - `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`: The Kubernetes API server host and port (discovered in the previous step) used to create a kubeconfig file for Calico services. If your node already has an existing kubeconfig file, leave these variables blank.
    - `K8S_SERVICE_CIDR`: The Kubernetes service clusterIP range configured in your cluster. This must match the service-cluster-ip-range used by kube-apiserver.
    - `CNI_BIN_DIR`: Path where Calico CNI binaries will be installed. The this must match the CNI bin values in the ContainerD service configuration.
    - `CNI_CONF_DIR`: Path where Calico CNI configuration will be installed. this must match the CNI conf values in the ContainerD service configuration.
@@ -94,7 +113,8 @@ Before beginning, ensure that the Windows nodes have [joined the cluster](https:
 1. Install kube-proxy
 
    Depending on your platform, you may already have kube-proxy running on your Windows nodes.
-   If it is not, you must install and run kube-proxy on each of the Windows nodes in your cluster.
+   If kube-proxy is already running on your Windows nodes, skip this step. If kube-proxy is not running,
+   you must install and run kube-proxy on each of the Windows nodes in your cluster.
    Note: the provided manifest depends on the kubeconfig provided by the `kube-proxy` configmap in the `kube-system` namespace.
 
    - Download the kube-proxy manifest:
