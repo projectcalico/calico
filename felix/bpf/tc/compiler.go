@@ -101,7 +101,7 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 	case EpTypeHost:
 		epTypeShort = "hep"
 	case EpTypeTunnel:
-		if features != nil && features.IPIPDeviceIsL3 {
+		if features.IPIPDeviceIsL3 {
 			epTypeShort = "l3"
 		} else {
 			epTypeShort = "tnl"
