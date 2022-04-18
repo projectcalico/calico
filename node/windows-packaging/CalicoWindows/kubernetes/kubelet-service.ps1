@@ -19,7 +19,7 @@ Param(
 
 $baseDir = "$PSScriptRoot\.."
 . $baseDir\config.ps1
-ipmo $baseDir\libs\calico\calico.psm1
+ipmo $baseDir\libs\calico\calico.psm1 -Force
 
 Write-Host "Running kubelet service."
 Write-Host "Using configured nodename: $env:NODENAME DNS: $env:DNS_NAME_SERVERS"
