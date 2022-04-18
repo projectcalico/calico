@@ -212,7 +212,7 @@ skip_fib:
 		 * XXX those devices where we expect them before we even decap.
 		 */
 		if (CALI_F_FROM_HEP && state->tun_ip != 0 && ctx->fwd.mark != CALI_SKB_MARK_BYPASS_FWD) {
-			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_RPF;
+			ctx->fwd.mark = CALI_SKB_MARK_SKIP_RPF;
 			CALI_DEBUG("marking SKB_MARK_SKIP_RPF\n");
 		}
 		/* Packet is towards host namespace, mark it so that downstream
