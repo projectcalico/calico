@@ -208,31 +208,30 @@ function GetCalicoKubeConfig()
     }
 
     # If we are running inside a HostProcess container then we already have
-    # access to the serviceaccount token and ca cert and do not need the
-    # kubeconfig.
+    # access to the serviceaccount token and ca cert.
     if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
-        write-host "Install script is running in a HostProcess container, setting kubeconfig"
+        Write-Host "Install script is running in a HostProcess container, using mounted serviceaccount ca cert and token."
         # CA needs to be base64-encoded.
         $ca = Get-Content -Raw -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
         $ca = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($ca))
         # But not the token.
         $token = Get-Content -Path $env:CONTAINER_SANDBOX_MOUNT_POINT/var/run/secrets/kubernetes.io/serviceaccount/token
 
-        $k8sHost = "KUBERNETES_SERVICE_HOST"
-        $k8sPort = "KUBERNETES_SERVICE_PORT"
-        $envVars = @(
-            $k8sHost,
-            $k8sPort
-        )
-
-        ForEach ($envVar in $envVars) {
-            if (-not (Test-Path "env:$envVar")) {
-                Write-Host "$envVar is not defined, please add $envVar to the calico-windows-config configmap"
-                exit 1
-            }
+        # KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT are used if both
+        # provided. If this is not the case, fallback to using $KubeConfigPath
+        # if it exists.
+        $k8sHost = $env:KUBERNETES_SERVICE_HOST
+        $k8sPort = $env:KUBERNETES_SERVICE_PORT
+        if ($k8sHost -and $k8sPort) {
+            $server = "server: https://{0}:{1}" -f $k8sHost, $k8sPort
+            Write-Host "Using KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT env variables for kubeconfig. $server"
+        } elseif (Test-Path $KubeConfigPath) {
+            $server=findstr https:// $KubeConfigPath
+            Write-Host ("Using existing kubeconfig at $KubeConfigPath for API server host and port. {0}" -f $server.Trim())
+        } else {
+            Write-Host "Cannot determine API server host and port. Add KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to calico-windows-config in calico-system namespace"
+            exit 1
         }
-
-        $server = "server: https://{0}:{1}" -f (gci env:$k8sHost | select -expand Value), (gci env:$k8sPort | select -expand Value)
     } else {
         $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
         if ([string]::IsNullOrEmpty($name)) {
