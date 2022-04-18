@@ -15,6 +15,7 @@
 package environment_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -404,4 +405,139 @@ func (d *ipOutputCmd) StdoutPipe() (io.ReadCloser, error) {
 
 func (d *ipOutputCmd) Run() error {
 	return errors.New("Not implemented")
+}
+
+func TestBPFFeatureDetection(t *testing.T) {
+	RegisterTestingT(t)
+
+	type test struct {
+		kernelVersion string
+		features      Features
+		override      map[string]string
+	}
+	for _, tst := range []test{
+		{
+			"Linux version 5.10.0 - ubuntu",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 5.14.0 - something else",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 5.15.0",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 5.10.0 - Default",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "true",
+			},
+		},
+		{
+			"Linux version 5.14.0",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+		{
+			"Linux version 5.16.0 - Ubuntu",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+		{
+			"Linux version 4.18.0 - Red Hat",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.18.0-330 - Red Hat",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.18.0-420 - Red hat",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.17.0 - el8_3",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "true",
+			},
+		},
+		{
+			"Linux version 4.18.0-330 - el8_5",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+		{
+			"Linux version 4.18.0-390 - el9_7",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+	} {
+		t.Run("kernel "+tst.kernelVersion, func(t *testing.T) {
+			RegisterTestingT(t)
+			featureDetector := NewFeatureDetector(nil)
+			if tst.override != nil {
+				featureDetector = NewFeatureDetector(tst.override)
+			}
+			kernel := mockKernelVersion{
+				kernelVersion: tst.kernelVersion,
+			}
+			featureDetector.GetKernelVersionReader = kernel.GetKernelVersionReader
+			Expect(featureDetector.GetFeatures()).To(Equal(&tst.features))
+		})
+	}
+}
+
+type mockKernelVersion struct {
+	kernelVersion string
+}
+
+func (kv mockKernelVersion) GetKernelVersionReader() (io.Reader, error) {
+	return bytes.NewBufferString(kv.kernelVersion), nil
 }
