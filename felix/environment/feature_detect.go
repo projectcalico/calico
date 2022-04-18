@@ -16,9 +16,7 @@ package environment
 
 import (
 	"bytes"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -49,11 +47,6 @@ var (
 	v3Dot14Dot0 = MustParseVersion("3.14.0")
 	// v5Dot7Dot0 contains a fix for checksum offloading.
 	v5Dot7Dot0 = MustParseVersion("5.7.0")
-	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels acts like other L3
-	// devices where bpf programs only see inner IP header. In RHEL based distros,
-	// kernel 4.18.0 (v4Dot18Dot0_330) is the first one with this behavior.
-	v5Dot14Dot0     = MustParseVersion("5.14.0")
-	v4Dot18Dot0_330 = MustParseVersion("4.18.0-330")
 )
 
 type Features struct {
@@ -68,8 +61,6 @@ type Features struct {
 	// ports. See https://github.com/projectcalico/calico/issues/3145.  On such kernels we disable checksum offload
 	// on our VXLAN device.
 	ChecksumOffloadBroken bool
-	// IPIPDeviceIsL3 represent if ipip tunnels acts like other l3 devices
-	IPIPDeviceIsL3 bool
 }
 
 type FeatureDetector struct {
@@ -123,7 +114,6 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		MASQFullyRandom:       iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
 		RestoreSupportsLock:   iptV.Compare(v1Dot6Dot2) >= 0,
 		ChecksumOffloadBroken: kerV.Compare(v5Dot7Dot0) < 0,
-		IPIPDeviceIsL3:        d.ipipDeviceIsL3(),
 	}
 
 	for k, v := range d.featureOverride {
@@ -162,54 +152,6 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 			"iptablesVersion": iptV,
 		}).Info("Updating detected iptables features")
 		d.featureCache = &features
-	}
-}
-
-func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
-	versionReader, err := d.GetKernelVersionReader()
-	if err != nil {
-		return fmt.Errorf("failed to get kernel version reader: %v", err)
-	}
-
-	kernelVersion, err := GetKernelVersion(versionReader)
-	if err != nil {
-		return fmt.Errorf("failed to get kernel version: %v", err)
-	}
-
-	if kernelVersion.Compare(v) < 0 {
-		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v)
-	}
-
-	return nil
-}
-
-func (d *FeatureDetector) getDistributionName() string {
-	versionReader, err := d.GetKernelVersionReader()
-	if err != nil {
-		log.Errorf("failed to get kernel version reader: %v", err)
-		return DefaultDistro
-	}
-
-	kernVersion, err := ioutil.ReadAll(versionReader)
-	if err != nil {
-		log.WithError(err).Warn("Failed to read kernel version from reader")
-		return DefaultDistro
-	}
-	return GetDistFromString(string(kernVersion))
-}
-
-func (d *FeatureDetector) ipipDeviceIsL3() bool {
-	switch d.getDistributionName() {
-	case RedHat:
-		if err := d.isAtLeastKernel(v4Dot18Dot0_330); err != nil {
-			return false
-		}
-		return true
-	default:
-		if err := d.isAtLeastKernel(v5Dot14Dot0); err != nil {
-			return false
-		}
-		return true
 	}
 }
 
