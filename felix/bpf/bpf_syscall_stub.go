@@ -84,3 +84,7 @@ func (m *MapIterator) Next() (k, v []byte, err error) {
 func (m *MapIterator) Close() error {
 	return nil
 }
+
+func BPFHelperSupported(helper string) bool {
+	return false
+}

@@ -50,7 +50,7 @@ UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 
 OBJS:=$(shell ./list-objs)
-C_FILES:=tc.c connect_balancer.c xdp.c
+C_FILES:=tc.c connect_balancer.c xdp.c bpf_test_helpers.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
@@ -59,6 +59,8 @@ COMPILE=$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
 connect_time_%v4.ll: connect_balancer.c connect_balancer.d calculate-flags
 	$(COMPILE)
 connect_time_%v6.ll: connect_balancer_v6.c connect_balancer_v6.d calculate-flags
+	$(COMPILE)
+bpf_check_mtu.ll: bpf_test_helpers.c bpf_test_helpers.d calculate-flags
 	$(COMPILE)
 
 UT_CFLAGS=\
@@ -102,6 +104,9 @@ bin/connect_time_%v4_co-re.o: connect_time_%v4.ll | bin
 	$(LINK)
 bin/connect_time_%v6_co-re.o: connect_time_%v6.ll | bin
 	$(LINK)
+bin/bpf_check_mtu.o: bpf_check_mtu.ll | bin
+	$(LINK)
+
 ut/%.o: ut/%.ll
 	$(LINK)
 

@@ -15,6 +15,7 @@
 package bpf
 
 import (
+	"path"
 	"reflect"
 	"runtime"
 	"strings"
@@ -476,4 +477,19 @@ func (m *MapIterator) Close() error {
 	runtime.SetFinalizer(m, nil)
 
 	return nil
+}
+
+func BPFHelperSupported(helper string) bool {
+	filename := helper + ".o"
+	preCompiledBinary := path.Join(ObjectDir, filename)
+	obj, err := libbpf.OpenObject(preCompiledBinary)
+	if err != nil {
+		return false
+	}
+	defer obj.Close()
+
+	if err := obj.Load(); err != nil {
+		return false
+	}
+	return true
 }
