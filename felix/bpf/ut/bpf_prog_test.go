@@ -74,11 +74,12 @@ var (
 			}},
 		}},
 	}
-	node1ip   = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
-	node2ip   = net.IPv4(10, 10, 0, 2).To4()
-	intfIP    = net.IPv4(10, 10, 0, 3).To4()
-	node1CIDR = net.IPNet{
+	node1ip    = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2   = net.IPv4(10, 10, 2, 1).To4()
+	node1tunIP = net.IPv4(11, 11, 0, 1).To4()
+	node2ip    = net.IPv4(10, 10, 0, 2).To4()
+	intfIP     = net.IPv4(10, 10, 0, 3).To4()
+	node1CIDR  = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
@@ -209,6 +210,12 @@ outter:
 		if strings.Contains(section, "host") {
 			obj += "hep_"
 			progLog = "HEP"
+		} else if strings.Contains(section, "nat") {
+			obj += "nat_"
+			progLog = "NAT"
+		} else if strings.Contains(section, "wireguard") {
+			obj += "wg_"
+			progLog = "WG"
 		} else {
 			obj += "wep_"
 			progLog = "WEP"
@@ -239,6 +246,8 @@ outter:
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
 	bin.PatchSkbMark(skbMark)
+	err = bin.PatchHostTunnelIPv4(node1tunIP)
+	Expect(err).NotTo(HaveOccurred())
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -486,6 +495,13 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "8", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (drop_v6 program)")
+		}
+	}
+
+	if !forXDP {
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
 	}
 
