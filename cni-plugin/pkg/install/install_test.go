@@ -1,15 +1,15 @@
 //  Copyright (c) 2020 Tigera, Inc. All rights reserved.
-package install_test
+package install
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -123,7 +123,7 @@ var _ = Describe("CNI installation tests", func() {
 
 		// Create token file for the Kubernetes client.
 		k8sSecret := []byte("my-secret-key")
-		var tokenFile = fmt.Sprintf("%s/serviceaccount/token", tempDir)
+		tokenFile := fmt.Sprintf("%s/serviceaccount/token", tempDir)
 		err = ioutil.WriteFile(tokenFile, k8sSecret, 0755)
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s secret file: %v", err))
@@ -152,12 +152,11 @@ yvQ/7I8lUKV1hMeCWc2k/x146B/gEgyDl1zUNnJZ/hrKmXqjQy3dkj4HzBePHYND
 2oFTq6p93/5bB6PAJknn1ZTGQAXzVKrqau8gHaHw1F+I2p3SuN3NGz4v7HHXo+e4
 PuB/TL+u2y+iQUyXxLy3
 -----END CERTIFICATE-----`)
-		var caFile = fmt.Sprintf("%s/serviceaccount/ca.crt", tempDir)
+		caFile := fmt.Sprintf("%s/serviceaccount/ca.crt", tempDir)
 		err = ioutil.WriteFile(caFile, k8sCA, 0755)
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s CA file for test: %v", err))
 		}
-
 	})
 
 	Context("Install with default values", func() {
@@ -306,6 +305,72 @@ PuB/TL+u2y+iQUyXxLy3
 			expectedConfig := "{\"etcd_cert\": \"/etc/cni/net.d/calico-tls/etcd-cert\"}"
 			expectFileContents(tempDir+"/net.d/10-calico.conflist", expectedConfig)
 		})
+	})
+})
+
+var _ = Describe("file comparison tests", func() {
+	var err error
+	var tempDir string
+	BeforeEach(func() {
+		// Make a temporary directory for this test and build arguments to pass
+		// to the CNI container, configuring it to use the temp directory.
+		tempDir, err = ioutil.TempDir("/tmp", "")
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should compare two equal files", func() {
+		// Write two identical files.
+		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// Assert that they are equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(true))
+	})
+
+	It("should compare two unequal files", func() {
+		// Write two files with different contents.
+		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("it does matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// Assert that they are not equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(false))
+	})
+
+	It("should compare two unequal files of the same size", func() {
+		// Write two files with different contents, but same total size.
+		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("foobar"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("barfoo"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// Assert that they are not equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(false))
+	})
+
+	It("should compare two files with differing file modes", func() {
+		// Write two identical files.
+		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// For whatever reason, we need to explicitly chmod the file to get the permissions to change.
+		Expect(os.Chmod(tempDir+"/dstFile", 0777)).NotTo(HaveOccurred())
+
+		// Assert that they are not equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(false))
 	})
 })
 
