@@ -129,5 +129,25 @@ spec:
             - -felix-ready
           periodSeconds: 10
           timeoutSeconds: 10
+      {% if networkingType == "windows-bgp" -%}
+      - name: confd
+        image: {{page.registry}}{{page.imageNames["calico/windows"]}}:{{site.data.versions.first.components["calico/windows"].version}}
+        imagePullPolicy: Always
+        args:
+          - ".\\confd\\confd-service.ps1"
+        # The confd container's working dir is in c:\CalicoWindows on the host,
+        # which is two-levels up from the CONTAINER_SANDBOX_MOUNT_POINT.
+        workingDir: "..\\..\\{{installDirName}}"
+        envFrom:
+        - configMapRef:
+            name: calico-windows-config
+        # Calico needs to know the name of the node on which it is running.
+        env:
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+      {% endif -%}
       nodeSelector:
         kubernetes.io/os: windows
