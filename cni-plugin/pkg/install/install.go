@@ -521,7 +521,7 @@ func destinationUptoDate(src, dst string) (bool, error) {
 	}
 
 	// Stat the dst file.
-	f2info, err := os.Stat(src)
+	f2info, err := os.Stat(dst)
 	if os.IsNotExist(err) {
 		// If the destination file doesn't exist, it means the
 		// two files are not equal.
@@ -538,6 +538,9 @@ func destinationUptoDate(src, dst string) (bool, error) {
 	if f1info.Mode() != f2info.Mode() {
 		return false, nil
 	}
+
+	logrus.Infof("F1MODE: %s", f1info.Mode())
+	logrus.Infof("F2MODE: %s", f2info.Mode())
 
 	// Files have the same exact size and mode, check the actual contents.
 	f1, err := os.Open(src)

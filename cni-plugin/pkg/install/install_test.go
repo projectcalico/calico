@@ -356,6 +356,22 @@ var _ = Describe("file comparison tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(match).To(Equal(false))
 	})
+
+	It("should compare two files with differing file modes", func() {
+		// Write two identical files.
+		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// For whatever reason, we need to explicitly chmod the file to get the permissions to change.
+		Expect(os.Chmod(tempDir+"/dstFile", 0777)).NotTo(HaveOccurred())
+
+		// Assert that they are not equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(false))
+	})
 })
 
 func expectFileContents(filename, expected string) {
