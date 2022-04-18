@@ -29,10 +29,13 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -74,6 +77,9 @@ const (
 
 	// Interface name used by kube-proxy to bind service ips.
 	KubeIPVSInterface = "kube-ipvs0"
+
+	// Route cleanup grace period. Used for workload routes only.
+	routeCleanupGracePeriod = 10 * time.Second
 )
 
 var (
@@ -193,6 +199,7 @@ type Config struct {
 	BPFMapSizeIPSets                   int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
+	BPFEnforceRPF                      string
 	KubeProxyMinSyncPeriod             time.Duration
 
 	SidecarAccelerationEnabled bool
@@ -355,7 +362,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
-	backendMode := iptables.DetectBackend(config.LookPathOverride, iptables.NewRealCmd, config.IptablesBackend)
+	backendMode := environment.DetectBackend(config.LookPathOverride, cmdshim.NewRealCmd, config.IptablesBackend)
 
 	// Most iptables tables need the same options.
 	iptablesOptions := iptables.TableOptions{
@@ -386,11 +393,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
-	featureDetector := iptables.NewFeatureDetector(config.FeatureDetectOverrides)
-	iptablesFeatures := featureDetector.GetFeatures()
+	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
+	dataplaneFeatures := featureDetector.GetFeatures()
 
 	var iptablesLock sync.Locker
-	if iptablesFeatures.RestoreSupportsLock {
+	if dataplaneFeatures.RestoreSupportsLock {
 		log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
 			"iptables-restore will use its own implementation).")
 		iptablesLock = dummyLock{}
@@ -449,7 +456,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.RulesConfig.VXLANEnabled {
 		routeTableVXLAN := routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
 			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 		vxlanManager := newVXLANManager(
@@ -459,7 +466,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 		)
-		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
+		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
@@ -665,8 +672,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_UNSPEC,
+		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+		routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -761,8 +769,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		routeTableV6 := routetable.New(
 			interfaceRegexes, 6, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
+			unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))
@@ -1342,62 +1351,14 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	}
 
 	for _, t := range d.iptablesRawTables {
-		// Do not RPF check what is marked as to be skipped by RPF check.
-		rpfRules := []iptables.Rule{{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
-			Action: iptables.ReturnAction{},
-		}}
-
-		// For anything we approved for forward, permit accept_local as it is
-		// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
-		rpfRules = append(rpfRules, iptables.Rule{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
-			Action: iptables.ReturnAction{},
-		})
-
-		// Do the full RPF check and dis-allow accept_local for anything else.
-		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
-			rulesConfig.OpenStackSpecialCasesEnabled, false)...)
-
-		rpfChain := []*iptables.Chain{{
-			Name:  rules.ChainNamePrefix + "RPF",
-			Rules: rpfRules,
-		}}
-		t.UpdateChains(rpfChain)
-
-		var rawRules []iptables.Rule
-		if t.IPVersion == 4 && rulesConfig.WireguardEnabled && len(rulesConfig.WireguardInterfaceName) > 0 &&
-			d.config.Wireguard.EncryptHostTraffic {
-			// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
-			// check allows it.
-			log.Debug("Adding Wireguard iptables rule chain")
-			rawRules = append(rawRules, iptables.Rule{
-				Match:  nil,
-				Action: iptables.JumpAction{Target: rules.ChainSetWireguardIncomingMark},
-			})
-			t.UpdateChain(d.ruleRenderer.WireguardIncomingMarkChain())
-		}
-
-		rawRules = append(rawRules, iptables.Rule{
-			Action: iptables.JumpAction{Target: rpfChain[0].Name},
-		})
-
-		rawChains := []*iptables.Chain{{
-			Name:  rules.ChainRawPrerouting,
-			Rules: rawRules,
-		}}
-		t.UpdateChains(rawChains)
-
+		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion,
+			d.config.Wireguard.EncryptHostTraffic, d.config.BPFHostConntrackBypass,
+			d.config.BPFEnforceRPF == "Strict",
+		))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
-
 		if t.IPVersion == 4 {
-			// Iptables for untracked policy.
-			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass), d.config.BPFHostConntrackBypass))
-			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
-				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
-			}})
 			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
 			}})

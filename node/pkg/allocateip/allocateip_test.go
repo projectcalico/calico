@@ -22,6 +22,7 @@ import (
 	"os"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
@@ -43,37 +44,13 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-func allocateIPDescribe(description string, tunnelType []string, body func(tunnelType string)) bool {
-	for _, tt := range tunnelType {
-		switch tt {
-		case ipam.AttributeTypeIPIP:
-			Describe(fmt.Sprintf("%s (ipip)", description),
-				func() {
-					body(tt)
-				})
-		case ipam.AttributeTypeVXLAN:
-			Describe(fmt.Sprintf("%s (vxlan)", description),
-				func() {
-					body(tt)
-				})
-		case ipam.AttributeTypeWireguard:
-			Describe(fmt.Sprintf("%s (wireguard)", description),
-				func() {
-					body(tt)
-				})
-		default:
-			panic(fmt.Errorf("Unknown tunnelType, %s", tt))
-		}
-	}
-
-	return true
-}
-
 func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
 	if tunnelType == ipam.AttributeTypeIPIP {
 		n.Spec.BGP.IPv4IPIPTunnelAddr = addr
 	} else if tunnelType == ipam.AttributeTypeVXLAN {
 		n.Spec.IPv4VXLANTunnelAddr = addr
+	} else if tunnelType == ipam.AttributeTypeVXLANV6 {
+		n.Spec.IPv6VXLANTunnelAddr = addr
 	} else if tunnelType == ipam.AttributeTypeWireguard {
 		if addr != "" {
 			n.Spec.Wireguard = &libapi.NodeWireguardSpec{
@@ -84,6 +61,73 @@ func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
 		}
 	} else {
 		panic(fmt.Errorf("Unknown tunnelType, %s", tunnelType))
+	}
+}
+
+func getEnsureCIDRAndExpectedAddrForIPVersion(ipVersion int) (pool1CIDR, pool1ExpectedAddr, pool2CIDR, pool2ExpectedAddr string) {
+	switch ipVersion {
+	case 4:
+		pool1CIDR = "172.16.10.10/32"
+		pool1ExpectedAddr = "172.16.10.10"
+		pool2CIDR = "172.16.0.0/31"
+		pool2ExpectedAddr = "172.16.0.1"
+	case 6:
+		pool1CIDR = "2001:db8:00:ff::/128"
+		pool1ExpectedAddr = "2001:db8:0:ff::"
+		pool2CIDR = "2001:db8::/127"
+		pool2ExpectedAddr = "2001:db8::1"
+	default:
+		panic(fmt.Errorf("Invalid IP version %v", ipVersion))
+	}
+
+	return pool1CIDR, pool1ExpectedAddr, pool2CIDR, pool2ExpectedAddr
+}
+
+func getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType string) (pool1CIDR, pool1ExpectedAddr, pool2CIDR, pool2ExpectedAddr string) {
+	switch tunnelType {
+	case ipam.AttributeTypeIPIP:
+		fallthrough
+	case ipam.AttributeTypeVXLAN:
+		fallthrough
+	case ipam.AttributeTypeWireguard:
+		return getEnsureCIDRAndExpectedAddrForIPVersion(4)
+	case ipam.AttributeTypeVXLANV6:
+		return getEnsureCIDRAndExpectedAddrForIPVersion(6)
+	default:
+		panic(fmt.Errorf("Invalid tunnelType %v", tunnelType))
+	}
+}
+
+func getRemoveCIDRAndAddrForIPVersion(ipVersion int) (poolCIDR, expectedAddr, allocationCIDR, allocationAddr string) {
+	switch ipVersion {
+	case 4:
+		poolCIDR = "172.16.0.0/24"
+		expectedAddr = "172.16.0.5"
+		allocationCIDR = "172.16.0.1/32"
+		allocationAddr = "172.16.0.1"
+	case 6:
+		poolCIDR = "2001:db8::/64"
+		expectedAddr = "2001:db8::5"
+		allocationCIDR = "2001:db8::1/128"
+		allocationAddr = "2001:db8::1"
+	default:
+		panic(fmt.Errorf("Invalid IP version %v", ipVersion))
+	}
+	return poolCIDR, expectedAddr, allocationCIDR, allocationAddr
+}
+
+func getRemoveCIDRAndAddrForTunnelType(tunnelType string) (poolCIDR, expectedAddr, allocationCIDR, allocationAddr string) {
+	switch tunnelType {
+	case ipam.AttributeTypeIPIP:
+		fallthrough
+	case ipam.AttributeTypeVXLAN:
+		fallthrough
+	case ipam.AttributeTypeWireguard:
+		return getRemoveCIDRAndAddrForIPVersion(4)
+	case ipam.AttributeTypeVXLANV6:
+		return getRemoveCIDRAndAddrForIPVersion(6)
+	default:
+		panic(fmt.Errorf("Invalid tunnelType %v", tunnelType))
 	}
 }
 
@@ -101,6 +145,8 @@ func checkTunnelAddressEmpty(c client.Interface, tunnelType string, nodeName str
 		addr = n.Spec.BGP.IPv4IPIPTunnelAddr
 	} else if tunnelType == ipam.AttributeTypeVXLAN {
 		addr = n.Spec.IPv4VXLANTunnelAddr
+	} else if tunnelType == ipam.AttributeTypeVXLANV6 {
+		addr = n.Spec.IPv6VXLANTunnelAddr
 	} else if tunnelType == ipam.AttributeTypeWireguard {
 		if n.Spec.Wireguard != nil {
 			addr = n.Spec.Wireguard.InterfaceIPv4Address
@@ -129,6 +175,8 @@ func checkTunnelAddressForNode(c client.Interface, tunnelType string, nodeName s
 		addr = n.Spec.BGP.IPv4IPIPTunnelAddr
 	} else if tunnelType == ipam.AttributeTypeVXLAN {
 		addr = n.Spec.IPv4VXLANTunnelAddr
+	} else if tunnelType == ipam.AttributeTypeVXLANV6 {
+		addr = n.Spec.IPv6VXLANTunnelAddr
 	} else if tunnelType == ipam.AttributeTypeWireguard {
 		if n.Spec.Wireguard != nil {
 			addr = n.Spec.Wireguard.InterfaceIPv4Address
@@ -137,7 +185,7 @@ func checkTunnelAddressForNode(c client.Interface, tunnelType string, nodeName s
 		panic(fmt.Errorf("Unknown tunnelType, %s", tunnelType))
 	}
 	if addr != expected {
-		return fmt.Errorf("%s address is %s not, expected %s", tunnelType, addr, expected)
+		return fmt.Errorf("%s address is %s, not expected %s", tunnelType, addr, expected)
 	}
 
 	// Also check the assignment attributes for this IP match.
@@ -174,7 +222,7 @@ var _ = Describe("FV tests", func() {
 		c, _ = client.New(*cfg)
 
 		// Create an IPPool.
-		_, err = c.IPPools().Create(ctx, makeIPv4Pool("pool1", "172.16.0.0/16", 31), options.SetOptions{})
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1", "172.16.0.0/16", 31, api.IPIPModeAlways, api.VXLANModeNever), options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -356,7 +404,7 @@ var _ = Describe("FV tests", func() {
 	})
 })
 
-var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{ipam.AttributeTypeIPIP, ipam.AttributeTypeVXLAN, ipam.AttributeTypeWireguard}, func(tunnelType string) {
+var _ = Describe("ensureHostTunnelAddress", func() {
 	log.SetOutput(os.Stdout)
 	// Set log formatting.
 	log.SetFormatter(&logutils.Formatter{})
@@ -372,7 +420,8 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{ipam.AttributeTyp
 	var be bapi.Client
 	BeforeEach(func() {
 		// Clear out datastore
-		be, err := backend.NewClient(*cfg)
+		var err error
+		be, err = backend.NewClient(*cfg)
 		Expect(err).ToNot(HaveOccurred())
 		err = be.Clean()
 		Expect(err).ToNot(HaveOccurred())
@@ -380,23 +429,47 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{ipam.AttributeTyp
 		//create client.
 		c, _ = client.New(*cfg)
 
-		//create IPPool which has only two ips available.
-		_, err = c.IPPools().Create(ctx, makeIPv4Pool("pool1", "172.16.0.0/31", 31), options.SetOptions{})
+		pool1CIDR, _, pool2CIDR, _ := getEnsureCIDRAndExpectedAddrForIPVersion(4)
+
+		//create IPPool which has only one ip available.
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v4", pool1CIDR, 32, api.IPIPModeAlways, api.VXLANModeNever), options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		//create second IPPool which has only one ips available.
-		_, err = c.IPPools().Create(ctx, makeIPv4Pool("pool2", "172.16.10.10/32", 32), options.SetOptions{})
+		// create IPPool which has only two ips available.
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool2-v4", pool2CIDR, 31, api.IPIPModeAlways, api.VXLANModeNever), options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Pre-allocate a WEP ip on 172.16.0.0. This will force tunnel address to use 172.16.0.1
 		handle := "myhandle"
-		wepIp := gnet.IP{172, 16, 0, 0}
 		wepAttr = map[string]string{
 			ipam.AttributeNode: "test.node",
 			ipam.AttributeType: ipam.AttributePod,
 		}
 		err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
-			IP:       net.IP{IP: wepIp},
+			IP:       net.IP{IP: gnet.ParseIP("172.16.0.0")},
+			Hostname: "test.node",
+			HandleID: &handle,
+			Attrs:    wepAttr,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		pool1CIDR, _, pool2CIDR, _ = getEnsureCIDRAndExpectedAddrForIPVersion(6)
+
+		//create IPPool which has only one ip available.
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", pool1CIDR, 128, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		//create IPPool which has only two ips available.
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool2-v6", pool2CIDR, 127, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Pre-allocate a WEP ip on 2001:db8::0. This will force tunnel address to use 2001:db8::1
+		wepAttr = map[string]string{
+			ipam.AttributeNode: "test.node",
+			ipam.AttributeType: ipam.AttributePod,
+		}
+		err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+			IP:       net.IP{IP: gnet.ParseIP("2001:db8::0")},
 			Hostname: "test.node",
 			HandleID: &handle,
 			Attrs:    wepAttr,
@@ -404,19 +477,26 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{ipam.AttributeTyp
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should add tunnel address to node", func() {
+	DescribeTable("should add tunnel address to node", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
 
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		_, ip4net, _ := net.ParseCIDR("172.16.0.0/31")
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
-	})
+		_, _, cidr, expectedAddr := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
 
-	It("should add tunnel address to node without BGP Spec or Wireguard Spec", func() {
+		_, ipnet, _ := net.ParseCIDR(cidr)
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr)
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
+
+	DescribeTable("should add tunnel address to node without BGP Spec or Wireguard Spec", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
 		node.Spec.BGP = nil
@@ -425,47 +505,63 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{ipam.AttributeTyp
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		_, ip4net, _ := net.ParseCIDR("172.16.0.0/31")
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
-	})
+		_, _, cidr, expectedAddr := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
 
-	It("should release old tunnel address and assign new one on ippool update", func() {
-		// Assign a tunnel address from pool2.
+		_, ipnet, _ := net.ParseCIDR(cidr)
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr)
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
+
+	DescribeTable("should release old tunnel address and assign new one on ippool update", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
 
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		_, ip4net, _ := net.ParseCIDR("172.16.10.10/32")
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.10.10")
+		cidr1, expectedAddr1, cidr2, expectedAddr2 := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
+
+		_, ipnet, _ := net.ParseCIDR(cidr1)
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr1)
 
 		// Simulate a node restart and ippool update.
-		_, ip4net, _ = net.ParseCIDR("172.16.0.0/31")
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
+		_, ipnet, _ = net.ParseCIDR(cidr2)
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
 
 		// Check old address
 		// Verify 172.16.10.10 has been released.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.10.10")})
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)})
 		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 
 		// Check new address has been assigned in pool1.
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
-	})
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should assign new tunnel address to node on ippool update if old address been occupied", func() {
+	DescribeTable("should assign new tunnel address to node on ippool update if old address been occupied", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
-		setTunnelAddressForNode(tunnelType, node, "172.16.10.10")
+
+		_, expectedAddr1, cidr2, expectedAddr2 := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
+
+		setTunnelAddressForNode(tunnelType, node, expectedAddr1)
 
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Pre-allocate a WEP ip on 172.16.10.10.
 		handle := "myhandle"
-		wepIp := gnet.IP{172, 16, 10, 10}
+		wepIp := gnet.ParseIP(expectedAddr1)
 		err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
 			IP:       net.IP{IP: wepIp},
 			Hostname: "another.node",
@@ -474,98 +570,144 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{ipam.AttributeTyp
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		_, ip4net, _ := net.ParseCIDR("172.16.0.0/31")
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
+		_, ipnet, _ := net.ParseCIDR(cidr2)
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
 
 		// Check old address.
 		// Verify 172.16.10.10 has not been touched.
-		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.10.10")})
+		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(attr).To(Equal(wepAttr))
 
 		// Check new address has been assigned.
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
-	})
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should assign new tunnel address and do nothing if node restart", func() {
+	DescribeTable("should assign new tunnel address and do nothing if node restarts", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
 
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		_, ip4net, _ := net.ParseCIDR("172.16.0.0/31")
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
+		_, _, cidr2, expectedAddr2 := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
+
+		_, ipnet, _ := net.ParseCIDR(cidr2)
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
 
 		// Now we have a wep IP allocated at 172.16.0.0 and tunnel ip allocated at 172.16.0.1.
 		// Release wep IP and call ensureHostTunnelAddress again. Tunnel ip should not be changed.
 		err = c.IPAM().ReleaseByHandle(ctx, "myhandle")
 		Expect(err).NotTo(HaveOccurred())
 
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
-	})
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should assign new tunnel address to node on unassigned address", func() {
+	DescribeTable("should assign new tunnel address to node on unassigned address", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
-		setTunnelAddressForNode(tunnelType, node, "172.16.0.1")
+
+		_, _, cidr2, expectedAddr2 := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
+		setTunnelAddressForNode(tunnelType, node, expectedAddr2)
 
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify 172.16.0.1 is not properly assigned to tunnel address.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr2)})
 		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 
-		_, ip4net, _ := net.ParseCIDR("172.16.0.0/31")
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
-	})
+		_, ipnet, _ := net.ParseCIDR(cidr2)
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should assign new tunnel address to node on pre-allocated address", func() {
+	DescribeTable("should assign new tunnel address to node on pre-allocated address", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
-		setTunnelAddressForNode(tunnelType, node, "172.16.0.0")
+
+		var expectedAddr1 string
+		switch tunnelType {
+		case ipam.AttributeTypeIPIP:
+			fallthrough
+		case ipam.AttributeTypeVXLAN:
+			fallthrough
+		case ipam.AttributeTypeWireguard:
+			expectedAddr1 = "172.16.0.0"
+		case ipam.AttributeTypeVXLANV6:
+			expectedAddr1 = "2001:db8::0"
+		default:
+			panic(fmt.Errorf("Invalid tunnelType %v", tunnelType))
+		}
+
+		_, _, cidr2, expectedAddr2 := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
+		setTunnelAddressForNode(tunnelType, node, expectedAddr1)
 
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		_, ip4net, _ := net.ParseCIDR("172.16.0.0/31")
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ip4net}, tunnelType)
-		expectTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
+		_, ipnet, _ := net.ParseCIDR(cidr2)
+		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
 
 		// Verify 172.16.0.0 has not been released.
-		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.0")})
+		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(attr).To(Equal(wepAttr))
-	})
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should panic on datastore errors", func() {
-		// Create a shimClient
+	DescribeTable("should panic on datastore errors", func(tunnelType string) {
 		pa := newIPPoolErrorAccessor(cerrors.ErrorDatastoreError{Err: errors.New("mock datastore error"), Identifier: nil})
 		cc := newShimClientWithPoolAccessor(c, be, pa)
 
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
-		setTunnelAddressForNode(tunnelType, node, "172.16.0.1")
+
+		_, _, cidr2, expectedAddr2 := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
+		setTunnelAddressForNode(tunnelType, node, expectedAddr2)
 
 		_, err := cc.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		_, ip4net, _ := net.ParseCIDR("172.16.0.0/31")
+		_, ipnet, _ := net.ParseCIDR(cidr2)
 
 		defer func() {
 			if err := recover(); err == nil {
 				Fail("Panic didn't occur!")
 			}
 		}()
-		ensureHostTunnelAddress(ctx, cc, node.Name, []net.IPNet{*ip4net}, tunnelType)
-	})
+		ensureHostTunnelAddress(ctx, cc, node.Name, []net.IPNet{*ipnet}, tunnelType)
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 })
 
-var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTypeIPIP, ipam.AttributeTypeVXLAN, ipam.AttributeTypeWireguard}, func(tunnelType string) {
+var _ = Describe("removeHostTunnelAddress", func() {
 	log.SetOutput(os.Stdout)
 	// Set log formatting.
 	log.SetFormatter(&logutils.Formatter{})
@@ -583,16 +725,25 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTyp
 		err = be.Clean()
 		Expect(err).ToNot(HaveOccurred())
 
-		//create client and IPPool
+		//create client and IPPools
 		c, _ = client.New(*cfg)
-		_, err = c.IPPools().Create(ctx, makeIPv4Pool("pool1", "172.16.0.0/24", 26), options.SetOptions{})
+
+		poolCIDR, _, _, _ := getRemoveCIDRAndAddrForIPVersion(4)
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v4", poolCIDR, 26, api.IPIPModeAlways, api.VXLANModeNever), options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		poolCIDR, _, _, _ = getRemoveCIDRAndAddrForIPVersion(6)
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", poolCIDR, 122, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	It("should remove tunnel address from node", func() {
+	DescribeTable("should remove tunnel address from node", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
-		setTunnelAddressForNode(tunnelType, node, "172.16.0.5")
+
+		_, expectedAddr, _, _ := getRemoveCIDRAndAddrForTunnelType(tunnelType)
+
+		setTunnelAddressForNode(tunnelType, node, expectedAddr)
 
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -601,9 +752,14 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTyp
 		_, err = c.Nodes().Get(ctx, node.Name, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressEmpty(c, tunnelType, node.Name)
-	})
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should not panic on node without BGP Spec", func() {
+	DescribeTable("should not panic on node without BGP Spec", func(tunnelType string) {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
 		node.Spec.BGP = nil
@@ -615,11 +771,17 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTyp
 		n, err := c.Nodes().Get(ctx, node.Name, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(n.Spec.BGP).To(BeNil())
-	})
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should release IP address allocations", func() {
+	DescribeTable("should release IP address allocations", func(tunnelType string) {
+		_, _, allocationCIDR, allocationAddr := getRemoveCIDRAndAddrForTunnelType(tunnelType)
 		// Create an allocation for this node in IPAM.
-		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		ipAddr, _, _ := net.ParseCIDR(allocationCIDR)
 		nodename := "my-test-node"
 		handle, attrs := generateHandleAndAttributes(nodename, tunnelType)
 		args := ipam.AssignIPArgs{
@@ -633,7 +795,7 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTyp
 		// Create a Node object which uses that allocation.
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = nodename
-		setTunnelAddressForNode(tunnelType, node, "172.16.0.1")
+		setTunnelAddressForNode(tunnelType, node, allocationAddr)
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -641,13 +803,19 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTyp
 		removeHostTunnelAddr(ctx, c, node.Name, tunnelType)
 
 		// Assert that the IPAM allocation is gone.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
 		Expect(err).To(HaveOccurred())
-	})
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should release old-style IP address allocations", func() {
+	DescribeTable("should release old-style IP address allocations", func(tunnelType string) {
+		_, _, allocationCIDR, allocationAddr := getRemoveCIDRAndAddrForTunnelType(tunnelType)
 		// Create an old-style allocation for this node in IPAM.
-		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		ipAddr, _, _ := net.ParseCIDR(allocationCIDR)
 		nodename := "my-test-node"
 		args := ipam.AssignIPArgs{
 			IP:       *ipAddr,
@@ -658,7 +826,7 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTyp
 		// Create a Node object which uses that allocation.
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = nodename
-		setTunnelAddressForNode(tunnelType, node, "172.16.0.1")
+		setTunnelAddressForNode(tunnelType, node, allocationAddr)
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -666,13 +834,19 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTyp
 		removeHostTunnelAddr(ctx, c, node.Name, tunnelType)
 
 		// Assert that the IPAM allocation is gone.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
 		Expect(err).To(HaveOccurred())
-	})
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 
-	It("should not release old-style IP address allocations belonging to someone else", func() {
+	DescribeTable("should not release old-style IP address allocations belonging to someone else", func(tunnelType string) {
+		_, _, allocationCIDR, allocationAddr := getRemoveCIDRAndAddrForTunnelType(tunnelType)
 		// Create an old-style allocation for this node in IPAM.
-		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		ipAddr, _, _ := net.ParseCIDR(allocationCIDR)
 		nodename := "my-test-node"
 		handle := "some-handle"
 		args := ipam.AssignIPArgs{
@@ -685,17 +859,22 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{ipam.AttributeTyp
 		// Create a Node object which uses that allocation.
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = nodename
-		setTunnelAddressForNode(tunnelType, node, "172.16.0.1")
+		setTunnelAddressForNode(tunnelType, node, allocationAddr)
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Remove the tunnel address.
 		removeHostTunnelAddr(ctx, c, node.Name, tunnelType)
 
-		// Assert that the IPAM allocation is not gone.
-		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		// Assert that the IPAM allocation is gone.
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
 		Expect(err).NotTo(HaveOccurred())
-	})
+	},
+		Entry("IPIP", ipam.AttributeTypeIPIP),
+		Entry("VXLAN", ipam.AttributeTypeVXLAN),
+		Entry("Wireguard", ipam.AttributeTypeWireguard),
+		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
+	)
 })
 
 var _ = Describe("Running as daemon", func() {
@@ -709,7 +888,7 @@ var _ = Describe("Running as daemon", func() {
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 
 	var c client.Interface
-	var pool *api.IPPool
+	var poolV4 *api.IPPool
 	BeforeEach(func() {
 		// Clear out datastore
 		be, err := backend.NewClient(*cfg)
@@ -719,7 +898,12 @@ var _ = Describe("Running as daemon", func() {
 
 		// Create client and IPPool (IPIP)
 		c, _ = client.New(*cfg)
-		pool, err = c.IPPools().Create(ctx, makeIPv4Pool("pool1", "172.16.0.0/26", 26), options.SetOptions{})
+
+		poolV4, err = c.IPPools().Create(ctx, makeIPPool("pool1-v4", "172.16.0.0/26", 26, api.IPIPModeAlways, api.VXLANModeNever), options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Create /128 IPv6 IPPool so that there is only one address to be assigned
+		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", "2001:db8::/128", 128, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -746,17 +930,20 @@ var _ = Describe("Running as daemon", func() {
 		}, "5s", "200ms").ShouldNot(HaveOccurred())
 		Eventually(func() error { return checkTunnelAddressForNode(c, ipam.AttributeTypeIPIP, "test.node", "172.16.0.1") }, "5s", "200ms").ShouldNot(HaveOccurred())
 
-		// Modify the pool to be VXLAN.  The IPIP tunnel should be removed, and the VXLAN one should be assigned. The
+		// Modify the IPv4 pool to be VXLAN.  The IPIP tunnel should be removed, and the VXLAN one should be assigned. The
 		// wireguard IP should not change.
 		By("changing from IPIP to VXLAN")
-		pool.Spec.IPIPMode = api.IPIPModeNever
-		pool.Spec.VXLANMode = api.VXLANModeAlways
-		pool, err = c.IPPools().Update(ctx, pool, options.SetOptions{})
+		poolV4.Spec.IPIPMode = api.IPIPModeNever
+		poolV4.Spec.VXLANMode = api.VXLANModeAlways
+		poolV4, err = c.IPPools().Update(ctx, poolV4, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() error { return checkTunnelAddressEmpty(c, ipam.AttributeTypeIPIP, "test.node") }, "5s", "200ms").ShouldNot(HaveOccurred())
 		Eventually(func() error { return checkTunnelAddressForNode(c, ipam.AttributeTypeVXLAN, "test.node", "172.16.0.2") }, "5s", "200ms").ShouldNot(HaveOccurred())
 		expectTunnelAddressForNode(c, ipam.AttributeTypeWireguard, "test.node", "172.16.0.0")
+
+		// Verify that IPv6 address is assigned from the only one available in the VXLAN IPv6 IPPool
+		expectTunnelAddressForNode(c, ipam.AttributeTypeVXLANV6, "test.node", "2001:db8::")
 
 		// Modify the node so that the wireguard status has a different public key - the IP address should not change.
 		By("changing the wireguard public key")
@@ -830,7 +1017,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 	})
 
-	Context("VXLAN tests", func() {
+	Context("IPv4 VXLAN tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
 			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
@@ -888,6 +1075,69 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeVXLAN)
 			_, cidr1, _ := net.ParseCIDR("172.0.0.1/9")
 			_, cidr2, _ := net.ParseCIDR("172.128.0.1/9")
+			Expect(cidrs).To(ContainElement(*cidr1))
+			Expect(cidrs).ToNot(ContainElement(*cidr2))
+		})
+	})
+
+	Context("IPv6 VXLAN tests", func() {
+		It("should match ip-pool-1 but not ip-pool-2", func() {
+			// Mock out the node and ip pools
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			pl := api.IPPoolList{
+				Items: []api.IPPool{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-1"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "2001:db8::/64",
+							NodeSelector: `foo == "bar"`,
+							VXLANMode:    api.VXLANModeAlways,
+						},
+					}, {
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-2"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "2001:db8:00:ff::/64",
+							NodeSelector: `foo != "bar"`,
+							VXLANMode:    api.VXLANModeAlways,
+						},
+					}}}
+
+			// Execute and test assertions.
+			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeVXLANV6)
+			_, cidr1, _ := net.ParseCIDR("2001:db8::1/64")
+			_, cidr2, _ := net.ParseCIDR("2001:db8:00:ff::1/64")
+			Expect(cidrs).To(ContainElement(*cidr1))
+			Expect(cidrs).ToNot(ContainElement(*cidr2))
+		})
+		It("should match ip-pool-1 but not ip-pool-2 for VXLANMode CrossSubnet", func() {
+			// Mock out the node and ip pools
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			pl := api.IPPoolList{
+				Items: []api.IPPool{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-1"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "2001:db8::/64",
+							NodeSelector: `foo == "bar"`,
+							VXLANMode:    api.VXLANModeCrossSubnet,
+						},
+					}, {
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-2"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "2001:db8:00:ff::/64",
+							NodeSelector: `foo != "bar"`,
+							VXLANMode:    api.VXLANModeCrossSubnet,
+						},
+					}}}
+
+			// Execute and test assertions.
+			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeVXLANV6)
+			_, cidr1, _ := net.ParseCIDR("2001:db8::1/64")
+			_, cidr2, _ := net.ParseCIDR("2001:db8:00:ff::1/64")
 			Expect(cidrs).To(ContainElement(*cidr1))
 			Expect(cidrs).ToNot(ContainElement(*cidr2))
 		})

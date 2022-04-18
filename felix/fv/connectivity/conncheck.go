@@ -57,7 +57,8 @@ type Checker struct {
 	OnFail func(msg string)
 
 	description string
-	beforeRetry func()
+	beforeRetry func()       // called when a test fails and before it is retried
+	finalTest   func() error // called after connectivity test, if it is successful, may fail the test.
 }
 
 // CheckerOpt is an option to CheckConnectivity()
@@ -76,6 +77,13 @@ func CheckWithBeforeRetry(f func()) CheckerOpt {
 	return func(c *Checker) {
 		log.Debug("CheckWithBeforeRetry set")
 		c.beforeRetry = f
+	}
+}
+
+func CheckWithFinalTest(f func() error) CheckerOpt {
+	return func(c *Checker) {
+		log.Debug("CheckWithFinalTest set")
+		c.finalTest = f
 	}
 }
 
@@ -157,6 +165,7 @@ func (c *Checker) ResetExpectations() {
 
 	c.description = ""
 	c.beforeRetry = nil
+	c.finalTest = nil
 }
 
 // ActualConnectivity calculates the current connectivity for all the expected paths.  It returns a
@@ -288,9 +297,12 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 	completedAttempts := 0
 	var actualConn []*Result
 	var actualConnPretty []string
+	var finalErr error
+
 	for !c.RetriesDisabled && time.Since(start) < timeout || completedAttempts < 2 {
 		actualConn, actualConnPretty = c.ActualConnectivity()
 		failed := false
+		finalErr = nil
 		expConnectivity = c.ExpectedConnectivityPretty()
 		for i := range c.expectations {
 			exp := c.expectations[i]
@@ -301,9 +313,18 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 				expConnectivity[i] += " <---- EXPECTED"
 			}
 		}
+
 		if !failed {
-			// Success!
-			return
+			if c.finalTest != nil {
+				finalErr = c.finalTest()
+				if finalErr != nil {
+					failed = true
+				}
+			}
+			if !failed {
+				// Success!
+				return
+			}
 		}
 		completedAttempts++
 		if c.beforeRetry != nil {
@@ -317,9 +338,15 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 		strings.Join(actualConnPretty, "\n    "),
 		strings.Join(expConnectivity, "\n    "),
 	)
+
+	if finalErr != nil {
+		message += "\n Final test failed: " + finalErr.Error() + "\n"
+	}
+
 	if c.description != "" {
 		message += "\nDescription:\n" + c.description
 	}
+
 	if c.OnFail != nil {
 		c.OnFail(message)
 	} else {

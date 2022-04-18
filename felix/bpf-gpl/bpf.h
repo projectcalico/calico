@@ -59,7 +59,7 @@ struct bpf_map_def_extended {
 // CALI_L3_DEV is set for any L3 device such as wireguard and IPIP tunnels that act fully
 // at layer 3. In kernerls before 5.14 (rhel 4.18.0-330) IPIP tunnels on inbound
 // direction were acting differently, where they could see outer ethernet and ip headers.
-#define CALI_L3_DEV 	(1<<5)
+#define CALI_TC_L3_DEV 	(1<<5)
 // CALI_XDP_PROG is set for programs attached to the XDP hook
 #define CALI_XDP_PROG 	(1<<6)
 
@@ -77,7 +77,7 @@ struct bpf_map_def_extended {
 #define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP)
 #define CALI_F_WEP     	 (!CALI_F_HEP)
 #define CALI_F_TUNNEL  	 ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
-#define CALI_F_L3_DEV ((CALI_COMPILE_FLAGS) & CALI_L3_DEV)
+#define CALI_F_L3_DEV ((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV)
 
 #define CALI_F_XDP ((CALI_COMPILE_FLAGS) & CALI_XDP_PROG)
 

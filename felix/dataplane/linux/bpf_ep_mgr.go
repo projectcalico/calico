@@ -233,7 +233,7 @@ func newBPFEndpointManager(
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
-		ipv6Enabled: config.BPFIpv6Enabled,
+		ipv6Enabled:       config.BPFIpv6Enabled,
 		mtuCheckSupported: bpf.BPFHelperSupported("bpf_check_mtu"),
 	}
 

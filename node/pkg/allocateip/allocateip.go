@@ -237,12 +237,20 @@ func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c cli
 		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeIPIP)
 	}
 
-	// Query the VXLAN enabled pools and either configure the tunnel
+	// Query the IPv4 VXLAN enabled pools and either configure the tunnel
 	// address, or remove it.
 	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeVXLAN); len(cidrs) > 0 {
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeVXLAN)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeVXLAN)
+	}
+
+	// Query the IPv6 VXLAN enabled pools and either configure the tunnel
+	// address, or remove it.
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeVXLANV6); len(cidrs) > 0 {
+		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeVXLANV6)
+	} else {
+		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeVXLANV6)
 	}
 }
 
@@ -261,6 +269,8 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 	switch attrType {
 	case ipam.AttributeTypeVXLAN:
 		addr = node.Spec.IPv4VXLANTunnelAddr
+	case ipam.AttributeTypeVXLANV6:
+		addr = node.Spec.IPv6VXLANTunnelAddr
 	case ipam.AttributeTypeIPIP:
 		if node.Spec.BGP != nil {
 			addr = node.Spec.BGP.IPv4IPIPTunnelAddr
@@ -403,6 +413,8 @@ func generateHandleAndAttributes(nodename string, attrType string) (string, map[
 	switch attrType {
 	case ipam.AttributeTypeVXLAN:
 		handle = fmt.Sprintf("vxlan-tunnel-addr-%s", nodename)
+	case ipam.AttributeTypeVXLANV6:
+		handle = fmt.Sprintf("vxlan-v6-tunnel-addr-%s", nodename)
 	case ipam.AttributeTypeIPIP:
 		handle = fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 	case ipam.AttributeTypeWireguard:
@@ -420,27 +432,47 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 	handle, attrs := generateHandleAndAttributes(nodename, attrType)
 	logCtx := getLogger(attrType)
 
+	if len(cidrs) == 0 {
+		logCtx.Fatal("Unable to assign an address: no IP pools provided")
+	}
+
 	args := ipam.AutoAssignArgs{
-		Num4:        1,
-		Num6:        0,
 		HandleID:    &handle,
 		Attrs:       attrs,
 		Hostname:    nodename,
-		IPv4Pools:   cidrs,
 		IntendedUse: api.IPPoolAllowedUseTunnel,
 	}
+	switch cidrs[0].Version() {
+	case 4:
+		args.Num4 = 1
+		args.IPv4Pools = cidrs
+	case 6:
+		args.Num6 = 1
+		args.IPv6Pools = cidrs
+	default:
+		logCtx.Panicf("Unable to assign an address: invalid IP version for IP pool %v", cidrs[0])
+	}
 
-	v4Assignments, _, err := c.IPAM().AutoAssign(ctx, args)
+	v4Assignments, v6Assignments, err := c.IPAM().AutoAssign(ctx, args)
 	if err != nil {
 		logCtx.WithError(err).Fatal("Unable to autoassign an address")
 	}
 
-	if err := v4Assignments.PartialFulfillmentError(); err != nil {
-		logCtx.WithError(err).Fatal("Unable to autoassign an address")
+	ip := ""
+	if v4Assignments != nil {
+		if err := v4Assignments.PartialFulfillmentError(); err != nil {
+			logCtx.WithError(err).Fatal("Unable to autoassign an IPv4 address")
+		}
+		ip = v4Assignments.IPs[0].IP.String()
+	}
+	if v6Assignments != nil {
+		if err := v6Assignments.PartialFulfillmentError(); err != nil {
+			logCtx.WithError(err).Fatal("Unable to autoassign an IPv6 address")
+		}
+		ip = v6Assignments.IPs[0].IP.String()
 	}
 
 	// Update the node object with the assigned address.
-	ip := v4Assignments.IPs[0].IP.String()
 	if err = updateNodeWithAddress(ctx, c, nodename, ip, attrType); err != nil {
 		// We hit an error, so release the IP address before exiting.
 		err := c.IPAM().ReleaseByHandle(ctx, handle)
@@ -466,6 +498,8 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 		switch attrType {
 		case ipam.AttributeTypeVXLAN:
 			node.Spec.IPv4VXLANTunnelAddr = addr
+		case ipam.AttributeTypeVXLANV6:
+			node.Spec.IPv6VXLANTunnelAddr = addr
 		case ipam.AttributeTypeIPIP:
 			if node.Spec.BGP == nil {
 				node.Spec.BGP = &libapi.NodeBGPSpec{}
@@ -479,11 +513,15 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 		}
 
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
-		if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
-			// Wait for a second and try again if there was a conflict during the resource update.
-			log.WithField("node", node.Name).WithError(err).Info("Error updating node, retrying.")
-			time.Sleep(1 * time.Second)
-			continue
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				// Wait for a second and try again if there was a conflict during the resource update.
+				log.WithField("node", node.Name).Info("Resource update conflict error updating node, retrying.")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			log.WithField("node", node.Name).WithError(err).Warning("Error updating node")
 		}
 
 		return nil
@@ -513,6 +551,9 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		case ipam.AttributeTypeVXLAN:
 			ipAddrStr = node.Spec.IPv4VXLANTunnelAddr
 			node.Spec.IPv4VXLANTunnelAddr = ""
+		case ipam.AttributeTypeVXLANV6:
+			ipAddrStr = node.Spec.IPv6VXLANTunnelAddr
+			node.Spec.IPv6VXLANTunnelAddr = ""
 		case ipam.AttributeTypeIPIP:
 			if node.Spec.BGP != nil {
 				ipAddrStr = node.Spec.BGP.IPv4IPIPTunnelAddr
@@ -649,6 +690,10 @@ func determineEnabledPoolCIDRs(node libapi.Node, ipPoolList api.IPPoolList, attr
 			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways || ipPool.Spec.VXLANMode == api.VXLANModeCrossSubnet) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
 				cidrs = append(cidrs, *poolCidr)
 			}
+		case ipam.AttributeTypeVXLANV6:
+			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways || ipPool.Spec.VXLANMode == api.VXLANModeCrossSubnet) && !ipPool.Spec.Disabled && poolCidr.Version() == 6 {
+				cidrs = append(cidrs, *poolCidr)
+			}
 		case ipam.AttributeTypeIPIP:
 			// Check if IPIP is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support IPIP with IPv6.
 			if (ipPool.Spec.IPIPMode == api.IPIPModeCrossSubnet || ipPool.Spec.IPIPMode == api.IPIPModeAlways) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
@@ -679,6 +724,8 @@ func getLogger(attrType string) *log.Entry {
 	switch attrType {
 	case ipam.AttributeTypeVXLAN:
 		return log.WithField("type", "vxlanTunnelAddress")
+	case ipam.AttributeTypeVXLANV6:
+		return log.WithField("type", "vxlanV6TunnelAddress")
 	case ipam.AttributeTypeIPIP:
 		return log.WithField("type", "ipipTunnelAddress")
 	case ipam.AttributeTypeWireguard:
