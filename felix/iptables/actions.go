@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018,2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@ package iptables
 import (
 	"fmt"
 
-	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/environment"
 )
 
 type Action interface {
-	ToFragment(features *detector.Features) string
+	ToFragment(features *environment.Features) string
 }
 
 type Referrer interface {
@@ -33,7 +33,7 @@ type GotoAction struct {
 	TypeGoto struct{}
 }
 
-func (g GotoAction) ToFragment(features *detector.Features) string {
+func (g GotoAction) ToFragment(features *environment.Features) string {
 	return "--goto " + g.Target
 }
 
@@ -52,7 +52,7 @@ type JumpAction struct {
 	TypeJump struct{}
 }
 
-func (g JumpAction) ToFragment(features *detector.Features) string {
+func (g JumpAction) ToFragment(features *environment.Features) string {
 	return "--jump " + g.Target
 }
 
@@ -70,7 +70,7 @@ type ReturnAction struct {
 	TypeReturn struct{}
 }
 
-func (r ReturnAction) ToFragment(features *detector.Features) string {
+func (r ReturnAction) ToFragment(features *environment.Features) string {
 	return "--jump RETURN"
 }
 
@@ -82,7 +82,7 @@ type DropAction struct {
 	TypeDrop struct{}
 }
 
-func (g DropAction) ToFragment(features *detector.Features) string {
+func (g DropAction) ToFragment(features *environment.Features) string {
 	return "--jump DROP"
 }
 
@@ -94,7 +94,7 @@ type RejectAction struct {
 	TypeReject struct{}
 }
 
-func (g RejectAction) ToFragment(features *detector.Features) string {
+func (g RejectAction) ToFragment(features *environment.Features) string {
 	return "--jump REJECT"
 }
 
@@ -107,7 +107,7 @@ type LogAction struct {
 	TypeLog struct{}
 }
 
-func (g LogAction) ToFragment(features *detector.Features) string {
+func (g LogAction) ToFragment(features *environment.Features) string {
 	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, g.Prefix)
 }
 
@@ -119,7 +119,7 @@ type AcceptAction struct {
 	TypeAccept struct{}
 }
 
-func (g AcceptAction) ToFragment(features *detector.Features) string {
+func (g AcceptAction) ToFragment(features *environment.Features) string {
 	return "--jump ACCEPT"
 }
 
@@ -133,7 +133,7 @@ type DNATAction struct {
 	TypeDNAT struct{}
 }
 
-func (g DNATAction) ToFragment(features *detector.Features) string {
+func (g DNATAction) ToFragment(features *environment.Features) string {
 	if g.DestPort == 0 {
 		return fmt.Sprintf("--jump DNAT --to-destination %s", g.DestAddr)
 	} else {
@@ -150,7 +150,7 @@ type SNATAction struct {
 	TypeSNAT struct{}
 }
 
-func (g SNATAction) ToFragment(features *detector.Features) string {
+func (g SNATAction) ToFragment(features *environment.Features) string {
 	fullyRand := ""
 	if features.SNATFullyRandom {
 		fullyRand = " --random-fully"
@@ -167,7 +167,7 @@ type MasqAction struct {
 	TypeMasq struct{}
 }
 
-func (g MasqAction) ToFragment(features *detector.Features) string {
+func (g MasqAction) ToFragment(features *environment.Features) string {
 	fullyRand := ""
 	if features.MASQFullyRandom {
 		fullyRand = " --random-fully"
@@ -187,7 +187,7 @@ type ClearMarkAction struct {
 	TypeClearMark struct{}
 }
 
-func (c ClearMarkAction) ToFragment(features *detector.Features) string {
+func (c ClearMarkAction) ToFragment(features *environment.Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark 0/%#x", c.Mark)
 }
 
@@ -200,7 +200,7 @@ type SetMarkAction struct {
 	TypeSetMark struct{}
 }
 
-func (c SetMarkAction) ToFragment(features *detector.Features) string {
+func (c SetMarkAction) ToFragment(features *environment.Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mark)
 }
 
@@ -214,7 +214,7 @@ type SetMaskedMarkAction struct {
 	TypeSetMaskedMark struct{}
 }
 
-func (c SetMaskedMarkAction) ToFragment(features *detector.Features) string {
+func (c SetMaskedMarkAction) ToFragment(features *environment.Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mask)
 }
 
@@ -226,7 +226,7 @@ type NoTrackAction struct {
 	TypeNoTrack struct{}
 }
 
-func (g NoTrackAction) ToFragment(features *detector.Features) string {
+func (g NoTrackAction) ToFragment(features *environment.Features) string {
 	return "--jump NOTRACK"
 }
 
@@ -239,7 +239,7 @@ type SaveConnMarkAction struct {
 	TypeConnMark struct{}
 }
 
-func (c SaveConnMarkAction) ToFragment(features *detector.Features) string {
+func (c SaveConnMarkAction) ToFragment(features *environment.Features) string {
 	var mask uint32
 	if c.SaveMask == 0 {
 		// If Mask field is ignored, save full mark.
@@ -259,7 +259,7 @@ type RestoreConnMarkAction struct {
 	TypeConnMark struct{}
 }
 
-func (c RestoreConnMarkAction) ToFragment(features *detector.Features) string {
+func (c RestoreConnMarkAction) ToFragment(features *environment.Features) string {
 	var mask uint32
 	if c.RestoreMask == 0 {
 		// If Mask field is ignored, restore full mark.
@@ -280,7 +280,7 @@ type SetConnMarkAction struct {
 	TypeConnMark struct{}
 }
 
-func (c SetConnMarkAction) ToFragment(features *detector.Features) string {
+func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
 	var mask uint32
 	if c.Mask == 0 {
 		// If Mask field is ignored, default to full mark.

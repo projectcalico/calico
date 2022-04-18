@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 )
 
@@ -73,7 +73,7 @@ var _ = Describe("Hash extraction tests", func() {
 	var table *Table
 
 	BeforeEach(func() {
-		fd := detector.NewFeatureDetector(nil)
+		fd := environment.NewFeatureDetector(nil)
 		fd.GetKernelVersionReader = func() (io.Reader, error) {
 			return nil, errors.New("not implemented")
 		}
@@ -216,7 +216,7 @@ var _ = Describe("rule comments", func() {
 		}
 
 		It("should render rule including multiple comments", func() {
-			render := rule.RenderAppend("test", "TEST", &detector.Features{})
+			render := rule.RenderAppend("test", "TEST", &environment.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"boz\""))
 			Expect(render).To(ContainSubstring("-m comment --comment \"fizz\""))
 		})
@@ -232,7 +232,7 @@ fizz`},
 		}
 
 		It("should render rule with newline escaped", func() {
-			render := rule.RenderAppend("test", "TEST", &detector.Features{})
+			render := rule.RenderAppend("test", "TEST", &environment.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"boz_fizz\""))
 		})
 	})
@@ -246,7 +246,7 @@ fizz`},
 		}
 
 		It("should render rule with comment truncated", func() {
-			render := rule.RenderAppend("test", "TEST", &detector.Features{})
+			render := rule.RenderAppend("test", "TEST", &environment.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"" + strings.Repeat("a", 256) + "\""))
 		})
 	})
@@ -272,5 +272,5 @@ func calculateHashes(chainName string, rules []Rule) []string {
 		Name:  chainName,
 		Rules: rules,
 	}
-	return chain.RuleHashes(&detector.Features{})
+	return chain.RuleHashes(&environment.Features{})
 }

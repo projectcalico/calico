@@ -23,7 +23,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/environment"
 )
 
 const (
@@ -39,31 +39,31 @@ type Rule struct {
 	Comment []string
 }
 
-func (r Rule) RenderAppend(chainName, prefixFragment string, features *detector.Features) string {
+func (r Rule) RenderAppend(chainName, prefixFragment string, features *environment.Features) string {
 	fragments := make([]string, 0, 6)
 	fragments = append(fragments, "-A", chainName)
 	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) RenderInsert(chainName, prefixFragment string, features *detector.Features) string {
+func (r Rule) RenderInsert(chainName, prefixFragment string, features *environment.Features) string {
 	fragments := make([]string, 0, 6)
 	fragments = append(fragments, "-I", chainName)
 	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) RenderInsertAtRuleNumber(chainName string, ruleNum int, prefixFragment string, features *detector.Features) string {
+func (r Rule) RenderInsertAtRuleNumber(chainName string, ruleNum int, prefixFragment string, features *environment.Features) string {
 	fragments := make([]string, 0, 7)
 	fragments = append(fragments, "-I", chainName, fmt.Sprintf("%d", ruleNum))
 	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string, features *detector.Features) string {
+func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string, features *environment.Features) string {
 	fragments := make([]string, 0, 7)
 	fragments = append(fragments, "-R", chainName, fmt.Sprintf("%d", ruleNum))
 	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) renderInner(fragments []string, prefixFragment string, features *detector.Features) string {
+func (r Rule) renderInner(fragments []string, prefixFragment string, features *environment.Features) string {
 	if prefixFragment != "" {
 		fragments = append(fragments, prefixFragment)
 	}
@@ -115,7 +115,7 @@ type Chain struct {
 	Rules []Rule
 }
 
-func (c *Chain) RuleHashes(features *detector.Features) []string {
+func (c *Chain) RuleHashes(features *environment.Features) []string {
 	if c == nil {
 		return nil
 	}

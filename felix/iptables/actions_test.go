@@ -15,7 +15,7 @@
 package iptables_test
 
 import (
-	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/environment"
 	. "github.com/projectcalico/calico/felix/iptables"
 
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -23,28 +23,28 @@ import (
 )
 
 var _ = DescribeTable("Actions",
-	func(features detector.Features, action Action, expRendering string) {
+	func(features environment.Features, action Action, expRendering string) {
 		Expect(action.ToFragment(&features)).To(Equal(expRendering))
 	},
-	Entry("GotoAction", detector.Features{}, GotoAction{Target: "cali-abcd"}, "--goto cali-abcd"),
-	Entry("JumpAction", detector.Features{}, JumpAction{Target: "cali-abcd"}, "--jump cali-abcd"),
-	Entry("ReturnAction", detector.Features{}, ReturnAction{}, "--jump RETURN"),
-	Entry("DropAction", detector.Features{}, DropAction{}, "--jump DROP"),
-	Entry("AcceptAction", detector.Features{}, AcceptAction{}, "--jump ACCEPT"),
-	Entry("LogAction", detector.Features{}, LogAction{Prefix: "prefix"}, `--jump LOG --log-prefix "prefix: " --log-level 5`),
-	Entry("DNATAction", detector.Features{}, DNATAction{DestAddr: "10.0.0.1", DestPort: 8081}, "--jump DNAT --to-destination 10.0.0.1:8081"),
-	Entry("SNATAction", detector.Features{}, SNATAction{ToAddr: "10.0.0.1"}, "--jump SNAT --to-source 10.0.0.1"),
-	Entry("SNATAction fully random", detector.Features{SNATFullyRandom: true}, SNATAction{ToAddr: "10.0.0.1"}, "--jump SNAT --to-source 10.0.0.1 --random-fully"),
-	Entry("MasqAction", detector.Features{}, MasqAction{}, "--jump MASQUERADE"),
-	Entry("MasqAction", detector.Features{MASQFullyRandom: true}, MasqAction{}, "--jump MASQUERADE --random-fully"),
-	Entry("ClearMarkAction", detector.Features{}, ClearMarkAction{Mark: 0x1000}, "--jump MARK --set-mark 0/0x1000"),
-	Entry("SetMarkAction", detector.Features{}, SetMarkAction{Mark: 0x1000}, "--jump MARK --set-mark 0x1000/0x1000"),
-	Entry("SetMaskedMarkAction", detector.Features{}, SetMaskedMarkAction{
+	Entry("GotoAction", environment.Features{}, GotoAction{Target: "cali-abcd"}, "--goto cali-abcd"),
+	Entry("JumpAction", environment.Features{}, JumpAction{Target: "cali-abcd"}, "--jump cali-abcd"),
+	Entry("ReturnAction", environment.Features{}, ReturnAction{}, "--jump RETURN"),
+	Entry("DropAction", environment.Features{}, DropAction{}, "--jump DROP"),
+	Entry("AcceptAction", environment.Features{}, AcceptAction{}, "--jump ACCEPT"),
+	Entry("LogAction", environment.Features{}, LogAction{Prefix: "prefix"}, `--jump LOG --log-prefix "prefix: " --log-level 5`),
+	Entry("DNATAction", environment.Features{}, DNATAction{DestAddr: "10.0.0.1", DestPort: 8081}, "--jump DNAT --to-destination 10.0.0.1:8081"),
+	Entry("SNATAction", environment.Features{}, SNATAction{ToAddr: "10.0.0.1"}, "--jump SNAT --to-source 10.0.0.1"),
+	Entry("SNATAction fully random", environment.Features{SNATFullyRandom: true}, SNATAction{ToAddr: "10.0.0.1"}, "--jump SNAT --to-source 10.0.0.1 --random-fully"),
+	Entry("MasqAction", environment.Features{}, MasqAction{}, "--jump MASQUERADE"),
+	Entry("MasqAction", environment.Features{MASQFullyRandom: true}, MasqAction{}, "--jump MASQUERADE --random-fully"),
+	Entry("ClearMarkAction", environment.Features{}, ClearMarkAction{Mark: 0x1000}, "--jump MARK --set-mark 0/0x1000"),
+	Entry("SetMarkAction", environment.Features{}, SetMarkAction{Mark: 0x1000}, "--jump MARK --set-mark 0x1000/0x1000"),
+	Entry("SetMaskedMarkAction", environment.Features{}, SetMaskedMarkAction{
 		Mark: 0x1000,
 		Mask: 0xf000,
 	}, "--jump MARK --set-mark 0x1000/0xf000"),
-	Entry("SaveConnMarkAction", detector.Features{}, SaveConnMarkAction{SaveMask: 0x100}, "--jump CONNMARK --save-mark --mark 0x100"),
-	Entry("RestoreConnMarkAction", detector.Features{}, RestoreConnMarkAction{RestoreMask: 0x100}, "--jump CONNMARK --restore-mark --mark 0x100"),
-	Entry("SaveConnMarkAction", detector.Features{}, SaveConnMarkAction{}, "--jump CONNMARK --save-mark --mark 0xffffffff"),
-	Entry("RestoreConnMarkAction", detector.Features{}, RestoreConnMarkAction{}, "--jump CONNMARK --restore-mark --mark 0xffffffff"),
+	Entry("SaveConnMarkAction", environment.Features{}, SaveConnMarkAction{SaveMask: 0x100}, "--jump CONNMARK --save-mark --mark 0x100"),
+	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{RestoreMask: 0x100}, "--jump CONNMARK --restore-mark --mark 0x100"),
+	Entry("SaveConnMarkAction", environment.Features{}, SaveConnMarkAction{}, "--jump CONNMARK --save-mark --mark 0xffffffff"),
+	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{}, "--jump CONNMARK --restore-mark --mark 0xffffffff"),
 )

@@ -24,12 +24,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/detector"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -442,13 +442,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			})
 
 			It("should have expected no dropped packets in iptables in TCP", func() {
-				versionReader, err := detector.GetKernelVersionReader()
+				versionReader, err := environment.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
-				kernelVersion, err := detector.GetKernelVersion(versionReader)
+				kernelVersion, err := environment.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(detector.MustParseVersion("4.19.0")) < 0 {
+				if kernelVersion.Compare(environment.MustParseVersion("4.19.0")) < 0 {
 					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}
@@ -588,13 +588,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			})
 
 			It("should have expected no dropped packets in iptables in TCP", func() {
-				versionReader, err := detector.GetKernelVersionReader()
+				versionReader, err := environment.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
-				kernelVersion, err := detector.GetKernelVersion(versionReader)
+				kernelVersion, err := environment.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(detector.MustParseVersion("4.19.0")) < 0 {
+				if kernelVersion.Compare(environment.MustParseVersion("4.19.0")) < 0 {
 					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}

@@ -17,7 +17,7 @@ package iptables_test
 import (
 	"time"
 
-	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/environment"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -43,7 +43,7 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 			"OUTPUT":  {},
 		}, "legacy")
 		iptLock := &mockMutex{}
-		featureDetector := detector.NewFeatureDetector(nil)
+		featureDetector := environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
 		table := NewTable(
@@ -75,7 +75,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
 	var table *Table
 	var iptLock *mockMutex
-	var featureDetector *detector.FeatureDetector
+	var featureDetector *environment.FeatureDetector
 	BeforeEach(func() {
 		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
 			"FORWARD": {},
@@ -83,7 +83,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			"OUTPUT":  {},
 		}, dataplaneMode)
 		iptLock = &mockMutex{}
-		featureDetector = detector.NewFeatureDetector(nil)
+		featureDetector = environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
 		table = NewTable(
@@ -966,7 +966,7 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
 		}
-		featureDetector := detector.NewFeatureDetector(nil)
+		featureDetector := environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
 		table = NewTable(
@@ -1169,7 +1169,7 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 		if appendMode {
 			insertMode = "append"
 		}
-		featureDetector := detector.NewFeatureDetector(nil)
+		featureDetector := environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
 		table = NewTable(
@@ -1592,7 +1592,7 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 			"non-calico": {"-m comment \"foo\""},
 		}, dataplaneMode)
 		iptLock = &mockMutex{}
-		featureDetector := detector.NewFeatureDetector(nil)
+		featureDetector := environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
 		table = NewTable(

@@ -32,7 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
-	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
 )
@@ -191,7 +191,7 @@ type Table struct {
 	IPVersion uint8
 
 	// featureDetector detects the features of the dataplane.
-	featureDetector *detector.FeatureDetector
+	featureDetector *environment.FeatureDetector
 
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
@@ -314,7 +314,7 @@ func NewTable(
 	ipVersion uint8,
 	hashPrefix string,
 	iptablesWriteLock sync.Locker,
-	featuredetector *detector.FeatureDetector,
+	featuredetector *environment.FeatureDetector,
 	options TableOptions,
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
@@ -450,8 +450,8 @@ func NewTable(
 		table.nftablesMode = true
 	}
 
-	table.iptablesRestoreCmd = detector.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
-	table.iptablesSaveCmd = detector.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
+	table.iptablesRestoreCmd = environment.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
+	table.iptablesSaveCmd = environment.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
 
 	return table
 }
@@ -1385,7 +1385,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	return strings.Replace(rule, "-A", "-D", 1), nil
 }
 
-func calculateRuleHashes(chainName string, rules []Rule, features *detector.Features) []string {
+func calculateRuleHashes(chainName string, rules []Rule, features *environment.Features) []string {
 	chain := Chain{
 		Name:  chainName,
 		Rules: rules,

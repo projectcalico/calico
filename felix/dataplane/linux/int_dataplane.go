@@ -33,7 +33,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-	"github.com/projectcalico/calico/felix/detector"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -358,7 +358,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
-	backendMode := detector.DetectBackend(config.LookPathOverride, cmdshim.NewRealCmd, config.IptablesBackend)
+	backendMode := environment.DetectBackend(config.LookPathOverride, cmdshim.NewRealCmd, config.IptablesBackend)
 
 	// Most iptables tables need the same options.
 	iptablesOptions := iptables.TableOptions{
@@ -389,7 +389,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
-	featureDetector := detector.NewFeatureDetector(config.FeatureDetectOverrides)
+	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
 	dataplaneFeatures := featureDetector.GetFeatures()
 
 	var iptablesLock sync.Locker
@@ -615,8 +615,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.RegisterManager(bpfEndpointManager)
-
-		bpfEndpointManager.Features = dataplaneFeatures
 
 		conntrackScanner := conntrack.NewScanner(bpfMapContext.CtMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
