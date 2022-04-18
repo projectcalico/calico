@@ -1,0 +1,153 @@
+{%- assign installDirName = "CalicoWindows" -%}
+{%- assign networkingType = include.networking -%}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calico-windows-config
+  namespace: calico-system
+data:
+  # Valid values for Calico networking are: "vxlan", "windows-bgp"
+  # For non-Calico networking, the only value is "none".
+  CALICO_NETWORKING_BACKEND: "{{ networkingType }}"
+  # The Kubernetes API server host and port. This is required to
+  # bootstrap Calico for Windows.
+  KUBERNETES_SERVICE_HOST: ""
+  KUBERNETES_SERVICE_PORT: ""
+  # The Kubernetes service clusterIP range configured in your cluster.
+  # This must match the service-cluster-ip-range used by kube-apiserver.
+  K8S_SERVICE_CIDR: "10.96.0.0/12"
+  # The DNS nameservers that will be used in the CNI configuration.
+  DNS_NAME_SERVERS: "10.96.0.10"
+  # The CNI bin dir. This must match the containerd configuration on the Windows nodes.
+  CNI_BIN_DIR: "c:\\opt\\cni\\bin"
+  # The CNI conf dir. This must match the containerd configuration on the Windows nodes.
+  CNI_CONF_DIR: "c:\\etc\\cni\\net.d"
+  # Felix health must be enabled.
+  FELIX_HEALTHENABLED: "true"
+
+---
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: calico-node-windows
+  namespace: calico-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: calico-node-windows
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-node-windows
+    spec:
+      serviceAccountName: calico-node
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\system"
+      hostNetwork: true
+      tolerations:
+        # Make sure calico-node gets scheduled on all nodes.
+        - effect: NoSchedule
+          operator: Exists
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      initContainers:
+      - name: install
+        image: {{page.registry}}{{page.imageNames["calico/windows"]}}:{{site.data.versions.first.components["calico/windows"].version}}
+        args:
+          - ".\\host-process-install.ps1"
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: calico-windows-config
+        # Calico needs to know the name of the node on which it is running.
+        env:
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+      containers:
+      - name: node
+        image: {{page.registry}}{{page.imageNames["calico/windows"]}}:{{site.data.versions.first.components["calico/windows"].version}}
+        imagePullPolicy: Always
+        args:
+          - ".\\node\\node-service.ps1"
+        # The node container's working dir is in c:\{{installDirName}} on the host,
+        # which is two-levels up from the CONTAINER_SANDBOX_MOUNT_POINT.
+        workingDir: "..\\..\\{{installDirName}}"
+        envFrom:
+        - configMapRef:
+            name: calico-windows-config
+        # Calico needs to know the name of the node on which it is running.
+        env:
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+      - name: felix
+        image: {{page.registry}}{{page.imageNames["calico/windows"]}}:{{site.data.versions.first.components["calico/windows"].version}}
+        imagePullPolicy: Always
+        args:
+        - ".\\felix\\felix-service.ps1"
+        # The felix container's working dir is in c:\{{installDirName}} on the host,
+        # which is two-levels up from the CONTAINER_SANDBOX_MOUNT_POINT.
+        workingDir: "..\\..\\{{installDirName}}"
+        envFrom:
+        - configMapRef:
+            name: calico-windows-config
+        # Calico needs to know the name of the node on which it is running.
+        env:
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        livenessProbe:
+          exec:
+            command:
+            - c:\\{{installDirName}}\\calico-node.exe
+            - -felix-live
+          periodSeconds: 10
+          initialDelaySeconds: 10
+          failureThreshold: 6
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - c:\\{{installDirName}}\\calico-node.exe
+            - -felix-ready
+          periodSeconds: 10
+          timeoutSeconds: 10
+      {% if networkingType == "windows-bgp" -%}
+      - name: confd
+        image: {{page.registry}}{{page.imageNames["calico/windows"]}}:{{site.data.versions.first.components["calico/windows"].version}}
+        imagePullPolicy: Always
+        args:
+          - ".\\confd\\confd-service.ps1"
+        # The confd container's working dir is in c:\CalicoWindows on the host,
+        # which is two-levels up from the CONTAINER_SANDBOX_MOUNT_POINT.
+        workingDir: "..\\..\\{{installDirName}}"
+        envFrom:
+        - configMapRef:
+            name: calico-windows-config
+        # Calico needs to know the name of the node on which it is running.
+        env:
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+      {% endif -%}
+      nodeSelector:
+        kubernetes.io/os: windows
