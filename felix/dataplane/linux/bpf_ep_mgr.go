@@ -38,6 +38,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -174,6 +175,9 @@ type bpfEndpointManager struct {
 
 	// IPv6 Support
 	ipv6Enabled bool
+
+	// Detected features
+	Features *environment.Features
 }
 
 type bpfAllowChainRenderer interface {
@@ -1009,7 +1013,11 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
-
+	if m.Features == nil {
+		ap.Features = *environment.NewFeatureDetector(nil).GetFeatures()
+	} else {
+		ap.Features = *m.Features
+	}
 	return ap
 }
 
