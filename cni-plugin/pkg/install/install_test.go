@@ -4,6 +4,7 @@ package install
 import (
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
@@ -311,7 +312,17 @@ PuB/TL+u2y+iQUyXxLy3
 var _ = Describe("file comparison tests", func() {
 	var err error
 	var tempDir string
+	var bigFile []byte
 	BeforeEach(func() {
+		if bigFile == nil {
+			// The comparison code reads 64000 bytes at a time, so use something 4 times that size.
+			letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+			bigFile := make([]byte, 256000)
+			for i := range bigFile {
+				bigFile[i] = letters[rand.Int63n(int64(len(letters)))]
+			}
+		}
+
 		// Make a temporary directory for this test and build arguments to pass
 		// to the CNI container, configuring it to use the temp directory.
 		tempDir, err = ioutil.TempDir("/tmp", "")
@@ -371,6 +382,30 @@ var _ = Describe("file comparison tests", func() {
 		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(match).To(Equal(false))
+	})
+
+	It("should compare a big file with a small file", func() {
+		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile, 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// Assert that they are not equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(false))
+	})
+
+	It("should compare two identical files larger than the buffer size", func() {
+		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile, 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", bigFile, 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// Assert that they are equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(true))
 	})
 })
 
