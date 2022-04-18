@@ -312,15 +312,17 @@ PuB/TL+u2y+iQUyXxLy3
 var _ = Describe("file comparison tests", func() {
 	var err error
 	var tempDir string
-	var bigFile []byte
+
+	// The comparison code reads 64000 bytes at a time, so use something 4 times that size.
+	bigFile := make([]byte, 256000)
+	bigFileInitizlied := false
 	BeforeEach(func() {
-		if bigFile == nil {
-			// The comparison code reads 64000 bytes at a time, so use something 4 times that size.
+		if !bigFileInitizlied {
 			letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-			bigFile := make([]byte, 256000)
 			for i := range bigFile {
 				bigFile[i] = letters[rand.Int63n(int64(len(letters)))]
 			}
+			bigFileInitizlied = true
 		}
 
 		// Make a temporary directory for this test and build arguments to pass
@@ -387,7 +389,38 @@ var _ = Describe("file comparison tests", func() {
 	It("should compare a big file with a small file", func() {
 		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile, 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+
+		// Here we use the first 10 bytes from "bigFile" to be extra tricky, to make sure
+		// we spot if the files partially match.
+		err = ioutil.WriteFile(tempDir+"/dstFile", bigFile[:10], 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// Assert that they are not equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(false))
+	})
+
+	It("should compare a small file with a big file", func() {
+		// Here we use the first 10 bytes from "bigFile" to be extra tricky, to make sure
+		// we spot if the files partially match.
+		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile[:10], 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", bigFile, 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+
+		// Assert that they are not equal.
+		match, err := destinationUptoDate(tempDir+"/srcFile", tempDir+"/dstFile")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(match).To(Equal(false))
+	})
+
+	It("should compare two files larger than the buffer size, that differ slightly", func() {
+		// Grab a slightly different number of bytes, ensuring that both are large enough
+		// to require a second loop iteration.
+		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile[:128002], 0644)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
+		err = ioutil.WriteFile(tempDir+"/dstFile", bigFile[:128003], 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.

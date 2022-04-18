@@ -552,15 +552,19 @@ func destinationUptoDate(src, dst string) (bool, error) {
 	}
 	defer f2.Close()
 
+	// Create a buffer, which we'll use to read both files.
+	buf := make([]byte, 64000)
+
 	// Iterate the files until we reach the end. If we spot a difference,
 	// we know that the files are not the same. Otherwise, if we reach the
 	// end of the file before seeing a difference, the files are identical.
 	for {
-		b1 := make([]byte, 64000)
-		_, err1 := f1.Read(b1)
 
-		b2 := make([]byte, 64000)
-		_, err2 := f2.Read(b2)
+		// Read the two files.
+		bytesRead, err1 := f1.Read(buf)
+		s1 := string(buf[:bytesRead])
+		bytesRead2, err2 := f2.Read(buf)
+		s2 := string(buf[:bytesRead2])
 
 		if err1 != nil || err2 != nil {
 			if err1 == io.EOF && err2 == io.EOF {
@@ -576,9 +580,13 @@ func destinationUptoDate(src, dst string) (bool, error) {
 				// Other error - return it.
 				return false, err2
 			}
+		} else if bytesRead != bytesRead2 {
+			// Read a different number of bytes from each file. Defensively
+			// consider the files different.
+			return false, nil
 		}
 
-		if !bytes.Equal(b1, b2) {
+		if s1 != s2 {
 			// The slice of bytes we read from each file are not equal.
 			return false, nil
 		}
