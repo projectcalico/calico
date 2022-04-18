@@ -22,7 +22,7 @@ ARG WINDOWS_VERSION
 # The files in this image are copied to $env:CONTAINER_SANDBOX_MOUNT_POINT on the host.
 FROM mcr.microsoft.com/windows/nanoserver:${WINDOWS_VERSION}
 
-ENV PATH="C:\Program Files\PowerShell;C:\utils;C:\Windows\system32;C:\Windows;"
+ENV PATH="C:\Program Files\PowerShell;C:\utils;C:\Windows\system32;C:\Windows;C:\Windows\System32\WindowsPowerShell\v1.0;"
 
 COPY install-calico-windows.ps1 /
 COPY calico-windows.zip /
