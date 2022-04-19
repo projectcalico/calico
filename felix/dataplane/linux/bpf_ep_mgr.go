@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -172,6 +173,8 @@ type bpfEndpointManager struct {
 
 	// XDP
 	xdpModes []bpf.XDPMode
+	// Detected features
+	Features *environment.Features
 }
 
 type bpfAllowChainRenderer interface {
@@ -1002,7 +1005,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.VXLANPort = m.vxlanPort
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
-
+	ap.Features = *m.Features
 	return ap
 }
 
