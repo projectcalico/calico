@@ -10,9 +10,9 @@ Use BGP passwords to prevent attackers from injecting false routing information.
 
 ### Value
 
-Setting a password on a BGP peering from the cluster to an external BGP speaker means that
-that peering will only work when the external speaker has the same password.  This
-provides a layer of defense against an attacker impersonating the external speaker, for
+Setting a password on a BGP peering between BGP speakers means that a peering will only
+work when both ends of the peering have the same password. This provides a layer of defense
+against an attacker impersonating an external BGP peer or a workload in the cluster, for
 example in order to inject malicious routing information into the cluster.
 
 ### Features
@@ -115,9 +115,18 @@ subjects:
 EOF
 ```
 
-#### Specify secret and key name on the BGPPeer resource
+#### Specify secret and key name on the BGP resource
 
-Then, when [configuring a BGP peer]({{site.baseurl}}/networking/bgp),
+The BGP password can be specified on separate resources depending on the use case.
+Specify the password on the BGP peer in order to secure specific BGP peerings or
+specify the password in the BGP configuration in order to set the password for all
+intra cluster communications in a node to node mesh.
+
+{% tabs %}
+  <label:Specific or external peerings,active:true>
+<%
+
+When [configuring a BGP peer]({{site.baseurl}}/networking/bgp),
 include the secret and key name in the specification of the BGPPeer resource, like this:
 
 ```
@@ -133,6 +142,35 @@ spec:
       name: bgp-secrets
       key: rr-password
 ```
+
+%>
+
+  <label:Node to node mesh,active:true>
+<%
+
+Include the secret in the default [BGP configuration]({{site.baseurl}}/reference/resources/bgpconfig)
+similar to the following:
+
+```
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  logSeverityScreen: Info
+  nodeToNodeMeshEnabled: true
+  nodeMeshPassword:
+    secretKeyRef:
+      name: bgp-secrets
+      key: rr-password
+```
+> **Note**: Node to node mesh must be enabled in order to set node to node mesh
+> BGP password.
+{: .alert .alert-info}
+
+%>
+
+{% endtabs %}
 
 ### Above and beyond
 
