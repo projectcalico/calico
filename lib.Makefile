@@ -1217,7 +1217,7 @@ kind $(KIND):
 
 kubectl $(KUBECTL):
 	mkdir -p $(KIND_DIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
+	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
 ###############################################################################
