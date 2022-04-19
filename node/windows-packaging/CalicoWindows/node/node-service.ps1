@@ -128,17 +128,22 @@ Set-StoredLastBootTime $lastBootTime
 $Stored = Get-StoredLastBootTime
 Write-Host "Stored new lastBootTime $Stored"
 
-# The old version of Calico upgrade service may still be running.
-while (Get-UpgradeService)
-{
+# The old version of Calico upgrade service may still be running
+# so try to remove it while it exists.
+#
+# Upgrade service is not needed if node is running in a hostprocess container.
+if (-not $env:CONTAINER_SANDBOX_MOUNT_POINT) {
+    while (Get-UpgradeService)
+    {
 
-    Remove-UpgradeService
-    if ($LastExitCode -EQ 0) {
-        Write-Host "CalicoUpgrade service removed"
-        break
+        Remove-UpgradeService
+        if ($LastExitCode -EQ 0) {
+            Write-Host "CalicoUpgrade service removed"
+            break
+        }
+        Start-Sleep 5
+        Write-Host "Failed to clean up old CalicoUpgrade service, retrying..."
     }
-    Start-Sleep 5
-    Write-Host "Failed to clean up old CalicoUpgrade service, retrying..."
 }
 
 # Run the startup script whenever kubelet (re)starts. This makes sure that we refresh our Node annotations if
@@ -174,12 +179,15 @@ while ($True)
         $kubeletPid = -1
     }
 
-    if (!(Get-UpgradeService)) {
-        # If upgrade service has not been running, check if we should run upgrade service.
-        .\calico-node.exe -should-install-windows-upgrade
-        if ($LastExitCode -EQ 0) {
-            Install-UpgradeService
-            Start-Service CalicoUpgrade
+    # Upgrade service is not needed if node is running in a hostprocess container.
+    if (-not $env:CONTAINER_SANDBOX_MOUNT_POINT) {
+        if (!(Get-UpgradeService)) {
+            # If upgrade service has not been running, check if we should run upgrade service.
+            .\calico-node.exe -should-install-windows-upgrade
+            if ($LastExitCode -EQ 0) {
+                Install-UpgradeService
+                Start-Service CalicoUpgrade
+            }
         }
     }
 
