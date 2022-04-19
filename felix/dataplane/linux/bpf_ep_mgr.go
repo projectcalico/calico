@@ -176,6 +176,9 @@ type bpfEndpointManager struct {
 	// IPv6 Support
 	ipv6Enabled bool
 
+	// IP of the tunnel / overlay device
+	tunnelIP net.IP
+
 	// Detected features
 	Features *environment.Features
 }
@@ -332,6 +335,21 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IP, no change applied")
 			}
 		}
+	case *proto.RouteUpdate:
+		m.onRouteUpdate(msg)
+	}
+}
+
+func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
+	if update.Type == proto.RouteType_LOCAL_TUNNEL {
+		ip, _, err := net.ParseCIDR(update.Dst)
+		if err != nil {
+			log.WithField("local tunnel cird", update.Dst).WithError(err).Warn("not parsable")
+			return
+		}
+		m.tunnelIP = ip
+		log.WithField("ip", update.Dst).Info("host tunnel")
+		m.dirtyIfaceNames.Add("bpfnatout")
 	}
 }
 
