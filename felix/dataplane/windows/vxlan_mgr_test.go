@@ -121,10 +121,10 @@ var _ = Describe("VXLAN manager tests", func() {
 				Describe("after receiving a matching VTEP", func() {
 					BeforeEach(func() {
 						mgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
-							Node:           "other-node",
-							ParentDeviceIp: "11.0.0.1",
-							Ipv4Addr:       "10.0.0.1",
-							Mac:            "00-11-22-33-44-55",
+							Node:             "other-node",
+							ParentDeviceIpv4: "11.0.0.1",
+							Ipv4Addr:         "10.0.0.1",
+							Mac:              "00-11-22-33-44-55",
 						})
 					})
 					It("should be dirty", func() {
@@ -220,10 +220,10 @@ var _ = Describe("VXLAN manager tests", func() {
 						Describe("after updating the VTEP and calling CompleteDeferredWork", func() {
 							BeforeEach(func() {
 								mgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
-									Node:           "other-node",
-									ParentDeviceIp: "11.0.0.2",
-									Ipv4Addr:       "10.0.0.2",
-									Mac:            "00-11-22-33-44-56",
+									Node:             "other-node",
+									ParentDeviceIpv4: "11.0.0.2",
+									Ipv4Addr:         "10.0.0.2",
+									Mac:              "00-11-22-33-44-56",
 								})
 								Expect(mgr.CompleteDeferredWork()).NotTo(HaveOccurred())
 							})
