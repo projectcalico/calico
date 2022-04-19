@@ -13,18 +13,19 @@
 # limitations under the License.
 
 Param(
-    [string]$NetworkName = "Calico"
+    [string]$NetworkName = "Calico",
+    [string]$CalicoWindowsDir = "$PSScriptRoot\..",
+    [string]$Kubeconfig = "c:\k\config",
+    [string]$KubeProxy = "c:\k\kube-proxy.exe"
 )
 
-$baseDir = "$PSScriptRoot\.."
-
 # Import HNS libraries, included in the package.
-ipmo -Force $baseDir\libs\hns\hns.psm1
+ipmo -Force $CalicoWindowsDir\libs\hns\hns.psm1
 
-. $baseDir\config.ps1
-ipmo $baseDir\libs\calico\calico.psm1
+. $CalicoWindowsDir\config.ps1
+ipmo -Force $CalicoWindowsDir\libs\calico\calico.psm1
 
-Write-Host "Running kub-proxy service."
+Write-Host "Running kube-proxy service."
 
 # Now, wait for the Calico network to be created.
 Write-Host "Waiting for HNS network $NetworkName to be created..."
@@ -35,7 +36,7 @@ while (-Not (Get-HnsNetwork | ? Name -EQ $NetworkName)) {
 Write-Host "HNS network $NetworkName found."
 
 # Determine the kube-proxy version.
-$kubeProxyVer = $(c:\k\kube-proxy.exe --version)
+$kubeProxyVer = Invoke-Expression "$KubeProxy --version"
 $kubeProxyGE114 = $false
 if ($kubeProxyVer -match "v([0-9])\.([0-9]+)") {
     $major = $Matches.1 -as [int]
@@ -49,7 +50,7 @@ $argList = @(`
     "--hostname-override=$env:NODENAME", `
     "--v=4",`
     "--proxy-mode=kernelspace",`
-    "--kubeconfig=""c:\k\config"""`
+    "--kubeconfig=""$Kubeconfig"""`
 )
 $extraFeatures = @()
 
@@ -90,8 +91,8 @@ if ($policyLists) {
     $policyLists | Remove-HnsPolicyList
 }
 
-Write-Host "Start to run c:\k\kube-proxy.exe"
+Write-Host "Start to run $KubeProxy"
 # We'll also pick up a network name env var from the Calico config file.  Override it
 # since the value in the config file may be a regex.
 $env:KUBE_NETWORK=$NetworkName
-c:\k\kube-proxy.exe $argList
+Invoke-Expression "$KubeProxy $argList"
