@@ -114,6 +114,10 @@ certs:
     commonName:
     caBundle:
 
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user.
+resources: {}
+
 # Configuration for the tigera operator images to deploy.
 tigeraOperator:
   image: tigera/operator
