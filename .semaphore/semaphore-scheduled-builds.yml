@@ -403,9 +403,10 @@ blocks:
         values: [ "arm64", "armv7", "ppc64le" ]
       commands:
       - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
-    - name: "Build Windows archive"
+    - name: "Build Windows archives"
       commands:
       - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
+      - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-upgrade-archive
 
 - name: "e2e tests"
   run:
