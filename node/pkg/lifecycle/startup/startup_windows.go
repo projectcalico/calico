@@ -54,7 +54,6 @@ func ensureNetworkForOS(ctx context.Context, c client.Interface, nodeName string
 	case "none":
 		logrus.Info("Backend networking is none, no network setup needed.")
 	case "vxlan", "windows-bgp":
-		logrus.Info("Backend networking is vxlan, ensure vxlan network.")
 		rsvdAttrWindows := &ipam.HostReservedAttr{
 			StartOfBlock: 3,
 			EndOfBlock:   1,
@@ -76,6 +75,7 @@ func ensureNetworkForOS(ctx context.Context, c client.Interface, nodeName string
 		networkName := "Calico"
 
 		if backend == "vxlan" {
+			logrus.Info("Backend networking is vxlan, ensure vxlan network.")
 			vniString := os.Getenv("VXLAN_VNI")
 			vni, err := strconv.ParseInt(vniString, 10, 64)
 			if err != nil {
@@ -99,6 +99,7 @@ func ensureNetworkForOS(ctx context.Context, c client.Interface, nodeName string
 				return err
 			}
 		} else {
+			logrus.Info("Backend networking is windows-bgp, ensure l2bridge network.")
 			_, err = windows.SetupL2bridgeNetwork(networkName, subnet, logrus.WithField("subnet", subnet.String()))
 			if err != nil {
 				return err
