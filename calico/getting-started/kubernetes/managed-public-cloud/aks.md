@@ -49,10 +49,6 @@ The geeky details of what you get:
 
 1. Now that you have a cluster configured, you can install {{site.prodname}}.
 
-{% tabs %}
-  <label:Operator,active:true>
-<%
-
 1. Install the operator.
 
    ```bash
@@ -78,26 +74,14 @@ The geeky details of what you get:
           encapsulation: VXLAN
    EOF
    ```
+   
+1. Confirm that all of the pods are running with the following command.
 
-%>
-  <label:Manifest>
-<%
-
-1. Install the {{site.prodname}} manifest.
-
-   ```bash
-   kubectl apply -f {{ "/manifests/calico-typha.yaml" | absolute_url }}
+   ```
+   watch kubectl get pods -n calico-system
    ```
 
-2. Configure {{site.prodname}}.
-
-   ```bash
-   kubectl -n kube-system set env daemonset/calico-node CALICO_IPV4POOL_VXLAN=Always
-   kubectl -n kube-system set env daemonset/calico-node CALICO_IPV4POOL_IPIP=Never
-   kubectl -n kube-system set env daemonset/calico-node CALICO_IPV4POOL_CIDR=10.244.0.0/16
-   ```
-%>
-{% endtabs %}
+   Wait until each pod has the `STATUS` of `Running`.
 
 ### Next steps
 
