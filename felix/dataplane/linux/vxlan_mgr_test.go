@@ -115,6 +115,7 @@ var _ = Describe("VXLANManager", func() {
 			&mockVXLANDataplane{
 				links: []netlink.Link{&mockLink{attrs: netlink.LinkAttrs{Name: "eth0"}}},
 			},
+			4,
 			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
 				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
 				return prt
@@ -124,17 +125,17 @@ var _ = Describe("VXLANManager", func() {
 
 	It("successfully adds a route to the parent interface", func() {
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
-			Node:           "node1",
-			Mac:            "00:0a:74:9d:68:16",
-			Ipv4Addr:       "10.0.0.0",
-			ParentDeviceIp: "172.0.0.2",
+			Node:             "node1",
+			Mac:              "00:0a:74:9d:68:16",
+			Ipv4Addr:         "10.0.0.0",
+			ParentDeviceIpv4: "172.0.0.2",
 		})
 
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
-			Node:           "node2",
-			Mac:            "00:0a:95:9d:68:16",
-			Ipv4Addr:       "10.0.80.0/32",
-			ParentDeviceIp: "172.0.12.1",
+			Node:             "node2",
+			Mac:              "00:0a:95:9d:68:16",
+			Ipv4Addr:         "10.0.80.0/32",
+			ParentDeviceIpv4: "172.0.12.1",
 		})
 
 		localVTEP := manager.getLocalVTEP()
@@ -202,10 +203,10 @@ var _ = Describe("VXLANManager", func() {
 	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
 		go manager.KeepVXLANDeviceInSync(1400, false, 1*time.Second)
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
-			Node:           "node2",
-			Mac:            "00:0a:95:9d:68:16",
-			Ipv4Addr:       "10.0.80.0/32",
-			ParentDeviceIp: "172.0.12.1",
+			Node:             "node2",
+			Mac:              "00:0a:95:9d:68:16",
+			Ipv4Addr:         "10.0.80.0/32",
+			ParentDeviceIpv4: "172.0.12.1",
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
@@ -224,10 +225,10 @@ var _ = Describe("VXLANManager", func() {
 		Expect(manager.routesDirty).To(BeTrue())
 
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
-			Node:           "node1",
-			Mac:            "00:0a:74:9d:68:16",
-			Ipv4Addr:       "10.0.0.0",
-			ParentDeviceIp: "172.0.0.2",
+			Node:             "node1",
+			Mac:              "00:0a:74:9d:68:16",
+			Ipv4Addr:         "10.0.0.0",
+			ParentDeviceIpv4: "172.0.0.2",
 		})
 
 		time.Sleep(2 * time.Second)

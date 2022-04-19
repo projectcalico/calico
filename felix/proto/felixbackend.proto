@@ -550,7 +550,9 @@ message VXLANTunnelEndpointUpdate {
   string node = 1;
   string mac = 2;
   string ipv4_addr = 3;
-  string parent_device_ip = 4;
+  string parent_device_ipv4 = 4;
+  string ipv6_addr = 5;
+  string parent_device_ipv6 = 6;
 }
 
 message VXLANTunnelEndpointRemove {

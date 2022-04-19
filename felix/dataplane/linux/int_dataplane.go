@@ -465,6 +465,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			"vxlan.calico",
 			config,
 			dp.loopSummarizer,
+			4,
 		)
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
