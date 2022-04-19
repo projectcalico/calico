@@ -1,0 +1,4 @@
+---
+layout: null
+---
+{% include non-helm-manifests/calico-windows.yaml networking="windows-bgp" %}
