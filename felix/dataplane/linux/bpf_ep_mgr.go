@@ -38,6 +38,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -177,6 +178,9 @@ type bpfEndpointManager struct {
 
 	// IP of the tunnel / overlay device
 	tunnelIP net.IP
+
+	// Detected features
+	Features *environment.Features
 }
 
 type bpfAllowChainRenderer interface {
@@ -1027,7 +1031,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
-
+	ap.Features = *m.Features
 	return ap
 }
 

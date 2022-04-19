@@ -937,6 +937,7 @@ func (pkt *Packet) handleL4() error {
 	case *layers.UDP:
 		pkt.udp = v
 		pkt.length += 8
+		pkt.udp.Length = uint16(pkt.length)
 		pkt.l4Protocol = layers.IPProtocolUDP
 		pkt.layers = append(pkt.layers, pkt.udp)
 	case *layers.TCP:
@@ -968,9 +969,10 @@ func (pkt *Packet) handleL3() error {
 	switch v := pkt.l3.(type) {
 	case *layers.IPv4:
 		pkt.ipv4 = v
+		pkt.length += 5 * 4
 		pkt.l3Protocol = layers.EthernetTypeIPv4
 		pkt.ipv4.Protocol = pkt.l4Protocol
-		pkt.ipv4.Length = uint16(pkt.length + 5*4)
+		pkt.ipv4.Length = uint16(pkt.length)
 		pkt.layers = append(pkt.layers, pkt.ipv4)
 	case *layers.IPv6:
 		pkt.ipv6 = v
