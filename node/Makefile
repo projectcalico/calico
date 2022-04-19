@@ -132,10 +132,10 @@ WINDOWS_UPGRADE_BUILD        ?= $(WINDOWS_UPGRADE_ROOT)/build
 WINDOWS_UPGRADE_ARCHIVE      ?= $(WINDOWS_UPGRADE_BUILD)/calico-windows-upgrade.zip
 
 # The directory for windows image tarball
-WINDOWS_PACKAGING_DIST        = dist/windows-packaging
+WINDOWS_DIST        = dist/windows
 
 # The directory for temporary files used to build the windows image
-WINDOWS_PACKAGING_DIST_STAGE  = $(WINDOWS_PACKAGING_DIST)/stage
+WINDOWS_DIST_STAGE  = $(WINDOWS_DIST)/stage
 
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
@@ -164,7 +164,7 @@ SRC_FILES=$(shell find ./pkg -name '*.go') \
 BINDIR?=bin
 
 ## Clean enough that a new release build will be clean
-clean: clean-windows-upgrade
+clean: clean-windows
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
@@ -172,13 +172,6 @@ clean: clean-windows-upgrade
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
 	rm -rf $(REMOTE_DEPS)
-	rm -f $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
-	rm -f $(WINDOWS_INSTALL_SCRIPT)
-	rm -f $(WINDOWS_UPGRADE_INSTALL_FILE)
-	rm -f $(WINDOWS_UPGRADE_BUILD)/*.zip
 	rm -rf filesystem/included-source
 	rm -rf dist
 	rm -rf bin
@@ -189,8 +182,14 @@ clean: clean-windows-upgrade
 	docker rmi $(TEST_CONTAINER_NAME) || true
 	docker rmi $(addprefix $(WINDOWS_UPGRADE_IMAGE):latest-,$(WINDOWS_VERSIONS)) || true
 
-clean-windows-upgrade:
-	-rm -f "$(WINDOWS_UPGRADE_DIST_STAGE)"
+clean-windows:
+	-rm -f $(WINDOWS_ARCHIVE) $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
+	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
+	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
+	-rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
+	-rm -f $(WINDOWS_INSTALL_SCRIPT)
+	-rm -rf "$(WINDOWS_DIST)"
+	-rm -rf "$(WINDOWS_UPGRADE_DIST)"
 	-rm -rf "$(WINDOWS_UPGRADE_BUILD)"
 
 ###############################################################################
@@ -613,22 +612,22 @@ endif
 # Uses the docker builder to create a Windows image tarball for a single Windows version.
 sub-image-tar-windows-%:
 	# ensure dir for windows image tars
-	-mkdir -p $(WINDOWS_PACKAGING_DIST)
+	-mkdir -p $(WINDOWS_DIST)
 	# ensure docker build dir exists
-	-mkdir -p $(WINDOWS_PACKAGING_DIST_STAGE)
+	-mkdir -p $(WINDOWS_DIST_STAGE)
 	# copy dockerfile to staging dir
-	cp $(WINDOWS_PACKAGING_ROOT)/Dockerfile $(WINDOWS_PACKAGING_DIST_STAGE)
+	cp $(WINDOWS_PACKAGING_ROOT)/Dockerfile $(WINDOWS_DIST_STAGE)
 	# copy install entrypoint script to staging dir
-	cp $(WINDOWS_PACKAGING_ROOT)/host-process-install.ps1 $(WINDOWS_PACKAGING_DIST_STAGE)
+	cp $(WINDOWS_PACKAGING_ROOT)/host-process-install.ps1 $(WINDOWS_DIST_STAGE)
 	# build and copy install script to staging dir
 	make -C ../calico build
-	cp ../calico/_site/scripts/install-calico-windows.ps1 $(WINDOWS_PACKAGING_DIST_STAGE)
+	cp ../calico/_site/scripts/install-calico-windows.ps1 $(WINDOWS_DIST_STAGE)
 	# copy calico install zip file to staging dir
-	cp dist/calico-windows-$(GIT_VERSION).zip $(WINDOWS_PACKAGING_DIST_STAGE)/calico-windows.zip
-	cd $(WINDOWS_PACKAGING_DIST_STAGE) && \
+	cp dist/calico-windows-$(GIT_VERSION).zip $(WINDOWS_DIST_STAGE)/calico-windows.zip
+	cd $(WINDOWS_DIST_STAGE) && \
 	docker buildx build \
 		--platform windows/amd64 \
-		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_PACKAGING_DIST)/image-$(GIT_VERSION)-$*.tar \
+		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/image-$(GIT_VERSION)-$*.tar \
 		--pull \
 		--build-arg=WINDOWS_VERSION=$* .
 
@@ -644,7 +643,7 @@ sub-image-tar-windows-upgrade-%:
 			--build-arg=WINDOWS_VERSION=$* .
 
 cd-windows-all:
-	$(MAKE) cd-windows-windows WINDOWS_IMAGE_TAR_ROOT=$(WINDOWS_PACKAGING_DIST)
+	$(MAKE) cd-windows-windows WINDOWS_IMAGE_TAR_ROOT=$(WINDOWS_DIST)
 	$(MAKE) cd-windows-windows-upgrade WINDOWS_IMAGE_TAR_ROOT=$(WINDOWS_UPGRADE_DIST)
 
 # Windows image pushing is different because we do not build docker images directly.
