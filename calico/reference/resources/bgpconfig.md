@@ -17,6 +17,7 @@ metadata:
 spec:
   logSeverityScreen: Info
   nodeToNodeMeshEnabled: true
+  nodeMeshMaxRestartTime: 120s
   asNumber: 63400
   serviceClusterIPs:
   - cidr: 10.96.0.0/12
