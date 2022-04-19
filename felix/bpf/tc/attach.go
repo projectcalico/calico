@@ -48,6 +48,7 @@ type AttachPoint struct {
 	Iface                string
 	LogLevel             string
 	HostIP               net.IP
+	HostTunnelIP         net.IP
 	IntfIP               net.IP
 	FIB                  bool
 	ToHostDrop           bool
@@ -621,8 +622,17 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		flags |= libbpf.GlobalsIPv6Enabled
 	}
 
+	hostTunnelIP := hostIP
+
+	if ap.HostTunnelIP != nil {
+		hostTunnelIP, err = convertIPToUint32(ap.HostTunnelIP)
+		if err != nil {
+			return err
+		}
+	}
+
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, flags)
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP, flags)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
