@@ -147,22 +147,36 @@ function GetBackendType()
         if (($backend -eq "vxlan") -or ($backend -eq "windows-bgp")) {
             return $backend
         }
+
+        if ($backend -NE $null) {
+            Write-Host "Invalid Calico backend type: $backend. Set CALICO_NETWORKING_BACKEND in calico-windows-config in calico-system namespace to one of: 'vxlan', 'windows-bgp'"
+            exit 1
+        }
+
+        # If CALICO_NETWORKING_BACKEND is not set we can only continue if the
+        # kubeconfig and kubectl.exe both exist.
+        if ((-not (Test-Path $KubeConfigPath)) -or (-not (Test-Path "c:\k\kubectl.exe"))) {
+            Write-Host "No CALICO_NETWORKING_BACKEND provided. Set CALICO_NETWORKING_BACKEND in calico-windows-config in calico-system namespace to one of: 'vxlan', 'windows-bgp'"
+            exit 1
+        }
+
+        # If we reach here, we can continue auto-detecting the backend type.
     }
 
     # Auto detect backend type
     if ($Datastore -EQ "kubernetes") {
-        $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
+        $encap=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
         if ($encap -EQ "true") {
             throw "{{site.prodname}} on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
         }
 
-        $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
+        $encap=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
         if ($encap -EQ "true") {
             return ("vxlan")
         }
         return ("bgp")
     } else {
-        $CalicoBackend=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get configmap calico-config -n $CalicoNamespace -o jsonpath='{.data.calico_backend}'
+        $CalicoBackend=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get configmap calico-config -n $CalicoNamespace -o jsonpath='{.data.calico_backend}'
         if ($CalicoBackend -EQ "vxlan") {
             return ("vxlan")
         }
