@@ -1013,11 +1013,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
-	if m.Features == nil {
-		ap.Features = *environment.NewFeatureDetector(nil).GetFeatures()
-	} else {
-		ap.Features = *m.Features
-	}
+	ap.Features = *m.Features
 	return ap
 }
 
