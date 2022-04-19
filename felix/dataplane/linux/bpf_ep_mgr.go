@@ -805,12 +805,9 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	// Host side of the veth is always configured as 169.254.1.1.
 	ap.HostIP = calicoRouterIP
-	// * VXLAN MTU should be the host ifaces MTU -50, in order to allow space for VXLAN.
-	// * We also expect that to be the MTU used on veths.
-	// * We do encap on the veths, and there's a bogus kernel MTU check in the BPF helper
-	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
-	//   when we cannot encap the packet - non-GSO & too close to veth MTU
-	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
+	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
+	// * Hence it is safe to set the tunnel mtu same as veth mtu
+	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.IntfIP = calicoRouterIP
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 

@@ -2730,45 +2730,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							if testOpts.protocol == "tcp" {
 
 								const (
-									npEncapOverhead = 50
-									hostIfaceMTU    = 1500
-									podIfaceMTU     = 1450
-									sendLen         = hostIfaceMTU
-									recvLen         = podIfaceMTU - npEncapOverhead
+									hostIfaceMTU = 1500
+									podIfaceMTU  = 1450
+									sendLen      = hostIfaceMTU
+									recvLen      = podIfaceMTU
 								)
 
 								Context("with TCP, tx/rx close to MTU size on NP via node1->node0 ", func() {
-
-									negative := ""
-									adjusteMTU := podIfaceMTU - npEncapOverhead
-									if testOpts.dsr {
-										negative = "not "
-										adjusteMTU = 0
-									}
-
-									It("should "+negative+"adjust MTU on workload side", func() {
-										// force non-GSO packets when workload replies
-										_, err := w[0][0].RunCmd("ethtool", "-K", "eth0", "gso", "off")
-										Expect(err).NotTo(HaveOccurred())
-										_, err = w[0][0].RunCmd("ethtool", "-K", "eth0", "tso", "off")
-										Expect(err).NotTo(HaveOccurred())
-
-										pmtu, err := w[0][0].PathMTU(externalClient.IP)
-										Expect(err).NotTo(HaveOccurred())
-										Expect(pmtu).To(Equal(0)) // nothing specific for this path yet
-
-										cc.Expect(Some, externalClient, TargetIP(felixes[1].IP),
-											ExpectWithPorts(npPort),
-											ExpectWithSendLen(sendLen),
-											ExpectWithRecvLen(recvLen),
-											ExpectWithClientAdjustedMTU(hostIfaceMTU, hostIfaceMTU),
-										)
-										cc.CheckConnectivity()
-
-										pmtu, err = w[0][0].PathMTU(externalClient.IP)
-										Expect(err).NotTo(HaveOccurred())
-										Expect(pmtu).To(Equal(adjusteMTU))
-									})
 
 									It("should not adjust MTU on client side if GRO off on nodes", func() {
 										// force non-GSO packets on node ingress
