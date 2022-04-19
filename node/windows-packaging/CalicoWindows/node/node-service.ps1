@@ -15,8 +15,8 @@
 # This script is run from the main Calico folder.
 . .\config.ps1
 
-ipmo .\libs\calico\calico.psm1
-ipmo .\libs\hns\hns.psm1
+ipmo .\libs\calico\calico.psm1 -Force
+ipmo .\libs\hns\hns.psm1 -Force
 
 $lastBootTime = Get-LastBootTime
 $Stored = Get-StoredLastBootTime
@@ -118,6 +118,9 @@ if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_
     }
 }
 
+# For Windows, we expect the nodename file to exist in the root directory of the
+# Calico for Windows installation. The CNI config field 'nodename_file' will
+# always be $RootDir\nodename
 $env:CALICO_NODENAME_FILE = ".\nodename"
 
 # We use this setting as a trigger for the other scripts to proceed.
