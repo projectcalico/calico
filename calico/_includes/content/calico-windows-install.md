@@ -17,7 +17,11 @@
    {% include content/kube-apiserver-host-port.md %}
 
 1. Edit the `calico-windows-config` configmap in the downloaded manifest and ensure the required variables are correct for your cluster:
+{%- if include.networkingType == "vxlan" %}
    - `CALICO_NETWORKING_BACKEND`: This should be set to "vxlan".
+{%- else %}
+   - `CALICO_NETWORKING_BACKEND`: This should be set to "windows-bgp".
+{%- endif %}
    - `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`: The Kubernetes API server host and port (discovered in the previous step) used to create a kubeconfig file for Calico services. If your node already has an existing kubeconfig file, leave these variables blank.
    - `K8S_SERVICE_CIDR`: The Kubernetes service clusterIP range configured in your cluster. This must match the service-cluster-ip-range used by kube-apiserver.
    - `CNI_BIN_DIR`: Path where Calico CNI binaries will be installed. The this must match the CNI bin values in the ContainerD service configuration.
