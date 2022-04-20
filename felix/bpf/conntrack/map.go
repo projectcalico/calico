@@ -210,7 +210,7 @@ func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint1
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(created, lastSeen time.Duration, flags uint8, legA, legB Leg) Value {
+func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
 	v := Value{}
 
 	initValue(&v, created, lastSeen, TypeNormal, flags)
@@ -223,7 +223,7 @@ func NewValueNormal(created, lastSeen time.Duration, flags uint8, legA, legB Leg
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(created, lastSeen time.Duration, flags uint8, revKey Key) Value {
+func NewValueNATForward(created, lastSeen time.Duration, flags uint16, revKey Key) Value {
 	v := Value{}
 
 	initValue(&v, created, lastSeen, TypeNATForward, flags)
@@ -235,7 +235,7 @@ func NewValueNATForward(created, lastSeen time.Duration, flags uint8, revKey Key
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueNATReverse(created, lastSeen time.Duration, flags uint8, legA, legB Leg,
+func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
 	v := Value{}
 
