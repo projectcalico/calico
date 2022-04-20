@@ -17,7 +17,6 @@ $ErrorActionPreference = "Stop"
 $rootDir = "c:\CalicoWindows"
 
 Write-Host "Uninstalling any existing Calico install before proceeding with installation..."
-$calicoSvcsRunning = (Get-Service | where Name -Like 'Calico*') -NE $null
 if ((Get-Service | where Name -Like 'Calico*') -NE $null) {
     Write-Host "Calico services running. Executing $rootDir\uninstall-calico.ps1..."
     & "$rootDir\uninstall-calico.ps1"
@@ -44,7 +43,7 @@ if ($LastExitCode -NE 0) {
 # Restart kubelet and/or kube-proxy services if they are installed by Calico and
 # running since their service files may have been updated in-place.
 $kubeProxySvc = Get-CimInstance -Query 'select * from win32_service where name="kube-proxy"'
-if ($kubeProxySvc.PathName.StartsWith($rootDir, 'CurrentCultureIgnoreCase')) {
+if (($kubeProxySvc -NE $null) -and ($kubeProxySvc.PathName.StartsWith($rootDir, 'CurrentCultureIgnoreCase'))) {
     if ($kubeProxySvc.State -EQ "Running") {
         Write-Host "Restarting running kube-proxy service managed by Calico to reload service"
         Restart-Service kube-proxy
@@ -61,7 +60,7 @@ if ($kubeProxySvc.PathName.StartsWith($rootDir, 'CurrentCultureIgnoreCase')) {
 }
 
 $kubeletSvc = Get-CimInstance -Query 'select * from win32_service where name="kubelet"'
-if ($kubeletSvc.PathName.StartsWith($rootDir, 'CurrentCultureIgnoreCase')) {
+if (($kubeletSvc -NE $null) -and ($kubeletSvc.PathName.StartsWith($rootDir, 'CurrentCultureIgnoreCase'))) {
     if ($kubeletSvc.State -EQ "Running") {
         Write-Host "Restarting running kubelet service managed by Calico to reload service"
         Restart-Service kubelet
