@@ -146,9 +146,21 @@ func (b *Binary) PatchPSNATPorts(start, end uint32) {
 	b.patchU32Placeholder("PRTL", end-start+1)
 }
 
+// PatchSkbMark replaces SKBM with the expected mark - for tests.
 func (b *Binary) PatchSkbMark(mark uint32) {
 	logrus.WithField("mark", mark).Debug("Patching skb mark")
 	b.patchU32Placeholder("SKBM", uint32(mark))
+}
+
+// PatchHostTunnelIPv4 replaces TUNL with the tunnel interface IP.
+func (b *Binary) PatchHostTunnelIPv4(ip net.IP) error {
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return errors.Errorf("%s is not IPv4", ip)
+	}
+	b.replaceAllLoadImm32([]byte("TUNL"), []byte(ipv4))
+
+	return nil
 }
 
 // patchU32Placeholder replaces a placeholder with the given value.

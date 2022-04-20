@@ -339,6 +339,7 @@ Exit
 Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
 Write-Host "Unzip Calico for Windows release..."
 Expand-Archive -Force $CalicoZip c:\
+ipmo $RootDir\libs\calico\calico.psm1
 
 Write-Host "Setup Calico for Windows..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore

@@ -29,10 +29,13 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -74,6 +77,9 @@ const (
 
 	// Interface name used by kube-proxy to bind service ips.
 	KubeIPVSInterface = "kube-ipvs0"
+
+	// Route cleanup grace period. Used for workload routes only.
+	routeCleanupGracePeriod = 10 * time.Second
 )
 
 var (
@@ -357,7 +363,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
-	backendMode := iptables.DetectBackend(config.LookPathOverride, iptables.NewRealCmd, config.IptablesBackend)
+	backendMode := environment.DetectBackend(config.LookPathOverride, cmdshim.NewRealCmd, config.IptablesBackend)
 
 	// Most iptables tables need the same options.
 	iptablesOptions := iptables.TableOptions{
@@ -388,11 +394,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
-	featureDetector := iptables.NewFeatureDetector(config.FeatureDetectOverrides)
-	iptablesFeatures := featureDetector.GetFeatures()
+	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
+	dataplaneFeatures := featureDetector.GetFeatures()
 
 	var iptablesLock sync.Locker
-	if iptablesFeatures.RestoreSupportsLock {
+	if dataplaneFeatures.RestoreSupportsLock {
 		log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
 			"iptables-restore will use its own implementation).")
 		iptablesLock = dummyLock{}
@@ -454,8 +460,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
-				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+			 	dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableVXLAN = &routetable.DummyTable{}
@@ -468,7 +474,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 		)
-		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
+		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
@@ -594,7 +600,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
 		ipsetsManager.AddDataplane(ipSetsV4)
-		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer)
+		bpfRTMgr := newBPFRouteManager(&config, bpfMapContext, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
@@ -621,6 +627,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.RegisterManager(bpfEndpointManager)
+
+		bpfEndpointManager.Features = dataplaneFeatures
 
 		conntrackScanner := conntrack.NewScanner(bpfMapContext.CtMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
@@ -678,8 +686,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if !config.RouteSyncDisabled {
 		log.Debug("RouteSyncDisabled is false.")
 		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_UNSPEC,
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 	} else {
 		log.Info("RouteSyncDisabled is true, using DummyTable.")
 		routeTableV4 = &routetable.DummyTable{}
@@ -779,10 +788,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var routeTableV6 routeTable
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
-			routeTableV6 = routetable.New(
+			routeTableV6 = outetable.New(
 				interfaceRegexes, 6, false, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
+				unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 		} else {
 			log.Debug("RouteSyncDisabled is true, using DummyTable.")
 			routeTableV6 = &routetable.DummyTable{}

@@ -165,16 +165,16 @@ FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
 const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
-10.65.0.1/32: local host
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
 10.65.0.4/32: local workload in-pool nat-out idx -
-10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
-10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
+10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
 FELIX_0/32: local host idx -
+FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
@@ -816,10 +816,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 
 			It("should have correct routes", func() {
+				tunnelAddr := ""
 				expectedRoutes := expectedRouteDump
-				if felixes[0].ExpectedIPIPTunnelAddr != "" || felixes[0].ExpectedVXLANTunnelAddr != "" || felixes[0].ExpectedWireguardTunnelAddr != "" {
+				switch {
+				case felixes[0].ExpectedIPIPTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedIPIPTunnelAddr
+				case felixes[0].ExpectedVXLANTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedVXLANTunnelAddr
+				case felixes[0].ExpectedWireguardTunnelAddr != "":
+					tunnelAddr = felixes[0].ExpectedWireguardTunnelAddr
+				}
+
+				if tunnelAddr != "" {
 					expectedRoutes = expectedRouteDumpWithTunnelAddr
 				}
+
 				dumpRoutes := func() string {
 					out, err := felixes[0].ExecOutput("calico-bpf", "routes", "dump")
 					if err != nil {
@@ -838,6 +849,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						l = strings.ReplaceAll(l, felixes[1].IP, "FELIX_1")
 						l = strings.ReplaceAll(l, felixes[2].IP, "FELIX_2")
 						l = idxRE.ReplaceAllLiteralString(l, "idx -")
+						if tunnelAddr != "" {
+							l = strings.ReplaceAll(l, tunnelAddr+"/32", "FELIX_0_TNL/32")
+						}
 						filteredLines = append(filteredLines, l)
 					}
 					sort.Strings(filteredLines)
@@ -2730,45 +2744,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							if testOpts.protocol == "tcp" {
 
 								const (
-									npEncapOverhead = 50
-									hostIfaceMTU    = 1500
-									podIfaceMTU     = 1450
-									sendLen         = hostIfaceMTU
-									recvLen         = podIfaceMTU - npEncapOverhead
+									hostIfaceMTU = 1500
+									podIfaceMTU  = 1450
+									sendLen      = hostIfaceMTU
+									recvLen      = podIfaceMTU
 								)
 
 								Context("with TCP, tx/rx close to MTU size on NP via node1->node0 ", func() {
-
-									negative := ""
-									adjusteMTU := podIfaceMTU - npEncapOverhead
-									if testOpts.dsr {
-										negative = "not "
-										adjusteMTU = 0
-									}
-
-									It("should "+negative+"adjust MTU on workload side", func() {
-										// force non-GSO packets when workload replies
-										_, err := w[0][0].RunCmd("ethtool", "-K", "eth0", "gso", "off")
-										Expect(err).NotTo(HaveOccurred())
-										_, err = w[0][0].RunCmd("ethtool", "-K", "eth0", "tso", "off")
-										Expect(err).NotTo(HaveOccurred())
-
-										pmtu, err := w[0][0].PathMTU(externalClient.IP)
-										Expect(err).NotTo(HaveOccurred())
-										Expect(pmtu).To(Equal(0)) // nothing specific for this path yet
-
-										cc.Expect(Some, externalClient, TargetIP(felixes[1].IP),
-											ExpectWithPorts(npPort),
-											ExpectWithSendLen(sendLen),
-											ExpectWithRecvLen(recvLen),
-											ExpectWithClientAdjustedMTU(hostIfaceMTU, hostIfaceMTU),
-										)
-										cc.CheckConnectivity()
-
-										pmtu, err = w[0][0].PathMTU(externalClient.IP)
-										Expect(err).NotTo(HaveOccurred())
-										Expect(pmtu).To(Equal(adjusteMTU))
-									})
 
 									It("should not adjust MTU on client side if GRO off on nodes", func() {
 										// force non-GSO packets on node ingress

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables_test
+package environment_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -24,7 +25,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/calico/felix/iptables"
+	. "github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
+	"github.com/projectcalico/calico/felix/iptables/testutils"
 )
 
 func TestFeatureDetection(t *testing.T) {
@@ -129,10 +132,10 @@ func TestFeatureDetection(t *testing.T) {
 		tst := tst
 		t.Run("iptables version "+tst.iptablesVersion+" kernel "+tst.kernelVersion, func(t *testing.T) {
 			RegisterTestingT(t)
-			dataplane := newMockDataplane("filter", map[string][]string{}, "legacy")
+			dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
 			featureDetector := NewFeatureDetector(nil)
-			featureDetector.NewCmd = dataplane.newCmd
-			featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
+			featureDetector.NewCmd = dataplane.NewCmd
+			featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
 
 			if tst.iptablesVersion == "error" {
 				dataplane.FailNextVersion = true
@@ -203,10 +206,10 @@ func TestFeatureDetectionOverride(t *testing.T) {
 		tst := tst
 		t.Run("iptables version "+tst.iptablesVersion+" kernel "+tst.kernelVersion, func(t *testing.T) {
 			RegisterTestingT(t)
-			dataplane := newMockDataplane("filter", map[string][]string{}, "legacy")
+			dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
 			featureDetector := NewFeatureDetector(tst.override)
-			featureDetector.NewCmd = dataplane.newCmd
-			featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
+			featureDetector.NewCmd = dataplane.NewCmd
+			featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
 
 			if tst.iptablesVersion == "error" {
 				dataplane.FailNextVersion = true
@@ -325,9 +328,9 @@ func TestIptablesBackendDetection(t *testing.T) {
 		tst := tst
 		t.Run("DetectingBackend, testing "+tst.name, func(t *testing.T) {
 			RegisterTestingT(t)
-			Expect(DetectBackend(lookPathAll, tst.cmdF.NewCmd, tst.spec)).To(Equal(tst.expectedBackend))
+			Expect(DetectBackend(testutils.LookPathAll, tst.cmdF.NewCmd, tst.spec)).To(Equal(tst.expectedBackend))
 
-			Expect(DetectBackend(lookPathAll, tst.cmdF.NewCmd, strings.ToUpper(tst.spec))).To(Equal(tst.expectedBackend), "Capitalization affected output")
+			Expect(DetectBackend(testutils.LookPathAll, tst.cmdF.NewCmd, strings.ToUpper(tst.spec))).To(Equal(tst.expectedBackend), "Capitalization affected output")
 		})
 	}
 }
@@ -339,7 +342,7 @@ type ipOutputFactory struct {
 	Ip4Nft    int
 }
 
-func (f *ipOutputFactory) NewCmd(name string, arg ...string) CmdIface {
+func (f *ipOutputFactory) NewCmd(name string, arg ...string) cmdshim.CmdIface {
 	switch name {
 	case "iptables-legacy-save":
 		return &ipOutputCmd{out: f.Ip4legacy}
@@ -402,4 +405,139 @@ func (d *ipOutputCmd) StdoutPipe() (io.ReadCloser, error) {
 
 func (d *ipOutputCmd) Run() error {
 	return errors.New("Not implemented")
+}
+
+func TestBPFFeatureDetection(t *testing.T) {
+	RegisterTestingT(t)
+
+	type test struct {
+		kernelVersion string
+		features      Features
+		override      map[string]string
+	}
+	for _, tst := range []test{
+		{
+			"Linux version 5.10.0 - ubuntu",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 5.14.0 - something else",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 5.15.0",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 5.10.0 - Default",
+			Features{
+				IPIPDeviceIsL3: true,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "true",
+			},
+		},
+		{
+			"Linux version 5.14.0",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+		{
+			"Linux version 5.16.0 - Ubuntu",
+			Features{
+				IPIPDeviceIsL3: false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+		{
+			"Linux version 4.18.0 - Red Hat",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.18.0-330 - Red Hat",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.18.0-420 - Red hat",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 4.17.0 - el8_3",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        true,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "true",
+			},
+		},
+		{
+			"Linux version 4.18.0-330 - el8_5",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+		{
+			"Linux version 4.18.0-390 - el9_7",
+			Features{
+				ChecksumOffloadBroken: true,
+				IPIPDeviceIsL3:        false,
+			},
+			map[string]string{
+				"IPIPDeviceIsL3": "false",
+			},
+		},
+	} {
+		t.Run("kernel "+tst.kernelVersion, func(t *testing.T) {
+			RegisterTestingT(t)
+			featureDetector := NewFeatureDetector(nil)
+			if tst.override != nil {
+				featureDetector = NewFeatureDetector(tst.override)
+			}
+			kernel := mockKernelVersion{
+				kernelVersion: tst.kernelVersion,
+			}
+			featureDetector.GetKernelVersionReader = kernel.GetKernelVersionReader
+			Expect(featureDetector.GetFeatures()).To(Equal(&tst.features))
+		})
+	}
+}
+
+type mockKernelVersion struct {
+	kernelVersion string
+}
+
+func (kv mockKernelVersion) GetKernelVersionReader() (io.Reader, error) {
+	return bytes.NewBufferString(kv.kernelVersion), nil
 }

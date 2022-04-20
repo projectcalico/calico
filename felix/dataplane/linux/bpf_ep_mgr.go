@@ -38,6 +38,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -174,6 +175,12 @@ type bpfEndpointManager struct {
 
 	// IPv6 Support
 	ipv6Enabled bool
+
+	// IP of the tunnel / overlay device
+	tunnelIP net.IP
+
+	// Detected features
+	Features *environment.Features
 }
 
 type bpfAllowChainRenderer interface {
@@ -328,6 +335,21 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IP, no change applied")
 			}
 		}
+	case *proto.RouteUpdate:
+		m.onRouteUpdate(msg)
+	}
+}
+
+func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
+	if update.Type == proto.RouteType_LOCAL_TUNNEL {
+		ip, _, err := net.ParseCIDR(update.Dst)
+		if err != nil {
+			log.WithField("local tunnel cird", update.Dst).WithError(err).Warn("not parsable")
+			return
+		}
+		m.tunnelIP = ip
+		log.WithField("ip", update.Dst).Info("host tunnel")
+		m.dirtyIfaceNames.Add("bpfnatout")
 	}
 }
 
@@ -805,12 +827,9 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	// Host side of the veth is always configured as 169.254.1.1.
 	ap.HostIP = calicoRouterIP
-	// * VXLAN MTU should be the host ifaces MTU -50, in order to allow space for VXLAN.
-	// * We also expect that to be the MTU used on veths.
-	// * We do encap on the veths, and there's a bogus kernel MTU check in the BPF helper
-	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
-	//   when we cannot encap the packet - non-GSO & too close to veth MTU
-	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
+	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
+	// * Hence it is safe to set the tunnel mtu same as veth mtu
+	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.IntfIP = calicoRouterIP
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 
@@ -1009,7 +1028,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
-
+	ap.Features = *m.Features
 	return ap
 }
 

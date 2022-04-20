@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -33,6 +34,7 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 	"k8s.io/client-go/rest"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
@@ -103,7 +105,6 @@ func mkdir(path string) {
 	if err := os.MkdirAll(path, 0777); err != nil {
 		logrus.WithError(err).Fatalf("Failed to create directory %s", path)
 	}
-
 }
 
 func loadConfig() config {
@@ -117,13 +118,10 @@ func loadConfig() config {
 }
 
 func Install() error {
+	// Configure logging before anything else.
+	logrus.SetFormatter(&logutils.Formatter{Component: "cni-installer"})
+
 	// Clean up any existing binaries / config / assets.
-	if err := os.Remove("/host/opt/cni/bin/calico"); err != nil && !os.IsNotExist(err) {
-		logrus.WithError(err).Warnf("Error removing old plugin")
-	}
-	if err := os.Remove("/host/opt/cni/bin/calico-ipam"); err != nil && !os.IsNotExist(err) {
-		logrus.WithError(err).Warnf("Error removing old IPAM plugin")
-	}
 	if err := os.RemoveAll("/host/etc/cni/net.d/calico-tls"); err != nil && !os.IsNotExist(err) {
 		logrus.WithError(err).Warnf("Error removing old TLS directory")
 	}
@@ -187,6 +185,7 @@ func Install() error {
 
 	// Place the new binaries if the directory is writeable.
 	dirs := []string{"/host/opt/cni/bin", "/host/secondary-bin-dir"}
+	binsWritten := false
 	for _, d := range dirs {
 		if err := fileutil.IsDirWriteable(d); err != nil {
 			logrus.Infof("%s is not writeable, skipping", d)
@@ -215,17 +214,26 @@ func Install() error {
 			logrus.Infof("Installed %s", target)
 		}
 
+		// Binaries were placed into at least one directory
 		logrus.Infof("Wrote Calico CNI binaries to %s\n", d)
+		binsWritten = true
 
-		// Print CNI plugin version
+		// Print CNI plugin version to confirm that the binary was actually written.
+		// If this fails, it means something has gone wrong so we should retry.
 		cmd := exec.Command(d+"/calico", "-v")
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		err = cmd.Run()
 		if err != nil {
-			logrus.WithError(err).Warnf("Failed getting CNI plugin version")
+			logrus.WithError(err).Warnf("Failed getting CNI plugin version from installed binary, exiting")
+			return err
 		}
 		logrus.Infof("CNI plugin version: %s", out.String())
+	}
+
+	// If binaries were not placed, exit
+	if !binsWritten {
+		logrus.WithError(err).Fatalf("found no writeable directory, exiting")
 	}
 
 	if kubecfg != nil {
@@ -412,6 +420,16 @@ func writeCNIConfig(c config) {
 
 // copyFileAndPermissions copies file permission
 func copyFileAndPermissions(src, dst string) (err error) {
+	// If the source and destination are the same, we can simply return.
+	skip, err := destinationUptoDate(src, dst)
+	if err != nil {
+		return err
+	}
+	if skip {
+		logrus.WithField("file", dst).Info("File is already up to date, skipping")
+		return nil
+	}
+
 	// Make a temporary file at the destination.
 	dstTmp := fmt.Sprintf("%s.tmp", dst)
 	if err := cp.CopyFile(src, dstTmp); err != nil {
@@ -487,4 +505,93 @@ func setSuidBit(file string) error {
 	}
 
 	return nil
+}
+
+// destinationUptoDate compares the given files and returns
+// whether or not the destination file needs to be updated with the
+// contents of the source file.
+func destinationUptoDate(src, dst string) (bool, error) {
+	// Stat the src file.
+	f1info, err := os.Stat(src)
+	if os.IsNotExist(err) {
+		// If the source file doesn't exist, that's an unrecoverable problem.
+		return false, err
+	} else if err != nil {
+		return false, err
+	}
+
+	// Stat the dst file.
+	f2info, err := os.Stat(dst)
+	if os.IsNotExist(err) {
+		// If the destination file doesn't exist, it means the
+		// two files are not equal.
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+
+	// First, compare the files sizes and modes. No point in comparing
+	// file contents if they differ in size or file mode.
+	if f1info.Size() != f2info.Size() {
+		return false, nil
+	}
+	if f1info.Mode() != f2info.Mode() {
+		return false, nil
+	}
+
+	// Files have the same exact size and mode, check the actual contents.
+	f1, err := os.Open(src)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f1.Close()
+
+	f2, err := os.Open(dst)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f2.Close()
+
+	// Create a buffer, which we'll use to read both files.
+	buf := make([]byte, 64000)
+
+	// Iterate the files until we reach the end. If we spot a difference,
+	// we know that the files are not the same. Otherwise, if we reach the
+	// end of the file before seeing a difference, the files are identical.
+	for {
+
+		// Read the two files.
+		bytesRead, err1 := f1.Read(buf)
+		s1 := string(buf[:bytesRead])
+		bytesRead2, err2 := f2.Read(buf)
+		s2 := string(buf[:bytesRead2])
+
+		if err1 != nil || err2 != nil {
+			if err1 == io.EOF && err2 == io.EOF {
+				// Reached the end of both files.
+				return true, nil
+			} else if err1 == io.EOF || err2 == io.EOF {
+				// Reached the end of one file, but not the other. They are different.
+				return false, nil
+			} else if err1 != nil {
+				// Other error - return it.
+				return false, err1
+			} else if err2 != nil {
+				// Other error - return it.
+				return false, err2
+			}
+		} else if bytesRead != bytesRead2 {
+			// Read a different number of bytes from each file. Defensively
+			// consider the files different.
+			return false, nil
+		}
+
+		if s1 != s2 {
+			// The slice of bytes we read from each file are not equal.
+			return false, nil
+		}
+
+		// The slice of bytes we read from each file are equal. Loop again, checking the next
+		// slice of bytes.
+	}
 }

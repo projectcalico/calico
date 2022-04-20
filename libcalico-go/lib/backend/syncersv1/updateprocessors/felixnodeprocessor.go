@@ -150,14 +150,14 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 
 		// Parse the IPv6 VXLAN tunnel MAC address, Felix expects this as a HostConfigKey.  If we fail to parse then
 		// treat as a delete (i.e. leave vxlanV6TunlMac as nil).
-		if len(node.Spec.IPv6VXLANTunnelMACAddr) != 0 {
-			mac := node.Spec.IPv6VXLANTunnelMACAddr
+		if len(node.Spec.VXLANTunnelMACAddrV6) != 0 {
+			mac := node.Spec.VXLANTunnelMACAddrV6
 			if mac != "" {
 				log.WithField("mac addr", mac).Debug("Parsed IPv6 VXLAN tunnel MAC address")
 				vxlanV6TunlMac = mac
 			} else {
-				log.WithField("IPv6VXLANTunnelMACAddr", node.Spec.IPv6VXLANTunnelMACAddr).Warn("IPv6VXLANTunnelMACAddr not populated")
-				err = fmt.Errorf("failed to update IPv6VXLANTunnelMACAddr")
+				log.WithField("VXLANTunnelMACAddrV6", node.Spec.VXLANTunnelMACAddrV6).Warn("VXLANTunnelMACAddrV6 not populated")
+				err = fmt.Errorf("failed to update VXLANTunnelMACAddrV6")
 			}
 		}
 
@@ -234,7 +234,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		{
 			Key: model.HostConfigKey{
 				Hostname: name,
-				Name:     "IPv6VXLANTunnelMACAddr",
+				Name:     "VXLANTunnelMACAddrV6",
 			},
 			Value:    vxlanV6TunlMac,
 			Revision: kvp.Revision,
