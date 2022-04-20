@@ -84,9 +84,6 @@ The geeky details of what you get:
 
 ### Next steps
 
-**Required**
-- [Install calicoctl command line tool]({{ site.baseurl }}/maintenance/clis/calicoctl/install)
-
 **Recommended**
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Azure' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-azure/' %}
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
