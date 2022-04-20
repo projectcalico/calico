@@ -380,3 +380,52 @@ func V4CommonPrefix(a, b V4CIDR) V4CIDR {
 
 	return result
 }
+
+func V6CommonPrefix(a, b V6CIDR) V6CIDR {
+	var result V6CIDR
+	var maxLen uint8
+
+	if b.prefix < a.prefix {
+		maxLen = b.prefix
+	} else {
+		maxLen = a.prefix
+	}
+
+	a_h, a_l := a.addr.AsUint64Pair()
+	b_h, b_l := b.addr.AsUint64Pair()
+
+	xored_h := a_h ^ b_h // Has a zero bit wherever the two values are the same.
+	xored_l := a_l ^ b_l
+
+	commonPrefixLen := uint8(bits.LeadingZeros64(xored_h))
+
+	if xored_h == 0 {
+		// This means a_h == b_h and commonPrefixLen will be > 64. The first
+		// 8 bytes of the result will be equal to a_h (and b_h), last 8 will
+		// be the common prefix of a_l and b_l.
+		commonPrefixLen = 64 + uint8(bits.LeadingZeros64(xored_l))
+		binary.BigEndian.PutUint64(result.addr[:8], a_h)
+		if commonPrefixLen > maxLen {
+			result.prefix = maxLen
+		} else {
+			result.prefix = commonPrefixLen
+		}
+		mask := uint64(0xffffffffffffffff) << (128 - result.prefix)
+		commonPrefix64 := mask & a_l
+		binary.BigEndian.PutUint64(result.addr[8:], commonPrefix64)
+	} else {
+		// This means commonPrefixLen will be < 64. Just the first 8 bytes of
+		// the result will be filled with the common prefix of a_h and b_h,
+		// last 8 will be 0.
+		if commonPrefixLen > maxLen {
+			result.prefix = maxLen
+		} else {
+			result.prefix = commonPrefixLen
+		}
+		mask := uint64(0xffffffffffffffff) << (64 - result.prefix)
+		commonPrefix64 := mask & a_h
+		binary.BigEndian.PutUint64(result.addr[:8], commonPrefix64)
+	}
+
+	return result
+}
