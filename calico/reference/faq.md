@@ -47,7 +47,7 @@ subnet-local gateways is fairly common in WAN networking.
 Kubernetes node in a directory on the host as specified in the manifest.  By
 default it places binaries in /opt/cni/bin and config /etc/cni/net.d.
 
-When running the kubelet as a container using hyperkube as is common on CoreOS Container Linux,
+When running the kubelet as a container using hyperkube,
 you need to make sure that the containerized kubelet can see the CNI network
 plugins and config that have been installed by mounting them into the kubelet container.
 
@@ -497,23 +497,6 @@ gateway, with Calico.
     networking for OpenStack.
 
 1.  Calico's iptables rules generally do not allow a VM to contact its host.
-
-## Are the Calico manifests compatible with CoreOS?
-
-As it stands, the majority of the provided manifests are compatible with CoreOS systems. The
-only required change is as follows:
-
-As `/usr` on CoreOS is readonly, the default path of the `flexvol-driver-host` volume will
-need to be changed to match the path of the `--flex-volume-plugin-dir` flag passed to the
-`kube-controller-manager`.
-
-For example:
-```yaml
-- name: flexvol-driver-host
-    hostPath:
-      type: DirectoryOrCreate
-      path: /var/lib/kubelet/volumeplugins/nodeagent~uds
-```
 
 ## Can Calico do IP multicast?
 
