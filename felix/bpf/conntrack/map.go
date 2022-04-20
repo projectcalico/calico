@@ -1,4 +1,7 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+//go:build !windows
+// +build !windows
+
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,61 +89,76 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 //  // not to zero the padding bytes, which upsets the verifier.  Worse than
 //  // that, debug logging often prevents such optimisation resulting in
 //  // failures when debug logging is compiled out only :-).
-//  __u8 pad0[5];
-//  __u8 flags2;
+//  __u8 pad0[6];
 //  union {
 //    // CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 //    struct {
 //      struct calico_ct_leg a_to_b; // 24
-//      struct calico_ct_leg b_to_a; // 36
+//      struct calico_ct_leg b_to_a; // 56
 //
 //      // CALI_CT_TYPE_NAT_REV only.
-//      __u32 orig_dst;                    // 48
-//      __u16 orig_port;                   // 52
-//      __u8 pad1[2];                      // 54
-//      __u32 tun_ip;                      // 56
-//      __u32 pad3;                        // 60
+//      __u32 orig_dst;                    // 88
+//      __u16 orig_port;                   // 92
+//      __u8 pad1[2];                      // 94
+//      __u32 tun_ip;                      // 96
+//      __u32 pad3;                        // 100
 //    };
 //
 //    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
 //    struct {
 //      struct calico_ct_key nat_rev_key;  // 24
-//      __u8 pad2[8];
+//      __u8 pad2[64];
 //    };
 //  };
 // };
+
+const (
+	voCreated   int = 0
+	voLastSeen  int = 8
+	voType      int = 16
+	voFlags     int = 17
+	voFlags2    int = 23
+	voRevKey    int = 24
+	voLegAB     int = 24
+	voLegBA     int = 36
+	voOrigIP    int = 48
+	voOrigPort  int = 52
+	voOrigSPort int = 54
+	voTunIP     int = 56
+)
+
 type Value [ValueSize]byte
 
 func (e Value) Created() int64 {
-	return int64(binary.LittleEndian.Uint64(e[:8]))
+	return int64(binary.LittleEndian.Uint64(e[voCreated : voCreated+8]))
 }
 
 func (e Value) LastSeen() int64 {
-	return int64(binary.LittleEndian.Uint64(e[8:16]))
+	return int64(binary.LittleEndian.Uint64(e[voLastSeen : voLastSeen+8]))
 }
 
 func (e Value) Type() uint8 {
-	return e[16]
+	return e[voType]
 }
 
 func (e Value) Flags() uint16 {
-	return uint16(e[17]) | (uint16(e[23]) << 8)
+	return uint16(e[voFlags]) | (uint16(e[voFlags2]) << 8)
 }
 
 // OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
 func (e Value) OrigIP() net.IP {
-	return e[48:52]
+	return e[voOrigIP : voOrigIP+4]
 }
 
 // OrigPort returns the original destination port, valid only if Type() is TypeNormal or TypeNATReverse
 func (e Value) OrigPort() uint16 {
-	return binary.LittleEndian.Uint16(e[52:54])
+	return binary.LittleEndian.Uint16(e[voOrigPort : voOrigPort+2])
 }
 
 // OrigSPort returns the original source port, valid only if Type() is
 // TypeNATReverse and if the value returned is non-zero.
 func (e Value) OrigSPort() uint16 {
-	return binary.LittleEndian.Uint16(e[54:56])
+	return binary.LittleEndian.Uint16(e[voOrigPort+2 : voOrigPort+4])
 }
 
 // NATSPort resturns the port to SNAT to, valid only if Type() is TypeNATForward.
@@ -153,21 +171,20 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut    uint16 = (1 << 0)
-	FlagNATFwdDsr uint16 = (1 << 1)
-	FlagNATNPFwd  uint16 = (1 << 2)
-	FlagSkipFIB   uint16 = (1 << 3)
-	FlagReserved4 uint16 = (1 << 4)
-	FlagReserved5 uint16 = (1 << 5)
-	FlagExtLocal  uint16 = (1 << 6)
-	FlagViaNATIf  uint16 = (1 << 7)
+	FlagNATOut        uint16 = (1 << 0)
+	FlagNATFwdDsr     uint16 = (1 << 1)
+	FlagNATNPFwd      uint16 = (1 << 2)
+	FlagSkipFIB       uint16 = (1 << 3)
+	FlagTrustDNS      uint16 = (1 << 4)
+	FlagTrustWorkload uint16 = (1 << 5)
+	FlagExtLocal      uint16 = (1 << 6)
 )
 
 func (e Value) ReverseNATKey() Key {
 	var ret Key
 
 	l := len(Key{})
-	copy(ret[:l], e[24:24+l])
+	copy(ret[:l], e[voRevKey:voRevKey+l])
 
 	return ret
 }
@@ -178,23 +195,22 @@ func (e Value) AsBytes() []byte {
 }
 
 func (e *Value) SetLegA2B(leg Leg) {
-	copy(e[24:36], leg.AsBytes())
+	copy(e[voLegAB:voLegAB+legSize], leg.AsBytes())
 }
 
 func (e *Value) SetLegB2A(leg Leg) {
-	copy(e[36:48], leg.AsBytes())
+	copy(e[voLegBA:voLegBA+legSize], leg.AsBytes())
 }
 
-func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint16) {
-	binary.LittleEndian.PutUint64(v[:8], uint64(created))
-	binary.LittleEndian.PutUint64(v[8:16], uint64(lastSeen))
-	v[16] = typ
-	v[17] = byte(flags & 0xff)
-	v[23] = byte((flags >> 8) & 0xff)
+func initValue(v *Value, created, lastSeen time.Duration, typ, flags uint8) {
+	binary.LittleEndian.PutUint64(v[voCreated:voCreated+8], uint64(created))
+	binary.LittleEndian.PutUint64(v[voLastSeen:voLastSeen+8], uint64(lastSeen))
+	v[voType] = typ
+	v[voFlags] = flags
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
+func NewValueNormal(created, lastSeen time.Duration, flags uint8, legA, legB Leg) Value {
 	v := Value{}
 
 	initValue(&v, created, lastSeen, TypeNormal, flags)
@@ -207,19 +223,19 @@ func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Le
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(created, lastSeen time.Duration, flags uint16, revKey Key) Value {
+func NewValueNATForward(created, lastSeen time.Duration, flags uint8, revKey Key) Value {
 	v := Value{}
 
 	initValue(&v, created, lastSeen, TypeNATForward, flags)
 
-	copy(v[24:24+KeySize], revKey.AsBytes())
+	copy(v[voRevKey:voRevKey+KeySize], revKey.AsBytes())
 
 	return v
 }
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverse(created, lastSeen time.Duration, flags uint8, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
 	v := Value{}
 
@@ -228,15 +244,17 @@ func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, leg
 	v.SetLegA2B(legA)
 	v.SetLegB2A(legB)
 
-	copy(v[48:52], origIP.To4())
-	binary.LittleEndian.PutUint16(v[52:54], origPort)
+	copy(v[voOrigIP:voOrigIP+4], origIP.To4())
+	binary.LittleEndian.PutUint16(v[voOrigPort:voOrigPort+2], origPort)
 
-	copy(v[56:60], tunnelIP.To4())
+	copy(v[voTunIP:voTunIP+4], tunnelIP.To4())
 
 	return v
 }
 
 type Leg struct {
+	Bytes       uint64
+	Packets     uint32
 	Seqno       uint32
 	SynSeen     bool
 	AckSeen     bool
@@ -247,15 +265,19 @@ type Leg struct {
 	Ifindex     uint32
 }
 
+const legSize int = 12
+
 func setBit(bits *uint32, bit uint8, val bool) {
 	if val {
 		*bits |= (1 << bit)
 	}
 }
 
+const legExtra = 0
+
 // AsBytes returns Leg serialized as a slice of bytes
 func (leg Leg) AsBytes() []byte {
-	bytes := make([]byte, 12)
+	bytes := make([]byte, 24)
 
 	bits := uint32(0)
 
@@ -266,9 +288,9 @@ func (leg Leg) AsBytes() []byte {
 	setBit(&bits, 4, leg.Whitelisted)
 	setBit(&bits, 5, leg.Opener)
 
-	binary.LittleEndian.PutUint32(bytes[0:4], leg.Seqno)
-	binary.LittleEndian.PutUint32(bytes[4:8], bits)
-	binary.LittleEndian.PutUint32(bytes[8:12], leg.Ifindex)
+	binary.LittleEndian.PutUint32(bytes[legExtra+0:legExtra+4], leg.Seqno)
+	binary.LittleEndian.PutUint32(bytes[legExtra+4:legExtra+8], bits)
+	binary.LittleEndian.PutUint32(bytes[legExtra+8:legExtra+12], leg.Ifindex)
 
 	return bytes
 }
@@ -301,16 +323,16 @@ func bitSet(bits uint32, bit uint8) bool {
 }
 
 func readConntrackLeg(b []byte) Leg {
-	bits := binary.LittleEndian.Uint32(b[4:8])
+	bits := binary.LittleEndian.Uint32(b[legExtra+4 : legExtra+8])
 	return Leg{
-		Seqno:       binary.BigEndian.Uint32(b[0:4]),
+		Seqno:       binary.BigEndian.Uint32(b[legExtra+0 : legExtra+4]),
 		SynSeen:     bitSet(bits, 0),
 		AckSeen:     bitSet(bits, 1),
 		FinSeen:     bitSet(bits, 2),
 		RstSeen:     bitSet(bits, 3),
 		Whitelisted: bitSet(bits, 4),
 		Opener:      bitSet(bits, 5),
-		Ifindex:     binary.LittleEndian.Uint32(b[8:12]),
+		Ifindex:     binary.LittleEndian.Uint32(b[legExtra+8 : legExtra+12]),
 	}
 }
 
@@ -340,26 +362,25 @@ func (data EntryData) FINsSeenDSR() bool {
 }
 
 func (e Value) Data() EntryData {
-	ip := e[48:52]
-	tip := e[56:60]
+	ip := e[voOrigIP : voOrigIP+4]
+	tip := e[voTunIP : voTunIP+4]
 	return EntryData{
-		A2B:       readConntrackLeg(e[24:36]),
-		B2A:       readConntrackLeg(e[36:48]),
+		A2B:       readConntrackLeg(e[voLegAB : voLegAB+legSize]),
+		B2A:       readConntrackLeg(e[voLegBA : voLegBA+legSize]),
 		OrigDst:   ip,
-		OrigPort:  binary.LittleEndian.Uint16(e[52:54]),
-		OrigSPort: binary.LittleEndian.Uint16(e[54:56]),
+		OrigPort:  binary.LittleEndian.Uint16(e[voOrigPort : voOrigPort+2]),
+		OrigSPort: binary.LittleEndian.Uint16(e[voOrigSPort : voOrigSPort+2]),
 		TunIP:     tip,
 	}
 }
 
 func (e Value) String() string {
-	flagsStr := ""
 	flags := e.Flags()
+	flagsStr := fmt.Sprintf("%v", flags)
 
 	if flags == 0 {
 		flagsStr = " <none>"
 	} else {
-		flagsStr = fmt.Sprintf(" 0x%x", flags)
 		if flags&FlagNATOut != 0 {
 			flagsStr += " nat-out"
 		}
