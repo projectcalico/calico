@@ -28,19 +28,17 @@ The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
 1. Create an Azure AKS cluster with no Kubernetes CNI pre-installed. Please refer to [Bring your own CNI with AKS](https://docs.microsoft.com/en-us/azure/aks/use-byo-cni?tabs=azure-cli) for details.
+   ```bash 
+    # Install aks-preview extension
+    az extension add --name aks-preview
+    # Update aks-preview to ensure latest version is installed
+    az extension update --name aks-preview
 
-  ```bash
-  # Install aks-preview extension
-  az extension add --name aks-preview
-  # Update aks-preview to ensure latest version is installed
-  az extension update --name aks-preview
+    # Create a resource group
+    az group create --name my-calico-rg --location westcentralus
 
-  # Create a resource group
-  az group create --name my-calico-rg --location westcentralus
-
-  az aks create --resource-group my-calico-rg --name my-calico-cluster --location westcentralus --network-plugin none
-
-  ```
+    az aks create --resource-group my-calico-rg --name my-calico-cluster --location westcentralus --network-plugin none
+    ```
 
 1. Get credentials to allow you to access the cluster with `kubectl`:
     ```
@@ -74,7 +72,7 @@ The geeky details of what you get:
           encapsulation: VXLAN
    EOF
    ```
-   
+
 1. Confirm that all of the pods are running with the following command.
 
    ```
@@ -82,6 +80,7 @@ The geeky details of what you get:
    ```
 
    Wait until each pod has the `STATUS` of `Running`.
+ 
 
 ### Next steps
 
