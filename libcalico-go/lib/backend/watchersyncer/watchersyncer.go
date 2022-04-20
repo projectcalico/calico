@@ -98,7 +98,9 @@ func (ws *watcherSyncer) Start() {
 	ws.wgwc = &sync.WaitGroup{}
 	ws.wgws = &sync.WaitGroup{}
 
+	ws.wgws.Add(1)
 	go func() {
+		defer ws.wgws.Done()
 		ws.run(ctx)
 		log.Debug("Watcher syncer run completed")
 	}()
@@ -133,14 +135,13 @@ func (ws *watcherSyncer) sendStatusUpdate(status api.SyncStatus) {
 // to syncer updates.
 func (ws *watcherSyncer) run(ctx context.Context) {
 	log.Debug("Sending initial status event and starting watchers")
-	ws.wgws.Add(1)
 	ws.sendStatusUpdate(api.WaitForDatastore)
 	for _, wc := range ws.watcherCaches {
 		ws.wgwc.Add(1)
 		go func(wc *watcherCache) {
+			defer ws.wgwc.Done()
 			wc.run(ctx)
 			log.Debug("Watcher cache run completed")
-			ws.wgwc.Done()
 		}(wc)
 	}
 
@@ -167,8 +168,6 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 		// call again.
 		updates = ws.sendUpdates(updates)
 	}
-
-	ws.wgws.Done()
 }
 
 // Process a result from the result channel.  We don't immediately action updates, but
