@@ -1,0 +1,9 @@
+# This manifest defines the {{site.prodname}} CSI driver
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: csi.tigera.io
+spec:
+  podInfoOnMount: true
+  volumeLifecycleModes:
+  - Ephemeral
