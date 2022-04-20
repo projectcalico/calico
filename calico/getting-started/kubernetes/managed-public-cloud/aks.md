@@ -24,6 +24,12 @@ To enable {{site.prodname}} network policy enforcement, follow these step-by-ste
 
 #### Install AKS with {{site.prodname}} networking
 
+**Limitations**
+- [Windows dataplane]({{ site.baseurl }}/getting-started/windows-calico) is not supported.
+- [eBPF dataplane]({{ site.baseurl }}/maintenance/ebpf/use-cases-ebpf) is not supported.
+- [VPP dataplane](https://github.com/projectcalico/vpp-dataplane) is not supported.
+
+
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
