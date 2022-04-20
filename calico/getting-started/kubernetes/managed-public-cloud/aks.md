@@ -28,7 +28,7 @@ The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
 1. Create an Azure AKS cluster with no Kubernetes CNI pre-installed. Please refer to [Bring your own CNI with AKS](https://docs.microsoft.com/en-us/azure/aks/use-byo-cni?tabs=azure-cli) for details.
-   ```bash 
+   ``` 
     # Install aks-preview extension
     az extension add --name aks-preview
     # Update aks-preview to ensure latest version is installed
@@ -49,13 +49,13 @@ The geeky details of what you get:
 
 1. Install the operator.
 
-   ```bash
+   ```
    kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
    ```
 
 1. Configure the {{site.prodname}} installation.
 
-   ```bash
+   ```
    kubectl create -f - <<EOF
    kind: Installation
    apiVersion: operator.tigera.io/v1
