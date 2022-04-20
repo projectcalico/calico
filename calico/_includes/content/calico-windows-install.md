@@ -1,3 +1,39 @@
+{%- if include.networkingType == "vxlan" %}
+1. Ensure that BGP is disabled since you're using VXLAN.
+   If you installed Calico using operator, you can do this by:
+
+   ```bash
+   kubectl patch installation default --type=merge -p '{"spec": {"calicoNetwork": {"bgp": "Disabled"}}}'
+   ```
+   If you installed Calico using the manifest from https://projectcalico.docs.tigera.io/manifests/calico-vxlan.yaml then BGP is already disabled.
+{%- else %}
+1. Enable BGP service on the Windows nodes (instead of VXLAN).
+   Install the RemoteAccess service using the following Powershell commands:
+
+   ```powershell
+   Install-WindowsFeature RemoteAccess
+   Install-WindowsFeature RSAT-RemoteAccess-PowerShell
+   Install-WindowsFeature Routing
+   ```
+
+   Then restart the computer:
+
+   ```powershell
+   Restart-Computer -Force
+   ```
+
+   before running:
+
+   ```powershell
+   Install-RemoteAccess -VpnType RoutingOnly
+   ```
+   Sometimes the remote access service fails to start automatically after install. To make sure it is running, execute the following command:
+
+   ```powershell
+   Start-Service RemoteAccess
+   ```
+{%- endif %}
+
 1. Download the {{site.prodnameWindows}} installation manifest.
 
    ```bash
