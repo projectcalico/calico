@@ -99,6 +99,7 @@ func (ws *watcherSyncer) Start() {
 	ws.wgws = &sync.WaitGroup{}
 
 	ws.wgws.Add(1)
+	ws.wgwc.Add(len(ws.watcherCaches))
 	go func() {
 		defer ws.wgws.Done()
 		ws.run(ctx)
@@ -137,7 +138,7 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 	log.Debug("Sending initial status event and starting watchers")
 	ws.sendStatusUpdate(api.WaitForDatastore)
 	for _, wc := range ws.watcherCaches {
-		ws.wgwc.Add(1)
+		// no need for ws.wgwc.Add(1), been set already
 		go func(wc *watcherCache) {
 			defer ws.wgwc.Done()
 			wc.run(ctx)
