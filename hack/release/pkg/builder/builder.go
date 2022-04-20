@@ -147,6 +147,11 @@ func (r *ReleaseBuilder) PublishRelease() error {
 		return fmt.Errorf("failed to publish github release: %s", err)
 	}
 
+	// Publish the release to calicoctl github as well.
+	if err = r.publishCalicoctlRelease(ver); err != nil {
+		return fmt.Errorf("failed to publish calicoctl github release: %s", err)
+	}
+
 	return nil
 }
 
@@ -400,6 +405,36 @@ Attached to this release are the following artifacts:
 		r.uploadDir(ver),
 	}
 	_, err = r.runner.Run("./hack/release/ghr", args, nil)
+	return err
+}
+
+// calicoctl needs releases in both locations, since we switched to a monorepo in the middle of the
+// v3.21 release stream.
+func (r *ReleaseBuilder) publishCalicoctlRelease(ver string) error {
+	releaseNoteTemplate := `
+The calicoctl codebase has been moved to https://github.com/projectcalico/calico/
+
+Starting with v3.22.0, binaries will no longer be published to this repository. Please see https://github.com/projectcalico/calico/releases for the latest releases.
+
+calicoctl binaries for {version} can be found here: https://github.com/projectcalico/calico/releases/tag/{version}
+
+The binaries attached to this release are mirrored from that location.
+`
+	formatters := []string{
+		"{version}", ver,
+	}
+	replacer := strings.NewReplacer(formatters...)
+	releaseNote := replacer.Replace(releaseNoteTemplate)
+
+	args := []string{
+		"-username", organization,
+		"-repository", "calicoctl",
+		"-name", ver,
+		"-body", releaseNote,
+		ver,
+		"calicoctl/bin/",
+	}
+	_, err := r.runner.Run("./hack/release/ghr", args, nil)
 	return err
 }
 
