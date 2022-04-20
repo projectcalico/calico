@@ -771,19 +771,19 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabled {
-			routeTableVXLAN := routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
+			routeTableVXLANV6 := routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
 				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 
 			vxlanManagerV6 := newVXLANManager(
 				ipSetsV6,
-				routeTableVXLAN,
+				routeTableVXLANV6,
 				"vxlan-v6.calico",
 				config,
 				dp.loopSummarizer,
 				6,
 			)
-			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
+			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 			dp.RegisterManager(vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry

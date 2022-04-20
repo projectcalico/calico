@@ -124,7 +124,7 @@ var _ = Describe("VXLAN manager tests", func() {
 							Node:           "other-node",
 							ParentDeviceIp: "11.0.0.1",
 							Ipv4Addr:       "10.0.0.1",
-							MacV4:          "00-11-22-33-44-55",
+							Mac:            "00-11-22-33-44-55",
 						})
 					})
 					It("should be dirty", func() {
@@ -223,7 +223,7 @@ var _ = Describe("VXLAN manager tests", func() {
 									Node:           "other-node",
 									ParentDeviceIp: "11.0.0.2",
 									Ipv4Addr:       "10.0.0.2",
-									MacV4:          "00-11-22-33-44-56",
+									Mac:            "00-11-22-33-44-56",
 								})
 								Expect(mgr.CompleteDeferredWork()).NotTo(HaveOccurred())
 							})

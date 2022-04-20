@@ -313,7 +313,7 @@ func (c *VXLANResolver) sendVTEPUpdateOrRemove(node string) {
 	}
 	if hasV4Info {
 		vtep.ParentDeviceIp = c.nodeNameToIPv4Addr[node]
-		vtep.MacV4 = c.vtepMACForHost(node, 4)
+		vtep.Mac = c.vtepMACForHost(node, 4)
 		vtep.Ipv4Addr = c.nodeNameToVXLANTunnelAddr[node]
 	}
 	if hasV6Info {
@@ -342,7 +342,7 @@ func (c *VXLANResolver) vtepEqual(vtep1, vtep2 *proto.VXLANTunnelEndpointUpdate)
 	switch {
 	case vtep1.Node != vtep2.Node:
 		return false
-	case vtep1.MacV4 != vtep2.MacV4:
+	case vtep1.Mac != vtep2.Mac:
 		return false
 	case vtep1.Ipv4Addr != vtep2.Ipv4Addr:
 		return false

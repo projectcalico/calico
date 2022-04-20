@@ -403,7 +403,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		// known VTEPs.
 		var l2routes []routetable.L2Target
 		for _, u := range m.vtepsByNode {
-			mac, err := net.ParseMAC(u.MacV4)
+			mac, err := net.ParseMAC(u.Mac)
 			if err != nil {
 				// Don't block programming of other VTEPs if somehow we receive one with a bad mac.
 				logrus.WithError(err).Warn("Failed to parse VTEP mac address")
@@ -593,7 +593,7 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 	if err != nil {
 		return err
 	}
-	mac, err := net.ParseMAC(localVTEP.MacV4)
+	mac, err := net.ParseMAC(localVTEP.Mac)
 	if err != nil {
 		return err
 	}

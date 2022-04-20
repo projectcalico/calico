@@ -176,14 +176,14 @@ var _ = Describe("VXLANManager", func() {
 	It("successfully adds a route to the parent interface", func() {
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node1",
-			MacV4:          "00:0a:74:9d:68:16",
+			Mac:            "00:0a:74:9d:68:16",
 			Ipv4Addr:       "10.0.0.0",
 			ParentDeviceIp: "172.0.0.2",
 		})
 
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node2",
-			MacV4:          "00:0a:95:9d:68:16",
+			Mac:            "00:0a:95:9d:68:16",
 			Ipv4Addr:       "10.0.80.0/32",
 			ParentDeviceIp: "172.0.12.1",
 		})
@@ -331,7 +331,7 @@ var _ = Describe("VXLANManager", func() {
 		go manager.KeepVXLANDeviceInSync(1400, false, 1*time.Second)
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node2",
-			MacV4:          "00:0a:95:9d:68:16",
+			Mac:            "00:0a:95:9d:68:16",
 			Ipv4Addr:       "10.0.80.0/32",
 			ParentDeviceIp: "172.0.12.1",
 		})
@@ -353,7 +353,7 @@ var _ = Describe("VXLANManager", func() {
 
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node1",
-			MacV4:          "00:0a:74:9d:68:16",
+			Mac:            "00:0a:74:9d:68:16",
 			Ipv4Addr:       "10.0.0.0",
 			ParentDeviceIp: "172.0.0.2",
 		})
