@@ -178,15 +178,6 @@ spec:
 {{- end }}
           securityContext:
             privileged: true
-        # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
-        # to communicate with Felix over the Policy Sync API.
-        - name: flexvol-driver
-          image: {{.Values.flexvol.image}}:{{.Values.flexvol.tag}}
-          volumeMounts:
-          - name: flexvol-driver-host
-            mountPath: /host/driver
-          securityContext:
-            privileged: true
       containers:
         # Runs {{ include "nodeName" . }} container on each Kubernetes node. This
         # container programs network policy and routes on each
@@ -607,11 +598,6 @@ spec:
           hostPath:
             type: DirectoryOrCreate
             path: /var/run/nodeagent
-        # Used to install Flex Volume Driver
-        - name: flexvol-driver-host
-          hostPath:
-            type: DirectoryOrCreate
-            path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
 ---
 
 apiVersion: v1

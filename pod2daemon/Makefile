@@ -5,7 +5,8 @@ PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 FLEXVOL_IMAGE  ?=pod2daemon-flexvol
-BUILD_IMAGES ?=$(FLEXVOL_IMAGE)
+CSI_IMAGE ?=calico/csi
+BUILD_IMAGES ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE)
 
 ###############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -46,7 +47,7 @@ build-all: $(addprefix bin/flexvol-,$(VALIDARCHES))
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
-build: bin/flexvol-$(ARCH)
+build: bin/flexvol-$(ARCH) bin/csi-driver-$(ARCH)
 
 bin/flexvol-amd64: ARCH=amd64
 bin/flexvol-arm64: ARCH=arm64
@@ -56,20 +57,35 @@ bin/flexvol-s390x: ARCH=s390x
 bin/flexvol-%: $(SRC_FILES)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
 
+bin/csi-driver-amd64: ARCH=amd64
+bin/csi-driver-arm64: ARCH=arm64
+bin/csi-driver-armv7: ARCH=armv7
+bin/csi-driver-ppc64le: ARCH=ppc64le
+bin/csi-driver-s390x: ARCH=s390x
+bin/csi-driver-%: $(SRC_FILES)
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/csi-driver-$(ARCH) csidriver/main.go
+
 ###############################################################################
 # Building the image
 ###############################################################################
-CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
+FLEXVOL_CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
+CSI_CONTAINER_CREATED=.calico-csi.created-$(ARCH)
 .PHONY: image calico/pod2daemon-flexvol
-image: $(FLEXVOL_IMAGE)
+image: $(FLEXVOL_IMAGE) $(CSI_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$* IMAGETAG=latest
 
-$(FLEXVOL_IMAGE): $(CONTAINER_CREATED)
-$(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
+
+$(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_CREATED)
+$(FLEXVOL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
 	$(DOCKER_BUILD) -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
+	touch $@
+
+$(CSI_IMAGE): $(CSI_CONTAINER_CREATED)
+$(CSI_CONTAINER_CREATED): csidriver/Dockerfile.$(ARCH) bin/csi-driver-$(ARCH)
+	$(DOCKER_BUILD) -t $(CSI_IMAGE):latest-$(ARCH) -f csidriver/Dockerfile.$(ARCH) . --load
 	touch $@
 
 ###############################################################################
