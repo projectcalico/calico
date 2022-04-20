@@ -102,6 +102,9 @@ def gen_values(versions, imageNames, imageRegistry, chart)
     flexvol:
       image: #{imageRegistry}#{imageNames.fetch("flexvol")}
       tag: #{versions.fetch("flexvol")}
+    csi-driver:
+      image: #{imageRegistry}#{imageNames.fetch("csi-driver")}
+      tag: #{versions.fetch("csi-driver")}
 
     EOF
   end
