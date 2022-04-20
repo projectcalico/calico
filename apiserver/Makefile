@@ -47,9 +47,6 @@ VERSION_FLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERS
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_DESCRIPTION=$(APISERVER_GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_REVISION=$(APISERVER_GIT_REVISION)
 
-BUILD_LDFLAGS = -ldflags "$(VERSION_FLAGS)"
-RELEASE_LDFLAGS = -ldflags "$(VERSION_FLAGS) -w"
-
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -92,23 +89,13 @@ cd: image-all cd-common
 # "apiserver" instead of "$(BINDIR)/apiserver".
 #########################################################################
 $(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
-ifndef RELEASE_BUILD
-	$(eval LDFLAGS:=$(RELEASE_LDFLAGS))
-else
-	$(eval LDFLAGS:=$(BUILD_LDFLAGS))
-endif
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/apiserver'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
-ifndef RELEASE_BUILD
-	$(eval LDFLAGS:=$(RELEASE_LDFLAGS))
-else
-	$(eval LDFLAGS:=$(BUILD_LDFLAGS))
-endif
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/filecheck'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
 
 ###############################################################################
 # Building the image

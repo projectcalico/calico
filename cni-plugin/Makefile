@@ -89,7 +89,7 @@ $(BIN)/install binary: $(SRC_FILES)
 	-mkdir -p .go-pkg-cache
 	-mkdir -p $(BIN)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -w" $(PACKAGE_NAME)/cmd/calico && \
+		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico && \
 		$(CHECK_BORINGSSL)'
 
 ## Build the Calico network plugin and ipam plugins for Windows
@@ -98,8 +98,8 @@ $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 	-e GOOS=windows \
 	-e CGO_ENABLED=1 \
 	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -o $(BIN_WIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico && \
-		go build -v -o $(BIN_WIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
+		go build -v -o $(BIN_WIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico && \
+		go build -v -o $(BIN_WIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico'
 
 
 ###############################################################################
