@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-var sha1, sha2 string
+var sha1, sha2, filterDir string
 
 func init() {
 	flag.StringVar(&sha1, "sha1", "HEAD", "First commit in diff calculation")
 	flag.StringVar(&sha2, "sha2", "HEAD~1", "Second commit in diff calculation")
+	flag.StringVar(&filterDir, "filter-dir", "", "Directory to filter on")
 
 	flag.Parse()
 }
@@ -31,43 +31,63 @@ func isLocalDir(pkg string) bool {
 	return strings.Contains(pkg, "github.com/projectcalico/calico")
 }
 
-func main() {
-	// Read packages file.
-	// TODO: Generate this.
-	depsBytes, err := os.ReadFile("deps.json")
-	if err != nil {
-		panic(err)
+func filter(pkg string) bool {
+	if filterDir == "" || strings.HasPrefix(pkg, filterDir) {
+		// No filter, or a filter is specified and matches.
+		return false
 	}
+	return true
+}
 
-	// Split each.
-	pkgs := strings.SplitAfter(string(depsBytes), "}\n")
+func loadPackages() []Package {
+	var out, stderr bytes.Buffer
+	cmd := exec.Command("go", "list", "-json", "all")
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+	}
+	splits := strings.SplitAfter(out.String(), "}\n")
 
 	// Load each package.
 	packages := []Package{}
-	for _, p := range pkgs {
+	for _, s := range splits {
 		pkg := Package{}
-		json.Unmarshal([]byte(p), &pkg)
+		json.Unmarshal([]byte(s), &pkg)
 
-		// Filter out packages that aren't part of this repo.
 		if isLocalDir(pkg.Dir) {
+			// Canonicalize the package names, since by default the packages are
+			// absolute paths based on the host filesystem.
+			pkg.Dir = canonical(pkg.Dir)
+			deps := []string{}
+			for i := range pkg.Deps {
+				if isLocalDir(pkg.Deps[i]) {
+					deps = append(deps, canonical(pkg.Deps[i]))
+				}
+			}
+			pkg.Deps = deps
+
+			// Filter out packages that aren't part of this repo.
 			packages = append(packages, pkg)
 		}
 	}
+	return packages
+}
+
+func main() {
+	// Get the list of packages.
+	packages := loadPackages()
 
 	// Make a map of package, to all of the packages that import it either
 	// directly or indirectly.
 	depTree := map[string]map[string]string{}
 	for _, p := range packages {
 		for _, d := range p.Deps {
-			if isLocalDir(d) {
-				relativeDep := canonical(d)
-				relativeDir := canonical(p.Dir)
-
-				if depTree[relativeDep] == nil {
-					depTree[relativeDep] = map[string]string{}
-				}
-				depTree[relativeDep][relativeDir] = ""
+			if depTree[d] == nil {
+				depTree[d] = map[string]string{}
 			}
+			depTree[d][p.Dir] = ""
 		}
 	}
 
@@ -77,8 +97,7 @@ func main() {
 	cmd := exec.Command("git", "diff", "--name-only", sha1, sha2)
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
-
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", err, stderr.String()))
 	}
@@ -97,10 +116,12 @@ func main() {
 		}
 	}
 
-	// Print out all of the packages that need rebuilding.
+	// Print out all of the packages that need rebuilding, sorted and filtered.
 	sorted := []string{}
 	for d := range allDownstream {
-		sorted = append(sorted, d)
+		if !filter(d) {
+			sorted = append(sorted, d)
+		}
 	}
 	sort.Strings(sorted)
 
