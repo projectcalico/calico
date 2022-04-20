@@ -21,8 +21,8 @@ Before beginning the quickstart, setup a {{site.prodname}} cluster on Linux node
 ### How to
 
 - [Configure strict affinity for clusters using {{site.prodname}} networking](#configure-strict-affinity-for-clusters-using-calico-networking)
-- [Install {{site.prodnameWindows}} using HostProcess containers](#install-calico-for-windows-using-hostprocess-containers)
 - [Install {{site.prodnameWindows}} manually](#install-calico-for-windows-manually)
+- [Install {{site.prodnameWindows}} using HostProcess containers](#install-calico-for-windows-using-hostprocess-containers)
 - [Configure installation parameters](#configure-installation-parameters)
 
 #### Configure strict affinity for clusters using {{site.prodname}} networking
@@ -33,52 +33,6 @@ This is required to prevent Linux nodes from borrowing IP addresses from Windows
 ```bash
 calicoctl ipam configure --strictaffinity=true
 ```
-
-#### Install {{site.prodnameWindows}} using HostProcess containers
-
-With Kubernetes v1.22, a new Windows container type called "HostProcess containers" can run directly on the host with access to the host network namespace,
-storage and devices. With this feature, {{site.prodnameWindows}} can now be installed and managed using Kubernetes resources such as Daemonsets and ConfigMaps,
-instead of needing to configure and install {{site.prodnameWindows}} manually on each node. Using this installation method, the {{site.prodnameWindows}}
-services are no longer registered on the host. Instead, the services are run directly within HostProcess containers.
-
-> **Note**: This installation method is a tech preview and should not be used for production clusters. Upgrades from a tech preview version of this
-> installation method to the GA version might not be seamless.
-{: .alert .alert-info}
-
-**Requirements**
-
-In addition to the [{{site.prodnameWindows}} requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements),
-this installation method has [additional requirements](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/):
-
-- Kubernetes v1.22+
-- HostProcess containers support enabled: for v1.22, HostProcess containers support has to be [enabled](https://v1-22.docs.kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#before-you-begin-version-check). For Kubernetes v1.23+, HostProcess containers are enabled by default.
-- ContainerD 1.6.0+
-
-**Migrating from {{site.prodnameWindows}} installed manually**
-
-If your Windows nodes already have {{site.prodnameWindows}} installed using the manual installation method, you can continue this quickstart guide
-to migrate to a manifest-based installation. This installation process will uninstall any existing {{site.prodnameWindows}} services and overwrite the {{site.prodnameWindows}} installation files with those included in the `calico/windows` image. If `kubelet` and `kube-proxy` were installed using `{{site.rootDirWindows}}\kubernetes\install-kube-services.ps1`, those services will updated in-place and remain installed. If those services were running they are restarted so the services
-run with the updated service files.
-
-> **Note**: Before proceeding, take note of the configuration parameters in `{{site.rootDirWindows}}\config.ps1`. These configuration parameters will be needed during the install.
-{: .alert .alert-info}
-
-**Install**
-
-Before beginning, ensure that the Windows nodes have [joined the cluster](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/adding-windows-nodes/#joining-a-windows-worker-node). If you have an existing {{site.prodnameWindows}} installation using the manual method, your Windows nodes may have already joined the cluster.
-
-{% tabs %}
-<label:Kubernetes VXLAN,active:true>
-<%
-{% include content/calico-windows-install.md networkingType="vxlan" %}
-%>
-<label:Kubernetes BGP>
-<%
-{% include content/calico-windows-install.md networkingType="windows-bgp" %}
-%>
-{% endtabs %}
-
-Congratulations! You now have a Kubernetes cluster with {{site.prodnameWindows}} and a Linux control node.
 
 #### Install {{site.prodnameWindows}} manually
 
@@ -420,6 +374,52 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
     --kubernetes-version 1.20.2 \
     --node-vm-size Standard_D2s_v3
    ```
+%>
+{% endtabs %}
+
+Congratulations! You now have a Kubernetes cluster with {{site.prodnameWindows}} and a Linux control node.
+
+#### Install {{site.prodnameWindows}} using HostProcess containers
+
+With Kubernetes v1.22, a new Windows container type called "HostProcess containers" can run directly on the host with access to the host network namespace,
+storage and devices. With this feature, {{site.prodnameWindows}} can now be installed and managed using Kubernetes resources such as Daemonsets and ConfigMaps,
+instead of needing to configure and install {{site.prodnameWindows}} manually on each node. Using this installation method, the {{site.prodnameWindows}}
+services are no longer registered on the host. Instead, the services are run directly within HostProcess containers.
+
+> **Note**: This installation method is a tech preview and should not be used for production clusters. Upgrades from a tech preview version of this
+> installation method to the GA version might not be seamless.
+{: .alert .alert-info}
+
+**Requirements**
+
+In addition to the [{{site.prodnameWindows}} requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements),
+this installation method has [additional requirements](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/):
+
+- Kubernetes v1.22+
+- HostProcess containers support enabled: for v1.22, HostProcess containers support has to be [enabled](https://v1-22.docs.kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#before-you-begin-version-check). For Kubernetes v1.23+, HostProcess containers are enabled by default.
+- ContainerD 1.6.0+
+
+**Migrating from {{site.prodnameWindows}} installed manually**
+
+If your Windows nodes already have {{site.prodnameWindows}} installed using the manual installation method, you can continue this quickstart guide
+to migrate to a manifest-based installation. This installation process will uninstall any existing {{site.prodnameWindows}} services and overwrite the {{site.prodnameWindows}} installation files with those included in the `calico/windows` image. If `kubelet` and `kube-proxy` were installed using `{{site.rootDirWindows}}\kubernetes\install-kube-services.ps1`, those services will updated in-place and remain installed. If those services were running they are restarted so the services
+run with the updated service files.
+
+> **Note**: Before proceeding, take note of the configuration parameters in `{{site.rootDirWindows}}\config.ps1`. These configuration parameters will be needed during the install.
+{: .alert .alert-info}
+
+**Install**
+
+Before beginning, ensure that the Windows nodes have [joined the cluster](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/adding-windows-nodes/#joining-a-windows-worker-node). If you have an existing {{site.prodnameWindows}} installation using the manual method, your Windows nodes may have already joined the cluster.
+
+{% tabs %}
+<label:Kubernetes VXLAN,active:true>
+<%
+{% include content/calico-windows-install.md networkingType="vxlan" %}
+%>
+<label:Kubernetes BGP>
+<%
+{% include content/calico-windows-install.md networkingType="windows-bgp" %}
 %>
 {% endtabs %}
 
