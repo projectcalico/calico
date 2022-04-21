@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv_test
+package config_test
 
 import (
 	"context"
@@ -36,7 +36,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
-var _ = Describe("KubeControllersConfiguration tests", func() {
+var _ = Describe("KubeControllersConfiguration FV tests", func() {
 	var (
 		etcd              *containers.Container
 		uut               *containers.Container
@@ -92,7 +92,6 @@ var _ = Describe("KubeControllersConfiguration tests", func() {
 	})
 
 	Context("with no KubeControllersConfig at start of day", func() {
-
 		BeforeEach(func() {
 			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), nil)
 		})
@@ -128,7 +127,6 @@ var _ = Describe("KubeControllersConfiguration tests", func() {
 				}
 				return out.Status.RunningConfig.HealthChecks
 			}, time.Second*5).Should(Equal(v3.Enabled))
-
 		})
 
 		It("should restart if config is changed", func() {
@@ -169,13 +167,13 @@ var _ = Describe("KubeControllersConfiguration tests", func() {
 	})
 
 	Context("with KubeControllersConfig at start of day", func() {
-
 		BeforeEach(func() {
 			kcc := v3.NewKubeControllersConfiguration()
 			kcc.Name = "default"
 			kcc.Spec = v3.KubeControllersConfigurationSpec{Controllers: v3.ControllersConfig{
 				Namespace: &v3.NamespaceControllerConfig{
-					ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 6}},
+					ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 6},
+				},
 			}}
 			_, err := c.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -204,13 +202,13 @@ var _ = Describe("KubeControllersConfiguration tests", func() {
 	})
 
 	Context("with environment overrides", func() {
-
 		BeforeEach(func() {
 			kcc := v3.NewKubeControllersConfiguration()
 			kcc.Name = "default"
 			kcc.Spec = v3.KubeControllersConfigurationSpec{Controllers: v3.ControllersConfig{
 				Namespace: &v3.NamespaceControllerConfig{
-					ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 6}},
+					ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 6},
+				},
 			}}
 			_, err := c.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
