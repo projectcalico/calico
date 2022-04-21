@@ -1,0 +1,239 @@
+data:
+  config: |-
+    policy: enabled
+    template: |-
+      rewriteAppHTTPProbe: false
+      initContainers:
+      [[ if ne (annotation .ObjectMeta `sidecar.istio.io/interceptionMode` .ProxyConfig.InterceptionMode) "NONE" ]]
+      - name: istio-init
+        image: "docker.io/istio/proxy_init:1.1.8"
+        args:
+        - "-p"
+        - [[ .MeshConfig.ProxyListenPort ]]
+        - "-u"
+        - 1337
+        - "-m"
+        - [[ annotation .ObjectMeta `sidecar.istio.io/interceptionMode` .ProxyConfig.InterceptionMode ]]
+        - "-i"
+        - "[[ annotation .ObjectMeta `traffic.sidecar.istio.io/includeOutboundIPRanges`  "*"  ]]"
+        - "-x"
+        - "[[ annotation .ObjectMeta `traffic.sidecar.istio.io/excludeOutboundIPRanges`  ""  ]]"
+        - "-b"
+        - "[[ annotation .ObjectMeta `traffic.sidecar.istio.io/includeInboundPorts` (includeInboundPorts .Spec.Containers) ]]"
+        - "-d"
+        - "[[ excludeInboundPort (annotation .ObjectMeta `status.sidecar.istio.io/port`  15020 ) (annotation .ObjectMeta `traffic.sidecar.istio.io/excludeInboundPorts`  "" ) ]]"
+        [[ if (isset .ObjectMeta.Annotations `traffic.sidecar.istio.io/kubevirtInterfaces`) -]]
+        - "-k"
+        - "[[ index .ObjectMeta.Annotations `traffic.sidecar.istio.io/kubevirtInterfaces` ]]"
+        [[ end -]]
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+          limits:
+            cpu: 100m
+            memory: 50Mi
+        securityContext:
+          runAsUser: 0
+          runAsNonRoot: false
+          capabilities:
+            add:
+            - NET_ADMIN
+        restartPolicy: Always
+      [[ end -]]
+      containers:
+      - name: istio-proxy
+        image: [[ annotation .ObjectMeta `sidecar.istio.io/proxyImage`  "docker.io/istio/proxyv2:1.1.8"  ]]
+        ports:
+        - containerPort: 15090
+          protocol: TCP
+          name: http-envoy-prom
+        args:
+        - proxy
+        - sidecar
+        - --domain
+        - $(POD_NAMESPACE).svc.cluster.local
+        - --configPath
+        - [[ .ProxyConfig.ConfigPath ]]
+        - --binaryPath
+        - [[ .ProxyConfig.BinaryPath ]]
+        - --serviceCluster
+        [[ if ne "" (index .ObjectMeta.Labels "app") -]]
+        - [[ index .ObjectMeta.Labels "app" ]].$(POD_NAMESPACE)
+        [[ else -]]
+        - [[ valueOrDefault .DeploymentMeta.Name "istio-proxy" ]].[[ valueOrDefault .DeploymentMeta.Namespace "default" ]]
+        [[ end -]]
+        - --drainDuration
+        - [[ formatDuration .ProxyConfig.DrainDuration ]]
+        - --parentShutdownDuration
+        - [[ formatDuration .ProxyConfig.ParentShutdownDuration ]]
+        - --discoveryAddress
+        - [[ annotation .ObjectMeta `sidecar.istio.io/discoveryAddress` .ProxyConfig.DiscoveryAddress ]]
+        - --zipkinAddress
+        - [[ .ProxyConfig.GetTracing.GetZipkin.GetAddress ]]
+        - --connectTimeout
+        - [[ formatDuration .ProxyConfig.ConnectTimeout ]]
+        - --proxyAdminPort
+        - [[ .ProxyConfig.ProxyAdminPort ]]
+        [[ if gt .ProxyConfig.Concurrency 0 -]]
+        - --concurrency
+        - [[ .ProxyConfig.Concurrency ]]
+        [[ end -]]
+        - --controlPlaneAuthPolicy
+        - [[ annotation .ObjectMeta `sidecar.istio.io/controlPlaneAuthPolicy` .ProxyConfig.ControlPlaneAuthPolicy ]]
+      [[- if (ne (annotation .ObjectMeta `status.sidecar.istio.io/port`  15020 ) "0") ]]
+        - --statusPort
+        - [[ annotation .ObjectMeta `status.sidecar.istio.io/port`  15020  ]]
+        - --applicationPorts
+        - "[[ annotation .ObjectMeta `readiness.status.sidecar.istio.io/applicationPorts` (applicationPorts .Spec.Containers) ]]"
+      [[- end ]]
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        - name: ISTIO_META_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ISTIO_META_CONFIG_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: ISTIO_META_INTERCEPTION_MODE
+          value: [[ or (index .ObjectMeta.Annotations "sidecar.istio.io/interceptionMode") .ProxyConfig.InterceptionMode.String ]]
+        [[ if .ObjectMeta.Annotations ]]
+        - name: ISTIO_METAJSON_ANNOTATIONS
+          value: |
+                 [[ toJSON .ObjectMeta.Annotations ]]
+        [[ end ]]
+        [[ if .ObjectMeta.Labels ]]
+        - name: ISTIO_METAJSON_LABELS
+          value: |
+                 [[ toJSON .ObjectMeta.Labels ]]
+        [[ end ]]
+        [[- if (isset .ObjectMeta.Annotations `sidecar.istio.io/bootstrapOverride`) ]]
+        - name: ISTIO_BOOTSTRAP_OVERRIDE
+          value: "/etc/istio/custom-bootstrap/custom_bootstrap.json"
+        [[- end ]]
+        imagePullPolicy: IfNotPresent
+        [[ if (ne (annotation .ObjectMeta `status.sidecar.istio.io/port`  15020 ) "0") ]]
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: [[ annotation .ObjectMeta `status.sidecar.istio.io/port`  15020  ]]
+          initialDelaySeconds: [[ annotation .ObjectMeta `readiness.status.sidecar.istio.io/initialDelaySeconds`  1  ]]
+          periodSeconds: [[ annotation .ObjectMeta `readiness.status.sidecar.istio.io/periodSeconds`  2  ]]
+          failureThreshold: [[ annotation .ObjectMeta `readiness.status.sidecar.istio.io/failureThreshold`  30  ]]
+        [[ end -]]securityContext:
+          readOnlyRootFilesystem: true
+          [[ if eq (annotation .ObjectMeta `sidecar.istio.io/interceptionMode` .ProxyConfig.InterceptionMode) "TPROXY" -]]
+          capabilities:
+            add:
+            - NET_ADMIN
+          runAsGroup: 1337
+          [[ else -]]
+          
+          runAsUser: 1337
+          [[- end ]]
+        resources:
+          [[ if or (isset .ObjectMeta.Annotations `sidecar.istio.io/proxyCPU`) (isset .ObjectMeta.Annotations `sidecar.istio.io/proxyMemory`) -]]
+          requests:
+            [[ if (isset .ObjectMeta.Annotations `sidecar.istio.io/proxyCPU`) -]]
+            cpu: "[[ index .ObjectMeta.Annotations `sidecar.istio.io/proxyCPU` ]]"
+            [[ end ]]
+            [[ if (isset .ObjectMeta.Annotations `sidecar.istio.io/proxyMemory`) -]]
+            memory: "[[ index .ObjectMeta.Annotations `sidecar.istio.io/proxyMemory` ]]"
+            [[ end ]]
+        [[ else -]]
+          limits:
+            cpu: 2000m
+            memory: 1024Mi
+          requests:
+            cpu: 10m
+            memory: 40Mi
+          
+        [[ end -]]
+        volumeMounts:
+        [[- if (isset .ObjectMeta.Annotations `sidecar.istio.io/bootstrapOverride`) ]]
+        - mountPath: /etc/istio/custom-bootstrap
+          name: custom-bootstrap-volume
+        [[- end ]]
+        - mountPath: /etc/istio/proxy
+          name: istio-envoy
+        - mountPath: /etc/certs/
+          name: istio-certs
+          readOnly: true
+          [[- if isset .ObjectMeta.Annotations `sidecar.istio.io/userVolumeMount` ]]
+          [[ range $index, $value := fromJSON (index .ObjectMeta.Annotations `sidecar.istio.io/userVolumeMount`) ]]
+        - name: "[[ $index ]]"
+          [[ toYaml $value | indent 4 ]]
+          [[ end ]]
+          [[- end ]]
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
+      - name: dikastes
+        image: calico/dikastes:master
+        args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          exec:
+            command:
+            - /healthz
+            - liveness
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          exec:
+            command:
+            - /healthz
+            - readiness
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        volumeMounts:
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
+        - mountPath: /var/run/felix
+          name: felix-sync
+
+      volumes:
+      [[- if (isset .ObjectMeta.Annotations `sidecar.istio.io/bootstrapOverride`) ]]
+      - name: custom-bootstrap-volume
+        configMap:
+          name: [[ annotation .ObjectMeta `sidecar.istio.io/bootstrapOverride` `` ]]
+      [[- end ]]
+      - emptyDir:
+          medium: Memory
+        name: istio-envoy
+      - name: istio-certs
+        secret:
+          optional: true
+          [[ if eq .Spec.ServiceAccountName "" -]]
+          secretName: istio.default
+          [[ else -]]
+          secretName: [[ printf "istio.%s" .Spec.ServiceAccountName ]]
+          [[ end -]]
+        [[- if isset .ObjectMeta.Annotations `sidecar.istio.io/userVolume` ]]
+        [[ range $index, $value := fromJSON (index .ObjectMeta.Annotations `sidecar.istio.io/userVolume`) ]]
+      - name: "[[ $index ]]"
+        [[ toYaml $value | indent 2 ]]
+        [[ end ]]
+        [[ end ]]
+      - name: dikastes-sock
+        emptyDir:
+          medium: Memory
+      - name: felix-sync
+        csi:
+          driver: "csi.tigera.io"
+
