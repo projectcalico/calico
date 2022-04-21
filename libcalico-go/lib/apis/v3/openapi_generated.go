@@ -1924,6 +1924,20 @@ func schema_libcalico_go_lib_apis_v1_WorkloadEndpointSpec(ref common.ReferenceCa
 							},
 						},
 					},
+					"allow_spoofed_source_prefixes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowSpoofedSourcePrefixes is a list of CIDRs this workload endoint is allowed to send traffic from, i.e. this allows the workload endpoint to spoof its IP address using addresses in these prefixes",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/net.IPNet"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -3219,6 +3233,21 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref common.ReferenceCa
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
 										Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v3.WorkloadEndpointPort"),
+									},
+								},
+							},
+						},
+					},
+					"allowSpoofedSourcePrefixes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowSpoofedSourcePrefixes is a list of CIDRs that the endpoint should be able to send traffic from, bypassing the RPF check.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
 									},
 								},
 							},
