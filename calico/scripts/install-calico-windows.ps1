@@ -50,34 +50,12 @@ function DownloadFiles()
 
     Write-Host "Downloading Windows Kubernetes scripts"
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
-}
-
-function PrepareDockerFile()
-{
-    # Update Dockerfile for windows
-    $OSInfo = (Get-ComputerInfo  | select WindowsVersion, OsBuildNumber)
-    $OSNumber = $OSInfo.WindowsVersion
-    $ExistOSNumber = cat c:\k\Dockerfile | findstr.exe $OSNumber
-    if (!$ExistOSNumber)
-    {
-        Write-Host "Update dockerfile for $OSNumber"
-
-        $ImageWithOSNumber = "nanoserver:" + $OSNumber
-        (get-content c:\k\Dockerfile) | foreach-object {$_ -replace "nanoserver", "$ImageWithOSNumber"} | set-content c:\k\Dockerfile
-    }
 }
 
 function PrepareKubernetes()
 {
     DownloadFiles
-    PrepareDockerFile
     ipmo C:\k\hns.psm1
-
-    # Prepare POD infra Images
-    c:\k\InstallImages.ps1
-
     InstallK8sBinaries
 }
 
