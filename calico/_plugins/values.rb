@@ -21,6 +21,8 @@ def gen_values(versions, imageNames, imageRegistry, chart)
         commonName:
         caBundle:
 
+    resources: {}
+
     # Configuration for the tigera operator
     tigeraOperator:
       image: #{versions.fetch("tigera-operator").image}
