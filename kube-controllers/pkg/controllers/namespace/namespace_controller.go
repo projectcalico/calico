@@ -160,7 +160,9 @@ func (c *namespaceController) Run(stopCh chan struct{}) {
 	// Wait till k8s cache is synced
 	log.Debug("Waiting to sync with Kubernetes API (Namespaces)")
 	go c.informer.Run(stopCh)
-	for !c.informer.HasSynced() {
+	if !cache.WaitForNamedCacheSync("namespaces", stopCh, c.informer.HasSynced) {
+		log.Error("Failed to sync resources, received signal for controller to shut down.")
+		return
 	}
 	log.Debug("Finished syncing with Kubernetes API (Namespaces)")
 

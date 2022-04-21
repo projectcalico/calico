@@ -152,7 +152,9 @@ func (c *policyController) Run(stopCh chan struct{}) {
 	// Wait until we are in sync with the Kubernetes API before starting the
 	// resource cache.
 	log.Debug("Waiting to sync with Kubernetes API (NetworkPolicy)")
-	for !c.informer.HasSynced() {
+	if !cache.WaitForNamedCacheSync("network-policies", stopCh, c.informer.HasSynced) {
+		log.Error("Failed to sync resources, received signal for controller to shut down.")
+		return
 	}
 	log.Debug("Finished syncing with Kubernetes API (NetworkPolicy)")
 

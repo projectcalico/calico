@@ -234,7 +234,9 @@ func (c *podController) Run(stopCh chan struct{}) {
 
 	// Wait till k8s cache is synced.
 	log.Debug("Waiting to sync with Kubernetes API (Pods)")
-	for !c.informer.HasSynced() {
+	if !cache.WaitForNamedCacheSync("pods", stopCh, c.informer.HasSynced) {
+		log.Error("Failed to sync resources, received signal for controller to shut down.")
+		return
 	}
 	log.Debug("Finished syncing with Kubernetes API (Pods)")
 
