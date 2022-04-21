@@ -45,6 +45,7 @@ type Addr interface {
 	AsCalicoNetIP() calinet.IP
 	AsCIDR() CIDR
 	String() string
+	NthBit(uint) int
 }
 
 type V4Addr [4]byte
@@ -126,6 +127,7 @@ type CIDR interface {
 	Prefix() uint8
 	String() string
 	ToIPNet() net.IPNet
+	Contains(addr Addr) bool
 }
 
 type V4CIDR struct {
@@ -150,6 +152,15 @@ func (c V4CIDR) ToIPNet() net.IPNet {
 		IP:   c.Addr().AsNetIP(),
 		Mask: net.CIDRMask(int(c.Prefix()), 32),
 	}
+}
+
+func (c V4CIDR) Contains(addr Addr) bool {
+	v4Addr, ok := addr.(V4Addr)
+	if !ok {
+		return false
+	}
+
+	return c.ContainsV4(v4Addr)
 }
 
 func (c V4CIDR) ContainsV4(addr V4Addr) bool {
@@ -186,6 +197,15 @@ func (c V6CIDR) ToIPNet() net.IPNet {
 		IP:   c.Addr().AsNetIP(),
 		Mask: net.CIDRMask(int(c.Prefix()), 128),
 	}
+}
+
+func (c V6CIDR) Contains(addr Addr) bool {
+	v6Addr, ok := addr.(V6Addr)
+	if !ok {
+		return false
+	}
+
+	return c.ContainsV6(v6Addr)
 }
 
 func (c V6CIDR) ContainsV6(addr V6Addr) bool {

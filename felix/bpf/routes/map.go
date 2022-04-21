@@ -217,12 +217,12 @@ func LoadMap(rtm bpf.Map) (MapMem, error) {
 
 type LPMv4 struct {
 	sync.RWMutex
-	t *ip.V4Trie
+	t *ip.CIDRTrie
 }
 
 func NewLPMv4() *LPMv4 {
 	return &LPMv4{
-		t: new(ip.V4Trie),
+		t: new(ip.CIDRTrie),
 	}
 }
 
