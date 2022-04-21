@@ -181,6 +181,16 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		}
 	}
 
+	// Handle source IP spoofing annotation
+	var requestedSourcePrefixes []string
+	if annotation, ok := pod.Annotations["cni.projectcalico.org/allowedSourcePrefixes"]; ok && annotation != "" {
+		// Parse Annotation data
+		err := json.Unmarshal([]byte(annotation), &requestedSourcePrefixes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", annotation, err)
+		}
+	}
+
 	// Map any named ports through.
 	var endpointPorts []libapiv3.WorkloadEndpointPort
 	for _, container := range pod.Spec.Containers {
@@ -229,17 +239,18 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		GenerateName:      pod.GenerateName,
 	}
 	wep.Spec = libapiv3.WorkloadEndpointSpec{
-		Orchestrator:       "k8s",
-		Node:               pod.Spec.NodeName,
-		Pod:                pod.Name,
-		ContainerID:        containerID,
-		Endpoint:           "eth0",
-		InterfaceName:      interfaceName,
-		Profiles:           profiles,
-		IPNetworks:         ipNets,
-		Ports:              endpointPorts,
-		IPNATs:             floatingIPs,
-		ServiceAccountName: pod.Spec.ServiceAccountName,
+		Orchestrator:               "k8s",
+		Node:                       pod.Spec.NodeName,
+		Pod:                        pod.Name,
+		ContainerID:                containerID,
+		Endpoint:                   "eth0",
+		InterfaceName:              interfaceName,
+		Profiles:                   profiles,
+		IPNetworks:                 ipNets,
+		Ports:                      endpointPorts,
+		IPNATs:                     floatingIPs,
+		ServiceAccountName:         pod.Spec.ServiceAccountName,
+		AllowSpoofedSourcePrefixes: requestedSourcePrefixes,
 	}
 
 	// Embed the workload endpoint into a KVPair.
