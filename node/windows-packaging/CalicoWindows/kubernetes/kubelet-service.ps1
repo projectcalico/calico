@@ -65,7 +65,7 @@ else
     $argList += "--cni-bin-dir=""c:\k\cni"""
     $argList += "--cni-conf-dir=""c:\k\cni\config"""
     $argList += "--network-plugin=cni"
-    $argList += "--pod-infra-container-image=mcr.microsoft.com/oss/kubernetes/pause:3.6"
+    $argList += "--pod-infra-container-image=kubeletwin/pause"
     $argList += "--image-pull-progress-deadline=20m"
 }
 
