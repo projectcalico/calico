@@ -11,11 +11,12 @@ import (
 	"strings"
 )
 
-var sha1, sha2, filterDir string
+var sha1, sha2, commitRange, filterDir string
 
 func init() {
-	flag.StringVar(&sha1, "sha1", "HEAD", "First commit in diff calculation")
-	flag.StringVar(&sha2, "sha2", "HEAD~1", "Second commit in diff calculation")
+	flag.StringVar(&sha1, "sha1", "", "First commit in diff calculation")
+	flag.StringVar(&sha2, "sha2", "", "Second commit in diff calculation")
+	flag.StringVar(&commitRange, "commit-range", "", "Range of commits, e.g. SHA1...SHA2")
 	flag.StringVar(&filterDir, "filter-dir", "", "Directory to filter on")
 
 	flag.Parse()
@@ -31,12 +32,12 @@ func isLocalDir(pkg string) bool {
 	return strings.Contains(pkg, "github.com/projectcalico/calico")
 }
 
-func filter(pkg string) bool {
+func filter(pkg string) string {
 	if filterDir == "" || strings.HasPrefix(pkg, filterDir) {
 		// No filter, or a filter is specified and matches.
-		return false
+		return strings.TrimPrefix(pkg, filterDir)
 	}
-	return true
+	return ""
 }
 
 func loadPackages() []Package {
@@ -75,6 +76,19 @@ func loadPackages() []Package {
 	return packages
 }
 
+func getCommits() (string, string) {
+	if sha1 == "" && sha2 == "" && commitRange == "" {
+		panic("No commit information provided!")
+	}
+
+	if sha1 != "" && sha2 != "" {
+		return sha1, sha2
+	}
+
+	splits := strings.Split(commitRange, "...")
+	return splits[0], splits[1]
+}
+
 func main() {
 	// Get the list of packages.
 	packages := loadPackages()
@@ -91,10 +105,13 @@ func main() {
 		}
 	}
 
+	// Determine commits to compare.
+	c1, c2 := getCommits()
+
 	// Find all of the files that changed in the diff.
 	// git diff --name-only SHA1 SHA2
 	var out, stderr bytes.Buffer
-	cmd := exec.Command("git", "diff", "--name-only", sha1, sha2)
+	cmd := exec.Command("git", "diff", "--name-only", c1, c2)
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 	err := cmd.Run()
@@ -119,8 +136,8 @@ func main() {
 	// Print out all of the packages that need rebuilding, sorted and filtered.
 	sorted := []string{}
 	for d := range allDownstream {
-		if !filter(d) {
-			sorted = append(sorted, d)
+		if p := filter(d); p != "" {
+			sorted = append(sorted, p)
 		}
 	}
 	sort.Strings(sorted)
