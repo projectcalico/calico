@@ -114,6 +114,12 @@ When starting development on a new minor release, the first step is to create a 
         ... etc ...
    ```
 
+1. Update manifests (and other auto-generated code) by running the following command in the repository root.
+
+   ```
+   make generate
+   ```
+
 1. Create the the release notes file. This does not need to be populated now but does need to exist for the site to render. The file should match
    the `title` field from `calico/_data/versions.yml` created in the previous step.
 
@@ -207,6 +213,12 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
    ```
 
 1. Add the new version to the top of `calico/_data/versions.yml`
+
+1. Update manifests (and other auto-generated code) by running the following command in the repository root.
+
+   ```
+   make generate
+   ```
 
 1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
 
