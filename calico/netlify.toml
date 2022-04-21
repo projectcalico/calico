@@ -4,7 +4,7 @@
   command = '''
 
   cp netlify/Gemfile Gemfile && bundle install
-  make bin/helm
+  make bin/helm bin/helm3
   export PATH=$PATH:$(pwd)/bin
 
   # LATEST_RELEASE is set in Netlify UI for environment-variables ONLY for docs.projectcalico.org and projectcalico.docs.tigera.io sites.
@@ -45,7 +45,7 @@
 [context.deploy-preview]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
-  make bin/helm
+  make bin/helm bin/helm3
   export PATH=$PATH:$(pwd)/bin
   echo "url: $DEPLOY_PRIME_URL" > _config_url.yml
   jekyll build --config _config.yml,_config_url.yml
@@ -57,7 +57,7 @@
 [context.master]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
-  make bin/helm
+  make bin/helm bin/helm3
   export PATH=$PATH:$(pwd)/bin
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
   '''
