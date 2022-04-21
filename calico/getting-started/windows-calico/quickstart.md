@@ -390,7 +390,7 @@ services are no longer registered on the host. Instead, the services are run dir
 > installation method to the GA version might not be seamless.
 {: .alert .alert-info}
 
-**Requirements**
+##### Requirements
 
 In addition to the [{{site.prodnameWindows}} requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements),
 this installation method has [additional requirements](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/):
@@ -398,8 +398,39 @@ this installation method has [additional requirements](https://kubernetes.io/doc
 - Kubernetes v1.22+
 - HostProcess containers support enabled: for v1.22, HostProcess containers support has to be [enabled](https://v1-22.docs.kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#before-you-begin-version-check). For Kubernetes v1.23+, HostProcess containers are enabled by default.
 - ContainerD 1.6.0+
+- The Windows nodes have joined the cluster
 
-**Migrating from {{site.prodnameWindows}} installed manually**
+To install ContainerD on the Windows node and configure the ContainerD service:
+```powershell
+Invoke-WebRequest {{ "/scripts/InstallContainerd.ps1" | absolute_url }} -OutFile c:\InstallContainerd.ps1
+c:\Install-Containerd.ps1 -ContainerDVersion 1.6.2 -CNIConfigPath "c:/etc/cni/net.d" -CNIBinPath "c:/opt/cni/bin"
+```
+
+If you have an existing {{site.prodnameWindows}} installation using the manual method, your Windows nodes may have already joined the cluster.
+
+To join a Windows node to a cluster provisioned with kubeadm:
+
+- Install kubeadm and kubelet binaries and install the kubelet service
+```powershell
+Invoke-WebRequest {{ "/scripts/PrepareNode.ps1" | absolute_url }} -OutFile c:\PrepareNode.ps1
+c:\PrepareNode.ps1 -KubernetesVersion v1.23.4 -ContainerRuntime ContainerD
+```
+
+- Run kubeadm on a control plane host and copy the join command
+```bash
+kubeadm token create --print-join-command
+```
+
+- Edit the join command by appending `--cri-socket "npipe:////./pipe/containerd-containerd"` and update the kubeadm.exe path to `c:\k\kubeadm.exe`.
+  An example join command:
+```
+c:\k\kubeadm.exe join 172.16.101.139:6443 --token v8w2jt.jmc45acn85dbll1e --discovery-token-ca-cert-hash sha256:d0b7040a704d8deb805ba1f29f56bbc7cea8af6aafa78137a9338a62831739b4 --cri-socket "npipe:////./pipe/containerd-containerd"
+```
+
+- Run the join command on the Windows node. Shortly after it completes successfully, the Windows node will appear in `kubectl get nodes`.
+  The new node's status will be NotReady since Calico CNI has not yet been installed.
+
+##### Migrating from {{site.prodnameWindows}} installed manually
 
 If your Windows nodes already have {{site.prodnameWindows}} installed using the manual installation method, you can continue this quickstart guide
 to migrate to a manifest-based installation. This installation process will uninstall any existing {{site.prodnameWindows}} services and overwrite the {{site.prodnameWindows}} installation files with those included in the `calico/windows` image. If `kubelet` and `kube-proxy` were installed using `{{site.rootDirWindows}}\kubernetes\install-kube-services.ps1`, those services will updated in-place and remain installed. If those services were running they are restarted so the services
@@ -408,9 +439,7 @@ run with the updated service files.
 > **Note**: Before proceeding, take note of the configuration parameters in `{{site.rootDirWindows}}\config.ps1`. These configuration parameters will be needed during the install.
 {: .alert .alert-info}
 
-**Install**
-
-Before beginning, ensure that the Windows nodes have [joined the cluster](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/adding-windows-nodes/#joining-a-windows-worker-node). If you have an existing {{site.prodnameWindows}} installation using the manual method, your Windows nodes may have already joined the cluster.
+##### Install
 
 {% tabs %}
 <label:Kubernetes VXLAN,active:true>
