@@ -57,6 +57,24 @@ function PrepareKubernetes()
     DownloadFiles
     ipmo C:\k\hns.psm1
     InstallK8sBinaries
+
+    # Prepull and tag the pause image for docker
+    if (-not (Get-IsContainerdRunning)) {
+        # If containerd is not running we assume the installation should be
+        # configured for docker. But in this case, docker has to be running.
+        $svc = Get-Service | where Name -EQ 'docker'
+        if ($svc -EQ $null) {
+            Write-Host "Docker service is not installed. Cannot prepare kubernetes pause image."
+            exit 1
+        }
+        if ($svc.Status -NE 'Running') {
+            Write-Host "Docker service is not running. Cannot prepare kubernetes pause image. Run 'Start-Service docker' and try again."
+            exit 1
+        }
+        $pause = "mcr.microsoft.com/oss/kubernetes/pause:3.6"
+        docker pull $pause
+        docker tag $pause kubeletwin/pause
+    }
 }
 
 function InstallK8sBinaries()
@@ -305,10 +323,6 @@ if (!(Test-Path $CalicoZip))
 
 $platform=GetPlatformType
 
-if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
-    PrepareKubernetes
-}
-
 if ((Get-Service -exclude 'CalicoUpgrade' | where Name -Like 'Calico*' | where Status -EQ Running) -NE $null) {
 Write-Host "Calico services are still running. In order to re-run the installation script, stop the CalicoNode and CalicoFelix services or uninstall them by running: $RootDir\uninstall-calico.ps1"
 Exit
@@ -318,6 +332,11 @@ Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
 Write-Host "Unzip Calico for Windows release..."
 Expand-Archive -Force $CalicoZip c:\
 ipmo $RootDir\libs\calico\calico.psm1
+
+# This comes after we import calico.psm1
+if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
+    PrepareKubernetes
+}
 
 Write-Host "Setup Calico for Windows..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
