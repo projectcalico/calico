@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: calico-system
+
+
+---
+
+# This manifest defines the Calico CSI driver
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: csi.tigera.io
+spec:
+  podInfoOnMount: true
+  volumeLifecycleModes:
+  - Ephemeral
+
+
+---
+
+# This manifest installs the Calico CSI driver which
+# will be installed on every node in the cluster.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: csi-node-driver
+  namespace: calico-system
+  labels:
+    app.kubernetes.io/name: csi-node-driver
+spec:
+  selector:
+    matchLabels:
+      name: csi-node-driver
+  template:
+    metadata:
+      labels:
+        name: csi-node-driver
+    spec:
+      tolerations:
+      # This toleration is to have the daemonset runnable on control-plane nodes
+      # remove it if your control-plane nodes can't run pods
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      # Same as the above toleration except looks at the outdated node label since
+      # some installers may not have been updated to use the new terminology.
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: calico-csi
+        image: calico/csi:master
+        imagePullPolicy: Always
+        args:
+        - --nodeid=$(KUBE_NODE_NAME)
+        - --loglevel=$(LOG_LEVEL)
+        securityContext:
+          privileged: true
+        env:
+        - name: LOG_LEVEL
+          value: warn
+        - name: KUBE_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        volumeMounts:
+        - name: varrun
+          mountPath: /var/run
+        - name: etccalico
+          mountPath: /etc/calico
+        - name: socket-dir
+          mountPath: /csi
+        - name: kubelet-dir
+          mountPath: /var/lib/kubelet/
+          mountPropagation: "Bidirectional"
+      - name: csi-node-driver-registrar
+        image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
+        imagePullPolicy: Always
+        args:
+        - --v=5
+        - --csi-address=$(ADDRESS)
+        - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+        securityContext:
+          # This is necessary only for systems with SELinux, where
+          # non-privileged sidecar containers cannot access unix domain socket
+          # created by privileged CSI driver container.
+          privileged: true
+        env:
+        - name: ADDRESS
+          value: /csi/csi.sock
+        - name: DRIVER_REG_SOCK_PATH
+          value: /var/lib/kubelet/plugins/csi.tigera.io/csi.sock
+        - name: KUBE_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        volumeMounts:
+        - name: socket-dir
+          mountPath: /csi
+        - name: registration-dir
+          mountPath: /registration
+      volumes:
+      - name: varrun
+        hostPath:
+          path: /var/run
+      - name: etccalico
+        hostPath:
+          path: /etc/calico
+      # This points to the kubelet directory in your platform. Change
+      # the location as required.
+      - name: kubelet-dir
+        hostPath:
+          path: /var/lib/kubelet
+          type: Directory
+      - name: socket-dir
+        hostPath:
+          path: /var/lib/kubelet/plugins/csi.tigera.io/
+          type: DirectoryOrCreate
+      - name: registration-dir
+        hostPath:
+          path: /var/lib/kubelet/plugins_registry/
+          type: Directory
+
