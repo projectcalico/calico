@@ -176,8 +176,9 @@ func (c *flannelMigrationController) Run(stopCh chan struct{}) {
 	// Wait till k8s cache is synced
 	go c.informer.Run(stopCh)
 	log.Infof("Waiting to sync with Kubernetes API (Nodes)")
-	for !c.informer.HasSynced() {
-		time.Sleep(100 * time.Millisecond)
+	if !cache.WaitForNamedCacheSync("flannelMigrationController", stopCh, c.informer.HasSynced) {
+		log.Error("Failed to sync resources, received signal for controller to shut down.")
+		return
 	}
 	log.Infof("Finished syncing with Kubernetes API (Nodes)")
 
