@@ -465,12 +465,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			"vxlan.calico",
 			config,
 			dp.loopSummarizer,
+			4,
 		)
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpVXLANDevice()
+		go cleanUpVXLANDevice("vxlan.calico")
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -769,6 +770,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
+		if config.RulesConfig.VXLANEnabled {
+			routeTableVXLANV6 := routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+
+			vxlanManagerV6 := newVXLANManager(
+				ipSetsV6,
+				routeTableVXLANV6,
+				"vxlan-v6.calico",
+				config,
+				dp.loopSummarizer,
+				6,
+			)
+			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
+			dp.RegisterManager(vxlanManagerV6)
+		} else {
+			// Start a cleanup goroutine not to block felix if it needs to retry
+			go cleanUpVXLANDevice("vxlan-v6.calico")
+		}
+
 		routeTableV6 := routetable.New(
 			interfaceRegexes, 6, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
@@ -997,7 +1018,7 @@ cleanupRetry:
 	}
 }
 
-func cleanUpVXLANDevice() {
+func cleanUpVXLANDevice(deviceName string) {
 	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
 	log.Debug("Checking if we need to clean up the VXLAN device")
 
@@ -1007,7 +1028,7 @@ func cleanUpVXLANDevice() {
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		link, err := netlink.LinkByName("vxlan.calico")
+		link, err := netlink.LinkByName(deviceName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); ok {
 				log.Debug("VXLAN disabled and no VXLAN device found")
