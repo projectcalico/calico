@@ -68,6 +68,13 @@ _site build: bin/helm
 	-v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
 	jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
+	# Move the manifests into the the generated site, and also update
+	# the repos manifests that the site generated, removing the templates dir.
+	cp -r ../manifests/ _site/manifests
+	rsync -a _site/manifest-templates/ ../manifests/ && rm -r _site/manifest-templates
+
+# Update the static manifests 
+gen-manifests: clean _site
 
 ## Clean enough that a new release build will be clean
 clean:
@@ -79,7 +86,7 @@ clean:
 ###############################################################################
 # CI / test targets
 ###############################################################################
-ci: htmlproofer kubeval helm-tests
+ci: htmlproofer kubeval helm-tests gen-manifests check-dirty
 
 htmlproofer: _site
 	docker run -ti -e JEKYLL_UID=`id -u` --rm \
@@ -189,14 +196,15 @@ endif
 # Utilities
 ###############################################################################
 # TODO: stop using bin/helm as an entrypoint in build scripts.
-bin/helm: bin/helm3
+helm-deps: bin/helm3 bin/helm
+
+bin/helm:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
 	wget -q https://get.helm.sh/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
 	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm
 
-helm-deps: bin/helm3 bin/helm
 bin/helm3:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
