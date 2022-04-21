@@ -54,7 +54,7 @@ var _ = Describe("Test BIRD status Scanner", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check we can print status.
-		printStatus(status)
+		printStatus(status, GinkgoWriter)
 	})
 
 	DescribeTable("Convert to v3 object",

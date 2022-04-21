@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"regexp"
@@ -403,12 +404,12 @@ func (b BirdBGPPeers) Show() {
 	}
 
 	fmt.Printf("\nbird v%s BGP peers\n", b.ipv.String())
-	printPeers(peers)
+	printPeers(peers, os.Stdout)
 }
 
 // printPeers prints out the slice of peers in table format.
-func printPeers(peers []*bgpPeer) {
-	table := tablewriter.NewWriter(os.Stdout)
+func printPeers(peers []*bgpPeer, out io.Writer) {
+	table := tablewriter.NewWriter(out)
 	table.SetHeader([]string{"Peer address", "Peer type", "State", "Since", "BGPState"})
 
 	for _, peer := range peers {
