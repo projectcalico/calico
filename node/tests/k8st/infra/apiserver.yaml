@@ -5,10 +5,13 @@
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: calico-apiserver
   labels:
     name: calico-apiserver
-  name: calico-apiserver
-spec:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
 
 ---
 
@@ -301,36 +304,3 @@ subjects:
 - kind: ServiceAccount
   name: calico-apiserver
   namespace: calico-apiserver
-
----
-
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
-metadata:
-  annotations:
-    seccomp.security.alpha.kubernetes.io/allowedProfileNames: '*'
-  name: calico-apiserver
-spec:
-  allowPrivilegeEscalation: false
-  fsGroup:
-    ranges:
-    - max: 65535
-      min: 1
-    rule: MustRunAs
-  hostPorts:
-  - max: 65535
-    min: 0
-  requiredDropCapabilities:
-  - ALL
-  runAsUser:
-    rule: RunAsAny
-  seLinux:
-    rule: RunAsAny
-  supplementalGroups:
-    ranges:
-    - max: 65535
-      min: 1
-    rule: MustRunAs
-  volumes:
-  - secret
-
