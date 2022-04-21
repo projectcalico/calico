@@ -105,8 +105,7 @@ clean:
 	       build \
 	       fv/fv.test \
 	       go/docs/calc.pdf \
-	       release-notes-* \
-	       fv/infrastructure/crds/
+	       release-notes-*
 	find . -name "junit.xml" -type f -delete
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
@@ -280,10 +279,7 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	# outside a container and allow them to interact with docker.
 	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
 
-REMOTE_DEPS=fv/infrastructure/crds build-typha
-
-fv/infrastructure/crds:
-	cp -r ../libcalico-go/config/crd fv/infrastructure/crds; chmod +w fv/infrastructure/crds/
+REMOTE_DEPS=build-typha
 
 build-typha:
 	make -C ../typha image DEV_REGISTRIES=felix-test
