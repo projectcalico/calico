@@ -23,7 +23,7 @@ import (
 	"path"
 	"reflect"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	"golang.org/x/net/context"

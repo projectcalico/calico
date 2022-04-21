@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
@@ -85,7 +85,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
@@ -104,7 +104,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 			felix.Stop()
 		}
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 		}
 		infra.Stop()
