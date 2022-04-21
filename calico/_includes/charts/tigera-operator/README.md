@@ -24,16 +24,10 @@ Calico’s flexible architecture supports a wide range of deployment options, us
    helm repo add projectcalico https://projectcalico.docs.tigera.io/charts
    ```
 
-1. Create the tigera-operator namespace.
-
-   ```
-   kubectl create namespace tigera-operator
-   ```
-
 1. Install the helm chart into the `tigera-operator` namespace.
 
    ```
-   helm install calico projectcalico/tigera-operator --namespace tigera-operator
+   helm install calico projectcalico/tigera-operator --namespace tigera-operator -- create-namespace
    ```
 
 # Upgrading

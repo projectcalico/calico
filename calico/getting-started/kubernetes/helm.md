@@ -75,22 +75,18 @@ If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubern
 
 #### Install {{site.prodname}}
 
-1. Create the `tigera-operator` namespace.
+1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart, into the `tigera-operator` namespace:
 
    ```
-   kubectl create namespace tigera-operator
-   ```
-
-1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart:
-
-   ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} --namespace tigera-operator
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} \
+   --namespace tigera-operator --create-namespace
    ```
 
    or if you created a `values.yaml` above:
 
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} -f values.yaml --namespace tigera-operator
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} -f values.yaml \
+   --namespace tigera-operator --create-namespace
    ```
 
 1. Confirm that all of the pods are running with the following command.
