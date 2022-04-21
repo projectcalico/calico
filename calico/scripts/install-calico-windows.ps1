@@ -49,7 +49,7 @@ function DownloadFiles()
     md $BaseDir\cni\config -ErrorAction Ignore
 
     Write-Host "Downloading Windows Kubernetes scripts"
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
+    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
 }
 
 function PrepareKubernetes()
