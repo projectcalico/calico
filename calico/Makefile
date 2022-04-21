@@ -52,7 +52,6 @@ serve: bin/helm
 	docker run --rm -it \
 	  -v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
 	  -v $(CURDIR):/srv/jekyll \
-	  -v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	  -e JEKYLL_DOCKER_TAG="" \
 	  -e JEKYLL_UID=`id -u` \
 	  -p 4000:4000 \
@@ -64,8 +63,7 @@ _site build: bin/helm
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
 	-v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
-	-v $(CURDIR)/:/srv/jekyll \
-	-v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
+	-v $(CURDIR):/srv/jekyll \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
 	jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
 
