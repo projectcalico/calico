@@ -1,0 +1,87 @@
+---
+# Source: tigera-operator/templates/tigera-operator/02-tigera-operator.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tigera-operator
+  namespace: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: tigera-operator
+  template:
+    metadata:
+      labels:
+        name: tigera-operator
+        k8s-app: tigera-operator
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - effect: NoExecute
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
+      serviceAccountName: tigera-operator
+      hostNetwork: true
+      # This must be set when hostNetwork is true or else the cluster services won't resolve
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: tigera-operator
+          image: quay.io/tigera/operator:master
+          imagePullPolicy: IfNotPresent
+          command:
+            - operator
+          volumeMounts:
+            - name: var-lib-calico
+              readOnly: true
+              mountPath: /var/lib/calico
+          env:
+            - name: WATCH_NAMESPACE
+              value: ""
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "tigera-operator"
+            - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
+              value: master
+          envFrom:
+            - configMapRef:
+                name: kubernetes-services-endpoint
+                optional: true
+      volumes:
+        - name: var-lib-calico
+          hostPath:
+            path: /var/lib/calico
+        - name: calico-resources
+          configMap:
+            defaultMode: 0400
+            name: calico-resources
+        - name: install-resources-script
+          configMap:
+            defaultMode: 0777
+            name: install-resources-script
+      initContainers:
+        - name: create-initial-resources
+          image: docker.io/calico/ctl:master
+          env:
+            - name: DATASTORE_TYPE
+              value: kubernetes
+          command:
+            - calicoctl
+          args:
+            - --allow-version-mismatch
+            - create
+            - --skip-exists
+            - --skip-empty
+            - -f
+            - /calico-resources
+          volumeMounts:
+            - name: calico-resources
+              mountPath: /calico-resources
+
