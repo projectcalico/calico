@@ -5,7 +5,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 FLEXVOL_IMAGE  ?=pod2daemon-flexvol
-CSI_IMAGE ?=calico/csi
+CSI_IMAGE ?=csi
 BUILD_IMAGES ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE)
 
 ###############################################################################
@@ -75,17 +75,17 @@ image: $(FLEXVOL_IMAGE) $(CSI_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$* IMAGETAG=latest
-
 
 $(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_CREATED)
 $(FLEXVOL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
 	$(DOCKER_BUILD) -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FLEXVOL_IMAGE)
 	touch $@
 
 $(CSI_IMAGE): $(CSI_CONTAINER_CREATED)
 $(CSI_CONTAINER_CREATED): csidriver/Dockerfile.$(ARCH) bin/csi-driver-$(ARCH)
 	$(DOCKER_BUILD) -t $(CSI_IMAGE):latest-$(ARCH) -f csidriver/Dockerfile.$(ARCH) . --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(CSI_IMAGE)
 	touch $@
 
 ###############################################################################
