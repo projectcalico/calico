@@ -5,7 +5,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 FLEXVOL_IMAGE  ?=pod2daemon-flexvol
-CSI_IMAGE ?=calico/csi
+CSI_IMAGE ?=csi
 BUILD_IMAGES ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE)
 
 ###############################################################################
@@ -72,11 +72,11 @@ FLEXVOL_CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
 CSI_CONTAINER_CREATED=.calico-csi.created-$(ARCH)
 .PHONY: image calico/pod2daemon-flexvol
 image: $(FLEXVOL_IMAGE) $(CSI_IMAGE)
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$* IMAGETAG=latest
+
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$* IMAGETAG=latest
-
 
 $(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_CREATED)
 $(FLEXVOL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
