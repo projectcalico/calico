@@ -27,7 +27,7 @@ Calico’s flexible architecture supports a wide range of deployment options, us
 1. Install the helm chart into the `tigera-operator` namespace.
 
    ```
-   helm install calico projectcalico/tigera-operator --namespace tigera-operator -- create-namespace
+   helm install calico projectcalico/tigera-operator --namespace tigera-operator --create-namespace
    ```
 
 # Upgrading
