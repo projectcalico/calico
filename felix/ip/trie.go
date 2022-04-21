@@ -16,34 +16,40 @@ package ip
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"math/bits"
 )
 
-type V4Trie struct {
-	root *V4Node
+type CIDRTrie struct {
+	root *CIDRNode
 }
 
-type V4Node struct {
-	cidr     V4CIDR
-	children [2]*V4Node
+type CIDRNode struct {
+	cidr     CIDR
+	children [2]*CIDRNode
 	data     interface{}
 }
 
-func (t *V4Trie) Delete(cidr V4CIDR) {
+func (t *CIDRTrie) Delete(cidr CIDR) {
 	if t.root == nil {
 		// Trie is empty.
 		return
 	}
-	if V4CommonPrefix(t.root.cidr, cidr) != t.root.cidr {
+	if pfx, err := CommonPrefix(t.root.cidr, cidr); err != nil || pfx != t.root.cidr {
 		// Trie does not contain prefix.
 		return
 	}
 	t.root = deleteInternal(t.root, cidr)
 }
 
-func deleteInternal(n *V4Node, cidr V4CIDR) *V4Node {
-	if !n.cidr.ContainsV4(cidr.addr) {
+func deleteInternal(n *CIDRNode, cidr CIDR) *CIDRNode {
+	if n.cidr.Version() != cidr.Version() {
+		// IP version mismatch
+		return n
+	}
+
+	if !n.cidr.Contains(cidr.Addr()) {
 		// Not in trie.
 		return n
 	}
@@ -66,7 +72,7 @@ func deleteInternal(n *V4Node, cidr V4CIDR) *V4Node {
 
 	// If we get here, then this node is a parent of the CIDR we're looking for.
 	// Figure out which child to recurse on.
-	childIdx := cidr.addr.NthBit(uint(n.cidr.prefix + 1))
+	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	oldChild := n.children[childIdx]
 	if oldChild == nil {
 		return n
@@ -83,12 +89,12 @@ func deleteInternal(n *V4Node, cidr V4CIDR) *V4Node {
 	return n
 }
 
-type V4TrieEntry struct {
-	CIDR V4CIDR
+type CIDRTrieEntry struct {
+	CIDR CIDR
 	Data interface{}
 }
 
-func (t *V4Trie) Get(cidr V4CIDR) interface{} {
+func (t *CIDRTrie) Get(cidr CIDR) interface{} {
 	return t.root.get(cidr)
 }
 
@@ -97,21 +103,21 @@ func (t *V4Trie) Get(cidr V4CIDR) interface{} {
 // if it is too short append() is used to extend it and the updated slice is returned.
 //
 // If the CIDR is not in the trie then an empty slice is returned.
-func (t *V4Trie) LookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
+func (t *CIDRTrie) LookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry {
 	return t.root.lookupPath(buffer[:0], cidr)
 }
 
 // LPM does a longest prefix match on the trie
-func (t *V4Trie) LPM(cidr V4CIDR) (V4CIDR, interface{}) {
+func (t *CIDRTrie) LPM(cidr CIDR) (CIDR, interface{}) {
 	n := t.root
-	var match *V4Node
+	var match *CIDRNode
 
 	for {
 		if n == nil {
 			break
 		}
 
-		if !n.cidr.ContainsV4(cidr.addr) {
+		if !n.cidr.Contains(cidr.Addr()) {
 			break
 		}
 
@@ -125,28 +131,38 @@ func (t *V4Trie) LPM(cidr V4CIDR) (V4CIDR, interface{}) {
 
 		// If we get here, then this node is a parent of the CIDR we're looking for.
 		// Figure out which child to recurse on.
-		childIdx := cidr.addr.NthBit(uint(n.cidr.prefix + 1))
+		childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 		n = n.children[childIdx]
 	}
 
 	if match == nil || match.data == nil {
-		return V4CIDR{}, nil
+		switch n.cidr.Version() {
+		case 4:
+			return V4CIDR{}, nil
+		case 6:
+			return V6CIDR{}, nil
+		}
 	}
 	return match.cidr, match.data
 }
 
-func (n *V4Node) lookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
+func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry {
 	if n == nil {
 		return buffer[:0]
 	}
 
-	if !n.cidr.ContainsV4(cidr.addr) {
+	if n.cidr.Version() != cidr.Version() {
+		// IP version mismatch
+		return nil
+	}
+
+	if !n.cidr.Contains(cidr.Addr()) {
 		// Not in trie.
 		return nil
 	}
 
 	if n.data != nil {
-		buffer = append(buffer, V4TrieEntry{CIDR: n.cidr, Data: n.data})
+		buffer = append(buffer, CIDRTrieEntry{CIDR: n.cidr, Data: n.data})
 	}
 
 	if cidr == n.cidr {
@@ -159,17 +175,22 @@ func (n *V4Node) lookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
 
 	// If we get here, then this node is a parent of the CIDR we're looking for.
 	// Figure out which child to recurse on.
-	childIdx := cidr.addr.NthBit(uint(n.cidr.prefix + 1))
+	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	child := n.children[childIdx]
 	return child.lookupPath(buffer, cidr)
 }
 
-func (n *V4Node) get(cidr V4CIDR) interface{} {
+func (n *CIDRNode) get(cidr CIDR) interface{} {
 	if n == nil {
 		return nil
 	}
 
-	if !n.cidr.ContainsV4(cidr.addr) {
+	if n.cidr.Version() != cidr.Version() {
+		// IP version mismatch
+		return nil
+	}
+
+	if !n.cidr.Contains(cidr.Addr()) {
 		// Not in trie.
 		return nil
 	}
@@ -184,25 +205,33 @@ func (n *V4Node) get(cidr V4CIDR) interface{} {
 
 	// If we get here, then this node is a parent of the CIDR we're looking for.
 	// Figure out which child to recurse on.
-	childIdx := cidr.addr.NthBit(uint(n.cidr.prefix + 1))
+	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	child := n.children[childIdx]
 	return child.get(cidr)
 }
 
-func (t *V4Trie) CoveredBy(cidr V4CIDR) bool {
-	return V4CommonPrefix(t.root.cidr, cidr) == cidr
+func (t *CIDRTrie) CoveredBy(cidr CIDR) bool {
+	pfx, err := CommonPrefix(t.root.cidr, cidr)
+	if err != nil {
+		return false
+	}
+	return pfx == cidr
 }
 
-func (t *V4Trie) Covers(cidr V4CIDR) bool {
+func (t *CIDRTrie) Covers(cidr CIDR) bool {
 	return t.root.covers(cidr)
 }
 
-func (n *V4Node) covers(cidr V4CIDR) bool {
+func (n *CIDRNode) covers(cidr CIDR) bool {
 	if n == nil {
 		return false
 	}
 
-	if V4CommonPrefix(n.cidr, cidr) != n.cidr {
+	commonPfx, err := CommonPrefix(n.cidr, cidr)
+	if err != nil {
+		return false
+	}
+	if commonPfx != n.cidr {
 		// Not in trie.
 		return false
 	}
@@ -213,21 +242,24 @@ func (n *V4Node) covers(cidr V4CIDR) bool {
 
 	// If we get here, then this node is a parent of the CIDR we're looking for.
 	// Figure out which child to recurse on.
-	childIdx := cidr.addr.NthBit(uint(n.cidr.prefix + 1))
+	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	child := n.children[childIdx]
 	return child.covers(cidr)
 }
 
-func (t *V4Trie) Intersects(cidr V4CIDR) bool {
+func (t *CIDRTrie) Intersects(cidr CIDR) bool {
 	return t.root.intersects(cidr)
 }
 
-func (n *V4Node) intersects(cidr V4CIDR) bool {
+func (n *CIDRNode) intersects(cidr CIDR) bool {
 	if n == nil {
 		return false
 	}
 
-	common := V4CommonPrefix(n.cidr, cidr)
+	common, err := CommonPrefix(n.cidr, cidr)
+	if err != nil {
+		return false
+	}
 
 	if common == cidr {
 		// This node's CIDR is contained within the target CIDR so we must have
@@ -242,17 +274,17 @@ func (n *V4Node) intersects(cidr V4CIDR) bool {
 
 	// If we get here, then this node is a parent of the CIDR we're looking for.
 	// Figure out which child to recurse on.
-	childIdx := cidr.addr.NthBit(uint(n.cidr.prefix + 1))
+	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	child := n.children[childIdx]
 	return child.intersects(cidr)
 }
 
-func (n *V4Node) appendTo(s []V4TrieEntry) []V4TrieEntry {
+func (n *CIDRNode) appendTo(s []CIDRTrieEntry) []CIDRTrieEntry {
 	if n == nil {
 		return s
 	}
 	if n.data != nil {
-		s = append(s, V4TrieEntry{
+		s = append(s, CIDRTrieEntry{
 			CIDR: n.cidr,
 			Data: n.data,
 		})
@@ -262,7 +294,7 @@ func (n *V4Node) appendTo(s []V4TrieEntry) []V4TrieEntry {
 	return s
 }
 
-func (n *V4Node) visit(f func(cidr V4CIDR, data interface{}) bool) bool {
+func (n *CIDRNode) visit(f func(cidr CIDR, data interface{}) bool) bool {
 	if n == nil {
 		return true
 	}
@@ -280,17 +312,17 @@ func (n *V4Node) visit(f func(cidr V4CIDR, data interface{}) bool) bool {
 	return n.children[1].visit(f)
 }
 
-func (t *V4Trie) ToSlice() []V4TrieEntry {
+func (t *CIDRTrie) ToSlice() []CIDRTrieEntry {
 	return t.root.appendTo(nil)
 }
 
-func (t *V4Trie) Visit(f func(cidr V4CIDR, data interface{}) bool) {
+func (t *CIDRTrie) Visit(f func(cidr CIDR, data interface{}) bool) {
 	t.root.visit(f)
 }
 
-func (t *V4Trie) Update(cidr V4CIDR, value interface{}) {
+func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {
 	if value == nil {
-		log.Panic("Can't store nil in a V4Trie")
+		log.Panic("Can't store nil in a CIDRTrie")
 	}
 	parentsPtr := &t.root
 	thisNode := t.root
@@ -298,7 +330,7 @@ func (t *V4Trie) Update(cidr V4CIDR, value interface{}) {
 	for {
 		if thisNode == nil {
 			// We've run off the end of the tree, create new child to hold this data.
-			newNode := &V4Node{
+			newNode := &CIDRNode{
 				cidr: cidr,
 				data: value,
 			}
@@ -317,40 +349,58 @@ func (t *V4Trie) Update(cidr V4CIDR, value interface{}) {
 		// - The new CIDR contains this node, in which case we need to insert a new node as the parent of this one.
 		// - The two CIDRs are disjoint, in which case we need to insert a new intermediate node as the parent of
 		//   thisNode and the new CIDR.
-		commonPrefix := V4CommonPrefix(cidr, thisNode.cidr)
+		commonPrefix, err := CommonPrefix(cidr, thisNode.cidr)
+		if err != nil {
+			return
+		}
 
-		if commonPrefix.prefix == thisNode.cidr.prefix {
+		if commonPrefix.Prefix() == thisNode.cidr.Prefix() {
 			// Common is this node's CIDR so this node is parent of the new CIDR. Figure out which child to recurse on.
-			childIdx := cidr.addr.NthBit(uint(commonPrefix.prefix + 1))
+			childIdx := cidr.Addr().NthBit(uint(commonPrefix.Prefix() + 1))
 			parentsPtr = &thisNode.children[childIdx]
 			thisNode = thisNode.children[childIdx]
 			continue
 		}
 
-		if commonPrefix.prefix == cidr.prefix {
+		if commonPrefix.Prefix() == cidr.Prefix() {
 			// Common is new CIDR so this node is a child of the new CIDR. Insert new node.
-			newNode := &V4Node{
+			newNode := &CIDRNode{
 				cidr: cidr,
 				data: value,
 			}
-			childIdx := thisNode.cidr.addr.NthBit(uint(commonPrefix.prefix + 1))
+			childIdx := thisNode.cidr.Addr().NthBit(uint(commonPrefix.Prefix() + 1))
 			newNode.children[childIdx] = thisNode
 			*parentsPtr = newNode
 			return
 		}
 
 		// Neither CIDR contains the other.  Create an internal node with this node and new CIDR as children.
-		newInternalNode := &V4Node{
+		newInternalNode := &CIDRNode{
 			cidr: commonPrefix,
 		}
-		childIdx := thisNode.cidr.addr.NthBit(uint(commonPrefix.prefix + 1))
+		childIdx := thisNode.cidr.Addr().NthBit(uint(commonPrefix.Prefix() + 1))
 		newInternalNode.children[childIdx] = thisNode
-		newInternalNode.children[1-childIdx] = &V4Node{
+		newInternalNode.children[1-childIdx] = &CIDRNode{
 			cidr: cidr,
 			data: value,
 		}
 		*parentsPtr = newInternalNode
 		return
+	}
+}
+
+func CommonPrefix(a, b CIDR) (CIDR, error) {
+	if a.Version() != b.Version() {
+		return nil, fmt.Errorf("Mismatched CIDR IP versions")
+	}
+
+	switch a.Version() {
+	case 4:
+		return V4CommonPrefix(a.(V4CIDR), b.(V4CIDR)), nil
+	case 6:
+		return V6CommonPrefix(a.(V6CIDR), b.(V6CIDR)), nil
+	default:
+		return nil, fmt.Errorf("Invalid CIDR IP version")
 	}
 }
 
@@ -377,6 +427,55 @@ func V4CommonPrefix(a, b V4CIDR) V4CIDR {
 	mask := uint32(0xffffffff) << (32 - result.prefix)
 	commonPrefix32 := mask & a32
 	binary.BigEndian.PutUint32(result.addr[:], commonPrefix32)
+
+	return result
+}
+
+func V6CommonPrefix(a, b V6CIDR) V6CIDR {
+	var result V6CIDR
+	var maxLen uint8
+
+	if b.prefix < a.prefix {
+		maxLen = b.prefix
+	} else {
+		maxLen = a.prefix
+	}
+
+	a_h, a_l := a.addr.AsUint64Pair()
+	b_h, b_l := b.addr.AsUint64Pair()
+
+	xored_h := a_h ^ b_h // Has a zero bit wherever the two values are the same.
+	xored_l := a_l ^ b_l
+
+	commonPrefixLen := uint8(bits.LeadingZeros64(xored_h))
+
+	if xored_h == 0 {
+		// This means a_h == b_h and commonPrefixLen will be > 64. The first
+		// 8 bytes of the result will be equal to a_h (and b_h), last 8 will
+		// be the common prefix of a_l and b_l.
+		commonPrefixLen = 64 + uint8(bits.LeadingZeros64(xored_l))
+		binary.BigEndian.PutUint64(result.addr[:8], a_h)
+		if commonPrefixLen > maxLen {
+			result.prefix = maxLen
+		} else {
+			result.prefix = commonPrefixLen
+		}
+		mask := uint64(0xffffffffffffffff) << (128 - result.prefix)
+		commonPrefix64 := mask & a_l
+		binary.BigEndian.PutUint64(result.addr[8:], commonPrefix64)
+	} else {
+		// This means commonPrefixLen will be < 64. Just the first 8 bytes of
+		// the result will be filled with the common prefix of a_h and b_h,
+		// last 8 will be 0.
+		if commonPrefixLen > maxLen {
+			result.prefix = maxLen
+		} else {
+			result.prefix = commonPrefixLen
+		}
+		mask := uint64(0xffffffffffffffff) << (64 - result.prefix)
+		commonPrefix64 := mask & a_h
+		binary.BigEndian.PutUint64(result.addr[:8], commonPrefix64)
+	}
 
 	return result
 }
