@@ -154,7 +154,9 @@ func (c *serviceAccountController) Run(stopCh chan struct{}) {
 	// Wait till k8s cache is synced
 	log.Debug("Waiting to sync with Kubernetes API (ServiceAccount)")
 	go c.informer.Run(stopCh)
-	for !c.informer.HasSynced() {
+	if !cache.WaitForNamedCacheSync("service-accounts", stopCh, c.informer.HasSynced) {
+		log.Info("Failed to sync resources, received signal for controller to shut down.")
+		return
 	}
 	log.Debug("Finished syncing with Kubernetes API (ServiceAccount)")
 
