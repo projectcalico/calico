@@ -17,7 +17,7 @@ package v3_test
 import (
 	"reflect"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/api/pkg/apis/projectcalico/v3"

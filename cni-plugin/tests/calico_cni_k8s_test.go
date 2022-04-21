@@ -22,7 +22,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 	v1 "k8s.io/api/core/v1"
