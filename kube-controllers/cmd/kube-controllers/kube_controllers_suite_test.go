@@ -31,7 +31,7 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-func TestConverter(t *testing.T) {
+func Test(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../report/main_controller_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Main binary suite", []Reporter{junitReporter})
