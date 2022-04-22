@@ -54,19 +54,19 @@ func cpEntry(a, b, exp string) TableEntry {
 	return Entry(fmt.Sprintf("Common prefix of %v and %v should be %v", a, b, exp), a, b, exp)
 }
 
-var _ = Describe("V4Trie tests", func() {
-	var trie *ip.V4Trie
+var _ = Describe("CIDRTrie tests", func() {
+	var trie *ip.CIDRTrie
 
 	BeforeEach(func() {
-		trie = &ip.V4Trie{}
+		trie = &ip.CIDRTrie{}
 	})
 
 	update := func(cidr string) {
-		trie.Update(ip.MustParseCIDROrIP(cidr).(ip.V4CIDR), "data:"+cidr)
+		trie.Update(ip.MustParseCIDROrIP(cidr), "data:"+cidr)
 	}
 
 	remove := func(cidr string) {
-		trie.Delete(ip.MustParseCIDROrIP(cidr).(ip.V4CIDR))
+		trie.Delete(ip.MustParseCIDROrIP(cidr))
 	}
 
 	contents := func() []string {
@@ -90,12 +90,12 @@ var _ = Describe("V4Trie tests", func() {
 	}
 
 	lpm := func(cidr string, expectedCidr string) interface{} {
-		cidrIn := ip.MustParseCIDROrIP(cidr).(ip.V4CIDR)
+		cidrIn := ip.MustParseCIDROrIP(cidr)
 		cidrOut, data := trie.LPM(cidrIn)
 
 		if data != nil {
-			Expect(cidrOut.ContainsV4(cidrIn.Addr().(ip.V4Addr))).To(BeTrue())
-			cidrExp := ip.MustParseCIDROrIP(expectedCidr).(ip.V4CIDR)
+			Expect(cidrOut.Contains(cidrIn.Addr())).To(BeTrue())
+			cidrExp := ip.MustParseCIDROrIP(expectedCidr)
 			Expect(cidrExp).To(Equal(cidrOut))
 		}
 
