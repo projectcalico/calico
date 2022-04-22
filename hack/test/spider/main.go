@@ -95,13 +95,13 @@ func main() {
 
 	// Make a map of package, to all of the packages that import it either
 	// directly or indirectly.
-	depTree := map[string]map[string]string{}
+	packageToDeps := map[string]map[string]string{}
 	for _, p := range packages {
 		for _, d := range p.Deps {
-			if depTree[d] == nil {
-				depTree[d] = map[string]string{}
+			if packageToDeps[d] == nil {
+				packageToDeps[d] = map[string]string{}
 			}
-			depTree[d][p.Dir] = ""
+			packageToDeps[d][p.Dir] = ""
 		}
 	}
 
@@ -119,23 +119,28 @@ func main() {
 		panic(fmt.Sprintf("%s: %s", err, stderr.String()))
 	}
 
+	// From the list of files, condense that to a set of packages.
 	changedPackages := map[string]string{}
 	for _, f := range strings.Split(out.String(), "\n") {
 		changedPackages[filepath.Dir(f)] = ""
 	}
 
-	// Based off of the changed packages, determine the full set of downstream packages
+	// Based off of the changed packages, determine the full set of packages
 	// that need to be built and tested.
-	allDownstream := map[string]string{}
-	for changed := range changedPackages {
-		for d := range depTree[changed] {
-			allDownstream[d] = ""
+	impactedPackages := map[string]string{}
+	for pkg := range changedPackages {
+		// Include the package that changed.
+		impactedPackages[pkg] = ""
+
+		// As well as any packages that import that package.
+		for d := range packageToDeps[pkg] {
+			impactedPackages[d] = ""
 		}
 	}
 
 	// Print out all of the packages that need rebuilding, sorted and filtered.
 	sorted := []string{}
-	for d := range allDownstream {
+	for d := range impactedPackages {
 		if p := filter(d); p != "" {
 			sorted = append(sorted, p)
 		}
