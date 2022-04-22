@@ -20,9 +20,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -161,47 +159,6 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 		controllerManager.Stop()
 		apiserver.Stop()
 		etcd.Stop()
-	})
-
-	Context("Basic FV tests", func() {
-		BeforeEach(func() {
-			startController()
-		})
-		AfterEach(func() {
-			stopController()
-		})
-
-		It("should initialize the datastore at start-of-day", func() {
-			var info *api.ClusterInformation
-			Eventually(func() *api.ClusterInformation {
-				info, _ = calicoClient.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
-				return info
-			}, 10*time.Second).ShouldNot(BeNil())
-
-			Expect(info.Spec.ClusterGUID).To(MatchRegexp("^[a-f0-9]{32}$"))
-			Expect(info.Spec.ClusterType).To(Equal("k8s,kdd"))
-			Expect(*info.Spec.DatastoreReady).To(BeTrue())
-		})
-
-		Context("Healthcheck FV tests", func() {
-			It("should pass health check", func() {
-				By("Waiting for an initial readiness report")
-				Eventually(func() []byte {
-					cmd := exec.Command("docker", "exec", migrationController.Name, "/usr/bin/check-status", "-r")
-					stdoutStderr, _ := cmd.CombinedOutput()
-
-					return stdoutStderr
-				}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
-
-				By("Waiting for the controller to be ready")
-				Eventually(func() string {
-					cmd := exec.Command("docker", "exec", migrationController.Name, "/usr/bin/check-status", "-r")
-					stdoutStderr, _ := cmd.CombinedOutput()
-
-					return strings.TrimSpace(string(stdoutStderr))
-				}, 20*time.Second, 500*time.Millisecond).Should(Equal("Ready"))
-			})
-		})
 	})
 
 	Context("Should migrate FV tests", func() {
