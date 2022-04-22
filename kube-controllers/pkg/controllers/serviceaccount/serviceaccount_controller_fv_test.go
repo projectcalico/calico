@@ -46,9 +46,6 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func()
 		controllerManager *containers.Container
 	)
 
-	const kNodeName = "k8snodename"
-	const cNodeName = "caliconodename"
-
 	BeforeEach(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
