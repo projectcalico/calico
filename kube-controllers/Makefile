@@ -123,7 +123,7 @@ ut fv: $(TEST_BINARIES)
 		   CERTS_PATH=$(CERTS_PATH) \
 		   ./run-uts $(WHAT)
 
-# Product test binaries for each package that needs them.
+# Produce test binaries for each package that needs them.
 # ginkgo doesn't let you produce a single test binary with multiple packages.
 %/ut.test: $(SRC_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@
