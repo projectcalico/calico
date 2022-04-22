@@ -292,26 +292,16 @@ ifdef SEMAPHORE_GIT_COMMIT_RANGE
 WHAT=$(shell go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir node/)
 else
 # By default, run all tests.
-WHAT=.
+WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
 endif
 
-## Run the ginkgo FVs
+## Run the ginkgo tests.
 ut fv: run-k8s-apiserver
 	$(DOCKER_RUN) \
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	$(CALICO_BUILD) ./run-uts.sh ${WHAT}
-
-# Skip packages containing FV tests.
-# UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
-# .PHONY: ut
-# ut:
-# 	$(DOCKER_RUN) \
-# 		-e UT_PACKAGES_TO_SKIP=$(UT_PACKAGES_TO_SKIP) \
-# 		-e GINKGO_ARGS=$(GINKGO_ARGS) \
-# 		$(CALICO_BUILD) \
-# 		sh -c "$(GIT_CONFIG_SSH) ./run-uts.sh ${WHAT}"
+	$(CALICO_BUILD) ./run-uts $(WHAT)
 
 ###############################################################################
 # System tests
