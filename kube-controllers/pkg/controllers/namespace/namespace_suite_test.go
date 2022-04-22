@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config_test
+package namespace_test
 
 import (
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
 	"github.com/onsi/ginkgo/reporters"
@@ -26,10 +28,11 @@ import (
 
 func init() {
 	testutils.HookLogrusForGinkgo()
+	logrus.SetLevel(logrus.DebugLevel)
 }
 
-func TestConfig(t *testing.T) {
+func TestConverter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/config_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Config Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/namespace_controller_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Namespace controller suite", []Reporter{junitReporter})
 }
