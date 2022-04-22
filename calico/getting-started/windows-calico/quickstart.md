@@ -402,7 +402,7 @@ this installation method has [additional requirements](https://kubernetes.io/doc
 
 To install ContainerD on the Windows node and configure the ContainerD service:
 ```powershell
-Invoke-WebRequest {{ "/scripts/InstallContainerd.ps1" | absolute_url }} -OutFile c:\InstallContainerd.ps1
+Invoke-WebRequest {{ "/scripts/Install-Containerd.ps1" | absolute_url }} -OutFile c:\Install-Containerd.ps1
 c:\Install-Containerd.ps1 -ContainerDVersion 1.6.2 -CNIConfigPath "c:/etc/cni/net.d" -CNIBinPath "c:/opt/cni/bin"
 ```
 
