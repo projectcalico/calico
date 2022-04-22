@@ -55,6 +55,9 @@ VERSION_FLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERS
 
 include ../lib.Makefile
 
+# Now we support 2 architectures: amd64, arm64
+ENABLEDARCHES ?= amd64 arm64
+
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 CGO_ENABLED=1
@@ -105,13 +108,13 @@ build: image
 CONTAINER_CREATED=.apiserver.created-$(ARCH)
 .PHONY: image $(API_SERVER_IMAGE)
 image: $(API_SERVER_IMAGE)
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(ENABLEDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(API_SERVER_IMAGE): register $(CONTAINER_CREATED)
-$(CONTAINER_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
-	$(DOCKER_BUILD) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile.$(ARCH) . --load
+$(CONTAINER_CREATED): docker-image/Dockerfile.march $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
+	$(DOCKER_BUILD) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile.march . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
