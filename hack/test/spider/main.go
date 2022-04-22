@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -33,6 +34,10 @@ func isLocalDir(pkg string) bool {
 }
 
 func filter(pkg string) string {
+	// Ensure the filterDir ends with a slash.
+	if !strings.HasSuffix(filterDir, "/") {
+		filterDir = filterDir + "/"
+	}
 	if filterDir == "" || strings.HasPrefix(pkg, filterDir) {
 		// No filter, or a filter is specified and matches.
 		return strings.TrimPrefix(pkg, filterDir)
@@ -142,6 +147,11 @@ func main() {
 	sorted := []string{}
 	for d := range impactedPackages {
 		if p := filter(d); p != "" {
+			if _, err := os.Stat(p); err != nil {
+				// Filter out any packages which don't actually exist. If a changeset
+				// removes a package, it will show up here, but there won't be any tests to run.
+				continue
+			}
 			sorted = append(sorted, p)
 		}
 	}
