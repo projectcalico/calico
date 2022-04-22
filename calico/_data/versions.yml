@@ -21,6 +21,8 @@
       version: master
      calico/flannel-migration-controller:
       version: master
+     calico/windows:
+      version: master
      networking-calico:
       version: master
      flannel:
