@@ -2507,6 +2507,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"workloadSourceSpoofing": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WorkloadSourceSpoofing controls whether pods can use the allowedSourcePrefixes annotation to send traffic with a source IP address that is not theirs. This is disabled by default. When set to \"Any\", pods can request any prefix.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"mtuIfacePattern": {
 						SchemaProps: spec.SchemaProps{
 							Description: "MTUIfacePattern is a regular expression that controls which interfaces Felix should scan in order to calculate the host's MTU. This should not match workload interfaces (usually named cali...).",

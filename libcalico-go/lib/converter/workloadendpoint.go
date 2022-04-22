@@ -83,19 +83,20 @@ func (w *WorkloadEndpointConverter) ConvertAPIToKVPair(a unversioned.Resource) (
 	d := model.KVPair{
 		Key: k,
 		Value: &model.WorkloadEndpoint{
-			Labels:           ah.Metadata.Labels,
-			ActiveInstanceID: ah.Metadata.ActiveInstanceID,
-			State:            "active",
-			Name:             ah.Spec.InterfaceName,
-			Mac:              ah.Spec.MAC,
-			ProfileIDs:       ah.Spec.Profiles,
-			IPv4Nets:         ipv4Nets,
-			IPv6Nets:         ipv6Nets,
-			IPv4NAT:          ipv4NAT,
-			IPv6NAT:          ipv6NAT,
-			IPv4Gateway:      ah.Spec.IPv4Gateway,
-			IPv6Gateway:      ah.Spec.IPv6Gateway,
-			Ports:            ports,
+			Labels:                     ah.Metadata.Labels,
+			ActiveInstanceID:           ah.Metadata.ActiveInstanceID,
+			State:                      "active",
+			Name:                       ah.Spec.InterfaceName,
+			Mac:                        ah.Spec.MAC,
+			ProfileIDs:                 ah.Spec.Profiles,
+			IPv4Nets:                   ipv4Nets,
+			IPv6Nets:                   ipv6Nets,
+			IPv4NAT:                    ipv4NAT,
+			IPv6NAT:                    ipv6NAT,
+			IPv4Gateway:                ah.Spec.IPv4Gateway,
+			IPv6Gateway:                ah.Spec.IPv6Gateway,
+			Ports:                      ports,
+			AllowSpoofedSourcePrefixes: ah.Spec.AllowSpoofedSourcePrefixes,
 		},
 		Revision: ah.Metadata.Revision,
 	}
@@ -120,6 +121,9 @@ func (w *WorkloadEndpointConverter) ConvertKVPairToAPI(d *model.KVPair) (unversi
 		nats = append(nats, nat)
 	}
 
+	allowedSources := []net.IPNet{}
+	allowedSources = append(allowedSources, bh.AllowSpoofedSourcePrefixes...)
+
 	ah := api.NewWorkloadEndpoint()
 	ah.Metadata.Node = bk.Hostname
 	ah.Metadata.Orchestrator = bk.OrchestratorID
@@ -142,6 +146,7 @@ func (w *WorkloadEndpointConverter) ConvertKVPairToAPI(d *model.KVPair) (unversi
 	}
 	ah.Spec.IPv4Gateway = bh.IPv4Gateway
 	ah.Spec.IPv6Gateway = bh.IPv6Gateway
+	ah.Spec.AllowSpoofedSourcePrefixes = allowedSources
 
 	var ports []api.EndpointPort
 	for _, port := range bh.Ports {

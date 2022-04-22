@@ -1171,6 +1171,13 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		})
 	}
 
+	// Send workload traffic to a specific chain to skip the rpf check for some workloads
+	rules = append(rules,
+		Rule{
+			Match:  Match().MarkMatchesWithMask(markFromWorkload, markFromWorkload),
+			Action: JumpAction{Target: ChainRpfSkip},
+		})
+
 	// Apply strict RPF check to packets from workload interfaces.  This prevents
 	// workloads from spoofing their IPs.  Note: non-privileged containers can't
 	// usually spoof but privileged containers and VMs can.
