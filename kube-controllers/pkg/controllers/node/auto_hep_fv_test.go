@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv_test
+package node_test
 
 import (
 	"context"
@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Auto Hostendpoint tests", func() {
+var _ = Describe("Auto Hostendpoint FV tests", func() {
 	var (
 		etcd              *containers.Container
 		nodeController    *containers.Container
@@ -183,12 +183,18 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 		// Also add a duplicate IP and make sure it is not added.
 		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
 			cn.Spec.Addresses = []libapi.NodeAddress{
-				{Address: "192.168.200.1",
-					Type: libapi.InternalIP},
-				{Address: "192.168.200.2",
-					Type: libapi.ExternalIP},
-				{Address: "172.100.2.3",
-					Type: libapi.InternalIP},
+				{
+					Address: "192.168.200.1",
+					Type:    libapi.InternalIP,
+				},
+				{
+					Address: "192.168.200.2",
+					Type:    libapi.ExternalIP,
+				},
+				{
+					Address: "172.100.2.3",
+					Type:    libapi.InternalIP,
+				},
 			}
 		})).NotTo(HaveOccurred())
 
