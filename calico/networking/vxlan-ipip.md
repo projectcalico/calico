@@ -79,7 +79,7 @@ spec:
   <label:Manifest>
 <%
 
-For manifest installations of Calico, you can control the deafult IP pool encapsualtion mode using the `CALICO_IPV4POOL_VXLAN` and `CALICO_IPV4POOL_IPIP` environment variables in the environment of the `calico-node` daemon set.
+For manifest installations of Calico, you can control the deafult IP pool encapsualtion mode using the `CALICO_IPV4POOL_VXLAN` and `CALICO_IPV4POOL_IPIP` (and `CALICO_IPV6POOL_VXLAN` for IPv6) environment variables in the environment of the `calico-node` daemon set.
 
 %>
 {% endtabs %}
