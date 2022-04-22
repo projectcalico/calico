@@ -249,7 +249,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) 
+$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES)
 	$(DOCKER_BUILD) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
@@ -275,19 +275,21 @@ $(FELIX_GPL_SOURCE):
 ###############################################################################
 K8ST_IMAGE_TARS=calico-node.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
 
-## Run the ginkgo FVs
-fv: run-k8s-apiserver
+ifdef SEMAPHORE_GIT_COMMIT_RANGE
+# Determine the tests to run using the test spider tool, which emits a list of impacted packages.
+WHAT=$(shell $(DOCKER_GO_BUILD) go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir node/)
+else
+# By default, run all tests.
+WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
+endif
+
+## Run the ginkgo tests.
+ut fv: run-k8s-apiserver
 	$(DOCKER_RUN) \
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
-
-# Skip packages containing FV tests.
-UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
-.PHONY: ut
-ut:
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) ginkgo -r -skipPackage=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
+	$(CALICO_BUILD) ./run-uts $(WHAT)
 
 ###############################################################################
 # System tests
@@ -348,7 +350,7 @@ load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	KUBECONFIG=$(KIND_KUBECONFIG) ./tests/k8st/load_images_on_kind_cluster.sh
 	# Restart the Calico containers so they launch with the newly loaded code.
 	# TODO: We should be able to do this without restarting everything in kube-system.
-	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n kube-system --all 
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n kube-system --all
 	# calicoctl is deployed as a pod on the cluster and needs to be recreated.
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f tests/k8st/infra/calicoctl.yaml
 
