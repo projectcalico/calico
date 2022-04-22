@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,27 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv_test
+package flannelmigration_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
-
-	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logrus.SetLevel(logrus.InfoLevel)
 }
 
-func TestFv(t *testing.T) {
+func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/fv_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Fv Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../../report/flannelmigration_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "flannelmigration Suite", []Reporter{junitReporter})
 }
