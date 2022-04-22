@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package flannelmigration_test
+package pod_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
-	"testing"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
 	"github.com/onsi/ginkgo/reporters"
 )
 
-func TestConfig(t *testing.T) {
+func init() {
+	testutils.HookLogrusForGinkgo()
+	logrus.SetLevel(logrus.DebugLevel)
+}
+
+func TestConverter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/flannelmigration_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "flannelmigration Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/pod_controller_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Pod controller suite", []Reporter{junitReporter})
 }
