@@ -126,7 +126,7 @@ ut fv: $(TEST_BINARIES)
 
 # Product test binaries for each package that needs them.
 # ginkgo doesn't let you produce a single test binary with multiple packages.
-%/ut.test:
+%/ut.test: $(SRC_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@
 
 ###############################################################################
