@@ -97,18 +97,6 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 		etcd.Stop()
 	})
 
-	It("should initialize the datastore at start-of-day", func() {
-		var info *api.ClusterInformation
-		Eventually(func() *api.ClusterInformation {
-			info, _ = calicoClient.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
-			return info
-		}, 10*time.Second).ShouldNot(BeNil())
-
-		Expect(info.Spec.ClusterGUID).To(MatchRegexp("^[a-f0-9]{32}$"))
-		Expect(info.Spec.ClusterType).To(Equal("k8s"))
-		Expect(*info.Spec.DatastoreReady).To(BeTrue())
-	})
-
 	It("should not overwrite a workload endpoint's container ID", func() {
 		// Create a Pod
 		podName := fmt.Sprintf("pod-fv-container-id-%s", uuid.NewV4())

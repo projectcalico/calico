@@ -4,8 +4,6 @@
 # TODO: We should actually upgrade ginkgo!
 export ACK_GINKGO_RC=true
 
-set -e
-
 if [ -z "$1" ]; then 
 	echo "No packages need to be tested"
 	exit 0
@@ -14,6 +12,10 @@ fi
 echo WHAT: $@
 echo SKIP: $SKIP
 echo GINKGO_ARGS: $GINKGO_ARGS
+
+# We want to run all the tests even if one suite fails. We'll increment this each
+# time a suite fails.
+RC=0
 
 # Go through each package we've been told to test. If there are actually test files present,
 # then run those tests. If the package is included in SKIP, we'll skip them.
@@ -27,8 +29,10 @@ for PKG in "$@"; do
 	HAS_TESTS=$(find ${PKG} -name "ut.test")
 	if [ ! -z "${HAS_TESTS}" ]; then 
 		echo "Running tests for package: ${PKG}";
-		${PKG}/ut.test ${GINKGO_ARGS}
+		${PKG}/ut.test ${GINKGO_ARGS} || ((RC++))
 	else 
 		echo "WARNING: No tests to run in ${PKG}, skipping"
 	fi
 done
+
+exit ${RC}
