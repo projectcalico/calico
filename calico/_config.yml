@@ -69,7 +69,7 @@ defaults:
     scope:
       path: ""
     values:
-      version: master
+      version: v3.23
       layout: docwithnav
       show_title: true
       show_read_time: true

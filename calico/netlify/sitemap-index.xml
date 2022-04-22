@@ -3,6 +3,8 @@
   <sitemap><loc>https://projectcalico.docs.tigera.io/release-legacy-sitemap.xml</loc></sitemap>
   <sitemap><loc>https://projectcalico.docs.tigera.io/latest-sitemap.xml</loc></sitemap>
   <sitemap><loc>https://projectcalico.docs.tigera.io/master/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://projectcalico.docs.tigera.io/archive/v3.23/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://projectcalico.docs.tigera.io/archive/v3.22/sitemap.xml</loc></sitemap>
   <sitemap><loc>https://projectcalico.docs.tigera.io/archive/v3.21/sitemap.xml</loc></sitemap>
   <sitemap><loc>https://projectcalico.docs.tigera.io/archive/v3.20/sitemap.xml</loc></sitemap>
   <sitemap><loc>https://projectcalico.docs.tigera.io/archive/v3.19/sitemap.xml</loc></sitemap>

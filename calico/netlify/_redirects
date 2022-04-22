@@ -1,6 +1,7 @@
 # redirect old docs to latest at root.
 # note that you can still access these old docs at https://docs.projectcalico.org/archive/*
 
+/archive/v3.23 /archive/v3.23/about/about-calico 301
 /archive/v3.15 /archive/v3.15/about/about-calico 301
 /archive/v3.14 /archive/v3.14/introduction/ 301
 /archive/v3.13 /archive/v3.13/introduction 301

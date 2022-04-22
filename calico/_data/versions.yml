@@ -1,4 +1,4 @@
-- title: master
+- title: v3.23.0-pre-release
   note: ""
   chart:
     version: 1
@@ -8,26 +8,26 @@
    version: master
   components:
      typha:
-      version: master
+      version: release-v3.23
      calicoctl:
-      version: master
+      version: release-v3.23
      calico/node:
-      version: master
+      version: release-v3.23
      calico/cni:
-      version: master
+      version: release-v3.23
      calico/apiserver:
-      version: master
+      version: release-v3.23
      calico/kube-controllers:
-      version: master
+      version: release-v3.23
      calico/flannel-migration-controller:
-      version: master
+      version: release-v3.23
      networking-calico:
-      version: master
+      version: release-v3.23
      flannel:
       version: v0.15.1
      calico/dikastes:
-      version: master
+      version: release-v3.23
      flexvol:
-      version: master
+      version: release-v3.23
      csi-driver:
-      version: master
+      version: release-v3.23
