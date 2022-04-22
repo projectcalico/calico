@@ -46,16 +46,13 @@ const (
 )
 
 var _ = Describe("Node status FV tests", func() {
+	defer GinkgoRecover()
+
 	// Create Calico client with k8s backend.
 	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	Expect(err).NotTo(HaveOccurred())
-
 	cfg.Spec = apiconfig.CalicoAPIConfigSpec{
 		DatastoreType: apiconfig.Kubernetes,
-		KubeConfig: apiconfig.KubeConfig{
-			K8sAPIEndpoint:           "http://127.0.0.1:8080",
-			K8sInsecureSkipTLSVerify: true,
-		},
 	}
 
 	c, err := client.New(*cfg)
