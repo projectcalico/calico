@@ -147,9 +147,6 @@ func main() {
 	}
 }
 
-// A list of Packages, as output by `go list -json all`
-type Packages []Package
-
 type Package struct {
 	// The package's name / directory.
 	Dir string `json:"Dir"`
