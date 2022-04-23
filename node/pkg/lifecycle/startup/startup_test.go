@@ -376,6 +376,10 @@ var _ = Describe("FV tests against a real etcd", func() {
 			"192.168.0.0/16", randomULAPool, "Off", "Off", "CrossSubnet", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV6POOL_VXLAN set CrossSubnet", []EnvItem{{"CALICO_IPV6POOL_VXLAN", "CrossSubnet"}},
 			"192.168.0.0/16", randomULAPool, "Off", "Off", "CrossSubnet", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN and CALICO_IPV6POOL_VXLAN set CrossSubnet", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "CrossSubnet"}, {"CALICO_IPV6POOL_VXLAN", "CrossSubnet"}},
+			"192.168.0.0/16", randomULAPool, "Off", "CrossSubnet", "CrossSubnet", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set CrossSubnet and CALICO_IPV6POOL_VXLAN set Always", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "CrossSubnet"}, {"CALICO_IPV6POOL_VXLAN", "Always"}},
+			"192.168.0.0/16", randomULAPool, "Off", "CrossSubnet", "Always", true, false, 26, 122, "all()", "all()"),
 	)
 
 	It("should properly clear node IPs", func() {
