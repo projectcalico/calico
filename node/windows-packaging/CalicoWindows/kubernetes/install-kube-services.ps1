@@ -99,7 +99,6 @@ if (($service -ne "") -and ($service -notin "kubelet", "kube-proxy"))
     Exit
 }
 
-Write-Host the param is $service
 if ($service -eq "")
 {
     Install-KubeletService

@@ -14,22 +14,22 @@
 
 Param(
     [string]$NodeIp="",
-    [string]$InterfaceName="Ethernet"
+    [string]$InterfaceName="vEthernet (Ethernet*"
 )
 
 $baseDir = "$PSScriptRoot\.."
 . $baseDir\config.ps1
-ipmo $baseDir\libs\calico\calico.psm1
+ipmo $baseDir\libs\calico\calico.psm1 -Force
 
 Write-Host "Running kubelet service."
 Write-Host "Using configured nodename: $env:NODENAME DNS: $env:DNS_NAME_SERVERS"
 
-Write-Host "Auto-detecting node IP, looking for interface named 'vEthernet ($InterfaceName...'."
-$na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*" | ? Status -EQ Up
+Write-Host "Auto-detecting node IP, looking for interface named like '$InterfaceName' ..."
+$na = Get-NetAdapter | ? Name -Like "$InterfaceName" | ? Status -EQ Up
 while ($na -EQ $null) {
-    Write-Host "Waiting for interface named 'vEthernet ($InterfaceName...'."
+    Write-Host "Waiting for interface named like '$InterfaceName' ..."
     Start-Sleep 3
-    $na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*" | ? Status -EQ Up
+    $na = Get-NetAdapter | ? Name -Like "$InterfaceName" | ? Status -EQ Up
 }
 $NodeIp = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
 Write-Host "Detected node IP: $NodeIp."
