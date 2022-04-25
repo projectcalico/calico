@@ -207,6 +207,8 @@ type Config struct {
 	EtcdCertFile  string   `config:"file(must-exist);;local"`
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
+	EtcdUsername  string   `config:"etcd_username;;local,non-zero"`
+	EtcdPassword  string   `config:"etcd_password;;local,non-zero"`
 
 	TyphaAddr           string        `config:"authority;;local"`
 	TyphaK8sServiceName string        `config:"string;;local"`
@@ -647,6 +649,18 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	if config.setByConfigFileOrEnvironment("EtcdCaFile") {
 		log.Infof("Overriding EtcdCaFile from felix config to %s", config.EtcdCaFile)
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
+	}
+	if config.setByConfigFileOrEnvironment("EtcdUsername") {
+		log.Infof("Overriding EtcdUsername from felix config to %s", config.EtcdUsername)
+		cfg.Spec.EtcdUsername = config.EtcdUsername
+	}
+	if config.setByConfigFileOrEnvironment("EtcdUsername") {
+		log.Infof("Overriding EtcdUsername from felix config to %s", config.EtcdUsername)
+		cfg.Spec.EtcdUsername = config.EtcdUsername
+	}
+	if config.setByConfigFileOrEnvironment("EtcdPassword") {
+		log.Infof("Overriding EtcdUsername from felix config to %s", config.EtcdPassword)
+		cfg.Spec.EtcdPassword = config.EtcdUsername
 	}
 
 	if !(config.Encapsulation.IPIPEnabled || config.Encapsulation.VXLANEnabled || config.BPFEnabled) {
