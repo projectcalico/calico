@@ -21,6 +21,8 @@
       version: release-v3.23
      calico/flannel-migration-controller:
       version: release-v3.23
+     calico/windows:
+      version: release-v3.23
      networking-calico:
       version: release-v3.23
      flannel:
