@@ -17,8 +17,7 @@ package converters_test
 import (
 	cnet "net"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -32,7 +31,29 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
 )
 
-var wepTable = []TableEntry{
+var _ = DescribeTable("v1->v3 workload endpoint conversion tests",
+	func(v1API unversioned.Resource, v1KVP *model.KVPair, v3API libapiv3.WorkloadEndpoint) {
+		w := converters.WorkloadEndpoint{}
+
+		// Test and assert v1 API to v1 backend logic.
+		v1KVPResult, err := w.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Metadata to Key.
+		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).Hostname).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).Hostname))
+		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).OrchestratorID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).OrchestratorID))
+		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).WorkloadID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).WorkloadID))
+		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).EndpointID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).EndpointID))
+		// Spec to Value.
+		Expect(*v1KVPResult.Value.(*model.WorkloadEndpoint)).To(Equal(*v1KVP.Value.(*model.WorkloadEndpoint)))
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := w.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).ObjectMeta.Name).To(Equal(v3API.ObjectMeta.Name))
+		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(v3API.ObjectMeta.Labels))
+		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).Spec).To(Equal(v3API.Spec))
+	},
 	Entry("fully populated WEP",
 		&apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
@@ -310,32 +331,6 @@ var wepTable = []TableEntry{
 			},
 		},
 	),
-}
-
-var _ = DescribeTable("v1->v3 workload endpoint conversion tests",
-	func(v1API unversioned.Resource, v1KVP *model.KVPair, v3API libapiv3.WorkloadEndpoint) {
-		w := converters.WorkloadEndpoint{}
-
-		// Test and assert v1 API to v1 backend logic.
-		v1KVPResult, err := w.APIV1ToBackendV1(v1API)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Metadata to Key.
-		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).Hostname).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).Hostname))
-		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).OrchestratorID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).OrchestratorID))
-		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).WorkloadID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).WorkloadID))
-		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).EndpointID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).EndpointID))
-		// Spec to Value.
-		Expect(*v1KVPResult.Value.(*model.WorkloadEndpoint)).To(Equal(*v1KVP.Value.(*model.WorkloadEndpoint)))
-
-		// Test and assert v1 backend to v3 API logic.
-		v3APIResult, err := w.BackendV1ToAPIV3(v1KVP)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).ObjectMeta.Name).To(Equal(v3API.ObjectMeta.Name))
-		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(v3API.ObjectMeta.Labels))
-		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).Spec).To(Equal(v3API.Spec))
-	},
-	wepTable...,
 )
 
 var _ = Describe("v1->v3 workload endpoint conversion tests", func() {
