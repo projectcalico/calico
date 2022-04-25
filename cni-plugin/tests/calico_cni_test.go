@@ -15,7 +15,7 @@ import (
 
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
