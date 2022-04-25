@@ -25,19 +25,6 @@ func main() {
 	// Create a releaseBuilder to use.
 	r := builder.NewReleaseBuilder(&builder.RealCommandRunner{})
 
-	// Uncomment this to echo out commands that would be run, rather than running them!
-	//
-	// echoRunner := &echoRunner{
-	// 	responses: map[string]string{
-	// 		"git rev-parse --abbrev-ref HEAD":                  "release-v4.15",
-	// 		"git describe --tags --dirty --always --abbrev=12": "v4.16.0-0.dev-24850-ga7254d42ad39",
-	// 	},
-	// 	errors: map[string]error{
-	// 		"git describe --exact-match --tags HEAD": fmt.Errorf("Not on a tag"),
-	// 	},
-	// }
-	// r = builder.NewReleaseBuilder(&echoRunner)
-
 	if create {
 		configureLogging("release-build.log")
 		err := r.BuildRelease()
