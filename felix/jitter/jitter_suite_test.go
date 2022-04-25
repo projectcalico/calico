@@ -20,7 +20,6 @@ import (
 
 	"testing"
 
-
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
