@@ -46,7 +46,7 @@ var _ = Describe("Server", func() {
 			var output chan *proto.ToDataplane
 			syncDone := make(chan bool)
 
-			BeforeEach(func(done Done) {
+			BeforeEach(withTimeout("1s", func() {
 				output = make(chan *proto.ToDataplane)
 				stream = &testSyncStream{output: output}
 				go func() {
@@ -57,10 +57,9 @@ var _ = Describe("Server", func() {
 				jr := j.(policysync.JoinRequest)
 				Expect(jr.EndpointID.GetWorkloadId()).To(Equal(WorkloadID))
 				updates = jr.C
-				close(done)
-			})
+			}))
 
-			It("should stream messages", func(done Done) {
+			It("should stream messages", withTimeout("1s", func() {
 				msgs := []proto.ToDataplane{
 					{Payload: &proto.ToDataplane_WorkloadEndpointUpdate{}},
 					{Payload: &proto.ToDataplane_InSync{}},
@@ -70,27 +69,23 @@ var _ = Describe("Server", func() {
 					g := <-output
 					Expect(g).To(Equal(&msg))
 				}
-
-				close(done)
-			})
+			}))
 
 			Context("with unstreamed updates", func() {
-				BeforeEach(func(done Done) {
+				BeforeEach(withTimeout("1s", func() {
 					// Queue up 10 messages. This should not block because the updates channel should be buffered.
 					for i := 0; i < 10; i++ {
 						updates <- proto.ToDataplane{}
 					}
-					close(done)
-				})
+				}))
 
 				Context("after error on stream", func() {
-					BeforeEach(func(done Done) {
+					BeforeEach(withTimeout("1s", func() {
 						stream.sendErr = true
 						<-output
-						close(done)
-					})
+					}))
 
-					It("should drain updates channel, send leave request and end Sync", func(done Done) {
+					It("should drain updates channel, send leave request and end Sync", withTimeout("1s", func() {
 						for i := 0; i < 10; i++ {
 							updates <- proto.ToDataplane{}
 						}
@@ -99,8 +94,7 @@ var _ = Describe("Server", func() {
 						Expect(lr.EndpointID.GetWorkloadId()).To(Equal(WorkloadID))
 						close(updates)
 						<-syncDone
-						close(done)
-					})
+					}))
 
 				})
 
@@ -109,7 +103,7 @@ var _ = Describe("Server", func() {
 						close(updates)
 					})
 
-					It("send pending updates, leave request and end Sync", func(done Done) {
+					It("send pending updates, leave request and end Sync", withTimeout("1s", func() {
 						for i := 0; i < 10; i++ {
 							<-output
 						}
@@ -117,8 +111,7 @@ var _ = Describe("Server", func() {
 						lr := j.(policysync.LeaveRequest)
 						Expect(lr.EndpointID.GetWorkloadId()).To(Equal(WorkloadID))
 						<-syncDone
-						close(done)
-					})
+					}))
 				})
 			})
 		})

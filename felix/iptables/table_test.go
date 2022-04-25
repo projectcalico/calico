@@ -1375,19 +1375,19 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 				Expect(func() {
 					table.Apply()
 				}).To(Panic())
-			}, 1)
+			})
 			It("it should do exponential backoff", func() {
 				Expect(func() {
 					table.Apply()
 				}).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(Equal((100 + 200 + 400) * time.Millisecond))
-			}, 1)
+			})
 			It("it should retry 3 times", func() {
 				Expect(func() {
 					table.Apply()
 				}).To(Panic())
 				Expect(dataplane.Cmds).To(HaveLen(5))
-			}, 1)
+			})
 		})
 
 		It("shouldn't touch already-correct chain", func() {
@@ -1430,14 +1430,14 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 				Expect(func() {
 					table.Apply()
 				}).To(Panic())
-			}, 1)
+			})
 			It("it should do exponential backoff", func() {
 				Expect(func() {
 					table.Apply()
 				}).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(Equal(
 					(1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 512) * time.Millisecond))
-			}, 1)
+			})
 		})
 
 		Describe("with a simulated clobber of chains before first write", func() {

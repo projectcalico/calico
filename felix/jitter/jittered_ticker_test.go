@@ -39,7 +39,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		now := time.Now()
 		duration := now.Sub(startTime)
 		Expect(duration).To(BeNumerically(">=", 20*time.Millisecond))
-	}, 1)
+	})
 	It("should produce longer and shorter ticks", func() {
 		lastTime := startTime
 		foundLT5 := false
@@ -61,7 +61,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		}
 		Expect(foundLT5).To(BeTrue())
 		Expect(foundGT5).To(BeTrue())
-	}, 1)
+	})
 })
 
 var _ = Describe("Delay calculation", func() {
@@ -98,7 +98,7 @@ var _ = Describe("Delay calculation", func() {
 		}
 		Expect(foundLT5).To(BeTrue())
 		Expect(foundGT5).To(BeTrue())
-	}, 1)
+	})
 })
 
 var _ = Describe("Ticker constructor", func() {
