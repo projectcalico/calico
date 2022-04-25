@@ -526,7 +526,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			return fmt.Errorf("policy not applied")
 		}
 
-		It("between pod to pod should be encrypted using wg tunnel with egress policies applied", func() {
+		It("between pod to pod should be encrypted using wg tunnel with egress policies applied", FlakeAttempts(3), func() {
 			policy := api.NewGlobalNetworkPolicy()
 
 			policy.Name = "f01-egress-deny"
