@@ -100,7 +100,7 @@
    curl {{ "/manifests/windows-kube-proxy.yaml" | absolute_url }} -o windows-kube-proxy.yaml
    ```
    - Edit the downloaded manifest
-       - Replace `VERSION` with your Windows nodes' server version.
+       - Replace `VERSION` with your Windows nodes' server version. E.g. `1809`.
        - Update the `K8S_VERSION` env variable value with your Kubernetes cluster version.
 
    - Apply the manifest

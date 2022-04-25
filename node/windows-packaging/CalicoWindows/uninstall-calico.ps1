@@ -26,7 +26,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # If running in a hostprocess container, remove Calico CNI if installed.
 # Skip the rest of the logic that applies to manual installations only.
-if ($env:CONTAINER_SANDBOX_MOUNT_POINT) -and $env:CALICO_NETWORKING_BACKEND -NE "none")
+if (($env:CONTAINER_SANDBOX_MOUNT_POINT) -and ($env:CALICO_NETWORKING_BACKEND -NE "none"))
 {
     if ($env:CALICO_NETWORKING_BACKEND -NE "none") {
         Remove-CNIPlugin
