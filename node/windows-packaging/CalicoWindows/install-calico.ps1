@@ -32,6 +32,14 @@ Unblock-File $PSScriptRoot\*.ps1
 
 Test-CalicoConfiguration
 
+if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+   if ($env:CALICO_NETWORKING_BACKEND -NE "none") {
+      Install-CNIPlugin
+   }
+   Write-Host "CONTAINER_SANDBOX_MOUNT_POINT is set, skipping service installation"
+   exit $lastexitcode
+}
+
 Install-NodeService
 Install-FelixService
 if ($env:CALICO_NETWORKING_BACKEND -EQ "vxlan")
@@ -53,22 +61,3 @@ else
     Write-Host "Using third party CNI plugin."
 }
 
-Write-Host "Starting Calico..."
-Write-Host "This may take several seconds if the vSwitch needs to be created."
-
-Start-Service CalicoNode
-Wait-ForCalicoInit
-Start-Service CalicoFelix
-
-if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
-{
-    Start-Service CalicoConfd
-}
-
-while ((Get-Service | where Name -Like 'Calico*' | where Status -NE Running) -NE $null) {
-    Write-Host "Waiting for the Calico services to be running..."
-    Start-Sleep 1
-}
-
-Write-Host "Done, the Calico services are running:"
-Get-Service | where Name -Like 'Calico*'
