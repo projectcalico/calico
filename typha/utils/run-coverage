@@ -4,7 +4,7 @@ set -e
 set -x
 
 echo "Removing old coverprofiles..."
-find . -name "*.coverprofile" -type f -delete
+find . -name "*_coverprofile.out" -type f -delete
 
 echo "Calculating packages to cover..."
 go_dirs=$(find -type f -name '*_test.go' | \
@@ -35,6 +35,7 @@ test ! -z "$test_pkgs"
 echo "Packages with tests: $test_pkgs"
 
 ginkgo2 -cover -covermode=count -coverpkg=${ginkgo_test_dirs} -keep-going \
+	--keep-separate-coverprofiles \
 	--junit-report suite.xml \
 	--keep-separate-reports --output-dir=./report -r \
 	--skip-package=${old_test_dirs}
@@ -45,7 +46,7 @@ ginkgo -cover -covermode=count -coverpkg=${old_test_dirs} -keepGoing -r \
 	--skipPackage ${ginkgo_test_dirs}
 
 
-gocovmerge $(find . -name '*coverprofile*') > combined.coverprofile
+gocovmerge $(find . -name '*_coverprofile.out') > combined.coverprofile
 
 # Print the coverage.  We use sed to remove the verbose prefix and trim down
 # the whitespace.
