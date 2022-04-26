@@ -17,10 +17,9 @@ package clientv3
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/onsi/ginkgo/reporters"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -28,6 +27,5 @@ import (
 func TestClient(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/client_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "client Suite", []Reporter{junitReporter})
+	RunSpecs(t, "client Suite")
 }
