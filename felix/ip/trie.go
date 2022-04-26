@@ -16,9 +16,9 @@ package ip
 
 import (
 	"encoding/binary"
-	"fmt"
-	"log"
 	"math/bits"
+
+	"github.com/sirupsen/logrus"
 )
 
 type CIDRTrie struct {
@@ -36,7 +36,7 @@ func (t *CIDRTrie) Delete(cidr CIDR) {
 		// Trie is empty.
 		return
 	}
-	if pfx, err := CommonPrefix(t.root.cidr, cidr); err != nil || pfx != t.root.cidr {
+	if pfx := CommonPrefix(t.root.cidr, cidr); pfx != t.root.cidr {
 		// Trie does not contain prefix.
 		return
 	}
@@ -45,8 +45,7 @@ func (t *CIDRTrie) Delete(cidr CIDR) {
 
 func deleteInternal(n *CIDRNode, cidr CIDR) *CIDRNode {
 	if n.cidr.Version() != cidr.Version() {
-		// IP version mismatch
-		return n
+		logrus.WithField("n.cidr", n.cidr).WithField("cidr", cidr).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -141,6 +140,8 @@ func (t *CIDRTrie) LPM(cidr CIDR) (CIDR, interface{}) {
 			return V4CIDR{}, nil
 		case 6:
 			return V6CIDR{}, nil
+		default:
+			logrus.WithField("cidr", cidr).Panic("Invalid CIDR IP version")
 		}
 	}
 	return match.cidr, match.data
@@ -152,8 +153,7 @@ func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 	}
 
 	if n.cidr.Version() != cidr.Version() {
-		// IP version mismatch
-		return nil
+		logrus.WithField("n.cidr", n.cidr).WithField("cidr", cidr).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -186,8 +186,7 @@ func (n *CIDRNode) get(cidr CIDR) interface{} {
 	}
 
 	if n.cidr.Version() != cidr.Version() {
-		// IP version mismatch
-		return nil
+		logrus.WithField("n.cidr", n.cidr).WithField("cidr", cidr).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -211,10 +210,7 @@ func (n *CIDRNode) get(cidr CIDR) interface{} {
 }
 
 func (t *CIDRTrie) CoveredBy(cidr CIDR) bool {
-	pfx, err := CommonPrefix(t.root.cidr, cidr)
-	if err != nil {
-		return false
-	}
+	pfx := CommonPrefix(t.root.cidr, cidr)
 	return pfx == cidr
 }
 
@@ -227,10 +223,7 @@ func (n *CIDRNode) covers(cidr CIDR) bool {
 		return false
 	}
 
-	commonPfx, err := CommonPrefix(n.cidr, cidr)
-	if err != nil {
-		return false
-	}
+	commonPfx := CommonPrefix(n.cidr, cidr)
 	if commonPfx != n.cidr {
 		// Not in trie.
 		return false
@@ -256,10 +249,7 @@ func (n *CIDRNode) intersects(cidr CIDR) bool {
 		return false
 	}
 
-	common, err := CommonPrefix(n.cidr, cidr)
-	if err != nil {
-		return false
-	}
+	common := CommonPrefix(n.cidr, cidr)
 
 	if common == cidr {
 		// This node's CIDR is contained within the target CIDR so we must have
@@ -322,7 +312,7 @@ func (t *CIDRTrie) Visit(f func(cidr CIDR, data interface{}) bool) {
 
 func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {
 	if value == nil {
-		log.Panic("Can't store nil in a CIDRTrie")
+		logrus.Panic("Can't store nil in a CIDRTrie")
 	}
 	parentsPtr := &t.root
 	thisNode := t.root
@@ -349,10 +339,7 @@ func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {
 		// - The new CIDR contains this node, in which case we need to insert a new node as the parent of this one.
 		// - The two CIDRs are disjoint, in which case we need to insert a new intermediate node as the parent of
 		//   thisNode and the new CIDR.
-		commonPrefix, err := CommonPrefix(cidr, thisNode.cidr)
-		if err != nil {
-			return
-		}
+		commonPrefix := CommonPrefix(cidr, thisNode.cidr)
 
 		if commonPrefix.Prefix() == thisNode.cidr.Prefix() {
 			// Common is this node's CIDR so this node is parent of the new CIDR. Figure out which child to recurse on.
@@ -389,19 +376,22 @@ func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {
 	}
 }
 
-func CommonPrefix(a, b CIDR) (CIDR, error) {
+func CommonPrefix(a, b CIDR) CIDR {
 	if a.Version() != b.Version() {
-		return nil, fmt.Errorf("Mismatched CIDR IP versions")
+		logrus.WithField("a", a).WithField("b", b).Panic("Mismatched CIDR IP versions")
 	}
 
+	var cidr CIDR
 	switch a.Version() {
 	case 4:
-		return V4CommonPrefix(a.(V4CIDR), b.(V4CIDR)), nil
+		cidr = V4CommonPrefix(a.(V4CIDR), b.(V4CIDR))
 	case 6:
-		return V6CommonPrefix(a.(V6CIDR), b.(V6CIDR)), nil
+		cidr = V6CommonPrefix(a.(V6CIDR), b.(V6CIDR))
 	default:
-		return nil, fmt.Errorf("Invalid CIDR IP version")
+		logrus.WithField("a", a).Panic("Invalid CIDR IP version")
 	}
+
+	return cidr
 }
 
 func V4CommonPrefix(a, b V4CIDR) V4CIDR {
