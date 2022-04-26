@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package calc
+package calc_test
 
 import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	. "github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
@@ -42,18 +43,18 @@ var _ = Describe("EncapsulationCalculator", func() {
 		DescribeTable("pool tests",
 			func(apiPoolsToAdd []model.KVPair, apiPoolsToRemove []string, modelPoolsToAdd []model.KVPair, modelPoolsToRemove []string, poolsToInit *model.KVPairList, expectedIPIP, expectedVXLAN bool) {
 				if poolsToInit != nil {
-					encapsulationCalculator.initPools(poolsToInit)
+					encapsulationCalculator.InitPools(poolsToInit)
 				}
 				for _, p := range apiPoolsToAdd {
-					err := encapsulationCalculator.handlePool(p)
+					err := encapsulationCalculator.HandlePool(p)
 					Expect(err).To(Not(HaveOccurred()))
 				}
 				for _, p := range modelPoolsToAdd {
-					err := encapsulationCalculator.handlePool(p)
+					err := encapsulationCalculator.HandlePool(p)
 					Expect(err).To(Not(HaveOccurred()))
 				}
 				for _, p := range apiPoolsToRemove {
-					encapsulationCalculator.removePool(p)
+					encapsulationCalculator.RemovePool(p)
 				}
 				for _, p := range modelPoolsToRemove {
 					_, cidr, err := net.ParseCIDR(p)
@@ -64,7 +65,7 @@ var _ = Describe("EncapsulationCalculator", func() {
 						},
 						Value: nil,
 					}
-					err = encapsulationCalculator.handlePool(p)
+					err = encapsulationCalculator.HandlePool(p)
 					Expect(err).To(Not(HaveOccurred()))
 				}
 				Expect(encapsulationCalculator.IPIPEnabled()).To(Equal(expectedIPIP))
@@ -179,11 +180,11 @@ var _ = Describe("EncapsulationCalculator", func() {
 				conf.IpInIpEnabled = felixIPIP
 				conf.VXLANEnabled = felixVXLAN
 				for _, p := range apiPoolsToAdd {
-					err := encapsulationCalculator.handlePool(p)
+					err := encapsulationCalculator.HandlePool(p)
 					Expect(err).To(Not(HaveOccurred()))
 				}
 				for _, p := range modelPoolsToAdd {
-					err := encapsulationCalculator.handlePool(p)
+					err := encapsulationCalculator.HandlePool(p)
 					Expect(err).To(Not(HaveOccurred()))
 				}
 				Expect(encapsulationCalculator.IPIPEnabled()).To(Equal(expectedIPIP))
@@ -221,15 +222,15 @@ var _ = Describe("EncapsulationResolver", func() {
 	Describe("OnStatusUpdate", func() {
 		It("should not touch inSync to true when receiving other status updates", func() {
 			encapsulationResolver.OnStatusUpdate(api.WaitForDatastore)
-			Expect(encapsulationResolver.inSync).To(BeFalse())
+			Expect(encapsulationResolver.InSync()).To(BeFalse())
 
 			encapsulationResolver.OnStatusUpdate(api.ResyncInProgress)
-			Expect(encapsulationResolver.inSync).To(BeFalse())
+			Expect(encapsulationResolver.InSync()).To(BeFalse())
 		})
 
 		It("should update inSync to true when receiving InSync status update", func() {
 			encapsulationResolver.OnStatusUpdate(api.InSync)
-			Expect(encapsulationResolver.inSync).To(BeTrue())
+			Expect(encapsulationResolver.InSync()).To(BeTrue())
 		})
 	})
 
