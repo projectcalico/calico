@@ -266,7 +266,7 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) build-bpf
 	@echo Running Go UTs.
-	$(DOCKER_GO_BUILD) ./utils/run-coverage -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ./utils/run-coverage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests

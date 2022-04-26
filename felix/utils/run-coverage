@@ -21,12 +21,25 @@ echo "Removing old coverprofiles..."
 find . -name "*.coverprofile" -type f -delete
 
 echo "Calculating packages to cover..."
-go_dirs=$(find -type f -name '*.go' | \
+go_dirs=$(find -type f -name '*_test.go' | \
 	      grep -vE '/vendor/|\./proto/|.glide|/k8sfv/|/fv/' | \
 	      xargs -n 1 dirname | \
-	      sort | uniq | \
+	      sort -u )
+
+ginkgo_dirs=$(find -type f -name '*suite_test.go' | \
+	      grep -vE '/vendor/|\./proto/|.glide|/k8sfv/|/fv/' | \
+	      xargs -n 1 dirname | \
+	      sort -u)
+
+old_test_dirs=$(comm -3 <(cat <<< $go_dirs) <(cat <<< $ginkgo_dirs) | \
 	      tr '\n' ',' | \
 	      sed 's/,$//' )
+
+ginkgo_test_dirs=$(cat <(cat <<< $ginkgo_dirs) | tr '\n' ',' | sed 's/,$//' )
+
+echo "Old tests: $old_test_dirs"
+echo "Ginkgo tests: $ginkgo_test_dirs"
+
 echo "Covering: $go_dirs"
 test ! -z "$go_dirs"
 
@@ -35,9 +48,18 @@ test_pkgs=$(go list -f '{{ if .TestGoFiles | or .XTestGoFiles }}{{ .ImportPath }
 test ! -z "$test_pkgs"
 echo "Packages with tests: $test_pkgs"
 
-ginkgo2 -cover -covermode=count -coverpkg=${go_dirs} -keep-going --junit-report suite.xml \
-	--keep-separate-reports --output-dir=./report -r "$@"
-gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
+ginkgo2 -cover -covermode=count -coverpkg=${ginkgo_test_dirs} -keep-going \
+	--junit-report suite.xml \
+	--keep-separate-reports --output-dir=./report -r \
+	--skip-package=${old_test_dirs},${@}
+
+# we use old ginkgo to run coverage on slected test only, easier to do than with
+# go test.
+ginkgo -cover -covermode=count -coverpkg=${old_test_dirs} -keepGoing -r \
+	--skipPackage ${ginkgo_test_dirs},"$@"
+
+
+gocovmerge $(find . -name '*coverprofile*') > combined.coverprofile
 
 # Print the coverage.  We use sed to remove the verbose prefix and trim down
 # the whitespace.
