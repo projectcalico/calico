@@ -360,10 +360,10 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 			}
 		} else {
 			ipv4, caliNodeCIDR := cresources.FindNodeAddress(node, apiv3.InternalIP, 4)
-			ipv6, caliNodeCIDRV6 := cresources.FindNodeAddress(node, apiv3.InternalIP, 6)
 			if ipv4 == nil {
 				ipv4, caliNodeCIDR = cresources.FindNodeAddress(node, apiv3.ExternalIP, 4)
 			}
+			ipv6, caliNodeCIDRV6 := cresources.FindNodeAddress(node, apiv3.InternalIP, 6)
 			if ipv6 == nil {
 				ipv6, caliNodeCIDRV6 = cresources.FindNodeAddress(node, apiv3.ExternalIP, 6)
 			}
@@ -451,19 +451,19 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 
 	if nodeName == c.myNodeName {
 		// Check if our CIDR has changed and if so recalculate the "same subnet" tracking.
-		var myNewV4CIDR ip.V4CIDR
-		var myNewV4CIDRKnown bool
-		var myNewV6CIDR ip.V6CIDR
-		var myNewV6CIDRKnown bool
+		var (
+			myNewNodeInfoKnown bool
+			myNewV4CIDR        ip.V4CIDR
+			myNewV6CIDR        ip.V6CIDR
+		)
 		if newNodeInfo != nil {
+			myNewNodeInfoKnown = true
 			myNewV4CIDR = newNodeInfo.V4CIDR
-			myNewV4CIDRKnown = true
 			myNewV6CIDR = newNodeInfo.V6CIDR
-			myNewV6CIDRKnown = true
 		}
 		if oldNodeInfo.V4CIDR != myNewV4CIDR {
 			// This node's CIDR has changed; some routes may now have an incorrect value for same-subnet.
-			c.visitAllRoutes(func(r nodenameRoute) {
+			c.visitAllRoutes(c.trie.v4T, func(r nodenameRoute) {
 				if r.nodeName == c.myNodeName {
 					return // Ignore self.
 				}
@@ -473,16 +473,16 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 				}
 				otherNodesIPv4 := otherNodeInfo.V4Addr
 				wasSameSubnet := nodeExisted && oldNodeInfo.V4CIDR.ContainsV4(otherNodesIPv4)
-				nowSameSubnet := myNewV4CIDRKnown && myNewV4CIDR.ContainsV4(otherNodesIPv4)
+				nowSameSubnet := myNewNodeInfoKnown && myNewV4CIDR.ContainsV4(otherNodesIPv4)
 				if wasSameSubnet != nowSameSubnet {
 					logrus.WithField("route", r).Debug("Update to our subnet invalidated route")
 					c.trie.MarkCIDRDirty(r.dst)
 				}
-			}, 4)
+			})
 		}
 		if oldNodeInfo.V6CIDR != myNewV6CIDR {
 			// This node's CIDR has changed; some routes may now have an incorrect value for same-subnet.
-			c.visitAllRoutes(func(r nodenameRoute) {
+			c.visitAllRoutes(c.trie.v4T, func(r nodenameRoute) {
 				if r.nodeName == c.myNodeName {
 					return // Ignore self.
 				}
@@ -492,12 +492,12 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 				}
 				otherNodesIPv6 := otherNodeInfo.V6Addr
 				wasSameSubnet := nodeExisted && oldNodeInfo.V6CIDR.ContainsV6(otherNodesIPv6)
-				nowSameSubnet := myNewV6CIDRKnown && myNewV6CIDR.ContainsV6(otherNodesIPv6)
+				nowSameSubnet := myNewNodeInfoKnown && myNewV6CIDR.ContainsV6(otherNodesIPv6)
 				if wasSameSubnet != nowSameSubnet {
 					logrus.WithField("route", r).Debug("Update to our subnet invalidated route")
 					c.trie.MarkCIDRDirty(r.dst)
 				}
-			}, 6)
+			})
 		}
 	}
 
@@ -554,16 +554,7 @@ func (c *L3RouteResolver) markAllNodeRoutesDirty(nodeName string) {
 	})
 }
 
-func (c *L3RouteResolver) visitAllRoutes(v func(route nodenameRoute), ipVersion int) {
-	var trie *ip.CIDRTrie
-	switch ipVersion {
-	case 4:
-		trie = c.trie.v4T
-	case 6:
-		trie = c.trie.v6T
-	default:
-		logrus.WithField("ipVersion", ipVersion).Panic("Invalid IP version")
-	}
+func (c *L3RouteResolver) visitAllRoutes(trie *ip.CIDRTrie, v func(route nodenameRoute)) {
 	trie.Visit(func(cidr ip.CIDR, data interface{}) bool {
 		// Construct a nodenameRoute to pass to the visiting function.
 		ri := trie.Get(cidr).(RouteInfo)
@@ -669,17 +660,9 @@ func (c *L3RouteResolver) flush() {
 	c.trie.dirtyCIDRs.Iter(func(item interface{}) error {
 		logCxt := logrus.WithField("cidr", item)
 		logCxt.Debug("Flushing dirty route")
-		var trie *ip.CIDRTrie
-		var ipVersion int
-		switch item.(type) {
-		case ip.V4CIDR:
-			ipVersion = 4
-			trie = c.trie.v4T
-		case ip.V6CIDR:
-			ipVersion = 6
-			trie = c.trie.v6T
-		}
+
 		cidr := item.(ip.CIDR)
+		trie := c.trie.trieForCIDR(cidr)
 
 		// We know the CIDR may be dirty, look up the path through the trie to the CIDR.  This will
 		// give us the information about the enclosing CIDRs.  For example, if we have:
@@ -797,7 +780,7 @@ func (c *L3RouteResolver) flush() {
 		if rt.DstNodeName != "" {
 			dstNodeInfo, exists := c.nodeNameToNodeInfo[rt.DstNodeName]
 			if exists {
-				switch ipVersion {
+				switch cidr.Version() {
 				case 4:
 					if dstNodeInfo.V4Addr != emptyV4Addr {
 						rt.DstNodeIp = dstNodeInfo.V4Addr.String()
@@ -806,6 +789,8 @@ func (c *L3RouteResolver) flush() {
 					if dstNodeInfo.V6Addr != emptyV6Addr {
 						rt.DstNodeIp = dstNodeInfo.V6Addr.String()
 					}
+				default:
+					logrus.WithField("cidr", cidr).Panic("Invalid IP version")
 				}
 			}
 		}
@@ -913,15 +898,7 @@ func (r *RouteTrie) UpdatePool(cidr ip.CIDR, poolType proto.IPPoolType, natOutgo
 
 func (r *RouteTrie) markChildrenDirty(cidr ip.CIDR) {
 	// TODO: avoid full scan to mark children dirty
-	var trie *ip.CIDRTrie
-	switch cidr.(type) {
-	case ip.V4CIDR:
-		trie = r.v4T
-	case ip.V6CIDR:
-		trie = r.v6T
-	default:
-		logrus.WithField("cidr", cidr).Panic("Invalid CIDR type")
-	}
+	trie := r.trieForCIDR(cidr)
 	trie.Visit(func(c ip.CIDR, data interface{}) bool {
 		if cidr.Contains(c.Addr()) {
 			r.MarkCIDRDirty(c)
@@ -1039,15 +1016,8 @@ func (r RouteTrie) updateCIDR(cidr ip.CIDR, updateFn func(info *RouteInfo)) bool
 		return false
 	}
 
-	var trie *ip.CIDRTrie
-	switch cidr.(type) {
-	case ip.V4CIDR:
-		trie = r.v4T
-	case ip.V6CIDR:
-		trie = r.v6T
-	default:
-		logrus.WithField("cidr", cidr).Panic("Invalid CIDR type")
-	}
+	trie := r.trieForCIDR(cidr)
+
 	// Get the RouteInfo for the given CIDR and take a copy so we can compare.
 	ri := r.Get(cidr)
 	riCopy := ri.Copy()
@@ -1076,20 +1046,27 @@ func (r RouteTrie) updateCIDR(cidr ip.CIDR, updateFn func(info *RouteInfo)) bool
 }
 
 func (r RouteTrie) Get(cidr ip.CIDR) RouteInfo {
-	var ri interface{}
-
-	switch cidr.(type) {
-	case ip.V4CIDR:
-		ri = r.v4T.Get(cidr)
-	case ip.V6CIDR:
-		ri = r.v6T.Get(cidr)
-	}
+	trie := r.trieForCIDR(cidr)
+	ri := trie.Get(cidr)
 
 	if ri == nil {
 		return RouteInfo{}
 	}
 
 	return ri.(RouteInfo)
+}
+
+func (r RouteTrie) trieForCIDR(cidr ip.CIDR) *ip.CIDRTrie {
+	var trie *ip.CIDRTrie
+	switch cidr.(type) {
+	case ip.V4CIDR:
+		trie = r.v4T
+	case ip.V6CIDR:
+		trie = r.v6T
+	default:
+		logrus.WithField("cidr", cidr).Panic("Invalid CIDR type")
+	}
+	return trie
 }
 
 type RouteInfo struct {

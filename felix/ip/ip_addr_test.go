@@ -74,3 +74,36 @@ var _ = DescribeTable("CIDR",
 		16,
 	),
 )
+
+var _ = DescribeTable("NthBit",
+	func(inputAddr string, n uint, expected int) {
+		addr := FromString(inputAddr)
+		Expect(addr.NthBit(n)).To(Equal(expected))
+	},
+	Entry("IPv4 32nd bit", "10.10.10.1", uint(32), 1),
+	Entry("IPv4 31st bit", "10.10.10.1", uint(31), 0),
+	Entry("IPv4 32nd bit 2", "192.168.0.2", uint(32), 0),
+	Entry("IPv4 31st bit 2", "192.168.0.2", uint(31), 1),
+	Entry("IPv4 1st bit", "192.168.0.2", uint(1), 1),
+	Entry("IPv6 128th bit", "fc00:fe11::1", uint(128), 1),
+	Entry("IPv6 127th bit", "fc00:fe11::1", uint(127), 0),
+	Entry("IPv6 128th bit 2", "fc00:fe11::2", uint(128), 0),
+	Entry("IPv6 127th bit 2", "fc00:fe11::2", uint(127), 1),
+	Entry("IPv6 1st bit", "fc00:fe11::2", uint(1), 1),
+)
+
+var _ = DescribeTable("Contains",
+	func(inputCIDR string, inputAddr string, expected bool) {
+		cidr := MustParseCIDROrIP(inputCIDR)
+		addr := FromString(inputAddr)
+		Expect(cidr.Contains(addr)).To(Equal(expected))
+	},
+	Entry("IPv4 /32 true", "10.10.10.1/32", "10.10.10.1", true),
+	Entry("IPv4 /32 false", "10.10.10.1/32", "10.10.10.2", false),
+	Entry("IPv4 /24 true", "10.10.10.0/24", "10.10.10.3", true),
+	Entry("IPv4 /24 false", "10.10.10.0/24", "10.10.11.3", false),
+	Entry("IPv6 /128 true", "fc00:fe11::1/128", "fc00:fe11::1", true),
+	Entry("IPv6 /128 false", "fc00:fe11::1/128", "fc00:fe11::2", false),
+	Entry("IPv6 /112 true", "fc00:fe11::/112", "fc00:fe11::3", true),
+	Entry("IPv6 /112 false", "fc00:fe11::/112", "fc00:fe12::3", false),
+)
