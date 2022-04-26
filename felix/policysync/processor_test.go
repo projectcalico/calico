@@ -40,7 +40,7 @@ const ProfileName = "testpro"
 const TierName = "testtier"
 const PolicyName = "testpolicy"
 
-func withTimeout(timeout string, fn func()) func() {
+func withTimeout(timeout interface{}, fn func()) func() {
 	return func() {
 		done := make(chan struct{})
 
@@ -49,7 +49,7 @@ func withTimeout(timeout string, fn func()) func() {
 			close(done)
 		}()
 
-		Eventually(done, "2s").Should(BeClosed())
+		EventuallyWithOffset(1, done, timeout).Should(BeClosed())
 	}
 }
 
