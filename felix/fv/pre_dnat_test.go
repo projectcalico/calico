@@ -22,7 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -87,7 +87,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 	AfterEach(func() {
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 			felix.Exec("iptables-save", "-c")
 			felix.Exec("ip", "r")
