@@ -25,8 +25,7 @@ import (
 
 	"github.com/onsi/gomega/format"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -44,17 +43,16 @@ func init() {
 
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/fv_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "FV Suite", []Reporter{junitReporter})
+	RunSpecs(t, "FV Suite")
 }
 
 var _ = BeforeEach(func() {
-	_, _ = fmt.Fprintf(realStdout, "FV-TEST-START: %s\n", CurrentGinkgoTestDescription().FullTestText)
+	_, _ = fmt.Fprintf(realStdout, "FV-TEST-START: %s\n", CurrentSpecReport().FullText())
 })
 
 var _ = AfterEach(func() {
 	defer connectivity.UnactivatedCheckers.Clear()
-	if CurrentGinkgoTestDescription().Failed {
+	if CurrentSpecReport().Failed() {
 		// If the test has already failed, ignore any connectivity checker leak.
 		return
 	}

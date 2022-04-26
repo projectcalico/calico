@@ -266,7 +266,7 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) build-bpf
 	@echo Running Go UTs.
-	$(DOCKER_GO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ./utils/run-coverage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
@@ -476,12 +476,14 @@ release-build: .release-$(VERSION).created
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo2 -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS) \
+		--junit-report suite.xml --keep-separate-reports --output-dir=./report
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo2 watch -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS) \
+		--junit-report suite.xml --keep-separate-reports --output-dir=./report
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
@@ -562,6 +564,7 @@ docs/calc.pdf: docs/calc.dot
 .PHONY: update-tools
 update-tools:
 	go get -u github.com/onsi/ginkgo/ginkgo
+	go get github.com/onsi/ginkgo/v2
 
 # Override the default golangci-lint target from the library makefile with a version that uses the right CGO
 # argument for Felix.
