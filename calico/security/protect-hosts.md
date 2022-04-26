@@ -45,6 +45,9 @@ By default, {{site.prodname}} blocks all connections from a workload to its loca
 
 If a host endpoint is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
 
+> Auto host endpoints specify the `projectcalico-default-allow` profile so they will only deny traffic by default once a GlobalNetworkPolicy applies to the endpoint.
+{: .alert .alert-info}
+
 #### Other host protection
 
 In terms of design consistency in {{site.prodname}}, you may wonder about the following use cases.
