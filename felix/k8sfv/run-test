@@ -257,7 +257,7 @@ elif ${JUST_A_MINUTE}; then
     # than 1 minute - so this allows a buffer of 1 extra minute to
     # allow for executor slowness.
     docker exec ${prefix}-felix /bin/sh -c \
-       "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120" | tee $tmp
+       "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slow-spec-threshold 120" | tee $tmp
     # Fail if the docker command returned failure
     cmdStatus=${PIPESTATUS[0]}
     if [ $cmdStatus -ne 0 ]; then
