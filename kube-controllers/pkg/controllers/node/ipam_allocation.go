@@ -224,8 +224,9 @@ func (a *allocation) isPodIP() bool {
 func (a *allocation) isTunnelAddress() bool {
 	ipip := a.attrs[ipam.AttributeType] == ipam.AttributeTypeIPIP
 	vxlan := a.attrs[ipam.AttributeType] == ipam.AttributeTypeVXLAN
+	vxlanV6 := a.attrs[ipam.AttributeType] == ipam.AttributeTypeVXLANV6
 	wg := a.attrs[ipam.AttributeType] == ipam.AttributeTypeWireguard
-	return ipip || vxlan || wg
+	return ipip || vxlan || vxlanV6 || wg
 }
 
 func (a *allocation) isWindowsReserved() bool {
