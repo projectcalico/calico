@@ -81,7 +81,7 @@ FV_NUM_BATCHES?=1
 # were designed to be isolated; if you hit a failure, try running the tests sequentially
 # (with FV_NUM_BATCHES=1) to check that it's not a flake.
 FV_BATCHES_TO_RUN?=$(shell seq $(FV_NUM_BATCHES))
-FV_SLOW_SPEC_THRESH=90
+FV_SLOW_SPEC_THRESH=90s
 
 # Linker flags for building Felix.
 #
