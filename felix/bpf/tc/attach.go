@@ -60,6 +60,7 @@ type AttachPoint struct {
 	PSNATEnd             uint16
 	IPv6Enabled          bool
 	MapSizes             map[string]uint32
+	RPFStrictEnabled     bool
 }
 
 var tcLock sync.RWMutex
@@ -619,6 +620,9 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	var flags uint32
 	if ap.IPv6Enabled {
 		flags |= libbpf.GlobalsIPv6Enabled
+	}
+	if ap.RPFStrictEnabled {
+		flags |= libbpf.GlobalsRPFStrictEnabled
 	}
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,

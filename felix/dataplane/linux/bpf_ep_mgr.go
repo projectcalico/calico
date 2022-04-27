@@ -174,6 +174,9 @@ type bpfEndpointManager struct {
 
 	// IPv6 Support
 	ipv6Enabled bool
+
+	// RPF mode
+	rpfStrictModeEnabled string
 }
 
 type bpfAllowChainRenderer interface {
@@ -230,7 +233,8 @@ func newBPFEndpointManager(
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
-		ipv6Enabled: config.BPFIpv6Enabled,
+		ipv6Enabled:          config.BPFIpv6Enabled,
+		rpfStrictModeEnabled: config.BPFEnforceRPF,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -1009,6 +1013,10 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
+	ap.RPFStrictEnabled = false
+	if m.rpfStrictModeEnabled == "Strict" {
+		ap.RPFStrictEnabled = true
+	}
 
 	return ap
 }
