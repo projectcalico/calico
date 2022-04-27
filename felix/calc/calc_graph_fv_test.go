@@ -398,6 +398,90 @@ var baseTests = []StateList{
 		encapWithVXLANPool,
 		encapWithIPIPAndVXLANPool,
 	},
+
+	// IPv6 VXLAN tests.
+
+	{
+		// Start with a basic VXLAN scenario with one block.
+		vxlanV6WithBlock,
+
+		// Delete the block, should clean up the routes.
+		vxlanV6BlockDelete,
+
+		// Add it back again.
+		vxlanV6WithBlock,
+
+		// Delete the node IP, should clean up VTEP and routes.
+		vxlanV6NodeResIPDelete,
+
+		// Add it back again.
+		vxlanV6WithBlock,
+
+		// Delete tunnel IP, should clean up.
+		vxlanV6TunnelIPDelete,
+
+		// Add it back again.
+		vxlanV6WithBlock,
+
+		// Delete the node BGP, should clean up VTEP and routes.
+		vxlanV6NodeResBGPDelete,
+
+		// Add it back again.
+		vxlanV6WithBlock,
+
+		// Delete the node resource, should clean up VTEP and routes.
+		vxlanV6NodeResDelete,
+
+		// Add it back again.
+		vxlanV6WithBlock,
+
+		// Specify a VXLAN tunnel MAC
+		vxlanV6WithMAC,
+
+		// Remove the VXLAN tunnel MAC
+		vxlanV6WithBlock,
+	},
+
+	// IPv4+IPv6 (dual stack) VXLAN tests.
+	{
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6BlockV6Delete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6BlockV4Delete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6NodeResIPv4Delete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6NodeResIPv6Delete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6NodeResIPv4Delete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6NodeResBGPDelete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6NodeResDelete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6TunnelIPv4Delete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6TunnelIPv6Delete,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6WithMAC,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6WithV4MAC,
+		vxlanV4V6WithBlock,
+
+		vxlanV4V6WithV6MAC,
+		vxlanV4V6WithBlock,
+	},
 }
 
 var logOnce sync.Once
@@ -497,7 +581,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
 					// and the async graph.
-					validator := NewValidationFilter(asyncGraph)
+					validator := NewValidationFilter(asyncGraph, conf)
 					toValidator := NewSyncerCallbacksDecoupler()
 					// Start the validator in one thread.
 					go toValidator.SendTo(validator)
@@ -646,7 +730,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			return nil
 		})
 		statsCollector.RegisterWith(calcGraph)
-		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher)
+		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher, conf)
 		sentInSync = false
 		lastState = empty
 		state = empty

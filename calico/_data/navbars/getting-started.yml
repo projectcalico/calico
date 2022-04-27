@@ -130,6 +130,8 @@ section:
       path: /getting-started/kubernetes/vpp/getting-started
     - title: Enable IPsec encryption between nodes
       path: /getting-started/kubernetes/vpp/ipsec
+    - title: Details of VPP implementation & known-issues
+      path: /getting-started/kubernetes/vpp/specifics
 - title: OpenStack
   path: /getting-started/openstack/
   section:

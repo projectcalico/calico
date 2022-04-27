@@ -254,6 +254,7 @@ func TcSetGlobals(
 	vxlanPort uint16,
 	psNatStart uint16,
 	psNatLen uint16,
+	hostTunnelIP uint32,
 	flags uint32,
 ) error {
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
@@ -264,7 +265,9 @@ func TcSetGlobals(
 		C.ushort(vxlanPort),
 		C.ushort(psNatStart),
 		C.ushort(psNatLen),
-		C.uint(flags))
+		C.uint(hostTunnelIP),
+		C.uint(flags),
+	)
 
 	return err
 }

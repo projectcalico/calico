@@ -1576,6 +1576,14 @@ var vxlanBlockDelete = vxlanWithBlock.withKVUpdates(
 	// VXLAN block route removed but still keep the IP pool and host routes.
 	routeUpdateIPPoolVXLAN,
 	routeUpdateRemoteHost,
+).withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
 )
 
 var vxlanHostIPDelete = vxlanWithBlock.withKVUpdates(
@@ -1667,6 +1675,296 @@ var vxlanSlash32NoPool = empty.withKVUpdates(
 		Dst:         "10.0.0.0/32",
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIP.String(),
+	},
+)
+
+// Minimal IPv6 VXLAN set-up using Calico IPAM, all the data needed for a remote VTEP, a pool and a block.
+var vxlanV6WithBlock = empty.withKVUpdates(
+	KVPair{Key: v6IPPoolKey, Value: &v6IPPoolWithVXLAN},
+	KVPair{Key: remotev6IPAMBlockKey, Value: &remotev6IPAMBlock},
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+			IPv6Address: remoteHostIPv6.String() + "/96",
+		}}}},
+	KVPair{Key: remoteHostVXLANV6TunnelConfigKey, Value: remoteHostVXLANV6TunnelIP},
+).withName("VXLAN IPv6").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		MacV6:            "66:a0:68:c9:4c:79",
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
+)
+
+var vxlanV6BlockDelete = vxlanV6WithBlock.withKVUpdates(
+	KVPair{Key: remotev6IPAMBlockKey, Value: nil},
+).withName("VXLAN IPv6 block removed").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		MacV6:            "66:a0:68:c9:4c:79",
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+)
+
+var vxlanV6NodeResIPDelete = vxlanV6WithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{}}}},
+).withName("VXLAN IPv6 Node Resource IP removed").withVTEPs()
+
+var vxlanV6NodeResBGPDelete = vxlanV6WithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{BGP: nil}}},
+).withName("VXLAN IPv6 Node Resource BGP removed").withVTEPs()
+
+var vxlanV6NodeResDelete = vxlanV6WithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: nil},
+).withName("VXLAN IPv6 Node Resource removed").withVTEPs()
+
+var vxlanV6TunnelIPDelete = vxlanV6WithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANV6TunnelConfigKey, Value: nil},
+).withName("VXLAN IPv6 tunnel IP removed").withVTEPs()
+
+var vxlanV6WithMAC = vxlanV6WithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANV6TunnelMACConfigKey, Value: remoteHostVXLANV6TunnelMAC},
+).withName("VXLAN IPv6 with MAC").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		MacV6:            remoteHostVXLANV6TunnelMAC,
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+)
+
+// IPv4+IPv6 VXLAN (dual stack)
+var vxlanV4V6WithBlock = empty.withKVUpdates(
+	KVPair{Key: v6IPPoolKey, Value: &v6IPPoolWithVXLAN},
+	KVPair{Key: remotev6IPAMBlockKey, Value: &remotev6IPAMBlock},
+	KVPair{Key: remoteHostVXLANV6TunnelConfigKey, Value: remoteHostVXLANV6TunnelIP},
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
+	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+			IPv4Address: remoteHostIP.String() + "/24",
+			IPv6Address: remoteHostIPv6.String() + "/96",
+		}}}},
+).withName("VXLAN IPv4+IPv6").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		Mac:              "66:3e:ca:a4:db:65",
+		Ipv4Addr:         remoteHostVXLANTunnelIP,
+		ParentDeviceIp:   remoteHostIP.String(),
+		MacV6:            "66:a0:68:c9:4c:79",
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+).withExpectedEncapsulation(
+	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true},
+).withRoutes(vxlanWithBlockRoutes...)
+
+var vxlanV4V6BlockV6Delete = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remotev6IPAMBlockKey, Value: nil},
+).withName("VXLAN IPv4+IPv6 with IPv6 block removed").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		Mac:              "66:3e:ca:a4:db:65",
+		Ipv4Addr:         remoteHostVXLANTunnelIP,
+		ParentDeviceIp:   remoteHostIP.String(),
+		MacV6:            "66:a0:68:c9:4c:79",
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+)
+
+var vxlanV4V6BlockV4Delete = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteIPAMBlockKey, Value: nil},
+).withName("VXLAN IPv4+IPv6 with IPv4 block removed").withRoutes(
+	// VXLAN block route removed but still keep the IP pool and host routes.
+	routeUpdateIPPoolVXLAN,
+	routeUpdateRemoteHost,
+).withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		Mac:              "66:3e:ca:a4:db:65",
+		Ipv4Addr:         remoteHostVXLANTunnelIP,
+		ParentDeviceIp:   remoteHostIP.String(),
+		MacV6:            "66:a0:68:c9:4c:79",
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+)
+
+var vxlanV4V6NodeResIPv4Delete = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+			IPv6Address: remoteHostIPv6.String() + "/96",
+		}}}},
+).withName("VXLAN IPv4+IPv6 Node Resource IPv4 removed").withRoutes(
+	routeUpdateIPPoolVXLAN,
+	// Host removed but keep the route without the node IP.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.1.0/29",
+		DstNodeName: remoteHostname,
+		DstNodeIp:   "",
+		NatOutgoing: true,
+	},
+).withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		MacV6:            "66:a0:68:c9:4c:79",
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+)
+
+var vxlanV4V6NodeResIPv6Delete = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+			IPv4Address: remoteHostIP.String() + "/24",
+		}}}},
+).withName("VXLAN IPv4+IPv6 Node Resource IPv6 removed").withRoutes(
+	vxlanWithBlockRoutes...,
+).withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+)
+
+var vxlanV4V6NodeResBGPDelete = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{BGP: nil}}},
+).withName("VXLAN IPv4+IPv6 Node Resource BGP removed").withRoutes(
+	routeUpdateIPPoolVXLAN,
+	// Host removed but keep the route without the node IP.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.1.0/29",
+		DstNodeName: remoteHostname,
+		DstNodeIp:   "",
+		NatOutgoing: true,
+	},
+).withVTEPs()
+
+var vxlanV4V6NodeResDelete = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: nil},
+).withName("VXLAN IPv4+IPv6 Node Resource removed").withRoutes(
+	routeUpdateIPPoolVXLAN,
+	// Host removed but keep the route without the node IP.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.1.0/29",
+		DstNodeName: remoteHostname,
+		DstNodeIp:   "",
+		NatOutgoing: true,
+	},
+).withVTEPs()
+
+var vxlanV4V6TunnelIPv4Delete = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: nil},
+).withName("VXLAN IPv4+IPv6 tunnel IPv4 removed").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		MacV6:            "66:a0:68:c9:4c:79",
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+)
+
+var vxlanV4V6TunnelIPv6Delete = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANV6TunnelConfigKey, Value: nil},
+).withName("VXLAN IPv4+IPv6 tunnel IPv6 removed").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+)
+
+var vxlanV4V6WithMAC = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANTunnelMACConfigKey, Value: remoteHostVXLANTunnelMAC},
+	KVPair{Key: remoteHostVXLANV6TunnelMACConfigKey, Value: remoteHostVXLANV6TunnelMAC},
+).withName("VXLAN IPv4+IPv6 with IPv4+IPv6 MAC").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		Mac:              remoteHostVXLANTunnelMAC,
+		Ipv4Addr:         remoteHostVXLANTunnelIP,
+		ParentDeviceIp:   remoteHostIP.String(),
+		MacV6:            remoteHostVXLANV6TunnelMAC,
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+)
+
+var vxlanV4V6WithV4MAC = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANTunnelMACConfigKey, Value: remoteHostVXLANTunnelMAC},
+).withName("VXLAN IPv4+IPv6 with IPv4+IPv6 MAC").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		Mac:              remoteHostVXLANTunnelMAC,
+		Ipv4Addr:         remoteHostVXLANTunnelIP,
+		ParentDeviceIp:   remoteHostIP.String(),
+		MacV6:            "66:a0:68:c9:4c:79",
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
+	},
+)
+
+var vxlanV4V6WithV6MAC = vxlanV4V6WithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANV6TunnelMACConfigKey, Value: remoteHostVXLANV6TunnelMAC},
+).withName("VXLAN IPv4+IPv6 with IPv4+IPv6 MAC").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:             remoteHostname,
+		Mac:              "66:3e:ca:a4:db:65",
+		Ipv4Addr:         remoteHostVXLANTunnelIP,
+		ParentDeviceIp:   remoteHostIP.String(),
+		MacV6:            remoteHostVXLANV6TunnelMAC,
+		Ipv6Addr:         remoteHostVXLANV6TunnelIP,
+		ParentDeviceIpv6: remoteHostIPv6.String(),
 	},
 )
 

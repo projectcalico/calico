@@ -465,12 +465,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			"vxlan.calico",
 			config,
 			dp.loopSummarizer,
+			4,
 		)
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpVXLANDevice()
+		go cleanUpVXLANDevice("vxlan.calico")
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -569,6 +570,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
 		interfaceRegexes[i] = "^" + r + ".*"
 	}
+
+	defaultRPFilter, err := os.ReadFile("/proc/sys/net/ipv4/conf/default/rp_filter")
+	if err != nil {
+		log.Warn("could not determine default rp_filter setting, defaulting to strict")
+		defaultRPFilter = []byte{'1'}
+	}
+
 	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
 		config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeRoute, config.BPFMapSizeConntrack, config.BPFMapRepin)
 
@@ -592,7 +600,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
 		ipsetsManager.AddDataplane(ipSetsV4)
-		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer)
+		bpfRTMgr := newBPFRouteManager(&config, bpfMapContext, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
@@ -619,6 +627,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.RegisterManager(bpfEndpointManager)
+
+		bpfEndpointManager.Features = dataplaneFeatures
 
 		conntrackScanner := conntrack.NewScanner(bpfMapContext.CtMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
@@ -687,6 +697,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.KubeIPVSSupportEnabled,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+		string(defaultRPFilter),
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -767,6 +778,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
+		if config.RulesConfig.VXLANEnabled {
+			routeTableVXLANV6 := routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+
+			vxlanManagerV6 := newVXLANManager(
+				ipSetsV6,
+				routeTableVXLANV6,
+				"vxlan-v6.calico",
+				config,
+				dp.loopSummarizer,
+				6,
+			)
+			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
+			dp.RegisterManager(vxlanManagerV6)
+		} else {
+			// Start a cleanup goroutine not to block felix if it needs to retry
+			go cleanUpVXLANDevice("vxlan-v6.calico")
+		}
+
 		routeTableV6 := routetable.New(
 			interfaceRegexes, 6, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
@@ -793,6 +824,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.KubeIPVSSupportEnabled,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+			"",
 			config.BPFEnabled,
 			nil,
 			callbacks,
@@ -995,7 +1027,7 @@ cleanupRetry:
 	}
 }
 
-func cleanUpVXLANDevice() {
+func cleanUpVXLANDevice(deviceName string) {
 	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
 	log.Debug("Checking if we need to clean up the VXLAN device")
 
@@ -1005,7 +1037,7 @@ func cleanUpVXLANDevice() {
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		link, err := netlink.LinkByName("vxlan.calico")
+		link, err := netlink.LinkByName(deviceName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); ok {
 				log.Debug("VXLAN disabled and no VXLAN device found")

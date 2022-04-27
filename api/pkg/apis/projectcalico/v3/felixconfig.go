@@ -448,6 +448,10 @@ type FelixConfigurationSpec struct {
 	// [Default: Drop]
 	ServiceLoopPrevention string `json:"serviceLoopPrevention,omitempty" validate:"omitempty,oneof=Drop Reject Disabled"`
 
+	// WorkloadSourceSpoofing controls whether pods can use the allowedSourcePrefixes annotation to send traffic with a source IP
+	// address that is not theirs. This is disabled by default. When set to "Any", pods can request any prefix.
+	WorkloadSourceSpoofing string `json:"workloadSourceSpoofing,omitempty" validate:"omitempty,oneof=Disabled Any)"`
+
 	// MTUIfacePattern is a regular expression that controls which interfaces Felix should scan in order
 	// to calculate the host's MTU.
 	// This should not match workload interfaces (usually named cali...).

@@ -13,6 +13,7 @@ struct cali_tc_globals {
 	__be32 ext_to_svc_mark;
 	__be16 psnat_start;
 	__be16 psnat_len;
+	__be32 host_tunnel_ip;
 	__be32 flags;
 };
 

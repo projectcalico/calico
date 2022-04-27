@@ -178,15 +178,6 @@ spec:
 {{- end }}
           securityContext:
             privileged: true
-        # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
-        # to communicate with Felix over the Policy Sync API.
-        - name: flexvol-driver
-          image: {{.Values.flexvol.image}}:{{.Values.flexvol.tag}}
-          volumeMounts:
-          - name: flexvol-driver-host
-            mountPath: /host/driver
-          securityContext:
-            privileged: true
       containers:
         # Runs {{ include "nodeName" . }} container on each Kubernetes node. This
         # container programs network policy and routes on each
@@ -289,6 +280,9 @@ spec:
               value: "{{- if .Values.bpf -}} Never {{- else if .Values.vxlan -}} Never {{- else -}} Always {{- end -}}"
             # Enable or Disable VXLAN on the default IP pool.
             - name: CALICO_IPV4POOL_VXLAN
+              value: "{{- if .Values.vxlan -}} CrossSubnet {{- else -}} Never {{- end -}}"
+            # Enable or Disable VXLAN on the default IPv6 IP pool.
+            - name: CALICO_IPV6POOL_VXLAN
               value: "{{- if .Values.vxlan -}} CrossSubnet {{- else -}} Never {{- end -}}"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
@@ -607,11 +601,6 @@ spec:
           hostPath:
             type: DirectoryOrCreate
             path: /var/run/nodeagent
-        # Used to install Flex Volume Driver
-        - name: flexvol-driver-host
-          hostPath:
-            type: DirectoryOrCreate
-            path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
 ---
 
 apiVersion: v1

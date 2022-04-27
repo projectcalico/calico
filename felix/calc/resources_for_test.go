@@ -621,6 +621,7 @@ var netSet2 = NetworkSet{
 
 var localHostIP = mustParseIP("192.168.0.1")
 var remoteHostIP = mustParseIP("192.168.0.2")
+var remoteHostIPv6 = mustParseIP("dead:beef:0001::2")
 var remoteHost2IP = mustParseIP("192.168.0.3")
 
 var localHostIPWithPrefix = "192.168.0.1/24"
@@ -634,6 +635,10 @@ var remoteHostVXLANTunnelConfigKey = HostConfigKey{
 	Hostname: remoteHostname,
 	Name:     "IPv4VXLANTunnelAddr",
 }
+var remoteHostVXLANV6TunnelConfigKey = HostConfigKey{
+	Hostname: remoteHostname,
+	Name:     "IPv6VXLANTunnelAddr",
+}
 var remoteHost2VXLANTunnelConfigKey = HostConfigKey{
 	Hostname: remoteHostname2,
 	Name:     "IPv4VXLANTunnelAddr",
@@ -642,6 +647,11 @@ var remoteHost2VXLANTunnelConfigKey = HostConfigKey{
 var remoteHostVXLANTunnelMACConfigKey = HostConfigKey{
 	Hostname: remoteHostname,
 	Name:     "VXLANTunnelMACAddr",
+}
+
+var remoteHostVXLANV6TunnelMACConfigKey = HostConfigKey{
+	Hostname: remoteHostname,
+	Name:     "VXLANTunnelMACAddrV6",
 }
 
 var ipPoolKey = IPPoolKey{
@@ -683,6 +693,12 @@ var ipPoolWithVXLAN = IPPool{
 
 var ipPool2WithVXLAN = IPPool{
 	CIDR:       mustParseNet("11.0.0.0/16"),
+	VXLANMode:  encap.Always,
+	Masquerade: true,
+}
+
+var v6IPPoolWithVXLAN = IPPool{
+	CIDR:       mustParseNet("feed:beef::/64"),
 	VXLANMode:  encap.Always,
 	Masquerade: true,
 }
@@ -845,6 +861,8 @@ func intPtr(i int) *int {
 
 var localHostVXLANTunnelIP = "10.0.0.0"
 var remoteHostVXLANTunnelIP = "10.0.1.0"
+var remoteHostVXLANV6TunnelIP = "feed:beef:0001::0"
 var remoteHostVXLANTunnelIP2 = "10.0.1.1"
 var remoteHost2VXLANTunnelIP = "10.0.2.0"
 var remoteHostVXLANTunnelMAC = "66:74:c5:72:3f:01"
+var remoteHostVXLANV6TunnelMAC = "10:f3:27:5c:47:66"
