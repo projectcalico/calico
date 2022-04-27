@@ -111,7 +111,7 @@ helm-tests: bin/helm values.yaml
 	$(DOCKER_RUN) \
 		-v $(CURDIR)/bin/helm3:/usr/local/bin/helm \
 		$(CALICO_BUILD) \
-		sh -c "$(GIT_CONFIG_SSH) ginkgo -cover -r ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)"
+		sh -c "$(GIT_CONFIG_SSH) ginkgo2 -cover -r ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)"
 
 ###############################################################################
 # Docs automation

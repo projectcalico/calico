@@ -27,14 +27,12 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-
-	. "github.com/onsi/ginkgo/extensions/table"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 

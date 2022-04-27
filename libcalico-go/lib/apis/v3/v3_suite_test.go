@@ -15,16 +15,13 @@
 package v3_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"testing"
-
-	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestV2(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/v3_api_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "v3 API Suite", []Reporter{junitReporter})
+	RunSpecs(t, "v3 API Suite")
 }
