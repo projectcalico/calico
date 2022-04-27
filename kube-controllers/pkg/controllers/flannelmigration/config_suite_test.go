@@ -15,16 +15,14 @@
 package flannelmigration_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/flannelmigration_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "flannelmigration Suite", []Reporter{junitReporter})
+	RunSpecs(t, "flannelmigration Suite")
 }

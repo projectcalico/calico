@@ -115,7 +115,7 @@ fv: tests/fv/fv.test image
 		PRIVATE_KEY=`pwd`/private.key \
 		CRDS=$(CURDIR)/../libcalico-go/config/crd \
 		CERTS_PATH=$(CERTS_PATH) \
-		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
+		./fv.test $(GINKGO_ARGS) -ginkgo.slow-spec-threshold 30
 
 tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
 	# We pre-build the test binary so that we can run it outside a container and allow it

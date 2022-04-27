@@ -17,8 +17,7 @@ package clientv3_test
 import (
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -484,11 +483,89 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		})
 	})
 
+	testFn := func(name, backendName string) {
+		c, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		be, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		By("Attempting to creating a new NetworkPolicy with name: " + name)
+		inNp := &apiv3.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name},
+			Spec:       ingressTypesSpec1,
+		}
+		np, outError := c.NetworkPolicies().Create(ctx, inNp, options.SetOptions{})
+		Expect(outError).NotTo(HaveOccurred())
+		Expect(inNp.GetName()).To(Equal(name), "Create() shouldn't touch input data")
+		Expect(np.GetName()).To(Equal(name), "Create() should return the data as we'd read it")
+
+		By("Reading back the raw data with its normalized name: " + backendName)
+		// Make sure that, where the name and the storage name differ, we do the write with
+		// the storage name.  Then the assertions below verify that all the CRUD methods
+		// do the right conversion too.
+		kv, err := be.Get(ctx, model.ResourceKey{
+			Kind:      apiv3.KindNetworkPolicy,
+			Namespace: namespace1,
+			Name:      backendName,
+		}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kv.Value.(*apiv3.NetworkPolicy).Spec).To(Equal(ingressTypesSpec1))
+
+		By("Getting the right policy by name")
+		np, err = c.NetworkPolicies().Get(ctx, namespace1, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(np.GetName()).To(Equal(name))
+		Expect(np.Spec).To(Equal(ingressTypesSpec1))
+
+		By("Updating the policy")
+		np.Spec = egressTypesSpec2
+		np, err = c.NetworkPolicies().Update(ctx, np, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Getting the right policy")
+		np, err = c.NetworkPolicies().Get(ctx, namespace1, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(np.GetName()).To(Equal(name))
+		Expect(np.Spec).To(Equal(egressTypesSpec2))
+
+		By("Listing the policy with correct name (no query options)")
+		nps, err := c.NetworkPolicies().List(ctx, options.ListOptions{Namespace: namespace1})
+		Expect(err).NotTo(HaveOccurred())
+		var names []string
+		for _, np := range nps.Items {
+			names = append(names, np.GetName())
+		}
+		Expect(names).To(ContainElement(name))
+		if name != name {
+			Expect(names).NotTo(ContainElement(name))
+		}
+
+		By("Listing the policy with correct name (list by name)")
+		nps, err = c.NetworkPolicies().List(ctx,
+			options.ListOptions{Namespace: namespace1, Name: name})
+		Expect(err).NotTo(HaveOccurred())
+		names = nil
+		for _, np := range nps.Items {
+			names = append(names, np.GetName())
+		}
+		Expect(names).To(ConsistOf(name))
+
+		By("Deleting the policy via the name")
+		np, err = c.NetworkPolicies().Delete(ctx, namespace1, name, options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		if np != nil {
+			Expect(np.GetName()).To(Equal(name))
+		}
+	}
+
 	// These tests check that the names we use on the API properly round-trip.  In particular,
 	// k8s and OpenStack policies have special prefixes, which should be preserved.  Other
 	// names get stored with a prefix, for consistency but the API returns them without the
 	// prefix.
-	nameNormalizationTests := []TableEntry{
+	nameNormalizationTests := []interface{}{
+		testFn,
 		// OpenStack names should round-trip, including their prefix.
 		Entry("OpenStack policy", "ossg.default.group1", "ossg.default.group1"),
 		// As should normal names.
@@ -503,83 +580,8 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			Entry("KDD policy", knpName, knpName),
 		)
 	}
+
 	DescribeTable("name round-tripping tests",
-		func(name, backendName string) {
-			c, err := clientv3.New(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			be, err := backend.NewClient(config)
-			Expect(err).NotTo(HaveOccurred())
-			be.Clean()
-
-			By("Attempting to creating a new NetworkPolicy with name: " + name)
-			inNp := &apiv3.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name},
-				Spec:       ingressTypesSpec1,
-			}
-			np, outError := c.NetworkPolicies().Create(ctx, inNp, options.SetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			Expect(inNp.GetName()).To(Equal(name), "Create() shouldn't touch input data")
-			Expect(np.GetName()).To(Equal(name), "Create() should return the data as we'd read it")
-
-			By("Reading back the raw data with its normalized name: " + backendName)
-			// Make sure that, where the name and the storage name differ, we do the write with
-			// the storage name.  Then the assertions below verify that all the CRUD methods
-			// do the right conversion too.
-			kv, err := be.Get(ctx, model.ResourceKey{
-				Kind:      apiv3.KindNetworkPolicy,
-				Namespace: namespace1,
-				Name:      backendName,
-			}, "")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(kv.Value.(*apiv3.NetworkPolicy).Spec).To(Equal(ingressTypesSpec1))
-
-			By("Getting the right policy by name")
-			np, err = c.NetworkPolicies().Get(ctx, namespace1, name, options.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(np.GetName()).To(Equal(name))
-			Expect(np.Spec).To(Equal(ingressTypesSpec1))
-
-			By("Updating the policy")
-			np.Spec = egressTypesSpec2
-			np, err = c.NetworkPolicies().Update(ctx, np, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Getting the right policy")
-			np, err = c.NetworkPolicies().Get(ctx, namespace1, name, options.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(np.GetName()).To(Equal(name))
-			Expect(np.Spec).To(Equal(egressTypesSpec2))
-
-			By("Listing the policy with correct name (no query options)")
-			nps, err := c.NetworkPolicies().List(ctx, options.ListOptions{Namespace: namespace1})
-			Expect(err).NotTo(HaveOccurred())
-			var names []string
-			for _, np := range nps.Items {
-				names = append(names, np.GetName())
-			}
-			Expect(names).To(ContainElement(name))
-			if name != name {
-				Expect(names).NotTo(ContainElement(name))
-			}
-
-			By("Listing the policy with correct name (list by name)")
-			nps, err = c.NetworkPolicies().List(ctx,
-				options.ListOptions{Namespace: namespace1, Name: name})
-			Expect(err).NotTo(HaveOccurred())
-			names = nil
-			for _, np := range nps.Items {
-				names = append(names, np.GetName())
-			}
-			Expect(names).To(ConsistOf(name))
-
-			By("Deleting the policy via the name")
-			np, err = c.NetworkPolicies().Delete(ctx, namespace1, name, options.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			if np != nil {
-				Expect(np.GetName()).To(Equal(name))
-			}
-		},
 		nameNormalizationTests...,
 	)
 })

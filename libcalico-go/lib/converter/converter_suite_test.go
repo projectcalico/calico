@@ -15,19 +15,17 @@
 package converter_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestConverter(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/converter_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Converter Suite", []Reporter{junitReporter})
+	RunSpecs(t, "Converter Suite")
 }
