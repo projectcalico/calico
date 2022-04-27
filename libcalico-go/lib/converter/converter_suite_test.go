@@ -21,7 +21,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
 	"testing"
-
 )
 
 func TestConverter(t *testing.T) {
