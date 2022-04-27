@@ -20,7 +20,6 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
-	"os"
 	"testing"
 )
 
@@ -30,10 +29,5 @@ func init() {
 
 func TestCalicoCni(t *testing.T) {
 	RegisterFailHandler(Fail)
-	reportPath := os.Getenv("REPORT")
-	if reportPath == "" {
-		// Default the report path if not specified.
-		reportPath = "../report/windows_suite.xml"
-	}
 	RunSpecs(t, "CNI suite (Windows)")
 }

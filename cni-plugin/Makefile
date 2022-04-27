@@ -170,7 +170,8 @@ ut-datastore:
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo2 -cover -r -skip-package pkg/install $(GINKGO_ARGS)'
+			ginkgo2 -cover -r -skip-package pkg/install $(GINKGO_ARGS) \
+			--junit-report suite.xml --keep-separate-reports --output-dir=./report'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
