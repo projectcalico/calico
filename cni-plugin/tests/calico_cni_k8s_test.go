@@ -22,7 +22,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 	v1 "k8s.io/api/core/v1"
@@ -3115,8 +3115,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	Describe("testConnection tests", func() {
-		It("successfully connects to the datastore", func(done Done) {
-			netconf := fmt.Sprintf(`
+		It("successfully connects to the datastore", func() {
+			done := make(chan struct{})
+			go func() {
+				netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
 			  "name": "net1",
@@ -3134,24 +3136,29 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			  "nodename_file_optional": true,
 			  "log_level":"info"
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
-			c := exec.Command(pluginPath, "-t")
-			stdin, err := c.StdinPipe()
-			Expect(err).ToNot(HaveOccurred())
+				pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
+				c := exec.Command(pluginPath, "-t")
+				stdin, err := c.StdinPipe()
+				Expect(err).ToNot(HaveOccurred())
 
-			go func() {
-				defer stdin.Close()
-				_, _ = io.WriteString(stdin, netconf)
+				go func() {
+					defer stdin.Close()
+					_, _ = io.WriteString(stdin, netconf)
+				}()
+
+				_, err = c.CombinedOutput()
+				Expect(err).ToNot(HaveOccurred())
+				close(done)
 			}()
 
-			_, err = c.CombinedOutput()
-			Expect(err).ToNot(HaveOccurred())
-			close(done)
-		}, 10)
+			Eventually(done, 10).Should(BeClosed())
+		})
 
-		It("reports it cannot connect to the datastore", func(done Done) {
-			// wrong port(s).
-			netconf := fmt.Sprintf(`
+		It("reports it cannot connect to the datastore", func() {
+			done := make(chan struct{})
+			go func() {
+				// wrong port(s).
+				netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
 			  "name": "net1",
@@ -3170,20 +3177,23 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			  "nodename_file_optional": true,
 			  "log_level":"info"
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
-			c := exec.Command(pluginPath, "-t")
-			stdin, err := c.StdinPipe()
-			Expect(err).ToNot(HaveOccurred())
+				pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
+				c := exec.Command(pluginPath, "-t")
+				stdin, err := c.StdinPipe()
+				Expect(err).ToNot(HaveOccurred())
 
-			go func() {
-				defer stdin.Close()
-				_, _ = io.WriteString(stdin, netconf)
+				go func() {
+					defer stdin.Close()
+					_, _ = io.WriteString(stdin, netconf)
+				}()
+
+				_, err = c.CombinedOutput()
+				Expect(err).To(HaveOccurred())
+				close(done)
 			}()
 
-			_, err = c.CombinedOutput()
-			Expect(err).To(HaveOccurred())
-			close(done)
-		}, 10)
+			Eventually(done, 10).Should(BeClosed())
+		})
 	})
 })
 
