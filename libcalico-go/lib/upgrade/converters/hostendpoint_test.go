@@ -17,8 +17,7 @@ package converters
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -30,7 +29,23 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var hepTable = []TableEntry{
+var _ = DescribeTable("v1->v3 HostEndpoint conversion tests",
+	func(v1API *apiv1.HostEndpoint, v1KVP *model.KVPair, v3API apiv3.HostEndpoint) {
+		p := HostEndpoint{}
+
+		// Check v1API->v1KVP.
+		convertedKvp, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(convertedKvp.Key.(model.HostEndpointKey)).To(Equal(v1KVP.Key.(model.HostEndpointKey)))
+		Expect(convertedKvp.Value.(*model.HostEndpoint)).To(Equal(v1KVP.Value))
+
+		// Check v1KVP->v3API.
+		convertedv3, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(convertedv3.(*apiv3.HostEndpoint).ObjectMeta).To(Equal(v3API.ObjectMeta))
+		Expect(convertedv3.(*apiv3.HostEndpoint).Spec).To(Equal(v3API.Spec))
+	},
 	Entry("Valid basic v1 hep has data moved to right place",
 		&apiv1.HostEndpoint{
 			Metadata: apiv1.HostEndpointMetadata{
@@ -132,28 +147,6 @@ var hepTable = []TableEntry{
 			},
 		},
 	),
-}
-
-var _ = DescribeTable("v1->v3 HostEndpoint conversion tests",
-	func(v1API *apiv1.HostEndpoint, v1KVP *model.KVPair, v3API apiv3.HostEndpoint) {
-		p := HostEndpoint{}
-
-		// Check v1API->v1KVP.
-		convertedKvp, err := p.APIV1ToBackendV1(v1API)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(convertedKvp.Key.(model.HostEndpointKey)).To(Equal(v1KVP.Key.(model.HostEndpointKey)))
-		Expect(convertedKvp.Value.(*model.HostEndpoint)).To(Equal(v1KVP.Value))
-
-		// Check v1KVP->v3API.
-		convertedv3, err := p.BackendV1ToAPIV3(v1KVP)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(convertedv3.(*apiv3.HostEndpoint).ObjectMeta).To(Equal(v3API.ObjectMeta))
-		Expect(convertedv3.(*apiv3.HostEndpoint).Spec).To(Equal(v3API.Spec))
-	},
-
-	// Add entries from table above.
-	hepTable...,
 )
 
 var _ = Describe("v1-v3 HostEndpoint conversion tests", func() {

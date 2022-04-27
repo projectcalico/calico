@@ -15,12 +15,10 @@
 package v1_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"testing"
-
-	"github.com/onsi/ginkgo/reporters"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -31,6 +29,5 @@ func init() {
 
 func TestValidator(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/v1_validator_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "v1 Validator Suite", []Reporter{junitReporter})
+	RunSpecs(t, "v1 Validator Suite")
 }

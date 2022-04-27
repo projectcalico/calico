@@ -17,7 +17,7 @@ package flannelmigration_test
 import (
 	"os"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	fm "github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
