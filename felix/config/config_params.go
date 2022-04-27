@@ -207,8 +207,8 @@ type Config struct {
 	EtcdCertFile  string   `config:"file(must-exist);;local"`
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
-	EtcdUsername  string   `config:"etcd_username;;local,non-zero"`
-	EtcdPassword  string   `config:"etcd_password;;local,non-zero"`
+	EtcdUsername  string   `config:"string;;local"`
+	EtcdPassword  string   `config:"string;;local"`
 
 	TyphaAddr           string        `config:"authority;;local"`
 	TyphaK8sServiceName string        `config:"string;;local"`
@@ -649,10 +649,6 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	if config.setByConfigFileOrEnvironment("EtcdCaFile") {
 		log.Infof("Overriding EtcdCaFile from felix config to %s", config.EtcdCaFile)
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
-	}
-	if config.setByConfigFileOrEnvironment("EtcdUsername") {
-		log.Infof("Overriding EtcdUsername from felix config to %s", config.EtcdUsername)
-		cfg.Spec.EtcdUsername = config.EtcdUsername
 	}
 	if config.setByConfigFileOrEnvironment("EtcdUsername") {
 		log.Infof("Overriding EtcdUsername from felix config to %s", config.EtcdUsername)
