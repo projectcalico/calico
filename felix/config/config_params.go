@@ -655,8 +655,8 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		cfg.Spec.EtcdUsername = config.EtcdUsername
 	}
 	if config.setByConfigFileOrEnvironment("EtcdPassword") {
-		log.Infof("Overriding EtcdUsername from felix config to %s", config.EtcdPassword)
-		cfg.Spec.EtcdPassword = config.EtcdUsername
+		log.Infof("Overriding EtcdPassword from felix config to %s", config.EtcdPassword)
+		cfg.Spec.EtcdPassword = config.EtcdPassword
 	}
 
 	if !(config.Encapsulation.IPIPEnabled || config.Encapsulation.VXLANEnabled || config.BPFEnabled) {
