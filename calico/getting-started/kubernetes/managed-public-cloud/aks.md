@@ -76,6 +76,12 @@ The geeky details of what you get:
        ipPools:
         - cidr: 10.244.0.0/16
           encapsulation: VXLAN
+   ---
+   apiVersion: operator.tigera.io/v1
+   kind: APIServer
+   metadata:
+      name: default
+   spec: {}
    EOF
    ```
 
