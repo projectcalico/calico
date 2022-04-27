@@ -17,10 +17,9 @@ package watchersyncer_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/onsi/ginkgo/reporters"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -28,6 +27,5 @@ import (
 func TestClient(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/backend_watcher_syncer_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Backend multi-watcher/syncer test suite", []Reporter{junitReporter})
+	RunSpecs(t, "Backend multi-watcher/syncer test suite")
 }
