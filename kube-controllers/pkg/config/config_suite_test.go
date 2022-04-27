@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"testing"
-
 )
 
 func TestConfig(t *testing.T) {

@@ -22,7 +22,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
 	"testing"
-
 )
 
 func init() {
