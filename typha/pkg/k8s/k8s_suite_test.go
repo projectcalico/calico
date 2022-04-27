@@ -15,12 +15,10 @@
 package k8s_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"testing"
-
-	"github.com/onsi/ginkgo/reporters"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -31,6 +29,5 @@ func init() {
 
 func TestK8s(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/k8s_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "K8s Suite", []Reporter{junitReporter})
+	RunSpecs(t, "K8s Suite")
 }

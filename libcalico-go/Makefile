@@ -122,7 +122,8 @@ GINKGO_FOCUS?=.*
 ## Run the fast set of unit tests in a container.
 ut:
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -r -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)' \
+		--junit-report suite.xml --keep-separate-reports --output-dir=./report
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
@@ -131,7 +132,8 @@ fv: fv-setup
 		-e KUBECONFIG=/kubeconfig.yaml \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)' \
+		--junit-report suite.xml --keep-separate-reports --output-dir=./report
 	$(MAKE) fv-teardown
 
 ## Run the setup required to run the FVs, but don't run any FVs.
@@ -148,7 +150,8 @@ fv-fast:
 		-e KUBECONFIG=/kubeconfig.yaml \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)' \
+		--junit-report suite.xml --keep-separate-reports --output-dir=./report
 
 # Create a kind cluster, and deploy some resources required for the libcalico-go tests.
 # TODO: Remove the need for this extra target, these should be created by the tests that need them.
