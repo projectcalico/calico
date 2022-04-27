@@ -48,6 +48,10 @@ func NewEncapsulationResolver(config *config.Config, callbacks encapCallbacks) *
 	}
 }
 
+func (r *EncapsulationResolver) InSync() bool {
+	return r.inSync
+}
+
 func (r *EncapsulationResolver) RegisterWith(dispatcher *dispatcher.Dispatcher) {
 	dispatcher.Register(model.IPPoolKey{}, r.OnPoolUpdate)
 	dispatcher.RegisterStatusHandler(r.OnStatusUpdate)
@@ -129,6 +133,10 @@ func NewEncapsulationCalculator(config *config.Config, ippoolKVPList *model.KVPa
 	return encapCalc
 }
 
+func (c *EncapsulationCalculator) InitPools(ippoolKVPList *model.KVPairList) {
+	c.initPools(ippoolKVPList)
+}
+
 func (c *EncapsulationCalculator) initPools(ippoolKVPList *model.KVPairList) {
 	for _, kvp := range ippoolKVPList.KVPairs {
 		err := c.handlePool(*kvp)
@@ -136,6 +144,10 @@ func (c *EncapsulationCalculator) initPools(ippoolKVPList *model.KVPairList) {
 			log.Infof("error handling update %+v: %v. Ignoring.", *kvp, err)
 		}
 	}
+}
+
+func (c *EncapsulationCalculator) HandlePool(p model.KVPair) error {
+	return c.handlePool(p)
 }
 
 func (c *EncapsulationCalculator) handlePool(p model.KVPair) error {
@@ -206,6 +218,10 @@ func (c *EncapsulationCalculator) updatePool(cidr string, ipipEnabled, vxlanEnab
 	} else {
 		delete(c.vxlanPools, cidr)
 	}
+}
+
+func (c *EncapsulationCalculator) RemovePool(cidr string) {
+	c.removePool(cidr)
 }
 
 func (c *EncapsulationCalculator) removePool(cidr string) {
