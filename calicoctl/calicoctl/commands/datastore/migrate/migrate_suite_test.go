@@ -15,16 +15,14 @@
 package migrate_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestCommands(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/migrate_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Migrate Suite", []Reporter{junitReporter})
+	RunSpecs(t, "Migrate Suite")
 }

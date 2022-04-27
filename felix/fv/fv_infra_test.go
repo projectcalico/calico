@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -81,7 +81,7 @@ func describeConnCheckTests(protocol string) bool {
 					felix.Stop()
 				}
 
-				if CurrentGinkgoTestDescription().Failed {
+				if CurrentSpecReport().Failed() {
 					infra.DumpErrorData()
 				}
 				infra.Stop()
@@ -168,7 +168,7 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 			for _, felix := range felixes {
 				felix.Stop()
 			}
-			if CurrentGinkgoTestDescription().Failed {
+			if CurrentSpecReport().Failed() {
 				infra.DumpErrorData()
 			}
 			infra.Stop()

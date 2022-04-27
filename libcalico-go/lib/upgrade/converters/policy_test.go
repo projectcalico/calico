@@ -15,7 +15,7 @@
 package converters
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -28,7 +28,23 @@ import (
 
 var order1 = 1000.00
 var order2 = 999.99
-var policyTable = []TableEntry{
+
+var _ = DescribeTable("v1->v3 policy conversion tests",
+	func(v1API unversioned.Resource, v1KVP *model.KVPair, v3API apiv3.GlobalNetworkPolicy) {
+		p := Policy{}
+
+		// Test and assert v1 API to v1 backend logic.
+		v1KVPResult, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v1KVPResult.Key.(model.PolicyKey).Name).To(Equal(v1KVP.Key.(model.PolicyKey).Name))
+		Expect(v1KVPResult.Value.(*model.Policy)).To(Equal(v1KVP.Value))
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Name).To(Equal(v3API.Name))
+		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(v3API.Spec))
+	},
 	Entry("fully populated Policy",
 		&apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
@@ -349,17 +365,11 @@ var policyTable = []TableEntry{
 			},
 		},
 	),
-}
+)
 
-var _ = DescribeTable("v1->v3 policy conversion tests",
-	func(v1API unversioned.Resource, v1KVP *model.KVPair, v3API apiv3.GlobalNetworkPolicy) {
+var _ = DescribeTable("v1->v3 policy conversion tests (backend)",
+	func(v1KVP *model.KVPair, v3API apiv3.GlobalNetworkPolicy) {
 		p := Policy{}
-
-		// Test and assert v1 API to v1 backend logic.
-		v1KVPResult, err := p.APIV1ToBackendV1(v1API)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(v1KVPResult.Key.(model.PolicyKey).Name).To(Equal(v1KVP.Key.(model.PolicyKey).Name))
-		Expect(v1KVPResult.Value.(*model.Policy)).To(Equal(v1KVP.Value))
 
 		// Test and assert v1 backend to v3 API logic.
 		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
@@ -367,11 +377,6 @@ var _ = DescribeTable("v1->v3 policy conversion tests",
 		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Name).To(Equal(v3API.Name))
 		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(v3API.Spec))
 	},
-
-	policyTable...,
-)
-
-var policyTableBackend = []TableEntry{
 	Entry("converting model with no Types with preDNAT to v3 API only has Ingress for Types",
 		&model.KVPair{
 			Key: model.PolicyKey{
@@ -406,18 +411,4 @@ var policyTableBackend = []TableEntry{
 			},
 		},
 	),
-}
-
-var _ = DescribeTable("v1->v3 policy conversion tests (backend)",
-	func(v1KVP *model.KVPair, v3API apiv3.GlobalNetworkPolicy) {
-		p := Policy{}
-
-		// Test and assert v1 backend to v3 API logic.
-		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Name).To(Equal(v3API.Name))
-		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(v3API.Spec))
-	},
-
-	policyTableBackend...,
 )
