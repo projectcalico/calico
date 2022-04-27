@@ -129,6 +129,8 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 
 	client, err := clientv3.New(cfg)
 	fmt.Printf("AAAAAAA: %v", cfg)
+	fmt.Printf("BBBBB: %s", cfg.Username)
+	fmt.Printf("CCC: %s", cfg.Password)
 	if err != nil {
 		return nil, err
 	}
