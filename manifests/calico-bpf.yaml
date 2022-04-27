@@ -1407,6 +1407,12 @@ spec:
                 description: 'WireguardRoutingRulePriority controls the priority value
                   to use for the Wireguard routing rule. [Default: 99]'
                 type: integer
+              workloadSourceSpoofing:
+                description: WorkloadSourceSpoofing controls whether pods can use
+                  the allowedSourcePrefixes annotation to send traffic with a source
+                  IP address that is not theirs. This is disabled by default. When
+                  set to "Any", pods can request any prefix.
+                type: string
               xdpEnabled:
                 description: 'XDPEnabled enables XDP acceleration for suitable untracked
                   incoming deny rules. [Default: true]'
@@ -4437,6 +4443,9 @@ spec:
               value: "Never"
             # Enable or Disable VXLAN on the default IP pool.
             - name: CALICO_IPV4POOL_VXLAN
+              value: "Never"
+            # Enable or Disable VXLAN on the default IPv6 IP pool.
+            - name: CALICO_IPV6POOL_VXLAN
               value: "Never"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
