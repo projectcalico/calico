@@ -46,9 +46,9 @@ blocks:
         commands:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make VALIDARCHES=amd64 -C node image-all cd-common CONFIRM=true; fi
 
-      - name: "windows-upgrade"
+      - name: "windows"
         env_vars:
         - name: DEV_REGISTRIES
           value: quay.io/calico docker.io/calico
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node build-windows-upgrade-archive image-tar-windows-all cd-windows-upgrade CONFIRM=true; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node build-windows-upgrade-archive image-tar-windows-all cd-windows-all CONFIRM=true; fi
