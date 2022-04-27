@@ -259,6 +259,11 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
+	if (ctx->state->ct_result.rc == CALI_CT_NEW && CALI_F_TO_HOST) {
+		if (!hep_rpf_check(ctx)) {
+				goto deny;
+		}
+	}
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
@@ -268,7 +273,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			/* We are possibly past (D)NAT, but that is ok, we need to let the
 			 * IP stack do the RPF check on the source, dest is not important.
 			 */
-			fwd_fib_set(&ctx->fwd, false);
+			goto deny;
 		} else if (!wep_rpf_check(ctx, cali_rt_lookup(ctx->state->ip_src))) {
 			goto deny;
 		}
