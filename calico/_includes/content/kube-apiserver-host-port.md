@@ -13,7 +13,7 @@ First, make a note of the address of the API server:
      kubernetes   172.16.101.157:6443   40m
      ```
 
-     If there are multiple entries under "ENDPOINTS" then your cluster must have more than one API server.  In that case, you should try to determine the load balancing approach used by your cluster and use the appropriate option below.
+     If there are multiple entries under "ENDPOINTS", then your cluster must have more than one API server.  In this case, use the appropriate load balancing option below for your cluster.
 
    - If using DNS load balancing (as used by `kops`), use the FQDN and port of the API server `api.internal.<clustername>`.
    - If you have multiple API servers with a load balancer in front, you should use the IP and port of the load balancer.
