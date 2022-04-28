@@ -321,6 +321,7 @@ const (
 
 	ipipMTUOverhead      = 20
 	vxlanMTUOverhead     = 50
+	vxlanV6MTUOverhead   = 70
 	wireguardMTUOverhead = 60
 	aksMTUOverhead       = 100
 )
@@ -958,6 +959,12 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 	if c.VXLANMTU == 0 {
 		log.Debug("Defaulting VXLAN MTU based on host")
 		c.VXLANMTU = hostMTU - vxlanMTUOverhead
+
+		if c.IPv6Enabled {
+			log.Debug("IPv6 is enabled, defaulting VXLAN MTU based on host")
+			c.VXLANMTU = hostMTU - vxlanV6MTUOverhead
+		}
+
 	}
 	if c.Wireguard.MTU == 0 {
 		if c.KubernetesProvider == config.ProviderAKS && c.Wireguard.EncryptHostTraffic {
