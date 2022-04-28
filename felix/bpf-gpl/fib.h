@@ -249,29 +249,4 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx) {
-	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_STRICT_ENABLED)) {
-		return 1;
-	}
-	struct bpf_fib_lookup fib_params = {
-		.family = 2, /* AF_INET */
-		.tot_len = 0,
-		.ifindex = ctx->skb->ingress_ifindex,
-		.l4_protocol = ctx->state->ip_proto,
-		.sport = bpf_htons(ctx->state->dport),
-		.dport = bpf_htons(ctx->state->sport),
-	};
-
-	/* set the ipv4 here, otherwise the ipv4/6 unions do not get
-	 * zeroed properly
-	 */
-	fib_params.ipv4_src = ctx->state->ip_dst;
-	fib_params.ipv4_dst = ctx->state->ip_src;
-
-	int rc = bpf_fib_lookup(ctx->skb, &fib_params, sizeof(fib_params), 0);
-	if (rc < 0) {
-		return 0;
-	}
-	return ctx->skb->ingress_ifindex == fib_params.ifindex;
-}
 #endif /* __CALI_FIB_H__ */

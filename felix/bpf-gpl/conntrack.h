@@ -10,7 +10,7 @@
 #include "bpf.h"
 #include "icmp.h"
 #include "types.h"
-#include "fib.h"
+#include "rpf.h"
 
 // Connection tracking.
 
@@ -805,13 +805,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				// something nasty.
 				CALI_CT_DEBUG("CT RPF failed ifindex %d != %d\n",
 						src_to_dst->ifindex, ifindex);
-			}
-			if (ct_result_rc(result.rc) == CALI_CT_ESTABLISHED_BYPASS) {
-				// Disable bypass so the kernel can do its RPF check.
-				// The next BPF program to see the packet will update the interface
-				// after the RPF has passed.
-				CALI_CT_DEBUG("Disabling bypass to allow kernel RPF.\n");
-				ct_result_set_rc(result.rc, CALI_CT_ESTABLISHED);
 			}
 			if (!hep_rpf_check(tc_ctx)) {
 				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
