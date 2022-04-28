@@ -40,13 +40,14 @@ exist in the cluster. The following options control the parameters on the create
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
 | CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: First not used in locally of (192.168.0.0/16, 172.16.0.0/16, .., 172.31.0.0/16) ] | IPv4 CIDR |
-| CALICO_IPV4POOL_BLOCK_SIZE | Block size to use for the IPv4 POOL created at startup.  Block size for IPv4 should be in the range 20-32 (inclusive) [Default: `26`] | int |
-| CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. If set to a value other than `Never`, `CALICO_IPV4POOL_VXLAN` should not be set. [Default: `Always`] | Always, CrossSubnet, Never ("Off" is also accepted as a synonym for "Never") |
-| CALICO_IPV4POOL_VXLAN | VXLAN Mode to use for the IPv4 POOL created at start up.  If set to a value other than `Never`, `CALICO_IPV4POOL_IPIP` should not be set. [Default: `Never`] | Always, CrossSubnet, Never |
+| CALICO_IPV4POOL_BLOCK_SIZE | Block size to use for the IPv4 Pool created at startup.  Block size for IPv4 should be in the range 20-32 (inclusive) [Default: `26`] | int |
+| CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 Pool created at start up. If set to a value other than `Never`, `CALICO_IPV4POOL_VXLAN` should not be set. [Default: `Always`] | Always, CrossSubnet, Never ("Off" is also accepted as a synonym for "Never") |
+| CALICO_IPV4POOL_VXLAN | VXLAN Mode to use for the IPv4 Pool created at start up.  If set to a value other than `Never`, `CALICO_IPV4POOL_IPIP` should not be set. [Default: `Never`] | Always, CrossSubnet, Never |
 | CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. [Default: `true`] | boolean |
 | CALICO_IPV4POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv4 Pool created at start up. [Default: `all()`] | [selector]({{site.baseurl}}/reference/resources/ippool#node-selector) |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `<a randomly chosen /48 ULA>`] | IPv6 CIDR |
 | CALICO_IPV6POOL_BLOCK_SIZE | Block size to use for the IPv6 POOL created at startup.  Block size for IPv6 should be in the range 116-128 (inclusive) [Default: `122`] | int |
+| CALICO_IPV6POOL_VXLAN | VXLAN Mode to use for the IPv6 Pool created at start up. [Default: `Never`] | Always, CrossSubnet, Never |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
 | CALICO_IPV6POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv6 Pool created at start up. [Default: `all()`] | [selector]({{site.baseurl}}/reference/resources/ippool#node-selector) |
 | NO_DEFAULT_POOLS | Prevents  {{site.prodname}} from creating a default pool if one does not exist. [Default: `false`] | boolean |
