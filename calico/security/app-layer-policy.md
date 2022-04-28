@@ -69,6 +69,13 @@ calicoctl patch FelixConfiguration default --patch \
    '{"spec": {"policySyncPathPrefix": "/var/run/nodeagent"}}'
 ```
 
+Additionally, if you have installed Calico via the operator, you can optionally disable flexvolumes.
+Flexvolumes were used in earlier implementations and have since been deprecated.
+
+```bash
+kubectl patch installation default --type=merge -p '{"spec": {"flexVolumePath": "None"}}'
+```
+
 #### Install Calico CSI Driver
 
 {{site.prodname}} utilizes a Container Storage Interface (CSI) driver to help set up the policy sync API on every node.
