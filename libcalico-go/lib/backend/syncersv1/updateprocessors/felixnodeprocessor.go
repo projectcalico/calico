@@ -97,13 +97,13 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		}
 		// Look for internal node address, if BGP is not running
 		if ipv4 == nil {
-			ip, _ := cresources.FindNodeAddress(node, libapiv3.InternalIP)
+			ip, _ := cresources.FindNodeAddress(node, libapiv3.InternalIP, 4)
 			if ip != nil {
 				ipv4 = ip
 			}
 		}
 		if ipv4 == nil {
-			ip, _ := cresources.FindNodeAddress(node, libapiv3.ExternalIP)
+			ip, _ := cresources.FindNodeAddress(node, libapiv3.ExternalIP, 4)
 			if ip != nil {
 				ipv4 = ip
 			}
