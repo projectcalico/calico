@@ -384,7 +384,7 @@ syn_force_policy:
 	 * from outside of the host. We enforce RPF failed on every new flow.
 	 * This will make it to skip fib in calico_tc_skb_accepted()
 	 */
-	if (CALI_F_TO_HOST) {
+	if (!(ctx->state->tun_ip) && CALI_F_TO_HOST) {
 		if (!hep_rpf_check(ctx)) {
 			goto deny;
 		}
