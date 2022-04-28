@@ -33,6 +33,10 @@ const (
 	RuleIDLength = 16
 )
 
+func ParsedRulesToProtoRules(in []*ParsedRule, ruleIDSeed string) (out []*proto.Rule) {
+	return parsedRulesToProtoRules(in, ruleIDSeed)
+}
+
 func parsedRulesToProtoRules(in []*ParsedRule, ruleIDSeed string) (out []*proto.Rule) {
 	out = make([]*proto.Rule, len(in))
 	for ii, inRule := range in {

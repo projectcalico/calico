@@ -3,8 +3,7 @@ package resources_test
 import (
 	"errors"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
@@ -33,21 +32,21 @@ var _ = Describe("ConvertK8sResourceOneToOneAdapter", func() {
 
 		Expect(resources).Should(matcher1)
 		Expect(err).Should(matcher2)
-	}, TableEntry{
-		Description: "resource not nil error nil returns resource list of one with no error",
-		Parameters:  []interface{}{&model.KVPair{}, nil, []*model.KVPair{{}}, nil},
 	},
-		TableEntry{
-			Description: "resource nil error nil returns empty resource list with no error",
-			Parameters:  []interface{}{nil, nil, []*model.KVPair(nil), nil},
-		},
-		TableEntry{
-			Description: "resource nil error not nil returns resource empty list with error",
-			Parameters:  []interface{}{nil, errors.New(""), []*model.KVPair(nil), errors.New("")},
-		},
-		TableEntry{
-			Description: "resource not nil error not nil returns empty resource list with error",
-			Parameters:  []interface{}{&model.KVPair{}, errors.New(""), []*model.KVPair(nil), errors.New("")},
-		},
+		Entry("resource not nil error nil returns resource list of one with no error",
+			&model.KVPair{}, nil, []*model.KVPair{{}}, nil,
+		),
+		Entry(
+			"resource nil error nil returns empty resource list with no error",
+			nil, nil, []*model.KVPair(nil), nil,
+		),
+		Entry(
+			"resource nil error not nil returns resource empty list with error",
+			nil, errors.New(""), []*model.KVPair(nil), errors.New(""),
+		),
+		Entry(
+			"resource not nil error not nil returns empty resource list with error",
+			&model.KVPair{}, errors.New(""), []*model.KVPair(nil), errors.New(""),
+		),
 	)
 })

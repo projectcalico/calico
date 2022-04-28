@@ -19,7 +19,7 @@ package fv_test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -68,7 +68,7 @@ var _ = infrastructure.DatastoreDescribe("Base FORWARD behaviour", []apiconfig.D
 
 	AfterEach(func() {
 		felix.Stop()
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 			felix.Exec("iptables-save", "-c")
 			felix.Exec("ipset", "list")

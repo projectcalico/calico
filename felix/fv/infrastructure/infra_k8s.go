@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -167,7 +167,7 @@ func (kds *K8sDatastoreInfra) PerTestSetup() {
 		kds.bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
 			"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 	}
-	K8sInfra.runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
+	K8sInfra.runningTest = ginkgo.CurrentSpecReport().FullText()
 }
 
 func runK8sApiserver(etcdIp string) *containers.Container {

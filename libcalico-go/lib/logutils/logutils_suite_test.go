@@ -15,12 +15,10 @@
 package logutils_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"testing"
-
-	"github.com/onsi/ginkgo/reporters"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -28,6 +26,5 @@ import (
 func TestLogutils(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/logutils_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Logutils Suite", []Reporter{junitReporter})
+	RunSpecs(t, "Logutils Suite")
 }

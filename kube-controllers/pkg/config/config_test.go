@@ -19,7 +19,7 @@ import (
 	"os"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -31,6 +31,19 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 )
+
+func withTimeout(timeout interface{}, fn func()) func() {
+	return func() {
+		done := make(chan struct{})
+
+		go func() {
+			fn()
+			close(done)
+		}()
+
+		EventuallyWithOffset(1, done, timeout).Should(BeClosed())
+	}
+}
 
 var _ = Describe("Config", func() {
 
@@ -113,7 +126,7 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return default RunConfig", func(done Done) {
+			It("should return default RunConfig", withTimeout("1s", func() {
 				runCfg := <-ctrl.ConfigChan()
 				Expect(runCfg.LogLevelScreen).To(Equal(log.InfoLevel))
 				Expect(runCfg.HealthEnabled).To(BeTrue())
@@ -142,10 +155,9 @@ var _ = Describe("Config", func() {
 					ReconcilerPeriod: time.Minute * 5,
 					NumberOfWorkers:  1,
 				}))
-				close(done)
-			})
+			}))
 
-			It("should write status", func(done Done) {
+			It("should write status", withTimeout("1s", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.update).ToNot(BeNil())
 				s := m.update.Status
@@ -168,8 +180,7 @@ var _ = Describe("Config", func() {
 					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
 				Expect(c.ServiceAccount).To(Equal(&v3.ServiceAccountControllerConfig{
 					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
-				close(done)
-			})
+			}))
 		})
 
 		Context("with non-default API values", func() {
@@ -211,7 +222,7 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching API", func(done Done) {
+			It("should return RunConfig matching API", withTimeout("1s", func() {
 				runCfg := <-ctrl.ConfigChan()
 				Expect(runCfg.LogLevelScreen).To(Equal(log.WarnLevel))
 				Expect(runCfg.HealthEnabled).To(BeFalse())
@@ -240,10 +251,9 @@ var _ = Describe("Config", func() {
 					ReconcilerPeriod: time.Second * 33,
 					NumberOfWorkers:  1,
 				}))
-				close(done)
-			})
+			}))
 
-			It("should write status matching API", func(done Done) {
+			It("should write status matching API", withTimeout("1s", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.update).ToNot(BeNil())
 				s := m.update.Status
@@ -252,8 +262,7 @@ var _ = Describe("Config", func() {
 				// Since there are no environment variables, the running config
 				// should be exactly the API Spec
 				Expect(s.RunningConfig).To(Equal(m.get.Spec))
-				close(done)
-			})
+			}))
 		})
 
 		Context("with no API values", func() {
@@ -272,13 +281,12 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should create a default KubeControllersConfig", func(done Done) {
+			It("should create a default KubeControllersConfig", withTimeout(600, func() {
 				<-ctrl.ConfigChan()
 				Expect(m.create.Spec).To(Equal(config.DefaultKCC.Spec))
-				close(done)
-			}, 600)
+			}))
 
-			It("should send new update when API values change", func(done Done) {
+			It("should send new update when API values change", withTimeout("1s", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
@@ -300,10 +308,9 @@ var _ = Describe("Config", func() {
 
 				// get the update
 				<-ctrl.ConfigChan()
-				close(done)
-			})
+			}))
 
-			It("should not send new update when Spec is unchanged", func(done Done) {
+			It("should not send new update when Spec is unchanged", withTimeout("2s", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
@@ -328,10 +335,9 @@ var _ = Describe("Config", func() {
 					update = true
 				}
 				Expect(update).To(BeFalse())
-				close(done)
-			}, 2)
+			}))
 
-			It("should handle watch closed by remote", func(done Done) {
+			It("should handle watch closed by remote", withTimeout("3s", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
@@ -380,10 +386,7 @@ var _ = Describe("Config", func() {
 
 				// this should trigger an update
 				<-ctrl.ConfigChan()
-
-				close(done)
-
-			}, 3)
+			}))
 		})
 
 	})
@@ -434,7 +437,7 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching env", func(done Done) {
+			It("should return RunConfig matching env", withTimeout("600s", func() {
 				runCfg := <-ctrl.ConfigChan()
 				Expect(runCfg.LogLevelScreen).To(Equal(log.DebugLevel))
 				Expect(runCfg.HealthEnabled).To(BeFalse())
@@ -454,10 +457,9 @@ var _ = Describe("Config", func() {
 				Expect(rc.Namespace).To(BeNil())
 				Expect(rc.WorkloadEndpoint).To(BeNil())
 				Expect(rc.ServiceAccount).To(BeNil())
-				close(done)
-			}, 600)
+			}))
 
-			It("should write status", func(done Done) {
+			It("should write status", withTimeout("1s", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.update).ToNot(BeNil())
 				s := m.update.Status
@@ -485,8 +487,7 @@ var _ = Describe("Config", func() {
 				Expect(c.WorkloadEndpoint).To(BeNil())
 				Expect(c.Namespace).To(BeNil())
 				Expect(c.ServiceAccount).To(BeNil())
-				close(done)
-			})
+			}))
 		})
 
 		Context("with non-default API values", func() {
@@ -527,7 +528,7 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching API environment", func(done Done) {
+			It("should return RunConfig matching API environment", withTimeout("1s", func() {
 				runCfg := <-ctrl.ConfigChan()
 				Expect(runCfg.LogLevelScreen).To(Equal(log.DebugLevel))
 				Expect(runCfg.HealthEnabled).To(BeFalse())
@@ -546,10 +547,9 @@ var _ = Describe("Config", func() {
 				Expect(rc.WorkloadEndpoint).To(BeNil())
 				Expect(rc.Namespace).To(BeNil())
 				Expect(rc.ServiceAccount).To(BeNil())
-				close(done)
-			})
+			}))
 
-			It("should write status matching environment", func(done Done) {
+			It("should write status matching environment", withTimeout("1s", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.update).ToNot(BeNil())
 				s := m.update.Status
@@ -576,8 +576,7 @@ var _ = Describe("Config", func() {
 				Expect(c.WorkloadEndpoint).To(BeNil())
 				Expect(c.Namespace).To(BeNil())
 				Expect(c.ServiceAccount).To(BeNil())
-				close(done)
-			})
+			}))
 		})
 
 	})
@@ -616,7 +615,7 @@ var _ = Describe("Config", func() {
 			unsetEnv()
 		})
 
-		It("should use reconciler periods from API", func(done Done) {
+		It("should use reconciler periods from API", withTimeout("1s", func() {
 
 			cfg := new(config.Config)
 			err := cfg.Parse()
@@ -652,8 +651,7 @@ var _ = Describe("Config", func() {
 			Expect(runCfg.Controllers.WorkloadEndpoint.ReconcilerPeriod).To(Equal(time.Second * 31))
 			Expect(runCfg.Controllers.Namespace.ReconcilerPeriod).To(Equal(time.Second * 32))
 			Expect(runCfg.Controllers.ServiceAccount.ReconcilerPeriod).To(Equal(time.Second * 33))
-			close(done)
-		})
+		}))
 	})
 })
 

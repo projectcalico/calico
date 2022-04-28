@@ -31,7 +31,8 @@ test ! -z "$go_dirs"
 # Run tests in random order find tests recursively (-r).
 echo WHAT: $WHAT
 echo SKIP: $SKIP
-ginkgo -cover -coverpkg=${go_dirs} -r --skipPackage $SKIP $WHAT
+ginkgo2 -cover -coverpkg=${go_dirs} -r --skip-package $SKIP $WHAT \
+		--junit-report suite.xml --keep-separate-reports --output-dir=./report
 gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
 
 echo

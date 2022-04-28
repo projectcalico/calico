@@ -11,7 +11,7 @@ else
 fi
 
 echo "Removing old coverprofiles..."
-find . -name "*.coverprofile" -type f -delete
+find . -name "*_coverprofile.out" -type f -delete
 
 echo "Calculating packages to cover..."
 go_dirs=$(find -type f -name '*.go' | \
@@ -27,8 +27,10 @@ test ! -z "$go_dirs"
 echo WHAT: $WHAT
 echo SKIP: $SKIP
 echo GINKGO_ARGS: $GINKGO_ARGS
-ginkgo -cover -coverpkg=${go_dirs} -r --skipPackage $SKIP $WHAT $GINKGO_ARGS
-gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
+ginkgo2 -cover -coverpkg=${go_dirs} -covermode=count -r --skip-package=$SKIP $WHAT $GINKGO_ARGS \
+	--keep-separate-coverprofiles \
+	--junit-report suite.xml --keep-separate-reports --output-dir=./report
+gocovmerge $(find . -name '*_coverprofile.out') > combined.coverprofile
 
 echo
 echo '+==============+'

@@ -15,8 +15,7 @@
 package syncserver_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"testing"
@@ -30,6 +29,5 @@ func init() {
 
 func TestSyncserver(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/syncserver_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Syncserver Suite", []Reporter{junitReporter})
+	RunSpecs(t, "Syncserver Suite")
 }

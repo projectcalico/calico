@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"regexp"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -59,7 +59,7 @@ var _ = infrastructure.DatastoreDescribe("AWS-ec2-srcdstcheck", []apiconfig.Data
 
 	AfterEach(func() {
 		felix.Stop()
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 		}
 		infra.Stop()

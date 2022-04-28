@@ -15,7 +15,7 @@
 package converters
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +28,22 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var poolTable = []TableEntry{
+var _ = DescribeTable("v1->v3 IPPool conversion tests",
+	func(v1API *apiv1.IPPool, v1KVP *model.KVPair, v3API apiv3.IPPool) {
+		p := IPPool{}
+
+		// Test and assert v1 API to v1 backend logic.
+		v1KVPResult, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v1KVPResult.Key.(model.IPPoolKey).CIDR).To(Equal(v1KVP.Key.(model.IPPoolKey).CIDR))
+		Expect(v1KVPResult.Value.(*model.IPPool)).To(Equal(v1KVP.Value))
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*apiv3.IPPool).Name).To(Equal(v3API.Name))
+		Expect(v3APIResult.(*apiv3.IPPool).Spec).To(Equal(v3API.Spec))
+	},
 	Entry("fully populated IPv4 IPPool",
 		&apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
@@ -256,24 +271,4 @@ var poolTable = []TableEntry{
 			},
 		},
 	),
-}
-
-var _ = DescribeTable("v1->v3 IPPool conversion tests",
-	func(v1API *apiv1.IPPool, v1KVP *model.KVPair, v3API apiv3.IPPool) {
-		p := IPPool{}
-
-		// Test and assert v1 API to v1 backend logic.
-		v1KVPResult, err := p.APIV1ToBackendV1(v1API)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(v1KVPResult.Key.(model.IPPoolKey).CIDR).To(Equal(v1KVP.Key.(model.IPPoolKey).CIDR))
-		Expect(v1KVPResult.Value.(*model.IPPool)).To(Equal(v1KVP.Value))
-
-		// Test and assert v1 backend to v3 API logic.
-		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(v3APIResult.(*apiv3.IPPool).Name).To(Equal(v3API.Name))
-		Expect(v3APIResult.(*apiv3.IPPool).Spec).To(Equal(v3API.Spec))
-	},
-
-	poolTable...,
 )

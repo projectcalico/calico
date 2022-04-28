@@ -23,7 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -93,7 +93,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 	// AfterEach() to dump diags before the test is torn down.  Only the first call for a given
 	// test has any effect.
 	dumpDiags := func() {
-		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
+		if !CurrentSpecReport().Failed() || dumpedDiags {
 			return
 		}
 		for ii := range felixes {

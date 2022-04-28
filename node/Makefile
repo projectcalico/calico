@@ -292,13 +292,15 @@ fv: run-k8s-apiserver
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
+	$(CALICO_BUILD) ginkgo2 -cover -r -skip-package vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS) \
+		--junit-report suite.xml --keep-separate-reports --output-dir=./report
 
 # Skip packages containing FV tests.
 UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
 .PHONY: ut
 ut:
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) ginkgo -r -skipPackage=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) ginkgo2 -r -skip-package=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)' \
+		--junit-report suite.xml --keep-separate-reports --output-dir=./report
 
 ###############################################################################
 # System tests

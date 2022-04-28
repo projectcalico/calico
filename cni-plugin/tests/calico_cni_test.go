@@ -15,7 +15,7 @@ import (
 
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
@@ -373,13 +373,15 @@ var _ = Describe("CalicoCni", func() {
 	})
 
 	Context("With a gRPC dataplane", func() {
-		It("communicates with the dataplane", func(done Done) {
-			var contNs ns.NetNS
-			var grpcBackend *grpc_dataplane.TestServer
-			var exitCode int
-			var err error
-			socket := fmt.Sprintf("/tmp/cni_grpc_dataplane_test%d.sock", rand.Uint32())
-			netconf := fmt.Sprintf(`
+		It("communicates with the dataplane", func() {
+			done := make(chan struct{})
+			go func() {
+				var contNs ns.NetNS
+				var grpcBackend *grpc_dataplane.TestServer
+				var exitCode int
+				var err error
+				socket := fmt.Sprintf("/tmp/cni_grpc_dataplane_test%d.sock", rand.Uint32())
+				netconf := fmt.Sprintf(`
 				{
 					"cniVersion": "%s",
 					"name": "net1",
@@ -399,59 +401,62 @@ var _ = Describe("CalicoCni", func() {
 					}
 				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), socket)
 
-			grpcBackend, err = grpc_dataplane.StartTestServer(socket, true, "00:11:22:33:44:55")
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(grpcBackend).ShouldNot(Equal(nil))
+				grpcBackend, err = grpc_dataplane.StartTestServer(socket, true, "00:11:22:33:44:55")
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(grpcBackend).ShouldNot(Equal(nil))
 
-			By("sending ADD requests to the gRPC backend")
-			_, _, _, _, _, contNs, err = testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
-			Expect(err).ShouldNot(HaveOccurred())
-			message := <-grpcBackend.Received
-			addRequest, ok := message.(*proto.AddRequest)
-			Expect(ok).Should(BeTrue())
-			Expect(addRequest.Netns).Should(Equal(contNs.Path()))
-			option, ok := addRequest.DataplaneOptions["extra"]
-			Expect(ok).Should(BeTrue())
-			Expect(option).Should(Equal("option"))
-			Expect(len(addRequest.ContainerIps)).Should(BeNumerically(">=", 1))
+				By("sending ADD requests to the gRPC backend")
+				_, _, _, _, _, contNs, err = testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+				Expect(err).ShouldNot(HaveOccurred())
+				message := <-grpcBackend.Received
+				addRequest, ok := message.(*proto.AddRequest)
+				Expect(ok).Should(BeTrue())
+				Expect(addRequest.Netns).Should(Equal(contNs.Path()))
+				option, ok := addRequest.DataplaneOptions["extra"]
+				Expect(ok).Should(BeTrue())
+				Expect(option).Should(Equal("option"))
+				Expect(len(addRequest.ContainerIps)).Should(BeNumerically(">=", 1))
 
-			By("erroring if the backend fails to cleanup an interface")
-			grpcBackend.SetResult(false)
-			exitCode, err = testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(exitCode).ShouldNot(Equal(0))
-			message = <-grpcBackend.Received
-			_, ok = message.(*proto.DelRequest)
-			Expect(ok).Should(BeTrue())
+				By("erroring if the backend fails to cleanup an interface")
+				grpcBackend.SetResult(false)
+				exitCode, err = testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(exitCode).ShouldNot(Equal(0))
+				message = <-grpcBackend.Received
+				_, ok = message.(*proto.DelRequest)
+				Expect(ok).Should(BeTrue())
 
-			By("sending DEL requests to the gRPC backend")
-			grpcBackend.SetResult(true)
-			exitCode, err = testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(exitCode).Should(Equal(0))
-			message = <-grpcBackend.Received
-			delRequest, ok := message.(*proto.DelRequest)
-			Expect(ok).Should(BeTrue())
-			Expect(delRequest.Netns).Should(Equal(contNs.Path()))
-			option, ok = delRequest.DataplaneOptions["extra"]
-			Expect(ok).Should(BeTrue())
-			Expect(option).Should(Equal("option"))
+				By("sending DEL requests to the gRPC backend")
+				grpcBackend.SetResult(true)
+				exitCode, err = testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(exitCode).Should(Equal(0))
+				message = <-grpcBackend.Received
+				delRequest, ok := message.(*proto.DelRequest)
+				Expect(ok).Should(BeTrue())
+				Expect(delRequest.Netns).Should(Equal(contNs.Path()))
+				option, ok = delRequest.DataplaneOptions["extra"]
+				Expect(ok).Should(BeTrue())
+				Expect(option).Should(Equal("option"))
 
-			By("erroring if the backend fails to configure an interface")
-			grpcBackend.SetResult(false)
-			_, _, _, _, _, _, err = testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
-			Expect(err).Should(HaveOccurred())
-			message = <-grpcBackend.Received
-			_, ok = message.(*proto.AddRequest)
-			Expect(ok).Should(BeTrue())
+				By("erroring if the backend fails to configure an interface")
+				grpcBackend.SetResult(false)
+				_, _, _, _, _, _, err = testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+				Expect(err).Should(HaveOccurred())
+				message = <-grpcBackend.Received
+				_, ok = message.(*proto.AddRequest)
+				Expect(ok).Should(BeTrue())
 
-			grpcBackend.GracefulStop()
-			err = syscall.Unlink(socket)
-			if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
-				Expect(err).NotTo(HaveOccurred())
-			}
-			close(done)
-		}, 30.0)
+				grpcBackend.GracefulStop()
+				err = syscall.Unlink(socket)
+				if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
+					Expect(err).NotTo(HaveOccurred())
+				}
+				close(done)
+			}()
+
+			Eventually(done, 30).Should(BeClosed())
+		})
 	})
 
 	Context("deprecate hostname for nodename", func() {
@@ -864,8 +869,10 @@ var _ = Describe("CalicoCni", func() {
 
 	Describe("testConnection tests", func() {
 
-		It("successfully connects to the datastore", func(done Done) {
-			netconf := fmt.Sprintf(`
+		It("successfully connects to the datastore", func() {
+			done := make(chan struct{})
+			go func() {
+				netconf := fmt.Sprintf(`
 {
   "cniVersion": "%s",
   "name": "net1",
@@ -879,24 +886,29 @@ var _ = Describe("CalicoCni", func() {
 	"subnet": "10.0.0.0/8"
   }
 }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
-			c := exec.Command(pluginPath, "-t")
-			stdin, err := c.StdinPipe()
-			Expect(err).ToNot(HaveOccurred())
+				pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
+				c := exec.Command(pluginPath, "-t")
+				stdin, err := c.StdinPipe()
+				Expect(err).ToNot(HaveOccurred())
 
-			go func() {
-				defer stdin.Close()
-				_, _ = io.WriteString(stdin, netconf)
+				go func() {
+					defer stdin.Close()
+					_, _ = io.WriteString(stdin, netconf)
+				}()
+
+				_, err = c.CombinedOutput()
+				Expect(err).ToNot(HaveOccurred())
+				close(done)
 			}()
 
-			_, err = c.CombinedOutput()
-			Expect(err).ToNot(HaveOccurred())
-			close(done)
-		}, 10)
+			Eventually(done, 10).Should(BeClosed())
+		})
 
-		It("reports it cannot connect to the datastore", func(done Done) {
-			// wrong port.
-			netconf := fmt.Sprintf(`
+		It("reports it cannot connect to the datastore", func() {
+			done := make(chan struct{})
+			go func() {
+				// wrong port.
+				netconf := fmt.Sprintf(`
 {
   "cniVersion": "%s",
   "name": "net1",
@@ -910,20 +922,22 @@ var _ = Describe("CalicoCni", func() {
 	"subnet": "10.0.0.0/8"
   }
 }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
-			c := exec.Command(pluginPath, "-t")
-			stdin, err := c.StdinPipe()
-			Expect(err).ToNot(HaveOccurred())
+				pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
+				c := exec.Command(pluginPath, "-t")
+				stdin, err := c.StdinPipe()
+				Expect(err).ToNot(HaveOccurred())
 
-			go func() {
-				defer stdin.Close()
-				_, _ = io.WriteString(stdin, netconf)
+				go func() {
+					defer stdin.Close()
+					_, _ = io.WriteString(stdin, netconf)
+				}()
+
+				_, err = c.CombinedOutput()
+				Expect(err).To(HaveOccurred())
+				close(done)
 			}()
 
-			_, err = c.CombinedOutput()
-			Expect(err).To(HaveOccurred())
-			close(done)
-		}, 10)
-
+			Eventually(done, 10).Should(BeClosed())
+		})
 	})
 })

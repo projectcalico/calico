@@ -21,7 +21,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -62,7 +62,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 
 	AfterEach(func() {
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			felix.Exec("iptables-save", "-c")
 			felix.Exec("ip", "r")
 		}
@@ -72,7 +72,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		}
 		felix.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
@@ -250,7 +250,7 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 
 	AfterEach(func() {
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			felix.Exec("iptables-save", "-c")
 			felix.Exec("ip", "r")
 		}
@@ -260,7 +260,7 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 		}
 		felix.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
@@ -351,7 +351,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 
 	AfterEach(func() {
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			felix.Exec("iptables-save", "-c")
 			felix.Exec("ip", "r")
 		}
@@ -361,7 +361,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		}
 		felix.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()

@@ -19,7 +19,7 @@ import (
 	"crypto/x509"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -45,7 +45,7 @@ type typhaConfig struct {
 	URISAN string
 }
 
-func genTestCases() []TableEntry {
+func genTestCases() []interface{} {
 	// Prepare certificate cases: all possible combinations of whether and how it's signed, what
 	// CN it has, and what URI SAN it has.
 	signatureConfigs := []string{
@@ -106,7 +106,7 @@ func genTestCases() []TableEntry {
 	}
 
 	// Prepare an Entry for each combination of cert config and Typha config.
-	var entries []TableEntry
+	var entries []interface{}
 	for _, certConfig := range certConfigs {
 		peerCertBytes := makePeerCert(certConfig)
 		for _, typhaConfig := range typhaConfigs {
@@ -177,7 +177,7 @@ func errChecker(certConfig *certConfig, typhaConfig *typhaConfig) func(error) {
 }
 
 var _ = DescribeTable("CertificateVerifier",
-	func(peerCertBytes []byte, typhaConfig *typhaConfig, errChecker func(err error)) {
+	append([]interface{}{func(peerCertBytes []byte, typhaConfig *typhaConfig, errChecker func(err error)) {
 		roots := x509.NewCertPool()
 		switch typhaConfig.CAs {
 		case "NoTrustedCAs":
@@ -200,8 +200,8 @@ var _ = DescribeTable("CertificateVerifier",
 		)
 		err := verifier([][]byte{peerCertBytes}, nil)
 		errChecker(err)
-	},
-	genTestCases()...)
+	}},
+		genTestCases()...)...)
 
 func makePeerCert(cfg *certConfig) []byte {
 	log.WithField("cfg", cfg).Info("Make peer cert")

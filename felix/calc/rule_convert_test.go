@@ -12,32 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package calc
+package calc_test
 
 import (
 	net2 "net"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
+	. "github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var ipv0 = 0
-var ipv4 = 4
 var ipv6 = 6
 var icmpType10 = 10
 var icmpCode12 = 12
 var icmpType11 = 11
 var icmpCode13 = 13
 var proto123 = numorstring.ProtocolFromInt(uint8(123))
-var protoTCP = numorstring.ProtocolFromStringV1("tcp")
 
 var fullyLoadedParsedRule = ParsedRule{
 	Action:    "allow",
@@ -164,7 +162,7 @@ var fullyLoadedProtoRule = proto.Rule{
 
 var _ = DescribeTable("ParsedRulesToProtoRules",
 	func(in ParsedRule, expected proto.Rule) {
-		out := parsedRulesToProtoRules(
+		out := ParsedRulesToProtoRules(
 			[]*ParsedRule{&in},
 			"test",
 		)
@@ -241,14 +239,14 @@ var _ = Describe("rule ID tests", func() {
 		Expect(id1).To(Equal(id2))
 	})
 	It("should generate different IDs for different positions in chain", func() {
-		out1 := parsedRulesToProtoRules(
+		out1 := ParsedRulesToProtoRules(
 			[]*ParsedRule{
 				&fullyLoadedParsedRule,
 				&fullyLoadedParsedRule,
 			},
 			"test",
 		)
-		out2 := parsedRulesToProtoRules(
+		out2 := ParsedRulesToProtoRules(
 			[]*ParsedRule{
 				&ParsedRule{},
 				&fullyLoadedParsedRule,
@@ -261,7 +259,7 @@ var _ = Describe("rule ID tests", func() {
 })
 
 func calculateRuleID(seed string, in ParsedRule) string {
-	out := parsedRulesToProtoRules(
+	out := ParsedRulesToProtoRules(
 		[]*ParsedRule{&in},
 		seed,
 	)
