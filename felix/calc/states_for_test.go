@@ -1274,8 +1274,8 @@ var vxlanWithIPv6Resources = vxlanWithBlock.withKVUpdates(
 	append(vxlanWithBlockRoutes,
 		proto.RouteUpdate{
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
-			IpPoolType:  proto.IPPoolType_NONE,
-			Dst:         "feed:beef:1::/96",
+			IpPoolType:  proto.IPPoolType_NO_ENCAP,
+			Dst:         "feed:beef:0:0:1::/96",
 			DstNodeName: remoteHostname,
 		},
 		proto.RouteUpdate{
@@ -1808,11 +1808,11 @@ var vxlanV6WithBlockRoutes = []proto.RouteUpdate{
 	// Single route for the block.
 	proto.RouteUpdate{
 		Type:        proto.RouteType_REMOTE_WORKLOAD,
-		IpPoolType:  proto.IPPoolType_NONE,
-		Dst:         "feed:beef:1::/96",
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "feed:beef:0:0:1::/96",
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIPv6.String(),
-		//NatOutgoing: true, //TODO: should this be true?
+		NatOutgoing: true,
 	},
 }
 
@@ -1842,10 +1842,10 @@ var vxlanV6NodeResIPDelete = vxlanV6WithBlock.withKVUpdates(
 	routeUpdateV6IPPoolVXLAN,
 	proto.RouteUpdate{
 		Type:        proto.RouteType_REMOTE_WORKLOAD,
-		IpPoolType:  proto.IPPoolType_NONE,
-		Dst:         "feed:beef:1::/96",
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "feed:beef:0:0:1::/96",
 		DstNodeName: remoteHostname,
-		//NatOutgoing: true, //TODO: should this be true?
+		NatOutgoing: true,
 	},
 ).withVTEPs()
 
@@ -1859,10 +1859,10 @@ var vxlanV6NodeResBGPDelete = vxlanV6WithBlock.withKVUpdates(
 	routeUpdateV6IPPoolVXLAN,
 	proto.RouteUpdate{
 		Type:        proto.RouteType_REMOTE_WORKLOAD,
-		IpPoolType:  proto.IPPoolType_NONE,
-		Dst:         "feed:beef:1::/96",
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "feed:beef:0:0:1::/96",
 		DstNodeName: remoteHostname,
-		//NatOutgoing: true, //TODO: should this be true?
+		NatOutgoing: true,
 	},
 ).withVTEPs()
 
@@ -1872,10 +1872,10 @@ var vxlanV6NodeResDelete = vxlanV6WithBlock.withKVUpdates(
 	routeUpdateV6IPPoolVXLAN,
 	proto.RouteUpdate{
 		Type:        proto.RouteType_REMOTE_WORKLOAD,
-		IpPoolType:  proto.IPPoolType_NONE,
-		Dst:         "feed:beef:1::/96",
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "feed:beef:0:0:1::/96",
 		DstNodeName: remoteHostname,
-		//NatOutgoing: true, //TODO: should this be true?
+		NatOutgoing: true,
 	},
 ).withVTEPs()
 
@@ -2008,10 +2008,10 @@ var vxlanV4V6NodeResIPv6Delete = vxlanV4V6WithBlock.withKVUpdates(
 		routeUpdateV6IPPoolVXLAN,
 		proto.RouteUpdate{
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
-			IpPoolType:  proto.IPPoolType_NONE,
-			Dst:         "feed:beef:1::/96",
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "feed:beef:0:0:1::/96",
 			DstNodeName: remoteHostname,
-			//NatOutgoing: true, //TODO: should this be true?
+			NatOutgoing: true,
 		})...,
 ).withVTEPs(
 	// VTEP for the remote node.
@@ -2043,10 +2043,10 @@ var vxlanV4V6NodeResBGPDelete = vxlanV4V6WithBlock.withKVUpdates(
 	routeUpdateV6IPPoolVXLAN,
 	proto.RouteUpdate{
 		Type:        proto.RouteType_REMOTE_WORKLOAD,
-		IpPoolType:  proto.IPPoolType_NONE,
-		Dst:         "feed:beef:1::/96",
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "feed:beef:0:0:1::/96",
 		DstNodeName: remoteHostname,
-		//NatOutgoing: true, //TODO: should this be true?
+		NatOutgoing: true,
 	},
 ).withVTEPs()
 
@@ -2066,10 +2066,10 @@ var vxlanV4V6NodeResDelete = vxlanV4V6WithBlock.withKVUpdates(
 	routeUpdateV6IPPoolVXLAN,
 	proto.RouteUpdate{
 		Type:        proto.RouteType_REMOTE_WORKLOAD,
-		IpPoolType:  proto.IPPoolType_NONE,
-		Dst:         "feed:beef:1::/96",
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "feed:beef:0:0:1::/96",
 		DstNodeName: remoteHostname,
-		//NatOutgoing: true, //TODO: should this be true?
+		NatOutgoing: true,
 	},
 ).withVTEPs()
 

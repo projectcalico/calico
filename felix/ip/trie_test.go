@@ -69,7 +69,8 @@ var _ = Describe("CIDRTrie tests", func() {
 	})
 
 	update := func(cidr string) {
-		trie.Update(ip.MustParseCIDROrIP(cidr), "data:"+cidr)
+		parsedCIDR := ip.MustParseCIDROrIP(cidr)
+		trie.Update(parsedCIDR, "data:"+parsedCIDR.String())
 	}
 
 	remove := func(cidr string) {
@@ -209,6 +210,13 @@ var _ = Describe("CIDRTrie tests", func() {
 			update("fc00:fe11::/96")
 			remove("fc00:fe11:0:2:2::/128")
 			Expect(contents()).To(ConsistOf("fc00:fe11::/96"))
+		})
+
+		It("should look up the full path to a CIDR correctly", func() {
+			update("feed:beef::/64")
+			update("feed:beef:0:0:1::/96")
+			update("feed:beef:0:0:1::1/128") // non-canonical
+			Expect(lookup("feed:beef:0:0:1::1/128")).To(ConsistOf("feed:beef::/64", "feed:beef:0:0:1::/96", "feed:beef::1:0:0:1/128"))
 		})
 
 		It("should fail to lookup in empty trie", func() {

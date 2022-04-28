@@ -726,7 +726,7 @@ var remoteIPAMSlash32BlockKey = BlockKey{
 }
 
 var remotev6IPAMBlockKey = BlockKey{
-	CIDR: mustParseNet("feed:beef:0001::/96"),
+	CIDR: mustParseNet("feed:beef:0:0:1::/96"),
 }
 
 var localIPAMBlockKey = BlockKey{
@@ -749,7 +749,7 @@ var remoteIPAMBlockSlash32 = AllocationBlock{
 	Unallocated: []int{0},
 }
 var remotev6IPAMBlock = AllocationBlock{
-	CIDR:        mustParseNet("feed:beef:0001::/96"),
+	CIDR:        mustParseNet("feed:beef:0:0:1::/96"),
 	Affinity:    &remoteHostAffinity,
 	Allocations: make([]*int, 8),
 	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
@@ -861,7 +861,7 @@ func intPtr(i int) *int {
 
 var localHostVXLANTunnelIP = "10.0.0.0"
 var remoteHostVXLANTunnelIP = "10.0.1.0"
-var remoteHostVXLANV6TunnelIP = "feed:beef:0001::0"
+var remoteHostVXLANV6TunnelIP = "feed:beef:0:0:1::0"
 var remoteHostVXLANTunnelIP2 = "10.0.1.1"
 var remoteHost2VXLANTunnelIP = "10.0.2.0"
 var remoteHostVXLANTunnelMAC = "66:74:c5:72:3f:01"
