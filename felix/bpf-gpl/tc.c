@@ -33,6 +33,7 @@
 #include "arp.h"
 #include "sendrecv.h"
 #include "fib.h"
+#include "rpf.h"
 #include "tc.h"
 #include "tcv6.h"
 #include "policy_program.h"
@@ -227,28 +228,6 @@ deny:
 	goto finalize;
 }
 
-static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
-{
-	CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n",
-			bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex);
-	if (!r) {
-		CALI_INFO("Workload RPF fail: missing route.\n");
-		return false;
-	}
-	if (!cali_rt_flags_local_workload(r->flags)) {
-		CALI_INFO("Workload RPF fail: not a local workload.\n");
-		return false;
-	}
-	if (r->if_index != ctx->skb->ifindex) {
-		CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n",
-				ctx->skb->ifindex, r->if_index);
-		return false;
-	}
-
-	return true;
-}
-
-
 static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
@@ -268,7 +247,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			/* We are possibly past (D)NAT, but that is ok, we need to let the
 			 * IP stack do the RPF check on the source, dest is not important.
 			 */
-			fwd_fib_set(&ctx->fwd, false);
+			goto deny;
 		} else if (!wep_rpf_check(ctx, cali_rt_lookup(ctx->state->ip_src))) {
 			goto deny;
 		}
@@ -379,13 +358,10 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 syn_force_policy:
 	/* DNAT in state is set correctly now */
 
-	/* Unlike from WEP where we can do RPF by comparing to calico routing
-	 * info, we must rely in Linux to do it for us when receiving packets
-	 * from outside of the host. We enforce RPF failed on every new flow.
-	 * This will make it to skip fib in calico_tc_skb_accepted()
-	 */
-	if (CALI_F_FROM_HEP) {
-		ct_result_set_flag(ctx->state->ct_result.rc, CALI_CT_RPF_FAILED);
+	if (!(ctx->state->tun_ip) && CALI_F_TO_HOST) {
+		if (!hep_rpf_check(ctx)) {
+			goto deny;
+		}
 	}
 
 	if (CALI_F_TO_WEP && !skb_seen(ctx->skb) &&
