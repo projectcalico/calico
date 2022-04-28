@@ -259,11 +259,6 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
-	if (ctx->state->ct_result.rc == CALI_CT_NEW && CALI_F_TO_HOST) {
-		if (!hep_rpf_check(ctx)) {
-				goto deny;
-		}
-	}
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
@@ -389,6 +384,12 @@ syn_force_policy:
 	 * from outside of the host. We enforce RPF failed on every new flow.
 	 * This will make it to skip fib in calico_tc_skb_accepted()
 	 */
+	if (CALI_F_TO_HOST) {
+		if (!hep_rpf_check(ctx)) {
+			goto deny;
+		}
+	}
+
 	if (CALI_F_FROM_HEP) {
 		ct_result_set_flag(ctx->state->ct_result.rc, CALI_CT_RPF_FAILED);
 	}
