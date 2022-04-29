@@ -36,7 +36,7 @@ calicoctl ipam configure --strictaffinity=true
 
 #### Install {{site.prodnameWindows}} manually
 
-The following steps install a Kubernetes cluster on a single Windows node, with a Linux control node.
+The following steps install a Kubernetes cluster on a single Windows node with a Linux control node.
 
 - **Kubernetes VXLAN**
 
@@ -85,8 +85,8 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
    ```
 
-1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
-   The PowerShell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
+1. Install {{site.prodnameWindows}} for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
+   The PowerShell script downloads {{site.prodnameWindows}} release binary, Kubernetes binaries, Windows utilities files, configures {{site.prodnameWindows}}, and starts the Calico service.
 
    **Kubernetes datastore (default)**
 
@@ -182,8 +182,8 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
    ```
 
-1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
-   The PowerShell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
+1. Install {{site.prodnameWindows}} for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
+   The PowerShell script downloads {{site.prodnameWindows}} release binary, Kubernetes binaries, Windows utilities files, configures {{site.prodnameWindows}}, and starts the Calico service.
 
    You do not need to pass a parameter if the default value of the parameter is correct for your cluster.
 
@@ -263,8 +263,8 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Invoke-WebRequest {{site.url}}/scripts/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
    ```
 
-1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
-   The PowerShell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
+1. Install {{site.prodnameWindows}} for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
+   The PowerShell script downloads {{site.prodnameWindows}} release binary, Kubernetes binaries, Windows utilities files, configures {{site.prodnameWindows}}, and starts the Calico service.
 
    You do not need to pass a parameter if the default value of the parameter is correct for your cluster.
 
@@ -335,7 +335,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Microsoft.ContainerService/EnableAKSWindowsCalico  Registered
    ```
 
-1. Refresh the registration of the `Microsoft.ContainerService` resource provider. Execute the following command.
+1. Refresh the registration of the `Microsoft.ContainerService` resource provider. Run the following command.
 
    ```bash
    az provider register --namespace Microsoft.ContainerService
@@ -381,22 +381,22 @@ Congratulations! You now have a Kubernetes cluster with {{site.prodnameWindows}}
 
 #### Install {{site.prodnameWindows}} using HostProcess containers
 
-With Kubernetes v1.22, a new Windows container type called "HostProcess containers" can run directly on the host with access to the host network namespace,
-storage and devices. With this feature, {{site.prodnameWindows}} can now be installed and managed using Kubernetes resources such as Daemonsets and ConfigMaps,
-instead of needing to configure and install {{site.prodnameWindows}} manually on each node. Using this installation method, the {{site.prodnameWindows}}
-services are no longer registered on the host. Instead, the services are run directly within HostProcess containers.
-
 > **Note**: This installation method is a tech preview and should not be used for production clusters. Upgrades from a tech preview version of this
 > installation method to the GA version might not be seamless.
 {: .alert .alert-info}
 
+With Kubernetes v1.22, a new Windows container type called "HostProcess containers" can run directly on the host with access to the host network namespace,
+storage, and devices. With this feature, {{site.prodnameWindows}} can now be installed and managed using Kubernetes resources such as Daemonsets and ConfigMaps,
+instead of needing to configure and install {{site.prodnameWindows}} manually on each node. Using this installation method, the {{site.prodnameWindows}}
+services are no longer registered on the host. Instead, the services are run directly within HostProcess containers.
+
 ##### Requirements
 
 In addition to the [{{site.prodnameWindows}} requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements),
-this installation method has [additional requirements](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/):
+this installation method has {% include open-new-window.html text='additional requirements' url='https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/' %}:
 
 - Kubernetes v1.22+
-- HostProcess containers support enabled: for v1.22, HostProcess containers support has to be [enabled](https://v1-22.docs.kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#before-you-begin-version-check). For Kubernetes v1.23+, HostProcess containers are enabled by default.
+- HostProcess containers support enabled: for v1.22, HostProcess containers support has to be {% include open-new-window.html text='enabled' url='https://v1-22.docs.kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#before-you-begin-version-check' %}. For Kubernetes v1.23+, HostProcess containers are enabled by default.
 - ContainerD 1.6.0+
 - The Windows nodes have joined the cluster
 
@@ -428,13 +428,13 @@ c:\k\kubeadm.exe join 172.16.101.139:6443 --token v8w2jt.jmc45acn85dbll1e --disc
 ```
 
 - Run the join command on the Windows node. Shortly after it completes successfully, the Windows node will appear in `kubectl get nodes`.
-  The new node's status will be NotReady since Calico CNI has not yet been installed.
+  The new node's status will be NotReady since the Calico CNI has not yet been installed.
 
 ##### Migrating from {{site.prodnameWindows}} installed manually
 
 If your Windows nodes already have {{site.prodnameWindows}} installed using the manual installation method, you can continue this quickstart guide
-to migrate to a manifest-based installation. This installation process will uninstall any existing {{site.prodnameWindows}} services and overwrite the {{site.prodnameWindows}} installation files with those included in the `calico/windows` image. If `kubelet` and `kube-proxy` were installed using `{{site.rootDirWindows}}\kubernetes\install-kube-services.ps1`, those services will updated in-place and remain installed. If those services were running they are restarted so the services
-run with the updated service files.
+to migrate to a manifest-based installation. This installation process will uninstall any existing {{site.prodnameWindows}} services and overwrite the {{site.prodnameWindows}} installation files with those included in the `calico/windows` image. If `kubelet` and `kube-proxy` were installed using `{{site.rootDirWindows}}\kubernetes\install-kube-services.ps1`, those services will updated in-place and remain installed. If those services were running, they are restarted so those services
+will be updated in place and remain installed.
 
 > **Note**: Before proceeding, take note of the configuration parameters in `{{site.rootDirWindows}}\config.ps1`. These configuration parameters will be needed during the install.
 {: .alert .alert-info}
