@@ -251,34 +251,20 @@ items:
 
 #### Run commands across multiple nodes
 
-Export THE_COMMAND_TO_RUN=date && for calinode in:
+```bash
+export THE_COMMAND_TO_RUN=date && for calinode in `kubectl get pod -o wide -n calico-system | grep calico-node | awk '{print $1}'`; do echo $calinode; echo "-----"; kubectl exec -n calico-system $calinode -- $THE_COMMAND_TO_RUN; printf "\n"; done
 
 ```bash
-kubectl get pod -o wide -n calico-system | grep calico-node | awk '{print $1}'`; do echo $calinode; echo "-----"; 
-```
+calico-node-87lpx
+-----
+Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
+Thu Apr 28 13:48:06 UTC 2022
 
-```bash
-kubectl exec -n calico-system $calinode -- $THE_COMMAND_TO_RUN; printf "\n"; done calico-node-8xfmx
-```
+calico-node-x5fmm
+-----
+Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
+Thu Apr 28 13:48:07 UTC 2022
 
-```
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-9t8s7
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-9cjhw
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-cb7ff
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-qoxvw
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-wm5m2
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
 ```
 
 #### View pod info
