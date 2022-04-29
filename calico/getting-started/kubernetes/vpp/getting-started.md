@@ -220,6 +220,9 @@ The VPP dataplane has the following requirements:
 - A blank Kubernetes cluster, where no CNI was ever configured.
 - These [base requirements]({{site.baseurl}}/getting-started/kubernetes/requirements), except those related to the management of `cali*`, `tunl*` and `vxlan.calico` interfaces.
 
+> **Note**: If using `kubeadm` to create the cluster please make sure to specify the pod network CIDR using `--pod-network-cidr` command-line argument, for example, `sudo kubeadm init --pod-network-cidr=192.168.0.0/16`. If 192.168.0.0/16 is already in use within your network you must select a different pod network CIDR.
+   {: .alert .alert-info}
+   
 **Optional**
 For some hardware, the following hugepages configuration may enable VPP to use more efficient drivers:
 
