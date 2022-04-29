@@ -81,10 +81,6 @@ eBPF mode has the following pre-requisites:
   needs a way to reach the API server directly.
 - The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
 
-> **Note**: The default kernel used by EKS is not compatible with eBPF mode.  If you wish to try eBPF mode with EKS,
-> follow the [Creating an EKS cluster for eBPF mode](./ebpf-and-eks) guide, which explain how to set up a suitable cluster.
-{: .alert .alert-info}
-
 ### How to
 
 - [Verify that your cluster is ready for eBPF mode](#verify-that-your-cluster-is-ready-for-ebpf-mode)
