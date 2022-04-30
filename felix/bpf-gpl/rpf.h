@@ -55,9 +55,12 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx) {
 	fib_params.ipv4_dst = ctx->state->ip_src;
 
 	int rc = bpf_fib_lookup(ctx->skb, &fib_params, sizeof(fib_params), 0);
-	if (rc < 0) {
-		return false;
+	switch(rc) {
+		case BPF_FIB_LKUP_RET_SUCCESS:
+		case BPF_FIB_LKUP_RET_NO_NEIGH:
+			return ctx->skb->ingress_ifindex == fib_params.ifindex;
+		default:
+			return false;
 	}
-	return ctx->skb->ingress_ifindex == fib_params.ifindex;
 }
 #endif /* __CALI_FIB_H__ */
