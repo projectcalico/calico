@@ -38,6 +38,7 @@ function calico_aggr ()
       if ( net = {{$cidr}} ) then { accept; }
       if ( net ~ {{$cidr}} ) then { reject; }
     {{- end}}
+      if ( net = {{$cidr}} ) then { reject; }
   {{- else }}
       # Block {{$cidr}} is implicitly confirmed.
       if ( net = {{$cidr}} ) then { accept; }
