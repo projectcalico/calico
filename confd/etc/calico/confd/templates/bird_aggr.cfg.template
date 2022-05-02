@@ -37,6 +37,8 @@ function calico_aggr ()
     {{- if eq $affinity.state "confirmed"}}
       if ( net = {{$cidr}} ) then { accept; }
       if ( net ~ {{$cidr}} ) then { reject; }
+    {{- else }}
+      if ( net = {{$cidr}} ) then { reject; }
     {{- end}}
   {{- else }}
       # Block {{$cidr}} is implicitly confirmed.
