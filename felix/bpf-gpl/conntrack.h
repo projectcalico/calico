@@ -806,7 +806,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				CALI_CT_DEBUG("CT RPF failed ifindex %d != %d\n",
 						src_to_dst->ifindex, ifindex);
 			}
-			if (!hep_rpf_check(tc_ctx)) {
+			if (!ret_from_tun && !hep_rpf_check(tc_ctx)) {
 				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
 			} else {
 				src_to_dst->ifindex = ifindex;
