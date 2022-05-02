@@ -29,15 +29,14 @@ static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_r
         return true;
 }
 
-static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx) {
+static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
+{
+	bool ret = false;
 
 	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_STRICT_ENABLED)) {
 		CALI_DEBUG("Host RPF check disabled\n");
 		return true;
 	}
-
-	CALI_DEBUG("Host RPF check src=%x skb iface=%d.\n",
-			bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex);
 
 	struct bpf_fib_lookup fib_params = {
 		.family = 2, /* AF_INET */
@@ -58,9 +57,14 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx) {
 	switch(rc) {
 		case BPF_FIB_LKUP_RET_SUCCESS:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
-			return ctx->skb->ingress_ifindex == fib_params.ifindex;
-		default:
-			return false;
+			ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
 	}
+
+	CALI_DEBUG("Host RPF check src=%x skb iface=%d fib %d\n",
+			bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex, rc);
+	CALI_DEBUG("Host RPF check src=%x skb iface=%d result %d\n",
+			bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex, ret);
+
+	return ret;
 }
 #endif /* __CALI_FIB_H__ */
