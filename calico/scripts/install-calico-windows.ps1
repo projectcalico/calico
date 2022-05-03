@@ -166,11 +166,31 @@ function GetBackendType()
             throw "{{site.prodname}} on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
         }
 
+        # Check FelixConfig first.
         $encap=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
         if ($encap -EQ "true") {
             return ("vxlan")
+        } elseif ($encap -EQ "false") {
+            return ("bgp")
+        } else {
+           # If any IPPool has IPIP enabled, we need to exit the installer. The
+           # IPIP-enabled might not be assigned to this Windows node but we can't
+           # verify that easily by looking at the nodeSelector.
+           $ipipModes = c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get ippools.crd.projectcalico.org -o jsonpath='{.items[*].spec.ipipMode}' -n $CalicoNamespace
+           $ipipEnabled = $ipipModes | Select-String -pattern '(Always)|(CrossSubnet)'
+           if ($ipipEnabled -NE $null) {
+               throw "Failed to auto detect backend type. IPIP is not supported on Windows nodes but found IP pools with IPIP enabled. Rerun install script with the CalicoBackend param provided"
+           }
+
+           # If FelixConfig does not have vxlanEnabled then check the IPPools and see if any of them have enabled vxlan.
+           $vxlanModes=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get ippools.crd.projectcalico.org -o jsonpath='{.items[*].spec.vxlanMode}' -n $CalicoNamespace
+           $vxlanEnabled = $vxlanModes | Select-String -pattern '(Always)|(CrossSubnet)'
+           if ($vxlanEnabled -NE $null) {
+               return ("vxlan")
+           } else {
+               return ("bgp")
+           }
         }
-        return ("bgp")
     } else {
         $CalicoBackend=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get configmap calico-config -n $CalicoNamespace -o jsonpath='{.data.calico_backend}'
         if ($CalicoBackend -EQ "vxlan") {
