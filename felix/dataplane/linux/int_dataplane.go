@@ -462,7 +462,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
-			 	dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableVXLAN = &routetable.DummyTable{}
@@ -796,16 +796,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabled {
-      var routeTableVXLANV6 routeTable
-      if !config.RouteSyncDisabled {
-        log.Debug("RouteSyncDisabled is false.")
-        routeTableVXLANV6 := routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
-          config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
-          dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
-      } else {
-        log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
-		  	routeTableVXLANV6 = &routetable.DummyTable{}
-      }
+			var routeTableVXLANV6 routeTable
+			if !config.RouteSyncDisabled {
+				log.Debug("RouteSyncDisabled is false.")
+				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
+					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+					dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+			} else {
+				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
+				routeTableVXLANV6 = &routetable.DummyTable{}
+			}
 
 			vxlanManagerV6 := newVXLANManager(
 				ipSetsV6,
@@ -822,14 +822,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			go cleanUpVXLANDevice("vxlan-v6.calico")
 		}
 
-    var routeTableV6 routeTable
+		var routeTableV6 routeTable
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
-			routeTableV6 := routetable.New(
-			  interfaceRegexes, 6, false, config.NetlinkTimeout,
-			  config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
-			  unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
-			  routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+			routeTableV6 = routetable.New(
+				interfaceRegexes, 6, false, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
+				unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 		} else {
 			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")
 			routeTableV6 = &routetable.DummyTable{}
