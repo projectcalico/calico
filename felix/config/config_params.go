@@ -278,6 +278,7 @@ type Config struct {
 	VXLANPort           int    `config:"int;4789"`
 	VXLANVNI            int    `config:"int;4096"`
 	VXLANMTU            int    `config:"int;0"`
+	VXLANV6MTU          int    `config:"int;0"`
 	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
 	VXLANTunnelMACAddr  string `config:"string;"`
 
