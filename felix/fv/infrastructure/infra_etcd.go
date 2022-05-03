@@ -115,6 +115,12 @@ func (eds *EtcdDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int,
 	}
 }
 
+func (eds *EtcdDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, idx int, needBGP bool) {
+	if needBGP {
+		felix.ExpectedVXLANV6TunnelAddr = fmt.Sprintf("dead:beef::%d:0", idx)
+	}
+}
+
 func (eds *EtcdDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWireguard bool) {
 	if needWireguard {
 		// Set to be the same as IPIP.
@@ -138,14 +144,22 @@ func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	felixNode := libapi.NewNode()
 	felixNode.Name = felix.Hostname
 	felixNode.Spec.IPv4VXLANTunnelAddr = felix.ExpectedVXLANTunnelAddr
+	felixNode.Spec.IPv6VXLANTunnelAddr = felix.ExpectedVXLANV6TunnelAddr
 	if needBGP {
 		felixNode.Spec.BGP = &libapi.NodeBGPSpec{
 			IPv4Address:        fmt.Sprintf("%s/%s", felix.IP, felix.IPPrefix),
 			IPv4IPIPTunnelAddr: felix.ExpectedIPIPTunnelAddr,
 		}
+		if len(felix.IPv6) > 0 {
+			felixNode.Spec.BGP.IPv6Address = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
+		}
 	}
 	nodeAddress := libapi.NodeAddress{Address: felix.IP, Type: libapi.InternalIP}
 	felixNode.Spec.Addresses = append(felixNode.Spec.Addresses, nodeAddress)
+	if len(felix.IPv6) > 0 {
+		nodeAddressV6 := libapi.NodeAddress{Address: felix.IPv6, Type: libapi.InternalIP}
+		felixNode.Spec.Addresses = append(felixNode.Spec.Addresses, nodeAddressV6)
+	}
 	Eventually(func() error {
 		_, err := eds.GetCalicoClient().Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
 		if err != nil {
