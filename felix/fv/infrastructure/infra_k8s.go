@@ -573,6 +573,11 @@ func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int, 
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedVXLANTunnelAddr)
 }
 
+func (kds *K8sDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, idx int, needBGP bool) {
+	felix.ExpectedVXLANV6TunnelAddr = fmt.Sprintf("dead:beef::%d:0", idx)
+	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedVXLANV6TunnelAddr)
+}
+
 func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWg bool) {
 	// Set to be the same as IPIP tunnel address.
 	felix.ExpectedWireguardTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
@@ -604,13 +609,21 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 				"projectcalico.org/IPv4Address": fmt.Sprintf("%s/%s", felix.IP, felix.IPPrefix),
 			},
 		},
-		Spec: v1.NodeSpec{PodCIDR: fmt.Sprintf("10.65.%d.0/24", idx)},
+		Spec: v1.NodeSpec{PodCIDRs: []string{fmt.Sprintf("10.65.%d.0/24", idx)}},
 		Status: v1.NodeStatus{
 			Addresses: []v1.NodeAddress{{
 				Address: felix.IP,
 				Type:    v1.NodeInternalIP,
 			}},
 		},
+	}
+	if len(felix.IPv6) > 0 {
+		nodeIn.ObjectMeta.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
+		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("dead:beef::%d:0/96", idx))
+		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
+			Address: felix.IPv6,
+			Type:    v1.NodeInternalIP,
+		})
 	}
 	if felix.ExternalIP != "" {
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses,
@@ -624,6 +637,9 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	}
 	if felix.ExpectedVXLANTunnelAddr != "" {
 		nodeIn.Annotations["projectcalico.org/IPv4VXLANTunnelAddr"] = felix.ExpectedVXLANTunnelAddr
+	}
+	if felix.ExpectedVXLANV6TunnelAddr != "" {
+		nodeIn.Annotations["projectcalico.org/IPv6VXLANTunnelAddr"] = felix.ExpectedVXLANV6TunnelAddr
 	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
 		nodeIn.Annotations["projectcalico.org/IPv4WireguardInterfaceAddr"] = felix.ExpectedWireguardTunnelAddr
