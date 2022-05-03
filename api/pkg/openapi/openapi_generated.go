@@ -1994,7 +1994,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"vxlanMTU": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VXLANMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]",
+							Description: "VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel device. See Configuring MTU [Default: 1410]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vxlanMTUV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANMTUV6 is the MTU to set on the IPv6 VXLAN tunnel device. See Configuring MTU [Default: 1390]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

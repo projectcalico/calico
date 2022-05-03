@@ -148,7 +148,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					_, err := client.FelixConfigurations().Create(context.Background(), fc, options.SetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
-					// It should still have an MTU of 1410 since the VXLAN encap is set in the default IPPool.
+					// It should still have an MTU of 1410 (or 1390 for IPv6) since the VXLAN encap is set in the default IPPool.
 					for _, felix := range felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
@@ -156,12 +156,19 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						}, "30s", "100ms").Should(ContainSubstring(vxlanEnabledMtu))
 					}
 
-					// Set VXLANModeNever on the default IP pool
+					// Set VXLANModeNever on the default IP pool(s)
 					pool, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPPoolName, options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 					pool.Spec.VXLANMode = api.VXLANModeNever
 					_, err = client.IPPools().Update(context.Background(), pool, options.SetOptions{})
 					Expect(err).NotTo(HaveOccurred())
+					if enableIPv6 {
+						poolV6, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPv6PoolName, options.GetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						poolV6.Spec.VXLANMode = api.VXLANModeNever
+						_, err = client.IPPools().Update(context.Background(), poolV6, options.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+					}
 
 					// It should now have an MTU of 1460 since there is no encap.
 					for _, felix := range felixes {
