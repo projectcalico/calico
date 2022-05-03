@@ -45,8 +45,6 @@ section:
     path: /maintenance/ebpf/use-cases-ebpf 
   - title: Enable the eBPF dataplane
     path: /maintenance/ebpf/enabling-bpf
-  - title: eBPF on EKS
-    path: /maintenance/ebpf/ebpf-and-eks
   - title: Troubleshooting
     path: /maintenance/troubleshoot/troubleshoot-ebpf
 - title: Monitor
