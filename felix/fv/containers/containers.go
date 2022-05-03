@@ -43,6 +43,8 @@ type Container struct {
 	IP             string
 	ExtraSourceIPs []string
 	IPPrefix       string
+	IPv6           string
+	IPv6Prefix     string
 	Hostname       string
 	runCmd         *exec.Cmd
 	Stdin          io.WriteCloser
@@ -255,6 +257,8 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()
 	c.IPPrefix = c.GetIPPrefix()
+	c.IPv6 = c.GetIPv6()
+	c.IPv6Prefix = c.GetIPv6Prefix()
 	c.Hostname = c.GetHostname()
 	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
@@ -448,6 +452,16 @@ func (c *Container) GetIP() string {
 
 func (c *Container) GetIPPrefix() string {
 	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.IPPrefixLen}}{{end}}")
+	return strings.TrimSpace(output)
+}
+
+func (c *Container) GetIPv6() string {
+	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{end}}")
+	return strings.TrimSpace(output)
+}
+
+func (c *Container) GetIPv6Prefix() string {
+	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.GlobalIPv6PrefixLen}}{{end}}")
 	return strings.TrimSpace(output)
 }
 
