@@ -47,7 +47,14 @@ function create-vm() {
   set +x && \
   echo "$DOCKERHUB_PASSWORD" | gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
   set -x && \
-  gcloud --quiet compute scp --zone=${zone} --recurse --compress "$(dirname $(pwd))" "ubuntu@${vm_name}:/home/ubuntu/calico"
+  gcloud --quiet compute scp --zone=${zone} --recurse --compress "$(dirname $(pwd))" "ubuntu@${vm_name}:/home/ubuntu/calico" && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo bash -c 'cat > /etc/docker/daemon.json << EOF
+{
+  "ipv6": true,
+  "fixed-cidr-v6": "2001:db8:1::/64"
+}
+EOF' && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo systemctl restart docker
 }
 
 function delete-vm() {
