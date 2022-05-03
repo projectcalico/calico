@@ -182,9 +182,10 @@ function GetBackendType()
                throw "Failed to auto detect backend type. IPIP is not supported on Windows nodes but found IP pools with IPIP enabled. Rerun install script with the CalicoBackend param provided"
            }
 
-           # If FelixConfig does not have vxlanEnabled then check the first IPPool's vxlan mode.
-           $encap=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get ippools.crd.projectcalico.org -o jsonpath='{.items[0].spec.vxlanMode}' -n $CalicoNamespace
-           if (($encap -EQ "Always") -or ($encap -EQ "CrossSubnet")) {
+           # If FelixConfig does not have vxlanEnabled then check the IPPools and see if any of them have enabled vxlan.
+           $vxlanModes=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get ippools.crd.projectcalico.org -o jsonpath='{.items[*].spec.vxlanMode}' -n $CalicoNamespace
+           $vxlanEnabled = $vxlanModes | Select-String -pattern '(Always)|(CrossSubnet)'
+           if ($vxlanEnabled -NE $null) {
                return ("vxlan")
            } else {
                return ("bgp")
