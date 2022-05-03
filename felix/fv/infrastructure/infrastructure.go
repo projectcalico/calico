@@ -49,6 +49,7 @@ type DatastoreInfra interface {
 	// ExpectedVXLANTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
 	SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needVXLAN bool)
+	SetExpectedVXLANV6TunnelAddr(felix *Felix, idx int, needVXLAN bool)
 	// SetExpectedWireguardTunnelAddr will set the Felix object's
 	// ExpectedWireguardTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
