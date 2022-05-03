@@ -2,5 +2,5 @@
             emptyDir:
               medium: Memory
           - name: felix-sync
-            flexVolume:
-              driver: nodeagent/uds
+            csi:
+              driver: "csi.tigera.io"

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -206,7 +206,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 
 	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")
-	runArgs := []string{"run", "--name", c.Name, "--stop-timeout", fmt.Sprint(opts.StopTimeoutSecs)}
+	runArgs := []string{"run", "--cgroupns", "host", "--name", c.Name, "--stop-timeout", fmt.Sprint(opts.StopTimeoutSecs)}
 
 	if opts.StopSignal != "" {
 		runArgs = append(runArgs, "--stop-signal", opts.StopSignal)

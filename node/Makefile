@@ -8,9 +8,13 @@ DEV_TAG_SUFFIX        ?=0.dev
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
+WINDOWS_IMAGE         ?=windows
 WINDOWS_UPGRADE_IMAGE ?=windows-upgrade
 
 WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
+
+# We don't include the windows images here because we build them differently
+# using targets within this makefile.
 BUILD_IMAGES ?=$(NODE_IMAGE)
 
 # Paths within the build container for BPF source.
@@ -67,6 +71,7 @@ WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 
 # Variables for the Windows packaging.
 # Name of the Windows release ZIP archive.
+WINDOWS_PACKAGING_ROOT := windows-packaging
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
 WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
@@ -112,18 +117,25 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 WINDOWS_UPGRADE_ROOT         ?= windows-upgrade
 WINDOWS_UPGRADE_DIST          = dist/windows-upgrade
 
-# The directory that holds temporary files used to build the windows upgrade zip
-# archive.
+# The directory for temporary files used to build the windows upgrade zip archive.
 WINDOWS_UPGRADE_DIST_STAGE    = $(WINDOWS_UPGRADE_DIST)/stage
+
+# Windows upgrade archive components.
 WINDOWS_UPGRADE_INSTALL_FILE ?= $(WINDOWS_UPGRADE_DIST_STAGE)/install-calico-windows.ps1
 WINDOWS_UPGRADE_INSTALL_ZIP  ?= $(WINDOWS_UPGRADE_DIST_STAGE)/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 WINDOWS_UPGRADE_SCRIPT       ?= $(WINDOWS_UPGRADE_DIST_STAGE)/calico-upgrade.ps1
 
-# The directory used for the upgrade image docker build context.
+# The directory for the upgrade image docker build context.
 WINDOWS_UPGRADE_BUILD        ?= $(WINDOWS_UPGRADE_ROOT)/build
 
 # The final zip archive used in the upgrade image.
 WINDOWS_UPGRADE_ARCHIVE      ?= $(WINDOWS_UPGRADE_BUILD)/calico-windows-upgrade.zip
+
+# The directory for windows image tarball
+WINDOWS_DIST        = dist/windows
+
+# The directory for temporary files used to build the windows image
+WINDOWS_DIST_STAGE  = $(WINDOWS_DIST)/stage
 
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
@@ -152,7 +164,7 @@ SRC_FILES=$(shell find ./pkg -name '*.go') \
 BINDIR?=bin
 
 ## Clean enough that a new release build will be clean
-clean: clean-windows-upgrade
+clean: clean-windows
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
@@ -160,13 +172,6 @@ clean: clean-windows-upgrade
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
 	rm -rf $(REMOTE_DEPS)
-	rm -f $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
-	rm -f $(WINDOWS_INSTALL_SCRIPT)
-	rm -f $(WINDOWS_UPGRADE_INSTALL_FILE)
-	rm -f $(WINDOWS_UPGRADE_BUILD)/*.zip
 	rm -rf filesystem/included-source
 	rm -rf dist
 	rm -rf bin
@@ -177,8 +182,14 @@ clean: clean-windows-upgrade
 	docker rmi $(TEST_CONTAINER_NAME) || true
 	docker rmi $(addprefix $(WINDOWS_UPGRADE_IMAGE):latest-,$(WINDOWS_VERSIONS)) || true
 
-clean-windows-upgrade:
-	-rm -f "$(WINDOWS_UPGRADE_DIST_STAGE)"
+clean-windows:
+	-rm -f $(WINDOWS_ARCHIVE) $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
+	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
+	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
+	-rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
+	-rm -f $(WINDOWS_INSTALL_SCRIPT)
+	-rm -rf "$(WINDOWS_DIST)"
+	-rm -rf "$(WINDOWS_UPGRADE_DIST)"
 	-rm -rf "$(WINDOWS_UPGRADE_BUILD)"
 
 ###############################################################################
@@ -424,10 +435,10 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks ut fv image build-windows-archive st
+ci: static-checks ut fv image build-windows-upgrade-archive image-tar-windows-all st
 
 ## Deploys images to registry
-cd: cd-common cd-windows-upgrade
+cd: cd-common cd-windows-all
 
 check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
@@ -467,8 +478,8 @@ release-publish: release-prereqs .release-$(VERSION).published
 	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
-	# Push Windows upgrade images.
-	$(MAKE) cd-windows-upgrade RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	# Push Windows images.
+	$(MAKE) cd-windows-all RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 	touch $@
 
@@ -564,18 +575,18 @@ $(WINDOWS_UPGRADE_INSTALL_FILE): $(WINDOWS_UPGRADE_DIST_STAGE) $(WINDOWS_INSTALL
 release-windows-upgrade-archive: release-prereqs
 	$(MAKE) build-windows-upgrade-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
-# Build the Windows upgrade zip archive.
-build-windows-upgrade-archive: clean-windows-upgrade $(WINDOWS_UPGRADE_INSTALL_ZIP) $(WINDOWS_UPGRADE_INSTALL_FILE) $(WINDOWS_UPGRADE_SCRIPT) $(WINDOWS_UPGRADE_BUILD)
+# Build the Windows upgrade zip archive, which also builds the windows archive.
+build-windows-upgrade-archive: clean-windows $(WINDOWS_UPGRADE_INSTALL_ZIP) $(WINDOWS_UPGRADE_INSTALL_FILE) $(WINDOWS_UPGRADE_SCRIPT) $(WINDOWS_UPGRADE_BUILD)
 	rm $(WINDOWS_UPGRADE_ARCHIVE) || true
 	cd $(WINDOWS_UPGRADE_DIST_STAGE) && zip -r "$(CURDIR)/$(WINDOWS_UPGRADE_ARCHIVE)" *.zip *.ps1
 
 # Sets up the docker builder used to create Windows image tarballs.
 setup-windows-builder:
-	-docker buildx rm calico-windows-upgrade-builder
-	docker buildx create --name=calico-windows-upgrade-builder --use --platform windows/amd64
+	-docker buildx rm calico-windows-builder
+	docker buildx create --name=calico-windows-builder --use --platform windows/amd64
 
 # Builds all the Windows image tarballs for each version in WINDOWS_VERSIONS
-image-tar-windows-all: setup-windows-builder $(addprefix sub-image-tar-windows-,$(WINDOWS_VERSIONS))
+image-tar-windows-all: setup-windows-builder $(addprefix sub-image-tar-windows-,$(WINDOWS_VERSIONS)) $(addprefix sub-image-tar-windows-upgrade-,$(WINDOWS_VERSIONS))
 
 CRANE_BINDMOUNT_CMD := \
 	docker run --rm \
@@ -598,9 +609,30 @@ CRANE_BINDMOUNT = echo [DRY RUN] $(CRANE_BINDMOUNT_CMD)
 DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
 
-# Uses the docker builder to create a Windows image tarball for a single Windows
-# version.
+# Uses the docker builder to create a Windows image tarball for a single Windows version.
 sub-image-tar-windows-%:
+	# ensure dir for windows image tars
+	-mkdir -p $(WINDOWS_DIST)
+	# ensure docker build dir exists
+	-mkdir -p $(WINDOWS_DIST_STAGE)
+	# copy dockerfile to staging dir
+	cp $(WINDOWS_PACKAGING_ROOT)/Dockerfile $(WINDOWS_DIST_STAGE)
+	# copy install entrypoint script to staging dir
+	cp $(WINDOWS_PACKAGING_ROOT)/host-process-install.ps1 $(WINDOWS_DIST_STAGE)
+	# build and copy install script to staging dir
+	make -C ../calico build
+	cp ../calico/_site/scripts/install-calico-windows.ps1 $(WINDOWS_DIST_STAGE)
+	# copy calico install zip file to staging dir
+	cp dist/calico-windows-$(GIT_VERSION).zip $(WINDOWS_DIST_STAGE)/calico-windows.zip
+	cd $(WINDOWS_DIST_STAGE) && \
+	docker buildx build \
+		--platform windows/amd64 \
+		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/image-$(GIT_VERSION)-$*.tar \
+		--pull \
+		--build-arg=WINDOWS_VERSION=$* .
+
+# Uses the docker builder to create a Windows upgrade image tarball for a single Windows version.
+sub-image-tar-windows-upgrade-%:
 	-mkdir -p $(WINDOWS_UPGRADE_DIST)
 	cd $(WINDOWS_UPGRADE_ROOT) && \
 		docker buildx build \
@@ -610,13 +642,17 @@ sub-image-tar-windows-%:
 			--no-cache \
 			--build-arg=WINDOWS_VERSION=$* .
 
-# The calico-windows-upgrade cd is different because we do not build docker images directly.
+cd-windows-all:
+	$(MAKE) cd-windows-windows WINDOWS_IMAGE_TAR_ROOT=$(WINDOWS_DIST)
+	$(MAKE) cd-windows-windows-upgrade WINDOWS_IMAGE_TAR_ROOT=$(WINDOWS_UPGRADE_DIST)
+
+# Windows image pushing is different because we do not build docker images directly.
 # Since the build machine is linux, we output the images to a tarball. (We can
 # produce images but there will be no output because docker images
 # built for Windows cannot be loaded on linux.)
 #
 # The resulting image tarball is then pushed to registries during cd/release.
-# The image tarballs are located in dist/windows-upgrade and have files names
+# The image tarballs are located in WINDOWS_IMAGE_TAR_ROOT and have files names
 # with the format 'image-v3.21.0-2-abcdef-20H2.tar'.
 #
 # In addition to pushing the individual images, we also create the manifest
@@ -629,14 +665,18 @@ sub-image-tar-windows-%:
 #   Setting os.image in the manifest is required for Windows hosts to load the
 #   correct image in manifest.
 # - Finally we push the manifest, "purging" the local manifest.
-cd-windows-upgrade:
+cd-windows-%:
+# WINDOWS_IMAGE_TAR_ROOT is the dir containing image tarballs to push.
+ifndef WINDOWS_IMAGE_TAR_ROOT
+	$(error WINDOWS_IMAGE_TAR_ROOT is not set)
+endif
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \
-		manifest_image="$${registry}/$(WINDOWS_UPGRADE_IMAGE):$(GIT_VERSION)"; \
+		manifest_image="$${registry}/$*:$(GIT_VERSION)"; \
 		for win_ver in $(WINDOWS_VERSIONS); do \
-			image_tar="$(WINDOWS_UPGRADE_DIST)/image-$(GIT_VERSION)-$${win_ver}.tar"; \
-			image="$${registry}/$(WINDOWS_UPGRADE_IMAGE):$(GIT_VERSION)-windows-$${win_ver}"; \
+			image_tar="$(WINDOWS_IMAGE_TAR_ROOT)/image-$(GIT_VERSION)-$${win_ver}.tar"; \
+			image="$${registry}/$*:$(GIT_VERSION)-windows-$${win_ver}"; \
 			echo Pushing image $${image} ...; \
 			$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote) & \
 			all_images="$${all_images} $${image}"; \
@@ -645,7 +685,7 @@ cd-windows-upgrade:
 		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${all_images}; \
 		for win_ver in $(WINDOWS_VERSIONS); do \
 			version=$$(docker manifest inspect mcr.microsoft.com/windows/nanoserver:$${win_ver} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'); \
-			image="$${registry}/$(WINDOWS_UPGRADE_IMAGE):$(GIT_VERSION)-windows-$${win_ver}"; \
+			image="$${registry}/$*:$(GIT_VERSION)-windows-$${win_ver}"; \
 			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \

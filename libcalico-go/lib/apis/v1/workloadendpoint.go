@@ -109,6 +109,10 @@ type WorkloadEndpointSpec struct {
 
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
 	Ports []EndpointPort `json:"ports,omitempty" validate:"omitempty,dive"`
+
+	// AllowSpoofedSourcePrefixes is a list of CIDRs this workload endoint is allowed to send traffic from,
+	// i.e. this allows the workload endpoint to spoof its IP address using addresses in these prefixes
+	AllowSpoofedSourcePrefixes []net.IPNet `json:"allow_spoofed_source_prefixes,omitempty"`
 }
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.

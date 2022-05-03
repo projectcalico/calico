@@ -1107,6 +1107,11 @@ ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
 
+# Check if the codebase is dirty or not.
+check-dirty:
+	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
+	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
+
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
 ###############################################################################

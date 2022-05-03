@@ -21,6 +21,8 @@ def gen_values(versions, imageNames, imageRegistry, chart)
         commonName:
         caBundle:
 
+    resources: {}
+
     # Configuration for the tigera operator
     tigeraOperator:
       image: #{versions.fetch("tigera-operator").image}
@@ -102,6 +104,9 @@ def gen_values(versions, imageNames, imageRegistry, chart)
     flexvol:
       image: #{imageRegistry}#{imageNames.fetch("flexvol")}
       tag: #{versions.fetch("flexvol")}
+    csi-driver:
+      image: #{imageRegistry}#{imageNames.fetch("csi-driver")}
+      tag: #{versions.fetch("csi-driver")}
 
     EOF
   end

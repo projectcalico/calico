@@ -52,6 +52,7 @@ Although we expect future minor versions to work with the corresponding manifest
 ### How to
 
 1. [Enable application layer policy](#enable-application-layer-policy)
+1. [Install Calico CSI Driver](#install-calico-csi-driver)
 1. [Install Istio](#install-istio)
 1. [Update Istio sidecar injector](#update-istio-sidecar-injector)
 1. [Add Calico authorization services to the mesh](#add-calico-authorization-services-to-the-mesh)
@@ -66,6 +67,22 @@ In the default **FelixConfiguration**, set the field, `policySyncPathPrefix` to 
 ```bash
 calicoctl patch FelixConfiguration default --patch \
    '{"spec": {"policySyncPathPrefix": "/var/run/nodeagent"}}'
+```
+
+Additionally, if you have installed Calico via the operator, you can optionally disable flexvolumes.
+Flexvolumes were used in earlier implementations and have since been deprecated.
+
+```bash
+kubectl patch installation default --type=merge -p '{"spec": {"flexVolumePath": "None"}}'
+```
+
+#### Install Calico CSI Driver
+
+{{site.prodname}} utilizes a Container Storage Interface (CSI) driver to help set up the policy sync API on every node.
+Apply the following to install the Calico CSI driver
+
+```bash
+kubectl apply -f {{ "/manifests/csi-driver.yaml" | absolute_url }}
 ```
 
 #### Install Istio

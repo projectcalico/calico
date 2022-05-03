@@ -1029,10 +1029,6 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 			Action: ReturnAction{},
 		})
 
-		// Do the full RPF check and dis-allow accept_local for anything else.
-		rpfRules = append(rpfRules, RPFilter(ipVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
-			r.OpenStackSpecialCasesEnabled, false)...)
-
 		if r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && wgEncryptHost {
 			// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
 			// check allows it.
@@ -1170,6 +1166,13 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 			Action: SetMarkAction{Mark: markFromWorkload},
 		})
 	}
+
+	// Send workload traffic to a specific chain to skip the rpf check for some workloads
+	rules = append(rules,
+		Rule{
+			Match:  Match().MarkMatchesWithMask(markFromWorkload, markFromWorkload),
+			Action: JumpAction{Target: ChainRpfSkip},
+		})
 
 	// Apply strict RPF check to packets from workload interfaces.  This prevents
 	// workloads from spoofing their IPs.  Note: non-privileged containers can't

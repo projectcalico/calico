@@ -114,6 +114,10 @@ certs:
     commonName:
     caBundle:
 
+# Resources for the tigera/operator pod itself.
+# By default, no resource requests or limits are specified.
+resources: {}
+
 # Configuration for the tigera operator images to deploy.
 tigeraOperator:
   image: tigera/operator

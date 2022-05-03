@@ -41,6 +41,7 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C app-policy protobuf
+	$(MAKE) -C calico gen-manifests
 
 # Build all Calico images for the current architecture.
 image:
@@ -92,7 +93,3 @@ create-release-branch: hack/release/release
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
-
-check-dirty:
-	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
-	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi

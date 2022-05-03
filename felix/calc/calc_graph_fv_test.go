@@ -581,7 +581,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
 					// and the async graph.
-					validator := NewValidationFilter(asyncGraph)
+					validator := NewValidationFilter(asyncGraph, conf)
 					toValidator := NewSyncerCallbacksDecoupler()
 					// Start the validator in one thread.
 					go toValidator.SendTo(validator)
@@ -730,7 +730,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			return nil
 		})
 		statsCollector.RegisterWith(calcGraph)
-		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher)
+		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher, conf)
 		sentInSync = false
 		lastState = empty
 		state = empty

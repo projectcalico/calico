@@ -25,7 +25,8 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 # fail if unable to download
 CURL=curl -C - -sSf
 
-CNI_VERSION=v1.0.1
+CNI_VERSION=v1.1.1
+FLANNEL_VERSION=v1.0.1
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -89,7 +90,7 @@ $(BIN)/install binary: $(SRC_FILES)
 	-mkdir -p .go-pkg-cache
 	-mkdir -p $(BIN)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -w" $(PACKAGE_NAME)/cmd/calico && \
+		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico && \
 		$(CHECK_BORINGSSL)'
 
 ## Build the Calico network plugin and ipam plugins for Windows
@@ -98,8 +99,8 @@ $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 	-e GOOS=windows \
 	-e CGO_ENABLED=1 \
 	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -o $(BIN_WIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico && \
-		go build -v -o $(BIN_WIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
+		go build -v -o $(BIN_WIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico && \
+		go build -v -o $(BIN_WIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico'
 
 
 ###############################################################################
@@ -133,7 +134,7 @@ $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 
 $(BIN)/flannel:
 	mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(CNI_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./flannel-$(subst v7,,$(ARCH))
+	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) ./flannel-$(subst v7,,$(ARCH))
 	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $(BIN)/flannel
 
 ###############################################################################
