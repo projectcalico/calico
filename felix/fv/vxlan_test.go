@@ -79,6 +79,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
 				// tested but we can verify the state with ethtool.
 				topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
+
 				felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 				// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -98,6 +99,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 					return nil
 				}, "10s", "100ms").ShouldNot(HaveOccurred())
+
+				if enableIPv6 {
+					Eventually(func() error {
+						for i, f := range felixes {
+							out, err := f.ExecOutput("ip", "link")
+							if err != nil {
+								return err
+							}
+							if strings.Contains(out, "vxlan-v6.calico") {
+								continue
+							}
+							return fmt.Errorf("felix %d has no IPv6 vxlan device", i)
+						}
+						return nil
+					}, "10s", "100ms").ShouldNot(HaveOccurred())
+				}
 
 				// Create workloads, using that profile.  One on each "host".
 				for ii := range w {
@@ -486,9 +503,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// The VXLAN device should appear with default MTU, etc. FV environment uses MTU 1500,
 				// which means that we should expect 1450 after subracting VXLAN overhead for IPv4 or 1430 for IPv6.
 				mtuStr := "mtu 1450"
-				if enableIPv6 {
-					mtuStr = "mtu 1430"
-				}
+				mtuStrV6 := "mtu 1430"
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
@@ -502,6 +517,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "10s", "100ms").Should(ContainSubstring("dstport 4789"))
+					if enableIPv6 {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring(mtuStrV6))
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("vxlan id 4096"))
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("dstport 4789"))
+					}
 				}
 
 				// Change the host device's MTU, and expect the VXLAN device to be updated.
@@ -514,9 +543,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 				// MTU should be auto-detected, and updated to the host MTU minus 50 bytes overhead for IPv4 or 70 bytes for IPv6.
 				mtuStr = "mtu 1350"
+				mtuStrV6 = "mtu 1330"
 				mtuValue := "1350"
 				if enableIPv6 {
-					mtuStr = "mtu 1330"
 					mtuValue = "1330"
 				}
 				for _, felix := range felixes {
@@ -525,6 +554,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "60s", "100ms").Should(ContainSubstring(mtuStr))
+
+					if enableIPv6 {
+						// Felix checks host MTU every 30s
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "60s", "100ms").Should(ContainSubstring(mtuStrV6))
+					}
 
 					// And expect the MTU file on disk to be updated.
 					Eventually(func() string {
@@ -540,6 +577,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				vni := 4097
 				port := 4790
 				felixConfig.Spec.VXLANMTU = &mtu
+				felixConfig.Spec.VXLANV6MTU = &mtu
 				felixConfig.Spec.VXLANPort = &port
 				felixConfig.Spec.VXLANVNI = &vni
 				_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
@@ -559,6 +597,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "10s", "100ms").Should(ContainSubstring("dstport 4790"))
+
+					if enableIPv6 {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "30s", "100ms").Should(ContainSubstring("mtu 1300"))
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("vxlan id 4097"))
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("dstport 4790"))
+
+					}
 				}
 
 			})
@@ -566,14 +620,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			It("should delete the vxlan device when vxlan is disabled", func() {
 				// Wait for the VXLAN device to be created.
 				mtuStr := "mtu 1450"
-				if enableIPv6 {
-					mtuStr = "mtu 1430"
-				}
+				mtuStrV6 := "mtu 1430"
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "10s", "100ms").Should(ContainSubstring(mtuStr))
+					if enableIPv6 {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring(mtuStrV6))
+					}
 				}
 
 				// Disable VXLAN in Felix.
@@ -590,6 +648,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "10s", "100ms").ShouldNot(ContainSubstring(mtuStr))
+					if enableIPv6 {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").ShouldNot(ContainSubstring(mtuStrV6))
+					}
 				}
 			})
 		})

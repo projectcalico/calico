@@ -622,10 +622,14 @@ spec:
                   this based on the existing IP pools. [Default: nil (unset)]'
                 type: boolean
               vxlanMTU:
-                description: 'VXLANMTU is the MTU to set on the tunnel device. See
-                  Configuring MTU [Default: 1440]'
+                description: 'VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel
+                  device. See Configuring MTU [Default: 1440]'
                 type: integer
               vxlanPort:
+                type: integer
+              vxlanV6MTU:
+                description: 'VXLANV6MTU is the MTU to set on the IPv6 VXLAN tunnel
+                  device. See Configuring MTU [Default: 1420]'
                 type: integer
               vxlanVNI:
                 type: integer
