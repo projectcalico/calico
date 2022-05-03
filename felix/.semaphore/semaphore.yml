@@ -144,6 +144,14 @@ blocks:
       # how much we churn docker containers during the build.  Disable it.
       - sudo systemctl stop docker
       - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+      # Enable IPv6 in docker (https://docs.docker.com/config/daemon/ipv6/)
+      - >-
+        sudo bash -c 'cat > /etc/docker/daemon.json << EOF
+{
+  "ipv6": true,
+  "fixed-cidr-v6": "2001:db8:1::/64"
+}
+EOF'
       - sudo systemctl start docker
       # Free up space on the build machine.
       - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
@@ -176,6 +184,20 @@ blocks:
   task:
     prologue:
       commands:
+      # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+      # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+      # how much we churn docker containers during the build.  Disable it.
+      - sudo systemctl stop docker
+      - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+      # Enable IPv6 in docker (https://docs.docker.com/config/daemon/ipv6/)
+      - >-
+        sudo bash -c 'cat > /etc/docker/daemon.json << EOF
+{
+  "ipv6": true,
+  "fixed-cidr-v6": "2001:db8:1::/64"
+}
+EOF'
+      - sudo systemctl start docker
       - checkout
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
