@@ -107,8 +107,6 @@ func newVXLANManager(
 		blackHoleProto = dpConfig.DeviceRouteProtocol
 	}
 
-	var noEncapRTConstruct func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable
 	var brt routeTable
 	if !dpConfig.RouteSyncDisabled {
 		log.Debug("RouteSyncDisabled is false.")
@@ -123,36 +121,24 @@ func newVXLANManager(
 			0,
 			opRecorder,
 		)
-		noEncapRTConstruct = func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
-			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
-				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, 0,
+		if ipVersion == 6 {
+			brt = routetable.New(
+				[]string{routetable.InterfaceNone},
+				ipVersion,
+				false,
+				dpConfig.NetlinkTimeout,
+				dpConfig.DeviceRouteSourceAddressIPv6,
+				blackHoleProto,
+				false,
+				0,
 				opRecorder,
 			)
+		} else if ipVersion != 4 {
+			log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 		}
 	} else {
 		log.Info("RouteSyncDisabled is true, using DummyTable.")
 		brt = &routetable.DummyTable{}
-		noEncapRTConstruct = func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
-			return &routetable.DummyTable{}
-		}
-	}
-
-	if ipVersion == 6 {
-		brt = routetable.New(
-			[]string{routetable.InterfaceNone},
-			ipVersion,
-			false,
-			dpConfig.NetlinkTimeout,
-			dpConfig.DeviceRouteSourceAddressIPv6,
-			blackHoleProto,
-			false,
-			0,
-			opRecorder,
-		)
-	} else if ipVersion != 4 {
-		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
 
 	return newVXLANManagerWithShims(
