@@ -134,6 +134,7 @@ type Config struct {
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
 	VXLANMTU             int
+	VXLANV6MTU           int
 	VXLANPort            int
 
 	MaxIPSetSize int
@@ -792,7 +793,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				dp.loopSummarizer,
 				6,
 			)
-			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
+			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANV6MTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 			dp.RegisterManager(vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
@@ -929,6 +930,7 @@ func determinePodMTU(config Config) int {
 	for _, s := range []mtuState{
 		{config.IPIPMTU, config.RulesConfig.IPIPEnabled},
 		{config.VXLANMTU, config.RulesConfig.VXLANEnabled},
+		{config.VXLANV6MTU, config.RulesConfig.VXLANEnabled && config.IPv6Enabled},
 		{config.Wireguard.MTU, config.Wireguard.Enabled},
 	} {
 		if s.enabled && s.mtu != 0 && (s.mtu < mtu || mtu == 0) {
@@ -957,14 +959,12 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 		c.IPIPMTU = hostMTU - ipipMTUOverhead
 	}
 	if c.VXLANMTU == 0 {
-		log.Debug("Defaulting VXLAN MTU based on host")
+		log.Debug("Defaulting IPv4 VXLAN MTU based on host")
 		c.VXLANMTU = hostMTU - vxlanMTUOverhead
-
-		if c.IPv6Enabled {
-			log.Debug("IPv6 is enabled, defaulting VXLAN MTU based on host")
-			c.VXLANMTU = hostMTU - vxlanV6MTUOverhead
-		}
-
+	}
+	if c.VXLANV6MTU == 0 {
+		log.Debug("Defaulting IPv6 VXLAN MTU based on host")
+		c.VXLANV6MTU = hostMTU - vxlanV6MTUOverhead
 	}
 	if c.Wireguard.MTU == 0 {
 		if c.KubernetesProvider == config.ProviderAKS && c.Wireguard.EncryptHostTraffic {
