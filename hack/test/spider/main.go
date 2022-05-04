@@ -72,6 +72,11 @@ func loadPackages() []Package {
 					deps = append(deps, canonical(pkg.Deps[i]))
 				}
 			}
+			for _, d := range append(pkg.TestImports, pkg.XTestImports...) {
+				if isLocalDir(d) {
+					deps = append(deps, canonical(d))
+				}
+			}
 			pkg.Deps = deps
 
 			// Filter out packages that aren't part of this repo.
@@ -169,4 +174,10 @@ type Package struct {
 	// List of other packages that this package imports - either directly or
 	// indirectly.
 	Deps []string `json:"Deps"`
+
+	// List of imports from _test.go files within the package.
+	TestImports []string `json:"TestImports"`
+
+	// List of imports from _test.go files outside the package.
+	XTestImports []string `json:"XTestImports"`
 }
