@@ -290,25 +290,21 @@ func isMount(path string) (bool, error) {
 }
 
 func isBPF(path string) (bool, error) {
-	bpffsMagicNumber := uint32(0xCAFE4A11)
-
 	var fsdata unix.Statfs_t
 	if err := unix.Statfs(path, &fsdata); err != nil {
 		return false, fmt.Errorf("%s is not mounted", path)
 	}
 
-	return uint32(fsdata.Type) == bpffsMagicNumber, nil
+	return uint32(fsdata.Type) == uint32(unix.BPF_FS_MAGIC), nil
 }
 
 func isCgroupV2(path string) (bool, error) {
-	cgroup2MagicNumber := uint32(0x63677270)
-
 	var fsdata unix.Statfs_t
 	if err := unix.Statfs(path, &fsdata); err != nil {
 		return false, fmt.Errorf("%s is not mounted", path)
 	}
 
-	return uint32(fsdata.Type) == cgroup2MagicNumber, nil
+	return uint32(fsdata.Type) == uint32(unix.CGROUP2_SUPER_MAGIC), nil
 }
 
 func mountBPFfs(path string) error {

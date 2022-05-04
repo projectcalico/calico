@@ -199,6 +199,8 @@ RUN chgrp -R 0 /etc/calico && \
 
 COPY --from=bpftool /bpftool /bin
 
+COPY --from=centos /usr/bin/nsenter /usr/bin/nsenter
+
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-amd64 /bin/calico-node
 

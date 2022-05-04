@@ -116,6 +116,9 @@ bin_allow_list_patterns=(
   zless
   zmore
 
+  # Needed by cgroup v2
+  nsenter
+
   # Used by this script.
   '/find$'
   '/ldd$'
