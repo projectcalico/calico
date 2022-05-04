@@ -596,6 +596,7 @@ blocks:
     jobs:
     - name: "htmlproofer, kubeval, and helm tests"
       commands:
+      - ../.semaphore/run-and-monitor generation.log make gen-manifests check-dirty
       - ../.semaphore/run-and-monitor htmlproofer.log make htmlproofer
       - ../.semaphore/run-and-monitor kubeval.log make kubeval
       - ../.semaphore/run-and-monitor helm-tests.log make helm-tests
