@@ -22,6 +22,20 @@ helm -n tigera-operator template \
 	-f ../charts/values/tigera-operator.yaml >> tigera-operator.yaml
 
 ##########################################################################
+# Build CRD manifest.
+#
+# This manifest is used in "Calico the hard way" documentation.
+##########################################################################
+echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
+for FILE in $(ls ../charts/calico/crds); do
+	helm template ../charts/calico \
+		--include-crds \
+		--show-only $FILE \
+		-f ../charts/values/calico.yaml \
+		-f ../charts/values/values.common.yaml >> crds.yaml
+done
+
+##########################################################################
 # Build Calico manifests.
 #
 # To add a new manifest to this directory, define
