@@ -12,12 +12,12 @@ import (
 	"strings"
 )
 
-var sha1, sha2, commitRange, filterDir string
+var shaA, shaB, commitRange, filterDir string
 
 func init() {
-	flag.StringVar(&sha1, "sha1", "", "First commit in diff calculation")
-	flag.StringVar(&sha2, "sha2", "", "Second commit in diff calculation")
-	flag.StringVar(&commitRange, "commit-range", "", "Range of commits, e.g. SHA1...SHA2")
+	flag.StringVar(&shaA, "shaA", "", "First commit in diff calculation")
+	flag.StringVar(&shaB, "shaB", "", "Second commit in diff calculation")
+	flag.StringVar(&commitRange, "commit-range", "", "Range of commits, e.g. shaA...shaB")
 	flag.StringVar(&filterDir, "filter-dir", "", "Directory to filter on")
 
 	flag.Parse()
@@ -72,6 +72,8 @@ func loadPackages() []Package {
 					deps = append(deps, canonical(pkg.Deps[i]))
 				}
 			}
+
+			// Include test code as well.
 			for _, d := range append(pkg.TestImports, pkg.XTestImports...) {
 				if isLocalDir(d) {
 					deps = append(deps, canonical(d))
@@ -87,12 +89,12 @@ func loadPackages() []Package {
 }
 
 func getCommits() (string, string) {
-	if sha1 == "" && sha2 == "" && commitRange == "" {
+	if shaA == "" && shaB == "" && commitRange == "" {
 		panic("No commit information provided!")
 	}
 
-	if sha1 != "" && sha2 != "" {
-		return sha1, sha2
+	if shaA != "" && shaB != "" {
+		return shaA, shaB
 	}
 
 	splits := strings.Split(commitRange, "...")
@@ -119,7 +121,7 @@ func main() {
 	c1, c2 := getCommits()
 
 	// Find all of the files that changed in the diff.
-	// git diff --name-only SHA1 SHA2
+	// git diff --name-only SHA_A SHA_B
 	var out, stderr bytes.Buffer
 	cmd := exec.Command("git", "diff", "--name-only", c1, c2)
 	cmd.Stdout = &out
@@ -127,6 +129,24 @@ func main() {
 	err := cmd.Run()
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+	}
+
+	// First, check if go.mod has changed. If it has, we can skip building a graph of changed / impacted
+	// pacakges and instead just run all of the tests.
+	if strings.Contains(out.String(), "go.mod") {
+		// TODO: Be smarter - we can tell what imports changed, and run tests only in the affected packages.
+		var out, stderr bytes.Buffer
+		cmd = exec.Command("sh", "-c", "find . -name '*_test.go' | xargs dirname | sort -u")
+		cmd.Stdout = &out
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		if err != nil {
+			panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+		}
+		for _, p := range strings.Split(out.String(), "\n") {
+			fmt.Println(p)
+		}
+		return
 	}
 
 	// From the list of files, condense that to a set of packages.
