@@ -15,9 +15,9 @@
 package main
 
 import (
+	"math"
 	"net"
 	"strconv"
-	"math"
 
 	"golang.org/x/sys/unix"
 
@@ -61,7 +61,7 @@ func main() {
 		if err != nil {
 			log.WithError(err).Fatal("IP id not a number")
 		}
-		if id > math.MaxUint16 || id < 0  {
+		if id > math.MaxUint16 || id < 0 {
 			log.Fatal("IP id should be between 0 and 65535")
 		}
 		ipID = uint16(id)
@@ -73,7 +73,7 @@ func main() {
 		if err != nil {
 			log.WithError(err).Fatal("source port not a number")
 		}
-		if p > math.MaxUint16 || p < 0  {
+		if p > math.MaxUint16 || p < 0 {
 			log.Fatal("source port should be between 0 and 65535")
 		}
 		sport = uint16(p)
@@ -85,7 +85,7 @@ func main() {
 		if err != nil {
 			log.WithError(err).Fatal("destination port not a number")
 		}
-		if p > math.MaxUint16 || p < 0  {
+		if p > math.MaxUint16 || p < 0 {
 			log.Fatal("destination port should be between 0 and 65535")
 		}
 		dport = uint16(p)

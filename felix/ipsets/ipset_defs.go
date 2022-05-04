@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	"fmt"
-	"strconv"
 	"math"
+	"strconv"
 
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 
@@ -154,7 +154,7 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 		if err != nil {
 			log.WithField("member", member).WithError(err).Panic("Bad port")
 		}
-		if port > math.MaxUint16 || port < 0  {
+		if port > math.MaxUint16 || port < 0 {
 			log.WithField("member", member).Panic("Bad port range (should be between 0 and 65535)")
 		}
 		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
