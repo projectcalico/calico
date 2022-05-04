@@ -1,9 +1,5 @@
----
-layout: null
----
-{% helm %}
 datastore: kubernetes
 network: calico
+ipam: calico-ipam
 typha:
   enabled: true
-{% endhelm %}

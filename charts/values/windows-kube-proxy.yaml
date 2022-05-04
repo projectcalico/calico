@@ -1,6 +1,3 @@
----
-layout: null
----
 # Adapted from: https://github.com/kubernetes-sigs/sig-windows-tools/blob/master/hostprocess/calico/kube-proxy/start.ps1
 
 apiVersion: v1
@@ -32,7 +29,7 @@ data:
     ((Get-Content -Path ./var/lib/kube-proxy/kubeconfig.conf -Raw) -replace '/var',"$env:CONTAINER_SANDBOX_MOUNT_POINT/var") | Set-Content -Path $kubeConfigPath 
 
     # Download kube-proxy service script
-    curl https://raw.githubusercontent.com/projectcalico/calico/{{site.data.versions.first.components["calico/node"].version}}/node/windows-packaging/CalicoWindows/kubernetes/kube-proxy-service.ps1 -o $PSScriptRoot/kube-proxy-service.ps1
+    curl https://raw.githubusercontent.com/projectcalico/calico/master/node/windows-packaging/CalicoWindows/kubernetes/kube-proxy-service.ps1 -o $PSScriptRoot/kube-proxy-service.ps1
 
     & "$PSScriptRoot/kube-proxy-service.ps1" -CalicoWindowsDir "/CalicoWindows" -Kubeconfig $kubeConfigPath -KubeProxy $kubeProxyPath
 
