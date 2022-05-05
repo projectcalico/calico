@@ -16,7 +16,9 @@ package calc
 
 import (
 	"fmt"
+	"net"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
@@ -84,16 +86,21 @@ func (r *EncapsulationResolver) triggerCalculation() {
 	}
 
 	newEncap := config.Encapsulation{
-		IPIPEnabled:  r.encapCalc.IPIPEnabled(),
-		VXLANEnabled: r.encapCalc.VXLANEnabled(),
+		IPIPEnabled:    r.encapCalc.IPIPEnabled(),
+		VXLANEnabled:   r.encapCalc.VXLANEnabled(),
+		VXLANEnabledV6: r.encapCalc.VXLANEnabledV6(),
 	}
 
-	if r.config.Encapsulation.IPIPEnabled != newEncap.IPIPEnabled || r.config.Encapsulation.VXLANEnabled != newEncap.VXLANEnabled {
+	if r.config.Encapsulation.IPIPEnabled != newEncap.IPIPEnabled ||
+		r.config.Encapsulation.VXLANEnabled != newEncap.VXLANEnabled ||
+		r.config.Encapsulation.VXLANEnabledV6 != newEncap.VXLANEnabledV6 {
 		log.WithFields(log.Fields{
-			"oldIPIPEnabled":  r.config.Encapsulation.IPIPEnabled,
-			"newIPIPEnabled":  newEncap.IPIPEnabled,
-			"oldVXLANEnabled": r.config.Encapsulation.VXLANEnabled,
-			"newVXLANEnabled": newEncap.VXLANEnabled,
+			"oldIPIPEnabled":    r.config.Encapsulation.IPIPEnabled,
+			"newIPIPEnabled":    newEncap.IPIPEnabled,
+			"oldVXLANEnabled":   r.config.Encapsulation.VXLANEnabled,
+			"newVXLANEnabled":   newEncap.VXLANEnabled,
+			"oldVXLANEnabledV6": r.config.Encapsulation.VXLANEnabledV6,
+			"newVXLANEnabledV6": newEncap.VXLANEnabledV6,
 		}).Info("EncapsulationResolver: Encapsulation changed.")
 	}
 
@@ -106,9 +113,10 @@ func (r *EncapsulationResolver) triggerCalculation() {
 // encapsulation changes to restart Felix, and by Run() in daemon.go, where it calculates
 // the encapsulation state that will be effectively used by Felix.
 type EncapsulationCalculator struct {
-	config     *config.Config
-	ipipPools  map[string]struct{}
-	vxlanPools map[string]struct{}
+	config       *config.Config
+	ipipPools    map[string]struct{}
+	vxlanPools   map[string]struct{}
+	vxlanPoolsv6 map[string]struct{}
 }
 
 func NewEncapsulationCalculator(config *config.Config, ippoolKVPList *model.KVPairList) *EncapsulationCalculator {
@@ -117,9 +125,10 @@ func NewEncapsulationCalculator(config *config.Config, ippoolKVPList *model.KVPa
 	}
 
 	encapCalc := &EncapsulationCalculator{
-		config:     config,
-		ipipPools:  map[string]struct{}{},
-		vxlanPools: map[string]struct{}{},
+		config:       config,
+		ipipPools:    map[string]struct{}{},
+		vxlanPools:   map[string]struct{}{},
+		vxlanPoolsv6: map[string]struct{}{},
 	}
 
 	if ippoolKVPList != nil {
@@ -202,15 +211,25 @@ func (c *EncapsulationCalculator) updatePool(cidr string, ipipEnabled, vxlanEnab
 	}
 
 	if vxlanEnabled {
-		c.vxlanPools[cidr] = struct{}{}
+		parsed, _, err := net.ParseCIDR(cidr)
+		if err != nil {
+			logrus.WithError(err).Fatal("Invalid CIDR")
+		}
+		if parsed.To4() != nil {
+			c.vxlanPools[cidr] = struct{}{}
+		} else {
+			c.vxlanPoolsv6[cidr] = struct{}{}
+		}
 	} else {
 		delete(c.vxlanPools, cidr)
+		delete(c.vxlanPoolsv6, cidr)
 	}
 }
 
 func (c *EncapsulationCalculator) removePool(cidr string) {
 	delete(c.ipipPools, cidr)
 	delete(c.vxlanPools, cidr)
+	delete(c.vxlanPoolsv6, cidr)
 }
 
 func (c *EncapsulationCalculator) IPIPEnabled() bool {
@@ -227,4 +246,12 @@ func (c *EncapsulationCalculator) VXLANEnabled() bool {
 	}
 
 	return len(c.vxlanPools) > 0
+}
+
+func (c *EncapsulationCalculator) VXLANEnabledV6() bool {
+	if c.config != nil && c.config.VXLANEnabled != nil {
+		return *c.config.VXLANEnabled
+	}
+
+	return len(c.vxlanPoolsv6) > 0
 }

@@ -755,8 +755,10 @@ func loadParams() {
 		case "millis":
 			param = &MillisParam{}
 		case "iface-list":
-			param = &RegexpParam{Regexp: IfaceListRegexp,
-				Msg: "invalid Linux interface name"}
+			param = &RegexpParam{
+				Regexp: IfaceListRegexp,
+				Msg:    "invalid Linux interface name",
+			}
 		case "iface-list-regexp":
 			param = &RegexpPatternListParam{
 				NonRegexpElemRegexp: NonRegexpIfaceElemRegexp,
@@ -769,16 +771,20 @@ func loadParams() {
 				Flags: strings.Split(kindParams, ","),
 			}
 		case "iface-param":
-			param = &RegexpParam{Regexp: IfaceParamRegexp,
-				Msg: "invalid Linux interface parameter"}
+			param = &RegexpParam{
+				Regexp: IfaceParamRegexp,
+				Msg:    "invalid Linux interface parameter",
+			}
 		case "file":
 			param = &FileParam{
 				MustExist:  strings.Contains(kindParams, "must-exist"),
 				Executable: strings.Contains(kindParams, "executable"),
 			}
 		case "authority":
-			param = &RegexpParam{Regexp: AuthorityRegexp,
-				Msg: "invalid URL authority"}
+			param = &RegexpParam{
+				Regexp: AuthorityRegexp,
+				Msg:    "invalid URL authority",
+			}
 		case "ipv4":
 			param = &Ipv4Param{}
 		case "ipv6":
@@ -792,11 +798,15 @@ func loadParams() {
 		case "portrange-list":
 			param = &PortRangeListParam{}
 		case "hostname":
-			param = &RegexpParam{Regexp: HostnameRegexp,
-				Msg: "invalid hostname"}
+			param = &RegexpParam{
+				Regexp: HostnameRegexp,
+				Msg:    "invalid hostname",
+			}
 		case "host-address":
-			param = &RegexpParam{Regexp: HostAddressRegexp,
-				Msg: "invalid host address"}
+			param = &RegexpParam{
+				Regexp: HostAddressRegexp,
+				Msg:    "invalid host address",
+			}
 		case "region":
 			param = &RegionParam{}
 		case "oneof":
@@ -806,10 +816,13 @@ func loadParams() {
 				lowerCaseToCanon[strings.ToLower(option)] = option
 			}
 			param = &OneofListParam{
-				lowerCaseOptionsToCanonical: lowerCaseToCanon}
+				lowerCaseOptionsToCanonical: lowerCaseToCanon,
+			}
 		case "string":
-			param = &RegexpParam{Regexp: StringRegexp,
-				Msg: "invalid string"}
+			param = &RegexpParam{
+				Regexp: StringRegexp,
+				Msg:    "invalid string",
+			}
 		case "cidr-list":
 			param = &CIDRListParam{}
 		case "route-table-range":
@@ -937,6 +950,7 @@ type param interface {
 }
 
 type Encapsulation struct {
-	IPIPEnabled  bool
-	VXLANEnabled bool
+	IPIPEnabled    bool
+	VXLANEnabled   bool
+	VXLANEnabledV6 bool
 }
