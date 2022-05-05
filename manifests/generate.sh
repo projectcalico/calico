@@ -56,3 +56,15 @@ for FILE in $VALUES_FILES; do
 		-f ../charts/values/$FILE \
 		-f ../charts/values/values.common.yaml > $FILE
 done
+
+##########################################################################
+# Build tigera-operator manifests for OCP.
+#
+# OCP requires resources in their own yaml files, so output to a dir.
+##########################################################################
+helm template --include-crds \
+	-n tigera-operator \
+	../charts/tigera-operator/ \
+	--set installation.kubernetesProvider=openshift \
+	-f ../charts/values/tigera-operator.yaml --output-dir ocp
+mv $(find ocp/tigera-operator -name "*.yaml") ocp/manifests && rm -r ocp/tigera-operator
