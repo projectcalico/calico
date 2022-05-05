@@ -69,9 +69,11 @@ var baseTests = []StateList{
 
 	// Tests of policy ordering.  Each state has one tier but we shuffle
 	// the order of the policies within it.
-	{localEp1WithOneTierPolicy123,
+	{
+		localEp1WithOneTierPolicy123,
 		localEp1WithOneTierPolicy321,
-		localEp1WithOneTierPolicyAlpha},
+		localEp1WithOneTierPolicyAlpha,
+	},
 
 	// Test mutating the profile list of some endpoints.
 	{localEpsWithNonMatchingProfile, localEpsWithProfile},
@@ -80,12 +82,14 @@ var baseTests = []StateList{
 	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
 
 	// Network set tests.
-	{hostEp1WithPolicy,
+	{
+		hostEp1WithPolicy,
 		hostEp1WithPolicyAndANetworkSet,
 		hostEp1WithPolicyAndANetworkSetMatchingBEqB,
 		hostEp2WithPolicy,
 		hostEp1WithPolicyAndANetworkSet,
-		hostEp1WithPolicyAndTwoNetworkSets},
+		hostEp1WithPolicyAndTwoNetworkSets,
+	},
 
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
@@ -140,7 +144,8 @@ var baseTests = []StateList{
 		// Then change inherited label on EP2 to stop the match.
 		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2,
 		// Ditto for EP1.  Now matches none of the EPs.
-		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1},
+		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1,
+	},
 	// This scenario introduces ports with duplicate names.
 	{
 		// Start with endpoints and policy.
@@ -164,9 +169,11 @@ var baseTests = []StateList{
 
 	// Repro of a particular named port index update failure case.  The inherited profile was
 	// improperly cleaned up, so, when it was added back in again we ended up with multiple copies.
-	{localEpsWithTagInheritProfile,
+	{
+		localEpsWithTagInheritProfile,
 		localEp1WithPolicy,
-		localEpsWithProfile},
+		localEpsWithProfile,
+	},
 
 	// A long, fairly random sequence of updates.
 	{
@@ -215,7 +222,8 @@ var baseTests = []StateList{
 	},
 
 	// And another.
-	{localEpsWithProfile,
+	{
+		localEpsWithProfile,
 		localEp1WithOneTierPolicy123,
 		localEpsWithNonMatchingProfile,
 		localEpsWithTagInheritProfile,
@@ -577,7 +585,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan interface{})
-					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
+					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
 					// and the async graph.
@@ -722,7 +730,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
-		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
+		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
 		calcGraph = NewCalculationGraph(eventBuf, conf)
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
@@ -804,14 +812,13 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 }
 
 var _ = Describe("calc graph with health state", func() {
-
 	It("should be constructable", func() {
 		// Create the calculation graph.
 		conf := config.New()
 		conf.FelixHostname = localHostname
 		outputChan := make(chan interface{})
 		healthAggregator := health.NewHealthAggregator()
-		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true}
+		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
 		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator)
 		Expect(asyncGraph).NotTo(BeNil())
 	})
