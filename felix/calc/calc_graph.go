@@ -30,12 +30,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var (
-	gaugeNumActiveSelectors = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_active_local_selectors",
-		Help: "Number of active selectors on this host.",
-	})
-)
+var gaugeNumActiveSelectors = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "felix_active_local_selectors",
+	Help: "Number of active selectors on this host.",
+})
 
 func init() {
 	prometheus.MustRegister(gaugeNumActiveSelectors)
@@ -336,7 +334,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
-	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.WireguardEnabled {
+	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 || conf.WireguardEnabled {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)
@@ -365,7 +363,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//         |
 	//      <dataplane>
 	//
-	if conf.Encapsulation.VXLANEnabled {
+	if conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 {
 		vxlanResolver := NewVXLANResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
 		vxlanResolver.RegisterWith(allUpdDispatcher)
 	}
