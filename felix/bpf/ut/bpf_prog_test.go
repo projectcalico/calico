@@ -261,14 +261,20 @@ outter:
 
 	if rules != nil {
 		alloc := &forceAllocator{alloc: idalloc.New()}
-		pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
+		ipsMapFD := ipsMap.MapFD()
+		Expect(ipsMapFD).NotTo(BeZero())
+		stateMapFD := stateMap.MapFD()
+		Expect(stateMapFD).NotTo(BeZero())
+		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD())
 		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
-		polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+		var polProgFD bpf.ProgFD
 		if topts.xdp {
 			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_XDP)
+		} else {
+			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 		}
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
 		defer func() { _ = polProgFD.Close() }()
 		progFDBytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))

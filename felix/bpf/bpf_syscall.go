@@ -140,10 +140,10 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, p
 		log.WithError(errno).Debug("BPF_PROG_LOAD failed")
 		if len(goLog) > 0 {
 			for _, l := range strings.Split(goLog, "\n") {
-				log.Error("BPF Verifier:    ", l)
+				log.Error("BPF_PROG_LOAD failed, BPF Verifier output:    ", l)
 			}
 		} else if logSize > 0 {
-			log.Error("Verifier log was empty.")
+			log.Error("BPF_PROG_LOAD failed, verifier log was empty.")
 		}
 	}
 
