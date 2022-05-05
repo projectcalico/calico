@@ -848,13 +848,14 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	routeFilter := &netlink.Route{
 		Table: r.tableIndex,
 	}
-	routeFilterFlags := netlink.RT_FILTER_OIF
+	var routeFilterFlags uint64
 	if r.tableIndex != 0 {
 		routeFilterFlags |= netlink.RT_FILTER_TABLE
 	}
 	if linkAttrs != nil {
 		// Link attributes might be nil for the special "no-OIF" interface name.
 		routeFilter.LinkIndex = linkAttrs.Index
+		routeFilterFlags |= netlink.RT_FILTER_OIF
 	}
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
 	r.livenessCallback()
