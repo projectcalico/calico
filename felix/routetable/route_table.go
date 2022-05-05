@@ -802,6 +802,12 @@ func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) 
 		Table:     r.tableIndex,
 	}
 
+	// If this is an IPv6 blackhole route, set the dev to lo. This matches
+	// what the kernel does, and ensures we properly query programmed routes.
+	if r.ipVersion == 6 && target.RouteType() == syscall.RTN_BLACKHOLE {
+		route.LinkIndex = 1
+	}
+
 	if r.deviceRouteSourceAddress != nil {
 		route.Src = r.deviceRouteSourceAddress
 	}
@@ -848,14 +854,14 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	routeFilter := &netlink.Route{
 		Table: r.tableIndex,
 	}
-	var routeFilterFlags uint64
+
+	routeFilterFlags := netlink.RT_FILTER_OIF
 	if r.tableIndex != 0 {
 		routeFilterFlags |= netlink.RT_FILTER_TABLE
 	}
 	if linkAttrs != nil {
 		// Link attributes might be nil for the special "no-OIF" interface name.
 		routeFilter.LinkIndex = linkAttrs.Index
-		routeFilterFlags |= netlink.RT_FILTER_OIF
 	}
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
 	r.livenessCallback()
