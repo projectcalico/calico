@@ -933,7 +933,7 @@ var _ = Describe("Static", func() {
 				}))
 			})
 
-			Describe("with VXLAN enabled", func() {
+			Describe("with IPv4 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabled = true
 				})
@@ -959,7 +959,7 @@ var _ = Describe("Static", func() {
 					}))
 				})
 
-				Describe("and tunnel IP", func() {
+				Describe("and IPv4 tunnel IP", func() {
 					BeforeEach(func() {
 						conf.VXLANTunnelAddress = net.IP{10, 0, 0, 1}
 					})
@@ -992,7 +992,53 @@ var _ = Describe("Static", func() {
 				})
 			})
 
-			It("IPv4: Should return expected NAT postrouting chain", func() {
+			Describe("with IPv6 VXLAN enabled", func() {
+				BeforeEach(func() {
+					conf.VXLANEnabledV6 = true
+				})
+
+				checkManglePostrouting(6, kubeIPVSEnabled)
+
+				It("IPv6: Should return expected NAT postrouting chain", func() {
+					Expect(rr.StaticNATPostroutingChains(6)).To(Equal([]*Chain{
+						{
+							Name: "cali-POSTROUTING",
+							Rules: []Rule{
+								{Action: JumpAction{Target: "cali-fip-snat"}},
+								{Action: JumpAction{Target: "cali-nat-outgoing"}},
+							},
+						},
+					}))
+				})
+
+				Describe("and IPv6 tunnel IP", func() {
+					BeforeEach(func() {
+						conf.VXLANTunnelAddressV6 = net.ParseIP("dead:beef::1")
+
+					})
+
+					It("IPv6: Should return expected NAT postrouting chain", func() {
+						Expect(rr.StaticNATPostroutingChains(6)).To(Equal([]*Chain{
+							{
+								Name: "cali-POSTROUTING",
+								Rules: []Rule{
+									{Action: JumpAction{Target: "cali-fip-snat"}},
+									{Action: JumpAction{Target: "cali-nat-outgoing"}},
+									{
+										Match: Match().
+											OutInterface("vxlan-v6.calico").
+											NotSrcAddrType(AddrTypeLocal, true).
+											SrcAddrType(AddrTypeLocal, false),
+										Action: MasqAction{},
+									},
+								},
+							},
+						}))
+					})
+				})
+			})
+
+			It("IPv6: Should return expected NAT postrouting chain", func() {
 				Expect(rr.StaticNATPostroutingChains(6)).To(Equal([]*Chain{
 					{
 						Name: "cali-POSTROUTING",

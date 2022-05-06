@@ -294,7 +294,8 @@ type Config struct {
 	// by the host when sending traffic to a workload over IPIP.
 	IPIPTunnelAddress net.IP
 	// Same for VXLAN.
-	VXLANTunnelAddress net.IP
+	VXLANTunnelAddress   net.IP
+	VXLANTunnelAddressV6 net.IP
 
 	AllowVXLANPacketsFromWorkloads bool
 	AllowIPIPPacketsFromWorkloads  bool
