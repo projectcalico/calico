@@ -26,7 +26,7 @@ To learn more and see performance metrics from our test environment, see the blo
 
 eBPF mode currently has some limitations relative to the standard Linux pipeline mode:
 
-- eBPF mode only supports x86-64.  (The eBPF programs are not currently built for the other platforms.)
+- eBPF mode supports x86-64 and arm64. (For arm64, the support was added from version 3.21.4+)
 - eBPF mode does not yet support IPv6.
 - When enabling eBPF mode, pre-existing connections continue to use the non-BPF datapath; such connections should not be disrupted, but they do not benefit from eBPF mode's advantages.
 - Disabling eBPF mode _is_ disruptive; connections that were handled through the eBPF dataplane may be broken and services that do not detect and recover may need to be restarted.
