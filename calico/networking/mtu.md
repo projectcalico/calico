@@ -51,14 +51,14 @@ The following table lists common MTU sizes for {{site.prodname}} environments. B
 
 **Common MTU sizes**
 
-| Network MTU            | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP (IPv4) | {{site.prodname}} MTU with VXLAN (IPv4) | {{site.prodname}} MTU with WireGuard (IPv4) |
-| ---------------------- | --------------------- | ------------------------------------------ | --------------------------------------- | ------------------------------------------- |
-| 1500                   | 1500                  | 1480                                       | 1450                                    | 1440                                        |
-| 9000                   | 9000                  | 8980                                       | 8950                                    | 8940                                        |
-| 1500 (AKS)             | 1500                  | 1480                                       | 1450                                    | 1340                                        |
-| 1460 (GCE)             | 1460                  | 1440                                       | 1410                                    | 1400                                        |
-| 9001 (AWS Jumbo)       | 9001                  | 8981                                       | 8951                                    | 8941                                        |
-| 1450 (OpenStack VXLAN) | 1450                  | 1430                                       | 1400                                    | 1390                                        |
+| Network MTU            | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP (IPv4) | {{site.prodname}} MTU with VXLAN (IPv4) | {{site.prodname}} MTU with VXLAN (IPv6)     | {{site.prodname}} MTU with WireGuard (IPv4) |
+| ---------------------- | --------------------- | ------------------------------------------ | --------------------------------------- | ------------------------------------------- |                                             |
+| 1500                   | 1500                  | 1480                                       | 1450                                    | 1430                                        | 1440                                        |
+| 9000                   | 9000                  | 8980                                       | 8950                                    | 8930                                        | 8940                                        |
+| 1500 (AKS)             | 1500                  | 1480                                       | 1450                                    | 1430                                        | 1340                                        |
+| 1460 (GCE)             | 1460                  | 1440                                       | 1410                                    | 1390                                        | 1400                                        |
+| 9001 (AWS Jumbo)       | 9001                  | 8981                                       | 8951                                    | 8931                                        | 8941                                        |
+| 1450 (OpenStack VXLAN) | 1450                  | 1430                                       | 1400                                    | 1380                                        | 1390                                        |
 
 **Recommended MTU for overlay networking**
 
