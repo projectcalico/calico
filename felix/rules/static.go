@@ -229,7 +229,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 
 	if ipVersion == 4 && r.VXLANEnabled {
-		// VXLAN is enabled, filter incoming VXLAN packets that match our VXLAN port to ensure they
+		// IPv4 VXLAN is enabled, filter incoming VXLAN packets that match our VXLAN port to ensure they
 		// come from a recognised host and are going to a local address on the host.
 		inputRules = append(inputRules,
 			Rule{
@@ -238,14 +238,36 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 					SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
 					DestAddrType(AddrTypeLocal),
 				Action:  r.filterAllowAction,
-				Comment: []string{"Allow VXLAN packets from whitelisted hosts"},
+				Comment: []string{"Allow IPv4 VXLAN packets from whitelisted hosts"},
 			},
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(AddrTypeLocal),
 				Action:  DropAction{},
-				Comment: []string{"Drop VXLAN packets from non-whitelisted hosts"},
+				Comment: []string{"Drop IPv4 VXLAN packets from non-whitelisted hosts"},
+			},
+		)
+	}
+
+	if ipVersion == 6 && r.VXLANEnabledV6 {
+		// IPv6 VXLAN is enabled, filter incoming VXLAN packets that match our VXLAN port to ensure they
+		// come from a recognised host and are going to a local address on the host.
+		inputRules = append(inputRules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.VXLANPort)).
+					SourceIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
+					DestAddrType(AddrTypeLocal),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow IPv6 VXLAN packets from whitelisted hosts"},
+			},
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.VXLANPort)).
+					DestAddrType(AddrTypeLocal),
+				Action:  DropAction{},
+				Comment: []string{"Drop IPv6 VXLAN packets from non-whitelisted hosts"},
 			},
 		)
 	}
@@ -683,7 +705,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	}
 
 	if ipVersion == 4 && r.VXLANEnabled {
-		// When VXLAN is enabled, auto-allow VXLAN traffic to other Calico nodes.  Without this,
+		// When IPv4 VXLAN is enabled, auto-allow VXLAN traffic to other Calico nodes.  Without this,
 		// it's too easy to make a host policy that blocks VXLAN traffic, resulting in very confusing
 		// connectivity problems.
 		rules = append(rules,
@@ -693,7 +715,23 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 					SrcAddrType(AddrTypeLocal, false).
 					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
 				Action:  r.filterAllowAction,
-				Comment: []string{"Allow VXLAN packets to other whitelisted hosts"},
+				Comment: []string{"Allow IPv4 VXLAN packets to other whitelisted hosts"},
+			},
+		)
+	}
+
+	if ipVersion == 6 && r.VXLANEnabledV6 {
+		// When IPv6 VXLAN is enabled, auto-allow VXLAN traffic to other Calico nodes.  Without this,
+		// it's too easy to make a host policy that blocks VXLAN traffic, resulting in very confusing
+		// connectivity problems.
+		rules = append(rules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.VXLANPort)).
+					SrcAddrType(AddrTypeLocal, false).
+					DestIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow IPv6 VXLAN packets to other whitelisted hosts"},
 			},
 		)
 	}
@@ -792,6 +830,9 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Cha
 	}
 	if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
 		tunnelIfaces = append(tunnelIfaces, "vxlan.calico")
+	}
+	if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
+		tunnelIfaces = append(tunnelIfaces, "vxlan-v6.calico")
 	}
 	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 {
 		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have
