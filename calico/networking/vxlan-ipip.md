@@ -45,7 +45,7 @@ Encapsulation of workload traffic is typically required only when traffic crosse
 
 #### IPv4/6 address support
 
-IP in IP and VXLAN support only IPv4 addresses.
+IP in IP supports only IPv4 addresses.
 
 #### Best practice
 
