@@ -862,6 +862,9 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	if linkAttrs != nil {
 		// Link attributes might be nil for the special "no-OIF" interface name.
 		routeFilter.LinkIndex = linkAttrs.Index
+	} else if r.ipVersion == 6 {
+		// IPv6 no-OIF interfaces get corrected to lo, which is interface index 1.
+		routeFilter.LinkIndex = 1
 	}
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
 	r.livenessCallback()
