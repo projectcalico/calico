@@ -268,6 +268,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				FelixConfigIPIPEnabled: configParams.IpInIpEnabled,
 				IPIPTunnelAddress:      configParams.IpInIpTunnelAddr,
 				VXLANTunnelAddress:     configParams.IPv4VXLANTunnelAddr,
+				VXLANTunnelAddressV6:   configParams.IPv6VXLANTunnelAddr,
 
 				AllowVXLANPacketsFromWorkloads: configParams.AllowVXLANPacketsFromWorkloads,
 				AllowIPIPPacketsFromWorkloads:  configParams.AllowIPIPPacketsFromWorkloads,
