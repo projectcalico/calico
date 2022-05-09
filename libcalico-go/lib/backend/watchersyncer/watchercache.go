@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -191,6 +192,11 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			if err != nil {
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
+				if errors.IsResourceExpired(err) {
+					// Our current watch revision is too old. Start again without a revision.
+					wc.logger.Info("Clearing cached watch revision for next List call")
+					wc.currentWatchRevision = "0"
+				}
 				wc.resyncBlockedUntil = time.Now().Add(ListRetryInterval)
 				continue
 			}
@@ -213,6 +219,9 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 
 			// Store the current watch revision.  This gets updated on any new add/modified event.
 			wc.currentWatchRevision = l.Revision
+
+			// Mark the resync as complete.
+			performFullResync = false
 		}
 
 		// And now start watching from the revision returned by the List, or from a previous watch event
@@ -228,6 +237,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				// This loop effectively becomes a poll loop for this resource type.
 				wc.logger.Debug("Watch operation not supported")
 				wc.resyncBlockedUntil = time.Now().Add(WatchPollInterval)
+
 				// Make sure we force a re-list of the resource even if the watch previously succeeded
 				// but now cannot.
 				performFullResync = true
