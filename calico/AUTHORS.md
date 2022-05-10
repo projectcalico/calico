@@ -38,6 +38,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Andrei Nistor                            | @andrein |
 | Andrew Donald Kennedy                    | @grkvlt |
 | Anthony Arnaud                           | @aarnaud |
+| Anthony T                                | @anthonytwh |
 | Anton Antonov                            | @syndbg |
 | Aram Alipoor                             | @aramalipoor |
 | Armon Dadgar                             | @armon |
@@ -78,12 +79,15 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Christopher Grim                         | @bookest |
 | Christopher LIJLENSTOLPE                 | @liljenstolpe |
 | Christopher Randles                      | @crandles |
+| Christopher Tauchen                      | @ctauchen |
 | Chu Xiangyang                            | @xychu |
 | cinience                                 | @cinience |
 | Ciprian Hacman                           | @hakman |
 | Cody McCain                              | @McCodeman |
+| Cookie                                   | @luckymrwang |
 | Cory Benfield                            | @Lukasa |
 | Cristian Vrabie                          | @cvrabie |
+| Cyclinder                                | @cyclinder |
 | Dalton Hubble                            | @dghubble |
 | Dan (Turk) Osborne                       | @ozdanborne |
 | Dan O'Brien                              | @InTheCloudDan |
@@ -131,7 +135,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Gerard Hickey                            | @hickey |
 | Giancarlo Rubio                          | @gianrubio |
 | Gianluca                                 | @gianlucam76 |
-| Guang Ya Liu                             | @gyliu513 |
+| Guangya Liu                              | @gyliu513 |
 | Guillaume Lecerf                         | @guillaumelecerf |
 | Gunjan "Grass-fed Rabbit" Patel          | @gunjan5 |
 | Gunther Boeckmann                        | @gunboe |
@@ -141,6 +145,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Helen Chang                              | @c6h3un |
 | Henry Gessau                             | @HenryGessau |
 | Huanle Han                               | @hanxueluo |
+| Huo Qi Feng                              | @huoqifeng |
 | Iago López Galeiras                      | @iaguis |
 | Ian Wienand                              | @ianw |
 | Igor Kapkov                              | @igas |
@@ -153,6 +158,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Jak                                      | @jak-sdk |
 | James Lucktaylor                         | @jlucktay |
 | James Pollard                            | @james-pollard-leapyear |
+| James Sturtevant                         | @jsturtevant |
 | Jamie                                    | @91jme |
 | Jan Brauer                               | @bracki |
 | Jan Ivar Beddari                         | @beddari |
@@ -182,18 +188,11 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Julien Dehee                             | @prfalken |
 | Justin Burnham                           | @jburnham |
 | Justin Cattle                            | @jocado |
-| Justin Nauman                            | @jrnt30 |
-| Justin Sievenpiper                       | @jsievenpiper |
-| Kamil Madac                              | @kmadac |
-| Karl Matthias                            | @relistan |
 | Karthik Gaekwad                          | @karthequian |
 | Karthik Krishnan Ramasubramanian         | @doublek |
-| Kashif Saadat                            | @KashifSaadat |
 | Kelsey Hightower                         | @kelseyhightower |
 | Ketan Kulkarni                           | @ketkulka |
-| Kevin Benton                             | @kevinbenton |
 | Kevin Lynch                              | @klynch |
-| Kirill Buev                              | @NeonSludge |
 | Kris G                                   | @kgtw |
 | Krzesimir Nowak                          | @krnowak |
 | Krzysztof Cieplucha                      | @krisiasty |
@@ -203,18 +202,11 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Leo Ochoa                                | @leo8a |
 | libby kent                               | @libby |
 | lilianrong                               | @nightmeng |
-| littleboy                                | @LittleBoy18 |
-| Liz Rice                                 | @lizrice |
-| lizhigang                                | @Li-zhigang |
-| Logan Davis                              | @logand22 |
 | Logan V                                  | @logan2211 |
 | Luiz Filho                               | @luizbafilho |
 | Luke Mino-Altherr                        | @luke-mino-altherr |
-| Luthfi Anandra                           | @lanandra |
 | Lutzow                                   | @GeorgeGuo2018 |
-| Lv Jiawei                                | @MIBc |
 | Manjunath Kumatagi                       | @mkumatag |
-| Manuel Buil                              | @manuelbuil |
 | Marc Crebassa                            | @aalaesar |
 | Marius Grigaitis                         | @mariusgrigaitis |
 | Mark Fermor                              | @markfermor |
@@ -250,7 +242,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Paul Tiplady                             | @Symmetric |
 | Pedro Coutinho                           | @coutinhop |
 | Penkey Suresh                            | @penkeysuresh |
-| Peter Kelly                              | @petercork |
+| Peter Kelly                              | @peterkellydev |
 | Peter White                              | @plwhite |
 | Rahul Krishna Upadhyaya                  | @rakrup |
 | Renan Gonçalves                          | @renan |
@@ -260,8 +252,9 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Ricardo Katz                             | @rikatz |
 | Richard Kovacs                           | @mhmxs |
 | Rob Brockbank                            | @robbrockbank |
+| Rodrigo Barbieri                         | @rodrigogansobarbieri |
 | Roshani Rathi                            | @roshanirathi |
-| rui                                      | @chenrui333 |
+| Rui Chen                                 | @chenrui333 |
 | Rustam Zagirov                           | @stamm |
 | Ryan Zhang                               | @ry4nz |
 | Saurabh Mohan                            | @saumoh |
@@ -283,17 +276,18 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Tom Pointon                              | @tompntn |
 | Tomas Hruby                              | @tomastigera |
 | tonic                                    | @tonicbupt |
+| tuti.                                    | @radTuti |
 | Tyler Stachecki                          | @tj90241 |
 | Vinayak Shinde                           | @svInfra17 |
 | Vincent Schwarzer                        | @VincentS |
 | Wietse Muizelaar                         | @wmuizelaar |
 | xieyanker                                | @xieyanker |
-| Yi Tao                                   | @randmonkey |
 | Yumo Yang                                | @elementyang |
 | Zealic                                   | @zealic |
 | Àbéjídé Àyodélé                          | @bjhaid |
 | ---                                      | @alexvarsh |
 | ---                                      | @anton-klokau |
+| ---                                      | @Behnam-Shobiri |
 | ---                                      | @ben-st |
 | ---                                      | @billhathaway |
 | ---                                      | @blallau |
@@ -307,7 +301,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @frnkdny |
 | ---                                      | @gauravsinhatigera |
 | ---                                      | @hanamantagoudvk |
-| ---                                      | @houl7 |
+| ---                                      | @Icarus9913 |
 | ---                                      | @jinglina |
 | ---                                      | @joshti |
 | ---                                      | @joshuactm |
@@ -322,3 +316,4 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @sheepkiller |
 | ---                                      | @sridhartigera |
 | ---                                      | @tathagatachowdhury |
+| ---                                      | @turekt |
