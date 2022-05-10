@@ -44,6 +44,14 @@ function create-vm() {
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt install -y --no-install-recommends git docker-ce docker-ce-cli containerd.io make iproute2 wireguard && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo usermod -a -G docker ubuntu && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo modprobe ipip && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- 'if [ -s /etc/docker/daemon.json ] ; then cat /etc/docker/daemon.json | sed "\$d" | sed "\$s/\$/,/" > /tmp/daemon.json ; else echo -en {\\n > /tmp/daemon.json ; fi' && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- 'cat >> /tmp/daemon.json << EOF
+  "ipv6": true,
+  "fixed-cidr-v6": "2001:db8:1::/64"
+}
+EOF' && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" --  sudo mv /tmp/daemon.json /etc/docker/daemon.json && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" --  sudo systemctl restart docker && \
   set +x && \
   echo "$DOCKERHUB_PASSWORD" | gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
   set -x && \
