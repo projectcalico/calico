@@ -95,11 +95,11 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 //      struct calico_ct_leg b_to_a; // 36
 //
 //      // CALI_CT_TYPE_NAT_REV only.
-//      __u32 orig_dst;                    // 48
+//      __u32 orig_ip;                    // 48
 //      __u16 orig_port;                   // 52
-//      __u8 pad1[2];                      // 54
+//      __u16 orig_sport;                  // 54
 //      __u32 tun_ip;                      // 56
-//      __u32 pad3;                        // 60
+//      __u32 orig_sip;                    // 60
 //    };
 //
 //    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -148,6 +148,11 @@ func (e Value) OrigIP() net.IP {
 	return e[voOrigIP : voOrigIP+4]
 }
 
+// OrigSrcIP returns the original source IP.
+func (e Value) OrigSrcIP() net.IP {
+	return e[60:64]
+}
+
 // OrigPort returns the original destination port, valid only if Type() is TypeNormal or TypeNATReverse
 func (e Value) OrigPort() uint16 {
 	return binary.LittleEndian.Uint16(e[voOrigPort : voOrigPort+2])
@@ -177,6 +182,7 @@ const (
 	FlagReserved5 uint16 = (1 << 5)
 	FlagExtLocal  uint16 = (1 << 6)
 	FlagViaNATIf  uint16 = (1 << 7)
+	FlagSrcDstBA  uint16 = (1 << 8)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -248,6 +254,15 @@ func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, leg
 	binary.LittleEndian.PutUint16(v[voOrigPort:voOrigPort+2], origPort)
 
 	copy(v[voTunIP:voTunIP+4], tunnelIP.To4())
+
+	return v
+}
+
+// NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
+func NewValueNATReverseSNAT(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) Value {
+	v := NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
+	copy(v[60:64], origIP.To4())
 
 	return v
 }
@@ -338,6 +353,7 @@ type EntryData struct {
 	A2B       Leg
 	B2A       Leg
 	OrigDst   net.IP
+	OrigSrc   net.IP
 	OrigPort  uint16
 	OrigSPort uint16
 	TunIP     net.IP
@@ -361,6 +377,7 @@ func (data EntryData) FINsSeenDSR() bool {
 
 func (e Value) Data() EntryData {
 	ip := e[48:52]
+	sip := e[60:64]
 	tip := e[56:60]
 	return EntryData{
 		A2B:       readConntrackLeg(e[24:36]),
@@ -368,6 +385,7 @@ func (e Value) Data() EntryData {
 		OrigDst:   ip,
 		OrigPort:  binary.LittleEndian.Uint16(e[52:54]),
 		OrigSPort: binary.LittleEndian.Uint16(e[54:56]),
+		OrigSrc:   sip,
 		TunIP:     tip,
 	}
 }
@@ -398,6 +416,14 @@ func (e Value) String() string {
 
 		if flags&FlagExtLocal != 0 {
 			flagsStr += " ext-local"
+		}
+
+		if flags&FlagViaNATIf != 0 {
+			flagsStr += " via-nat-iface"
+		}
+
+		if flags&FlagSrcDstBA != 0 {
+			flagsStr += " B-A"
 		}
 	}
 
