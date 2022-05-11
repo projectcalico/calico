@@ -66,10 +66,10 @@ require (
 	github.com/tchap/go-patricia/v2 v2.3.1
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
-	go.etcd.io/etcd/api/v3 v3.5.2
-	go.etcd.io/etcd/client/pkg/v3 v3.5.2
-	go.etcd.io/etcd/client/v2 v2.305.2
-	go.etcd.io/etcd/client/v3 v3.5.1
+	go.etcd.io/etcd/api/v3 v3.5.4
+	go.etcd.io/etcd/client/pkg/v3 v3.5.4
+	go.etcd.io/etcd/client/v2 v2.305.4
+	go.etcd.io/etcd/client/v3 v3.5.4
 	golang.org/x/net v0.0.0-20220412020605-290c469a71a5
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
