@@ -87,7 +87,7 @@ var _ = Describe("Global Felix config conversion methods", func() {
 		Expect(r.(*custom.GlobalFelixConfig).Spec).To(Equal(res1.Spec))
 	})
 
-	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
+	It("should convert between a Kubernetes resource and the equivalent KVPair", func() {
 		kvp, err := converter.ToKVPair(res1)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))

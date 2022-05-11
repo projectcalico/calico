@@ -544,7 +544,7 @@ func (d *mockDataplane) RuleDel(rule *netlink.Rule) error {
 	key := keyForRule(rule)
 	log.WithField("ruleKey", key).Info("Mock dataplane: RuleDel called")
 	d.deletedRuleKeys.Add(key)
-	// Rule was deleted, but is planned on being readded
+	// Rule was deleted, but is planned on being re-added
 	if _, ok := d.ruleKeyToRule[key]; ok {
 		delete(d.ruleKeyToRule, key)
 		return nil

@@ -307,7 +307,7 @@ backend = {{replace $backend "-" "_" -1}}
 
 ### lookupIP
 
-Wrapper for [net.LookupIP](https://golang.org/pkg/net/#LookupIP) function. The wrapper also sorts (alphabeticaly) the IP addresses. This is crucial since in dynamic environments DNS servers typically shuffle the addresses linked to domain name. And that would cause unnecessary config reloads.
+Wrapper for [net.LookupIP](https://golang.org/pkg/net/#LookupIP) function. The wrapper also sorts (alphabetically) the IP addresses. This is crucial since in dynamic environments DNS servers typically shuffle the addresses linked to domain name. And that would cause unnecessary config reloads.
 
 ```
 {{range lookupIP "some.host.local"}}

@@ -306,7 +306,7 @@ Substitute `[flag]` with one or more of the following.
 
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
-in the cluster, see [decomissioning a node]({{site.baseurl}}/maintenance/decommissioning-a-node).
+in the cluster, see [decommissioning a node]({{site.baseurl}}/maintenance/decommissioning-a-node).
 
 
 ### Setting `CALICO_ROUTER_ID` for IPv6 only system
