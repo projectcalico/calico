@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -1396,6 +1397,9 @@ func CidrToHex(cidr string) ([]string, error) {
 	}
 
 	maskBytes := make([]byte, 4)
+	if mask > math.MaxUint32 || mask < 0 {
+		log.Fatal("mask should be between 0 and %v", math.MaxUint32)
+	}
 	binary.LittleEndian.PutUint32(maskBytes, uint32(mask))
 
 	hexStr := fmt.Sprintf("%02x %02x %02x %02x %02x %02x %02x %02x",

@@ -75,11 +75,8 @@ func main() {
 		}
 		if p > math.MaxUint16 || p < 0 {
 			log.Fatal("source port should be between 0 and 65535")
-		}
-		sport = uint16(p)
-	}
 
-	dport := uint16(0)
+		}
 	if args["--port-dst"] != nil {
 		p, err := strconv.Atoi(args["--port-dst"].(string))
 		if err != nil {
