@@ -536,6 +536,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	// dport to hold icmp type and code
 	if (state->ip_proto == IPPROTO_ICMP) {
 		state->dport = 0;
+		state->post_nat_dport = 0;
 	}
 
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
