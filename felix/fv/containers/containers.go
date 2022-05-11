@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,6 +43,8 @@ type Container struct {
 	IP             string
 	ExtraSourceIPs []string
 	IPPrefix       string
+	IPv6           string
+	IPv6Prefix     string
 	Hostname       string
 	runCmd         *exec.Cmd
 	Stdin          io.WriteCloser
@@ -206,7 +208,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 
 	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")
-	runArgs := []string{"run", "--name", c.Name, "--stop-timeout", fmt.Sprint(opts.StopTimeoutSecs)}
+	runArgs := []string{"run", "--cgroupns", "host", "--name", c.Name, "--stop-timeout", fmt.Sprint(opts.StopTimeoutSecs)}
 
 	if opts.StopSignal != "" {
 		runArgs = append(runArgs, "--stop-signal", opts.StopSignal)
@@ -255,6 +257,8 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()
 	c.IPPrefix = c.GetIPPrefix()
+	c.IPv6 = c.GetIPv6()
+	c.IPv6Prefix = c.GetIPv6Prefix()
 	c.Hostname = c.GetHostname()
 	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
@@ -448,6 +452,16 @@ func (c *Container) GetIP() string {
 
 func (c *Container) GetIPPrefix() string {
 	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.IPPrefixLen}}{{end}}")
+	return strings.TrimSpace(output)
+}
+
+func (c *Container) GetIPv6() string {
+	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{end}}")
+	return strings.TrimSpace(output)
+}
+
+func (c *Container) GetIPv6Prefix() string {
+	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.GlobalIPv6PrefixLen}}{{end}}")
 	return strings.TrimSpace(output)
 }
 

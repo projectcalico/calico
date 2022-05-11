@@ -158,6 +158,7 @@ LDFLAGS=-ldflags "\
 # Source golang files on which compiling the calico-node binary depends.
 SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
+	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \
 	  $(shell find ../confd -name '*.go')
 
@@ -206,7 +207,7 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
 	chmod +w $@
 
-$(LIBBPF_A): $(shell find ../felix/bpf-gpl/include/libbpf -type f)
+$(LIBBPF_A): $(shell find ../felix/bpf-gpl/include/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)

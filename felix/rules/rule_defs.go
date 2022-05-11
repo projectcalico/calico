@@ -124,8 +124,10 @@ const (
 )
 
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
-type PolicyChainNamePrefix string
-type ProfileChainNamePrefix string
+type (
+	PolicyChainNamePrefix  string
+	ProfileChainNamePrefix string
+)
 
 var (
 	// AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
@@ -281,9 +283,10 @@ type Config struct {
 	OpenStackMetadataPort        uint16
 	OpenStackSpecialCasesEnabled bool
 
-	VXLANEnabled bool
-	VXLANPort    int
-	VXLANVNI     int
+	VXLANEnabled   bool
+	VXLANEnabledV6 bool
+	VXLANPort      int
+	VXLANVNI       int
 
 	IPIPEnabled            bool
 	FelixConfigIPIPEnabled *bool
@@ -291,7 +294,8 @@ type Config struct {
 	// by the host when sending traffic to a workload over IPIP.
 	IPIPTunnelAddress net.IP
 	// Same for VXLAN.
-	VXLANTunnelAddress net.IP
+	VXLANTunnelAddress   net.IP
+	VXLANTunnelAddressV6 net.IP
 
 	AllowVXLANPacketsFromWorkloads bool
 	AllowIPIPPacketsFromWorkloads  bool

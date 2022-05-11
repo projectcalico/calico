@@ -256,14 +256,6 @@ cp c:\k\config c:\k\kubeconfig
 c:\wmcb.exe configure-cni --cni-dir c:\k\cni --cni-config c:\k\cni\config\10-calico.conf
 ```
 
-Then, we need to override the pod infra image used by kubelet. This is to ensure
-the pod infrastructure image used is using the same base Windows Server OS as
-the node. (For more details, see this {% include open-new-window.html text='upstream issue' url='https://github.com/kubernetes/kubernetes/issues/87339' %}.) 
-
-```powershell
-docker tag kubeletwin/pause mcr.microsoft.com/k8s/core/pause:1.2.0
-```
-
 Finally, clean up the additional files created on the Windows node:
 
 ```powershell
