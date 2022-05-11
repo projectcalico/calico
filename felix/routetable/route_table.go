@@ -456,7 +456,7 @@ func (r *RouteTable) getNetlink() (netlinkshim.Interface, error) {
 			log.WithField("numFailures", r.numConsistentNetlinkFailures).Panic(
 				"Repeatedly failed to connect to netlink.")
 		}
-		log.Info("Trying to connect to netlink")
+		log.Debug("Trying to connect to netlink")
 		nlHandle, err := r.newNetlinkHandle()
 		if err != nil {
 			r.numConsistentNetlinkFailures++

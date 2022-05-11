@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,6 +68,10 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 			log.Errorf("error parsing RouteUpdate CIDR: %s", msg.Dst)
 			return
 		}
+		if cidr.Version() == 6 {
+			log.Debugf("ignore update for IPv6 CIDR: %s", msg.Dst)
+			return
+		}
 		switch msg.Type {
 		case proto.RouteType_REMOTE_HOST:
 			log.Debug("RouteUpdate is a remote host update")
@@ -95,6 +99,10 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 		cidr, err := ip.ParseCIDROrIP(msg.Dst)
 		if err != nil || cidr == nil {
 			log.Errorf("error parsing RouteUpdate CIDR: %s", msg.Dst)
+			return
+		}
+		if cidr.Version() == 6 {
+			log.Debugf("ignore update for IPv6 CIDR: %s", msg.Dst)
 			return
 		}
 		log.Debugf("Route removal for IPv4 CIDR: %s", cidr)
