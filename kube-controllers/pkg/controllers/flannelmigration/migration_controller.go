@@ -166,6 +166,14 @@ func (c *flannelMigrationController) Run(stopCh chan struct{}) {
 
 	// Start migration process.
 
+	// Disable VXLAN in Felix explicitly. We don't want to turn this on until we have
+	// updated the Calico nodes with the necessary VTEP information from flannel. This ensures
+	// that Calico will respect flannel's VXLAN traffic once enabled.
+	if err := c.ipamMigrator.SetVXLANEnabled(context.TODO(), false); err != nil {
+		log.WithError(err).Errorf("Error disabling VXLAN")
+		c.HandleError(err)
+	}
+
 	// Initialise Calico IPAM before we handle any nodes.
 	err = c.ipamMigrator.InitialiseIPPoolAndFelixConfig()
 	if err != nil {
@@ -185,6 +193,12 @@ func (c *flannelMigrationController) Run(stopCh chan struct{}) {
 	c.flannelNodes, err = c.runIpamMigrationForNodes()
 	if err != nil {
 		log.WithError(err).Errorf("Error running ipam migration.")
+		c.HandleError(err)
+	}
+
+	// Now that we have populated Calico with flannel's VXLAN data, we can enable VXLAN in Felix.
+	if err := c.ipamMigrator.SetVXLANEnabled(context.TODO(), true); err != nil {
+		log.WithError(err).Errorf("Error enabling VXLAN")
 		c.HandleError(err)
 	}
 
@@ -317,7 +331,7 @@ func (c *flannelMigrationController) CheckShouldMigrate() (bool, error) {
 		return false, nil
 	}
 
-	//Check if addon manager label exists
+	// Check if addon manager label exists
 	found, val, err := d.getLabelValue(c.k8sClientset, namespaceKubeSystem, addOnManagerLabelKey)
 	if err != nil {
 		return false, err
