@@ -162,7 +162,7 @@ calicoctl get hostEndpoint
 
 Response:
 ```
-NAME          NODE       
+NAME          NODE
 endpoint1     host1
 myhost-eth0   myhost
 ```
@@ -202,7 +202,7 @@ Response:
 ```
 NAME        IPS
 endpoint1   1.2.3.4,0:bb::aa
-myhost-eth0                           
+myhost-eth0
 ```
 {: .no-select-button}
 
