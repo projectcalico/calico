@@ -15,6 +15,7 @@
 package fv
 
 import (
+	"os"
 	"regexp"
 
 	. "github.com/onsi/ginkgo"
@@ -25,6 +26,12 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+
+	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+		// Non-BPF run.
+		return
+	}
+
 	var (
 		infra   infrastructure.DatastoreInfra
 		felixes []*infrastructure.Felix
