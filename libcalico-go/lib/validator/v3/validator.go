@@ -45,8 +45,9 @@ const (
 	// Maximum size of annotations.
 	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
 
-	// linux can support route-tables with indices up to 0xfffffff
-	routeTableMaxLinux uint32 = 0xffffffff
+	// linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
+	routeTableMaxLinux       uint32 = 0xffffffff
+	routeTableRangeMaxTables uint32 = 0xffff
 
 	globalSelector = "global()"
 )
@@ -791,6 +792,11 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 	if c.RouteTableRange != nil && c.RouteTableRanges != nil {
 		structLevel.ReportError(reflect.ValueOf(c.RouteTableRange),
 			"RouteTableRange", "", reason("cannot be set when `RouteTableRanges` is also set"), "")
+	}
+
+	if c.RouteTableRanges != nil && c.RouteTableRanges.Len() > int(routeTableRangeMaxTables) {
+		structLevel.ReportError(reflect.ValueOf(c.RouteTableRanges),
+			"RouteTableRanges", "", reason("targets too many tables"), "")
 	}
 }
 
@@ -1612,7 +1618,6 @@ func validateRouteTableIDRange(structLevel validator.StructLevel) {
 		)
 	}
 
-	// cast both ints to 64bit as casting the max 32-bit integer to int() would overflow on 32bit systems
 	if int64(r.Max) > int64(routeTableMaxLinux) {
 		log.Warningf("RouteTableRange is invalid: %v", r)
 		structLevel.ReportError(
