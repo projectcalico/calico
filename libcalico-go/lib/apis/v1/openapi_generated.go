@@ -1900,7 +1900,7 @@ func schema_libcalico_go_lib_apis_v1_WorkloadEndpointSpec(ref common.ReferenceCa
 					},
 					"allow_spoofed_source_prefixes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AllowSpoofedSourcePrefixes is a list of CIDRs this workload endpoint is allowed to send traffic from, i.e. this allows the workload endpoint to spoof its IP address using addresses in these prefixes",
+							Description: "AllowSpoofedSourcePrefixes is a list of CIDRs this workload endoint is allowed to send traffic from, i.e. this allows the workload endpoint to spoof its IP address using addresses in these prefixes",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
