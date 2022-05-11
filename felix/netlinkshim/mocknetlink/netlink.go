@@ -307,7 +307,6 @@ func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
 	} else {
 		link.LinkAttrs.RawFlags &^= syscall.IFF_RUNNING
 	}
-
 }
 
 func (d *MockNetlinkDataplane) NewMockNetlink() (netlinkshim.Interface, error) {
