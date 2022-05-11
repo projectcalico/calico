@@ -55,7 +55,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 	namespaceConverter := converter.NewNamespaceConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
-	// in the Calico datastore. Indentifies controller written objects by
+	// in the Calico datastore. Identifies controller written objects by
 	// their naming convention.
 	listFunc := func() (map[string]interface{}, error) {
 		log.Debugf("Listing profiles from Calico datastore")

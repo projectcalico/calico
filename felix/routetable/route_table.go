@@ -932,7 +932,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	}
 
 	// Now loop through the expected CIDRs to Target. Remove any that we did not find, and add them back into our
-	// delta updates (unless the entry is superceded by another update).
+	// delta updates (unless the entry is superseded by another update).
 	for cidr, target := range expectedTargets {
 		if alreadyCorrectCIDRs.Contains(cidr) {
 			continue
@@ -941,7 +941,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 		logCxt.Info("Deleting from expected targets")
 		delete(expectedTargets, cidr)
 
-		// If we do not have an update that supercedes this entry, then add it back in as an update so that we add
+		// If we do not have an update that supersedes this entry, then add it back in as an update so that we add
 		// the route.
 		if pendingTarget, ok := pendingDeltaTargets[cidr]; !ok {
 			logCxt.Info("No pending target update, adding back in as an update")

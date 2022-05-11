@@ -530,7 +530,7 @@ You have now verified that communication is possible between all pods in the app
 
 In a real world deployment you would want to make sure only pods that are supposed to communicate with each other, are actually allowed to do so.
 
-To achieve this you wil apply a basic network policy which allows only the busybox pod to reach the porter pod.
+To achieve this you will apply a basic network policy which allows only the busybox pod to reach the porter pod.
 
 ### Create the network-policy.yaml file using your favorite editor on Windows
 

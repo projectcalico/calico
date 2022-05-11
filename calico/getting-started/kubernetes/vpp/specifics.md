@@ -1,6 +1,6 @@
 ---
 title: Details of VPP implementation & known-issues
-description: Behavioral discrepencies when running with the Calico/VPP dataplane
+description: Behavioral discrepancies when running with the Calico/VPP dataplane
 canonical_url: '/getting-started/kubernetes/vpp/specifics'
 ---
 

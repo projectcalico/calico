@@ -1365,7 +1365,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	resetCTMap(ctMap)
 }
 
-// TestNormalSYNRetryForcePolicy does tha same test for forcing policy
+// TestNormalSYNRetryForcePolicy does the same test for forcing policy
 // as TestNATSYNRetryGoesToSameBackend but without NAT.
 func TestNormalSYNRetryForcePolicy(t *testing.T) {
 	RegisterTestingT(t)

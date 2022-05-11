@@ -18,7 +18,7 @@ It then uses vagrant to
 
 Options:
 
-	- BUILD_CALICO: if "false", wont compile all the source before deploying.
+	- BUILD_CALICO: if "false", won't compile all the source before deploying.
 	- ROOT_CALICO_REPOS_DIR: the place where all your source is stored.
 
 Example:
@@ -72,7 +72,7 @@ Example:
 	vagrant destroy --force
 ```
 
-- You can use the `vagrant up` command to test that the changes you made to any calico repository wont break CI,
+- You can use the `vagrant up` command to test that the changes you made to any calico repository won't break CI,
 or reproduce a failure in CI.
 - You can use `vagrant up` followed by `vagrant ssh` to get into a kube cluster running the exact source of your
 calico build.
@@ -82,7 +82,7 @@ your own calico builds in house.
 # What this recipe is not
 
 - This is not a CI system for upstream calico, for that, see the contributor and developer docs.
-- This is not a full test suite: It doesnt run any kind of unit or performance tests.  Patches
+- This is not a full test suite: It doesn't run any kind of unit or performance tests.  Patches
 are welcome to extendt the install.sh with other optional test/make targets, but ideally, the smoke
 test for building calico from scratch should be able to run in under 10 minutes, so that it is 
 developer friendly.

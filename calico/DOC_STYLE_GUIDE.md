@@ -439,7 +439,7 @@ before exiting the server."
 **Tip**: In technical documentation, the word "ensure" is usually 
 the right choice.
 
-The word "insure" shuld only be used in relation to actual insurers 
+The word "insure" should only be used in relation to actual insurers
 and insurance policies.
 
 ### data

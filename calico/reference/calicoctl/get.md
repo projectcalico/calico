@@ -152,7 +152,7 @@ Description:
 This is the default output format.  It displays output in ps-style table output with sufficient columns to
 uniquely identify the resource.
 
-The headings displayed for each resource type is fixed.  However, wee `wide` option for displaying additional
+The headings displayed for each resource type is fixed.  However, we `wide` option for displaying additional
 columns, and `custom-columns` for selecting which columns to display.
 
 Example:
