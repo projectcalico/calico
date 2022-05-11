@@ -159,7 +159,7 @@ func (e Value) OrigSPort() uint16 {
 	return binary.LittleEndian.Uint16(e[voOrigSPort : voOrigSPort+2])
 }
 
-// NATSPort resturns the port to SNAT to, valid only if Type() is TypeNATForward.
+// NATSPort returns the port to SNAT to, valid only if Type() is TypeNATForward.
 func (e Value) NATSPort() uint16 {
 	return binary.LittleEndian.Uint16(e[40:42])
 }

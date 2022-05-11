@@ -563,7 +563,7 @@ take on the following precedence, 1 being the highest:
 
 > **Note**: {{site.prodname}} IPAM will not reassign IP addresses to workloads
 > that are already running. To update running workloads with IP addresses from
-> a newly configured IP pool, they must be recreated. We recommmend doing this
+> a newly configured IP pool, they must be recreated. We recommend doing this
 > before going into production or during a maintenance window.
 {: .alert .alert-info}
 

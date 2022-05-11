@@ -395,7 +395,7 @@ func updateOrCreateDefaultFelixConfiguration(ctx context.Context, client client.
 
 	// Do nothing if the correct value has been set.
 	if currentVNI == vni && currentPort == port && currentMTU == mtu {
-		log.Infof("Default Felix configration has got correct VNI(%d), port(%d), mtu(%d).", currentVNI, currentPort, currentMTU)
+		log.Infof("Default Felix configuration has got correct VNI(%d), port(%d), mtu(%d).", currentVNI, currentPort, currentMTU)
 		return nil
 	}
 

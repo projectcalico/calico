@@ -328,7 +328,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	kds.k8sControllerManager = runK8sControllerManager(kds.k8sApiContainer.IP)
 	if kds.k8sApiContainer == nil {
 		TearDownK8sInfra(kds)
-		return nil, errors.New("failed to create k8s contoller manager container")
+		return nil, errors.New("failed to create k8s controller manager container")
 	}
 
 	log.Info("Started controller manager.")
