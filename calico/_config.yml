@@ -75,7 +75,7 @@ defaults:
       show_title: true
       show_read_time: true
       show_toc: true
-      vppbranch: master  # The branch in vpp repo that these docs should point to for manifests, etc
+      vppbranch: v3.23.0  # The branch in vpp repo that these docs should point to for manifests, etc
       sitemap: true
       registry:
       # A lookup map for imageNames based on component names.
