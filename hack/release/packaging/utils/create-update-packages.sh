@@ -297,6 +297,7 @@ function do_nettle {
 
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'nettle_*-*' -exec mv '{}' $outputDir \;
+    cp nettle_3.3.orig.tar.gz $outputDir
 
     popd
 
@@ -306,8 +307,8 @@ function do_nettle {
 
 function do_pub_debs {
     # Publish Debian packages.
-    pushd ${rootdir}/hack/release/packaging
-    ./utils/publish-debs.sh
+    pushd ${rootdir}/hack/release/packaging/output
+    ../utils/publish-debs.sh
     popd
 }
 
@@ -317,8 +318,8 @@ function do_pub_rpms {
 
     # Publish RPM packages.  Note, this includes updating the RPM repo
     # metadata.
-    pushd ${rootdir}/hack/release/packaging
-    ./utils/publish-rpms.sh
+    pushd ${rootdir}/hack/release/packaging/output
+    ../utils/publish-rpms.sh
     popd
 }
 
