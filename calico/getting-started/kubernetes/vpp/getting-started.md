@@ -7,9 +7,9 @@ canonical_url: '/getting-started/kubernetes/vpp/getting-started'
 
 ### Big picture
 
-Install {{site.prodname}} and enable the tech preview of the VPP dataplane.
+Install {{site.prodname}} and enable the beta release of the VPP dataplane.
 
-> **Warning!** The VPP dataplane is a tech preview and should not be used in production clusters. It has had limited testing and it will contain bugs (please report these on the [Calico Users slack](https://calicousers.slack.com/archives/C017220EXU1) or [Github](https://github.com/projectcalico/vpp-dataplane/issues)).  In addition, it does not support all the features of {{site.prodname}} and it is currently missing some security features such as Application Layer Policy.
+> **Warning!** The VPP dataplane is in beta and should not be used in production clusters. It has had lots of testing and is pretty stable. However, chances are that some bugs are still lurking around (please report these on the [Calico Users slack](https://calicousers.slack.com/archives/C017220EXU1) or [Github](https://github.com/projectcalico/vpp-dataplane/issues)).  In addition, it still does not support all the features of {{site.prodname}}.
 {: .alert .alert-danger }
 
 ### Value
@@ -26,7 +26,7 @@ The VPP dataplane is entirely compatible with the other {{site.prodname}} datapl
 
 In addition, the VPP dataplane offers some specific features for network-intensive applications, such as providing `memif` userspace packet interfaces to the pods (instead of regular Linux network devices), or exposing the VPP Host Stack to run optimized L4+ applications in the pods.
 
-Trying out the tech preview will give you a taste of these benefits and an opportunity to give feedback to the VPP dataplane team.
+Trying out the beta will give you a taste of these benefits and an opportunity to give feedback to the VPP dataplane team.
 
 
 ### Features
@@ -124,6 +124,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 
 
 %>
+
 <label:Install on EKS with DPDK>
 <%
 
@@ -131,82 +132,80 @@ Before you get started, make sure you have downloaded and configured the {% incl
 
 #### Requirements
 
-These instructions require that `eksctl` (>= 0.51) and the `aws` (version 2) CLI are installed on your system to provision the cluster.
+DPDK provides better performance compared to the standard install but it requires some additional customisations (hugepages, for instance) in the EKS worker instances. We have a bash script, `init_eks.sh`, which takes care of applying the required customizations and we make use of the `preBootstrapCommands` property of `eksctl` {% include open-new-window.html text='configuration file' url='https://eksctl.io/usage/schema' %} to execute the script during the worker node creation. These instructions require the latest version of `eksctl`.
 
 
-#### Provision the cluster and configure it for DPDK
+#### Provision the cluster
 
-DPDK provides better performance compared to the standard install but it requires some additional customisations (hugepages, for instance) in the EKS worker instances. We have created a bash script, `create_eks_cluster.sh`, which automates the whole process right from customising the EKS worker instances (using cloud-init) to creating the cluster and the worker nodegroup. The script has been tested on MacOS and Linux.
-
-1. Download the helper script
+1. First, create an Amazon EKS cluster without any nodes.
 
    ```bash
-   curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/scripts/create_eks_cluster.sh -o create_eks_cluster.sh
+   eksctl create cluster --name my-calico-cluster --without-nodegroup
+   ```
+
+2. Since this cluster will use {{site.prodname}} for networking, you must delete the `aws-node` DaemonSet to disable the default AWS VPC networking for the pods.
+
+   ```bash
+   kubectl delete daemonset -n kube-system aws-node
    ```
 
 
-1. Either execute the script after filling in the `CONFIG PARAMS` section in the script
+#### Install and configure Calico with the VPP dataplane
 
-
-   ```bash
-   ###############################################################################
-   #                           CONFIG PARAMS                                     #
-   ###############################################################################
-   ### Config params; replace with appropriate values
-   CLUSTER_NAME=                           # cluster name (MANDATORY)
-   REGION=                                 # cluster region (MANDATORY)
-   NODEGROUP_NAME=$CLUSTER_NAME-nodegroup  # managed nodegroup name
-   LT_NAME=$CLUSTER_NAME-lt                # EC2 launch template name
-   KEYNAME=                                # keypair name for ssh access to worker nodes
-   SSH_SECURITY_GROUP_NAME="$CLUSTER_NAME-ssh-allow"
-   SSH_ALLOW_CIDR="0.0.0.0/0"              # source IP from which ssh access is allowed when KEYNAME is specified
-   INSTANCE_TYPE=m5.large                  # EC2 instance type
-   INSTANCE_NUM=2                          # Number of instances in cluster
-   ## Calico installation spec for the operator; could be url or local file
-   CALICO_INSTALLATION_YAML=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
-   #CALICO_INSTALLATION_YAML=./calico_installation.yaml
-   ## Calico/VPP deployment yaml; could be url or local file
-   CALICO_VPP_YAML=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks-dpdk.yaml
-   #CALICO_VPP_YAML=<full path>/calico-vpp-eks-dpdk.yaml
-   ## init_eks.sh script location; could be url or local file
-   INIT_EKS_SCRIPT=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/scripts/init_eks.sh
-   #INIT_EKS_SCRIPT=<full path>/init_eks.sh
-   ###############################################################################
-   ```
-
-   or execute the script with command-line options as follows
-
+1. Now that you have an empty cluster configured, you can install the Tigera operator. 
 
    ```bash
-   bash create_eks_cluster.sh <cluster name> -r <region-name> [-k <keyname>] [-t <instance type>] [-n <number of instances>] [-f <calico/vpp config yaml file>] [-i <installation yaml>]
+   kubectl apply -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
    ```
 
-   `CLUSTER_NAME` and `REGION` are MANDATORY.  Note that command-line options override the `CONFIG PARAMS` options. In case you want to enable ssh access to the EKS worker instances specify the name of an existing SSH key in EC2 in the `KEYNAME` option. For details on ssh access refer to {% include open-new-window.html text='Amazon EC2 key pairs and  Linux  instances' url='https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html' %}
+2. Then, you need to configure the {{site.prodname}} installation for the VPP dataplane. The yaml in the link below contains a minimal viable configuration for EKS. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
-
-
-**Example**
-
-
-1. The following creates a cluster named "test" in region "us-east-2" consisting of 2 x m5.large worker instances
+   > **Note**: Before applying this manifest, read its contents and make sure its settings are correct for your environment. For example,
+   > you may need to specify the default IP pool CIDR to match your desired pod network CIDR.
+   {: .alert .alert-info}
 
    ```bash
-   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
    ```
 
-1. To create a cluster with 3 x t3.large worker instances
+3. Now is time to install the VPP dataplane components.
 
    ```bash
-   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2 -t t3.large -n 3
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks-dpdk.yaml
    ```
 
-1. To enable ssh access to the worker instances
+4. Finally, time to add nodes to the cluster. Since we need to customize the nodes for DPDK, we will use an `eksctl` config file with the `preBootstrapCommands` property to create the worker nodes. The following command will create a managed nodegroup with 2 t3.large worker nodes in the cluster:
 
-   ```bash
-   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2 -k my_ec2_keyname
+
    ```
-
+   cat <<EOF | eksctl create nodegroup -f -
+   apiVersion: eksctl.io/v1alpha5
+   kind: ClusterConfig
+   metadata:
+     name: my-calico-cluster
+     region: us-east-2
+   managedNodeGroups:
+   - name: my-calico-cluster-ng
+     desiredCapacity: 2
+     instanceType: t3.large
+     labels: {role: worker}
+     preBootstrapCommands:
+       - sudo curl -o /tmp/init_eks.sh "https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/scripts/init_eks.sh"
+       - sudo chmod +x /tmp/init_eks.sh
+       - sudo /tmp/init_eks.sh
+   EOF
+   ```
+   
+   Please edit the cluster name, region and other fields as appropriate for your cluster. In case you want to enable ssh access to the EKS worker instances, add the following to the above config file:
+   
+   ```
+     ssh:
+       publicKeyPath: <path to public key>
+   ```
+   
+   For details on ssh access refer to {% include open-new-window.html text='Amazon EC2 key pairs and Linux instances' url='https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html' %}.
 %>
+
 <label:Install on any cluster>
 <%
 
@@ -220,9 +219,9 @@ The VPP dataplane has the following requirements:
 - A blank Kubernetes cluster, where no CNI was ever configured.
 - These [base requirements]({{site.baseurl}}/getting-started/kubernetes/requirements), except those related to the management of `cali*`, `tunl*` and `vxlan.calico` interfaces.
 
-> **Note**: If using `kubeadm` to create the cluster please make sure to specify the pod network CIDR using `--pod-network-cidr` command-line argument, for example, `sudo kubeadm init --pod-network-cidr=192.168.0.0/16`. If 192.168.0.0/16 is already in use within your network you must select a different pod network CIDR.
+   > **Note**: If you are using `kubeadm` to create the cluster please make sure to specify the pod network CIDR using the `--pod-network-cidr` command-line argument, i.e., `sudo kubeadm init --pod-network-cidr=192.168.0.0/16`. If 192.168.0.0/16 is already in use within your network you must select a different pod network CIDR.
    {: .alert .alert-info}
-   
+
 **Optional**
 For some hardware, the following hugepages configuration may enable VPP to use more efficient drivers:
 
