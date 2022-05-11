@@ -48,9 +48,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		EnableIPv6  bool
 	}
 	for _, testConfig := range []testConf{
-		//TODO: IPv6 must be enabled in docker on semaphore CI runs, otherwise the test will always fail when enableIPv6 is true. Disabling enableIPv6 for now.
-		// {api.VXLANModeCrossSubnet, "CalicoIPAM", true, true},
-		// {api.VXLANModeCrossSubnet, "WorkloadIPs", false, true},
+		{api.VXLANModeCrossSubnet, "CalicoIPAM", true, true},
+		{api.VXLANModeCrossSubnet, "WorkloadIPs", false, true},
 		{api.VXLANModeCrossSubnet, "CalicoIPAM", true, false},
 		{api.VXLANModeCrossSubnet, "WorkloadIPs", false, false},
 	} {
