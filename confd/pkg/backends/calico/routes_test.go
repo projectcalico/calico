@@ -351,7 +351,7 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
 				Expect(rg.client.cache["/calico/staticroutes/172.217.3.5-32"]).To(Equal("172.217.3.5/32"))
 
-				// set to unsupport service type
+				// set to unsupported service type
 				svc.Spec.Type = v1.ServiceTypeExternalName
 				rg.onSvcUpdate(nil, svc)
 				Expect(rg.client.cacheRevision).To(Equal(initRevision + 4))
@@ -398,7 +398,7 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.cache["/calico/staticroutes/172.217.3.5-32"]).To(Equal("172.217.3.5/32"))
 				Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
 
-				// set to unsupport service type
+				// set to unsupported service type
 				svc.Spec.Type = v1.ServiceTypeExternalName
 				rg.onEPUpdate(nil, ep)
 				Expect(rg.client.cacheRevision).To(Equal(initRevision + 4))

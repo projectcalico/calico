@@ -176,11 +176,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	maps := make([]bpf.Map, len(progMaps))
 	copy(maps, progMaps)
 
-outter:
+outer:
 	for _, m := range topts.extraMaps {
 		for i := range maps {
 			if maps[i].Path() == m.Path() {
-				continue outter
+				continue outer
 			}
 		}
 		maps = append(maps, m)
@@ -583,11 +583,11 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 	maps := make([]bpf.Map, len(progMaps))
 	copy(maps, progMaps)
 
-outter:
+outer:
 	for _, m := range topts.extraMaps {
 		for i := range maps {
 			if maps[i].Path() == m.Path() {
-				continue outter
+				continue outer
 			}
 		}
 		maps = append(maps, m)

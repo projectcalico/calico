@@ -332,7 +332,7 @@ Note: if {{site.prodname}} is installed in kube-system, update the `namespace` i
 <label:AKS>
 <%
 
-1. Register the `EnableAKSWindowsCalico` feature flag with the following Azure CLI commad.
+1. Register the `EnableAKSWindowsCalico` feature flag with the following Azure CLI command.
 
    ```bash
    az feature register --namespace "Microsoft.ContainerService" --name "EnableAKSWindowsCalico"

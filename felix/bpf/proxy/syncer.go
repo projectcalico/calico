@@ -677,7 +677,7 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 		s.synced = true
 	}
 
-	// We wrote all updates, noone will create new records in affinity table
+	// We wrote all updates, no one will create new records in affinity table
 	// that we would clean up now, so do it!
 	return s.cleanupSticky()
 }
@@ -889,7 +889,7 @@ func ProtoV1ToIntPanic(p v1.Protocol) uint8 {
 }
 
 func (s *Syncer) newSvcID() uint32 {
-	// TODO we may run out of IDs unless we restart ot recycle
+	// TODO we may run out of IDs unless we restart to recycle
 	id := s.nextSvcID
 	s.nextSvcID++
 	return id

@@ -410,7 +410,7 @@ var _ = Describe("Config", func() {
 		})
 
 		// Assert values
-		It("shoud return user defined values", func() {
+		It("should return user defined values", func() {
 			Expect(cfg.LogLevel).To(Equal("debug"))
 			Expect(cfg.WorkloadEndpointWorkers).To(Equal(2))
 			Expect(cfg.ProfileWorkers).To(Equal(3))
@@ -596,7 +596,7 @@ var _ = Describe("Config", func() {
 		})
 
 		// Assert error is generated
-		It("shoud generate error", func() {
+		It("should generate error", func() {
 			// Parse config
 			cfg = new(config.Config)
 			err := cfg.Parse()

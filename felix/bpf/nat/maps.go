@@ -599,7 +599,7 @@ func (k SendRecvMsgKey) IP() net.IP {
 	return k[8:12]
 }
 
-// Port returns port converted to 16-bit host endianess
+// Port returns port converted to 16-bit host endianness
 func (k SendRecvMsgKey) Port() uint16 {
 	port := binary.BigEndian.Uint32(k[12:16])
 	return uint16(port >> 16)
@@ -619,7 +619,7 @@ func (v SendRecvMsgValue) IP() net.IP {
 	return v[0:4]
 }
 
-// Port returns port converted to 16-bit host endianess
+// Port returns port converted to 16-bit host endianness
 func (v SendRecvMsgValue) Port() uint16 {
 	port := binary.BigEndian.Uint32(v[4:8])
 	return uint16(port >> 16)

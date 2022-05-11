@@ -864,7 +864,7 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 						delete(c.nodeIPs, oldNodeIPv4)
 					}
 					if oldNodeIPv6 != "" && oldNodeIPv6 == nodeIPv6 {
-						// IPv6 adress is updated, remove the old IPv6 address.
+						// IPv6 address is updated, remove the old IPv6 address.
 						delete(c.nodeIPs, oldNodeIPv6)
 					}
 					if nodeIPv4 != "" {

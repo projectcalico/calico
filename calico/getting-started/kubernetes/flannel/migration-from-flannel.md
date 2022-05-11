@@ -29,7 +29,7 @@ There are two ways to switch your cluster to use {{site.prodname}} networking. B
 
 - **Create a new cluster using {{site.prodname}} and migrate existing workloads**
 
-  If you have the ability to migrate worloads from one cluster to the next without caring about downtime, this is the easiest method: [create a new cluster using {{site.prodname}}]({{site.baseurl}}/getting-started/kubernetes/quickstart).
+  If you have the ability to migrate workloads from one cluster to the next without caring about downtime, this is the easiest method: [create a new cluster using {{site.prodname}}]({{site.baseurl}}/getting-started/kubernetes/quickstart).
 
 - **Live migration on an existing cluster**
 

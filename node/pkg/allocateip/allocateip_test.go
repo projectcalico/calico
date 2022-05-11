@@ -302,7 +302,7 @@ var _ = Describe("FV tests", func() {
 		_, _, err = net.ParseCIDROrIP(newNode.Spec.BGP.IPv4IPIPTunnelAddr)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Assert that the IPAM allocation for the original address is stil intact.
+		// Assert that the IPAM allocation for the original address is still intact.
 		_, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(handle).NotTo(BeNil())

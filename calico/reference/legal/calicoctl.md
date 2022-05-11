@@ -4515,7 +4515,7 @@ canonical_url: '/reference/legal/calicoctl'
 
 
 		-------
-		internal/common/binary.go in the gopsutil is copied and modifid from golang/encoding/binary.go.
+		internal/common/binary.go in the gopsutil is copied and modified from golang/encoding/binary.go.
 
 
 
