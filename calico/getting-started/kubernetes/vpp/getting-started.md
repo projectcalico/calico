@@ -7,9 +7,9 @@ canonical_url: '/getting-started/kubernetes/vpp/getting-started'
 
 ### Big picture
 
-Install {{site.prodname}} and enable the tech preview of the VPP dataplane.
+Install {{site.prodname}} and enable the beta release of the VPP dataplane.
 
-> **Warning!** The VPP dataplane is a tech preview and should not be used in production clusters. It has had limited testing and it will contain bugs (please report these on the [Calico Users slack](https://calicousers.slack.com/archives/C017220EXU1) or [Github](https://github.com/projectcalico/vpp-dataplane/issues)).  In addition, it does not support all the features of {{site.prodname}} and it is currently missing some security features such as Application Layer Policy.
+> **Warning!** The VPP dataplane is in beta and should not be used in production clusters. It has had lots of testing and is pretty stable. However, chances are that some bugs are still lurking around (please report these on the [Calico Users slack](https://calicousers.slack.com/archives/C017220EXU1) or [Github](https://github.com/projectcalico/vpp-dataplane/issues)).  In addition, it still does not support all the features of {{site.prodname}}.
 {: .alert .alert-danger }
 
 ### Value
@@ -26,7 +26,7 @@ The VPP dataplane is entirely compatible with the other {{site.prodname}} datapl
 
 In addition, the VPP dataplane offers some specific features for network-intensive applications, such as providing `memif` userspace packet interfaces to the pods (instead of regular Linux network devices), or exposing the VPP Host Stack to run optimized L4+ applications in the pods.
 
-Trying out the tech preview will give you a taste of these benefits and an opportunity to give feedback to the VPP dataplane team.
+Trying out the beta will give you a taste of these benefits and an opportunity to give feedback to the VPP dataplane team.
 
 
 ### Features
