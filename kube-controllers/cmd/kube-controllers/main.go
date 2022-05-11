@@ -55,9 +55,11 @@ import (
 )
 
 // VERSION is filled out during the build process (using git describe output)
-var VERSION string
-var version bool
-var statusFile string
+var (
+	VERSION    string
+	version    bool
+	statusFile string
+)
 
 func init() {
 	// Add a flag to check the version.
@@ -284,7 +286,6 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 
 // Starts an etcdv3 compaction goroutine with the given config.
 func startCompactor(ctx context.Context, interval time.Duration) {
-
 	if interval.Nanoseconds() == 0 {
 		log.Info("Disabling periodic etcdv3 compaction")
 		return
@@ -374,7 +375,6 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 		KeyFile:       config.Spec.EtcdKeyFile,
 	}
 	tlsClient, err := tlsInfo.ClientConfig()
-
 	if err != nil {
 		return nil, err
 	}
