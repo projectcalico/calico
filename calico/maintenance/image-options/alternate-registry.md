@@ -12,7 +12,7 @@ Configure {{site.prodname}} to pull images from a registry (public or private).
 
 ### Value
 
-In many deployments, installing {{site.prodname}} in clusters from third-party private repos is not an option. {{site.prodname}} offers these public and private registry options, which can be used in any combination: 
+In many deployments, installing {{site.prodname}} in clusters from third-party private repos is not an option. {{site.prodname}} offers these public and private registry options, which can be used in any combination:
 
 - **Install from a registry** for use cases like airgapped clusters, or clusters with bandwidth or security constraints
 - **Install from an image path in a registry** if you have pulled {{site.prodname}} images to a sub path in your registry
@@ -57,7 +57,7 @@ To install images from your registry, you must first pull the images from Tigera
    {%- endfor -%}
    ```
 
-1. Retag the images with the name of your registry `$REGISTRY`. 
+1. Retag the images with the name of your registry `$REGISTRY`.
 
    ```bash
    docker tag {{ operator.registry }}/{{ operator.image }}:{{ operator.version }} $REGISTRY/{{ operator.image }}:{{ operator.version }}

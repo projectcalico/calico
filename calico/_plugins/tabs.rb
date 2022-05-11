@@ -2,7 +2,7 @@
 # Authour : Reza R <54559947+frozenprocess@users.noreply.github.com>
 # This plugin adds bootstrap predefined tab block in Jekyll
 <<-EXAMPLE
-tabs can be generated using 
+tabs can be generated using
 {% tabs %}
 **Note: tabs are linked to a predefined group named `default`, using `tab-group`
 you can define multiple linked tab groups.**
@@ -55,7 +55,7 @@ module Jekyll
 
         # convert input parameters to hash
         def createHash(items)
-            hash = {} 
+            hash = {}
             items.scan(InputPattern) do |key, value|
                 hash[key] = value.strip
             end
@@ -64,7 +64,7 @@ module Jekyll
 
         def render(context)
             text = super
-                        
+
             # tab global header
             result = "<ul class=\"nav nav-#{@header["type"]} flex-column general-tab-header\" "
             result += "aria-orientation=\"vertical\" id=\"#{@header['id']}\" "
@@ -72,7 +72,7 @@ module Jekyll
             # user input should follow this format
             # tabs : <key:value>
             # content: <% content %>
-            tmpdata = text.scan(/<(.*?)>(?:.*?)<\%(.*?)\%>/m)            
+            tmpdata = text.scan(/<(.*?)>(?:.*?)<\%(.*?)\%>/m)
 
             # registering tab_group flag used in `_layouts/docwithnav.html` to decide
             # when to include js/tabs.js in a page.
@@ -106,7 +106,7 @@ module Jekyll
             end
             # final result is ready
             result += headers + contents + "</div>"
-            
+
             return result
 
         end
