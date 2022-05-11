@@ -17,6 +17,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -110,6 +111,9 @@ func (p *IntParam) Parse(raw string) (interface{}, error) {
 	if err != nil {
 		err = p.parseFailed(raw, "invalid int")
 		return nil, err
+	}
+	if value > math.MaxInt || value < math.MinInt {
+		log.Fatal("value must be between %v and %v", math.MaxInt, math.MinInt)
 	}
 	result := int(value)
 	if result < p.Min {

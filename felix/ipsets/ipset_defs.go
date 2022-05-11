@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 
+	"math"
 	"fmt"
 	"strconv"
 
@@ -152,6 +153,9 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 		port, err := strconv.Atoi(parts[1])
 		if err != nil {
 			log.WithField("member", member).WithError(err).Panic("Bad port")
+		}
+		if port > math.MaxUint16 || port < math.MinUint16 {
+			log.Fatal("port must be in range %v-%v", math.MaxUint16, math.MinUint16)
 		}
 		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
 		// the address as an interface by storing one fewer interface headers.  That is worthwhile

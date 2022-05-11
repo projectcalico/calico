@@ -426,7 +426,7 @@ func (rs *resourceStore) GuaranteedUpdate(
 		revInt, _ := strconv.Atoi(accessor.GetResourceVersion())
 		updatedRes := updatedObj.(resourceObject)
 		if !shouldCreateOnUpdate() {
-			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < int(curState.rev) {
+			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < int64(curState.rev) {
 				updatedRes.(resourceObject).GetObjectMeta().SetResourceVersion(strconv.FormatInt(curState.rev, 10))
 			}
 		}

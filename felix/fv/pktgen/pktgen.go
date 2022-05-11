@@ -15,6 +15,7 @@
 package main
 
 import (
+	"math"
 	"net"
 	"strconv"
 
@@ -60,6 +61,9 @@ func main() {
 		if err != nil {
 			log.WithError(err).Fatal("IP id not a number")
 		}
+		if id > math.MaxUint16 || id < math.MinUint16 {
+			log.Fatal("id must be in range %v-%v", math.MaxUint16, math.MinUint16)
+		}
 		ipID = uint16(id)
 	}
 
@@ -69,6 +73,9 @@ func main() {
 		if err != nil {
 			log.WithError(err).Fatal("source port not a number")
 		}
+		if p > math.MaxUint16 || p < math.MinUint16 {
+			log.Fatal("sport must be in range %v-%v", math.MaxUint16, math.MinUint16)
+		}
 		sport = uint16(p)
 	}
 
@@ -77,6 +84,9 @@ func main() {
 		p, err := strconv.Atoi(args["--port-dst"].(string))
 		if err != nil {
 			log.WithError(err).Fatal("destination port not a number")
+		}
+		if p > math.MaxUint16 || p < math.MinUint16 {
+			log.Fatal("dport must be in range %v-%v", math.MaxUint16, math.MinUint16)
 		}
 		dport = uint16(p)
 	}

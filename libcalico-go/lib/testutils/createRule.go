@@ -16,6 +16,7 @@ package testutils
 
 import (
 	"log"
+	"math"
 	"net"
 	"strconv"
 
@@ -31,6 +32,9 @@ func CreateRule(ipv, icmpType, icmpCode int, proto, cidrStr, tag, selector, inAc
 	var protocol numorstring.Protocol
 
 	i, err := strconv.Atoi(proto)
+	if i > math.MaxUint8 || i < math.MinUint8 {
+		log.Fatal("protocol must be in range %v-%v", math.MaxUint8, math.MinUint8)
+	}
 	if err != nil {
 		protocol = numorstring.ProtocolFromString(proto)
 	} else {
