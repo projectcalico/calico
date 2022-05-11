@@ -177,7 +177,7 @@ func (c *L3RouteResolver) RegisterWith(allUpdDispatcher, localDispatcher *dispat
 	// need all WEPs, or only local WEPs.
 	logrus.WithField("routeSource", c.routeSource).Info("Registering for L3 route updates")
 	if c.routeSource == "WorkloadIPs" {
-		// Driven off of workload IP addresses. Register for all WEP udpates.
+		// Driven off of workload IP addresses. Register for all WEP updates.
 		allUpdDispatcher.Register(model.WorkloadEndpointKey{}, c.OnWorkloadUpdate)
 	} else {
 		// Driven off of IPAM data. Register for blocks and local WEP updates.

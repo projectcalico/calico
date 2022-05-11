@@ -128,7 +128,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Allocate an IP address on the Calico node.
-		// Note: it refers to a pod that doesn't exist, but this is OK since we only clean up addressses
+		// Note: it refers to a pod that doesn't exist, but this is OK since we only clean up addresses
 		// when their node goes away, and the node exists.
 		handleA := "handleA"
 		attrs := map[string]string{"node": cNodeName, "pod": "pod-a", "namespace": "default"}

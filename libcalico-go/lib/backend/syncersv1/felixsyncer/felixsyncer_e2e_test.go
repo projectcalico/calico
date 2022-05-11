@@ -268,7 +268,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 
 			// Expect the correct updates - should have a new entry for each of these entries. Note that we don't do
 			// any more update checks below because we filter out host related updates since they are chatty outside
-			// of our control (and a lot of the tests below are focussed on host data), instead the tests below will
+			// of our control (and a lot of the tests below are focused on host data), instead the tests below will
 			// just check the final cache entry.
 			var expectedEvents []api.Update
 			for _, r := range defaultCacheEntries {

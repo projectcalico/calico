@@ -2069,7 +2069,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			ensureTimestamp(containerID3)
 
 			// Make sure timeout on pod1, pod2 deletion timestamp. 7+7 > 12
-			log.Infof("Sleeping further 7 seonds")
+			log.Infof("Sleeping further 7 seconds")
 			time.Sleep(time.Second * 7)
 			justDeleted, err = utils.CheckWepJustDeleted(containerID1, 12)
 			Expect(err).ShouldNot(HaveOccurred())

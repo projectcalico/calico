@@ -44,7 +44,7 @@ if (Get-IsContainerdRunning)
 } else {
     # Place to install the CNI plugin to. For docker, this should match kubelet's --cni-bin-dir.
     Set-EnvVarIfNotSet -var "CNI_BIN_DIR" -defaultValue "c:\k\cni"
-    # Place to install the CNI config to. For docker, this hould be located in kubelet's --cni-conf-dir.
+    # Place to install the CNI config to. For docker, this should be located in kubelet's --cni-conf-dir.
     Set-EnvVarIfNotSet -var "CNI_CONF_DIR" -defaultValue "c:\k\cni\config"
 }
 

@@ -9,7 +9,7 @@ spec:
 ---
 
 # This BGPPeer peers the RR node (kube-master) with an explicit
-# external peer and maintain orignal next hop.
+# external peer and maintain original next hop.
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
@@ -22,7 +22,7 @@ spec:
 ---
 
 # This BGPPeer peers the RR node (kube-master) with an explicit
-# external v6 peer and maintain orignal next hop.
+# external v6 peer and maintain original next hop.
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:

@@ -37,7 +37,7 @@ import (
 )
 
 // This file implements a set of functions that are called as part of the felix-start up processing. The purpose is
-// primarily focussed on deployments that have HostEncryptionEnabled set to true, and is to fix up routing issues that
+// primarily focused on deployments that have HostEncryptionEnabled set to true, and is to fix up routing issues that
 // may arise from mismatched routing configuration between nodes.
 //
 // Note that even when routing is broken between nodes, all nodes should still be able to reach the API server because
@@ -105,14 +105,14 @@ const (
 	boostrapK8sClientTimeout    = 10 * time.Second
 )
 
-// BootstrapAndFilterTyphaAddresses performs wireguard boostrap processing and filtering of typha addresses. This is
+// BootstrapAndFilterTyphaAddresses performs wireguard bootstrap processing and filtering of typha addresses. This is
 // primarily to handle the fact that Host Encryption can cause routing asymmetry due to timing windows. This results in
 // felixes being locked out from typhas.
 // - If wireguard is disabled then just remove all wireguard configuration from the node (kernel and published key).
 //   We do this whether host encryption is enabled or not.
 //
 // For host encryption only:
-// - If the published key and the kernel key don't match remove all wireguard configuraton from the node.
+// - If the published key and the kernel key don't match remove all wireguard configuration from the node.
 // - If the kernel has no programmed peers then remove all wireguard configuration from the node (since we can't
 //   be talking over wireguard yet anyways).
 // -  If a set of typha endpoints has been supplied, filter them to exclude endpoints that we know we cannot reach
@@ -204,7 +204,7 @@ func BootstrapAndFilterTyphaAddresses(
 // RemoveWireguardConditionallyOnBootstrap removes all wireguard configuration based on configuration conditions. This
 // is called as a last resort after failing to connect to typha.
 //
-// The following wireguard conifguration will be removed if HostEncryptionEnabled is true:
+// The following wireguard configuration will be removed if HostEncryptionEnabled is true:
 // - The wireguard public key
 // - The wireguard device (which in turn will delete all wireguard routing rules).
 //
@@ -332,7 +332,7 @@ func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient client
 		node, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			// If the node does not exist then it's not going ot have a wireguard public key configured.
+			// If the node does not exist then it's not going to have a wireguard public key configured.
 			logCxt.Info("Node does not exist - no published wireguard key")
 			return "", nil
 		} else if err != nil {
@@ -470,7 +470,7 @@ func removeWireguardPublicKey(
 		thisNode, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			// If the node does not exist then it's not going ot have a wireguard public key configured.
+			// If the node does not exist then it's not going to have a wireguard public key configured.
 			logCxt.Info("Node does not exist - no published wireguard key to remove")
 			return nil
 		} else if err != nil {

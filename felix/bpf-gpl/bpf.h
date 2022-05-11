@@ -57,7 +57,7 @@ struct bpf_map_def_extended {
 // node with the backing workload.
 #define CALI_TC_DSR		(1<<4)
 // CALI_L3_DEV is set for any L3 device such as wireguard and IPIP tunnels that act fully
-// at layer 3. In kernerls before 5.14 (rhel 4.18.0-330) IPIP tunnels on inbound
+// at layer 3. In kernels before 5.14 (rhel 4.18.0-330) IPIP tunnels on inbound
 // direction were acting differently, where they could see outer ethernet and ip headers.
 #define CALI_TC_L3_DEV 	(1<<5)
 // CALI_XDP_PROG is set for programs attached to the XDP hook

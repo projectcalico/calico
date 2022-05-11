@@ -216,7 +216,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 	return nil, errors.Errorf("unrecognized map type %T", m)
 }
 
-// IterMapCmdOutput iterates over the outout of a command obtained by DumpMapCmd
+// IterMapCmdOutput iterates over the output of a command obtained by DumpMapCmd
 func IterMapCmdOutput(output []byte, f IterCallback) error {
 	var mp []mapEntry
 	err := json.Unmarshal(output, &mp)
