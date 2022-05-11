@@ -96,6 +96,13 @@ rules:
       - get
       - list
       - watch
+  - apiGroups: [""]
+    resources:
+      - serviceaccounts/token
+    resourceNames:
+      - calico-node
+    verbs:
+      - create
 ---
 
 apiVersion: rbac.authorization.k8s.io/v1beta1
