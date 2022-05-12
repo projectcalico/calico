@@ -61,6 +61,10 @@ func newMockDataplane() *mockDataplane {
 func (m *mockDataplane) ensureStarted() {
 }
 
+func (m *mockDataplane) ensureBPFDevices() error {
+	return nil
+}
+
 func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -219,7 +223,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
-		bpfEpMgr = newBPFEndpointManager(
+		bpfEpMgr, _ = newBPFEndpointManager(
+			dp,
 			&Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
@@ -242,7 +247,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logutils.NewSummarizer("test"),
 		)
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
-		bpfEpMgr.dp = dp
 	})
 
 	It("exists", func() {
