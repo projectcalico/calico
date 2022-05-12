@@ -20,7 +20,7 @@ Param(
 )
 
 # Import HNS libraries, included in the package.
-ipmo -Force $CalicoWindowsDir\libs\hns\hns.psm1
+ipmo -Force -DisableNameChecking $CalicoWindowsDir\libs\hns\hns.psm1
 
 . $CalicoWindowsDir\config.ps1
 ipmo -Force $CalicoWindowsDir\libs\calico\calico.psm1

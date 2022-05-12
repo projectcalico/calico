@@ -78,7 +78,7 @@ if ($ContainerRuntime -eq "Docker") {
     docker network create -d nat host
 } elseif ($ContainerRuntime -eq "ContainerD") {
     DownloadFile "c:\k\hns.psm1" https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1
-    Import-Module "c:\k\hns.psm1"
+    Import-Module -DisableNameChecking "c:\k\hns.psm1"
     if ((Get-HNSNetwork | ? Type -EQ nat | ? Name -EQ nat) -eq $null) {
         New-HnsNetwork -Type NAT -Name nat
     }
