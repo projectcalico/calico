@@ -358,8 +358,15 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 	return nil
 }
 
-func (m *ipamMigrator) SetVXLANEnabled(ctx context.Context, enabled bool) error {
-	log.Infof("Setting FelixConfiguration VXLANEnabled=%t", enabled)
+type vxlanMode string
+
+const (
+	vxlanModeEnabled  vxlanMode = "enabled"
+	vxlanModeDisabled vxlanMode = "disabled"
+	vxlanModeCleared  vxlanMode = "clear"
+)
+
+func (m *ipamMigrator) SetVXLANMode(ctx context.Context, mode vxlanMode) error {
 	defaultConfig, err := m.calicoClient.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
 	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 		// Doesn't exist - create it.
@@ -369,7 +376,22 @@ func (m *ipamMigrator) SetVXLANEnabled(ctx context.Context, enabled bool) error 
 		log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
 		return err
 	}
-	defaultConfig.Spec.VXLANEnabled = &enabled
+
+	switch mode {
+	case vxlanModeEnabled:
+		log.Infof("Enabling VXLAN in FelixConfiguration")
+		enabled := true
+		defaultConfig.Spec.VXLANEnabled = &enabled
+	case vxlanModeDisabled:
+		log.Infof("Disabling VXLAN in FelixConfiguration")
+		disabled := false
+		defaultConfig.Spec.VXLANEnabled = &disabled
+	case vxlanModeCleared:
+		log.Info("Clearing FelixConfiguration.Spec.VXLANEnabled")
+		defaultConfig.Spec.VXLANEnabled = nil
+	default:
+		log.Fatalf("Invalid VXLAN mode given: %s", mode)
+	}
 
 	if defaultConfig.ResourceVersion != "" {
 		_, err = m.calicoClient.FelixConfigurations().Update(ctx, defaultConfig, options.SetOptions{})
@@ -384,7 +406,6 @@ func (m *ipamMigrator) SetVXLANEnabled(ctx context.Context, enabled bool) error 
 			return err
 		}
 	}
-	log.Infof("FelixConfiguration updated VXLANEnabled=%t", enabled)
 	return nil
 }
 
