@@ -219,7 +219,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
-		bpfEpMgr = newBPFEndpointManager(
+		bpfEpMgr, _ = newBPFEndpointManager(
 			&Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
