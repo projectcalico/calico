@@ -16,7 +16,7 @@
 . .\config.ps1
 
 ipmo .\libs\calico\calico.psm1 -Force
-ipmo .\libs\hns\hns.psm1 -Force
+ipmo .\libs\hns\hns.psm1 -Force -DisableNameChecking
 
 $lastBootTime = Get-LastBootTime
 $Stored = Get-StoredLastBootTime

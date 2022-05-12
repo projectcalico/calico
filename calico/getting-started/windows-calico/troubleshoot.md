@@ -11,7 +11,7 @@ canonical_url: /getting-started/windows-calico/troubleshoot
 When using the {{site.prodname}} CNI plugin, each {{site.prodname}} IPAM block (or the single podCIDR in host-local IPAM mode), is represented as a HNS l2bridge network. Use the following command to inspect the networks.
 
 ```powershell
-ipmo {{site.rootDirWindows}}\libs\hns\hns.psm1
+ipmo -DisableNameChecking {{site.rootDirWindows}}\libs\hns\hns.psm1
 Get-HNSNetwork
 ```
 
@@ -20,7 +20,7 @@ Get-HNSNetwork
 Use the following command to view the HNS endpoints on the system. There should be one HNS endpoint per pod networked with {{site.prodname}}:
 
 ```powershell
-ipmo {{site.rootDirWindows}}\libs\hns\hns.psm1
+ipmo -DisableNameChecking {{site.rootDirWindows}}\libs\hns\hns.psm1
 Get-HNSEndpoint
 ```
 

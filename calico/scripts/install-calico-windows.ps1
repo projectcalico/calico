@@ -56,7 +56,7 @@ function DownloadFiles()
 function PrepareKubernetes()
 {
     DownloadFiles
-    ipmo C:\k\hns.psm1
+    ipmo -DisableNameChecking C:\k\hns.psm1
     InstallK8sBinaries
 
     # Prepull and tag the pause image for docker
@@ -392,8 +392,8 @@ if (!(Test-Path $helperv2))
 {
     Invoke-WebRequest https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.v2.psm1 -O $BaseDir\helper.v2.psm1
 }
-ipmo -force $helper
-ipmo -force $helperv2
+ipmo -force -DisableNameChecking $helper
+ipmo -force -DisableNameChecking $helperv2
 
 if (!(Test-Path $CalicoZip))
 {
