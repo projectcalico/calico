@@ -105,6 +105,7 @@ type bpfDataplane interface {
 	ensureProgramAttached(ap attachPoint) (bpf.MapFD, error)
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) error
+	ensureBPFDevices() error
 	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error
 	removePolicyProgram(jumpMapFD bpf.MapFD) error
 	setAcceptLocal(iface string, val bool) error
@@ -215,6 +216,7 @@ type bpfAllowChainRenderer interface {
 }
 
 func newBPFEndpointManager(
+	dp bpfDataplane,
 	config *Config,
 	bpfMapContext *bpf.MapContext,
 	fibLookupEnabled bool,
@@ -224,11 +226,12 @@ func newBPFEndpointManager(
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
-) *bpfEndpointManager {
+) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
 	}
 	m := &bpfEndpointManager{
+		dp:                      dp,
 		allWEPs:                 map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPs:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPsDirty:          true,
@@ -299,8 +302,19 @@ func newBPFEndpointManager(
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
 	// indirection here so that UT can simulate the dataplane and test how it's called.
-	m.dp = m
-	return m
+	if m.dp == nil {
+		m.dp = m
+	}
+
+	err := m.dp.ensureBPFDevices()
+	if err != nil {
+		err = fmt.Errorf("ensure BPF devices: %w", err)
+		m = nil
+	} else {
+		log.Infof("Created %s:%s veth pair.", bpfInDev, bpfOutDev)
+	}
+
+	return m, err
 }
 
 // withIface handles the bookkeeping for working with a particular bpfInterface value.  It
@@ -1414,15 +1428,13 @@ func (m *bpfEndpointManager) ensureStarted() {
 	m.startupOnce.Do(func() {
 		log.Info("Starting map cleanup runner.")
 		m.mapCleanupRunner.Start(context.Background())
-
-		m.ensureCtlbDevice()
 	})
 }
 
-func (m *bpfEndpointManager) ensureCtlbDevice() {
+func (m *bpfEndpointManager) ensureBPFDevices() error {
 	nl, err := netlinkshim.NewRealNetlink()
 	if err != nil {
-		log.Fatal("Failed to create nelink.")
+		return fmt.Errorf("failed to create nelink: %w", err)
 	}
 
 	var bpfout, bpfin netlink.Link
@@ -1436,28 +1448,28 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 			PeerName: bpfOutDev,
 		}
 		if err := nl.LinkAdd(nat); err != nil {
-			log.Fatal("Failed to add bpfnatin.")
+			return fmt.Errorf("failed to add %s: %w", bpfInDev, err)
 		}
 		bpfin, err = nl.LinkByName(bpfInDev)
 		if err != nil {
-			log.WithError(err).Fatal("Miss bpfnatin after add.")
+			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
 		}
 		if err := nl.LinkSetUp(bpfin); err != nil {
-			log.WithError(err).Fatal("Failed to set bpfnatin up.")
+			return fmt.Errorf("failed to set %s up: %w", bpfInDev, err)
 		}
 		bpfout, err = nl.LinkByName(bpfOutDev)
 		if err != nil {
-			log.WithError(err).Fatal("Miss bpfnatout after add.")
+			return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
 		}
 		if err := nl.LinkSetUp(bpfout); err != nil {
-			log.WithError(err).Fatal("Failed to set bpfnatout up.")
+			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
 		}
 	}
 
 	if bpfout == nil {
 		bpfout, err = nl.LinkByName(bpfOutDev)
 		if err != nil {
-			log.WithError(err).Fatal("Miss bpfnatout after add.")
+			return fmt.Errorf("miss %s after add: %w", bpfOutDev, err)
 		}
 	}
 
@@ -1470,19 +1482,19 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 		LinkIndex:    bpfin.Attrs().Index,
 	}
 	if err := nl.NeighAdd(arp); err != nil && err != syscall.EEXIST {
-		log.WithError(err).Fatal("Failed to update neight for bpfnatout.")
+		return fmt.Errorf("failed to update neight for %s: %w", bpfOutDev, err)
 	}
 
 	if err := configureInterface(bpfInDev, 4, "0", writeProcSys); err != nil {
-		log.WithError(err).Fatal("Failed to configure bpfnatin parameters.")
+		return fmt.Errorf("failed to configure %s parameters: %w", bpfInDev, err)
 	}
 	if err := configureInterface(bpfOutDev, 4, "0", writeProcSys); err != nil {
-		log.WithError(err).Fatal("Failed to configure bpfnatout parameters.")
+		return fmt.Errorf("failed to configure %s parameters: %w", bpfOutDev, err)
 	}
 
 	err = m.ensureQdisc(bpfInDev)
 	if err != nil {
-		log.WithError(err).Fatalf("Failed to set qdisc on bpfnatin.")
+		return fmt.Errorf("failed to set qdisc on %s: %w", bpfOutDev, err)
 	}
 
 	// Setup a link local route to a non-existent link local address that would
@@ -1495,7 +1507,7 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 		CIDR: cidr,
 	})
 
-	log.Info("Created bpfnatin pair.")
+	return nil
 }
 
 func (m *bpfEndpointManager) ensureQdisc(iface string) error {
