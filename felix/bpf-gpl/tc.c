@@ -1323,10 +1323,10 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 		ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_ESTABLISHED_DNAT);
 		/* fallthrough */
 	case CALI_CT_NEW:
-		/* There is a conflict, this is the first packet that conflictis. By
+		/* There is a conflict, this is the first packet that conflicts. By
 		 * setting a NAT destination being the same as the original destination,
-		 * we trigger DNAT (void) which will conflict on the source port and will
-		 * trigger psnat.
+		 * we trigger a void/fake DNAT which will conflict on the source
+		 * port and will trigger psnat.
 		 */
 		nat_dest_ident.addr = ctx.state->ip_dst;
 		nat_dest_ident.port = ctx.state->dport;
