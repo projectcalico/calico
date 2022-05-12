@@ -97,9 +97,8 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	}
 
 	// Update default Felix configuration with Flannel VNI and vxlan port.
-	err = updateDefaultFelixConfigurtion(m.ctx, m.calicoClient,
-		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU,
-		checkVxlan)
+	err = updateDefaultFelixConfiguration(m.ctx, m.calicoClient,
+		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU)
 	if err != nil {
 		return fmt.Errorf("Failed to create default ippool")
 	}
@@ -359,28 +358,46 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 	return nil
 }
 
+func (m *ipamMigrator) SetVXLANEnabled(ctx context.Context, enabled bool) error {
+	log.Infof("Setting FelixConfiguration VXLANEnabled=%t", enabled)
+	defaultConfig, err := m.calicoClient.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
+	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+		// Doesn't exist - create it.
+		defaultConfig = &api.FelixConfiguration{}
+		defaultConfig.Name = "default"
+	} else if err != nil {
+		log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
+		return err
+	}
+	defaultConfig.Spec.VXLANEnabled = &enabled
+
+	if defaultConfig.ResourceVersion != "" {
+		_, err = m.calicoClient.FelixConfigurations().Update(ctx, defaultConfig, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to update default FelixConfiguration.")
+			return err
+		}
+	} else {
+		_, err = m.calicoClient.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to create default FelixConfiguration.")
+			return err
+		}
+	}
+	log.Infof("FelixConfiguration updated VXLANEnabled=%t", enabled)
+	return nil
+}
+
 // Update default FelixConfiguration with specified VNI, port and MTU.
 // If migrating from Flannel, return error if vxlan is not enabled.
 // If migrating from Canal, set vxlan enabled.
 // Do nothing if correct values already been set.
-func updateDefaultFelixConfigurtion(ctx context.Context, client client.Interface, vni, port, mtu int, checkVxlan bool) error {
+func updateDefaultFelixConfiguration(ctx context.Context, client client.Interface, vni, port, mtu int) error {
 	// Get default Felix configuration. Return error if not exists.
 	defaultConfig, err := client.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
 	if err != nil {
 		log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
 		return err
-	}
-
-	if checkVxlan {
-		// Check if vxlan is enabled. Return error if not.
-		vxlanEnabled := false
-		if defaultConfig.Spec.VXLANEnabled != nil {
-			vxlanEnabled = *defaultConfig.Spec.VXLANEnabled
-		}
-		if !vxlanEnabled {
-			log.WithError(err).Errorf("vxlan is not enabled by default Felix configration")
-			return err
-		}
 	}
 
 	// Get current value for vxlanEnabled, VNI , Port and MTU.
@@ -407,8 +424,6 @@ func updateDefaultFelixConfigurtion(ctx context.Context, client client.Interface
 		return nil
 	}
 
-	vxlanEnabled := true
-	defaultConfig.Spec.VXLANEnabled = &vxlanEnabled
 	defaultConfig.Spec.VXLANVNI = &vni
 	defaultConfig.Spec.VXLANPort = &port
 	defaultConfig.Spec.VXLANMTU = &mtu
