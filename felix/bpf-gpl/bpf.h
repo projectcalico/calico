@@ -141,7 +141,7 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 
      . . . .  . . 1 1  . . . .       BYPASS => SEEN and no further policy checking needed;
                                      remaining bits indicate options for how to treat such
-                                     packets: FWD, FWD_SRC_FIXUP, SKIP_RPF and NAT_OUT
+                                     packets: FWD, FWD_SRC_FIXUP and NAT_OUT
 
      . . . .  . 1 0 1  . . . .       FALLTHROUGH => SEEN but no BPF CT state; need to check
                                      against Linux CT state
@@ -178,10 +178,6 @@ enum calico_skb_mark {
 	 * such packets based on their Linux conntrack state. This allows for us to handle flows that
 	 * were live before BPF was enabled. */
 	CALI_SKB_MARK_FALLTHROUGH            = CALI_SKB_MARK_SEEN    | 0x04000000,
-	/* The SKIP_RPF bit is used by programs that are towards the host namespace to disable our
-	 * RPF check for that packet.  Typically used for a packet that we originate (such as an ICMP
-	 * response). */
-	CALI_SKB_MARK_SKIP_RPF               = CALI_SKB_MARK_BYPASS  | 0x00400000,
 	/* The NAT_OUT bit is used by programs that are towards the host namespace to tell iptables to
 	 * do SNAT for this flow.  Subsequent packets will also be allowed to fall through to the host
 	 * netns. */

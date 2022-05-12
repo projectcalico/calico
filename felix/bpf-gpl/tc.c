@@ -854,7 +854,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				goto icmp_too_big;
 			}
 			state->ip_src = HOST_IP;
-			seen_mark = CALI_SKB_MARK_SKIP_RPF;
 
 			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
 			fib = true;
