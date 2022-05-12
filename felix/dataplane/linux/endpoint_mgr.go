@@ -1075,7 +1075,7 @@ func (m *endpointManager) updateHostEndpoints() {
 		m.activeHostIfaceToMangleIngressChains = newHostIfaceMangleIngressChains
 	}
 
-	if m.ipVersion == 4 || !m.bpfEnabled {
+	if m.ipVersion == 4 || !m.bpfEnabled /* BPF enforces RPF on its own */ {
 		// Build iptables chains for untracked host endpoint policy.
 		newHostIfaceRawChains := map[string][]*iptables.Chain{}
 		for ifaceName, id := range newUntrackedIfaceNameToHostEpID {
