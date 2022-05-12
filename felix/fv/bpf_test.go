@@ -3670,7 +3670,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	Expect(err).NotTo(HaveOccurred())
 
 	lines := strings.Split(out, "\n")
-	rtRE := regexp.MustCompile(ip + " .* dev bpfnatin")
+	rtRE := regexp.MustCompile(ip + " .* dev bpfin.cali")
 
 	for _, l := range lines {
 		if rtRE.MatchString(l) {
