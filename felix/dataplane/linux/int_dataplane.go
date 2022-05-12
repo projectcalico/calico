@@ -617,7 +617,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(failsafeMgr)
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
-		bpfEndpointManager = newBPFEndpointManager(
+		bpfEndpointManager, err = newBPFEndpointManager(
 			&config,
 			bpfMapContext,
 			fibLookupEnabled,
@@ -628,6 +628,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.reportHealth,
 			dp.loopSummarizer,
 		)
+
+		if err != nil {
+			log.WithError(err).Panic("Failed to create BPF endpoint manager.")
+		}
+
 		dp.RegisterManager(bpfEndpointManager)
 
 		bpfEndpointManager.Features = dataplaneFeatures
