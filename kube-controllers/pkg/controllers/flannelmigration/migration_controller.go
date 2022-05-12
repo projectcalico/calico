@@ -169,7 +169,7 @@ func (c *flannelMigrationController) Run(stopCh chan struct{}) {
 	// Disable VXLAN in Felix explicitly. We don't want to turn this on until we have
 	// updated the Calico nodes with the necessary VTEP information from flannel. This ensures
 	// that Calico will respect flannel's VXLAN traffic once enabled.
-	if err := c.ipamMigrator.SetVXLANEnabled(context.TODO(), false); err != nil {
+	if err := c.ipamMigrator.SetVXLANMode(context.TODO(), vxlanModeDisabled); err != nil {
 		log.WithError(err).Errorf("Error disabling VXLAN")
 		c.HandleError(err)
 	}
@@ -197,8 +197,10 @@ func (c *flannelMigrationController) Run(stopCh chan struct{}) {
 		c.HandleError(err)
 	}
 
-	// Now that we have populated Calico with flannel's VXLAN data, we can enable VXLAN in Felix.
-	if err := c.ipamMigrator.SetVXLANEnabled(context.TODO(), true); err != nil {
+	// Now that we have populated Calico with flannel's VXLAN data, we can clear the VXLAN bit
+	// in Felix - Felix will determine that VXLAN is enabled based on the fact that it is
+	// set on an IP pool.
+	if err := c.ipamMigrator.SetVXLANMode(context.TODO(), vxlanModeCleared); err != nil {
 		log.WithError(err).Errorf("Error enabling VXLAN")
 		c.HandleError(err)
 	}
