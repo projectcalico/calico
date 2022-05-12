@@ -63,7 +63,12 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 )
 
-const jumpMapCleanupInterval = 10 * time.Second
+const (
+	jumpMapCleanupInterval = 10 * time.Second
+
+	bpfInDev  = "bpfin.cali"
+	bpfOutDev = "bpfout.cali"
+)
 
 var (
 	bpfEndpointsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -264,7 +269,7 @@ func newBPFEndpointManager(
 	}
 
 	m.routeTable = routetable.New(
-		[]string{"bpfnatin"},
+		[]string{bpfInDev},
 		4,
 		false, // vxlan
 		config.NetlinkTimeout,
@@ -390,7 +395,7 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 		}
 		m.tunnelIP = ip
 		log.WithField("ip", update.Dst).Info("host tunnel")
-		m.dirtyIfaceNames.Add("bpfnatout")
+		m.dirtyIfaceNames.Add(bpfOutDev)
 	}
 }
 
@@ -1029,7 +1034,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tc.EpTypeTunnel
 	} else if ifaceName == "wireguard.cali" {
 		endpointType = tc.EpTypeL3Device
-	} else if ifaceName == "bpfnatin" || ifaceName == "bpfnatout" {
+	} else if ifaceName == bpfInDev || ifaceName == bpfOutDev {
 		endpointType = tc.EpTypeNAT
 		ap.HostTunnelIP = m.tunnelIP
 		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
@@ -1181,7 +1186,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
-	return m.dataIfaceRegex.MatchString(iface) || iface == "bpfnatout"
+	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev
 }
 
 func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
@@ -1422,25 +1427,25 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 
 	var bpfout, bpfin netlink.Link
 
-	bpfin, err = nl.LinkByName("bpfnatin")
+	bpfin, err = nl.LinkByName(bpfInDev)
 	if err != nil {
 		nat := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
-				Name: "bpfnatin",
+				Name: bpfInDev,
 			},
-			PeerName: "bpfnatout",
+			PeerName: bpfOutDev,
 		}
 		if err := nl.LinkAdd(nat); err != nil {
 			log.Fatal("Failed to add bpfnatin.")
 		}
-		bpfin, err = nl.LinkByName("bpfnatin")
+		bpfin, err = nl.LinkByName(bpfInDev)
 		if err != nil {
 			log.WithError(err).Fatal("Miss bpfnatin after add.")
 		}
 		if err := nl.LinkSetUp(bpfin); err != nil {
 			log.WithError(err).Fatal("Failed to set bpfnatin up.")
 		}
-		bpfout, err = nl.LinkByName("bpfnatout")
+		bpfout, err = nl.LinkByName(bpfOutDev)
 		if err != nil {
 			log.WithError(err).Fatal("Miss bpfnatout after add.")
 		}
@@ -1450,7 +1455,7 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 	}
 
 	if bpfout == nil {
-		bpfout, err = nl.LinkByName("bpfnatout")
+		bpfout, err = nl.LinkByName(bpfOutDev)
 		if err != nil {
 			log.WithError(err).Fatal("Miss bpfnatout after add.")
 		}
@@ -1468,14 +1473,14 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 		log.WithError(err).Fatal("Failed to update neight for bpfnatout.")
 	}
 
-	if err := configureInterface("bpfnatin", 4, "0", writeProcSys); err != nil {
+	if err := configureInterface(bpfInDev, 4, "0", writeProcSys); err != nil {
 		log.WithError(err).Fatal("Failed to configure bpfnatin parameters.")
 	}
-	if err := configureInterface("bpfnatout", 4, "0", writeProcSys); err != nil {
+	if err := configureInterface(bpfOutDev, 4, "0", writeProcSys); err != nil {
 		log.WithError(err).Fatal("Failed to configure bpfnatout parameters.")
 	}
 
-	err = m.ensureQdisc("bpfnatin")
+	err = m.ensureQdisc(bpfInDev)
 	if err != nil {
 		log.WithError(err).Fatalf("Failed to set qdisc on bpfnatin.")
 	}
@@ -1485,7 +1490,7 @@ func (m *bpfEndpointManager) ensureCtlbDevice() {
 	// link local routes for each service that would trigger ARP querries.
 	cidr, _ := ip.CIDRFromString("169.254.1.1/32")
 
-	m.routeTable.RouteUpdate("bpfnatin", routetable.Target{
+	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeLinkLocalUnicast,
 		CIDR: cidr,
 	})
@@ -1782,7 +1787,7 @@ func (m *bpfEndpointManager) setRoute(dst string) error {
 		return err
 	}
 
-	m.routeTable.RouteUpdate("bpfnatin", routetable.Target{
+	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeGlobalUnicast,
 		CIDR: cidr,
 		GW:   bpfnatGW,
@@ -1799,7 +1804,7 @@ func (m *bpfEndpointManager) delRoute(dst string) error {
 		return err
 	}
 
-	m.routeTable.RouteRemove("bpfnatin", cidr)
+	m.routeTable.RouteRemove(bpfInDev, cidr)
 	log.WithFields(log.Fields{
 		"cidr": dst + "/32",
 	}).Debug("delRoute")
