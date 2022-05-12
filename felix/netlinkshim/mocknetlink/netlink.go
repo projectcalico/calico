@@ -735,6 +735,10 @@ func (d *MockNetlinkDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.
 	time.Sleep(d.ConntrackSleep)
 }
 
+func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
+	return nil
+}
+
 // ----- Internals -----
 
 func (d *MockNetlinkDataplane) shouldFail(flag FailFlags) bool {
