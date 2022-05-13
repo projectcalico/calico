@@ -38,15 +38,17 @@ section:
   path: /maintenance/operator-migration
 - title: Enable kubectl to manage Calico APIs
   path: /maintenance/install-apiserver
-- title: The eBPF dataplane
+- title: eBPF
   path: /maintenance/ebpf/
   section:
   - title: eBPF use cases
-    path: /maintenance/ebpf/use-cases-ebpf 
+    path: /maintenance/ebpf/use-cases-ebpf
   - title: Enable the eBPF dataplane
-    path: /maintenance/ebpf/enabling-bpf
-  - title: Troubleshooting
-    path: /maintenance/troubleshoot/troubleshoot-ebpf
+    path: /maintenance/ebpf/enabling-ebpf
+  - title: Install in eBPF mode
+    path: /maintenance/ebpf/install
+  - title: Troubleshoot eBPF dataplane
+    path: /maintenance/ebpf/troubleshoot-ebpf
 - title: Monitor
   path: /maintenance/monitor/
   section: 
@@ -66,7 +68,7 @@ section:
   - title: Component logs
     path: /maintenance/troubleshoot/component-logs
   - title: eBPF Dataplane
-    path: /maintenance/troubleshoot/troubleshoot-ebpf
+    path: /maintenance/ebpf/troubleshoot-ebpf
   - title: VPP dataplane troubleshooting
     path: /maintenance/troubleshoot/vpp
 - title: Certificate Management
