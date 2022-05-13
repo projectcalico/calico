@@ -148,11 +148,11 @@ eBPF dataplane mode uses the Linux Kernel's eBPF virtual machine to implement ne
 * Activate its embedded implementation of `kube-proxy` to implement Kubernetes service load balancing.
 * Disable support for IPv6.
 
-See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for step-by step instructions to enable this feature.
+See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-ebpf) for step-by step instructions to enable this feature.
 
 | Configuration parameter / Environment variable                                        | Description | Schema | Default |
 | ------------------------------------------------------------------------------------- | ----------- | ------ |---------|
-| BPFEnabled                         / <br/> FELIX_BPFENABLED                           | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf). | true, false |  false |
+| BPFEnabled                         / <br/> FELIX_BPFENABLED                           | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-ebpf). | true, false |  false |
 | BPFDisableUnprivileged             / <br/> FELIX_BPFDISABLEUNPRIVILEGED               | If true, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and cannot insert their own BPF programs to interfere with the ones that {{site.prodname}} installs. | true, false |  true |
 | BPFLogLevel                        / <br/> FELIX_BPFLOGLEVEL                          | The log level used by the BPF programs.  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec BPF debug`. | Off,Info,Debug | Off |
 | BPFDataIfacePattern                / <br/> FELIX_BPFDATAIFACEPATTERN                  | Controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the external network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to NodePorts and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).. | regular expression | `^(en[opsx].*|eth.*|tunl0$|wireguard.cali$)` |
