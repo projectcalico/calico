@@ -37,6 +37,11 @@ type Config struct {
 	// This config item is auto detected from /run/flannel/subnet.env.
 	FlannelNetwork string `default:"" split_words:"true"`
 
+	// FlannelIpv6Network should has same value as Flannel "IPv6Network" config.
+	// This is the IPv6 network in CIDR format used for the entire flannel network.
+	// This config item is auto detected from /run/flannel/subnet.env.
+	FlannelIpv6Network string `default:"" split_words:"true"`
+
 	// Name of Flannel daemonset in kube-system namespace.
 	// This could be a Canal daemonset where the controller will autodetect.
 	// Default is kube-flannel-ds-amd64
@@ -57,6 +62,10 @@ type Config struct {
 	// FlannelSubnetLen should has same value as Flannel "SubnetLen" configuration option.
 	// It is the size of the subnet allocated to each host. Default value is 24.
 	FlannelSubnetLen int `default:"24" split_words:"true"`
+
+	// FlannelIpv6SubnetLen should has same value as Flannel "IPv6SubnetLen" configuration option.
+	// It is the size of the subnet allocated to each host. Default value is 64.
+	FlannelIpv6SubnetLen int `default:"64" split_words:"true"`
 
 	// FlannelAnnotationPrefix should has same value as Flannel "kube-annotation-prefix" commandline option.
 	FlannelAnnotationPrefix string `default:"flannel.alpha.coreos.com" split_words:"true"`
@@ -88,8 +97,11 @@ type Config struct {
 	// This is used for debug/test purpose.
 	DebugWaitBeforeStart int `default:"0" split_words:"true"`
 
-	// Calico ippool blockSize default value.
+	// Calico IPv4 ippool blockSize default value.
 	DefaultIppoolSize int `default:"26" split_words:"true"`
+
+	// Calico IPv6 ippool blockSize default value.
+	DefaultIppoolSizeV6 int `default:"122" split_words:"true"`
 }
 
 // Parse parses envconfig and stores in Config struct.
@@ -142,6 +154,13 @@ func (c *Config) ValidateFlannelConfig() error {
 		return fmt.Errorf("Failed to parse cluster pod CIDR '%s'", c.FlannelNetwork)
 	}
 
+	if c.FlannelIpv6Network != "" {
+		_, _, err := cnet.ParseCIDR(c.FlannelIpv6Network)
+		if err != nil {
+			return fmt.Errorf("Failed to parse cluster pod CIDR '%s'", c.FlannelIpv6Network)
+		}
+	}
+
 	// Check Flannel daemonset name.
 	if c.FlannelDaemonsetName == "" {
 		return fmt.Errorf("Missing FlannelDaemonsetName config")
@@ -167,6 +186,9 @@ func (c *Config) ReadFlannelConfig(data string) error {
 	if c.FlannelNetwork, ok = config["FLANNEL_NETWORK"]; !ok {
 		return fmt.Errorf("Failed to get config item FLANNEL_NETWORK")
 	}
+
+	// IPv6 is optional, so don't fail if not present
+	c.FlannelIpv6Network = config["FLANNEL_IPV6_NETWORK"]
 
 	var masq string
 	if masq, ok = config["FLANNEL_IPMASQ"]; !ok {
