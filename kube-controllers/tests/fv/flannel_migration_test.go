@@ -342,13 +342,27 @@ func validateCalicoIPAM(fc *testutils.FlannelCluster, client client.Interface, b
 	Expect(defaultPool.Spec.NATOutgoing).To(Equal(true))
 	Expect(defaultPool.Spec.VXLANMode).To(Equal(api.VXLANMode(api.VXLANModeAlways)))
 
-	// Check felix configuration.
-	defaultConfig, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
-	Expect(err).ShouldNot(HaveOccurred())
-	Expect(*defaultConfig.Spec.VXLANEnabled).To(Equal(true))
-	Expect(*defaultConfig.Spec.VXLANVNI).To(Equal(1))
-	Expect(*defaultConfig.Spec.VXLANPort).To(Equal(8472))
-	Expect(*defaultConfig.Spec.VXLANMTU).To(Equal(8951))
+	// Check felix configuration. This might take a second or two.
+	Eventually(func() error {
+		defaultConfig, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if !*defaultConfig.Spec.VXLANEnabled {
+			return fmt.Errorf("VXLAN is not enabled")
+		}
+		if *defaultConfig.Spec.VXLANVNI != 1 {
+			return fmt.Errorf("Wrong VXLAN VNI: %d", *defaultConfig.Spec.VXLANVNI)
+		}
+		if *defaultConfig.Spec.VXLANPort != 8472 {
+			return fmt.Errorf("Wrong VXLAN port: %d", *defaultConfig.Spec.VXLANPort)
+		}
+		if *defaultConfig.Spec.VXLANMTU != 8951 {
+			return fmt.Errorf("Wrong VXLAN MTU: %d", *defaultConfig.Spec.VXLANMTU)
+		}
+		return nil
+
+	}, 5*time.Second).ShouldNot(HaveOccurred())
 
 	// Check each node.
 	for nodeName, fn := range fc.FlannelNodes {
