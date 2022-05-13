@@ -358,6 +358,57 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 	return nil
 }
 
+type vxlanMode string
+
+const (
+	vxlanModeEnabled  vxlanMode = "enabled"
+	vxlanModeDisabled vxlanMode = "disabled"
+	vxlanModeCleared  vxlanMode = "clear"
+)
+
+func (m *ipamMigrator) SetVXLANMode(ctx context.Context, mode vxlanMode) error {
+	defaultConfig, err := m.calicoClient.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
+	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+		// Doesn't exist - create it.
+		defaultConfig = &api.FelixConfiguration{}
+		defaultConfig.Name = defaultIpv4PoolName
+	} else if err != nil {
+		log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
+		return err
+	}
+
+	switch mode {
+	case vxlanModeEnabled:
+		log.Infof("Enabling VXLAN in FelixConfiguration")
+		enabled := true
+		defaultConfig.Spec.VXLANEnabled = &enabled
+	case vxlanModeDisabled:
+		log.Infof("Disabling VXLAN in FelixConfiguration")
+		disabled := false
+		defaultConfig.Spec.VXLANEnabled = &disabled
+	case vxlanModeCleared:
+		log.Info("Clearing FelixConfiguration.Spec.VXLANEnabled")
+		defaultConfig.Spec.VXLANEnabled = nil
+	default:
+		log.Fatalf("Invalid VXLAN mode given: %s", mode)
+	}
+
+	if defaultConfig.ResourceVersion != "" {
+		_, err = m.calicoClient.FelixConfigurations().Update(ctx, defaultConfig, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to update default FelixConfiguration.")
+			return err
+		}
+	} else {
+		_, err = m.calicoClient.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to create default FelixConfiguration.")
+			return err
+		}
+	}
+	return nil
+}
+
 // Update default FelixConfiguration with specified VNI, port and MTU.
 // If migrating from Flannel, return error if vxlan is not enabled.
 // If migrating from Canal, set vxlan enabled.
@@ -395,7 +446,7 @@ func updateOrCreateDefaultFelixConfiguration(ctx context.Context, client client.
 
 	// Do nothing if the correct value has been set.
 	if currentVNI == vni && currentPort == port && currentMTU == mtu {
-		log.Infof("Default Felix configration has got correct VNI(%d), port(%d), mtu(%d).", currentVNI, currentPort, currentMTU)
+		log.Infof("Default Felix configration has correct VNI(%d), port(%d), mtu(%d).", currentVNI, currentPort, currentMTU)
 		return nil
 	}
 
