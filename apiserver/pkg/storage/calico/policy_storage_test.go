@@ -105,7 +105,7 @@ func TestNetworkPolicyCreateWithKeyExist(t *testing.T) {
 	key, _ := testPropogateStore(ctx, t, store, obj)
 	out := &calico.NetworkPolicy{}
 	err := store.Create(ctx, key, obj, out, 0)
-	if err == nil || !storage.IsNodeExist(err) {
+	if err == nil || !storage.IsExist(err) {
 		t.Errorf("expecting key exists error, but get: %s", err)
 	}
 }
@@ -265,7 +265,7 @@ func TestNetworkPolicyDeleteDisallowK8sPrefix(t *testing.T) {
 	}
 }
 
-func TestNetworkPolicyGetToList(t *testing.T) {
+func TestNetworkPolicyGetList(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
@@ -275,15 +275,15 @@ func TestNetworkPolicyGetToList(t *testing.T) {
 		key         string
 		pred        storage.SelectionPredicate
 		expectedOut []*calico.NetworkPolicy
-	}{{ // test GetToList on existing key
+	}{{ // test GetList on existing key
 		key:         key,
 		pred:        storage.Everything,
 		expectedOut: []*calico.NetworkPolicy{storedObj},
-	}, { // test GetToList on non-existing key
+	}, { // test GetList on non-existing key
 		key:         "projectcalico.org/networkpolicies/default/non-existing",
 		pred:        storage.Everything,
 		expectedOut: nil,
-	}, { // test GetToList with matching policy name
+	}, { // test GetList with matching policy name
 		key: "projectcalico.org/networkpolicies/default/non-existing",
 		pred: storage.SelectionPredicate{
 			Label: labels.Everything(),
@@ -299,9 +299,9 @@ func TestNetworkPolicyGetToList(t *testing.T) {
 	for i, tt := range tests {
 		out := &calico.NetworkPolicyList{}
 		opts := storage.ListOptions{Predicate: tt.pred}
-		err := store.GetToList(ctx, tt.key, opts, out)
+		err := store.GetList(ctx, tt.key, opts, out)
 		if err != nil {
-			t.Fatalf("GetToList failed: %v", err)
+			t.Fatalf("GetList failed: %v", err)
 		}
 		if len(out.Items) != len(tt.expectedOut) {
 			t.Errorf("#%d: length of list want=%d, get=%d", i, len(tt.expectedOut), len(out.Items))

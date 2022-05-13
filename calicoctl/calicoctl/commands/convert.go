@@ -121,7 +121,6 @@ Description:
 		rom.SetCreationTimestamp(v1.Time{})
 		rom.SetDeletionTimestamp(nil)
 		rom.SetDeletionGracePeriodSeconds(nil)
-		rom.SetClusterName("")
 
 		ignoreValidation := argutils.ArgBoolOrFalse(parsedArgs, "--ignore-validation")
 		if !ignoreValidation {
