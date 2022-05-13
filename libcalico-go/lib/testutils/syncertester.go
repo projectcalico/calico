@@ -46,9 +46,7 @@ func NewSyncerTester() *SyncerTester {
 	}
 }
 
-var (
-	UnsetSyncStatus = api.SyncStatus(255)
-)
+var UnsetSyncStatus = api.SyncStatus(255)
 
 // Encapsulates parse error details for easy handling with a single channel.
 type parseError struct {
@@ -101,7 +99,6 @@ func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 	// to unblock the processing.
 	st.statusBlocker.Wait()
 	log.Infof("OnStatusUpdated now unblocked waiting for: %s", status)
-
 }
 
 // OnUpdates just stores the update and asserts the state of the cache and the update.
@@ -634,7 +631,6 @@ func kvpsEqual(actual, expected model.KVPair) bool {
 		expectedCopy.GetObjectMeta().SetDeletionGracePeriodSeconds(actualCopy.GetObjectMeta().GetDeletionGracePeriodSeconds())
 		expectedCopy.GetObjectMeta().SetFinalizers(actualCopy.GetObjectMeta().GetFinalizers())
 		expectedCopy.GetObjectMeta().SetOwnerReferences(actualCopy.GetObjectMeta().GetOwnerReferences())
-		expectedCopy.GetObjectMeta().SetClusterName(actualCopy.GetObjectMeta().GetClusterName())
 		expectedCopy.GetObjectMeta().SetManagedFields(actualCopy.GetObjectMeta().GetManagedFields())
 
 		// Finally compare the structs.
