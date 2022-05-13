@@ -544,7 +544,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
-	bool fib = false;
+	bool fib = true;
 	struct ct_create_ctx ct_ctx_nat = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
@@ -576,11 +576,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (state->flags & CALI_ST_SKIP_FIB) {
 			fib = false;
 			seen_mark = CALI_SKB_MARK_SKIP_FIB;
-		} else if (CALI_F_TO_HOST && !ct_result_rpf_failed(state->ct_result.rc)) {
-			// Non-SNAT case, allow FIB lookup only if RPF check passed.
-			// Note: tried to pass in the calculated value from calico_tc but
-			// hit verifier issues so recalculate it here.
-			fib = true;
 		}
 	}
 
@@ -854,10 +849,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				goto icmp_too_big;
 			}
 			state->ip_src = HOST_IP;
-			seen_mark = CALI_SKB_MARK_SKIP_RPF;
-
-			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
-			fib = true;
+			seen_mark = CALI_SKB_MARK_BYPASS;
 
 			goto nat_encap;
 		}

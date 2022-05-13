@@ -204,16 +204,11 @@ cancel_fib:
 skip_fib:
 
 	if (CALI_F_TO_HOST) {
-		/* If we received the packet from the tunnel and we forward it to a
-		 * workload we need to skip RPF check since there might be a better path
-		 * for the packet if the host has multiple ifaces and might get dropped.
-		 *
-		 * XXX We should check ourselves that we got our tunnel packets only from
-		 * XXX those devices where we expect them before we even decap.
-		 */
-		if (CALI_F_FROM_HEP && state->tun_ip != 0 && ctx->fwd.mark != CALI_SKB_MARK_BYPASS_FWD) {
-			ctx->fwd.mark = CALI_SKB_MARK_SKIP_RPF;
-		}
+		/* Packets received from the tunnel should be forwarded */
+               if (CALI_F_FROM_HEP && state->tun_ip != 0 && ctx->fwd.mark != CALI_SKB_MARK_BYPASS_FWD) {
+                       ctx->fwd.mark = CALI_SKB_MARK_BYPASS;
+               }
+
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
 		 */
