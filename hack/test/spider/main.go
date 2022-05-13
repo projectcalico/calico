@@ -168,6 +168,22 @@ func main() {
 		}
 	}
 
+	// Loop through impacted packages a few times to make sure capture the full
+	// depth of the dependency tree.
+	for i := 0; i < 10; i++ {
+		originalSize := len(impactedPackages)
+		for pkg := range impactedPackages {
+			for d := range packageToDeps[pkg] {
+				impactedPackages[d] = ""
+			}
+		}
+		finalSize := len(impactedPackages)
+		if finalSize == originalSize {
+			// No change, we reached out full set of impacted packages.
+			break
+		}
+	}
+
 	// Print out all of the packages that need rebuilding, sorted and filtered.
 	sorted := []string{}
 	for d := range impactedPackages {
