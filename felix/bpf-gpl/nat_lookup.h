@@ -21,7 +21,8 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 								    bool from_tun,
 								    nat_lookup_result *res,
 								    int affinity_always_timeo,
-								    bool affinity_tmr_update)
+								    bool affinity_tmr_update,
+								    __u32 cookie)
 {
 	struct calico_nat_v4_key nat_key = {
 		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
@@ -33,7 +34,9 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 	struct calico_nat_v4_value *nat_lv1_val;
 	struct calico_nat_secondary_v4_key nat_lv2_key;
 	struct calico_nat_dest *nat_lv2_val;
-	struct calico_nat_v4_affinity_key affkey = {};
+	struct calico_nat_v4_affinity_key affkey = {
+		.cookie = cookie,
+	};
 	__u64 now = 0;
 
 	nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
@@ -198,7 +201,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								    bool from_tun,
 								    nat_lookup_result *res)
 {
-	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false);
+	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false, 0);
 }
 
 #endif /* __CALI_NAT_LOOKUP_H__ */

@@ -86,7 +86,7 @@ CALI_MAP_V1(cali_v4_nat_be,
 struct calico_nat_v4_affinity_key {
 	struct calico_nat_v4 nat_key;
 	__u32 client_ip;
-	__u32 padding;
+	__u32 cookie;
 };
 
 struct calico_nat_v4_affinity_val {

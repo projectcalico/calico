@@ -33,16 +33,17 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 	 * is the localhost, so we might just use 0.0.0.0. That would not
 	 * conflict with traffic from elsewhere.
 	 *
-	 * XXX it means that all workloads that use the cgroup hook have the
-	 * XXX same affinity, which (a) is sub-optimal and (b) leaks info between
-	 * XXX workloads.
+	 * We distinguish individual clients by the socket cookie. That means,
+	 * each socket has its own affinity.
 	 */
 	nat_lookup_result res = NAT_LOOKUP_ALLOW;
 	__u16 dport_he = (__u16)(bpf_ntohl(ctx->user_port)>>16);
 	struct calico_nat_dest *nat_dest;
+	__u64 cookie = bpf_get_socket_cookie(ctx);
 	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he, false, &res,
 			proto == IPPROTO_UDP && !connect ? UDP_NOT_SEEN_TIMEO : 0, /* enforce affinity UDP */
-			proto == IPPROTO_UDP && !connect /* update affinity timer */);
+			proto == IPPROTO_UDP && !connect /* update affinity timer */,
+			cookie);
 	if (!nat_dest) {
 		CALI_INFO("NAT miss.\n");
 		if (res == NAT_NO_BACKEND) {
@@ -53,7 +54,6 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 
 	__u32 dport_be = host_to_ctx_port(nat_dest->port);
 
-	__u64 cookie = bpf_get_socket_cookie(ctx);
 	CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
 			bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
 
