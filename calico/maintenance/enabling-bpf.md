@@ -1,1 +1,0 @@
-ebpf/enabling-bpf.md
