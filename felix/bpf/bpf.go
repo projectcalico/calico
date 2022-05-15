@@ -77,7 +77,8 @@ const (
 	sockmapEndpointsMapVersion = "v1"
 	sockmapEndpointsMapName    = "calico_sk_endpoints_" + sockmapEndpointsMapVersion
 
-	defaultBPFfsPath = "/sys/fs/bpf"
+	DefaultBPFfsPath    = "/sys/fs/bpf"
+	DefaultCgroupV2Path = "/run/calico/cgroup"
 )
 
 var (
@@ -195,20 +196,20 @@ func NewBPFLib(binDir string) (*BPFLib, error) {
 
 func MaybeMountBPFfs() (string, error) {
 	var err error
-	bpffsPath := defaultBPFfsPath
+	bpffsPath := DefaultBPFfsPath
 
-	mnt, err := isMount(defaultBPFfsPath)
+	mnt, err := isMount(DefaultBPFfsPath)
 	if err != nil {
 		return "", err
 	}
 
-	fsBPF, err := isBPF(defaultBPFfsPath)
+	fsBPF, err := isBPF(DefaultBPFfsPath)
 	if err != nil {
 		return "", err
 	}
 
 	if !mnt {
-		err = mountBPFfs(defaultBPFfsPath)
+		err = mountBPFfs(DefaultBPFfsPath)
 	} else if !fsBPF {
 		var runfsBPF bool
 
@@ -233,29 +234,27 @@ func MaybeMountBPFfs() (string, error) {
 
 func MaybeMountCgroupV2() (string, error) {
 	var err error
-	cgroupV2Path := "/run/calico/cgroup"
-
-	if err := os.MkdirAll(cgroupV2Path, 0700); err != nil {
+	if err := os.MkdirAll(CgroupV2Path, 0700); err != nil {
 		return "", err
 	}
 
-	mnt, err := isMount(cgroupV2Path)
+	mnt, err := isMount(CgroupV2Path)
 	if err != nil {
-		return "", fmt.Errorf("error checking if %s is a mount: %v", cgroupV2Path, err)
+		return "", fmt.Errorf("error checking if %s is a mount: %v", CgroupV2Path, err)
 	}
 
-	fsCgroup, err := isCgroupV2(cgroupV2Path)
+	fsCgroup, err := isCgroupV2(CgroupV2Path)
 	if err != nil {
-		return "", fmt.Errorf("error checking if %s is CgroupV2: %v", cgroupV2Path, err)
+		return "", fmt.Errorf("error checking if %s is CgroupV2: %v", CgroupV2Path, err)
 	}
 
 	if !mnt {
-		err = mountCgroupV2(cgroupV2Path)
+		err = mountCgroupV2(CgroupV2Path)
 	} else if !fsCgroup {
-		err = fmt.Errorf("something that's not cgroup v2 is already mounted in %s", cgroupV2Path)
+		err = fmt.Errorf("something that's not cgroup v2 is already mounted in %s", CgroupV2Path)
 	}
 
-	return cgroupV2Path, err
+	return CgroupV2Path, err
 }
 
 func mountCgroupV2(path string) error {
@@ -290,25 +289,21 @@ func isMount(path string) (bool, error) {
 }
 
 func isBPF(path string) (bool, error) {
-	bpffsMagicNumber := uint32(0xCAFE4A11)
-
 	var fsdata unix.Statfs_t
 	if err := unix.Statfs(path, &fsdata); err != nil {
 		return false, fmt.Errorf("%s is not mounted", path)
 	}
 
-	return uint32(fsdata.Type) == bpffsMagicNumber, nil
+	return uint32(fsdata.Type) == uint32(unix.BPF_FS_MAGIC), nil
 }
 
 func isCgroupV2(path string) (bool, error) {
-	cgroup2MagicNumber := uint32(0x63677270)
-
 	var fsdata unix.Statfs_t
 	if err := unix.Statfs(path, &fsdata); err != nil {
 		return false, fmt.Errorf("%s is not mounted", path)
 	}
 
-	return uint32(fsdata.Type) == cgroup2MagicNumber, nil
+	return uint32(fsdata.Type) == uint32(unix.CGROUP2_SUPER_MAGIC), nil
 }
 
 func mountBPFfs(path string) error {
