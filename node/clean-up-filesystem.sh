@@ -116,6 +116,10 @@ bin_allow_list_patterns=(
   zless
   zmore
 
+  # Needed by cgroup v2
+  nsenter
+  /usr/bin/mount
+
   # Used by this script.
   '/find$'
   '/ldd$'
@@ -256,6 +260,9 @@ packages_to_keep=(
   libpwquality
   libselinux
   libzstd
+  libblkid
+  libuuid
+  libmount
   ncurses
   net-tools
   openssl-libs
