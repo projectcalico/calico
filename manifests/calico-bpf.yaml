@@ -4393,22 +4393,6 @@ spec:
               name: cni-net-dir
           securityContext:
             privileged: true
-        - name: mount-cgroupv2
-          image: docker.io/calico/node:master
-          command:
-            - nsenter
-            - --cgroup=/node-proc/1/ns/cgroup
-            - --mount=/node-proc/1/ns/mnt
-            - mount
-            - -t
-            - cgroup2
-            - none
-            - /run/calico/cgroup
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - mountPath: /node-proc
-              name: node-proc
       containers:
         # Runs calico-node container on each Kubernetes node. This
         # container programs network policy and routes on each
@@ -4600,9 +4584,6 @@ spec:
           hostPath:
             type: DirectoryOrCreate
             path: /var/run/nodeagent
-        - name: node-proc
-          hostPath:
-            path: /proc
 ---
 
 apiVersion: v1
