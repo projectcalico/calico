@@ -77,8 +77,8 @@ const (
 	sockmapEndpointsMapVersion = "v1"
 	sockmapEndpointsMapName    = "calico_sk_endpoints_" + sockmapEndpointsMapVersion
 
-	DefaultBPFfsPath    = "/sys/fs/bpf"
-	DefaultCgroupV2Path = "/run/calico/cgroup"
+	DefaultBPFfsPath = "/sys/fs/bpf"
+	CgroupV2Path     = "/run/calico/cgroup"
 )
 
 var (

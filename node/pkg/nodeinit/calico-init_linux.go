@@ -86,7 +86,7 @@ func ensureBPFFilesystem() error {
 func ensureCgroupV2Filesystem() error {
 	mountCmd := exec.Command(
 		"nsenter", "--cgroup=/node-proc/1/ns/cgroup", "--mount=/node-proc/1/ns/mnt",
-		"mount", "-t", "cgroup2", "none", bpf.DefaultCgroupV2Path)
+		"mount", "-t", "cgroup2", "none", bpf.CgroupV2Path)
 
 	out, err := mountCmd.Output()
 	if err != nil {
