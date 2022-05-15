@@ -77,7 +77,8 @@ const (
 	sockmapEndpointsMapVersion = "v1"
 	sockmapEndpointsMapName    = "calico_sk_endpoints_" + sockmapEndpointsMapVersion
 
-	DefaultBPFfsPath = "/sys/fs/bpf"
+	DefaultBPFfsPath    = "/sys/fs/bpf"
+	DefaultCgroupV2Path = "/run/calico/cgroup"
 )
 
 var (
@@ -230,8 +231,6 @@ func MaybeMountBPFfs() (string, error) {
 
 	return bpffsPath, err
 }
-
-const CgroupV2Path = "/run/calico/cgroup"
 
 func MaybeMountCgroupV2() (string, error) {
 	var err error
