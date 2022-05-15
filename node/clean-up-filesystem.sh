@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -115,6 +115,10 @@ bin_allow_list_patterns=(
   zcat
   zless
   zmore
+
+  # Needed by cgroup v2
+  nsenter
+  /usr/bin/mount
 
   # Used by this script.
   '/find$'
@@ -256,6 +260,9 @@ packages_to_keep=(
   libpwquality
   libselinux
   libzstd
+  libblkid
+  libuuid
+  libmount
   ncurses
   net-tools
   openssl-libs
