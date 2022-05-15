@@ -527,7 +527,7 @@ func TestNATNodePort(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	skbMark = tcdefs.MarkSeenBypassSkipRPF // CALI_SKB_MARK_SKIP_RPF
+	skbMark = tcdefs.MarkSeen
 
 	// Insert the reverse route for backend for RPF check.
 	resetRTMap(rtMap)
@@ -1976,7 +1976,7 @@ func TestNATSourceCollision(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	skbMark = tcdefs.MarkSeenBypassSkipRPF // CALI_SKB_MARK_SKIP_RPF
+	skbMark = tcdefs.MarkSeen
 
 	// Arriving at workload at node 2
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
