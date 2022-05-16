@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2022 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -198,6 +198,9 @@ RUN chgrp -R 0 /etc/calico && \
     chmod -R g=u /etc/calico
 
 COPY --from=bpftool /bpftool /bin
+
+COPY --from=centos /usr/bin/nsenter /usr/bin/nsenter
+COPY --from=centos /usr/bin/mount /usr/bin/mount
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-amd64 /bin/calico-node
