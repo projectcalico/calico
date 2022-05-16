@@ -190,7 +190,7 @@ type Config struct {
 	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict);Strict;non-zero"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
-	// are configured for cgroup v1, which prevents all but hte root cgroup v2 from working so this is only useful
+	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
 	// for development right now.
 	DebugBPFCgroupV2 string `config:"string;;local"`
 	// DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
@@ -349,7 +349,7 @@ type Config struct {
 
 	// Configure where Felix gets its routing information.
 	// - workloadIPs: use workload endpoints to construct routes.
-	// - calicoIPAM: use IPAM data to contruct routes.
+	// - calicoIPAM: use IPAM data to construct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
 	// RouteTableRange is deprecated in favor of RouteTableRanges,

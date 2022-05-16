@@ -72,7 +72,7 @@ type PolicySetsDataplane interface {
 type policySet struct {
 	// metadata for the Policy set.
 	PolicySetMetadata
-	// the original policy received from the datatore, which could be
+	// the original policy received from the datastore, which could be
 	// either a Profile or a Policy.
 	Policy interface{}
 	// Each member of the Policy set is a hns ACLRule computed from the

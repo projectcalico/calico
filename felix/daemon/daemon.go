@@ -523,7 +523,7 @@ configRetry:
 				time.Sleep(1 * time.Second)
 			}
 			if err != nil {
-				// We failed to connect to typha. Remove wireguard configuration if necessary (just incase this is
+				// We failed to connect to typha. Remove wireguard configuration if necessary (just in case this is
 				// why the connection is failing).
 				if err2 := bootstrapRemoveWireguard(configParams, v3Client); err2 != nil {
 					log.WithError(err2).Error("Failed to remove wireguard configuration")

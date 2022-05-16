@@ -855,7 +855,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				}
 
 				configureNodeRef(node)
-				// If we receieve an invalid env var then none will be set.
+				// If we receive an invalid env var then none will be set.
 				if len(node.Spec.OrchRefs) > 0 {
 					ref := node.Spec.OrchRefs[0]
 					Expect(ref == expected).To(Equal(isEqual))

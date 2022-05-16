@@ -29,7 +29,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_SKIP_FIB	0x08 /* marks traffic that should pass through host IP stack */
 #define CALI_CT_FLAG_RES_0x10	0x10 /* reserved */
 #define CALI_CT_FLAG_RES_0x20	0x20 /* reserved */
-#define CALI_CT_FLAG_EXT_LOCAL	0x40 /* marks traffic from external client to a local serice */
+#define CALI_CT_FLAG_EXT_LOCAL	0x40 /* marks traffic from external client to a local service */
 
 struct calico_ct_leg {
 	__u32 seqno;

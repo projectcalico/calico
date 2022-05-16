@@ -225,7 +225,7 @@ loop:
 				})
 				// Then try to write the update to the datastore.
 				// Note: the update could be a deletion, in which case
-				// the read from the cache wil return nil.
+				// the read from the cache will return nil.
 				err := esr.writeEndpointStatus(ctx, statID,
 					esr.epStatusIDToStatus[statID])
 				if err != nil {
