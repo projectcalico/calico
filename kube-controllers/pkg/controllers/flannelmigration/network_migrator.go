@@ -164,7 +164,7 @@ func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 	log.Infof("Removing flannel tunnel device/routes on %s.", node.Name)
 	// Remove Flannel network from node.
 	// Note Flannel vxlan tunnel device (flannel.1) is created by Flannel daemonset pod (not Flannel CNI)
-	// Therefor if Flannel daemonset pod can not run on this node, the tunnel device will not be recreated
+	// Therefore if Flannel daemonset pod can not run on this node, the tunnel device will not be recreated
 	// after we delete it.
 	err = m.removeFlannelNetworkAndInstallDummyCalicoCNI(node)
 	if err != nil {

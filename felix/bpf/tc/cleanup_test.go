@@ -43,7 +43,7 @@ func TestFindClsactQdiscs(t *testing.T) {
 
 const tcFilterExample = `filter protocol all pref 49152 bpf chain 0 
 filter protocol all pref 49152 bpf chain 0 handle 0x1 from_wep_info.o:[calico_from_workload_ep] direct-action not_in_hw id 210 tag 79b467cf6a77fb7c jited 
-fitler foo bar baz biff id 1234
+filter foo bar baz biff id 1234
 filter protocol all pref 49152 bpf chain 0 handle 0x1 from_wep_info.o:[calico_from_workload_ep] direct-action not_in_hw id 313 tag 79b467cf6a77fb7c jited 
 `
 

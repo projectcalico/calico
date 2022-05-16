@@ -101,7 +101,7 @@ skip_redir_ifindex:
 	if (fwd_fib(&ctx->fwd)) {
 		/* XXX we might include the tot_len in the fwd, set it once when
 		 * we get the ip_header the first time and only adjust the value
-		 * when we modify the packet - to avoid geting the header here
+		 * when we modify the packet - to avoid getting the header here
 		 * again - it is simpler though.
 		 */
 

@@ -186,7 +186,7 @@
   to = "https://calico-v3-12.netlify.app/v3.12/:splat"
   status = 200
 
-# proxy redirects for website for master, it doens't need manifests redirect
+# proxy redirects for website for master, it doesn't need manifests redirect
 [[redirects]]
   from = "/master/*"
   to = "https://calico-master.netlify.app/master/:splat"

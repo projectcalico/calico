@@ -6,7 +6,7 @@ Write-Host "Setting environment variables if not set..."
 ## Cluster configuration:
 
 # KUBE_NETWORK should be set to a regular expression that matches the HNS network(s) used for pods.
-# The default, "Calico.*", is correct for Calico CNI. 
+# The default, "Calico.*", is correct for Calico CNI.
 Set-EnvVarIfNotSet -var "KUBE_NETWORK" -defaultValue "Calico.*"
 
 # Set this to one of the following values:
@@ -44,7 +44,7 @@ if (Get-IsContainerdRunning)
 } else {
     # Place to install the CNI plugin to. For docker, this should match kubelet's --cni-bin-dir.
     Set-EnvVarIfNotSet -var "CNI_BIN_DIR" -defaultValue "c:\k\cni"
-    # Place to install the CNI config to. For docker, this hould be located in kubelet's --cni-conf-dir.
+    # Place to install the CNI config to. For docker, this should be located in kubelet's --cni-conf-dir.
     Set-EnvVarIfNotSet -var "CNI_CONF_DIR" -defaultValue "c:\k\cni\config"
 }
 
@@ -60,7 +60,7 @@ Set-EnvVarIfNotSet -var "VXLAN_VNI" -defaultValue 4096
 # Prefix used when generating MAC addresses for virtual NICs.
 $env:VXLAN_MAC_PREFIX = "0E-2A"
 Set-EnvVarIfNotSet -var "VXLAN_MAC_PREFIX" -defaultValue "0E-2A"
-# Network Adapter used on VXLAN, leave blank for primary NIC. 
+# Network Adapter used on VXLAN, leave blank for primary NIC.
 Set-EnvVarIfNotSet -var "VXLAN_ADAPTER" -defaultValue ""
 
 ## Node configuration.

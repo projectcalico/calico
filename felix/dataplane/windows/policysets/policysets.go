@@ -441,7 +441,7 @@ func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isI
 	}
 
 	//
-	// Source Neworks and IPSets
+	// Source Networks and IPSets
 	//
 	var localAddresses []string
 	var remoteAddresses []string

@@ -25,7 +25,7 @@ import (
 )
 
 func main() {
-	// Set the log output to stdout to prevent some components from interpretting logs as errors (e.g. fluentd).
+	// Set the log output to stdout to prevent some components from interpreting logs as errors (e.g. fluentd).
 	log.SetOutput(os.Stdout)
 	// Install a hook that adds file/line no information
 	log.AddHook(&logutils.ContextHook{})
