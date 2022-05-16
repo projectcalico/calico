@@ -116,7 +116,7 @@ bin_allow_list_patterns=(
   zless
   zmore
 
-  # Needed by cgroup v2
+  # Needed for eBPF mode to mount the cgroupv2 filesystem on the host.
   nsenter
   /usr/bin/mount
 
