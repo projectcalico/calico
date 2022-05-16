@@ -65,7 +65,7 @@ require (
 	github.com/spf13/viper v1.11.0
 	github.com/tchap/go-patricia/v2 v2.3.1
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
-	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
+	github.com/vishvananda/netlink v1.2.0-beta.0.20220404152918-5e915e014938
 	go.etcd.io/etcd/api/v3 v3.5.2
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2
 	go.etcd.io/etcd/client/v2 v2.305.2
