@@ -170,7 +170,6 @@ require (
 	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.3.0 // indirect
-	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/gophercloud/gophercloud v0.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
@@ -313,7 +312,7 @@ replace (
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.24.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.24.0
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.24.0
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20220124234850-424119656bbf
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.24.0
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.24.0
 	k8s.io/kubectl => k8s.io/kubectl v0.24.0
