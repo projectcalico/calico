@@ -118,7 +118,6 @@ bin_allow_list_patterns=(
 
   # Needed by cgroup v2
   nsenter
-  /usr/bin/mount
 
   # Used by this script.
   '/find$'
@@ -260,9 +259,6 @@ packages_to_keep=(
   libpwquality
   libselinux
   libzstd
-  libblkid
-  libuuid
-  libmount
   ncurses
   net-tools
   openssl-libs
