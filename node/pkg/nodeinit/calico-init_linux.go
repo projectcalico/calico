@@ -84,36 +84,25 @@ func ensureBPFFilesystem() error {
 // with PID 1 running on a host to allow felix running in calico-node access the root of cgroup namespace.
 // This is needed by felix to attach CTLB programs and implement k8s services correctly.
 func ensureCgroupV2Filesystem() error {
-	// Check if the Cgroup2 filesystem is mounted at the expected location.
-	logrus.Info("Checking if Cgroup2 filesystem is mounted.")
-	mounts, err := os.Open("/proc/mounts")
-	if err != nil {
-		return fmt.Errorf("failed to open /proc/mounts: %w", err)
-	}
-	scanner := bufio.NewScanner(mounts)
-	for scanner.Scan() {
-		parts := strings.Split(scanner.Text(), " ")
-		mountPoint := parts[1]
-		fs := parts[2]
+	umountCmd := exec.Command(
+		"nsenter", "--cgroup=/rootns/cgroup", "--mount=/rootns/mnt",
+		"umount", bpf.CgroupV2Path)
 
-		if mountPoint == bpf.CgroupV2Path && fs == "cgroup2" {
-			logrus.Info("Cgroup2 filesystem is mounted.")
-			return nil
-		}
+	out, err := umountCmd.Output()
+	if err != nil {
+		logrus.Errorf("Unmouting cgroup2 fs failed. output: %v", out)
+		return fmt.Errorf("failed to unmount cgroup2 filesystem: %w", err)
 	}
-	if scanner.Err() != nil {
-		return fmt.Errorf("failed to read /proc/mounts: %w", scanner.Err())
-	}
+
 	mountCmd := exec.Command(
 		"nsenter", "--cgroup=/rootns/cgroup", "--mount=/rootns/mnt",
 		"mount", "-t", "cgroup2", "none", bpf.CgroupV2Path)
 
-	out, err := mountCmd.Output()
+	out, err = mountCmd.Output()
 	if err != nil {
 		logrus.Errorf("Mouting cgroup2 fs failed. output: %v", out)
 		return fmt.Errorf("failed to mount cgroup2 filesystem: %w", err)
 	}
-
 	logrus.Infof("Mounted root cgroup2 filesystem.")
 	return nil
 }
