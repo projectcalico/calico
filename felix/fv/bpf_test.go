@@ -254,6 +254,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			// override IPIP being enabled by default
 			options.IPIPEnabled = false
 			options.IPIPRoutesEnabled = false
+			// BPF doesn't support IPv6, disable it.
+			options.EnableIPv6 = false
 			switch testOpts.tunnel {
 			case "none":
 				// nothing
@@ -266,8 +268,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Delay running Felix until Node resource has been created.
 				options.DelayFelixStart = true
 				options.TriggerDelayedFelixStart = true
-				// Wireguard doesn't support IPv6, disable it.
-				options.EnableIPv6 = false
 				// Allocate tunnel address for Wireguard.
 				options.WireguardEnabled = true
 				// Enable Wireguard.
