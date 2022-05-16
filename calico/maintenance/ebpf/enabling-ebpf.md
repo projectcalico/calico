@@ -30,6 +30,7 @@ eBPF (or "extended Berkeley Packet Filter"), is a technology that allows safe mi
 #### Supported
 
 - x86-64
+- ARM64 (community supported, not actively regression tested by the {{site.prodname}} team)
 
 - Distributions:
 
@@ -40,13 +41,13 @@ eBPF (or "extended Berkeley Packet Filter"), is a technology that allows safe mi
   - AKS with limitations:
     - [AKS with Azure CNI and Calico network policy](../../getting-started/kubernetes/managed-public-cloud/aks#install-aks-with-{{site.prodnamedash}}-for-network-policy) works, but it is not possible to disable kube-proxy resulting in wasted resources and suboptimal performance.
     - [AKS with {{site.prodname}} networking](../../getting-started/kubernetes/managed-public-cloud/aks#install-aks-with-{{site.prodnamedash}}-networking) is in testing with the eBPF dataplane. This should be a better solution overall but, at time of writing, the testing was not complete.
-  - RKE
+  - RKE (RKE2 recommended because it supports disabling `kube-proxy`)
 
 - Linux distribution/kernel:
 
   - Ubuntu 20.04.
   - Red Hat v8.2 with Linux kernel v4.18.0-193 or above (Red Hat have backported the required features to that build).
-  - Another [supported distribution]({{site.baseurl}}/getting-started/kubernetes/requirements) with Linux kernel v5.3 or above.
+  - Another [supported distribution]({{site.baseurl}}/getting-started/kubernetes/requirements) with Linux kernel v5.3 or above.  Kernel v5.8 or above with CO-RE enabled is recommended for better performance. 
 
 - An underlying network fabric that allows VXLAN traffic between hosts.  In eBPF mode, VXLAN is used to forward Kubernetes NodePort traffic.
 
