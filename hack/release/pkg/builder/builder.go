@@ -473,7 +473,7 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 // release number to use for this release.
 func (r *ReleaseBuilder) determineReleaseVersion(previousTag string) (string, error) {
 	// There are two types of tag that this might be - either it was a previous patch release,
-	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the relaese branch.
+	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.
 	if strings.Contains(previousTag, "-0.dev") {
 		// This is the first release from this branch - we can simply extract the version from
 		// the dev tag.

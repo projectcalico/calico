@@ -71,7 +71,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		_ = felix.GetFelixPID()
 
-		// Install the hping tool, which we use for latency measurments.
+		// Install the hping tool, which we use for latency measurements.
 		felix.Exec("apt-get", "install", "-y", "hping3")
 
 		var err error

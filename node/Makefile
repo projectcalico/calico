@@ -158,6 +158,7 @@ LDFLAGS=-ldflags "\
 # Source golang files on which compiling the calico-node binary depends.
 SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
+	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \
 	  $(shell find ../confd -name '*.go')
 
@@ -206,7 +207,7 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
 	chmod +w $@
 
-$(LIBBPF_A): $(shell find ../felix/bpf-gpl/include/libbpf -type f)
+$(LIBBPF_A): $(shell find ../felix/bpf-gpl/include/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
@@ -292,10 +293,10 @@ fv: run-k8s-apiserver
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
+	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip pkg/cni $(GINKGO_ARGS)
 
 # Skip packages containing FV tests.
-UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status
+UT_PACKAGES_TO_SKIP?=pkg/lifecycle/startup,pkg/allocateip,pkg/status,pkg/cni
 .PHONY: ut
 ut:
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) ginkgo -r -skipPackage=$(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'

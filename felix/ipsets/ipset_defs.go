@@ -23,6 +23,7 @@ import (
 
 	"math"
 	"fmt"
+	"math"
 	"strconv"
 
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
@@ -154,8 +155,8 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 		if err != nil {
 			log.WithField("member", member).WithError(err).Panic("Bad port")
 		}
-		if port > math.MaxUint16 || port < math.MinUint16 {
-			log.Fatal("port must be in range %v-%v", math.MaxUint16, math.MinUint16)
+		if port > math.MaxUint16 || port < 0 {
+			log.WithField("member", member).Panic("Bad port range (should be between 0 and 65535)")
 		}
 		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
 		// the address as an interface by storing one fewer interface headers.  That is worthwhile

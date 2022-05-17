@@ -38,6 +38,9 @@ func CreateRule(ipv, icmpType, icmpCode int, proto, cidrStr, tag, selector, inAc
 	if err != nil {
 		protocol = numorstring.ProtocolFromString(proto)
 	} else {
+		if i > math.MaxUint8 || i < 0 {
+			log.Printf("i = %v should be between 0 and 255 \n", i)
+		}
 		protocol = numorstring.ProtocolFromInt(uint8(i))
 	}
 

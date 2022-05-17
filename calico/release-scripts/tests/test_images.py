@@ -15,6 +15,8 @@ OPERATOR_EXCLUDED_IMAGES = EXCLUDED_IMAGES + [
     "calico/dikastes",
     "calico/flannel-migration-controller",
     "calico/ctl",
+    "calico/windows",
+    "calico/csi",
 ]
 
 GCR_IMAGES = ["calico/node", "calico/cni", "calico/typha"]

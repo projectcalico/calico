@@ -1994,7 +1994,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"vxlanMTU": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VXLANMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]",
+							Description: "VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel device. See Configuring MTU [Default: 1410]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vxlanMTUV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANMTUV6 is the MTU to set on the IPv6 VXLAN tunnel device. See Configuring MTU [Default: 1390]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -2339,7 +2346,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfExtToServiceConnmark": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFExtToServiceConnmark in BPF mode, control a 32bit mark that is set on connections from an external client to a local service. This mark allows us to control how packets of that connection are routed within the host and how is routing intepreted by RPF check. [Default: 0]",
+							Description: "BPFExtToServiceConnmark in BPF mode, control a 32bit mark that is set on connections from an external client to a local service. This mark allows us to control how packets of that connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

@@ -279,6 +279,7 @@ configRetry:
 		encapCalculator := calc.NewEncapsulationCalculator(configParams, ippoolKVPList)
 		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
 		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
+		configParams.Encapsulation.VXLANEnabledV6 = encapCalculator.VXLANEnabledV6()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
@@ -522,7 +523,7 @@ configRetry:
 				time.Sleep(1 * time.Second)
 			}
 			if err != nil {
-				// We failed to connect to typha. Remove wireguard configuration if necessary (just incase this is
+				// We failed to connect to typha. Remove wireguard configuration if necessary (just in case this is
 				// why the connection is failing).
 				if err2 := bootstrapRemoveWireguard(configParams, v3Client); err2 != nil {
 					log.WithError(err2).Error("Failed to remove wireguard configuration")
@@ -806,9 +807,7 @@ func exitWithCustomRC(rc int, message string) {
 	os.Exit(rc)
 }
 
-var (
-	ErrNotReady = errors.New("datastore is not ready or has not been initialised")
-)
+var ErrNotReady = errors.New("datastore is not ready or has not been initialised")
 
 func loadConfigFromDatastore(
 	ctx context.Context, client bapi.Client, cfg apiconfig.CalicoAPIConfig, hostname string,
@@ -1205,7 +1204,8 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 			log.Warn("Datastore became unready, need to restart.")
 			fc.shutDownProcess("datastore became unready")
 		case *proto.Encapsulation:
-			if msg.IpipEnabled != fc.config.Encapsulation.IPIPEnabled || msg.VxlanEnabled != fc.config.Encapsulation.VXLANEnabled {
+			if msg.IpipEnabled != fc.config.Encapsulation.IPIPEnabled || msg.VxlanEnabled != fc.config.Encapsulation.VXLANEnabled ||
+				msg.VxlanEnabledV6 != fc.config.Encapsulation.VXLANEnabledV6 {
 				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
 				fc.shutDownProcess(reasonEncapChanged)
 			}

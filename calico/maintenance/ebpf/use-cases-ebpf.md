@@ -66,13 +66,9 @@ Let’s look at some specific cases where it would make sense to use eBPF, and s
 
 #### ✘ When not to use eBPF
 
-#### ✘ Implementing application-layer policy
-
-Performing deep protocol inspection and implementing application-layer policy with eBPF would not be very efficient due to the price vs performance tradeoff. You can leverage the Linux kernel’s connection tracker for implementing policy, apply your policy once per flow (whether the flow has 5 packets or 5,000 packets), and mark it in the Linux conntrack tables as either allowed or denied. You don’t need to keep checking every packet in the flow. If you were to implement policy with eBPF, which allows you to have several HTTP transactions on a single TCP connection, you would need to inspect every packet to detect these transactions and then implement layer 7 controls. To do that, you would need to execute CPU cycles, which would become expensive. A more efficient way to do this would be to get a proxy like Envoy, and use eBPF to optimize traffic to Envoy while letting Envoy translate the application protocols for you. Iptables with a proxy like Envoy is a better design for this and would be a better option in this case.
-
 #### ✘ Building a service mesh control plane
 
-Similarly, service mesh relies on proxies like Envoy. A lot of thought has gone into designing this process over the years. The main reason for doing it this way is that, in many cases, it is not viable to do inline processing for application protocols like HTTP at the high speeds seen inside a cluster. Therefore, you should think of using eBPF to route traffic to a proxy like Envoy in an efficient way, rather than using it to replace the proxy itself.
+Service mesh relies on proxies like Envoy. A lot of thought has gone into designing this process over the years. The main reason for doing it this way is that, in many cases, it is not viable to do inline processing for application protocols like HTTP at the high speeds seen inside a cluster. Therefore, you should think of using eBPF to route traffic to a proxy like Envoy in an efficient way, rather than using it to replace the proxy itself.
 
 #### ✘ Packet-by-packet processing
 

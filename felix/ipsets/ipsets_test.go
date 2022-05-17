@@ -736,8 +736,8 @@ var _ = Describe("IP sets dataplane", func() {
 			"close" /* needs to be queued up before the start */, "start"))
 		Describe("with a write failure to the pipe (immediately)", describeRetryTests("write"))
 		Describe("with a write failure to the pipe when writing an IP", describeRetryTests("write-ip"))
-		Describe("with an update failure before any upates succeed", describeRetryTests("pre-update"))
-		Describe("with an update failure after upates succeed", describeRetryTests("post-update"))
+		Describe("with an update failure before any updates succeed", describeRetryTests("pre-update"))
+		Describe("with an update failure after updates succeed", describeRetryTests("post-update"))
 		Describe("with a couple of failures", describeRetryTests("post-update", "pre-update"))
 	})
 

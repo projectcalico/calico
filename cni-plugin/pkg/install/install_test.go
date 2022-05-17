@@ -2,6 +2,7 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -13,6 +14,11 @@ import (
 	. "github.com/onsi/gomega"
 
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 var expectedDefaultConfig string = `{
@@ -79,13 +85,16 @@ func runCniContainer(tempDir string, binFolderWriteable bool, extraArgs ...strin
 	}
 	args := []string{
 		"run", "--rm", "--name", name,
+		"--net=host",
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=6443",
 		"-e", "KUBERNETES_NODE_NAME=my-node",
+		"-e", "KUBECONFIG=/home/user/certs/kubeconfig",
 		"-v", tempDir + "/bin:" + binFolder,
 		"-v", tempDir + "/net.d:/host/etc/cni/net.d",
 		"-v", tempDir + "/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
+		"-v", os.Getenv("CERTS_PATH") + ":/home/user/certs",
 	}
 	args = append(args, extraArgs...)
 	image := os.Getenv("CONTAINER_NAME")
@@ -97,6 +106,54 @@ func runCniContainer(tempDir string, binFolderWriteable bool, extraArgs ...strin
 		log.WithField("out", out).WithError(writeErr).Warn("GinkgoWriter failed to write output from command.")
 	}
 	return err
+}
+
+func createKubernetesClient() *kubernetes.Clientset {
+	certsPath := os.Getenv("CERTS_PATH")
+	if len(certsPath) == 0 {
+		Fail("CERTS_PATH env variable not set")
+	}
+	kubeconfigPath := certsPath + "/kubeconfig"
+	kubeconfigData, err := ioutil.ReadFile(kubeconfigPath)
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to read kubeconfig file: %v", err))
+	}
+	// The client certificate/key do not necessarily reside in the location specified by kubeconfig => patch it directly
+	config, err := clientcmd.Load(kubeconfigData)
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to load kubeconfig: %v", err))
+	}
+	certificate, err := ioutil.ReadFile(certsPath + "/admin.pem")
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to read admin client certificate: %v", err))
+	}
+	key, err := ioutil.ReadFile(certsPath + "/admin-key.pem")
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to read admin client key: %v", err))
+	}
+
+	overrides := &clientcmd.ConfigOverrides{
+		AuthInfo: api.AuthInfo{
+			ClientCertificate:     "",
+			ClientCertificateData: certificate,
+			ClientKey:             "",
+			ClientKeyData:         key,
+		},
+	}
+	adminAuthInfo := config.AuthInfos["admin"]
+	adminAuthInfo.ClientCertificate = ""
+	adminAuthInfo.ClientCertificateData = certificate
+	adminAuthInfo.ClientKey = ""
+	adminAuthInfo.ClientKeyData = key
+	kubeconfig, err := clientcmd.NewDefaultClientConfig(*config, overrides).ClientConfig()
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to create kubeconfig: %v", err))
+	}
+	clientset, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		Fail(fmt.Sprintf("Could not create kubernetes client: %v", err))
+	}
+	return clientset
 }
 
 var _ = Describe("CNI installation tests", func() {
@@ -158,6 +215,29 @@ PuB/TL+u2y+iQUyXxLy3
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s CA file for test: %v", err))
 		}
+
+		// Create namespace file for token refresh
+		k8sNamespace := []byte("kube-system")
+		var namespaceFile = fmt.Sprintf("%s/serviceaccount/namespace", tempDir)
+		err = ioutil.WriteFile(namespaceFile, k8sNamespace, 0755)
+		if err != nil {
+			Fail(fmt.Sprintf("Failed to write k8s namespace file: %v", err))
+		}
+
+		// Create calico-node service account
+		serviceAccount := &v1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "calico-node",
+			},
+		}
+		_, err = createKubernetesClient().CoreV1().ServiceAccounts("kube-system").Create(context.Background(), serviceAccount, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		// Cleanup calico-node service account
+		err := createKubernetesClient().CoreV1().ServiceAccounts("kube-system").Delete(context.Background(), "calico-node", metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Context("Install with default values", func() {

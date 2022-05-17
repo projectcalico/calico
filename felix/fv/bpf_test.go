@@ -3403,7 +3403,7 @@ func k8sUpdateService(k8sClient kubernetes.Interface, nameSpace, svcName string,
 	svc, err := k8sClient.CoreV1().
 		Services(nameSpace).
 		Get(context.Background(), svcName, metav1.GetOptions{})
-	log.WithField("origSvc", svc).Info("Read original service befor updating it")
+	log.WithField("origSvc", svc).Info("Read original service before updating it")
 	newsvc.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
 	_, err = k8sClient.CoreV1().Services(nameSpace).Update(context.Background(), newsvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
@@ -3445,7 +3445,7 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) error {
 		for _, line := range lines {
 			line = strings.Trim(line, " ")
 			if strings.Contains(line, "src=") {
-				// Wheather traffic is generated in host namespace, or involves NAT, each
+				// Whether traffic is generated in host namespace, or involves NAT, each
 				// contrack entry should be related to node's address
 				if !strings.Contains(line, felix.IP) {
 					return fmt.Errorf("unexpected conntrack not from host (felix[%d]): %s", i, line)

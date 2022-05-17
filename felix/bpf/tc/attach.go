@@ -61,6 +61,7 @@ type AttachPoint struct {
 	IPv6Enabled          bool
 	MapSizes             map[string]uint32
 	Features             environment.Features
+	RPFStrictEnabled     bool
 }
 
 var tcLock sync.RWMutex
@@ -620,6 +621,9 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	var flags uint32
 	if ap.IPv6Enabled {
 		flags |= libbpf.GlobalsIPv6Enabled
+	}
+	if ap.RPFStrictEnabled {
+		flags |= libbpf.GlobalsRPFStrictEnabled
 	}
 
 	hostTunnelIP := hostIP
