@@ -161,7 +161,6 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 			resources = append(resources, converted...)
 			return nil
 		})
-
 		if err != nil {
 			_, ok := err.(fileError)
 			return CommandResults{Err: err, FileInvalid: ok}
@@ -281,7 +280,6 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 				rom.SetCreationTimestamp(v1.Time{})
 				rom.SetDeletionTimestamp(nil)
 				rom.SetDeletionGracePeriodSeconds(nil)
-				rom.SetClusterName("")
 			}
 		}
 
