@@ -3393,7 +3393,7 @@ static long (*bpf_load_hdr_opt)(struct bpf_sock_ops *skops, void *searchby_res, 
  *
  * 	**-EEXIST** if the option already exists.
  *
- * 	**-EFAULT** on failure to parse the existing header options.
+ * 	**-EFAULT** on failrue to parse the existing header options.
  *
  * 	**-EPERM** if the helper cannot be used under the current
  * 	*skops*\ **->op**.
@@ -3731,7 +3731,7 @@ static __u64 (*bpf_ktime_get_coarse_ns)(void) = (void *) 160;
 /*
  * bpf_ima_inode_hash
  *
- * 	Returns the stored IMA hash of the *inode* (if it's available).
+ * 	Returns the stored IMA hash of the *inode* (if it's avaialable).
  * 	If the hash is larger than *size*, then only *size*
  * 	bytes will be copied to *dst*
  *
@@ -3767,7 +3767,7 @@ static struct socket *(*bpf_sock_from_file)(struct file *file) = (void *) 162;
  * 	actual packet size (resulting in negative packet size) will in
  * 	principle not exceed the MTU, why it is not considered a
  * 	failure.  Other BPF-helpers are needed for performing the
- * 	planned size change, why the responsibility for catch a negative
+ * 	planned size change, why the responsability for catch a negative
  * 	packet size belong in those helpers.
  *
  * 	Specifying *ifindex* zero means the MTU check is performed

@@ -323,7 +323,7 @@ struct pt_regs;
  * BPF_PROG is a convenience wrapper for generic tp_btf/fentry/fexit and
  * similar kinds of BPF programs, that accept input arguments as a single
  * pointer to untyped u64 array, where each u64 can actually be a typed
- * pointer or integer of different size. Instead of requiring user to write
+ * pointer or integer of different size. Instead of requring user to write
  * manual casts and work with array elements by index, BPF_PROG macro
  * allows user to declare a list of named and typed input arguments in the
  * same syntax as for normal C function. All the casting is hidden and
@@ -369,7 +369,7 @@ struct pt_regs;
  * tp_btf/fentry/fexit BPF programs. It hides the underlying platform-specific
  * low-level way of getting kprobe input arguments from struct pt_regs, and
  * provides a familiar typed and named function arguments syntax and
- * semantics of accessing kprobe input parameters.
+ * semantics of accessing kprobe input paremeters.
  *
  * Original struct pt_regs* context is preserved as 'ctx' argument. This might
  * be necessary when using BPF helpers like bpf_perf_event_output().
