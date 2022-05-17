@@ -200,7 +200,6 @@ Description:
 				rom.SetCreationTimestamp(v1.Time{})
 				rom.SetDeletionTimestamp(nil)
 				rom.SetDeletionGracePeriodSeconds(nil)
-				rom.SetClusterName("")
 				return nil
 			})
 			if err != nil {
