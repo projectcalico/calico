@@ -358,7 +358,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 syn_force_policy:
 	/* DNAT in state is set correctly now */
 
-	if (!(ctx->state->tun_ip) && CALI_F_TO_HOST) {
+	if (!(ctx->state->tun_ip) && CALI_F_FROM_HEP) {
 		if (!hep_rpf_check(ctx)) {
 			goto deny;
 		}
