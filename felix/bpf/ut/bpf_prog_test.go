@@ -210,6 +210,12 @@ outer:
 		if strings.Contains(section, "host") {
 			obj += "hep_"
 			progLog = "HEP"
+		} else if strings.Contains(section, "nat") {
+			obj += "nat_"
+			progLog = "NAT"
+		} else if strings.Contains(section, "wireguard") {
+			obj += "wg_"
+			progLog = "WG"
 		} else {
 			obj += "wep_"
 			progLog = "WEP"
@@ -495,6 +501,13 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "8", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (drop_v6 program)")
+		}
+	}
+
+	if !forXDP {
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
 	}
 
