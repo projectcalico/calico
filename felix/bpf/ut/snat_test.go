@@ -124,7 +124,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		pktBytes = res.dataOut
 	})
 
-	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut | tcdefs.MarkSeenBypassSkipRPF
+	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut
 
 	dumpCTMap(ctMap)
 
@@ -175,7 +175,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 	// Out via wg tunnel (to intruduce ct entries)
 
-	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut | tcdefs.MarkSeenBypassSkipRPF
+	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut
 
 	var hostConflictPkt []byte
 

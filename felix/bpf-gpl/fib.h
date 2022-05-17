@@ -230,10 +230,6 @@ skip_fib:
 		 * which trips up the validator.
 		 */
 		ctx->skb->mark = ctx->fwd.mark; /* make sure that each pkt has SEEN mark */
-	} else if (CALI_F_NAT_IF) {
-		__u32 mark = CALI_SKB_MARK_SEEN | CALI_SKB_MARK_SKIP_RPF;
-		CALI_DEBUG("Setting mark to 0x%x\n", mark);
-		ctx->skb->mark = mark;
 	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
