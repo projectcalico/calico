@@ -291,13 +291,13 @@ function do_nettle {
     rm -rf ../nettle-3.3
     mv nettle-3.3 ../
     cp -a nettle_3.3.orig.tar.gz ../
+    cp -a nettle_3.3.orig.tar.gz $outputDir
     cd ../nettle-3.3
     sed -i '1 s/unstable/xenial/' debian/changelog
     docker_run_rm calico-build/xenial dpkg-buildpackage -S
 
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'nettle_*-*' -exec mv '{}' $outputDir \;
-    cp nettle_3.3.orig.tar.gz $outputDir
 
     popd
 
