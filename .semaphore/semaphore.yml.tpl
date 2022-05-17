@@ -90,9 +90,9 @@ blocks:
   dependencies: []
   task:
     jobs:
-    - name: "Prerequisites"
+    - name: "Check generated files"
       commands:
-      - make gen-semaphore-yaml
+      - make generate
       - make check-dirty
 
 - name: "API"
