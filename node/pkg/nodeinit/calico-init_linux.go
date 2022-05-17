@@ -86,9 +86,9 @@ func ensureBPFFilesystem() error {
 func ensureCgroupV2Filesystem() error {
 	// Check if the Cgroup2 filesystem is mounted at the expected location.
 	logrus.Info("Checking if Cgroup2 filesystem is mounted.")
-	mounts, err := os.Open("/node-proc/1/mountinfo")
+	mounts, err := os.Open("/initproc/mountinfo")
 	if err != nil {
-		return fmt.Errorf("failed to open /node-proc/1/mountinfo: %w", err)
+		return fmt.Errorf("failed to open /initproc/mountinfo: %w", err)
 	}
 	scanner := bufio.NewScanner(mounts)
 	for scanner.Scan() {
@@ -101,14 +101,14 @@ func ensureCgroupV2Filesystem() error {
 		}
 	}
 	if scanner.Err() != nil {
-		return fmt.Errorf("failed to read /node-proc/1/mountinfo: %w", scanner.Err())
+		return fmt.Errorf("failed to read /initproc/mountinfo: %w", scanner.Err())
 	}
 
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
 	logrus.Info("Cgroup2 filesystem is not mounted.  Trying to mount it...")
 
 	mountCmd := exec.Command(
-		"nsenter", "--cgroup=/node-proc/1/ns/cgroup", "--mount=/node-proc/1/ns/mnt",
+		"nsenter", "--cgroup=/initproc/ns/cgroup", "--mount=/initproc/ns/mnt",
 		"mount", "-t", "cgroup2", "none", bpf.CgroupV2Path)
 
 	out, err := mountCmd.Output()

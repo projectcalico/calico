@@ -4402,8 +4402,8 @@ spec:
               # Bidirectional is required to ensure that the new mount we make at /sys/fs/bpf propagates to the host
               # so that it outlives the init container.
               mountPropagation: Bidirectional
-            - mountPath: /rootns
-              name: rootns
+            - mountPath: /initproc
+              name: init-proc
       containers:
         # Runs calico-node container on each Kubernetes node. This
         # container programs network policy and routes on each
@@ -4574,8 +4574,8 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
-        - name: rootns
-          hostPath: /proc/1/ns
+        - name: init-proc
+          hostPath: /proc/1
           readOnly: true
         # Used to install CNI.
         - name: cni-bin-dir
