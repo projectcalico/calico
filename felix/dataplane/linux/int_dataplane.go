@@ -1381,6 +1381,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					},
 				)
 			}
+			fwdRules = append(fwdRules,
+				iptables.Rule{
+					Match:   iptables.Match().InInterface(bpfOutDev),
+					Action:  iptables.AcceptAction{},
+					Comment: []string{"From ", bpfOutDev, " device, mark verified, accept."},
+				},
+			)
 		}
 
 		t.InsertOrAppendRules("INPUT", inputRules)

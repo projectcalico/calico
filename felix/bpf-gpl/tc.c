@@ -599,11 +599,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			fib = false;
 			seen_mark = CALI_SKB_MARK_SKIP_FIB;
 		}
-		if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
-				state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
-			CALI_DEBUG("should skip rpf as the source IP is a service IP\n");
-			seen_mark = CALI_SKB_MARK_SKIP_RPF;
-		}
 	}
 
 	/* We check the ttl here to avoid needing complicated handling of
