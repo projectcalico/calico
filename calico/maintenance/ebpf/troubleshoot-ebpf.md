@@ -1,12 +1,12 @@
 ---
-title: Troubleshooting eBPF mode
+title: Troubleshoot eBPF mode
 description: How to troubleshoot when running in eBPF mode. 
-canonical_url: '/maintenance/troubleshoot/troubleshoot-ebpf'
+canonical_url: '/maintenance/ebpf/troubleshoot-ebpf'
 ---
 
 This document gives some general troubleshooting guidance for the eBPF dataplane.
 
-## Troubleshoot access to services
+### Troubleshoot access to services
 
 If pods or hosts within your cluster have trouble accessing services, check the following:
 
@@ -38,7 +38,7 @@ If pods or hosts within your cluster have trouble accessing services, check the 
     * In GCP, the "Allow forwarding" option must be enabled. As with AWS, traffic through a load balancer does not
       work correctly with DSR because the load balancer is not consulted on the return path from the backing node.
       
-## Checking if a program is dropping packets
+### Check if a program is dropping packets
 
 To check if an eBPF program is dropping packets, you can use the `tc` command-line tool.  For example, if you
 are worried that the eBPF program attached to `eth0` is dropping packets, you can run the following command:
@@ -57,7 +57,7 @@ qdisc clsact 0: dev eth0 root refcnt 2
 ...
 ```
 
-## Debugging high CPU usage
+### Debug high CPU usage
 
 If you notice `{{site.noderunning}}` using high CPU:
 
@@ -74,7 +74,7 @@ If you notice `{{site.noderunning}}` using high CPU:
   slices and they are enabled, then you can enable endpoint slice support in {{site.prodname}} with the 
   `bpfKubeProxyEndpointSlicesEnabled` configuration flag.
   
-## eBPF program debug logs
+### eBPF program debug logs
 
 {{site.prodname}}'s eBPF programs contain optional detailed debug logging.  Although the logs can be very verbose (because
 the programs will log every packet), they can be invaluable to diagnose eBPF program issues.  To enable the log, set the 
@@ -159,7 +159,7 @@ The tool is embedded in the {{site.nodecontainer}} container image. To run the t
   ...
   ```
 
-## Poor performance
+### Poor performance
 
 A number of problems can reduce the performance of the eBPF dataplane.
 
