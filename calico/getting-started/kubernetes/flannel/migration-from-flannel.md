@@ -100,10 +100,12 @@ which can be set as environment variables within the pod.
 | Configuration options            | Description                                                          | Default                                    |
 |----------------------------------|----------------------------------------------------------------------|--------------------------------------------|
 | FLANNEL_NETWORK                  | IPv4 network CIDR used by flannel for the cluster.                   | Automatically detected                     |
+| FLANNEL_IPV6_NETWORK             | IPv6 network CIDR used by flannel for the cluster.                   | Automatically detected                     |
 | FLANNEL_DAEMONSET_NAME           | Name of the flannel daemon set in the kube-system namespace.         | kube-flannel-ds-amd64                      |
 | FLANNEL_MTU                      | MTU for the flannel VXLAN device.                                    | Automatically detected                     |
 | FLANNEL_IP_MASQ                  | Whether masquerading is enabled for outbound traffic.                | Automatically detected                     |
-| FLANNEL_SUBNET_LEN               | Per-node subnet length used by flannel.                              | 24                                         |
+| FLANNEL_SUBNET_LEN               | Per-node IPv4 subnet length used by flannel.                         | 24                                         |
+| FLANNEL_IPV6_SUBNET_LEN          | Per-node IPv6 subnet length used by flannel.                         | 64                                         |
 | FLANNEL_ANNOTATION_PREFIX        | Value provided via the kube-annotation-prefix option to flannel.     |  flannel.alpha.coreos.com                  |
 | FLANNEL_VNI                      | The VNI used for the flannel network.                                |  1                                         |
 | FLANNEL_PORT                     | UDP port used for VXLAN.                                             |  8472                                      |
