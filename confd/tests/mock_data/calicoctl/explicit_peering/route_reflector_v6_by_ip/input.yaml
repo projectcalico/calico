@@ -35,14 +35,15 @@ spec:
 ---
 
 # This BGPPeer peers the RR node (kube-master) with the other
-# non-RR nodes in the cluster (kube-node-1, kube-node-2).
+# non-RR nodes in the cluster (kube-node-1, kube-node-2) using
+# its IP address only; this should be picked up as a bidirectional
+# peering but over IPv6 only.
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-other-nodes
 spec:
-  nodeSelector: has(routeReflector)
-  peerSelector: '!has(routeReflector)'
+  peerIP: "fe0a::2"
 
 ---
 
