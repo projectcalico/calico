@@ -86,13 +86,14 @@ func (p *IntParam) Parse(raw string) (interface{}, error) {
 		err = p.parseFailed(raw, "invalid int")
 		return nil, err
 	}
-	result := int(value)
-	if result < p.Min {
+	if value < p.Min {
 		err = p.parseFailed(raw,
 			fmt.Sprintf("value must be at least %v", p.Min))
-	} else if result > p.Max {
+	} else if value > p.Max {
 		err = p.parseFailed(raw,
 			fmt.Sprintf("value must be at most %v", p.Max))
+	} else {
+		result := int(value)
 	}
 	return result, err
 }
@@ -264,13 +265,9 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 			return nil, p.parseFailed(raw, "unknown protocol: "+protocolStr)
 		}
 
-		port, err := strconv.Atoi(portStr)
+		port, err := strconv.ParseUint(portStr, 10, 16)
 		if err != nil {
-			err = p.parseFailed(raw, "ports should be integers")
-			return nil, err
-		}
-		if port < 0 || port > 65535 {
-			err = p.parseFailed(raw, "ports must be in range 0-65535")
+			err = p.parseFailed(raw, "ports should be integers in range 0-65535")
 			return nil, err
 		}
 		result = append(result, ProtoPort{
