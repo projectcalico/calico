@@ -165,6 +165,17 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	}
 }
 
+// KernelIsAtLeast returns error is the predicates is either not true or running
+// kernel detection failed.
+func (d *FeatureDetector) KernelIsAtLeast(v string) error {
+	ver, err := NewVersion(v)
+	if err != nil {
+		return err
+	}
+
+	return d.isAtLeastKernel(ver)
+}
+
 func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
 	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
