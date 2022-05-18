@@ -21,28 +21,16 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
-
-/*
-#define _GNU_SOURCE
-#include <sched.h>
-#include <stdio.h>
-#include <fcntl.h>
-
-__attribute__((constructor)) void enter_mountns(void) {
-	setns(open("/initproc/ns/mnt", O_RDONLY, 0), CLONE_NEWNS);
-}
-*/
-import "C"
 
 func Run() {
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
@@ -123,34 +111,17 @@ func ensureCgroupV2Filesystem() error {
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
 	logrus.Info("Cgroup2 filesystem is not mounted.  Trying to mount it...")
 
-	// Try to enter root namespaces
-	cgroupNSFile := path.Join(cgroupRootPath, "/ns/cgroup")
-	cgroupFd, err := unix.Open(cgroupNSFile, unix.O_RDONLY, 0)
-	if err != nil {
-		return fmt.Errorf("failed to open %s: %w", cgroupNSFile, err)
-	}
-	defer unix.Close(cgroupFd)
-
-	err = unix.Setns(cgroupFd, unix.CLONE_NEWCGROUP)
-	if err != nil {
-		return fmt.Errorf("failed to change to root cgroup ns: %w", err)
-	}
-	logrus.Info("Changed to cgroup ns")
-
-	err = syscall.Mount("none", bpf.CgroupV2Path, "cgroup2", 0, "")
-	if err != nil {
-		return fmt.Errorf("failed to mount Cgroup filesystem: %w", err)
-	}
-
 	/*mountCmd := exec.Command(
-		"nsenter", "--cgroup=/initproc/ns/cgroup", "--mount=/initproc/ns/mnt",
-		"mount", "-t", "cgroup2", "none", bpf.CgroupV2Path)
+	"nsenter", "--cgroup=/initproc/ns/cgroup", "--mount=/initproc/ns/mnt",
+	"mount", "-t", "cgroup2", "none", bpf.CgroupV2Path)*/
+
+	mountCmd := exec.Command("mountns", cgroupRootPath)
 
 	out, err := mountCmd.Output()
 	if err != nil {
 		logrus.Errorf("Mouting cgroup2 fs failed. output: %v", out)
 		return fmt.Errorf("failed to mount cgroup2 filesystem: %w", err)
-	}*/
+	}
 
 	logrus.Infof("Mounted root cgroup2 filesystem.")
 	return nil
