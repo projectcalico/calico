@@ -1,3 +1,16 @@
+// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package main
 
 import (
@@ -11,6 +24,13 @@ import (
 	"sort"
 	"strings"
 )
+
+// This code is a build-time tool to help optimize our test running by only running tests
+// which are relevant for the given change set.
+//
+// It works by building a dependency tree of packages so that we can determine the full set
+// of impacted packages, given a set of modified files. We then turn that into a set of
+// packages which need to have their unit tests executed as a result of a given diff.
 
 var shaA, shaB, commitRange, filterDir string
 
@@ -60,8 +80,12 @@ func loadPackages() []Package {
 	packages := []Package{}
 	for _, s := range splits {
 		pkg := Package{}
-		json.Unmarshal([]byte(s), &pkg)
+		err := json.Unmarshal([]byte(s), &pkg)
+		if err != nil {
+			panic(err)
+		}
 
+		// Filter out packages that aren't part of this repo.
 		if isLocalDir(pkg.Dir) {
 			// Canonicalize the package names, since by default the packages are
 			// absolute paths based on the host filesystem.
@@ -81,7 +105,6 @@ func loadPackages() []Package {
 			}
 			pkg.Deps = deps
 
-			// Filter out packages that aren't part of this repo.
 			packages = append(packages, pkg)
 		}
 	}
@@ -132,7 +155,7 @@ func main() {
 	}
 
 	// First, check if go.mod has changed. If it has, we can skip building a graph of changed / impacted
-	// pacakges and instead just run all of the tests.
+	// packages and instead just run all of the tests.
 	if strings.Contains(out.String(), "go.mod") {
 		// TODO: Be smarter - we can tell what imports changed, and run tests only in the affected packages.
 		var out, stderr bytes.Buffer
