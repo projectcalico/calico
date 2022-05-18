@@ -307,7 +307,6 @@ func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
 	} else {
 		link.LinkAttrs.RawFlags &^= syscall.IFF_RUNNING
 	}
-
 }
 
 func (d *MockNetlinkDataplane) NewMockNetlink() (netlinkshim.Interface, error) {
@@ -690,7 +689,7 @@ func (d *MockNetlinkDataplane) RouteDel(route *netlink.Route) error {
 	key := KeyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteDel called")
 	d.DeletedRouteKeys.Add(key)
-	// Route was deleted, but is planned on being readded
+	// Route was deleted, but is planned on being re-added
 	if _, ok := d.RouteKeyToRoute[key]; ok {
 		delete(d.RouteKeyToRoute, key)
 		d.UpdatedRouteKeys.Add(key)

@@ -728,7 +728,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(BeEmpty())
 	})
 
-	It("should treat running pod with no podIP annoation with a deletion timestamp as running", func() {
+	It("should treat running pod with no podIP annotation with a deletion timestamp as running", func() {
 		now := metav1.Now()
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -757,7 +757,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32"))
 	})
 
-	It("should treat finished pod with no podIP annoation with a deletion timestamp as finished", func() {
+	It("should treat finished pod with no podIP annotation with a deletion timestamp as finished", func() {
 		now := metav1.Now()
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{

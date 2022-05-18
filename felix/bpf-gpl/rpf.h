@@ -60,7 +60,7 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 			ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
 	}
 
-	CALI_DEBUG("Host RPF check src=%x skb iface=%d fib %d\n",
+	CALI_DEBUG("Host RPF check src=%x skb iface=%d fib rc %d\n",
 			bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex, rc);
 	CALI_DEBUG("Host RPF check src=%x skb iface=%d result %d\n",
 			bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex, ret);

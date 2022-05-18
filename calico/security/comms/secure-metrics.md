@@ -396,7 +396,7 @@ The basic process is as follows:
    ```
 
    This policy selects all endpoints that have the label `running-calico: true`, and enforces a single ingress deny rule.
-   The ingress rule alows traffic to port 9091 from any source with the label `calico-prometheus-access: true`, meaning
+   The ingress rule allows traffic to port 9091 from any source with the label `calico-prometheus-access: true`, meaning
    all {{site.prodname}} workload endpoints, host endpoints, and global network sets that have the label will be allowed access.
 
    Then, use `calicoctl` to apply this policy.
@@ -464,7 +464,7 @@ spec:
 ```
 
 This policy selects all endpoints that have the label `running-calico: true`, and enforces a single ingress deny rule.
-The ingress rule alows traffic to port 9093 from any source with the label `calico-prometheus-access: true`, meaning
+The ingress rule allows traffic to port 9093 from any source with the label `calico-prometheus-access: true`, meaning
 all {{site.prodname}} workload endpoints, host endpoints, and global network sets that have the label will be allowed access.
 
 Then, use `calicoctl` to apply this policy.

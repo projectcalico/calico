@@ -519,7 +519,7 @@ func (c *client) updatePeersV1() {
 			var peers []*bgpPeer
 			if v3res.Spec.PeerSelector != "" {
 				for _, peerNodeName := range c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector) {
-					peers = append(peers, c.nodeAsBGPPeers(peerNodeName)...)
+					peers = append(peers, c.nodeAsBGPPeers(peerNodeName, true, true)...)
 				}
 			} else {
 				// Separate port from Ip if it uses <ip>:<port> format
@@ -594,11 +594,22 @@ func (c *client) updatePeersV1() {
 		// This time, the "local" nodes are actually those matching the remote fields
 		// in BGPPeer, i.e. PeerIP, ASNumber and PeerSelector...
 		var localNodeNames []string
+		var includeV4, includeV6 bool
 		if v3res.Spec.PeerSelector != "" {
 			localNodeNames = c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector)
+			// Peering on label selector, so we should reverse the peering over IPv4 and IPv6.
+			includeV4 = true
+			includeV6 = true
 		} else {
 			ip, port := parseIPPort(v3res.Spec.PeerIP)
 			localNodeNames = c.nodesWithIPPortAndAS(ip, v3res.Spec.ASNumber, port)
+			// Peering on IP only selector, so we should reverse the peering only over the
+			// same IP version.
+			if strings.Contains(ip, ":") {
+				includeV6 = true
+			} else {
+				includeV4 = true
+			}
 		}
 		log.Debugf("Local nodes %#v", localNodeNames)
 
@@ -625,7 +636,7 @@ func (c *client) updatePeersV1() {
 
 		var peers []*bgpPeer
 		for _, peerNodeName := range peerNodeNames {
-			peers = append(peers, c.nodeAsBGPPeers(peerNodeName)...)
+			peers = append(peers, c.nodeAsBGPPeers(peerNodeName, includeV4, includeV6)...)
 		}
 		if len(peers) == 0 {
 			continue
@@ -727,12 +738,16 @@ func (c *client) globalAS() string {
 	return c.cache[asKey]
 }
 
-func (c *client) nodeAsBGPPeers(nodeName string) (peers []*bgpPeer) {
+func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool) (peers []*bgpPeer) {
 	ipv4Str, ipv6Str, asNum, rrClusterID := c.nodeToBGPFields(nodeName)
-	for version, ipStr := range map[string]string{
-		"IPv4": ipv4Str,
-		"IPv6": ipv6Str,
-	} {
+	versions := map[string]string{}
+	if v4 {
+		versions["IPv4"] = ipv4Str
+	}
+	if v6 {
+		versions["IPv6"] = ipv6Str
+	}
+	for version, ipStr := range versions {
 		peer := &bgpPeer{}
 		if ipStr == "" {
 			log.Debugf("No %v for node %v", version, nodeName)
@@ -864,7 +879,7 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 						delete(c.nodeIPs, oldNodeIPv4)
 					}
 					if oldNodeIPv6 != "" && oldNodeIPv6 == nodeIPv6 {
-						// IPv6 adress is updated, remove the old IPv6 address.
+						// IPv6 address is updated, remove the old IPv6 address.
 						delete(c.nodeIPs, oldNodeIPv6)
 					}
 					if nodeIPv4 != "" {

@@ -76,13 +76,18 @@ const (
 type TargetType string
 
 const (
-	TargetTypeVXLAN   TargetType = "vxlan"
-	TargetTypeNoEncap TargetType = "noencap"
+	TargetTypeLocal            TargetType = "local"
+	TargetTypeVXLAN            TargetType = "vxlan"
+	TargetTypeNoEncap          TargetType = "noencap"
+	TargetTypeOnLink           TargetType = "onlink"
+	TargetTypeGlobalUnicast    TargetType = "global-unicast"
+	TargetTypeLinkLocalUnicast TargetType = "local-unicast"
 
 	// The following target types should be used with InterfaceNone.
-	TargetTypeBlackhole TargetType = "blackhole"
-	TargetTypeProhibit  TargetType = "prohibit"
-	TargetTypeThrow     TargetType = "throw"
+	TargetTypeBlackhole   TargetType = "blackhole"
+	TargetTypeProhibit    TargetType = "prohibit"
+	TargetTypeThrow       TargetType = "throw"
+	TargetTypeUnreachable TargetType = "unreachable"
 )
 
 const (
@@ -113,12 +118,16 @@ func (t Target) Equal(t2 Target) bool {
 
 func (t Target) RouteType() int {
 	switch t.Type {
+	case TargetTypeLocal:
+		return syscall.RTN_LOCAL
 	case TargetTypeThrow:
 		return syscall.RTN_THROW
 	case TargetTypeBlackhole:
 		return syscall.RTN_BLACKHOLE
 	case TargetTypeProhibit:
 		return syscall.RTN_PROHIBIT
+	case TargetTypeUnreachable:
+		return syscall.RTN_UNREACHABLE
 	default:
 		return syscall.RTN_UNICAST
 	}
@@ -126,14 +135,35 @@ func (t Target) RouteType() int {
 
 func (t Target) RouteScope() netlink.Scope {
 	switch t.Type {
+	case TargetTypeLocal:
+		return netlink.SCOPE_HOST
+	case TargetTypeLinkLocalUnicast:
+		return netlink.SCOPE_LINK
+	case TargetTypeGlobalUnicast:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeNoEncap:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeVXLAN:
+		return netlink.SCOPE_UNIVERSE
 	case TargetTypeThrow:
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeBlackhole:
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeProhibit:
 		return netlink.SCOPE_UNIVERSE
+	case TargetTypeOnLink:
+		return netlink.SCOPE_LINK
 	default:
 		return netlink.SCOPE_LINK
+	}
+}
+
+func (t Target) Flags() netlink.NextHopFlag {
+	switch t.Type {
+	case TargetTypeVXLAN, TargetTypeNoEncap, TargetTypeOnLink:
+		return syscall.RTNH_F_ONLINK
+	default:
+		return 0
 	}
 }
 
@@ -456,7 +486,7 @@ func (r *RouteTable) getNetlink() (netlinkshim.Interface, error) {
 			log.WithField("numFailures", r.numConsistentNetlinkFailures).Panic(
 				"Repeatedly failed to connect to netlink.")
 		}
-		log.Info("Trying to connect to netlink")
+		log.Debug("Trying to connect to netlink")
 		nlHandle, err := r.newNetlinkHandle()
 		if err != nil {
 			r.numConsistentNetlinkFailures++
@@ -902,7 +932,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	}
 
 	// Now loop through the expected CIDRs to Target. Remove any that we did not find, and add them back into our
-	// delta updates (unless the entry is superceded by another update).
+	// delta updates (unless the entry is superseded by another update).
 	for cidr, target := range expectedTargets {
 		if alreadyCorrectCIDRs.Contains(cidr) {
 			continue
@@ -911,7 +941,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 		logCxt.Info("Deleting from expected targets")
 		delete(expectedTargets, cidr)
 
-		// If we do not have an update that supercedes this entry, then add it back in as an update so that we add
+		// If we do not have an update that supersedes this entry, then add it back in as an update so that we add
 		// the route.
 		if pendingTarget, ok := pendingDeltaTargets[cidr]; !ok {
 			logCxt.Info("No pending target update, adding back in as an update")

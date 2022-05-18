@@ -23,7 +23,7 @@ import (
 // shims to hns_windows.go, add stubbed versions of the types and structs here so that the HNS code can
 // be compiled and tested on Windows. Since we can't import hcsshim here we have to make reasonable
 // type substitutes.  For upstream types that are typedeffed strings, simply repeat the typedef here.
-// For upstream types that are structs, createa  compatible type definiiton including at least the
+// For upstream types that are structs, create a compatible type definiiton including at least the
 // fields we use.
 
 // Types from hnssupport.go.

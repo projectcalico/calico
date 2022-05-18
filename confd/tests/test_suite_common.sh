@@ -620,6 +620,7 @@ execute_tests_oneshot() {
         run_individual_test_oneshot 'explicit_peering/specific_node'
         run_individual_test_oneshot 'explicit_peering/selectors'
         run_individual_test_oneshot 'explicit_peering/route_reflector'
+        run_individual_test_oneshot 'explicit_peering/route_reflector_v6_by_ip'
         run_individual_test_oneshot 'mesh/static-routes'
         run_individual_test_oneshot 'mesh/static-routes-exclude-node'
         run_individual_test_oneshot 'mesh/communities'

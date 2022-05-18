@@ -26,6 +26,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -74,11 +75,11 @@ var (
 	}
 	notSupported = cerrors.ErrorOperationNotSupported{}
 	notExists    = cerrors.ErrorResourceDoesNotExist{}
+	tooOldRV     = kerrors.NewResourceExpired("test error")
 	genError     = errors.New("Generic error")
 )
 
 var _ = Describe("Test the backend datastore multi-watch syncer", func() {
-
 	r1 := watchersyncer.ResourceType{
 		ListInterface: model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
 	}
@@ -136,8 +137,44 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUnchanged()
 	})
 
-	It("should handle reconnection if watchers fail to be created", func() {
+	// Tests the scenario found in this issue: https://github.com/projectcalico/calico/issues/6032
+	It("should handle resourceVersion expired errors", func() {
+		// Temporarily reduce the watch and list poll interval to make the tests faster.
+		// Since we are timing the processing, we still need the interval to be sufficiently
+		// large to make the measurements more accurate.
+		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(500*time.Millisecond, 2000*time.Millisecond)
 
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, tooOldRV)
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		// Send a watch error. This will trigger a re-list from the revision
+		// the watcher cache has stored.
+		rs.clientWatchResponse(r1, notSupported)
+		rs.clientListResponse(r1, emptyList)
+
+		// Expect List and watch be called with the emptylist revision.
+		Eventually(rs.fc.getLatestListRevision, 5*time.Second, 100*time.Millisecond).Should(Equal(emptyList.Revision))
+		Eventually(rs.fc.getLatestWatchRevision, 5*time.Second, 100*time.Millisecond).Should(Equal(emptyList.Revision))
+
+		// Send a watch error, followed by a resource version too old error
+		// on the list. This should trigger the watcher cache to retry the list
+		// without a revision.
+		rs.clientWatchResponse(r1, genError)
+		rs.clientListResponse(r1, tooOldRV)
+		Eventually(rs.fc.getLatestListRevision, 5*time.Second, 100*time.Millisecond).Should(Equal("0"))
+
+		// Simulate a successful list using the 0 revision - we should see the watch started from the correct
+		// revision again.
+		rs.clientListResponse(r1, emptyList)
+		Eventually(rs.fc.getLatestWatchRevision, 5*time.Second, 100*time.Millisecond).Should(Equal(emptyList.Revision))
+	})
+
+	It("should handle reconnection if watchers fail to be created", func() {
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
@@ -178,7 +215,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUnchanged()
-		//rs.ExpectStatusUpdate(api.InSync)
+		// rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r1, nil)
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, notSupported)
@@ -234,7 +271,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("Should handle reconnection and syncing when the watcher sends a watch terminated error", func() {
-
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, emptyList)
@@ -580,7 +616,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 				UpdateType: api.UpdateTypeKVDeleted,
 			},
 		}, false)
-
 	})
 
 	It("Should invoke the supplied converter to alter the update", func() {
@@ -667,7 +702,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			},
 		})
 		rs.ExpectParseError("zzzzz", "xxxxx")
-
 	})
 })
 
@@ -961,6 +995,18 @@ func (rst *watcherSyncerTester) clientWatchResponse(r watchersyncer.ResourceType
 // the events
 type fakeClient struct {
 	lws map[string]*listWatchSource
+
+	// Allows us to track the revision that the syncer is using.
+	latestListRevision  string
+	latestWatchRevision string
+}
+
+func (c *fakeClient) getLatestListRevision() string {
+	return c.latestListRevision
+}
+
+func (c *fakeClient) getLatestWatchRevision() string {
+	return c.latestWatchRevision
 }
 
 // We don't implement any of the CRUD related methods, just the Watch method to return
@@ -969,34 +1015,42 @@ func (c *fakeClient) Create(ctx context.Context, object *model.KVPair) (*model.K
 	panic("should not be called")
 	return nil, nil
 }
+
 func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	panic("should not be called")
 	return nil, nil
 }
+
 func (c *fakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	panic("should not be called")
 	return nil, nil
 }
+
 func (c *fakeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	panic("should not be called")
 	return nil, nil
 }
+
 func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	panic("should not be called")
 	return nil, nil
 }
+
 func (c *fakeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	panic("should not be called")
 	return nil, nil
 }
+
 func (c *fakeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	panic("should not be called")
 	return nil
 }
+
 func (c *fakeClient) EnsureInitialized() error {
 	panic("should not be called")
 	return nil
 }
+
 func (c *fakeClient) Clean() error {
 	panic("should not be called")
 	return nil
@@ -1005,10 +1059,11 @@ func (c *fakeClient) Clean() error {
 func (c *fakeClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	// Create a fake watcher keyed off the ListOptions (root path).
 	name := model.ListOptionsToDefaultPathRoot(list)
-	log.WithField("Name", name).Info("List request")
+	log.WithField("Name", name).WithField("rev", revision).Info("List request")
 	if l, ok := c.lws[name]; !ok || l == nil {
 		panic("List for unhandled resource type")
 	} else {
+		c.latestListRevision = revision
 		return l.list()
 	}
 }
@@ -1020,6 +1075,7 @@ func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revisi
 	if l, ok := c.lws[name]; !ok || l == nil {
 		panic("Watch for unhandled resource type")
 	} else {
+		c.latestWatchRevision = revision
 		return l.watch()
 	}
 }

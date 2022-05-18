@@ -800,7 +800,7 @@ func (c *Container) BPFNATDump() map[string][]string {
 	return nat
 }
 
-// BPFNATHasBackendForService returns true is the given service has the given backend programed in NAT tables
+// BPFNATHasBackendForService returns true is the given service has the given backend programmed in NAT tables
 func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
 	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
 	back := fmt.Sprintf("%s:%d", ip, port)

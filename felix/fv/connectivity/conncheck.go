@@ -483,7 +483,7 @@ func ExpectWithClientAdjustedMTU(from, to int) ExpectationOption {
 	}
 }
 
-// ExpectWithLoss asserts that the connection has a certain loos rate
+// ExpectWithLoss asserts that the connection has a certain loss rate
 func ExpectWithLoss(duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int) ExpectationOption {
 	Expect(duration.Seconds()).NotTo(BeZero(),
 		"Packet loss test must have a duration")

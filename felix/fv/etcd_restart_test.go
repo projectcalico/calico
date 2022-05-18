@@ -135,7 +135,7 @@ var _ = Context("etcd connection interruption", func() {
 		By("silently dropping etcd packets", func() {
 			// Normally, if a connection closes at either end, the other peer's traffic will get
 			// FIN or RST responses, which cleanly shut down the connection.  However, in order
-			// to test the GRPC-level keep-alives, we want to simulate a network or NAT change that
+			// to test the GRPC-level keep-alive, we want to simulate a network or NAT change that
 			// starts to black-hole the TCP connection so that there are no responses of any kind.
 			var portRegexp = regexp.MustCompile(`sport=(\d+).*dport=2379`)
 			for _, felix := range felixes {

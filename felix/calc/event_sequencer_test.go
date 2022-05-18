@@ -111,7 +111,7 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 
 	It("a fully-loaded ParsedRules struct should result in all fields being set in the protobuf rules", func() {
 		// We use reflection to scan all the fields in the protobuf rule to make sure that they're
-		// all filled in.  If any are still at their zero value, either hte test is out of date
+		// all filled in.  If any are still at their zero value, either the test is out of date
 		// or we forgot to add conversion logic for that field.
 		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
 		protoPolicy := *protoUpdate.Policy
