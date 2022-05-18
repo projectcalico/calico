@@ -204,11 +204,6 @@ cancel_fib:
 skip_fib:
 
 	if (CALI_F_TO_HOST) {
-		/* Packets received from the tunnel should be forwarded */
-               if (CALI_F_FROM_HEP && state->tun_ip != 0 && ctx->fwd.mark != CALI_SKB_MARK_BYPASS_FWD) {
-                       ctx->fwd.mark = CALI_SKB_MARK_BYPASS;
-               }
-
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
 		 */

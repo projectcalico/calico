@@ -536,7 +536,7 @@ func TestNATNodePort(t *testing.T) {
 		recvPkt = res.dataOut
 	})
 
-	expectMark(tcdefs.MarkSeenBypass)
+	expectMark(tcdefs.MarkSeen)
 
 	dumpCTMap(ctMap)
 	ct, err = conntrack.LoadMapMem(ctMap)
