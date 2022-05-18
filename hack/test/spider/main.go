@@ -79,6 +79,12 @@ func loadPackages() []Package {
 	// Load each package.
 	packages := []Package{}
 	for _, s := range splits {
+		if len(s) == 0 {
+			// Sometimes we get empty strings here since the output from go list
+			// isn't actually proper json.
+			continue
+		}
+
 		pkg := Package{}
 		err := json.Unmarshal([]byte(s), &pkg)
 		if err != nil {

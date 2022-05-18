@@ -100,7 +100,7 @@ check-boring-ssl: bin/kube-controllers-linux-amd64
 ###############################################################################
 # Tests
 ###############################################################################
-ifdef SEMAPHORE_GIT_COMMIT_RANGE
+ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
 WHAT=$(shell $(DOCKER_GO_BUILD) go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/)
 else
