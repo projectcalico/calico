@@ -1373,7 +1373,7 @@ func CidrToHex(cidr string) ([]string, error) {
 	}
 	rawIP := cidrParts[0]
 
-	mask, err := strconv.Atoi(cidrParts[1])
+	mask, err := strconv.ParseUint(cidrParts[1], 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert mask %d to int", mask)
 	}
@@ -1389,9 +1389,6 @@ func CidrToHex(cidr string) ([]string, error) {
 	}
 
 	maskBytes := make([]byte, 4)
-	if mask > math.MaxUint32 || mask < 0 {
-		log.Fatal("mask should be between 0 and %v", math.MaxUint32)
-	}
 	binary.LittleEndian.PutUint32(maskBytes, uint32(mask))
 
 	hexStr := fmt.Sprintf("%02x %02x %02x %02x %02x %02x %02x %02x",
