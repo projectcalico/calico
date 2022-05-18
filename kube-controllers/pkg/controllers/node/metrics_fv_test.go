@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv_test
+package node_test
 
 import (
 	"context"
@@ -43,7 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("kube-controllers metrics tests", func() {
+var _ = Describe("kube-controllers metrics FV tests", func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container

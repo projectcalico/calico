@@ -23,7 +23,7 @@ import (
 	fm "github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 )
 
-var _ = Describe("Config", func() {
+var _ = Describe("flannel migration config", func() {
 	// unsetEnv() function that unsets environment variables.
 	// required by flannel migration controller.
 	unsetEnv := func() {
@@ -146,7 +146,6 @@ var _ = Describe("Config", func() {
 	})
 
 	It("with invalid user defined values", func() {
-
 		// Set wrong environment variables
 		setWrongEnv()
 		defer unsetEnv()

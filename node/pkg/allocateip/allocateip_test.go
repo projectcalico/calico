@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	gnet "net"
-	"os"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -27,7 +26,6 @@ import (
 
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
 
-	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -39,7 +37,6 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -202,11 +199,6 @@ func checkTunnelAddressForNode(c client.Interface, tunnelType string, nodeName s
 }
 
 var _ = Describe("FV tests", func() {
-	// Set up logging.
-	log.SetOutput(os.Stdout)
-	log.SetFormatter(&logutils.Formatter{})
-	log.AddHook(&logutils.ContextHook{})
-
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 
@@ -405,11 +397,6 @@ var _ = Describe("FV tests", func() {
 })
 
 var _ = Describe("ensureHostTunnelAddress", func() {
-	log.SetOutput(os.Stdout)
-	// Set log formatting.
-	log.SetFormatter(&logutils.Formatter{})
-	// Install a hook that adds file and line number information.
-	log.AddHook(&logutils.ContextHook{})
 
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
@@ -708,11 +695,6 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 })
 
 var _ = Describe("removeHostTunnelAddress", func() {
-	log.SetOutput(os.Stdout)
-	// Set log formatting.
-	log.SetFormatter(&logutils.Formatter{})
-	// Install a hook that adds file and line number information.
-	log.AddHook(&logutils.ContextHook{})
 
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
@@ -878,11 +860,6 @@ var _ = Describe("removeHostTunnelAddress", func() {
 })
 
 var _ = Describe("Running as daemon", func() {
-	log.SetOutput(os.Stdout)
-	// Set log formatting.
-	log.SetFormatter(&logutils.Formatter{})
-	// Install a hook that adds file and line number information.
-	log.AddHook(&logutils.ContextHook{})
 
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
@@ -978,11 +955,6 @@ var _ = Describe("Running as daemon", func() {
 })
 
 var _ = Describe("determineEnabledPoolCIDRs", func() {
-	log.SetOutput(os.Stdout)
-	// Set log formatting.
-	log.SetFormatter(&logutils.Formatter{})
-	// Install a hook that adds file and line number information.
-	log.AddHook(&logutils.ContextHook{})
 
 	Context("IPIP tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {

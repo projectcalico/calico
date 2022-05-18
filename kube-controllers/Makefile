@@ -100,27 +100,33 @@ check-boring-ssl: bin/kube-controllers-linux-amd64
 ###############################################################################
 # Tests
 ###############################################################################
+ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
+# Determine the tests to run using the test spider tool, which emits a list of impacted packages.
+WHAT=$(shell $(DOCKER_GO_BUILD) go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/)
+else
+# By default, run all tests.
+WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
+endif
+
+# The list of test binaries to build.
+# We pre-build the test binary so that we can run it outside a container and allow it
+# to interact with docker.
+TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
+
 ## Run the unit tests in a container.
-ut:
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'WHAT=$(WHAT) SKIP=$(SKIP) GINKGO_ARGS=$(GINKGO_ARGS) ./run-uts'
+ut fv: $(TEST_BINARIES)
+	KUBE_IMAGE=$(CALICO_BUILD) \
+		   ETCD_IMAGE=$(ETCD_IMAGE) \
+		   CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
+		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
+		   CRDS=$(CURDIR)/../libcalico-go/config/crd \
+		   CERTS_PATH=$(CERTS_PATH) \
+		   ./run-uts $(WHAT)
 
-.PHONY: fv
-## Build and run the FV tests.
-fv: tests/fv/fv.test image
-	@echo Running Go FVs.
-	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) \
-		KUBE_IMAGE=$(CALICO_BUILD) \
-		CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
-		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
-		PRIVATE_KEY=`pwd`/private.key \
-		CRDS=$(CURDIR)/../libcalico-go/config/crd \
-		CERTS_PATH=$(CERTS_PATH) \
-		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
-
-tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
-	# We pre-build the test binary so that we can run it outside a container and allow it
-	# to interact with docker.
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
+# Produce test binaries for each package that needs them.
+# ginkgo doesn't let you produce a single test binary with multiple packages.
+%/ut.test: $(SRC_FILES)
+	$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@
 
 ###############################################################################
 # CI
