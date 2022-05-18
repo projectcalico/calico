@@ -132,7 +132,7 @@ ut fv: $(TEST_BINARIES)
 # CI
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download image-all static-checks ut fv
+ci: clean mod-download image-all static-checks ut
 
 ###############################################################################
 # CD
