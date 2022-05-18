@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -47,15 +48,24 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
+var canTestMarks bool
+
 func init() {
 	logutils.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
+
+	fd := environment.NewFeatureDetector(make(map[string]string))
+	if err := fd.KernelIsAtLeast("5.9.0"); err == nil {
+		canTestMarks = true
+	}
 }
 
 // Constants that are shared with the UT binaries that we build.
@@ -132,7 +142,17 @@ var retvalToStrXDP = map[int]string{
 	resXDP_DROP:    "XDP_DROP",
 }
 
+func expectMark(expect int) {
+	if canTestMarks {
+		ExpectWithOffset(1, skbMark).To(Equal(uint32(expect)),
+			fmt.Sprintf("skbMark 0x%08x should be 0x%08x at %s", skbMark, expect, caller(2)))
+	} else {
+		skbMark = uint32(expect)
+	}
+}
+
 func TestCompileTemplateRun(t *testing.T) {
+	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_workload_ep", &polprog.Rules{}, func(bpfrun bpfProgRunFn) {
 		_, _, _, _, pktBytes, err := testPacketUDPDefault()
 		Expect(err).NotTo(HaveOccurred())
@@ -239,9 +259,13 @@ outer:
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
+	// XXX for now we both path the mark here and include it in the context as
+	// well. This needs to be done for as long as we want to run the tests on
+	// older kernels.
 	bin.PatchSkbMark(skbMark)
 	err = bin.PatchHostTunnelIPv4(node1tunIP)
 	Expect(err).NotTo(HaveOccurred())
+	bin.PatchExtToServiceConnmark(0)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -285,20 +309,64 @@ outer:
 	runFn(bpfFsDir + "/" + section)
 }
 
+func caller(skip int) string {
+	_, f, l, ok := runtime.Caller(skip)
+	if ok {
+		return fmt.Sprintf("%s:%d", f, l)
+	}
+
+	return "<unknown>"
+}
+
 // runBpfTest runs a specific section of the entire bpf program in isolation
 func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
+	xdp := false
 	if strings.Contains(section, "xdp") == false {
 		section = "classifier_" + section
+	} else {
+		xdp = true
 	}
+
+	ctxIn := make([]byte, 18*4)
+	binary.LittleEndian.PutUint32(ctxIn[2*4:3*4], skbMark)
+	if xdp {
+		ctxIn = nil
+	}
+
+	topts := testOpts{}
+
+	for _, o := range opts {
+		o(&topts)
+	}
+
+	cllr := caller(2)
+
 	setupAndRun(t, "debug", section, rules, func(progName string) {
 		t.Run(section, func(_ *testing.T) {
+			if strings.Contains(section, "calico_from_") {
+				ExpectWithOffset(2, skbMark).To(Equal(uint32(0)),
+					fmt.Sprintf("skb mark 0x%08x should be zero at %s", skbMark, cllr))
+			}
+			if !topts.hostNetworked && strings.Contains(section, "calico_to_") {
+				ExpectWithOffset(2, skbMark&uint32(tcdefs.MarkSeen) != 0).
+					To(BeTrue(), fmt.Sprintf("skb mark 0x%08x does not have tcdefs.MarkSeen 0x%08x set before tc at %s",
+						skbMark, tcdefs.MarkSeen, cllr))
+			}
+
 			testFn(func(dataIn []byte) (bpfRunResult, error) {
-				res, err := bpftoolProgRun(progName, dataIn)
+				res, err := bpftoolProgRun(progName, dataIn, ctxIn)
 				log.Debugf("dataIn  = %+v", dataIn)
 				if err == nil {
 					log.Debugf("dataOut = %+v", res.dataOut)
 				}
+
+				if res.Retval != resTC_ACT_SHOT && canTestMarks && strings.Contains(section, "calico_from_") {
+					ExpectWithOffset(3, skbMark&uint32(tcdefs.MarkSeen) != 0).
+						To(BeTrue(), fmt.Sprintf("skb mark 0x%08x does not have tcdefs.MarkSeen 0x%08x set after tc at %s",
+							skbMark, tcdefs.MarkSeen, cllr))
+				}
+
 				return res, err
 			})
 		})
@@ -523,11 +591,11 @@ func (r bpfRunResult) RetvalStrXDP() string {
 	return s
 }
 
-func bpftoolProgRun(progName string, dataIn []byte) (bpfRunResult, error) {
-	return bpftoolProgRunN(progName, dataIn, 1)
+func bpftoolProgRun(progName string, dataIn, ctxIn []byte) (bpfRunResult, error) {
+	return bpftoolProgRunN(progName, dataIn, ctxIn, 1)
 }
 
-func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error) {
+func bpftoolProgRunN(progName string, dataIn, ctxIn []byte, N int) (bpfRunResult, error) {
 	var res bpfRunResult
 
 	tempDir, err := ioutil.TempDir("", "bpftool-data-")
@@ -538,11 +606,23 @@ func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error
 	dataInFname := tempDir + "/data_in"
 	dataOutFname := tempDir + "/data_out"
 
+	ctxInFname := tempDir + "/ctx_in"
+	ctxOutFname := tempDir + "/ctx_out"
+
 	if err := ioutil.WriteFile(dataInFname, dataIn, 0644); err != nil {
 		return res, errors.Errorf("failed to write input data in file: %s", err)
 	}
 
+	if ctxIn != nil {
+		if err := ioutil.WriteFile(ctxInFname, ctxIn, 0644); err != nil {
+			return res, errors.Errorf("failed to write input ctx in file: %s", err)
+		}
+	}
+
 	args := []string{"prog", "run", "pinned", progName, "data_in", dataInFname, "data_out", dataOutFname}
+	if ctxIn != nil {
+		args = append(args, "ctx_in", ctxInFname, "ctx_out", ctxOutFname)
+	}
 	if N > 1 {
 		args = append(args, "repeat", fmt.Sprintf("%d", N))
 	}
@@ -559,6 +639,14 @@ func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error
 	res.dataOut, err = ioutil.ReadFile(dataOutFname)
 	if err != nil {
 		return res, errors.Errorf("failed to read output data from file: %s", err)
+	}
+
+	if ctxIn != nil {
+		ctxOut, err := ioutil.ReadFile(ctxOutFname)
+		if err != nil {
+			return res, errors.Errorf("failed to read output ctx from file: %s", err)
+		}
+		skbMark = binary.LittleEndian.Uint32(ctxOut[2*4 : 3*4])
 	}
 
 	return res, nil
@@ -621,6 +709,7 @@ outer:
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
+	bin.PatchExtToServiceConnmark(0)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -628,9 +717,11 @@ outer:
 	err = bpftoolProgLoadAll(tempObj, bpfFsDir, false, true, maps...)
 	Expect(err).NotTo(HaveOccurred())
 
+	ctxIn := make([]byte, 18*4)
+
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
-			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn)
+			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn, ctxIn)
 			log.Debugf("dataIn  = %+v", dataIn)
 			if err == nil {
 				log.Debugf("dataOut = %+v", res.dataOut)
@@ -649,12 +740,13 @@ outer:
 }
 
 type testOpts struct {
-	subtests  bool
-	logLevel  log.Level
-	extraMaps []bpf.Map
-	xdp       bool
-	psnaStart uint32
-	psnatEnd  uint32
+	subtests      bool
+	logLevel      log.Level
+	extraMaps     []bpf.Map
+	xdp           bool
+	psnaStart     uint32
+	psnatEnd      uint32
+	hostNetworked bool
 }
 
 type testOption func(opts *testOpts)
@@ -691,6 +783,12 @@ func withPSNATPorts(start, end uint16) testOption {
 	return func(o *testOpts) {
 		o.psnaStart = uint32(start)
 		o.psnatEnd = uint32(end)
+	}
+}
+
+func withHostNetworked() testOption {
+	return func(o *testOpts) {
+		o.hostNetworked = true
 	}
 }
 
