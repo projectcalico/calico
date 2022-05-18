@@ -111,7 +111,7 @@ func (p *IntParam) Parse(raw string) (interface{}, error) {
 		err = p.parseFailed(raw, "invalid int")
 		return nil, err
 	}
-	result := int(value)
+	result := int64(value)
 	if result < p.Min {
 		err = p.parseFailed(raw,
 			fmt.Sprintf("value must be at least %v", p.Min))
