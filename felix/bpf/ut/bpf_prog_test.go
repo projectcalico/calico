@@ -147,6 +147,8 @@ func expectMark(expect int) {
 		ExpectWithOffset(1, skbMark).To(Equal(uint32(expect)),
 			fmt.Sprintf("skbMark 0x%08x should be 0x%08x at %s", skbMark, expect, caller(2)))
 	} else {
+		// If we cannot verify the mark, set it to the expected value as the
+		// next stage expects it to be set.
 		skbMark = uint32(expect)
 	}
 }
@@ -331,6 +333,7 @@ func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(
 	ctxIn := make([]byte, 18*4)
 	binary.LittleEndian.PutUint32(ctxIn[2*4:3*4], skbMark)
 	if xdp {
+		// XDP tests cannot take context and would fail.
 		ctxIn = nil
 	}
 
