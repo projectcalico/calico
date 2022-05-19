@@ -57,36 +57,27 @@ func main() {
 
 	ipID := uint16(0)
 	if args["--ip-id"] != nil {
-		id, err := strconv.Atoi(args["--ip-id"].(string))
+		id, err := strconv.ParseUint(args["--ip-id"].(string), 10, 16)
 		if err != nil {
-			log.WithError(err).Fatal("IP id not a number")
-		}
-		if id > math.MaxUint16 || id < 0 {
-			log.Fatal("IP id should be between 0 and 65535")
+			log.WithError(err).Fatal("IP id not a number between 0 and 65535")
 		}
 		ipID = uint16(id)
 	}
 
 	sport := uint16(0)
 	if args["--port-src"] != nil {
-		p, err := strconv.Atoi(args["--port-src"].(string))
+		p, err := strconv.ParseUint(args["--port-src"].(string), 10, 16)
 		if err != nil {
-			log.WithError(err).Fatal("source port not a number")
-		}
-		if p > math.MaxUint16 || p < 0 {
-			log.Fatal("source port should be between 0 and 65535")
+			log.WithError(err).Fatal("source port not a number between 0 and 65535")
 		}
 		sport = uint16(p)
 	}
 
 	dport := uint16(0)
 	if args["--port-dst"] != nil {
-		p, err := strconv.Atoi(args["--port-dst"].(string))
+		p, err := strconv.ParseUint(args["--port-dst"].(string), 10, 16)
 		if err != nil {
-			log.WithError(err).Fatal("destination port not a number")
-		}
-		if p > math.MaxUint16 || p < 0 {
-			log.Fatal("destination port should be between 0 and 65535")
+			log.WithError(err).Fatal("destination port not a number between 0 and 65535")
 		}
 		dport = uint16(p)
 	}
