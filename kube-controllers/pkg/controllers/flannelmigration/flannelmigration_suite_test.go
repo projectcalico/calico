@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config_test
+package flannelmigration_test
 
 import (
 	"testing"
@@ -31,6 +31,6 @@ func init() {
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/config_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Config Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../../report/flannelmigration_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "flannelmigration Suite", []Reporter{junitReporter})
 }
