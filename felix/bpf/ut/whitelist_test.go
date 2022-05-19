@@ -48,7 +48,7 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -56,6 +56,7 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
 
 	// Leaving workload
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
@@ -74,7 +75,7 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 	})
 
 	// Leaving node 1
-	skbMark = tcdefs.MarkSeen // CALI_SKB_MARK_SEEN
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -114,7 +115,7 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	defer func() {
 		err := rtMap.Delete(rtKey)
@@ -125,6 +126,7 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 	ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
 		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
@@ -142,7 +144,7 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
 	})
 
-	skbMark = tcdefs.MarkSeen // CALI_SKB_MARK_SEEN
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -182,7 +184,7 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	defer func() {
 		err := rtMap.Delete(rtKey)
@@ -193,6 +195,7 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 	ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
 		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
@@ -210,7 +213,7 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
 	})
 
-	skbMark = tcdefs.MarkSeen // CALI_SKB_MARK_SEEN
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -265,7 +268,7 @@ func TestWhitelistFromHostExitHost(t *testing.T) {
 		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
 
 	// Leaving node 1
-	skbMark = 0
+	skbMark = tcdefs.MarkSeen
 
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -286,6 +289,7 @@ func TestWhitelistFromHostExitHost(t *testing.T) {
 	})
 
 	// Return
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		respPkt := udpResponseRaw(pktBytes)
 		res, err := bpfrun(respPkt)
