@@ -117,7 +117,7 @@ bin_allow_list_patterns=(
   zmore
 
   # Needed for eBPF mode to mount the cgroupv2 filesystem on the host.
-  nsenter
+  mountns
 
   # Used by this script.
   '/find$'

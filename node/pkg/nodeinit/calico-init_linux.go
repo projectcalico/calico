@@ -111,12 +111,7 @@ func ensureCgroupV2Filesystem() error {
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
 	logrus.Info("Cgroup2 filesystem is not mounted.  Trying to mount it...")
 
-	/*mountCmd := exec.Command(
-	"nsenter", "--cgroup=/initproc/ns/cgroup", "--mount=/initproc/ns/mnt",
-	"mount", "-t", "cgroup2", "none", bpf.CgroupV2Path)*/
-
-	mountCmd := exec.Command("mountns", cgroupRootPath)
-
+	mountCmd := exec.Command("mountns")
 	out, err := mountCmd.Output()
 	if err != nil {
 		logrus.Errorf("Mouting cgroup2 fs failed. output: %v", out)

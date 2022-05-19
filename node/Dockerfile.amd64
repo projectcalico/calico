@@ -198,13 +198,18 @@ RUN chgrp -R 0 /etc/calico && \
     chmod -R g=u /etc/calico
 
 COPY --from=bpftool /bpftool /bin
-COPY --from=centos /usr/bin/nsenter /usr/bin/nsenter
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-amd64 /bin/calico-node
 
 # Set the suid bit on calico-node
 RUN chmod u+s /bin/calico-node
+
+# Copy in the moutnns binary
+COPY dist/bin/mountns /bin/mountns
+
+# Set the suid bit on mountns
+RUN chmod u+s /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
