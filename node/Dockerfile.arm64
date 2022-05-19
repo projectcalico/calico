@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2022 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -191,6 +191,12 @@ COPY --from=bpftool /bpftool /bin
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-arm64 /bin/calico-node
+
+# Copy in the moutnns binary
+COPY dist/bin/mountns /bin/mountns
+
+# Set the suid bit on mountns
+RUN chmod u+s /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
