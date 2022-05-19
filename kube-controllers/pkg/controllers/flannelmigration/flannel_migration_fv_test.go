@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv_test
+package flannelmigration_test
 
 import (
 	"context"
@@ -20,9 +20,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -163,47 +161,6 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 		etcd.Stop()
 	})
 
-	Context("Basic FV tests", func() {
-		BeforeEach(func() {
-			startController()
-		})
-		AfterEach(func() {
-			stopController()
-		})
-
-		It("should initialize the datastore at start-of-day", func() {
-			var info *api.ClusterInformation
-			Eventually(func() *api.ClusterInformation {
-				info, _ = calicoClient.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
-				return info
-			}, 10*time.Second).ShouldNot(BeNil())
-
-			Expect(info.Spec.ClusterGUID).To(MatchRegexp("^[a-f0-9]{32}$"))
-			Expect(info.Spec.ClusterType).To(Equal("k8s,kdd"))
-			Expect(*info.Spec.DatastoreReady).To(BeTrue())
-		})
-
-		Context("Healthcheck FV tests", func() {
-			It("should pass health check", func() {
-				By("Waiting for an initial readiness report")
-				Eventually(func() []byte {
-					cmd := exec.Command("docker", "exec", migrationController.Name, "/usr/bin/check-status", "-r")
-					stdoutStderr, _ := cmd.CombinedOutput()
-
-					return stdoutStderr
-				}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
-
-				By("Waiting for the controller to be ready")
-				Eventually(func() string {
-					cmd := exec.Command("docker", "exec", migrationController.Name, "/usr/bin/check-status", "-r")
-					stdoutStderr, _ := cmd.CombinedOutput()
-
-					return strings.TrimSpace(string(stdoutStderr))
-				}, 20*time.Second, 500*time.Millisecond).Should(Equal("Ready"))
-			})
-		})
-	})
-
 	Context("Should migrate FV tests", func() {
 		AfterEach(func() {
 			migrationController.Stop()
@@ -342,12 +299,26 @@ func validateCalicoIPAM(fc *testutils.FlannelCluster, client client.Interface, b
 	Expect(defaultPool.Spec.NATOutgoing).To(Equal(true))
 	Expect(defaultPool.Spec.VXLANMode).To(Equal(api.VXLANMode(api.VXLANModeAlways)))
 
-	// Check felix configuration.
-	defaultConfig, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
-	Expect(err).ShouldNot(HaveOccurred())
-	Expect(*defaultConfig.Spec.VXLANVNI).To(Equal(1))
-	Expect(*defaultConfig.Spec.VXLANPort).To(Equal(8472))
-	Expect(*defaultConfig.Spec.VXLANMTU).To(Equal(8951))
+	// Check felix configuration. This might take a second or two.
+	Eventually(func() error {
+		defaultConfig, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if defaultConfig.Spec.VXLANEnabled != nil {
+			return fmt.Errorf("VXLAN is explicitly set")
+		}
+		if *defaultConfig.Spec.VXLANVNI != 1 {
+			return fmt.Errorf("Wrong VXLAN VNI: %d", *defaultConfig.Spec.VXLANVNI)
+		}
+		if *defaultConfig.Spec.VXLANPort != 8472 {
+			return fmt.Errorf("Wrong VXLAN port: %d", *defaultConfig.Spec.VXLANPort)
+		}
+		if *defaultConfig.Spec.VXLANMTU != 8951 {
+			return fmt.Errorf("Wrong VXLAN MTU: %d", *defaultConfig.Spec.VXLANMTU)
+		}
+		return nil
+	}, 5*time.Second).ShouldNot(HaveOccurred())
 
 	// Check each node.
 	for nodeName, fn := range fc.FlannelNodes {

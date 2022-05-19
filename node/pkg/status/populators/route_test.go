@@ -102,7 +102,7 @@ var _ = Describe("Test BIRD BGP routes Scanner", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check we can print peers.
-		printRoutes(routes)
+		printRoutes(routes, GinkgoWriter)
 	})
 
 	It("should be able to scan routes with multiple blackhole and unreachable routes", func() {
@@ -191,7 +191,7 @@ var _ = Describe("Test BIRD BGP routes Scanner", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check we can print peers.
-		printRoutes(routes)
+		printRoutes(routes, GinkgoWriter)
 	})
 
 	DescribeTable("Convert to v3 object",

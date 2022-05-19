@@ -90,9 +90,9 @@ blocks:
   dependencies: []
   task:
     jobs:
-    - name: "Prerequisites"
+    - name: "Check generated files"
       commands:
-      - make gen-semaphore-yaml
+      - make generate
       - make check-dirty
 
 - name: "API"
@@ -288,6 +288,21 @@ blocks:
       - cache restore go-mod-cache
       - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
       - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - |-
+        if [ -s /etc/docker/daemon.json  ]; then
+        sudo sed -i '$d' /etc/docker/daemon.json && sudo sed -i '$s/$/,/' /etc/docker/daemon.json && sudo bash -c ' cat >> /etc/docker/daemon.json << EOF
+          "ipv6": true,
+          "fixed-cidr-v6": "2001:db8:1::/64"
+        }
+        EOF
+        ' ; else sudo bash -c ' cat > /etc/docker/daemon.json << EOF
+        {
+          "ipv6": true,
+          "fixed-cidr-v6": "2001:db8:1::/64"
+        }
+        EOF
+        ' ; fi
+      - sudo systemctl restart docker
       - docker load -i /tmp/calico-felix.tar
       - rm /tmp/calico-felix.tar
       - touch bin/*

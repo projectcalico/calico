@@ -56,7 +56,7 @@ function DownloadFiles()
 function PrepareKubernetes()
 {
     DownloadFiles
-    ipmo C:\k\hns.psm1
+    ipmo -DisableNameChecking C:\k\hns.psm1
     InstallK8sBinaries
 
     # Prepull and tag the pause image for docker
@@ -161,16 +161,36 @@ function GetBackendType()
 
     # Auto detect backend type
     if ($Datastore -EQ "kubernetes") {
-        $encap=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
+        $encap=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}'
         if ($encap -EQ "true") {
             throw "{{site.prodname}} on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
         }
 
-        $encap=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
+        # Check FelixConfig first.
+        $encap=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}'
         if ($encap -EQ "true") {
             return ("vxlan")
+        } elseif ($encap -EQ "false") {
+            return ("bgp")
+        } else {
+           # If any IPPool has IPIP enabled, we need to exit the installer. The
+           # IPIP-enabled might not be assigned to this Windows node but we can't
+           # verify that easily by looking at the nodeSelector.
+           $ipipModes = c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get ippools.crd.projectcalico.org -o jsonpath='{.items[*].spec.ipipMode}'
+           $ipipEnabled = $ipipModes | Select-String -pattern '(Always)|(CrossSubnet)'
+           if ($ipipEnabled -NE $null) {
+               throw "Failed to auto detect backend type. IPIP is not supported on Windows nodes but found IP pools with IPIP enabled. Rerun install script with the CalicoBackend param provided"
+           }
+
+           # If FelixConfig does not have vxlanEnabled then check the IPPools and see if any of them have enabled vxlan.
+           $vxlanModes=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get ippools.crd.projectcalico.org -o jsonpath='{.items[*].spec.vxlanMode}'
+           $vxlanEnabled = $vxlanModes | Select-String -pattern '(Always)|(CrossSubnet)'
+           if ($vxlanEnabled -NE $null) {
+               return ("vxlan")
+           } else {
+               return ("bgp")
+           }
         }
-        return ("bgp")
     } else {
         $CalicoBackend=c:\k\kubectl.exe --kubeconfig="$KubeConfigPath" get configmap calico-config -n $CalicoNamespace -o jsonpath='{.data.calico_backend}'
         if ($CalicoBackend -EQ "vxlan") {
@@ -372,8 +392,8 @@ if (!(Test-Path $helperv2))
 {
     Invoke-WebRequest https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.v2.psm1 -O $BaseDir\helper.v2.psm1
 }
-ipmo -force $helper
-ipmo -force $helperv2
+ipmo -force -DisableNameChecking $helper
+ipmo -force -DisableNameChecking $helperv2
 
 if (!(Test-Path $CalicoZip))
 {

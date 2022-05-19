@@ -1,42 +1,25 @@
 ---
-# Source: crds/operator.tigera.io_tigerastatuses_crd.yaml
+# Source: crds/operator.tigera.io_apiservers_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
-  name: tigerastatuses.operator.tigera.io
+  name: apiservers.operator.tigera.io
 spec:
   group: operator.tigera.io
   names:
-    kind: TigeraStatus
-    listKind: TigeraStatusList
-    plural: tigerastatuses
-    singular: tigerastatus
+    kind: APIServer
+    listKind: APIServerList
+    plural: apiservers
+    singular: apiserver
   scope: Cluster
   versions:
-  - additionalPrinterColumns:
-    - description: Whether the component running and stable.
-      jsonPath: .status.conditions[?(@.type=='Available')].status
-      name: Available
-      type: string
-    - description: Whether the component is processing changes.
-      jsonPath: .status.conditions[?(@.type=='Progressing')].status
-      name: Progressing
-      type: string
-    - description: Whether the component is degraded.
-      jsonPath: .status.conditions[?(@.type=='Degraded')].status
-      name: Degraded
-      type: string
-    - description: The time the component's Available status last changed.
-      jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
-      name: Since
-      type: date
-    name: v1
+  - name: v1
     schema:
       openAPIV3Schema:
-        description: TigeraStatus represents the most recently observed status for
-          Calico or a Calico Enterprise functional area.
+        description: APIServer installs the Tigera API server and related resources.
+          At most one instance of this resource is supported. It must be named "tigera-secure".
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -51,47 +34,85 @@ spec:
           metadata:
             type: object
           spec:
-            description: TigeraStatusSpec defines the desired state of TigeraStatus
+            description: Specification of the desired state for the Tigera API server.
             type: object
           status:
-            description: TigeraStatusStatus defines the observed state of TigeraStatus
+            description: Most recently observed status for the Tigera API server.
             properties:
-              conditions:
-                description: Conditions represents the latest observed set of conditions
-                  for this component. A component may be one or more of Available,
-                  Progressing, or Degraded.
+              state:
+                description: State provides user-readable status.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: crds/operator.tigera.io_imagesets_crd.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.3.0
+  name: imagesets.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: ImageSet
+    listKind: ImageSetList
+    plural: imagesets
+    singular: imageset
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: ImageSet is used to specify image digests for the images that
+          the operator deploys. The name of the ImageSet is expected to be in the
+          format `<variang>-<release>`. The `variant` used is `enterprise` if the
+          InstallationSpec Variant is `TigeraSecureEnterprise` otherwise it is `calico`.
+          The `release` must match the version of the variant that the operator is
+          built to deploy, this version can be obtained by passing the `--version`
+          flag to the operator binary.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ImageSetSpec defines the desired state of ImageSet.
+            properties:
+              images:
+                description: Images is the list of images to use digests. All images
+                  that the operator will deploy must be specified.
                 items:
-                  description: TigeraStatusCondition represents a condition attached
-                    to a particular component.
                   properties:
-                    lastTransitionTime:
-                      description: The timestamp representing the start time for the
-                        current status.
-                      format: date-time
+                    digest:
+                      description: Digest is the image identifier that will be used
+                        for the Image. The field should not include a leading `@`
+                        and must be prefixed with `sha256:`.
                       type: string
-                    message:
-                      description: Optionally, a detailed message providing additional
-                        context.
-                      type: string
-                    reason:
-                      description: A brief reason explaining the condition.
-                      type: string
-                    status:
-                      description: The status of the condition. May be True, False,
-                        or Unknown.
-                      type: string
-                    type:
-                      description: The type of condition. May be Available, Progressing,
-                        or Degraded.
+                    image:
+                      description: Image is an image that the operator deploys and
+                        instead of using the built in tag the operator will use the
+                        Digest for the image identifier. The value should be the image
+                        name without registry or tag or digest. For the image `docker.io/calico/node:v3.17.1`
+                        it should be represented as `calico/node`
                       type: string
                   required:
-                  - lastTransitionTime
-                  - status
-                  - type
+                  - digest
+                  - image
                   type: object
                 type: array
-            required:
-            - conditions
             type: object
         type: object
     served: true
@@ -1670,27 +1691,44 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/operator.tigera.io_apiservers_crd.yaml
+# Source: crds/operator.tigera.io_tigerastatuses_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
-  name: apiservers.operator.tigera.io
+  name: tigerastatuses.operator.tigera.io
 spec:
   group: operator.tigera.io
   names:
-    kind: APIServer
-    listKind: APIServerList
-    plural: apiservers
-    singular: apiserver
+    kind: TigeraStatus
+    listKind: TigeraStatusList
+    plural: tigerastatuses
+    singular: tigerastatus
   scope: Cluster
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - description: Whether the component running and stable.
+      jsonPath: .status.conditions[?(@.type=='Available')].status
+      name: Available
+      type: string
+    - description: Whether the component is processing changes.
+      jsonPath: .status.conditions[?(@.type=='Progressing')].status
+      name: Progressing
+      type: string
+    - description: Whether the component is degraded.
+      jsonPath: .status.conditions[?(@.type=='Degraded')].status
+      name: Degraded
+      type: string
+    - description: The time the component's Available status last changed.
+      jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
+      name: Since
+      type: date
+    name: v1
     schema:
       openAPIV3Schema:
-        description: APIServer installs the Tigera API server and related resources.
-          At most one instance of this resource is supported. It must be named "tigera-secure".
+        description: TigeraStatus represents the most recently observed status for
+          Calico or a Calico Enterprise functional area.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -1705,85 +1743,47 @@ spec:
           metadata:
             type: object
           spec:
-            description: Specification of the desired state for the Tigera API server.
+            description: TigeraStatusSpec defines the desired state of TigeraStatus
             type: object
           status:
-            description: Most recently observed status for the Tigera API server.
+            description: TigeraStatusStatus defines the observed state of TigeraStatus
             properties:
-              state:
-                description: State provides user-readable status.
-                type: string
-            type: object
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
----
-# Source: crds/operator.tigera.io_imagesets_crd.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
-  name: imagesets.operator.tigera.io
-spec:
-  group: operator.tigera.io
-  names:
-    kind: ImageSet
-    listKind: ImageSetList
-    plural: imagesets
-    singular: imageset
-  scope: Cluster
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        description: ImageSet is used to specify image digests for the images that
-          the operator deploys. The name of the ImageSet is expected to be in the
-          format `<variang>-<release>`. The `variant` used is `enterprise` if the
-          InstallationSpec Variant is `TigeraSecureEnterprise` otherwise it is `calico`.
-          The `release` must match the version of the variant that the operator is
-          built to deploy, this version can be obtained by passing the `--version`
-          flag to the operator binary.
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: ImageSetSpec defines the desired state of ImageSet.
-            properties:
-              images:
-                description: Images is the list of images to use digests. All images
-                  that the operator will deploy must be specified.
+              conditions:
+                description: Conditions represents the latest observed set of conditions
+                  for this component. A component may be one or more of Available,
+                  Progressing, or Degraded.
                 items:
+                  description: TigeraStatusCondition represents a condition attached
+                    to a particular component.
                   properties:
-                    digest:
-                      description: Digest is the image identifier that will be used
-                        for the Image. The field should not include a leading `@`
-                        and must be prefixed with `sha256:`.
+                    lastTransitionTime:
+                      description: The timestamp representing the start time for the
+                        current status.
+                      format: date-time
                       type: string
-                    image:
-                      description: Image is an image that the operator deploys and
-                        instead of using the built in tag the operator will use the
-                        Digest for the image identifier. The value should be the image
-                        name without registry or tag or digest. For the image `docker.io/calico/node:v3.17.1`
-                        it should be represented as `calico/node`
+                    message:
+                      description: Optionally, a detailed message providing additional
+                        context.
+                      type: string
+                    reason:
+                      description: A brief reason explaining the condition.
+                      type: string
+                    status:
+                      description: The status of the condition. May be True, False,
+                        or Unknown.
+                      type: string
+                    type:
+                      description: The type of condition. May be Available, Progressing,
+                        or Degraded.
                       type: string
                   required:
-                  - digest
-                  - image
+                  - lastTransitionTime
+                  - status
+                  - type
                   type: object
                 type: array
+            required:
+            - conditions
             type: object
         type: object
     served: true
@@ -1977,6 +1977,513 @@ status:
   conditions: []
   storedVersions: []
 ---
+# Source: crds/calico/crd.projectcalico.org_bgppeers.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: bgppeers.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: BGPPeer
+    listKind: BGPPeerList
+    plural: bgppeers
+    singular: bgppeer
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: BGPPeerSpec contains the specification for a BGPPeer resource.
+            properties:
+              asNumber:
+                description: The AS Number of the peer.
+                format: int32
+                type: integer
+              keepOriginalNextHop:
+                description: Option to keep the original nexthop field when routes
+                  are sent to a BGP Peer. Setting "true" configures the selected BGP
+                  Peers node to use the "next hop keep;" instead of "next hop self;"(default)
+                  in the specific branch of the Node on "bird.cfg".
+                type: boolean
+              maxRestartTime:
+                description: Time to allow for software restart.  When specified,
+                  this is configured as the graceful restart timeout.  When not specified,
+                  the BIRD default of 120s is used.
+                type: string
+              node:
+                description: The node name identifying the Calico node instance that
+                  is targeted by this peer. If this is not set, and no nodeSelector
+                  is specified, then this BGP peer selects all nodes in the cluster.
+                type: string
+              nodeSelector:
+                description: Selector for the nodes that should have this peering.  When
+                  this is set, the Node field must be empty.
+                type: string
+              numAllowedLocalASNumbers:
+                description: Maximum number of local AS numbers that are allowed in
+                  the AS path for received routes. This removes BGP loop prevention
+                  and should only be used if absolutely necesssary.
+                format: int32
+                type: integer
+              password:
+                description: Optional BGP password for the peerings generated by this
+                  BGPPeer resource.
+                properties:
+                  secretKeyRef:
+                    description: Selects a key of a secret in the node pod's namespace.
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be
+                          a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be
+                          defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                type: object
+              peerIP:
+                description: The IP address of the peer followed by an optional port
+                  number to peer with. If port number is given, format should be `[<IPv6>]:port`
+                  or `<IPv4>:<port>` for IPv4. If optional port number is not set,
+                  and this peer IP and ASNumber belongs to a calico/node with ListenPort
+                  set in BGPConfiguration, then we use that port to peer.
+                type: string
+              peerSelector:
+                description: Selector for the remote nodes to peer with.  When this
+                  is set, the PeerIP and ASNumber fields must be empty.  For each
+                  peering between the local node and selected remote nodes, we configure
+                  an IPv4 peering if both ends have NodeBGPSpec.IPv4Address specified,
+                  and an IPv6 peering if both ends have NodeBGPSpec.IPv6Address specified.  The
+                  remote AS number comes from the remote node's NodeBGPSpec.ASNumber,
+                  or the global default if that is not set.
+                type: string
+              sourceAddress:
+                description: Specifies whether and how to configure a source address
+                  for the peerings generated by this BGPPeer resource.  Default value
+                  "UseNodeIP" means to configure the node IP as the source address.  "None"
+                  means not to configure a source address.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+# Source: crds/calico/crd.projectcalico.org_blockaffinities.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: blockaffinities.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: BlockAffinity
+    listKind: BlockAffinityList
+    plural: blockaffinities
+    singular: blockaffinity
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: BlockAffinitySpec contains the specification for a BlockAffinity
+              resource.
+            properties:
+              cidr:
+                type: string
+              deleted:
+                description: Deleted indicates that this block affinity is being deleted.
+                  This field is a string for compatibility with older releases that
+                  mistakenly treat this field as a string.
+                type: string
+              node:
+                type: string
+              state:
+                type: string
+            required:
+            - cidr
+            - deleted
+            - node
+            - state
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+# Source: crds/calico/crd.projectcalico.org_caliconodestatuses.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: (devel)
+  creationTimestamp: null
+  name: caliconodestatuses.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: CalicoNodeStatus
+    listKind: CalicoNodeStatusList
+    plural: caliconodestatuses
+    singular: caliconodestatus
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: CalicoNodeStatusSpec contains the specification for a CalicoNodeStatus
+              resource.
+            properties:
+              classes:
+                description: Classes declares the types of information to monitor
+                  for this calico/node, and allows for selective status reporting
+                  about certain subsets of information.
+                items:
+                  type: string
+                type: array
+              node:
+                description: The node name identifies the Calico node instance for
+                  node status.
+                type: string
+              updatePeriodSeconds:
+                description: UpdatePeriodSeconds is the period at which CalicoNodeStatus
+                  should be updated. Set to 0 to disable CalicoNodeStatus refresh.
+                  Maximum update period is one day.
+                format: int32
+                type: integer
+            type: object
+          status:
+            description: CalicoNodeStatusStatus defines the observed state of CalicoNodeStatus.
+              No validation needed for status since it is updated by Calico.
+            properties:
+              agent:
+                description: Agent holds agent status on the node.
+                properties:
+                  birdV4:
+                    description: BIRDV4 represents the latest observed status of bird4.
+                    properties:
+                      lastBootTime:
+                        description: LastBootTime holds the value of lastBootTime
+                          from bird.ctl output.
+                        type: string
+                      lastReconfigurationTime:
+                        description: LastReconfigurationTime holds the value of lastReconfigTime
+                          from bird.ctl output.
+                        type: string
+                      routerID:
+                        description: Router ID used by bird.
+                        type: string
+                      state:
+                        description: The state of the BGP Daemon.
+                        type: string
+                      version:
+                        description: Version of the BGP daemon
+                        type: string
+                    type: object
+                  birdV6:
+                    description: BIRDV6 represents the latest observed status of bird6.
+                    properties:
+                      lastBootTime:
+                        description: LastBootTime holds the value of lastBootTime
+                          from bird.ctl output.
+                        type: string
+                      lastReconfigurationTime:
+                        description: LastReconfigurationTime holds the value of lastReconfigTime
+                          from bird.ctl output.
+                        type: string
+                      routerID:
+                        description: Router ID used by bird.
+                        type: string
+                      state:
+                        description: The state of the BGP Daemon.
+                        type: string
+                      version:
+                        description: Version of the BGP daemon
+                        type: string
+                    type: object
+                type: object
+              bgp:
+                description: BGP holds node BGP status.
+                properties:
+                  numberEstablishedV4:
+                    description: The total number of IPv4 established bgp sessions.
+                    type: integer
+                  numberEstablishedV6:
+                    description: The total number of IPv6 established bgp sessions.
+                    type: integer
+                  numberNotEstablishedV4:
+                    description: The total number of IPv4 non-established bgp sessions.
+                    type: integer
+                  numberNotEstablishedV6:
+                    description: The total number of IPv6 non-established bgp sessions.
+                    type: integer
+                  peersV4:
+                    description: PeersV4 represents IPv4 BGP peers status on the node.
+                    items:
+                      description: CalicoNodePeer contains the status of BGP peers
+                        on the node.
+                      properties:
+                        peerIP:
+                          description: IP address of the peer whose condition we are
+                            reporting.
+                          type: string
+                        since:
+                          description: Since the state or reason last changed.
+                          type: string
+                        state:
+                          description: State is the BGP session state.
+                          type: string
+                        type:
+                          description: Type indicates whether this peer is configured
+                            via the node-to-node mesh, or via en explicit global or
+                            per-node BGPPeer object.
+                          type: string
+                      type: object
+                    type: array
+                  peersV6:
+                    description: PeersV6 represents IPv6 BGP peers status on the node.
+                    items:
+                      description: CalicoNodePeer contains the status of BGP peers
+                        on the node.
+                      properties:
+                        peerIP:
+                          description: IP address of the peer whose condition we are
+                            reporting.
+                          type: string
+                        since:
+                          description: Since the state or reason last changed.
+                          type: string
+                        state:
+                          description: State is the BGP session state.
+                          type: string
+                        type:
+                          description: Type indicates whether this peer is configured
+                            via the node-to-node mesh, or via en explicit global or
+                            per-node BGPPeer object.
+                          type: string
+                      type: object
+                    type: array
+                required:
+                - numberEstablishedV4
+                - numberEstablishedV6
+                - numberNotEstablishedV4
+                - numberNotEstablishedV6
+                type: object
+              lastUpdated:
+                description: LastUpdated is a timestamp representing the server time
+                  when CalicoNodeStatus object last updated. It is represented in
+                  RFC3339 form and is in UTC.
+                format: date-time
+                nullable: true
+                type: string
+              routes:
+                description: Routes reports routes known to the Calico BGP daemon
+                  on the node.
+                properties:
+                  routesV4:
+                    description: RoutesV4 represents IPv4 routes on the node.
+                    items:
+                      description: CalicoNodeRoute contains the status of BGP routes
+                        on the node.
+                      properties:
+                        destination:
+                          description: Destination of the route.
+                          type: string
+                        gateway:
+                          description: Gateway for the destination.
+                          type: string
+                        interface:
+                          description: Interface for the destination
+                          type: string
+                        learnedFrom:
+                          description: LearnedFrom contains information regarding
+                            where this route originated.
+                          properties:
+                            peerIP:
+                              description: If sourceType is NodeMesh or BGPPeer, IP
+                                address of the router that sent us this route.
+                              type: string
+                            sourceType:
+                              description: Type of the source where a route is learned
+                                from.
+                              type: string
+                          type: object
+                        type:
+                          description: Type indicates if the route is being used for
+                            forwarding or not.
+                          type: string
+                      type: object
+                    type: array
+                  routesV6:
+                    description: RoutesV6 represents IPv6 routes on the node.
+                    items:
+                      description: CalicoNodeRoute contains the status of BGP routes
+                        on the node.
+                      properties:
+                        destination:
+                          description: Destination of the route.
+                          type: string
+                        gateway:
+                          description: Gateway for the destination.
+                          type: string
+                        interface:
+                          description: Interface for the destination
+                          type: string
+                        learnedFrom:
+                          description: LearnedFrom contains information regarding
+                            where this route originated.
+                          properties:
+                            peerIP:
+                              description: If sourceType is NodeMesh or BGPPeer, IP
+                                address of the router that sent us this route.
+                              type: string
+                            sourceType:
+                              description: Type of the source where a route is learned
+                                from.
+                              type: string
+                          type: object
+                        type:
+                          description: Type indicates if the route is being used for
+                            forwarding or not.
+                          type: string
+                      type: object
+                    type: array
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+# Source: crds/calico/crd.projectcalico.org_clusterinformations.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clusterinformations.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: ClusterInformation
+    listKind: ClusterInformationList
+    plural: clusterinformations
+    singular: clusterinformation
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: ClusterInformation contains the cluster specific information.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterInformationSpec contains the values of describing
+              the cluster.
+            properties:
+              calicoVersion:
+                description: CalicoVersion is the version of Calico that the cluster
+                  is running
+                type: string
+              clusterGUID:
+                description: ClusterGUID is the GUID of the cluster
+                type: string
+              clusterType:
+                description: ClusterType describes the type of the cluster
+                type: string
+              datastoreReady:
+                description: DatastoreReady is used during significant datastore migrations
+                  to signal to components such as Felix that it should wait before
+                  accessing the datastore.
+                type: boolean
+              variant:
+                description: Variant declares which variant of Calico should be active.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
 # Source: crds/calico/crd.projectcalico.org_felixconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -2066,7 +2573,7 @@ spec:
                 description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
                   mark that is set on connections from an external client to a local
                   service. This mark allows us to control how packets of that connection
-                  are routed within the host and how is routing intepreted by RPF
+                  are routed within the host and how is routing interpreted by RPF
                   check. [Default: 0]'
                 type: integer
               bpfExternalServiceMode:
@@ -2602,8 +3109,12 @@ spec:
                   this based on the existing IP pools. [Default: nil (unset)]'
                 type: boolean
               vxlanMTU:
-                description: 'VXLANMTU is the MTU to set on the tunnel device. See
-                  Configuring MTU [Default: 1440]'
+                description: 'VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel
+                  device. See Configuring MTU [Default: 1410]'
+                type: integer
+              vxlanMTUV6:
+                description: 'VXLANMTUV6 is the MTU to set on the IPv6 VXLAN tunnel
+                  device. See Configuring MTU [Default: 1390]'
                 type: integer
               vxlanPort:
                 type: integer
@@ -2664,21 +3175,18 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_ipreservations.yaml
+# Source: crds/calico/crd.projectcalico.org_globalnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: (devel)
-  creationTimestamp: null
-  name: ipreservations.crd.projectcalico.org
+  name: globalnetworkpolicies.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
   names:
-    kind: IPReservation
-    listKind: IPReservationList
-    plural: ipreservations
-    singular: ipreservation
+    kind: GlobalNetworkPolicy
+    listKind: GlobalNetworkPolicyList
+    plural: globalnetworkpolicies
+    singular: globalnetworkpolicy
   scope: Cluster
   versions:
   - name: v1
@@ -2698,13 +3206,817 @@ spec:
           metadata:
             type: object
           spec:
-            description: IPReservationSpec contains the specification for an IPReservation
-              resource.
             properties:
-              reservedCIDRs:
-                description: ReservedCIDRs is a list of CIDRs and/or IP addresses
-                  that Calico IPAM will exclude from new allocations.
+              applyOnForward:
+                description: ApplyOnForward indicates to apply the rules in this policy
+                  on forward traffic.
+                type: boolean
+              doNotTrack:
+                description: DoNotTrack indicates whether packets matched by the rules
+                  in this policy should go through the data plane's connection tracking,
+                  such as Linux conntrack.  If True, the rules in this policy are
+                  applied before any data plane connection tracking, and packets allowed
+                  by this policy are marked as not to be tracked.
+                type: boolean
+              egress:
+                description: The ordered set of egress rules.  Each rule contains
+                  a set of packet match criteria and a corresponding action to apply.
                 items:
+                  description: "A Rule encapsulates a set of match criteria and an
+                    action.  Both selector-based security Policy and security Profiles
+                    reference rules - separated out as a list of rules for both ingress
+                    and egress packet matching. \n Each positive match criteria has
+                    a negated version, prefixed with \"Not\". All the match criteria
+                    within a rule must be satisfied for a packet to match. A single
+                    rule can contain the positive and negative version of a match
+                    and both must be satisfied for the rule to match."
+                  properties:
+                    action:
+                      type: string
+                    destination:
+                      description: Destination contains the match criteria that apply
+                        to destination entity.
+                      properties:
+                        namespaceSelector:
+                          description: "NamespaceSelector is an optional field that
+                            contains a selector expression. Only traffic that originates
+                            from (or terminates at) endpoints within the selected
+                            namespaces will be matched. When both NamespaceSelector
+                            and another selector are defined on the same rule, then
+                            only workload endpoints that are matched by both selectors
+                            will be selected by the rule. \n For NetworkPolicy, an
+                            empty NamespaceSelector implies that the Selector is limited
+                            to selecting only workload endpoints in the same namespace
+                            as the NetworkPolicy. \n For NetworkPolicy, `global()`
+                            NamespaceSelector implies that the Selector is limited
+                            to selecting only GlobalNetworkSet or HostEndpoint. \n
+                            For GlobalNetworkPolicy, an empty NamespaceSelector implies
+                            the Selector applies to workload endpoints across all
+                            namespaces."
+                          type: string
+                        nets:
+                          description: Nets is an optional field that restricts the
+                            rule to only apply to traffic that originates from (or
+                            terminates at) IP addresses in any of the given subnets.
+                          items:
+                            type: string
+                          type: array
+                        notNets:
+                          description: NotNets is the negated version of the Nets
+                            field.
+                          items:
+                            type: string
+                          type: array
+                        notPorts:
+                          description: NotPorts is the negated version of the Ports
+                            field. Since only some protocols have ports, if any ports
+                            are specified it requires the Protocol match in the Rule
+                            to be set to "TCP" or "UDP".
+                          items:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^.*
+                            x-kubernetes-int-or-string: true
+                          type: array
+                        notSelector:
+                          description: NotSelector is the negated version of the Selector
+                            field.  See Selector field for subtleties with negated
+                            selectors.
+                          type: string
+                        ports:
+                          description: "Ports is an optional field that restricts
+                            the rule to only apply to traffic that has a source (destination)
+                            port that matches one of these ranges/values. This value
+                            is a list of integers or strings that represent ranges
+                            of ports. \n Since only some protocols have ports, if
+                            any ports are specified it requires the Protocol match
+                            in the Rule to be set to \"TCP\" or \"UDP\"."
+                          items:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^.*
+                            x-kubernetes-int-or-string: true
+                          type: array
+                        selector:
+                          description: "Selector is an optional field that contains
+                            a selector expression (see Policy for sample syntax).
+                            \ Only traffic that originates from (terminates at) endpoints
+                            matching the selector will be matched. \n Note that: in
+                            addition to the negated version of the Selector (see NotSelector
+                            below), the selector expression syntax itself supports
+                            negation.  The two types of negation are subtly different.
+                            One negates the set of matched endpoints, the other negates
+                            the whole match: \n \tSelector = \"!has(my_label)\" matches
+                            packets that are from other Calico-controlled \tendpoints
+                            that do not have the label \"my_label\". \n \tNotSelector
+                            = \"has(my_label)\" matches packets that are not from
+                            Calico-controlled \tendpoints that do have the label \"my_label\".
+                            \n The effect is that the latter will accept packets from
+                            non-Calico sources whereas the former is limited to packets
+                            from Calico-controlled endpoints."
+                          type: string
+                        serviceAccounts:
+                          description: ServiceAccounts is an optional field that restricts
+                            the rule to only apply to traffic that originates from
+                            (or terminates at) a pod running as a matching service
+                            account.
+                          properties:
+                            names:
+                              description: Names is an optional field that restricts
+                                the rule to only apply to traffic that originates
+                                from (or terminates at) a pod running as a service
+                                account whose name is in the list.
+                              items:
+                                type: string
+                              type: array
+                            selector:
+                              description: Selector is an optional field that restricts
+                                the rule to only apply to traffic that originates
+                                from (or terminates at) a pod running as a service
+                                account that matches the given label selector. If
+                                both Names and Selector are specified then they are
+                                AND'ed.
+                              type: string
+                          type: object
+                        services:
+                          description: "Services is an optional field that contains
+                            options for matching Kubernetes Services. If specified,
+                            only traffic that originates from or terminates at endpoints
+                            within the selected service(s) will be matched, and only
+                            to/from each endpoint's port. \n Services cannot be specified
+                            on the same rule as Selector, NotSelector, NamespaceSelector,
+                            Nets, NotNets or ServiceAccounts. \n Ports and NotPorts
+                            can only be specified with Services on ingress rules."
+                          properties:
+                            name:
+                              description: Name specifies the name of a Kubernetes
+                                Service to match.
+                              type: string
+                            namespace:
+                              description: Namespace specifies the namespace of the
+                                given Service. If left empty, the rule will match
+                                within this policy's namespace.
+                              type: string
+                          type: object
+                      type: object
+                    http:
+                      description: HTTP contains match criteria that apply to HTTP
+                        requests.
+                      properties:
+                        methods:
+                          description: Methods is an optional field that restricts
+                            the rule to apply only to HTTP requests that use one of
+                            the listed HTTP Methods (e.g. GET, PUT, etc.) Multiple
+                            methods are OR'd together.
+                          items:
+                            type: string
+                          type: array
+                        paths:
+                          description: 'Paths is an optional field that restricts
+                            the rule to apply to HTTP requests that use one of the
+                            listed HTTP Paths. Multiple paths are OR''d together.
+                            e.g: - exact: /foo - prefix: /bar NOTE: Each entry may
+                            ONLY specify either a `exact` or a `prefix` match. The
+                            validator will check for it.'
+                          items:
+                            description: 'HTTPPath specifies an HTTP path to match.
+                              It may be either of the form: exact: <path>: which matches
+                              the path exactly or prefix: <path-prefix>: which matches
+                              the path prefix'
+                            properties:
+                              exact:
+                                type: string
+                              prefix:
+                                type: string
+                            type: object
+                          type: array
+                      type: object
+                    icmp:
+                      description: ICMP is an optional field that restricts the rule
+                        to apply to a specific type and code of ICMP traffic.  This
+                        should only be specified if the Protocol field is set to "ICMP"
+                        or "ICMPv6".
+                      properties:
+                        code:
+                          description: Match on a specific ICMP code.  If specified,
+                            the Type value must also be specified. This is a technical
+                            limitation imposed by the kernel's iptables firewall,
+                            which Calico uses to enforce the rule.
+                          type: integer
+                        type:
+                          description: Match on a specific ICMP type.  For example
+                            a value of 8 refers to ICMP Echo Request (i.e. pings).
+                          type: integer
+                      type: object
+                    ipVersion:
+                      description: IPVersion is an optional field that restricts the
+                        rule to only match a specific IP version.
+                      type: integer
+                    metadata:
+                      description: Metadata contains additional information for this
+                        rule
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: Annotations is a set of key value pairs that
+                            give extra information about the rule
+                          type: object
+                      type: object
+                    notICMP:
+                      description: NotICMP is the negated version of the ICMP field.
+                      properties:
+                        code:
+                          description: Match on a specific ICMP code.  If specified,
+                            the Type value must also be specified. This is a technical
+                            limitation imposed by the kernel's iptables firewall,
+                            which Calico uses to enforce the rule.
+                          type: integer
+                        type:
+                          description: Match on a specific ICMP type.  For example
+                            a value of 8 refers to ICMP Echo Request (i.e. pings).
+                          type: integer
+                      type: object
+                    notProtocol:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: NotProtocol is the negated version of the Protocol
+                        field.
+                      pattern: ^.*
+                      x-kubernetes-int-or-string: true
+                    protocol:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: "Protocol is an optional field that restricts the
+                        rule to only apply to traffic of a specific IP protocol. Required
+                        if any of the EntityRules contain Ports (because ports only
+                        apply to certain protocols). \n Must be one of these string
+                        values: \"TCP\", \"UDP\", \"ICMP\", \"ICMPv6\", \"SCTP\",
+                        \"UDPLite\" or an integer in the range 1-255."
+                      pattern: ^.*
+                      x-kubernetes-int-or-string: true
+                    source:
+                      description: Source contains the match criteria that apply to
+                        source entity.
+                      properties:
+                        namespaceSelector:
+                          description: "NamespaceSelector is an optional field that
+                            contains a selector expression. Only traffic that originates
+                            from (or terminates at) endpoints within the selected
+                            namespaces will be matched. When both NamespaceSelector
+                            and another selector are defined on the same rule, then
+                            only workload endpoints that are matched by both selectors
+                            will be selected by the rule. \n For NetworkPolicy, an
+                            empty NamespaceSelector implies that the Selector is limited
+                            to selecting only workload endpoints in the same namespace
+                            as the NetworkPolicy. \n For NetworkPolicy, `global()`
+                            NamespaceSelector implies that the Selector is limited
+                            to selecting only GlobalNetworkSet or HostEndpoint. \n
+                            For GlobalNetworkPolicy, an empty NamespaceSelector implies
+                            the Selector applies to workload endpoints across all
+                            namespaces."
+                          type: string
+                        nets:
+                          description: Nets is an optional field that restricts the
+                            rule to only apply to traffic that originates from (or
+                            terminates at) IP addresses in any of the given subnets.
+                          items:
+                            type: string
+                          type: array
+                        notNets:
+                          description: NotNets is the negated version of the Nets
+                            field.
+                          items:
+                            type: string
+                          type: array
+                        notPorts:
+                          description: NotPorts is the negated version of the Ports
+                            field. Since only some protocols have ports, if any ports
+                            are specified it requires the Protocol match in the Rule
+                            to be set to "TCP" or "UDP".
+                          items:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^.*
+                            x-kubernetes-int-or-string: true
+                          type: array
+                        notSelector:
+                          description: NotSelector is the negated version of the Selector
+                            field.  See Selector field for subtleties with negated
+                            selectors.
+                          type: string
+                        ports:
+                          description: "Ports is an optional field that restricts
+                            the rule to only apply to traffic that has a source (destination)
+                            port that matches one of these ranges/values. This value
+                            is a list of integers or strings that represent ranges
+                            of ports. \n Since only some protocols have ports, if
+                            any ports are specified it requires the Protocol match
+                            in the Rule to be set to \"TCP\" or \"UDP\"."
+                          items:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^.*
+                            x-kubernetes-int-or-string: true
+                          type: array
+                        selector:
+                          description: "Selector is an optional field that contains
+                            a selector expression (see Policy for sample syntax).
+                            \ Only traffic that originates from (terminates at) endpoints
+                            matching the selector will be matched. \n Note that: in
+                            addition to the negated version of the Selector (see NotSelector
+                            below), the selector expression syntax itself supports
+                            negation.  The two types of negation are subtly different.
+                            One negates the set of matched endpoints, the other negates
+                            the whole match: \n \tSelector = \"!has(my_label)\" matches
+                            packets that are from other Calico-controlled \tendpoints
+                            that do not have the label \"my_label\". \n \tNotSelector
+                            = \"has(my_label)\" matches packets that are not from
+                            Calico-controlled \tendpoints that do have the label \"my_label\".
+                            \n The effect is that the latter will accept packets from
+                            non-Calico sources whereas the former is limited to packets
+                            from Calico-controlled endpoints."
+                          type: string
+                        serviceAccounts:
+                          description: ServiceAccounts is an optional field that restricts
+                            the rule to only apply to traffic that originates from
+                            (or terminates at) a pod running as a matching service
+                            account.
+                          properties:
+                            names:
+                              description: Names is an optional field that restricts
+                                the rule to only apply to traffic that originates
+                                from (or terminates at) a pod running as a service
+                                account whose name is in the list.
+                              items:
+                                type: string
+                              type: array
+                            selector:
+                              description: Selector is an optional field that restricts
+                                the rule to only apply to traffic that originates
+                                from (or terminates at) a pod running as a service
+                                account that matches the given label selector. If
+                                both Names and Selector are specified then they are
+                                AND'ed.
+                              type: string
+                          type: object
+                        services:
+                          description: "Services is an optional field that contains
+                            options for matching Kubernetes Services. If specified,
+                            only traffic that originates from or terminates at endpoints
+                            within the selected service(s) will be matched, and only
+                            to/from each endpoint's port. \n Services cannot be specified
+                            on the same rule as Selector, NotSelector, NamespaceSelector,
+                            Nets, NotNets or ServiceAccounts. \n Ports and NotPorts
+                            can only be specified with Services on ingress rules."
+                          properties:
+                            name:
+                              description: Name specifies the name of a Kubernetes
+                                Service to match.
+                              type: string
+                            namespace:
+                              description: Namespace specifies the namespace of the
+                                given Service. If left empty, the rule will match
+                                within this policy's namespace.
+                              type: string
+                          type: object
+                      type: object
+                  required:
+                  - action
+                  type: object
+                type: array
+              ingress:
+                description: The ordered set of ingress rules.  Each rule contains
+                  a set of packet match criteria and a corresponding action to apply.
+                items:
+                  description: "A Rule encapsulates a set of match criteria and an
+                    action.  Both selector-based security Policy and security Profiles
+                    reference rules - separated out as a list of rules for both ingress
+                    and egress packet matching. \n Each positive match criteria has
+                    a negated version, prefixed with \"Not\". All the match criteria
+                    within a rule must be satisfied for a packet to match. A single
+                    rule can contain the positive and negative version of a match
+                    and both must be satisfied for the rule to match."
+                  properties:
+                    action:
+                      type: string
+                    destination:
+                      description: Destination contains the match criteria that apply
+                        to destination entity.
+                      properties:
+                        namespaceSelector:
+                          description: "NamespaceSelector is an optional field that
+                            contains a selector expression. Only traffic that originates
+                            from (or terminates at) endpoints within the selected
+                            namespaces will be matched. When both NamespaceSelector
+                            and another selector are defined on the same rule, then
+                            only workload endpoints that are matched by both selectors
+                            will be selected by the rule. \n For NetworkPolicy, an
+                            empty NamespaceSelector implies that the Selector is limited
+                            to selecting only workload endpoints in the same namespace
+                            as the NetworkPolicy. \n For NetworkPolicy, `global()`
+                            NamespaceSelector implies that the Selector is limited
+                            to selecting only GlobalNetworkSet or HostEndpoint. \n
+                            For GlobalNetworkPolicy, an empty NamespaceSelector implies
+                            the Selector applies to workload endpoints across all
+                            namespaces."
+                          type: string
+                        nets:
+                          description: Nets is an optional field that restricts the
+                            rule to only apply to traffic that originates from (or
+                            terminates at) IP addresses in any of the given subnets.
+                          items:
+                            type: string
+                          type: array
+                        notNets:
+                          description: NotNets is the negated version of the Nets
+                            field.
+                          items:
+                            type: string
+                          type: array
+                        notPorts:
+                          description: NotPorts is the negated version of the Ports
+                            field. Since only some protocols have ports, if any ports
+                            are specified it requires the Protocol match in the Rule
+                            to be set to "TCP" or "UDP".
+                          items:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^.*
+                            x-kubernetes-int-or-string: true
+                          type: array
+                        notSelector:
+                          description: NotSelector is the negated version of the Selector
+                            field.  See Selector field for subtleties with negated
+                            selectors.
+                          type: string
+                        ports:
+                          description: "Ports is an optional field that restricts
+                            the rule to only apply to traffic that has a source (destination)
+                            port that matches one of these ranges/values. This value
+                            is a list of integers or strings that represent ranges
+                            of ports. \n Since only some protocols have ports, if
+                            any ports are specified it requires the Protocol match
+                            in the Rule to be set to \"TCP\" or \"UDP\"."
+                          items:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^.*
+                            x-kubernetes-int-or-string: true
+                          type: array
+                        selector:
+                          description: "Selector is an optional field that contains
+                            a selector expression (see Policy for sample syntax).
+                            \ Only traffic that originates from (terminates at) endpoints
+                            matching the selector will be matched. \n Note that: in
+                            addition to the negated version of the Selector (see NotSelector
+                            below), the selector expression syntax itself supports
+                            negation.  The two types of negation are subtly different.
+                            One negates the set of matched endpoints, the other negates
+                            the whole match: \n \tSelector = \"!has(my_label)\" matches
+                            packets that are from other Calico-controlled \tendpoints
+                            that do not have the label \"my_label\". \n \tNotSelector
+                            = \"has(my_label)\" matches packets that are not from
+                            Calico-controlled \tendpoints that do have the label \"my_label\".
+                            \n The effect is that the latter will accept packets from
+                            non-Calico sources whereas the former is limited to packets
+                            from Calico-controlled endpoints."
+                          type: string
+                        serviceAccounts:
+                          description: ServiceAccounts is an optional field that restricts
+                            the rule to only apply to traffic that originates from
+                            (or terminates at) a pod running as a matching service
+                            account.
+                          properties:
+                            names:
+                              description: Names is an optional field that restricts
+                                the rule to only apply to traffic that originates
+                                from (or terminates at) a pod running as a service
+                                account whose name is in the list.
+                              items:
+                                type: string
+                              type: array
+                            selector:
+                              description: Selector is an optional field that restricts
+                                the rule to only apply to traffic that originates
+                                from (or terminates at) a pod running as a service
+                                account that matches the given label selector. If
+                                both Names and Selector are specified then they are
+                                AND'ed.
+                              type: string
+                          type: object
+                        services:
+                          description: "Services is an optional field that contains
+                            options for matching Kubernetes Services. If specified,
+                            only traffic that originates from or terminates at endpoints
+                            within the selected service(s) will be matched, and only
+                            to/from each endpoint's port. \n Services cannot be specified
+                            on the same rule as Selector, NotSelector, NamespaceSelector,
+                            Nets, NotNets or ServiceAccounts. \n Ports and NotPorts
+                            can only be specified with Services on ingress rules."
+                          properties:
+                            name:
+                              description: Name specifies the name of a Kubernetes
+                                Service to match.
+                              type: string
+                            namespace:
+                              description: Namespace specifies the namespace of the
+                                given Service. If left empty, the rule will match
+                                within this policy's namespace.
+                              type: string
+                          type: object
+                      type: object
+                    http:
+                      description: HTTP contains match criteria that apply to HTTP
+                        requests.
+                      properties:
+                        methods:
+                          description: Methods is an optional field that restricts
+                            the rule to apply only to HTTP requests that use one of
+                            the listed HTTP Methods (e.g. GET, PUT, etc.) Multiple
+                            methods are OR'd together.
+                          items:
+                            type: string
+                          type: array
+                        paths:
+                          description: 'Paths is an optional field that restricts
+                            the rule to apply to HTTP requests that use one of the
+                            listed HTTP Paths. Multiple paths are OR''d together.
+                            e.g: - exact: /foo - prefix: /bar NOTE: Each entry may
+                            ONLY specify either a `exact` or a `prefix` match. The
+                            validator will check for it.'
+                          items:
+                            description: 'HTTPPath specifies an HTTP path to match.
+                              It may be either of the form: exact: <path>: which matches
+                              the path exactly or prefix: <path-prefix>: which matches
+                              the path prefix'
+                            properties:
+                              exact:
+                                type: string
+                              prefix:
+                                type: string
+                            type: object
+                          type: array
+                      type: object
+                    icmp:
+                      description: ICMP is an optional field that restricts the rule
+                        to apply to a specific type and code of ICMP traffic.  This
+                        should only be specified if the Protocol field is set to "ICMP"
+                        or "ICMPv6".
+                      properties:
+                        code:
+                          description: Match on a specific ICMP code.  If specified,
+                            the Type value must also be specified. This is a technical
+                            limitation imposed by the kernel's iptables firewall,
+                            which Calico uses to enforce the rule.
+                          type: integer
+                        type:
+                          description: Match on a specific ICMP type.  For example
+                            a value of 8 refers to ICMP Echo Request (i.e. pings).
+                          type: integer
+                      type: object
+                    ipVersion:
+                      description: IPVersion is an optional field that restricts the
+                        rule to only match a specific IP version.
+                      type: integer
+                    metadata:
+                      description: Metadata contains additional information for this
+                        rule
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: Annotations is a set of key value pairs that
+                            give extra information about the rule
+                          type: object
+                      type: object
+                    notICMP:
+                      description: NotICMP is the negated version of the ICMP field.
+                      properties:
+                        code:
+                          description: Match on a specific ICMP code.  If specified,
+                            the Type value must also be specified. This is a technical
+                            limitation imposed by the kernel's iptables firewall,
+                            which Calico uses to enforce the rule.
+                          type: integer
+                        type:
+                          description: Match on a specific ICMP type.  For example
+                            a value of 8 refers to ICMP Echo Request (i.e. pings).
+                          type: integer
+                      type: object
+                    notProtocol:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: NotProtocol is the negated version of the Protocol
+                        field.
+                      pattern: ^.*
+                      x-kubernetes-int-or-string: true
+                    protocol:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: "Protocol is an optional field that restricts the
+                        rule to only apply to traffic of a specific IP protocol. Required
+                        if any of the EntityRules contain Ports (because ports only
+                        apply to certain protocols). \n Must be one of these string
+                        values: \"TCP\", \"UDP\", \"ICMP\", \"ICMPv6\", \"SCTP\",
+                        \"UDPLite\" or an integer in the range 1-255."
+                      pattern: ^.*
+                      x-kubernetes-int-or-string: true
+                    source:
+                      description: Source contains the match criteria that apply to
+                        source entity.
+                      properties:
+                        namespaceSelector:
+                          description: "NamespaceSelector is an optional field that
+                            contains a selector expression. Only traffic that originates
+                            from (or terminates at) endpoints within the selected
+                            namespaces will be matched. When both NamespaceSelector
+                            and another selector are defined on the same rule, then
+                            only workload endpoints that are matched by both selectors
+                            will be selected by the rule. \n For NetworkPolicy, an
+                            empty NamespaceSelector implies that the Selector is limited
+                            to selecting only workload endpoints in the same namespace
+                            as the NetworkPolicy. \n For NetworkPolicy, `global()`
+                            NamespaceSelector implies that the Selector is limited
+                            to selecting only GlobalNetworkSet or HostEndpoint. \n
+                            For GlobalNetworkPolicy, an empty NamespaceSelector implies
+                            the Selector applies to workload endpoints across all
+                            namespaces."
+                          type: string
+                        nets:
+                          description: Nets is an optional field that restricts the
+                            rule to only apply to traffic that originates from (or
+                            terminates at) IP addresses in any of the given subnets.
+                          items:
+                            type: string
+                          type: array
+                        notNets:
+                          description: NotNets is the negated version of the Nets
+                            field.
+                          items:
+                            type: string
+                          type: array
+                        notPorts:
+                          description: NotPorts is the negated version of the Ports
+                            field. Since only some protocols have ports, if any ports
+                            are specified it requires the Protocol match in the Rule
+                            to be set to "TCP" or "UDP".
+                          items:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^.*
+                            x-kubernetes-int-or-string: true
+                          type: array
+                        notSelector:
+                          description: NotSelector is the negated version of the Selector
+                            field.  See Selector field for subtleties with negated
+                            selectors.
+                          type: string
+                        ports:
+                          description: "Ports is an optional field that restricts
+                            the rule to only apply to traffic that has a source (destination)
+                            port that matches one of these ranges/values. This value
+                            is a list of integers or strings that represent ranges
+                            of ports. \n Since only some protocols have ports, if
+                            any ports are specified it requires the Protocol match
+                            in the Rule to be set to \"TCP\" or \"UDP\"."
+                          items:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^.*
+                            x-kubernetes-int-or-string: true
+                          type: array
+                        selector:
+                          description: "Selector is an optional field that contains
+                            a selector expression (see Policy for sample syntax).
+                            \ Only traffic that originates from (terminates at) endpoints
+                            matching the selector will be matched. \n Note that: in
+                            addition to the negated version of the Selector (see NotSelector
+                            below), the selector expression syntax itself supports
+                            negation.  The two types of negation are subtly different.
+                            One negates the set of matched endpoints, the other negates
+                            the whole match: \n \tSelector = \"!has(my_label)\" matches
+                            packets that are from other Calico-controlled \tendpoints
+                            that do not have the label \"my_label\". \n \tNotSelector
+                            = \"has(my_label)\" matches packets that are not from
+                            Calico-controlled \tendpoints that do have the label \"my_label\".
+                            \n The effect is that the latter will accept packets from
+                            non-Calico sources whereas the former is limited to packets
+                            from Calico-controlled endpoints."
+                          type: string
+                        serviceAccounts:
+                          description: ServiceAccounts is an optional field that restricts
+                            the rule to only apply to traffic that originates from
+                            (or terminates at) a pod running as a matching service
+                            account.
+                          properties:
+                            names:
+                              description: Names is an optional field that restricts
+                                the rule to only apply to traffic that originates
+                                from (or terminates at) a pod running as a service
+                                account whose name is in the list.
+                              items:
+                                type: string
+                              type: array
+                            selector:
+                              description: Selector is an optional field that restricts
+                                the rule to only apply to traffic that originates
+                                from (or terminates at) a pod running as a service
+                                account that matches the given label selector. If
+                                both Names and Selector are specified then they are
+                                AND'ed.
+                              type: string
+                          type: object
+                        services:
+                          description: "Services is an optional field that contains
+                            options for matching Kubernetes Services. If specified,
+                            only traffic that originates from or terminates at endpoints
+                            within the selected service(s) will be matched, and only
+                            to/from each endpoint's port. \n Services cannot be specified
+                            on the same rule as Selector, NotSelector, NamespaceSelector,
+                            Nets, NotNets or ServiceAccounts. \n Ports and NotPorts
+                            can only be specified with Services on ingress rules."
+                          properties:
+                            name:
+                              description: Name specifies the name of a Kubernetes
+                                Service to match.
+                              type: string
+                            namespace:
+                              description: Namespace specifies the namespace of the
+                                given Service. If left empty, the rule will match
+                                within this policy's namespace.
+                              type: string
+                          type: object
+                      type: object
+                  required:
+                  - action
+                  type: object
+                type: array
+              namespaceSelector:
+                description: NamespaceSelector is an optional field for an expression
+                  used to select a pod based on namespaces.
+                type: string
+              order:
+                description: Order is an optional field that specifies the order in
+                  which the policy is applied. Policies with higher "order" are applied
+                  after those with lower order.  If the order is omitted, it may be
+                  considered to be "infinite" - i.e. the policy will be applied last.  Policies
+                  with identical order will be applied in alphanumerical order based
+                  on the Policy "Name".
+                type: number
+              preDNAT:
+                description: PreDNAT indicates to apply the rules in this policy before
+                  any DNAT.
+                type: boolean
+              selector:
+                description: "The selector is an expression used to pick pick out
+                  the endpoints that the policy should be applied to. \n Selector
+                  expressions follow this syntax: \n \tlabel == \"string_literal\"
+                  \ ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"
+                  \  ->  not equal; also matches if label is not present \tlabel in
+                  { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is
+                  one of \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\",
+                  ... }  ->  true if the value of label X is not one of \"a\", \"b\",
+                  \"c\" \thas(label_name)  -> True if that label is present \t! expr
+                  -> negation of expr \texpr && expr  -> Short-circuit and \texpr
+                  || expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall()
+                  or the empty selector -> matches all endpoints. \n Label names are
+                  allowed to contain alphanumerics, -, _ and /. String literals are
+                  more permissive but they do not support escape characters. \n Examples
+                  (with made-up labels): \n \ttype == \"webserver\" && deployment
+                  == \"prod\" \ttype in {\"frontend\", \"backend\"} \tdeployment !=
+                  \"dev\" \t! has(label_name)"
+                type: string
+              serviceAccountSelector:
+                description: ServiceAccountSelector is an optional field for an expression
+                  used to select a pod based on service accounts.
+                type: string
+              types:
+                description: "Types indicates whether this policy applies to ingress,
+                  or to egress, or to both.  When not explicitly specified (and so
+                  the value on creation is empty or nil), Calico defaults Types according
+                  to what Ingress and Egress rules are present in the policy.  The
+                  default is: \n - [ PolicyTypeIngress ], if there are no Egress rules
+                  (including the case where there are   also no Ingress rules) \n
+                  - [ PolicyTypeEgress ], if there are Egress rules but no Ingress
+                  rules \n - [ PolicyTypeIngress, PolicyTypeEgress ], if there are
+                  both Ingress and Egress rules. \n When the policy is read back again,
+                  Types will always be one of these values, never empty or nil."
+                items:
+                  description: PolicyType enumerates the possible values of the PolicySpec
+                    Types field.
                   type: string
                 type: array
             type: object
@@ -2718,26 +4030,26 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_caliconodestatuses.yaml
+# Source: crds/calico/crd.projectcalico.org_globalnetworksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: (devel)
-  creationTimestamp: null
-  name: caliconodestatuses.crd.projectcalico.org
+  name: globalnetworksets.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
   names:
-    kind: CalicoNodeStatus
-    listKind: CalicoNodeStatusList
-    plural: caliconodestatuses
-    singular: caliconodestatus
+    kind: GlobalNetworkSet
+    listKind: GlobalNetworkSetList
+    plural: globalnetworksets
+    singular: globalnetworkset
   scope: Cluster
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
+        description: GlobalNetworkSet contains a set of arbitrary IP sub-networks/CIDRs
+          that share labels to allow rules to refer to them via selectors.  The labels
+          of GlobalNetworkSet are not namespaced.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -2752,268 +4064,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: CalicoNodeStatusSpec contains the specification for a CalicoNodeStatus
-              resource.
-            properties:
-              classes:
-                description: Classes declares the types of information to monitor
-                  for this calico/node, and allows for selective status reporting
-                  about certain subsets of information.
-                items:
-                  type: string
-                type: array
-              node:
-                description: The node name identifies the Calico node instance for
-                  node status.
-                type: string
-              updatePeriodSeconds:
-                description: UpdatePeriodSeconds is the period at which CalicoNodeStatus
-                  should be updated. Set to 0 to disable CalicoNodeStatus refresh.
-                  Maximum update period is one day.
-                format: int32
-                type: integer
-            type: object
-          status:
-            description: CalicoNodeStatusStatus defines the observed state of CalicoNodeStatus.
-              No validation needed for status since it is updated by Calico.
-            properties:
-              agent:
-                description: Agent holds agent status on the node.
-                properties:
-                  birdV4:
-                    description: BIRDV4 represents the latest observed status of bird4.
-                    properties:
-                      lastBootTime:
-                        description: LastBootTime holds the value of lastBootTime
-                          from bird.ctl output.
-                        type: string
-                      lastReconfigurationTime:
-                        description: LastReconfigurationTime holds the value of lastReconfigTime
-                          from bird.ctl output.
-                        type: string
-                      routerID:
-                        description: Router ID used by bird.
-                        type: string
-                      state:
-                        description: The state of the BGP Daemon.
-                        type: string
-                      version:
-                        description: Version of the BGP daemon
-                        type: string
-                    type: object
-                  birdV6:
-                    description: BIRDV6 represents the latest observed status of bird6.
-                    properties:
-                      lastBootTime:
-                        description: LastBootTime holds the value of lastBootTime
-                          from bird.ctl output.
-                        type: string
-                      lastReconfigurationTime:
-                        description: LastReconfigurationTime holds the value of lastReconfigTime
-                          from bird.ctl output.
-                        type: string
-                      routerID:
-                        description: Router ID used by bird.
-                        type: string
-                      state:
-                        description: The state of the BGP Daemon.
-                        type: string
-                      version:
-                        description: Version of the BGP daemon
-                        type: string
-                    type: object
-                type: object
-              bgp:
-                description: BGP holds node BGP status.
-                properties:
-                  numberEstablishedV4:
-                    description: The total number of IPv4 established bgp sessions.
-                    type: integer
-                  numberEstablishedV6:
-                    description: The total number of IPv6 established bgp sessions.
-                    type: integer
-                  numberNotEstablishedV4:
-                    description: The total number of IPv4 non-established bgp sessions.
-                    type: integer
-                  numberNotEstablishedV6:
-                    description: The total number of IPv6 non-established bgp sessions.
-                    type: integer
-                  peersV4:
-                    description: PeersV4 represents IPv4 BGP peers status on the node.
-                    items:
-                      description: CalicoNodePeer contains the status of BGP peers
-                        on the node.
-                      properties:
-                        peerIP:
-                          description: IP address of the peer whose condition we are
-                            reporting.
-                          type: string
-                        since:
-                          description: Since the state or reason last changed.
-                          type: string
-                        state:
-                          description: State is the BGP session state.
-                          type: string
-                        type:
-                          description: Type indicates whether this peer is configured
-                            via the node-to-node mesh, or via en explicit global or
-                            per-node BGPPeer object.
-                          type: string
-                      type: object
-                    type: array
-                  peersV6:
-                    description: PeersV6 represents IPv6 BGP peers status on the node.
-                    items:
-                      description: CalicoNodePeer contains the status of BGP peers
-                        on the node.
-                      properties:
-                        peerIP:
-                          description: IP address of the peer whose condition we are
-                            reporting.
-                          type: string
-                        since:
-                          description: Since the state or reason last changed.
-                          type: string
-                        state:
-                          description: State is the BGP session state.
-                          type: string
-                        type:
-                          description: Type indicates whether this peer is configured
-                            via the node-to-node mesh, or via en explicit global or
-                            per-node BGPPeer object.
-                          type: string
-                      type: object
-                    type: array
-                required:
-                - numberEstablishedV4
-                - numberEstablishedV6
-                - numberNotEstablishedV4
-                - numberNotEstablishedV6
-                type: object
-              lastUpdated:
-                description: LastUpdated is a timestamp representing the server time
-                  when CalicoNodeStatus object last updated. It is represented in
-                  RFC3339 form and is in UTC.
-                format: date-time
-                nullable: true
-                type: string
-              routes:
-                description: Routes reports routes known to the Calico BGP daemon
-                  on the node.
-                properties:
-                  routesV4:
-                    description: RoutesV4 represents IPv4 routes on the node.
-                    items:
-                      description: CalicoNodeRoute contains the status of BGP routes
-                        on the node.
-                      properties:
-                        destination:
-                          description: Destination of the route.
-                          type: string
-                        gateway:
-                          description: Gateway for the destination.
-                          type: string
-                        interface:
-                          description: Interface for the destination
-                          type: string
-                        learnedFrom:
-                          description: LearnedFrom contains information regarding
-                            where this route originated.
-                          properties:
-                            peerIP:
-                              description: If sourceType is NodeMesh or BGPPeer, IP
-                                address of the router that sent us this route.
-                              type: string
-                            sourceType:
-                              description: Type of the source where a route is learned
-                                from.
-                              type: string
-                          type: object
-                        type:
-                          description: Type indicates if the route is being used for
-                            forwarding or not.
-                          type: string
-                      type: object
-                    type: array
-                  routesV6:
-                    description: RoutesV6 represents IPv6 routes on the node.
-                    items:
-                      description: CalicoNodeRoute contains the status of BGP routes
-                        on the node.
-                      properties:
-                        destination:
-                          description: Destination of the route.
-                          type: string
-                        gateway:
-                          description: Gateway for the destination.
-                          type: string
-                        interface:
-                          description: Interface for the destination
-                          type: string
-                        learnedFrom:
-                          description: LearnedFrom contains information regarding
-                            where this route originated.
-                          properties:
-                            peerIP:
-                              description: If sourceType is NodeMesh or BGPPeer, IP
-                                address of the router that sent us this route.
-                              type: string
-                            sourceType:
-                              description: Type of the source where a route is learned
-                                from.
-                              type: string
-                          type: object
-                        type:
-                          description: Type indicates if the route is being used for
-                            forwarding or not.
-                          type: string
-                      type: object
-                    type: array
-                type: object
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-# Source: crds/calico/crd.projectcalico.org_networksets.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: networksets.crd.projectcalico.org
-spec:
-  group: crd.projectcalico.org
-  names:
-    kind: NetworkSet
-    listKind: NetworkSetList
-    plural: networksets
-    singular: networkset
-  scope: Namespaced
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        description: NetworkSet is the Namespaced-equivalent of the GlobalNetworkSet.
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: NetworkSetSpec contains the specification for a NetworkSet
+            description: GlobalNetworkSetSpec contains the specification for a NetworkSet
               resource.
             properties:
               nets:
@@ -3032,18 +4083,18 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_ipamhandles.yaml
+# Source: crds/calico/crd.projectcalico.org_hostendpoints.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: ipamhandles.crd.projectcalico.org
+  name: hostendpoints.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
   names:
-    kind: IPAMHandle
-    listKind: IPAMHandleList
-    plural: ipamhandles
-    singular: ipamhandle
+    kind: HostEndpoint
+    listKind: HostEndpointList
+    plural: hostendpoints
+    singular: hostendpoint
   scope: Cluster
   versions:
   - name: v1
@@ -3063,20 +4114,191 @@ spec:
           metadata:
             type: object
           spec:
-            description: IPAMHandleSpec contains the specification for an IPAMHandle
+            description: HostEndpointSpec contains the specification for a HostEndpoint
               resource.
             properties:
-              block:
-                additionalProperties:
-                  type: integer
-                type: object
-              deleted:
-                type: boolean
-              handleID:
+              expectedIPs:
+                description: "The expected IP addresses (IPv4 and IPv6) of the endpoint.
+                  If \"InterfaceName\" is not present, Calico will look for an interface
+                  matching any of the IPs in the list and apply policy to that. Note:
+                  \tWhen using the selector match criteria in an ingress or egress
+                  security Policy \tor Profile, Calico converts the selector into
+                  a set of IP addresses. For host \tendpoints, the ExpectedIPs field
+                  is used for that purpose. (If only the interface \tname is specified,
+                  Calico does not learn the IPs of the interface for use in match
+                  \tcriteria.)"
+                items:
+                  type: string
+                type: array
+              interfaceName:
+                description: "Either \"*\", or the name of a specific Linux interface
+                  to apply policy to; or empty.  \"*\" indicates that this HostEndpoint
+                  governs all traffic to, from or through the default network namespace
+                  of the host named by the \"Node\" field; entering and leaving that
+                  namespace via any interface, including those from/to non-host-networked
+                  local workloads. \n If InterfaceName is not \"*\", this HostEndpoint
+                  only governs traffic that enters or leaves the host through the
+                  specific interface named by InterfaceName, or - when InterfaceName
+                  is empty - through the specific interface that has one of the IPs
+                  in ExpectedIPs. Therefore, when InterfaceName is empty, at least
+                  one expected IP must be specified.  Only external interfaces (such
+                  as \"eth0\") are supported here; it isn't possible for a HostEndpoint
+                  to protect traffic through a specific local workload interface.
+                  \n Note: Only some kinds of policy are implemented for \"*\" HostEndpoints;
+                  initially just pre-DNAT policy.  Please check Calico documentation
+                  for the latest position."
                 type: string
+              node:
+                description: The node name identifying the Calico node instance.
+                type: string
+              ports:
+                description: Ports contains the endpoint's named ports, which may
+                  be referenced in security policy rules.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    port:
+                      type: integer
+                    protocol:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^.*
+                      x-kubernetes-int-or-string: true
+                  required:
+                  - name
+                  - port
+                  - protocol
+                  type: object
+                type: array
+              profiles:
+                description: A list of identifiers of security Profile objects that
+                  apply to this endpoint. Each profile is applied in the order that
+                  they appear in this list.  Profile rules are applied after the selector-based
+                  security policy.
+                items:
+                  type: string
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+# Source: crds/calico/crd.projectcalico.org_ipamblocks.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ipamblocks.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: IPAMBlock
+    listKind: IPAMBlockList
+    plural: ipamblocks
+    singular: ipamblock
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: IPAMBlockSpec contains the specification for an IPAMBlock
+              resource.
+            properties:
+              affinity:
+                description: Affinity of the block, if this block has one. If set,
+                  it will be of the form "host:<hostname>". If not set, this block
+                  is not affine to a host.
+                type: string
+              allocations:
+                description: Array of allocations in-use within this block. nil entries
+                  mean the allocation is free. For non-nil entries at index i, the
+                  index is the ordinal of the allocation within this block and the
+                  value is the index of the associated attributes in the Attributes
+                  array.
+                items:
+                  type: integer
+                  # TODO: This nullable is manually added in. We should update controller-gen
+                  # to handle []*int properly itself.
+                  nullable: true
+                type: array
+              attributes:
+                description: Attributes is an array of arbitrary metadata associated
+                  with allocations in the block. To find attributes for a given allocation,
+                  use the value of the allocation's entry in the Allocations array
+                  as the index of the element in this array.
+                items:
+                  properties:
+                    handle_id:
+                      type: string
+                    secondary:
+                      additionalProperties:
+                        type: string
+                      type: object
+                  type: object
+                type: array
+              cidr:
+                description: The block's CIDR.
+                type: string
+              deleted:
+                description: Deleted is an internal boolean used to workaround a limitation
+                  in the Kubernetes API whereby deletion will not return a conflict
+                  error if the block has been updated. It should not be set manually.
+                type: boolean
+              sequenceNumber:
+                default: 0
+                description: We store a sequence number that is updated each time
+                  the block is written. Each allocation will also store the sequence
+                  number of the block at the time of its creation. When releasing
+                  an IP, passing the sequence number associated with the allocation
+                  allows us to protect against a race condition and ensure the IP
+                  hasn't been released and re-allocated since the release request.
+                format: int64
+                type: integer
+              sequenceNumberForAllocation:
+                additionalProperties:
+                  format: int64
+                  type: integer
+                description: Map of allocated ordinal within the block to sequence
+                  number of the block at the time of allocation. Kubernetes does not
+                  allow numerical keys for maps, so the key is cast to a string.
+                type: object
+              strictAffinity:
+                description: StrictAffinity on the IPAMBlock is deprecated and no
+                  longer used by the code. Use IPAMConfig StrictAffinity instead.
+                type: boolean
+              unallocated:
+                description: Unallocated is an ordered list of allocations which are
+                  free in the block.
+                items:
+                  type: integer
+                type: array
             required:
-            - block
-            - handleID
+            - allocations
+            - attributes
+            - cidr
+            - strictAffinity
+            - unallocated
             type: object
         type: object
     served: true
@@ -3133,6 +4355,62 @@ spec:
             required:
             - autoAllocateBlocks
             - strictAffinity
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+# Source: crds/calico/crd.projectcalico.org_ipamhandles.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ipamhandles.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: IPAMHandle
+    listKind: IPAMHandleList
+    plural: ipamhandles
+    singular: ipamhandle
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: IPAMHandleSpec contains the specification for an IPAMHandle
+              resource.
+            properties:
+              block:
+                additionalProperties:
+                  type: integer
+                type: object
+              deleted:
+                type: boolean
+              handleID:
+                type: string
+            required:
+            - block
+            - handleID
             type: object
         type: object
     served: true
@@ -3242,6 +4520,60 @@ spec:
                 type: string
             required:
             - cidr
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+# Source: crds/calico/crd.projectcalico.org_ipreservations.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: (devel)
+  creationTimestamp: null
+  name: ipreservations.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: IPReservation
+    listKind: IPReservationList
+    plural: ipreservations
+    singular: ipreservation
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: IPReservationSpec contains the specification for an IPReservation
+              resource.
+            properties:
+              reservedCIDRs:
+                description: ReservedCIDRs is a list of CIDRs and/or IP addresses
+                  that Calico IPAM will exclude from new allocations.
+                items:
+                  type: string
+                type: array
             type: object
         type: object
     served: true
@@ -4342,24 +5674,24 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_clusterinformations.yaml
+# Source: crds/calico/crd.projectcalico.org_networksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: clusterinformations.crd.projectcalico.org
+  name: networksets.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
   names:
-    kind: ClusterInformation
-    listKind: ClusterInformationList
-    plural: clusterinformations
-    singular: clusterinformation
-  scope: Cluster
+    kind: NetworkSet
+    listKind: NetworkSetList
+    plural: networksets
+    singular: networkset
+  scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: ClusterInformation contains the cluster specific information.
+        description: NetworkSet is the Namespaced-equivalent of the GlobalNetworkSet.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -4374,1097 +5706,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ClusterInformationSpec contains the values of describing
-              the cluster.
-            properties:
-              calicoVersion:
-                description: CalicoVersion is the version of Calico that the cluster
-                  is running
-                type: string
-              clusterGUID:
-                description: ClusterGUID is the GUID of the cluster
-                type: string
-              clusterType:
-                description: ClusterType describes the type of the cluster
-                type: string
-              datastoreReady:
-                description: DatastoreReady is used during significant datastore migrations
-                  to signal to components such as Felix that it should wait before
-                  accessing the datastore.
-                type: boolean
-              variant:
-                description: Variant declares which variant of Calico should be active.
-                type: string
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-# Source: crds/calico/crd.projectcalico.org_blockaffinities.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: blockaffinities.crd.projectcalico.org
-spec:
-  group: crd.projectcalico.org
-  names:
-    kind: BlockAffinity
-    listKind: BlockAffinityList
-    plural: blockaffinities
-    singular: blockaffinity
-  scope: Cluster
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: BlockAffinitySpec contains the specification for a BlockAffinity
-              resource.
-            properties:
-              cidr:
-                type: string
-              deleted:
-                description: Deleted indicates that this block affinity is being deleted.
-                  This field is a string for compatibility with older releases that
-                  mistakenly treat this field as a string.
-                type: string
-              node:
-                type: string
-              state:
-                type: string
-            required:
-            - cidr
-            - deleted
-            - node
-            - state
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-# Source: crds/calico/crd.projectcalico.org_globalnetworkpolicies.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: globalnetworkpolicies.crd.projectcalico.org
-spec:
-  group: crd.projectcalico.org
-  names:
-    kind: GlobalNetworkPolicy
-    listKind: GlobalNetworkPolicyList
-    plural: globalnetworkpolicies
-    singular: globalnetworkpolicy
-  scope: Cluster
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            properties:
-              applyOnForward:
-                description: ApplyOnForward indicates to apply the rules in this policy
-                  on forward traffic.
-                type: boolean
-              doNotTrack:
-                description: DoNotTrack indicates whether packets matched by the rules
-                  in this policy should go through the data plane's connection tracking,
-                  such as Linux conntrack.  If True, the rules in this policy are
-                  applied before any data plane connection tracking, and packets allowed
-                  by this policy are marked as not to be tracked.
-                type: boolean
-              egress:
-                description: The ordered set of egress rules.  Each rule contains
-                  a set of packet match criteria and a corresponding action to apply.
-                items:
-                  description: "A Rule encapsulates a set of match criteria and an
-                    action.  Both selector-based security Policy and security Profiles
-                    reference rules - separated out as a list of rules for both ingress
-                    and egress packet matching. \n Each positive match criteria has
-                    a negated version, prefixed with \"Not\". All the match criteria
-                    within a rule must be satisfied for a packet to match. A single
-                    rule can contain the positive and negative version of a match
-                    and both must be satisfied for the rule to match."
-                  properties:
-                    action:
-                      type: string
-                    destination:
-                      description: Destination contains the match criteria that apply
-                        to destination entity.
-                      properties:
-                        namespaceSelector:
-                          description: "NamespaceSelector is an optional field that
-                            contains a selector expression. Only traffic that originates
-                            from (or terminates at) endpoints within the selected
-                            namespaces will be matched. When both NamespaceSelector
-                            and another selector are defined on the same rule, then
-                            only workload endpoints that are matched by both selectors
-                            will be selected by the rule. \n For NetworkPolicy, an
-                            empty NamespaceSelector implies that the Selector is limited
-                            to selecting only workload endpoints in the same namespace
-                            as the NetworkPolicy. \n For NetworkPolicy, `global()`
-                            NamespaceSelector implies that the Selector is limited
-                            to selecting only GlobalNetworkSet or HostEndpoint. \n
-                            For GlobalNetworkPolicy, an empty NamespaceSelector implies
-                            the Selector applies to workload endpoints across all
-                            namespaces."
-                          type: string
-                        nets:
-                          description: Nets is an optional field that restricts the
-                            rule to only apply to traffic that originates from (or
-                            terminates at) IP addresses in any of the given subnets.
-                          items:
-                            type: string
-                          type: array
-                        notNets:
-                          description: NotNets is the negated version of the Nets
-                            field.
-                          items:
-                            type: string
-                          type: array
-                        notPorts:
-                          description: NotPorts is the negated version of the Ports
-                            field. Since only some protocols have ports, if any ports
-                            are specified it requires the Protocol match in the Rule
-                            to be set to "TCP" or "UDP".
-                          items:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            pattern: ^.*
-                            x-kubernetes-int-or-string: true
-                          type: array
-                        notSelector:
-                          description: NotSelector is the negated version of the Selector
-                            field.  See Selector field for subtleties with negated
-                            selectors.
-                          type: string
-                        ports:
-                          description: "Ports is an optional field that restricts
-                            the rule to only apply to traffic that has a source (destination)
-                            port that matches one of these ranges/values. This value
-                            is a list of integers or strings that represent ranges
-                            of ports. \n Since only some protocols have ports, if
-                            any ports are specified it requires the Protocol match
-                            in the Rule to be set to \"TCP\" or \"UDP\"."
-                          items:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            pattern: ^.*
-                            x-kubernetes-int-or-string: true
-                          type: array
-                        selector:
-                          description: "Selector is an optional field that contains
-                            a selector expression (see Policy for sample syntax).
-                            \ Only traffic that originates from (terminates at) endpoints
-                            matching the selector will be matched. \n Note that: in
-                            addition to the negated version of the Selector (see NotSelector
-                            below), the selector expression syntax itself supports
-                            negation.  The two types of negation are subtly different.
-                            One negates the set of matched endpoints, the other negates
-                            the whole match: \n \tSelector = \"!has(my_label)\" matches
-                            packets that are from other Calico-controlled \tendpoints
-                            that do not have the label \"my_label\". \n \tNotSelector
-                            = \"has(my_label)\" matches packets that are not from
-                            Calico-controlled \tendpoints that do have the label \"my_label\".
-                            \n The effect is that the latter will accept packets from
-                            non-Calico sources whereas the former is limited to packets
-                            from Calico-controlled endpoints."
-                          type: string
-                        serviceAccounts:
-                          description: ServiceAccounts is an optional field that restricts
-                            the rule to only apply to traffic that originates from
-                            (or terminates at) a pod running as a matching service
-                            account.
-                          properties:
-                            names:
-                              description: Names is an optional field that restricts
-                                the rule to only apply to traffic that originates
-                                from (or terminates at) a pod running as a service
-                                account whose name is in the list.
-                              items:
-                                type: string
-                              type: array
-                            selector:
-                              description: Selector is an optional field that restricts
-                                the rule to only apply to traffic that originates
-                                from (or terminates at) a pod running as a service
-                                account that matches the given label selector. If
-                                both Names and Selector are specified then they are
-                                AND'ed.
-                              type: string
-                          type: object
-                        services:
-                          description: "Services is an optional field that contains
-                            options for matching Kubernetes Services. If specified,
-                            only traffic that originates from or terminates at endpoints
-                            within the selected service(s) will be matched, and only
-                            to/from each endpoint's port. \n Services cannot be specified
-                            on the same rule as Selector, NotSelector, NamespaceSelector,
-                            Nets, NotNets or ServiceAccounts. \n Ports and NotPorts
-                            can only be specified with Services on ingress rules."
-                          properties:
-                            name:
-                              description: Name specifies the name of a Kubernetes
-                                Service to match.
-                              type: string
-                            namespace:
-                              description: Namespace specifies the namespace of the
-                                given Service. If left empty, the rule will match
-                                within this policy's namespace.
-                              type: string
-                          type: object
-                      type: object
-                    http:
-                      description: HTTP contains match criteria that apply to HTTP
-                        requests.
-                      properties:
-                        methods:
-                          description: Methods is an optional field that restricts
-                            the rule to apply only to HTTP requests that use one of
-                            the listed HTTP Methods (e.g. GET, PUT, etc.) Multiple
-                            methods are OR'd together.
-                          items:
-                            type: string
-                          type: array
-                        paths:
-                          description: 'Paths is an optional field that restricts
-                            the rule to apply to HTTP requests that use one of the
-                            listed HTTP Paths. Multiple paths are OR''d together.
-                            e.g: - exact: /foo - prefix: /bar NOTE: Each entry may
-                            ONLY specify either a `exact` or a `prefix` match. The
-                            validator will check for it.'
-                          items:
-                            description: 'HTTPPath specifies an HTTP path to match.
-                              It may be either of the form: exact: <path>: which matches
-                              the path exactly or prefix: <path-prefix>: which matches
-                              the path prefix'
-                            properties:
-                              exact:
-                                type: string
-                              prefix:
-                                type: string
-                            type: object
-                          type: array
-                      type: object
-                    icmp:
-                      description: ICMP is an optional field that restricts the rule
-                        to apply to a specific type and code of ICMP traffic.  This
-                        should only be specified if the Protocol field is set to "ICMP"
-                        or "ICMPv6".
-                      properties:
-                        code:
-                          description: Match on a specific ICMP code.  If specified,
-                            the Type value must also be specified. This is a technical
-                            limitation imposed by the kernel's iptables firewall,
-                            which Calico uses to enforce the rule.
-                          type: integer
-                        type:
-                          description: Match on a specific ICMP type.  For example
-                            a value of 8 refers to ICMP Echo Request (i.e. pings).
-                          type: integer
-                      type: object
-                    ipVersion:
-                      description: IPVersion is an optional field that restricts the
-                        rule to only match a specific IP version.
-                      type: integer
-                    metadata:
-                      description: Metadata contains additional information for this
-                        rule
-                      properties:
-                        annotations:
-                          additionalProperties:
-                            type: string
-                          description: Annotations is a set of key value pairs that
-                            give extra information about the rule
-                          type: object
-                      type: object
-                    notICMP:
-                      description: NotICMP is the negated version of the ICMP field.
-                      properties:
-                        code:
-                          description: Match on a specific ICMP code.  If specified,
-                            the Type value must also be specified. This is a technical
-                            limitation imposed by the kernel's iptables firewall,
-                            which Calico uses to enforce the rule.
-                          type: integer
-                        type:
-                          description: Match on a specific ICMP type.  For example
-                            a value of 8 refers to ICMP Echo Request (i.e. pings).
-                          type: integer
-                      type: object
-                    notProtocol:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      description: NotProtocol is the negated version of the Protocol
-                        field.
-                      pattern: ^.*
-                      x-kubernetes-int-or-string: true
-                    protocol:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      description: "Protocol is an optional field that restricts the
-                        rule to only apply to traffic of a specific IP protocol. Required
-                        if any of the EntityRules contain Ports (because ports only
-                        apply to certain protocols). \n Must be one of these string
-                        values: \"TCP\", \"UDP\", \"ICMP\", \"ICMPv6\", \"SCTP\",
-                        \"UDPLite\" or an integer in the range 1-255."
-                      pattern: ^.*
-                      x-kubernetes-int-or-string: true
-                    source:
-                      description: Source contains the match criteria that apply to
-                        source entity.
-                      properties:
-                        namespaceSelector:
-                          description: "NamespaceSelector is an optional field that
-                            contains a selector expression. Only traffic that originates
-                            from (or terminates at) endpoints within the selected
-                            namespaces will be matched. When both NamespaceSelector
-                            and another selector are defined on the same rule, then
-                            only workload endpoints that are matched by both selectors
-                            will be selected by the rule. \n For NetworkPolicy, an
-                            empty NamespaceSelector implies that the Selector is limited
-                            to selecting only workload endpoints in the same namespace
-                            as the NetworkPolicy. \n For NetworkPolicy, `global()`
-                            NamespaceSelector implies that the Selector is limited
-                            to selecting only GlobalNetworkSet or HostEndpoint. \n
-                            For GlobalNetworkPolicy, an empty NamespaceSelector implies
-                            the Selector applies to workload endpoints across all
-                            namespaces."
-                          type: string
-                        nets:
-                          description: Nets is an optional field that restricts the
-                            rule to only apply to traffic that originates from (or
-                            terminates at) IP addresses in any of the given subnets.
-                          items:
-                            type: string
-                          type: array
-                        notNets:
-                          description: NotNets is the negated version of the Nets
-                            field.
-                          items:
-                            type: string
-                          type: array
-                        notPorts:
-                          description: NotPorts is the negated version of the Ports
-                            field. Since only some protocols have ports, if any ports
-                            are specified it requires the Protocol match in the Rule
-                            to be set to "TCP" or "UDP".
-                          items:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            pattern: ^.*
-                            x-kubernetes-int-or-string: true
-                          type: array
-                        notSelector:
-                          description: NotSelector is the negated version of the Selector
-                            field.  See Selector field for subtleties with negated
-                            selectors.
-                          type: string
-                        ports:
-                          description: "Ports is an optional field that restricts
-                            the rule to only apply to traffic that has a source (destination)
-                            port that matches one of these ranges/values. This value
-                            is a list of integers or strings that represent ranges
-                            of ports. \n Since only some protocols have ports, if
-                            any ports are specified it requires the Protocol match
-                            in the Rule to be set to \"TCP\" or \"UDP\"."
-                          items:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            pattern: ^.*
-                            x-kubernetes-int-or-string: true
-                          type: array
-                        selector:
-                          description: "Selector is an optional field that contains
-                            a selector expression (see Policy for sample syntax).
-                            \ Only traffic that originates from (terminates at) endpoints
-                            matching the selector will be matched. \n Note that: in
-                            addition to the negated version of the Selector (see NotSelector
-                            below), the selector expression syntax itself supports
-                            negation.  The two types of negation are subtly different.
-                            One negates the set of matched endpoints, the other negates
-                            the whole match: \n \tSelector = \"!has(my_label)\" matches
-                            packets that are from other Calico-controlled \tendpoints
-                            that do not have the label \"my_label\". \n \tNotSelector
-                            = \"has(my_label)\" matches packets that are not from
-                            Calico-controlled \tendpoints that do have the label \"my_label\".
-                            \n The effect is that the latter will accept packets from
-                            non-Calico sources whereas the former is limited to packets
-                            from Calico-controlled endpoints."
-                          type: string
-                        serviceAccounts:
-                          description: ServiceAccounts is an optional field that restricts
-                            the rule to only apply to traffic that originates from
-                            (or terminates at) a pod running as a matching service
-                            account.
-                          properties:
-                            names:
-                              description: Names is an optional field that restricts
-                                the rule to only apply to traffic that originates
-                                from (or terminates at) a pod running as a service
-                                account whose name is in the list.
-                              items:
-                                type: string
-                              type: array
-                            selector:
-                              description: Selector is an optional field that restricts
-                                the rule to only apply to traffic that originates
-                                from (or terminates at) a pod running as a service
-                                account that matches the given label selector. If
-                                both Names and Selector are specified then they are
-                                AND'ed.
-                              type: string
-                          type: object
-                        services:
-                          description: "Services is an optional field that contains
-                            options for matching Kubernetes Services. If specified,
-                            only traffic that originates from or terminates at endpoints
-                            within the selected service(s) will be matched, and only
-                            to/from each endpoint's port. \n Services cannot be specified
-                            on the same rule as Selector, NotSelector, NamespaceSelector,
-                            Nets, NotNets or ServiceAccounts. \n Ports and NotPorts
-                            can only be specified with Services on ingress rules."
-                          properties:
-                            name:
-                              description: Name specifies the name of a Kubernetes
-                                Service to match.
-                              type: string
-                            namespace:
-                              description: Namespace specifies the namespace of the
-                                given Service. If left empty, the rule will match
-                                within this policy's namespace.
-                              type: string
-                          type: object
-                      type: object
-                  required:
-                  - action
-                  type: object
-                type: array
-              ingress:
-                description: The ordered set of ingress rules.  Each rule contains
-                  a set of packet match criteria and a corresponding action to apply.
-                items:
-                  description: "A Rule encapsulates a set of match criteria and an
-                    action.  Both selector-based security Policy and security Profiles
-                    reference rules - separated out as a list of rules for both ingress
-                    and egress packet matching. \n Each positive match criteria has
-                    a negated version, prefixed with \"Not\". All the match criteria
-                    within a rule must be satisfied for a packet to match. A single
-                    rule can contain the positive and negative version of a match
-                    and both must be satisfied for the rule to match."
-                  properties:
-                    action:
-                      type: string
-                    destination:
-                      description: Destination contains the match criteria that apply
-                        to destination entity.
-                      properties:
-                        namespaceSelector:
-                          description: "NamespaceSelector is an optional field that
-                            contains a selector expression. Only traffic that originates
-                            from (or terminates at) endpoints within the selected
-                            namespaces will be matched. When both NamespaceSelector
-                            and another selector are defined on the same rule, then
-                            only workload endpoints that are matched by both selectors
-                            will be selected by the rule. \n For NetworkPolicy, an
-                            empty NamespaceSelector implies that the Selector is limited
-                            to selecting only workload endpoints in the same namespace
-                            as the NetworkPolicy. \n For NetworkPolicy, `global()`
-                            NamespaceSelector implies that the Selector is limited
-                            to selecting only GlobalNetworkSet or HostEndpoint. \n
-                            For GlobalNetworkPolicy, an empty NamespaceSelector implies
-                            the Selector applies to workload endpoints across all
-                            namespaces."
-                          type: string
-                        nets:
-                          description: Nets is an optional field that restricts the
-                            rule to only apply to traffic that originates from (or
-                            terminates at) IP addresses in any of the given subnets.
-                          items:
-                            type: string
-                          type: array
-                        notNets:
-                          description: NotNets is the negated version of the Nets
-                            field.
-                          items:
-                            type: string
-                          type: array
-                        notPorts:
-                          description: NotPorts is the negated version of the Ports
-                            field. Since only some protocols have ports, if any ports
-                            are specified it requires the Protocol match in the Rule
-                            to be set to "TCP" or "UDP".
-                          items:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            pattern: ^.*
-                            x-kubernetes-int-or-string: true
-                          type: array
-                        notSelector:
-                          description: NotSelector is the negated version of the Selector
-                            field.  See Selector field for subtleties with negated
-                            selectors.
-                          type: string
-                        ports:
-                          description: "Ports is an optional field that restricts
-                            the rule to only apply to traffic that has a source (destination)
-                            port that matches one of these ranges/values. This value
-                            is a list of integers or strings that represent ranges
-                            of ports. \n Since only some protocols have ports, if
-                            any ports are specified it requires the Protocol match
-                            in the Rule to be set to \"TCP\" or \"UDP\"."
-                          items:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            pattern: ^.*
-                            x-kubernetes-int-or-string: true
-                          type: array
-                        selector:
-                          description: "Selector is an optional field that contains
-                            a selector expression (see Policy for sample syntax).
-                            \ Only traffic that originates from (terminates at) endpoints
-                            matching the selector will be matched. \n Note that: in
-                            addition to the negated version of the Selector (see NotSelector
-                            below), the selector expression syntax itself supports
-                            negation.  The two types of negation are subtly different.
-                            One negates the set of matched endpoints, the other negates
-                            the whole match: \n \tSelector = \"!has(my_label)\" matches
-                            packets that are from other Calico-controlled \tendpoints
-                            that do not have the label \"my_label\". \n \tNotSelector
-                            = \"has(my_label)\" matches packets that are not from
-                            Calico-controlled \tendpoints that do have the label \"my_label\".
-                            \n The effect is that the latter will accept packets from
-                            non-Calico sources whereas the former is limited to packets
-                            from Calico-controlled endpoints."
-                          type: string
-                        serviceAccounts:
-                          description: ServiceAccounts is an optional field that restricts
-                            the rule to only apply to traffic that originates from
-                            (or terminates at) a pod running as a matching service
-                            account.
-                          properties:
-                            names:
-                              description: Names is an optional field that restricts
-                                the rule to only apply to traffic that originates
-                                from (or terminates at) a pod running as a service
-                                account whose name is in the list.
-                              items:
-                                type: string
-                              type: array
-                            selector:
-                              description: Selector is an optional field that restricts
-                                the rule to only apply to traffic that originates
-                                from (or terminates at) a pod running as a service
-                                account that matches the given label selector. If
-                                both Names and Selector are specified then they are
-                                AND'ed.
-                              type: string
-                          type: object
-                        services:
-                          description: "Services is an optional field that contains
-                            options for matching Kubernetes Services. If specified,
-                            only traffic that originates from or terminates at endpoints
-                            within the selected service(s) will be matched, and only
-                            to/from each endpoint's port. \n Services cannot be specified
-                            on the same rule as Selector, NotSelector, NamespaceSelector,
-                            Nets, NotNets or ServiceAccounts. \n Ports and NotPorts
-                            can only be specified with Services on ingress rules."
-                          properties:
-                            name:
-                              description: Name specifies the name of a Kubernetes
-                                Service to match.
-                              type: string
-                            namespace:
-                              description: Namespace specifies the namespace of the
-                                given Service. If left empty, the rule will match
-                                within this policy's namespace.
-                              type: string
-                          type: object
-                      type: object
-                    http:
-                      description: HTTP contains match criteria that apply to HTTP
-                        requests.
-                      properties:
-                        methods:
-                          description: Methods is an optional field that restricts
-                            the rule to apply only to HTTP requests that use one of
-                            the listed HTTP Methods (e.g. GET, PUT, etc.) Multiple
-                            methods are OR'd together.
-                          items:
-                            type: string
-                          type: array
-                        paths:
-                          description: 'Paths is an optional field that restricts
-                            the rule to apply to HTTP requests that use one of the
-                            listed HTTP Paths. Multiple paths are OR''d together.
-                            e.g: - exact: /foo - prefix: /bar NOTE: Each entry may
-                            ONLY specify either a `exact` or a `prefix` match. The
-                            validator will check for it.'
-                          items:
-                            description: 'HTTPPath specifies an HTTP path to match.
-                              It may be either of the form: exact: <path>: which matches
-                              the path exactly or prefix: <path-prefix>: which matches
-                              the path prefix'
-                            properties:
-                              exact:
-                                type: string
-                              prefix:
-                                type: string
-                            type: object
-                          type: array
-                      type: object
-                    icmp:
-                      description: ICMP is an optional field that restricts the rule
-                        to apply to a specific type and code of ICMP traffic.  This
-                        should only be specified if the Protocol field is set to "ICMP"
-                        or "ICMPv6".
-                      properties:
-                        code:
-                          description: Match on a specific ICMP code.  If specified,
-                            the Type value must also be specified. This is a technical
-                            limitation imposed by the kernel's iptables firewall,
-                            which Calico uses to enforce the rule.
-                          type: integer
-                        type:
-                          description: Match on a specific ICMP type.  For example
-                            a value of 8 refers to ICMP Echo Request (i.e. pings).
-                          type: integer
-                      type: object
-                    ipVersion:
-                      description: IPVersion is an optional field that restricts the
-                        rule to only match a specific IP version.
-                      type: integer
-                    metadata:
-                      description: Metadata contains additional information for this
-                        rule
-                      properties:
-                        annotations:
-                          additionalProperties:
-                            type: string
-                          description: Annotations is a set of key value pairs that
-                            give extra information about the rule
-                          type: object
-                      type: object
-                    notICMP:
-                      description: NotICMP is the negated version of the ICMP field.
-                      properties:
-                        code:
-                          description: Match on a specific ICMP code.  If specified,
-                            the Type value must also be specified. This is a technical
-                            limitation imposed by the kernel's iptables firewall,
-                            which Calico uses to enforce the rule.
-                          type: integer
-                        type:
-                          description: Match on a specific ICMP type.  For example
-                            a value of 8 refers to ICMP Echo Request (i.e. pings).
-                          type: integer
-                      type: object
-                    notProtocol:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      description: NotProtocol is the negated version of the Protocol
-                        field.
-                      pattern: ^.*
-                      x-kubernetes-int-or-string: true
-                    protocol:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      description: "Protocol is an optional field that restricts the
-                        rule to only apply to traffic of a specific IP protocol. Required
-                        if any of the EntityRules contain Ports (because ports only
-                        apply to certain protocols). \n Must be one of these string
-                        values: \"TCP\", \"UDP\", \"ICMP\", \"ICMPv6\", \"SCTP\",
-                        \"UDPLite\" or an integer in the range 1-255."
-                      pattern: ^.*
-                      x-kubernetes-int-or-string: true
-                    source:
-                      description: Source contains the match criteria that apply to
-                        source entity.
-                      properties:
-                        namespaceSelector:
-                          description: "NamespaceSelector is an optional field that
-                            contains a selector expression. Only traffic that originates
-                            from (or terminates at) endpoints within the selected
-                            namespaces will be matched. When both NamespaceSelector
-                            and another selector are defined on the same rule, then
-                            only workload endpoints that are matched by both selectors
-                            will be selected by the rule. \n For NetworkPolicy, an
-                            empty NamespaceSelector implies that the Selector is limited
-                            to selecting only workload endpoints in the same namespace
-                            as the NetworkPolicy. \n For NetworkPolicy, `global()`
-                            NamespaceSelector implies that the Selector is limited
-                            to selecting only GlobalNetworkSet or HostEndpoint. \n
-                            For GlobalNetworkPolicy, an empty NamespaceSelector implies
-                            the Selector applies to workload endpoints across all
-                            namespaces."
-                          type: string
-                        nets:
-                          description: Nets is an optional field that restricts the
-                            rule to only apply to traffic that originates from (or
-                            terminates at) IP addresses in any of the given subnets.
-                          items:
-                            type: string
-                          type: array
-                        notNets:
-                          description: NotNets is the negated version of the Nets
-                            field.
-                          items:
-                            type: string
-                          type: array
-                        notPorts:
-                          description: NotPorts is the negated version of the Ports
-                            field. Since only some protocols have ports, if any ports
-                            are specified it requires the Protocol match in the Rule
-                            to be set to "TCP" or "UDP".
-                          items:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            pattern: ^.*
-                            x-kubernetes-int-or-string: true
-                          type: array
-                        notSelector:
-                          description: NotSelector is the negated version of the Selector
-                            field.  See Selector field for subtleties with negated
-                            selectors.
-                          type: string
-                        ports:
-                          description: "Ports is an optional field that restricts
-                            the rule to only apply to traffic that has a source (destination)
-                            port that matches one of these ranges/values. This value
-                            is a list of integers or strings that represent ranges
-                            of ports. \n Since only some protocols have ports, if
-                            any ports are specified it requires the Protocol match
-                            in the Rule to be set to \"TCP\" or \"UDP\"."
-                          items:
-                            anyOf:
-                            - type: integer
-                            - type: string
-                            pattern: ^.*
-                            x-kubernetes-int-or-string: true
-                          type: array
-                        selector:
-                          description: "Selector is an optional field that contains
-                            a selector expression (see Policy for sample syntax).
-                            \ Only traffic that originates from (terminates at) endpoints
-                            matching the selector will be matched. \n Note that: in
-                            addition to the negated version of the Selector (see NotSelector
-                            below), the selector expression syntax itself supports
-                            negation.  The two types of negation are subtly different.
-                            One negates the set of matched endpoints, the other negates
-                            the whole match: \n \tSelector = \"!has(my_label)\" matches
-                            packets that are from other Calico-controlled \tendpoints
-                            that do not have the label \"my_label\". \n \tNotSelector
-                            = \"has(my_label)\" matches packets that are not from
-                            Calico-controlled \tendpoints that do have the label \"my_label\".
-                            \n The effect is that the latter will accept packets from
-                            non-Calico sources whereas the former is limited to packets
-                            from Calico-controlled endpoints."
-                          type: string
-                        serviceAccounts:
-                          description: ServiceAccounts is an optional field that restricts
-                            the rule to only apply to traffic that originates from
-                            (or terminates at) a pod running as a matching service
-                            account.
-                          properties:
-                            names:
-                              description: Names is an optional field that restricts
-                                the rule to only apply to traffic that originates
-                                from (or terminates at) a pod running as a service
-                                account whose name is in the list.
-                              items:
-                                type: string
-                              type: array
-                            selector:
-                              description: Selector is an optional field that restricts
-                                the rule to only apply to traffic that originates
-                                from (or terminates at) a pod running as a service
-                                account that matches the given label selector. If
-                                both Names and Selector are specified then they are
-                                AND'ed.
-                              type: string
-                          type: object
-                        services:
-                          description: "Services is an optional field that contains
-                            options for matching Kubernetes Services. If specified,
-                            only traffic that originates from or terminates at endpoints
-                            within the selected service(s) will be matched, and only
-                            to/from each endpoint's port. \n Services cannot be specified
-                            on the same rule as Selector, NotSelector, NamespaceSelector,
-                            Nets, NotNets or ServiceAccounts. \n Ports and NotPorts
-                            can only be specified with Services on ingress rules."
-                          properties:
-                            name:
-                              description: Name specifies the name of a Kubernetes
-                                Service to match.
-                              type: string
-                            namespace:
-                              description: Namespace specifies the namespace of the
-                                given Service. If left empty, the rule will match
-                                within this policy's namespace.
-                              type: string
-                          type: object
-                      type: object
-                  required:
-                  - action
-                  type: object
-                type: array
-              namespaceSelector:
-                description: NamespaceSelector is an optional field for an expression
-                  used to select a pod based on namespaces.
-                type: string
-              order:
-                description: Order is an optional field that specifies the order in
-                  which the policy is applied. Policies with higher "order" are applied
-                  after those with lower order.  If the order is omitted, it may be
-                  considered to be "infinite" - i.e. the policy will be applied last.  Policies
-                  with identical order will be applied in alphanumerical order based
-                  on the Policy "Name".
-                type: number
-              preDNAT:
-                description: PreDNAT indicates to apply the rules in this policy before
-                  any DNAT.
-                type: boolean
-              selector:
-                description: "The selector is an expression used to pick pick out
-                  the endpoints that the policy should be applied to. \n Selector
-                  expressions follow this syntax: \n \tlabel == \"string_literal\"
-                  \ ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"
-                  \  ->  not equal; also matches if label is not present \tlabel in
-                  { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is
-                  one of \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\",
-                  ... }  ->  true if the value of label X is not one of \"a\", \"b\",
-                  \"c\" \thas(label_name)  -> True if that label is present \t! expr
-                  -> negation of expr \texpr && expr  -> Short-circuit and \texpr
-                  || expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall()
-                  or the empty selector -> matches all endpoints. \n Label names are
-                  allowed to contain alphanumerics, -, _ and /. String literals are
-                  more permissive but they do not support escape characters. \n Examples
-                  (with made-up labels): \n \ttype == \"webserver\" && deployment
-                  == \"prod\" \ttype in {\"frontend\", \"backend\"} \tdeployment !=
-                  \"dev\" \t! has(label_name)"
-                type: string
-              serviceAccountSelector:
-                description: ServiceAccountSelector is an optional field for an expression
-                  used to select a pod based on service accounts.
-                type: string
-              types:
-                description: "Types indicates whether this policy applies to ingress,
-                  or to egress, or to both.  When not explicitly specified (and so
-                  the value on creation is empty or nil), Calico defaults Types according
-                  to what Ingress and Egress rules are present in the policy.  The
-                  default is: \n - [ PolicyTypeIngress ], if there are no Egress rules
-                  (including the case where there are   also no Ingress rules) \n
-                  - [ PolicyTypeEgress ], if there are Egress rules but no Ingress
-                  rules \n - [ PolicyTypeIngress, PolicyTypeEgress ], if there are
-                  both Ingress and Egress rules. \n When the policy is read back again,
-                  Types will always be one of these values, never empty or nil."
-                items:
-                  description: PolicyType enumerates the possible values of the PolicySpec
-                    Types field.
-                  type: string
-                type: array
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-# Source: crds/calico/crd.projectcalico.org_hostendpoints.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: hostendpoints.crd.projectcalico.org
-spec:
-  group: crd.projectcalico.org
-  names:
-    kind: HostEndpoint
-    listKind: HostEndpointList
-    plural: hostendpoints
-    singular: hostendpoint
-  scope: Cluster
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: HostEndpointSpec contains the specification for a HostEndpoint
-              resource.
-            properties:
-              expectedIPs:
-                description: "The expected IP addresses (IPv4 and IPv6) of the endpoint.
-                  If \"InterfaceName\" is not present, Calico will look for an interface
-                  matching any of the IPs in the list and apply policy to that. Note:
-                  \tWhen using the selector match criteria in an ingress or egress
-                  security Policy \tor Profile, Calico converts the selector into
-                  a set of IP addresses. For host \tendpoints, the ExpectedIPs field
-                  is used for that purpose. (If only the interface \tname is specified,
-                  Calico does not learn the IPs of the interface for use in match
-                  \tcriteria.)"
-                items:
-                  type: string
-                type: array
-              interfaceName:
-                description: "Either \"*\", or the name of a specific Linux interface
-                  to apply policy to; or empty.  \"*\" indicates that this HostEndpoint
-                  governs all traffic to, from or through the default network namespace
-                  of the host named by the \"Node\" field; entering and leaving that
-                  namespace via any interface, including those from/to non-host-networked
-                  local workloads. \n If InterfaceName is not \"*\", this HostEndpoint
-                  only governs traffic that enters or leaves the host through the
-                  specific interface named by InterfaceName, or - when InterfaceName
-                  is empty - through the specific interface that has one of the IPs
-                  in ExpectedIPs. Therefore, when InterfaceName is empty, at least
-                  one expected IP must be specified.  Only external interfaces (such
-                  as \"eth0\") are supported here; it isn't possible for a HostEndpoint
-                  to protect traffic through a specific local workload interface.
-                  \n Note: Only some kinds of policy are implemented for \"*\" HostEndpoints;
-                  initially just pre-DNAT policy.  Please check Calico documentation
-                  for the latest position."
-                type: string
-              node:
-                description: The node name identifying the Calico node instance.
-                type: string
-              ports:
-                description: Ports contains the endpoint's named ports, which may
-                  be referenced in security policy rules.
-                items:
-                  properties:
-                    name:
-                      type: string
-                    port:
-                      type: integer
-                    protocol:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      pattern: ^.*
-                      x-kubernetes-int-or-string: true
-                  required:
-                  - name
-                  - port
-                  - protocol
-                  type: object
-                type: array
-              profiles:
-                description: A list of identifiers of security Profile objects that
-                  apply to this endpoint. Each profile is applied in the order that
-                  they appear in this list.  Profile rules are applied after the selector-based
-                  security policy.
-                items:
-                  type: string
-                type: array
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-# Source: crds/calico/crd.projectcalico.org_globalnetworksets.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: globalnetworksets.crd.projectcalico.org
-spec:
-  group: crd.projectcalico.org
-  names:
-    kind: GlobalNetworkSet
-    listKind: GlobalNetworkSetList
-    plural: globalnetworksets
-    singular: globalnetworkset
-  scope: Cluster
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        description: GlobalNetworkSet contains a set of arbitrary IP sub-networks/CIDRs
-          that share labels to allow rules to refer to them via selectors.  The labels
-          of GlobalNetworkSet are not namespaced.
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: GlobalNetworkSetSpec contains the specification for a NetworkSet
+            description: NetworkSetSpec contains the specification for a NetworkSet
               resource.
             properties:
               nets:
@@ -5472,244 +5714,6 @@ spec:
                 items:
                   type: string
                 type: array
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-# Source: crds/calico/crd.projectcalico.org_ipamblocks.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: ipamblocks.crd.projectcalico.org
-spec:
-  group: crd.projectcalico.org
-  names:
-    kind: IPAMBlock
-    listKind: IPAMBlockList
-    plural: ipamblocks
-    singular: ipamblock
-  scope: Cluster
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: IPAMBlockSpec contains the specification for an IPAMBlock
-              resource.
-            properties:
-              affinity:
-                description: Affinity of the block, if this block has one. If set,
-                  it will be of the form "host:<hostname>". If not set, this block
-                  is not affine to a host.
-                type: string
-              allocations:
-                description: Array of allocations in-use within this block. nil entries
-                  mean the allocation is free. For non-nil entries at index i, the
-                  index is the ordinal of the allocation within this block and the
-                  value is the index of the associated attributes in the Attributes
-                  array.
-                items:
-                  type: integer
-                  # TODO: This nullable is manually added in. We should update controller-gen
-                  # to handle []*int properly itself.
-                  nullable: true
-                type: array
-              attributes:
-                description: Attributes is an array of arbitrary metadata associated
-                  with allocations in the block. To find attributes for a given allocation,
-                  use the value of the allocation's entry in the Allocations array
-                  as the index of the element in this array.
-                items:
-                  properties:
-                    handle_id:
-                      type: string
-                    secondary:
-                      additionalProperties:
-                        type: string
-                      type: object
-                  type: object
-                type: array
-              cidr:
-                description: The block's CIDR.
-                type: string
-              deleted:
-                description: Deleted is an internal boolean used to workaround a limitation
-                  in the Kubernetes API whereby deletion will not return a conflict
-                  error if the block has been updated. It should not be set manually.
-                type: boolean
-              sequenceNumber:
-                default: 0
-                description: We store a sequence number that is updated each time
-                  the block is written. Each allocation will also store the sequence
-                  number of the block at the time of its creation. When releasing
-                  an IP, passing the sequence number associated with the allocation
-                  allows us to protect against a race condition and ensure the IP
-                  hasn't been released and re-allocated since the release request.
-                format: int64
-                type: integer
-              sequenceNumberForAllocation:
-                additionalProperties:
-                  format: int64
-                  type: integer
-                description: Map of allocated ordinal within the block to sequence
-                  number of the block at the time of allocation. Kubernetes does not
-                  allow numerical keys for maps, so the key is cast to a string.
-                type: object
-              strictAffinity:
-                description: StrictAffinity on the IPAMBlock is deprecated and no
-                  longer used by the code. Use IPAMConfig StrictAffinity instead.
-                type: boolean
-              unallocated:
-                description: Unallocated is an ordered list of allocations which are
-                  free in the block.
-                items:
-                  type: integer
-                type: array
-            required:
-            - allocations
-            - attributes
-            - cidr
-            - strictAffinity
-            - unallocated
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-# Source: crds/calico/crd.projectcalico.org_bgppeers.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: bgppeers.crd.projectcalico.org
-spec:
-  group: crd.projectcalico.org
-  names:
-    kind: BGPPeer
-    listKind: BGPPeerList
-    plural: bgppeers
-    singular: bgppeer
-  scope: Cluster
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: BGPPeerSpec contains the specification for a BGPPeer resource.
-            properties:
-              asNumber:
-                description: The AS Number of the peer.
-                format: int32
-                type: integer
-              keepOriginalNextHop:
-                description: Option to keep the original nexthop field when routes
-                  are sent to a BGP Peer. Setting "true" configures the selected BGP
-                  Peers node to use the "next hop keep;" instead of "next hop self;"(default)
-                  in the specific branch of the Node on "bird.cfg".
-                type: boolean
-              maxRestartTime:
-                description: Time to allow for software restart.  When specified,
-                  this is configured as the graceful restart timeout.  When not specified,
-                  the BIRD default of 120s is used.
-                type: string
-              node:
-                description: The node name identifying the Calico node instance that
-                  is targeted by this peer. If this is not set, and no nodeSelector
-                  is specified, then this BGP peer selects all nodes in the cluster.
-                type: string
-              nodeSelector:
-                description: Selector for the nodes that should have this peering.  When
-                  this is set, the Node field must be empty.
-                type: string
-              numAllowedLocalASNumbers:
-                description: Maximum number of local AS numbers that are allowed in
-                  the AS path for received routes. This removes BGP loop prevention
-                  and should only be used if absolutely necesssary.
-                format: int32
-                type: integer
-              password:
-                description: Optional BGP password for the peerings generated by this
-                  BGPPeer resource.
-                properties:
-                  secretKeyRef:
-                    description: Selects a key of a secret in the node pod's namespace.
-                    properties:
-                      key:
-                        description: The key of the secret to select from.  Must be
-                          a valid secret key.
-                        type: string
-                      name:
-                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                          TODO: Add other useful fields. apiVersion, kind, uid?'
-                        type: string
-                      optional:
-                        description: Specify whether the Secret or its key must be
-                          defined
-                        type: boolean
-                    required:
-                    - key
-                    type: object
-                type: object
-              peerIP:
-                description: The IP address of the peer followed by an optional port
-                  number to peer with. If port number is given, format should be `[<IPv6>]:port`
-                  or `<IPv4>:<port>` for IPv4. If optional port number is not set,
-                  and this peer IP and ASNumber belongs to a calico/node with ListenPort
-                  set in BGPConfiguration, then we use that port to peer.
-                type: string
-              peerSelector:
-                description: Selector for the remote nodes to peer with.  When this
-                  is set, the PeerIP and ASNumber fields must be empty.  For each
-                  peering between the local node and selected remote nodes, we configure
-                  an IPv4 peering if both ends have NodeBGPSpec.IPv4Address specified,
-                  and an IPv6 peering if both ends have NodeBGPSpec.IPv6Address specified.  The
-                  remote AS number comes from the remote node's NodeBGPSpec.ASNumber,
-                  or the global default if that is not set.
-                type: string
-              sourceAddress:
-                description: Specifies whether and how to configure a source address
-                  for the peerings generated by this BGPPeer resource.  Default value
-                  "UseNodeIP" means to configure the node IP as the source address.  "None"
-                  means not to configure a source address.
-                type: string
             type: object
         type: object
     served: true

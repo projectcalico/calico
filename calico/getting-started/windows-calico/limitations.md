@@ -102,7 +102,7 @@ One example is the VXLAN VNI setting. To change such parameters:
 - Delete the {{site.prodname}} HNS network:
 
    ```powershell
-   Import-Module {{site.rootDirWindows}}\libs\hns\hns.psm1
+   Import-Module -DisableNameChecking {{site.rootDirWindows}}\libs\hns\hns.psm1
    Get-HNSNetwork | ? Name -EQ "{{site.prodname}}" | Remove-HNSNetwork
    ```
 - Update the configuration in `config.ps1`, run `uninstall-calico.ps1` and then `install-calico.ps1` to regenerate the CNI configuration.

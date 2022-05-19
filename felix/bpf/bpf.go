@@ -998,7 +998,7 @@ func (b *BPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []stri
 }
 
 func (b *BPFLib) getMapArgs(ifName string) ([]string, error) {
-	// FIXME harcoded ipv4, do we need both?
+	// FIXME hardcoded ipv4, do we need both?
 	mapName := getCIDRMapName(ifName, IPFamilyV4)
 	mapPath := filepath.Join(b.xdpDir, mapName)
 
@@ -1258,12 +1258,12 @@ func (b *BPFLib) GetXDPIfaces() ([]string, error) {
 	printCommand(prog, args...)
 	output, err := exec.Command(prog, args...).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to show interface informations: %s\n%s", err, output)
+		return nil, fmt.Errorf("failed to show interface information: %s\n%s", err, output)
 	}
 
 	m := ifaceRegexp.FindAllStringSubmatch(string(output), -1)
 	if len(m) < 2 {
-		return nil, fmt.Errorf("failed to parse interface informations")
+		return nil, fmt.Errorf("failed to parse interface information")
 	}
 
 	for _, i := range m {

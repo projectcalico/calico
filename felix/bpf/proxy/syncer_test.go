@@ -618,7 +618,7 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(cluster.LocalCount()).To(Equal(uint32(1)))
 		}))
 
-		By("adding an unrelated route does not change anyhing", makestep(func() {
+		By("adding an unrelated route does not change anything", makestep(func() {
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.55.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(

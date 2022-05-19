@@ -236,7 +236,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	// we base the packet on the orignal packet before NAT as if we let the original packet through
+	// we base the packet on the original packet before NAT as if we let the original packet through
 	// before we do the actual NAT as that is where we check for TTL as doing it for the tunneled
 	// packet would be complicated
 	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)

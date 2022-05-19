@@ -201,7 +201,7 @@ func (d *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 func (d *ipipManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.HostMetadataUpdate:
-		log.WithField("hostanme", msg.Hostname).Debug("Host update/create")
+		log.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		d.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		d.ipSetInSync = false
 	case *proto.HostMetadataRemove:

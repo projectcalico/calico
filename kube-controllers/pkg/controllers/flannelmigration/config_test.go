@@ -23,12 +23,13 @@ import (
 	fm "github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 )
 
-var _ = Describe("Config", func() {
+var _ = Describe("flannel migration config", func() {
 	// unsetEnv() function that unsets environment variables.
 	// required by flannel migration controller.
 	unsetEnv := func() {
 		os.Unsetenv("FLANNEL_DAEMONSET_NAME")
 		os.Unsetenv("FLANNEL_SUBNET_LEN")
+		os.Unsetenv("FLANNEL_IPV6_SUBNET_LEN")
 		os.Unsetenv("FLANNEL_ANNOTATION_PREFIX")
 		os.Unsetenv("FLANNEL_VNI")
 		os.Unsetenv("FLANNEL_PORT")
@@ -75,10 +76,12 @@ var _ = Describe("Config", func() {
 
 		// Assert default values
 		Expect(config.FlannelNetwork).To(Equal(""))
+		Expect(config.FlannelIpv6Network).To(Equal(""))
 		Expect(config.FlannelMTU).To(Equal(0))
 		Expect(config.FlannelIPMasq).To(Equal(true))
 		Expect(config.FlannelDaemonsetName).To(Equal("kube-flannel-ds-amd64"))
 		Expect(config.FlannelSubnetLen).To(Equal(24))
+		Expect(config.FlannelIpv6SubnetLen).To(Equal(64))
 		Expect(config.FlannelAnnotationPrefix).To(Equal("flannel.alpha.coreos.com"))
 		Expect(config.FlannelVNI).To(Equal(1))
 		Expect(config.FlannelPort).To(Equal(8472))
@@ -100,10 +103,40 @@ var _ = Describe("Config", func() {
 
 		// Assert values
 		Expect(config.FlannelNetwork).To(Equal("10.244.0.0/16"))
+		Expect(config.FlannelIpv6Network).To(Equal(""))
 		Expect(config.FlannelMTU).To(Equal(8951))
 		Expect(config.FlannelIPMasq).To(Equal(false))
 		Expect(config.FlannelDaemonsetName).To(Equal("flannel-daemonset"))
 		Expect(config.FlannelSubnetLen).To(Equal(25))
+		Expect(config.FlannelIpv6SubnetLen).To(Equal(64))
+		Expect(config.FlannelAnnotationPrefix).To(Equal("flannel-prefix"))
+		Expect(config.FlannelVNI).To(Equal(3))
+		Expect(config.FlannelPort).To(Equal(1234))
+		Expect(config.CalicoDaemonsetName).To(Equal("calico-daemonset"))
+		Expect(config.CniConfigDir).To(Equal("/cni/config"))
+		Expect(config.PodNodeName).To(Equal("test-node"))
+	})
+
+	It("with valid IPv6 user defined values", func() {
+		// Set environment variables
+		setEnv()
+		os.Setenv("FLANNEL_IPV6_SUBNET_LEN", "66")
+		os.Setenv("FLANNEL_SUBNET_ENV", "FLANNEL_NETWORK=10.244.0.0/16;FLANNEL_SUBNET=10.244.1.1/24;FLANNEL_MTU=8951;FLANNEL_IPMASQ=false;FLANNEL_IPV6_NETWORK=2001:cafe:42::/56;FLANNEL_IPV6_SUBNET=2001:cafe:42::1/64;")
+		defer unsetEnv()
+
+		// Parse config
+		config := new(fm.Config)
+		err := config.Parse()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert values
+		Expect(config.FlannelNetwork).To(Equal("10.244.0.0/16"))
+		Expect(config.FlannelIpv6Network).To(Equal("2001:cafe:42::/56"))
+		Expect(config.FlannelMTU).To(Equal(8951))
+		Expect(config.FlannelIPMasq).To(Equal(false))
+		Expect(config.FlannelDaemonsetName).To(Equal("flannel-daemonset"))
+		Expect(config.FlannelSubnetLen).To(Equal(25))
+		Expect(config.FlannelIpv6SubnetLen).To(Equal(66))
 		Expect(config.FlannelAnnotationPrefix).To(Equal("flannel-prefix"))
 		Expect(config.FlannelVNI).To(Equal(3))
 		Expect(config.FlannelPort).To(Equal(1234))
@@ -113,7 +146,6 @@ var _ = Describe("Config", func() {
 	})
 
 	It("with invalid user defined values", func() {
-
 		// Set wrong environment variables
 		setWrongEnv()
 		defer unsetEnv()

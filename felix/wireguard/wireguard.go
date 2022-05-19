@@ -1237,7 +1237,7 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 	if device.PrivateKey == zeroKey || device.PublicKey == zeroKey {
 		// One of the private or public key is not set. Generate a new private key and return the corresponding
 		// public key.
-		log.Info("Generate new private/public keypair")
+		log.Info("Generate new private/public key pair")
 		pkey, err := wgtypes.GeneratePrivateKey()
 		if err != nil {
 			log.WithError(err).Error("error generating private-key")

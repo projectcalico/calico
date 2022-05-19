@@ -76,13 +76,18 @@ const (
 type TargetType string
 
 const (
-	TargetTypeVXLAN   TargetType = "vxlan"
-	TargetTypeNoEncap TargetType = "noencap"
+	TargetTypeLocal            TargetType = "local"
+	TargetTypeVXLAN            TargetType = "vxlan"
+	TargetTypeNoEncap          TargetType = "noencap"
+	TargetTypeOnLink           TargetType = "onlink"
+	TargetTypeGlobalUnicast    TargetType = "global-unicast"
+	TargetTypeLinkLocalUnicast TargetType = "local-unicast"
 
 	// The following target types should be used with InterfaceNone.
-	TargetTypeBlackhole TargetType = "blackhole"
-	TargetTypeProhibit  TargetType = "prohibit"
-	TargetTypeThrow     TargetType = "throw"
+	TargetTypeBlackhole   TargetType = "blackhole"
+	TargetTypeProhibit    TargetType = "prohibit"
+	TargetTypeThrow       TargetType = "throw"
+	TargetTypeUnreachable TargetType = "unreachable"
 )
 
 const (
@@ -113,12 +118,16 @@ func (t Target) Equal(t2 Target) bool {
 
 func (t Target) RouteType() int {
 	switch t.Type {
+	case TargetTypeLocal:
+		return syscall.RTN_LOCAL
 	case TargetTypeThrow:
 		return syscall.RTN_THROW
 	case TargetTypeBlackhole:
 		return syscall.RTN_BLACKHOLE
 	case TargetTypeProhibit:
 		return syscall.RTN_PROHIBIT
+	case TargetTypeUnreachable:
+		return syscall.RTN_UNREACHABLE
 	default:
 		return syscall.RTN_UNICAST
 	}
@@ -126,14 +135,35 @@ func (t Target) RouteType() int {
 
 func (t Target) RouteScope() netlink.Scope {
 	switch t.Type {
+	case TargetTypeLocal:
+		return netlink.SCOPE_HOST
+	case TargetTypeLinkLocalUnicast:
+		return netlink.SCOPE_LINK
+	case TargetTypeGlobalUnicast:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeNoEncap:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeVXLAN:
+		return netlink.SCOPE_UNIVERSE
 	case TargetTypeThrow:
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeBlackhole:
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeProhibit:
 		return netlink.SCOPE_UNIVERSE
+	case TargetTypeOnLink:
+		return netlink.SCOPE_LINK
 	default:
 		return netlink.SCOPE_LINK
+	}
+}
+
+func (t Target) Flags() netlink.NextHopFlag {
+	switch t.Type {
+	case TargetTypeVXLAN, TargetTypeNoEncap, TargetTypeOnLink:
+		return syscall.RTNH_F_ONLINK
+	default:
+		return 0
 	}
 }
 
@@ -456,7 +486,7 @@ func (r *RouteTable) getNetlink() (netlinkshim.Interface, error) {
 			log.WithField("numFailures", r.numConsistentNetlinkFailures).Panic(
 				"Repeatedly failed to connect to netlink.")
 		}
-		log.Info("Trying to connect to netlink")
+		log.Debug("Trying to connect to netlink")
 		nlHandle, err := r.newNetlinkHandle()
 		if err != nil {
 			r.numConsistentNetlinkFailures++
@@ -802,6 +832,12 @@ func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) 
 		Table:     r.tableIndex,
 	}
 
+	// If this is an IPv6 blackhole route, set the dev to lo. This matches
+	// what the kernel does, and ensures we properly query programmed routes.
+	if r.ipVersion == 6 && target.RouteType() == syscall.RTN_BLACKHOLE {
+		route.LinkIndex = 1
+	}
+
 	if r.deviceRouteSourceAddress != nil {
 		route.Src = r.deviceRouteSourceAddress
 	}
@@ -822,53 +858,9 @@ func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) 
 // the expected set. After correlation, it will create a set of routes to delete and update the delta routes to add
 // back any missing routes.
 func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string, deletedConnCIDRs set.Set) ([]netlink.Route, error) {
-	// Get the netlink client and the link attributes
-	nl, err := r.getNetlink()
-	if err != nil {
-		logCxt.Debug("Failed to connect to netlink")
-		return nil, ConnectFailed
-	}
-	// Try to get the link.  This may fail if it's been deleted out from under us.
-	linkAttrs, err := r.getLinkAttributes(ifaceName)
+	programmedRoutes, err := r.readProgrammedRoutes(logCxt, ifaceName)
 	if err != nil {
 		return nil, err
-	}
-
-	// In order to allow Calico to run without Felix in an emergency, the CNI plugin pre-adds
-	// the route to the interface.  To avoid flapping the route when Felix sees the interface
-	// before learning about the endpoint, we give each interface a grace period after we first
-	// see it before we remove routes that we're not expecting.  Check whether the grace period
-	// applies to this interface.
-	ifaceInGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < r.routeCleanupGracePeriod
-
-	// Got the link; try to sync its routes.  Note: We used to check if the interface
-	// was oper down before we tried to do the sync but that prevented us from removing
-	// routes from an interface in some corner cases (such as being admin up but oper
-	// down).
-	routeFilter := &netlink.Route{
-		Table: r.tableIndex,
-	}
-	routeFilterFlags := netlink.RT_FILTER_OIF
-	if r.tableIndex != 0 {
-		routeFilterFlags |= netlink.RT_FILTER_TABLE
-	}
-	if linkAttrs != nil {
-		// Link attributes might be nil for the special "no-OIF" interface name.
-		routeFilter.LinkIndex = linkAttrs.Index
-	}
-	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
-	r.livenessCallback()
-	if err != nil {
-		// Filter the error so that we don't spam errors if the interface is being torn
-		// down.
-		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
-		if filteredErr == ListFailed {
-			logCxt.WithError(err).Error("Error listing routes")
-			r.closeNetlink() // Defensive: force a netlink reconnection next time.
-		} else {
-			logCxt.WithError(err).Info("Failed to list routes; interface down/gone.")
-		}
-		return nil, filteredErr
 	}
 
 	var routesToDelete []netlink.Route
@@ -920,6 +912,12 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 			alreadyCorrectCIDRs.Add(dest)
 			continue
 		}
+		// In order to allow Calico to run without Felix in an emergency, the CNI plugin pre-adds
+		// the route to the interface.  To avoid flapping the route when Felix sees the interface
+		// before learning about the endpoint, we give each interface a grace period after we first
+		// see it before we remove routes that we're not expecting.  Check whether the grace period
+		// applies to this interface.
+		ifaceInGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < r.routeCleanupGracePeriod
 		if ifaceInGracePeriod && !routeExpected {
 			// Don't remove unexpected routes from interfaces created recently.
 			logCxt.Info("Syncing routes: found unexpected route; ignoring due to grace period.")
@@ -934,7 +932,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	}
 
 	// Now loop through the expected CIDRs to Target. Remove any that we did not find, and add them back into our
-	// delta updates (unless the entry is superceded by another update).
+	// delta updates (unless the entry is superseded by another update).
 	for cidr, target := range expectedTargets {
 		if alreadyCorrectCIDRs.Contains(cidr) {
 			continue
@@ -943,7 +941,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 		logCxt.Info("Deleting from expected targets")
 		delete(expectedTargets, cidr)
 
-		// If we do not have an update that supercedes this entry, then add it back in as an update so that we add
+		// If we do not have an update that supersedes this entry, then add it back in as an update so that we add
 		// the route.
 		if pendingTarget, ok := pendingDeltaTargets[cidr]; !ok {
 			logCxt.Info("No pending target update, adding back in as an update")
@@ -962,6 +960,55 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	}
 
 	return routesToDelete, nil
+}
+
+func (r *RouteTable) readProgrammedRoutes(logCxt *log.Entry, ifaceName string) ([]netlink.Route, error) {
+	// Get the netlink client and the link attributes
+	nl, err := r.getNetlink()
+	if err != nil {
+		logCxt.Debug("Failed to connect to netlink")
+		return nil, ConnectFailed
+	}
+	// Try to get the link.  This may fail if it's been deleted out from under us.
+	linkAttrs, err := r.getLinkAttributes(ifaceName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Got the link; try to sync its routes.  Note: We used to check if the interface
+	// was oper down before we tried to do the sync but that prevented us from removing
+	// routes from an interface in some corner cases (such as being admin up but oper
+	// down).
+	routeFilter := &netlink.Route{
+		Table: r.tableIndex,
+	}
+
+	routeFilterFlags := netlink.RT_FILTER_OIF
+	if r.tableIndex != 0 {
+		routeFilterFlags |= netlink.RT_FILTER_TABLE
+	}
+	if linkAttrs != nil {
+		// Link attributes might be nil for the special "no-OIF" interface name.
+		routeFilter.LinkIndex = linkAttrs.Index
+	} else if r.ipVersion == 6 {
+		// IPv6 no-OIF interfaces get corrected to lo, which is interface index 1.
+		routeFilter.LinkIndex = 1
+	}
+	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+	r.livenessCallback()
+	if err != nil {
+		// Filter the error so that we don't spam errors if the interface is being torn
+		// down.
+		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
+		if filteredErr == ListFailed {
+			logCxt.WithError(err).Error("Error listing routes")
+			r.closeNetlink() // Defensive: force a netlink reconnection next time.
+		} else {
+			logCxt.WithError(err).Info("Failed to list routes; interface down/gone.")
+		}
+		return nil, filteredErr
+	}
+	return programmedRoutes, nil
 }
 
 func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {

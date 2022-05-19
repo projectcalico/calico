@@ -704,8 +704,8 @@ func (t *Table) loadDataplaneState() {
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
 // given our inserts and appends.
-// Hashes for inserted rules are caculated first. If we're in append mode, that consists of numNonCalicoRules empty strings
-// followed by our inserted hashes; in insert mode, the opposite way round. Hashes for appended rules are caculated and
+// Hashes for inserted rules are calculated first. If we're in append mode, that consists of numNonCalicoRules empty strings
+// followed by our inserted hashes; in insert mode, the opposite way round. Hashes for appended rules are calculated and
 // appended at the end.
 // To avoid recalculation, it returns the inserted rule hashes as a second output and appended rule hashes
 // a third output.

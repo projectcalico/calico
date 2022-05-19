@@ -2,9 +2,9 @@
 # Authour : Reza R <54559947+frozenprocess@users.noreply.github.com>
 # This plugin adds bootstrap predefined tab block in Jekyll
 <<-EXAMPLE
-tabs can be generated using 
+tabs can be generated using
 {% tabs %}
-**Note: tabs are linked to a predifined group named `default`, using `tab-group`
+**Note: tabs are linked to a predefined group named `default`, using `tab-group`
 you can define multiple linked tab groups.**
 @input tab-group optional, string
 @input type optional, pill|tabs
@@ -46,7 +46,7 @@ module Jekyll
 
         # function checks mandatory items that are needed to implement tabs
         def checkMandatories(items)
-            # exception handeling if user not gave any id
+            # exception handling if user not gave any id
             if items.key?("id") == false || items["id"].match(IdPattern) == false
                 items["id"] = "tabplugin-#{$idInc}"
                 $idInc += 1
@@ -55,7 +55,7 @@ module Jekyll
 
         # convert input parameters to hash
         def createHash(items)
-            hash = {} 
+            hash = {}
             items.scan(InputPattern) do |key, value|
                 hash[key] = value.strip
             end
@@ -64,7 +64,7 @@ module Jekyll
 
         def render(context)
             text = super
-                        
+
             # tab global header
             result = "<ul class=\"nav nav-#{@header["type"]} flex-column general-tab-header\" "
             result += "aria-orientation=\"vertical\" id=\"#{@header['id']}\" "
@@ -72,9 +72,9 @@ module Jekyll
             # user input should follow this format
             # tabs : <key:value>
             # content: <% content %>
-            tmpdata = text.scan(/<(.*?)>(?:.*?)<\%(.*?)\%>/m)            
+            tmpdata = text.scan(/<(.*?)>(?:.*?)<\%(.*?)\%>/m)
 
-            # registering tab_group flag used in `_layouts/docwithnav.html` to decied
+            # registering tab_group flag used in `_layouts/docwithnav.html` to decide
             # when to include js/tabs.js in a page.
             context.registers[:page]["tab_group"] = true
 
@@ -106,7 +106,7 @@ module Jekyll
             end
             # final result is ready
             result += headers + contents + "</div>"
-            
+
             return result
 
         end

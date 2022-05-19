@@ -39,7 +39,7 @@ const (
 )
 
 // ConfigurationOptions may be used to setup the driver.
-// These are optional and most users will not depened on them and will instead use the defaults.
+// These are optional and most users will not depend on them and will instead use the defaults.
 type ConfigurationOptions struct {
 	// Location on the node's filesystem where the driver will host the
 	// per workload directory and the credentials for the workload.

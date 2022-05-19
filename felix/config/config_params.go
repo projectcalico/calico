@@ -190,7 +190,7 @@ type Config struct {
 	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict);Strict;non-zero"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
-	// are configured for cgroup v1, which prevents all but hte root cgroup v2 from working so this is only useful
+	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
 	// for development right now.
 	DebugBPFCgroupV2 string `config:"string;;local"`
 	// DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
@@ -274,12 +274,15 @@ type Config struct {
 	LogDebugFilenameRegex *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
 	// Optional: VXLAN encap is now determined by the existing IP pools (Encapsulation struct)
-	VXLANEnabled        *bool  `config:"*bool;"`
-	VXLANPort           int    `config:"int;4789"`
-	VXLANVNI            int    `config:"int;4096"`
-	VXLANMTU            int    `config:"int;0"`
-	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
-	VXLANTunnelMACAddr  string `config:"string;"`
+	VXLANEnabled         *bool  `config:"*bool;"`
+	VXLANPort            int    `config:"int;4789"`
+	VXLANVNI             int    `config:"int;4096"`
+	VXLANMTU             int    `config:"int;0"`
+	VXLANMTUV6           int    `config:"int;0"`
+	IPv4VXLANTunnelAddr  net.IP `config:"ipv4;"`
+	IPv6VXLANTunnelAddr  net.IP `config:"ipv6;"`
+	VXLANTunnelMACAddr   string `config:"string;"`
+	VXLANTunnelMACAddrV6 string `config:"string;"`
 
 	// Optional: IPIP encap is now determined by the existing IP pools (Encapsulation struct)
 	IpInIpEnabled    *bool  `config:"*bool;"`
@@ -346,7 +349,7 @@ type Config struct {
 
 	// Configure where Felix gets its routing information.
 	// - workloadIPs: use workload endpoints to construct routes.
-	// - calicoIPAM: use IPAM data to contruct routes.
+	// - calicoIPAM: use IPAM data to construct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
 	// RouteTableRange is deprecated in favor of RouteTableRanges,
@@ -755,8 +758,10 @@ func loadParams() {
 		case "millis":
 			param = &MillisParam{}
 		case "iface-list":
-			param = &RegexpParam{Regexp: IfaceListRegexp,
-				Msg: "invalid Linux interface name"}
+			param = &RegexpParam{
+				Regexp: IfaceListRegexp,
+				Msg:    "invalid Linux interface name",
+			}
 		case "iface-list-regexp":
 			param = &RegexpPatternListParam{
 				NonRegexpElemRegexp: NonRegexpIfaceElemRegexp,
@@ -769,16 +774,20 @@ func loadParams() {
 				Flags: strings.Split(kindParams, ","),
 			}
 		case "iface-param":
-			param = &RegexpParam{Regexp: IfaceParamRegexp,
-				Msg: "invalid Linux interface parameter"}
+			param = &RegexpParam{
+				Regexp: IfaceParamRegexp,
+				Msg:    "invalid Linux interface parameter",
+			}
 		case "file":
 			param = &FileParam{
 				MustExist:  strings.Contains(kindParams, "must-exist"),
 				Executable: strings.Contains(kindParams, "executable"),
 			}
 		case "authority":
-			param = &RegexpParam{Regexp: AuthorityRegexp,
-				Msg: "invalid URL authority"}
+			param = &RegexpParam{
+				Regexp: AuthorityRegexp,
+				Msg:    "invalid URL authority",
+			}
 		case "ipv4":
 			param = &Ipv4Param{}
 		case "ipv6":
@@ -792,11 +801,15 @@ func loadParams() {
 		case "portrange-list":
 			param = &PortRangeListParam{}
 		case "hostname":
-			param = &RegexpParam{Regexp: HostnameRegexp,
-				Msg: "invalid hostname"}
+			param = &RegexpParam{
+				Regexp: HostnameRegexp,
+				Msg:    "invalid hostname",
+			}
 		case "host-address":
-			param = &RegexpParam{Regexp: HostAddressRegexp,
-				Msg: "invalid host address"}
+			param = &RegexpParam{
+				Regexp: HostAddressRegexp,
+				Msg:    "invalid host address",
+			}
 		case "region":
 			param = &RegionParam{}
 		case "oneof":
@@ -806,10 +819,13 @@ func loadParams() {
 				lowerCaseToCanon[strings.ToLower(option)] = option
 			}
 			param = &OneofListParam{
-				lowerCaseOptionsToCanonical: lowerCaseToCanon}
+				lowerCaseOptionsToCanonical: lowerCaseToCanon,
+			}
 		case "string":
-			param = &RegexpParam{Regexp: StringRegexp,
-				Msg: "invalid string"}
+			param = &RegexpParam{
+				Regexp: StringRegexp,
+				Msg:    "invalid string",
+			}
 		case "cidr-list":
 			param = &CIDRListParam{}
 		case "route-table-range":
@@ -937,6 +953,7 @@ type param interface {
 }
 
 type Encapsulation struct {
-	IPIPEnabled  bool
-	VXLANEnabled bool
+	IPIPEnabled    bool
+	VXLANEnabled   bool
+	VXLANEnabledV6 bool
 }

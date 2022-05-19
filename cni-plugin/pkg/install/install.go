@@ -36,6 +36,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/node/pkg/cni"
 )
 
 type config struct {
@@ -476,7 +477,16 @@ contexts:
     user: calico
 current-context: calico-context`
 
-	data = strings.Replace(data, "TOKEN", kubecfg.BearerToken, 1)
+	clientset, err := cni.BuildClientSet()
+	if err != nil {
+		logrus.WithError(err).Fatal("Unable to create client for generating CNI token")
+	}
+	tr := cni.NewTokenRefresher(clientset, cni.NamespaceOfUsedServiceAccount(), cni.DefaultServiceAccountName)
+	tu, err := tr.UpdateToken()
+	if err != nil {
+		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
+	}
+	data = strings.Replace(data, "TOKEN", tu.Token, 1)
 	data = strings.Replace(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"), -1)
 	data = strings.Replace(data, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""), -1)
 	data = strings.Replace(data, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""), -1)

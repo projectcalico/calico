@@ -207,8 +207,8 @@ pkg/install/install.test: pkg/install/*.go
 
 .PHONY: test-install-cni
 ## Test the install
-test-install-cni: image pkg/install/install.test
-	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE):latest-$(ARCH) ./install.test
+test-install-cni: run-k8s-apiserver image pkg/install/install.test
+	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE):latest-$(ARCH) CERTS_PATH=$(CERTS_PATH) ./install.test
 
 ###############################################################################
 # CI/CD

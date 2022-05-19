@@ -47,5 +47,13 @@ filter calico_kernel_programming {
   {{- end}}
 
 {{- end}}
+{{range ls "/v1/ipam/v6/pool"}}{{$data := json (getv (printf "/v1/ipam/v6/pool/%s" .))}}
+{{- if $data.vxlan_mode}}
+  if ( net ~ {{$data.cidr}} ) then {
+    # Don't program VXLAN routes into the kernel - these are handled by Felix.
+    reject;
+  }
+{{- end}}{{/* End of '$data.vxlan_mode' */}}
+{{- end}}{{/* End of 'range ls...' */}}
   accept;                                  {{- /* Destination is not in any ipPool, accept  */}}
 }
