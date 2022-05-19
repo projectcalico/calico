@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
 
-func Run() {
+func Run(bestEffort bool) {
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
 	startup.ConfigureLogging()
 
@@ -45,7 +45,9 @@ func Run() {
 	err = ensureCgroupV2Filesystem()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to mount cgroup2 filesystem.")
-		os.Exit(3)
+		if !bestEffort {
+			os.Exit(3)
+		}
 	}
 }
 
@@ -72,7 +74,7 @@ func ensureBPFFilesystem() error {
 	}
 
 	// If we get here, the BPF filesystem is not mounted.  Try to mount it.
-	logrus.Info("BPF filesystem is not mounted.  Trying to mount it...")
+	logrus.Info("BPF filesystem is not mounted. Trying to mount it...")
 	err = syscall.Mount(bpf.DefaultBPFfsPath, bpf.DefaultBPFfsPath, "bpf", 0, "")
 	if err != nil {
 		return fmt.Errorf("failed to mount BPF filesystem: %w", err)
@@ -109,7 +111,7 @@ func ensureCgroupV2Filesystem() error {
 	}
 
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
-	logrus.Info("Cgroup2 filesystem is not mounted.  Trying to mount it...")
+	logrus.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
 
 	mountCmd := exec.Command("mountns")
 	out, err := mountCmd.Output()
