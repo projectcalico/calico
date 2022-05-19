@@ -63,7 +63,7 @@ func init() {
 	log.SetLevel(log.DebugLevel)
 
 	fd := environment.NewFeatureDetector(make(map[string]string))
-	if err := fd.KernelIsAtLeast("5.9.0"); err == nil {
+	if ok, err := fd.KernelIsAtLeast("5.9.0"); err == nil && ok {
 		canTestMarks = true
 	}
 }
