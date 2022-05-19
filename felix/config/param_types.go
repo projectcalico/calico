@@ -111,10 +111,10 @@ func (p *IntParam) Parse(raw string) (interface{}, error) {
 		err = p.parseFailed(raw, "invalid int")
 		return nil, err
 	}
-	if result < p.Min {
+	if value < p.Min {
 		err = p.parseFailed(raw,
 			fmt.Sprintf("value must be at least %v", p.Min))
-	} else if result > p.Max {
+	} else if value > p.Max {
 		err = p.parseFailed(raw,
 			fmt.Sprintf("value must be at most %v", p.Max))
 	} else {
