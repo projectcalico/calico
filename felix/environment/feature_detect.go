@@ -165,19 +165,40 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	}
 }
 
-func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
+func (d *FeatureDetector) kernelIsAtLeast(v *Version) (bool, *Version, error) {
 	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
-		return fmt.Errorf("failed to get kernel version reader: %v", err)
+		return false, nil, fmt.Errorf("failed to get kernel version reader: %w", err)
 	}
 
 	kernelVersion, err := GetKernelVersion(versionReader)
 	if err != nil {
-		return fmt.Errorf("failed to get kernel version: %v", err)
+		return false, nil, fmt.Errorf("failed to get kernel version: %w", err)
 	}
 
-	if kernelVersion.Compare(v) < 0 {
-		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v)
+	return kernelVersion.Compare(v) < 0, kernelVersion, nil
+}
+
+// KernelIsAtLeast returns whether the predicate is true or not and an error in
+// case it was not able to determine it.
+func (d *FeatureDetector) KernelIsAtLeast(v string) (bool, error) {
+	ver, err := NewVersion(v)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse kernel version: %w", err)
+	}
+
+	ok, _, err := d.kernelIsAtLeast(ver)
+
+	return ok, err
+}
+
+func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
+	ok, kernelVersion, err := d.kernelIsAtLeast(v)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("kernel is too old (have: %s but want at least: %s)", kernelVersion, v)
 	}
 
 	return nil
