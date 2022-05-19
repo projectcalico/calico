@@ -157,6 +157,10 @@ func (m *mockDataplane) delRoute(ip string) error {
 		return fmt.Errorf("delRoute error")
 	}
 
+	if _, ok := m.routes[ip]; !ok {
+		return fmt.Errorf("no route for %s", ip)
+	}
+
 	delete(m.routes, ip)
 
 	return nil
