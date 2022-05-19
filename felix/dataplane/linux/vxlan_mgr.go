@@ -111,7 +111,7 @@ func newVXLANManager(
 
 	var brt routeTable
 	if !dpConfig.RouteSyncDisabled {
-		log.Debug("RouteSyncDisabled is false.")
+		logrus.Debug("RouteSyncDisabled is false.")
 		brt = routetable.New(
 			[]string{routetable.InterfaceNone},
 			4,
@@ -136,10 +136,10 @@ func newVXLANManager(
 				opRecorder,
 			)
 		} else if ipVersion != 4 {
-			log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
+			logrus.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 		}
 	} else {
-		log.Info("RouteSyncDisabled is true, using DummyTable.")
+		logrus.Info("RouteSyncDisabled is true, using DummyTable.")
 		brt = &routetable.DummyTable{}
 	}
 
