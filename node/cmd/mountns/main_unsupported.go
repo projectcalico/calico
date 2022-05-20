@@ -1,3 +1,5 @@
+//go:build !cgo
+
 // Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,8 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nodeinit
+package main
 
-func Run(_ bool) {
-	// Unused on Windows.
+import (
+	"github.com/sirupsen/logrus"
+
+	"runtime"
+)
+
+// BPF dataplane is not supported in some architectures like Armv7, and at the same time
+// this binary cannot be compiled for these architectures becuase of the dependency to
+// libbpf and cgo. This file is compiled for these architectures.
+func main() {
+	logrus.Infof("mountns binary is not supported on %s architecture.", runtime.GOARCH)
 }
