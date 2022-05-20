@@ -107,9 +107,18 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
 	}
 	// Collect the volumes for this container.
+	wd, err := os.Getwd()
+	Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
+	fvBin := os.Getenv("FV_BINARY")
+	if fvBin == "" {
+		fvBin = "bin/calico-felix-amd64"
+	}
 	volumes := map[string]string{
-		"/lib/modules": "/lib/modules",
-		"/tmp":         "/tmp",
+		path.Join(wd, "..", "bin"):        "/usr/local/bin",
+		path.Join(wd, "..", fvBin):        "/usr/local/bin/calico-felix",
+		path.Join(wd, "..", "bin", "bpf"): "/usr/lib/calico/bpf/",
+		"/lib/modules":                    "/lib/modules",
+		"/tmp":                            "/tmp",
 	}
 
 	containerName := containers.UniqueName(fmt.Sprintf("felix-%d", id))
