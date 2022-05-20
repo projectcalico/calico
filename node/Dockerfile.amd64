@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2022 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -204,6 +204,12 @@ COPY dist/bin/calico-node-amd64 /bin/calico-node
 
 # Set the suid bit on calico-node
 RUN chmod u+s /bin/calico-node
+
+# Copy in the moutnns binary
+COPY dist/bin/mountns /bin/mountns
+
+# Set the suid bit on mountns
+RUN chmod u+s /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
