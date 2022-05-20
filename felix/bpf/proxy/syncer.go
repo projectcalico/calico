@@ -104,8 +104,8 @@ type stickyFrontend struct {
 // Syncer is an implementation of DPSyncer interface. It is not thread safe and
 // should be called only once at a time
 type Syncer struct {
-	bpfSvcs *cachingmap.CachingMap
-	bpfEps  *cachingmap.CachingMap
+	bpfSvcs *cachingmap.CachingMap[nat.FrontendKey, nat.FrontendValue]
+	bpfEps  *cachingmap.CachingMap[nat.BackendKey, nat.BackendValue]
 	bpfAff  bpf.Map
 
 	nextSvcID uint32
@@ -192,7 +192,11 @@ func uniqueIPs(ips []net.IP) []net.IP {
 }
 
 // NewSyncer returns a new Syncer
-func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap *cachingmap.CachingMap, affmap bpf.Map, rt Routes) (*Syncer, error) {
+func NewSyncer(nodePortIPs []net.IP,
+	svcsmap *cachingmap.CachingMap[nat.FrontendKey, nat.FrontendValue],
+	epsmap *cachingmap.CachingMap[nat.BackendKey, nat.BackendValue],
+	affmap bpf.Map, rt Routes) (*Syncer, error) {
+
 	s := &Syncer{
 		bpfSvcs:     svcsmap,
 		bpfEps:      epsmap,
@@ -272,12 +276,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 
 	// Walk the frontend bpf map that was read into memory and match it against the
 	// references build from the state
-	s.bpfSvcs.IterDataplaneCache(func(k, v []byte) {
-		var svck nat.FrontendKey
-		var svcv nat.FrontendValue
-		copy(svck[:], k)
-		copy(svcv[:], v)
-
+	s.bpfSvcs.IterDataplaneCache(func(svck nat.FrontendKey, svcv nat.FrontendValue) {
 		xref, ok := svcRef[svck]
 		if !ok {
 			return
@@ -313,14 +312,12 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 		}
 		for i := 0; i < count; i++ {
 			epk := nat.NewNATBackendKey(id, uint32(i))
-			epSlice := s.bpfEps.GetDataplaneCache(epk[:])
-			if epSlice == nil {
+			ep, ok := s.bpfEps.GetDataplaneCache(epk)
+			if !ok {
 				log.Warnf("inconsistent backed map, missing ep %s", epk)
 				inconsistent = true
 				break
 			}
-			var ep nat.BackendValue
-			copy(ep[:], epSlice)
 			s.prevEpsMap[svckey.sname] = append(s.prevEpsMap[svckey.sname],
 				&k8sp.BaseEndpointInfo{
 					Endpoint: net.JoinHostPort(ep.Addr().String(), strconv.Itoa(int(ep.Port()))),
@@ -756,7 +753,7 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 		return errors.Errorf("no port for endpoint %q: %s", ep, err)
 	}
 	val := nat.NewNATBackendValue(ip, uint16(tgtPort))
-	s.bpfEps.SetDesired(key[:], val[:])
+	s.bpfEps.SetDesired(key, val)
 
 	if s.stickyEps[svcID] != nil {
 		s.stickyEps[svcID][val] = struct{}{}
@@ -821,14 +818,14 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 		if log.GetLevel() >= log.DebugLevel {
 			log.Debugf("bpf map writing %s:%s", key, val)
 		}
-		s.bpfSvcs.SetDesired(key[:], val[:])
+		s.bpfSvcs.SetDesired(key, val)
 	}
 	key, err = getSvcNATKey(svc)
 	if err != nil {
 		return err
 	}
 	val = nat.NewNATValue(svcID, nat.BlackHoleCount, uint32(0), uint32(0))
-	s.bpfSvcs.SetDesired(key[:], val[:])
+	s.bpfSvcs.SetDesired(key, val)
 	return nil
 }
 
@@ -848,7 +845,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int, 
 	if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("bpf map writing %s:%s", key, val)
 	}
-	s.bpfSvcs.SetDesired(key[:], val[:])
+	s.bpfSvcs.SetDesired(key, val)
 
 	var affkey nat.FrontEndAffinityKey
 	copy(affkey[:], key.Affinitykey())
