@@ -1363,7 +1363,7 @@ func CidrToHex(cidr string) ([]string, error) {
 	}
 	rawIP := cidrParts[0]
 
-	mask, err := strconv.Atoi(cidrParts[1])
+	mask, err := strconv.ParseUint(cidrParts[1], 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert mask %d to int", mask)
 	}
