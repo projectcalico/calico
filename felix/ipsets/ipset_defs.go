@@ -150,7 +150,7 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 		default:
 			log.WithField("member", member).Panic("Unknown protocol")
 		}
-		port, err := strconv.ParseUInt(parts[1], 10, 16)
+		port, err := strconv.ParseUint(parts[1], 10, 16)
 		if err != nil {
 			log.WithField("member", member).WithError(err).Panic("Bad port (should be between 0 and 65535)")
 		}
