@@ -254,7 +254,7 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 		go build -v -o $@ $(LDFLAGS) ./cmd/calico-ipam'
 
 $(TOOLS_MOUNTNS_BINARY):
-	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./tools/mountns.go'
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/mountns'
 
 ###############################################################################
 # Building the image
