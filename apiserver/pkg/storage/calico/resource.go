@@ -423,10 +423,13 @@ func (rs *resourceStore) GuaranteedUpdate(
 		if err != nil {
 			return err
 		}
-		revInt, _ := strconv.Atoi(accessor.GetResourceVersion())
+		revInt, err := strconv.ParseInt(accessor.GetResourceVersion(), 10, 64)
+		if err != nil {
+			return err
+		}
 		updatedRes := updatedObj.(resourceObject)
 		if !shouldCreateOnUpdate() {
-			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < int64(curState.rev) {
+			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < curState.rev {
 				updatedRes.(resourceObject).GetObjectMeta().SetResourceVersion(strconv.FormatInt(curState.rev, 10))
 			}
 		}
