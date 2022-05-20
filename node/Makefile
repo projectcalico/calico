@@ -197,7 +197,7 @@ clean-windows:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(NODE_CONTAINER_BINARY)
+build: $(NODE_CONTAINER_BINARY) $(TOOLS_MOUNTNS_BINARY)
 
 # Pull in config from confd.
 filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
