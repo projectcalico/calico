@@ -27,11 +27,6 @@ FROM calico/bpftool:v5.3-amd64 as bpftool
 FROM debian:10-slim
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
-# Binary to execute as "felix". This allows us to swap out
-# alternative builds for the tests.
-# TODO: We should just mount this in from the host.
-ARG FV_BINARY=bin/calico-felix-amd64
-
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \
     ipset \
@@ -64,28 +59,13 @@ COPY --from=wgtool /usr/bin/wg /usr/bin/wg
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
 RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
-# Install tini, the init daemon we use.
-ENV TINI_VERSION v0.18.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
-
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin
 
 ADD bin/test-connection bin/test-workload bin/pktgen /
 
-# Add the felix and calico-bpf binaries from the host.
-ADD $FV_BINARY /code/calico-felix
-ADD bin/calico-bpf /usr/bin/calico-bpf
-
-ADD bpf/bin/* /usr/lib/calico/bpf/
-
-RUN ln -s /code/calico-felix /usr/bin
 COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code
-
-# Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-RUN chmod +x /sbin/tini
-ENTRYPOINT ["/sbin/tini", "--"]
 
 # Run felix (via the wrapper script) by default
 CMD ["/usr/bin/calico-felix-wrapper"]
