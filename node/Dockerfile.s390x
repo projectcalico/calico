@@ -42,6 +42,12 @@ COPY filesystem/ /
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-${ARCH} /bin/calico-node
 
+# Copy in the moutnns binary
+COPY dist/bin/mountns /bin/mountns
+
+# Set the suid bit on mountns
+RUN chmod u+s /bin/mountns
+
 COPY --from=bpftool /bpftool /bin
 
 RUN rm /usr/bin/qemu-${ARCH}-static
