@@ -193,7 +193,7 @@ COPY --from=bpftool /bpftool /bin
 COPY dist/bin/calico-node-arm64 /bin/calico-node
 
 # Copy in the moutnns binary
-COPY dist/bin/mountns /bin/mountns
+COPY dist/bin/mountns-arm64 /bin/mountns
 
 # Set the suid bit on mountns
 RUN chmod u+s /bin/mountns

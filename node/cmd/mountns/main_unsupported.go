@@ -1,4 +1,4 @@
-//go:build cgo
+//go:build !cgo
 
 // Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
@@ -17,31 +17,14 @@
 package main
 
 import (
-	"os"
-	"syscall"
-
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"runtime"
 )
 
-/*
-#define _GNU_SOURCE
-#include <sched.h>
-#include <fcntl.h>
-
-__attribute__((constructor)) void set_namespaces(void) {
-	setns(open("/initproc/ns/cgroup", O_RDONLY, 0), CLONE_NEWCGROUP);
-	setns(open("/initproc/ns/mnt", O_RDONLY, 0), CLONE_NEWNS);
-} */
-import "C"
-
+// BPF dataplane is not supported in some architectures like Armv7, and at the same time
+// this binary cannot be compiled for these architectures becuase of the dependency to
+// libbpf and cgo. This file is compiled for these architectures.
 func main() {
-	logrus.Info("Trying to mount root cgroup fs.")
-	err := syscall.Mount("none", bpf.CgroupV2Path, "cgroup2", 0, "")
-	if err != nil {
-		logrus.WithError(err).Errorf("Failed to mount Cgroup filesystem.")
-		os.Exit(1)
-	}
-	logrus.Info("Successfully mounted root cgroup fs.")
+	logrus.Infof("mountns binary is not supported on %s architecture.", runtime.GOARCH)
 }
