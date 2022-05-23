@@ -204,7 +204,7 @@ blocks:
         minutes: 60
       commands:
       - ../.semaphore/run-and-monitor static-checks.log make static-checks
-      - ../.semaphore/run-and-monitor build-image-all.log make build-all image-all
+      - ../.semaphore/run-and-monitor build-all.log make EXTRA_EXCLUDEARCH=amd64 build-all
 
 - name: "Felix: Build Windows binaries"
   run:
