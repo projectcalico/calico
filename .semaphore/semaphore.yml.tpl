@@ -199,12 +199,12 @@ blocks:
       - ../.semaphore/run-and-monitor ut.log make ut
       - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-    - name: make image-all
+    - name: Static checks, build all platforms
       execution_time_limit:
         minutes: 60
       commands:
       - ../.semaphore/run-and-monitor static-checks.log make static-checks
-      - ../.semaphore/run-and-monitor image-all.log make image-all
+      - ../.semaphore/run-and-monitor build-all.log make EXTRA_EXCLUDEARCH=amd64 build-all
 
 - name: "Felix: Build Windows binaries"
   run:

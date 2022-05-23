@@ -273,6 +273,10 @@ DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
+# A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
+.PHONY: force-rebuild
+force-rebuild:
+
 ###############################################################################
 # Updating pins
 #   the repo importing this Makefile _must_ define the update-pins target

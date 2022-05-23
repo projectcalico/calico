@@ -12,19 +12,13 @@ FROM s390x/alpine:3.8 as base
 COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/
 
 # Install our dependencies.
-RUN apk --no-cache add ip6tables tini ipset iputils iproute2 conntrack-tools file
+RUN apk --no-cache add ip6tables ipset iputils iproute2 conntrack-tools file
 
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin
 
-# Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
-# to more easily extract the Felix build artefacts from the container.
-ADD bin/calico-felix-s390x /code/calico-felix
-RUN ln -s /code/calico-felix /usr/bin
 COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code
 
-# Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-ENTRYPOINT ["/sbin/tini", "--"]
 # Run felix (via the wrapper script) by default
 CMD ["calico-felix-wrapper"]
