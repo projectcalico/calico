@@ -253,6 +253,7 @@ items:
 
 ```bash
 export THE_COMMAND_TO_RUN=date && for calinode in `kubectl get pod -o wide -n calico-system | grep calico-node | awk '{print $1}'`; do echo $calinode; echo "-----"; kubectl exec -n calico-system $calinode -- $THE_COMMAND_TO_RUN; printf "\n"; done
+```
 
 ```bash
 calico-node-87lpx
