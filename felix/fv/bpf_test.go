@@ -735,11 +735,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			// We will use this container to model an external client trying to connect into
 			// workloads on a host.  Create a route in the container for the workload CIDR.
 			// TODO: Copied from another test
-			externalClient = containers.Run("external-client",
-				containers.RunOpts{AutoRemove: true},
-				"--privileged", // So that we can add routes inside the container.
-				utils.Config.BusyboxImage,
-				"/bin/sh", "-c", "sleep 1000")
+			externalClient = infrastructure.RunExtClient()
 			_ = externalClient
 
 			err := infra.AddDefaultDeny()
@@ -1316,7 +1312,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var ip []string
 					var port uint16
 					BeforeEach(func() {
-						externalClient.EnsureBinary("test-connection")
 						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
 						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName, "10.101.0.10", w[0][0], 80, tgtPort,
 							testOpts.protocol, externalIP, srcIPRange)
@@ -1410,7 +1405,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var ip []string
 
 					BeforeEach(func() {
-						externalClient.EnsureBinary("test-connection")
 						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
 						// create a service workload as nil, so that the service has no backend
 						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName, "10.101.0.10", nil, 80, tgtPort,
@@ -1455,7 +1449,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var srcIPRange []string
 					BeforeEach(func() {
 						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
-						externalClient.EnsureBinary("test-connection")
 						pol.Spec.Ingress = []api.Rule{
 							{
 								Action: "Allow",

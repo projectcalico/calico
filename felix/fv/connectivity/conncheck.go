@@ -834,7 +834,6 @@ func IsMessagePartOfStream(msg string) bool {
 
 // Runtime abstracts *containers.Container to avoid import loops
 type Runtime interface {
-	EnsureBinary(name string)
 	ExecMayFail(cmd ...string) error
 }
 
@@ -883,8 +882,6 @@ func (pc *PersistentConnection) Start() error {
 		namespacePath = "-"
 	}
 
-	// Ensure that the host has the 'test-connection' binary.
-	pc.Runtime.EnsureBinary("test-connection")
 	permConnIdx++
 	n := fmt.Sprintf("%s-pc%d", pc.RuntimeName, permConnIdx)
 	loopFile := fmt.Sprintf("/tmp/%s-loop", n)
