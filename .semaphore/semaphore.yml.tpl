@@ -199,12 +199,34 @@ blocks:
       - ../.semaphore/run-and-monitor ut.log make ut
       - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-    - name: Static checks, build all platforms
+    - name: Static checks
       execution_time_limit:
         minutes: 60
       commands:
       - ../.semaphore/run-and-monitor static-checks.log make static-checks
-      - ../.semaphore/run-and-monitor build-all.log make EXTRA_EXCLUDEARCH=amd64 build-all
+
+- name: "Felix: Build other architectures"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Felix: Build"]
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - cd felix
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: "Build"
+      matrix:
+      # TODO: s390x builds of felix are not working.
+      - env_var: ARCH
+        values: [ "arm64", "armv7", "ppc64le" ]
+      commands:
+      - ../.semaphore/run-and-monitor build-$ARCH.log make ARCH=$ARCH build image
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -279,7 +301,7 @@ blocks:
 - name: "Felix: FV Tests"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: ["Prerequisites", "Felix: Build"]
+  dependencies: ["Felix: Build"]
   task:
     prologue:
       commands:

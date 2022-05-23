@@ -26,7 +26,7 @@ endif
 
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
-EXCLUDEARCH ?= s390x
+EXCLUDEARCH ?= s390x $(EXTRA_EXCLUDEARCH)
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
 # BUILDARCH is the host architecture
