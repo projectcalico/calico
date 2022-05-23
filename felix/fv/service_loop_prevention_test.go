@@ -131,11 +131,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 			"/bin/sh", "-c", "sleep 1000")
 		defer externalGW.Stop()
 
-		externalClient := containers.Run("external-client",
-			containers.RunOpts{AutoRemove: true},
-			"--privileged", // So that we can add routes inside the container.
-			utils.Config.BusyboxImage,
-			"/bin/sh", "-c", "sleep 1000")
+		externalClient := infrastructure.RunExtClient()
 		defer externalClient.Stop()
 
 		// Add a service CIDR route in those containers, similar to the routes that they
