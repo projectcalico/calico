@@ -84,7 +84,6 @@ Diags saved to /tmp/calico194224816/diags-20201127_010117.tar.gz
 
 ### Kubernetes 
 
-
 #### Verify all pods are running 
 
 ```bash
@@ -116,6 +115,7 @@ kubernetes   ClusterIP   10.49.0.1    <none>        443/TCP   2d2h
 ```bash
 kubectl get svc
 ```
+
 ```
 NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
 kubernetes   ClusterIP   10.49.0.1    <none>        443/TCP   2d2h
@@ -124,6 +124,7 @@ kubernetes   ClusterIP   10.49.0.1    <none>        443/TCP   2d2h
 ```bash
 kubectl exec -it multitool  bash
 ```
+
 ```
 bash-5.0# curl -I -k https://kubernetes
 HTTP/2 403 
@@ -252,6 +253,7 @@ items:
 
 ```bash
 export THE_COMMAND_TO_RUN=date && for calinode in `kubectl get pod -o wide -n calico-system | grep calico-node | awk '{print $1}'`; do echo $calinode; echo "-----"; kubectl exec -n calico-system $calinode -- $THE_COMMAND_TO_RUN; printf "\n"; done
+```
 
 ```bash
 calico-node-87lpx
