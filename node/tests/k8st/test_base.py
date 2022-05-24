@@ -22,7 +22,7 @@ from unittest import TestCase
 from deepdiff import DeepDiff
 from kubernetes import client, config
 
-from utils.utils import retry_until_success, run, kubectl
+from utils.utils import retry_until_success, run, kubectl, calicoctl
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +38,28 @@ class TestBase(TestCase):
 
     def setUp(self):
         """
-        Clean up before every test.
+        Set up before every test.
         """
+        super(TestBase, self).setUp()
         self.cluster = self.k8s_client()
+        self.cleanups = []
+        self.orig_vxlan_mode = None
+        self.orig_ipip_mode = None
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
+
+    def tearDown(self):
+        for cleanup in reversed(self.cleanups):
+            try:
+                cleanup()
+            except Exception:
+                logger.exception("Cleanup function failed %s", cleanup)
+                raise
+        super(TestBase, self).tearDown()
+
+    def add_cleanup(self, cleanup):
+        self.cleanups.append(cleanup)
 
     @staticmethod
     def assert_same(thing1, thing2):
@@ -103,8 +119,9 @@ class TestBase(TestCase):
                 kubectl("describe po %s -n %s" % (pod.metadata.name, pod.metadata.namespace))
             assert pod.status.phase == 'Running'
 
-    def create_namespace(self, ns_name):
-        self.cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name)))
+    def create_namespace(self, ns_name, labels=None, annotations=None):
+        self.cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name, labels=labels, annotations=annotations)))
+        self.add_cleanup(lambda: self.delete_and_confirm(ns_name, "ns"))
 
     def deploy(self, image, name, ns, port, replicas=1, svc_type="NodePort", traffic_policy="Local", cluster_ip=None, ipv6=False):
         """
@@ -171,9 +188,10 @@ class TestBase(TestCase):
                 "ports": [{"port": port}],
                 "selector": {"app": app},
                 "type": svc_type,
-                "externalTrafficPolicy": traffic_policy,
             }
         )
+        if traffic_policy:
+            service.spec["externalTrafficPolicy"] = traffic_policy
         if cluster_ip:
           service.spec["clusterIP"] = cluster_ip
         if ipv6:
@@ -189,15 +207,16 @@ class TestBase(TestCase):
         retry_until_success(kubectl, function_args=["get %s %s -n%s" %
                                                     (resource_type, name, ns)])
 
-    def delete_and_confirm(self, name, resource_type, ns="default"):
+    def delete(self, name, resource_type, ns="default", wait="true"):
         try:
-            kubectl("delete %s %s -n%s" % (resource_type, name, ns))
+            kubectl("delete %s %s -n %s --wait=%s" % (resource_type, name, ns, wait))
         except subprocess.CalledProcessError:
             pass
 
+    def confirm_deletion(self, name, resource_type, ns="default"):
         def is_it_gone_yet(res_name, res_type):
             try:
-                kubectl("get %s %s -n%s" % (res_type, res_name, ns),
+                kubectl("get %s %s -n %s" % (res_type, res_name, ns),
                         logerr=False)
                 raise self.StillThere
             except subprocess.CalledProcessError:
@@ -206,13 +225,64 @@ class TestBase(TestCase):
 
         retry_until_success(is_it_gone_yet, retries=10, wait_time=10, function_args=[name, resource_type])
 
+    def delete_and_confirm(self, name, resource_type, ns="default", wait="true"):
+        self.delete(name, resource_type, ns, wait)
+        self.confirm_deletion(name, resource_type, ns)
+
     class StillThere(Exception):
         pass
 
     def get_routes(self):
         return run("docker exec kube-node-extra ip r")
 
-    def update_ds_env(self, ds, ns, env_vars):
+    def annotate_resource(self, res_type, res_name, ns, k, v):
+        return run("kubectl annotate %s %s -n %s %s=%s" % (res_type, res_name, ns, k, v)).strip()
+
+    def get_node_ips_with_local_pods(self, ns, label_selector):
+        config.load_kube_config(os.environ.get('KUBECONFIG'))
+        api = client.CoreV1Api(client.ApiClient())
+        pods = api.list_namespaced_pod(ns, label_selector=label_selector)
+        node_names = map(lambda x: x.spec.node_name, pods.items)
+        node_ips = []
+        for n in node_names:
+            addrs = api.read_node(n).status.addresses
+            for a in addrs:
+                if a.type == 'InternalIP':
+                    node_ips.append(a.address)
+        return node_ips
+
+    def patch_ippool(self, name, vxlan_mode=None, ipip_mode=None, undo_at_teardown=True):
+        assert vxlan_mode is not None
+        assert ipip_mode is not None
+        json_str = calicoctl("get ippool %s -o json" % name)
+        node_dict = json.loads(json_str)
+        old_ipip_mode = node_dict['spec']['ipipMode']
+        old_vxlan_mode = node_dict['spec']['vxlanMode']
+
+        calicoctl("""patch ippool %s --patch '{"spec":{"vxlanMode": "%s", "ipipMode": "%s"}}'""" % (
+            name,
+            vxlan_mode,
+            ipip_mode,
+        ))
+        logger.info("Updated vxlanMode of %s from %s to %s, ipipMode from %s to %s",
+                  name, old_vxlan_mode, vxlan_mode, old_ipip_mode, ipip_mode)
+        if undo_at_teardown:
+            self.add_cleanup(lambda: self.patch_ippool(name, old_vxlan_mode, old_ipip_mode, undo_at_teardown=False))
+        return old_vxlan_mode, old_ipip_mode
+
+    def get_ds_env(self, ds, ns, key):
+        config.load_kube_config(os.environ.get('KUBECONFIG'))
+        api = client.AppsV1Api(client.ApiClient())
+        node_ds = api.read_namespaced_daemon_set(ds, ns, exact=True, export=False)
+        for container in node_ds.spec.template.spec.containers:
+            if container.name == ds:
+                for env in container.env:
+                    if env.name == key:
+                        return env.value
+        return None
+
+    def update_ds_env(self, ds, ns, env_vars, undo_at_teardown=True):
+        orig_env = {}
         config.load_kube_config(os.environ.get('KUBECONFIG'))
         api = client.AppsV1Api(client.ApiClient())
         node_ds = api.read_namespaced_daemon_set(ds, ns, exact=True, export=False)
@@ -221,15 +291,32 @@ class TestBase(TestCase):
                 for k, v in env_vars.items():
                     logger.info("Set %s=%s", k, v)
                     env_present = False
+                    orig_env[k] = None
                     for env in container.env:
                         if env.name == k:
-                            env_present = True
-                    if not env_present:
+                            orig_env[k] = env.value
+                            if env.value == v:
+                                env_present = True
+                            else:
+                                container.env.remove(env)
+
+                    if not env_present and v is not None:
                         v1_ev = client.V1EnvVar(name=k, value=v, value_from=None)
                         container.env.append(v1_ev)
         api.replace_namespaced_daemon_set(ds, ns, node_ds)
 
+        if undo_at_teardown:
+            self.add_cleanup(lambda: self.update_ds_env(ds, ns, orig_env, undo_at_teardown=False))
+
         # Wait until the DaemonSet reports that all nodes have been updated.
+        # In the past we've seen that the calico-node on kind-control-plane can
+        # hang, in a not Ready state, for about 15 minutes.  Here we want to
+        # detect in case that happens again, and fail the test case if so.  We
+        # do that by querying the number of nodes that have been updated, every
+        # 10s, and failing the test if that number does not change for 4 cycles
+        # i.e. for 40s.
+        last_number = 0
+        iterations_with_no_change = 0
         while True:
             time.sleep(10)
             node_ds = api.read_namespaced_daemon_set_status("calico-node", "kube-system")
@@ -238,11 +325,26 @@ class TestBase(TestCase):
                       node_ds.status.desired_number_scheduled)
             if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
                 break
+            if node_ds.status.updated_number_scheduled == last_number:
+                iterations_with_no_change += 1
+                if iterations_with_no_change == 4:
+                    run("docker exec kind-control-plane conntrack -L", allow_fail=True)
+                    self.fail("calico-node DaemonSet update failed to make progress for 40s")
+            else:
+                last_number = node_ds.status.updated_number_scheduled
+                iterations_with_no_change = 0
+
+        # Wait until all calico-node pods are ready.
+        kubectl("wait pod --for=condition=Ready -l k8s-app=calico-node -n kube-system --timeout=300s")
+
+        # After restarting felixes, wait to ensure Felix is past its route-cleanup grace period.
+        time.sleep(30)
+
+        return orig_env
 
     def scale_deployment(self, deployment, ns, replicas):
         return kubectl("scale deployment %s -n %s --replicas %s" %
                        (deployment, ns, replicas)).strip()
-
 
 class TestBaseV6(TestBase):
 
