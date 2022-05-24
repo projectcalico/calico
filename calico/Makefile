@@ -71,7 +71,6 @@ _site build: bin/helm bin/helm3 bin/ocp.tgz _site
 	# Move the manifests into the the generated site, and also update
 	# the repos manifests that the site generated, removing the templates dir.
 	cp -r ../manifests/ _site/manifests
-	rsync -a _site/manifest-templates/ ../manifests/ && rm -r _site/manifest-templates
 	# Move ocp.tgz into place in the generate site.
 	cp bin/ocp.tgz _site/manifests
 
