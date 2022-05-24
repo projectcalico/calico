@@ -4,7 +4,7 @@
   command = '''
 
   cp netlify/Gemfile Gemfile && bundle install
-  make bin/helm bin/helm3
+  make bin/ocp.tgz
   export PATH=$PATH:$(pwd)/bin
 
   # LATEST_RELEASE is set in Netlify UI for environment-variables ONLY for docs.projectcalico.org and projectcalico.docs.tigera.io sites.
@@ -15,14 +15,12 @@
     # generate only manifests served at /<version>
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml,$(pwd)/netlify/_manifests_only.yml --baseurl /$RELEASE_VERSION --destination _site/$RELEASE_VERSION
     cp -r ../manifests _site/$RELEASE_VERSION
-    rm -r _site/$RELEASE_VERSION/manifest-templates
-
 
     # generate the website which is served at /archive/<version>/
     # note: this must be done second since destination folders are cleaned on each builds
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
     cp -r ../manifests _site/archive/$RELEASE_VERSION
-    rm -r _site/archive/$RELEASE_VERSION/manifest-templates
+    cp bin/ocp.tgz _site/archive/$RELEASE_VERSION/manifests/
 
     # move 404 page to root of the site so that netlify shows it automatically
     mv $(pwd)/_site/archive/$RELEASE_VERSION/404.html $(pwd)/_site/404.html
@@ -32,12 +30,12 @@
     # generate the website which is served at root /
     jekyll build --config _config.yml,$(pwd)/netlify/_config_latest.yml --destination _site
     cp -r ../manifests _site/$RELEASE_VERSION
-    rm -r _site/$RELEASE_VERSION/manifest-templates
+    cp bin/ocp.tgz _site/$RELEASE_VERSION/manifests/
 
     # generate the website which is served at /archive/<version>/
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
     cp -r ../manifests _site/archive/$RELEASE_VERSION
-    rm -r _site/archive/$RELEASE_VERSION/manifest-templates
+    cp bin/ocp.tgz _site/archive/$RELEASE_VERSION/manifests/
 
     mv $(pwd)/_site/sitemap.xml $(pwd)/_site/latest-sitemap.xml
     mv $(pwd)/netlify/sitemap-index.xml $(pwd)/_site/sitemap.xml
@@ -52,13 +50,13 @@
 [context.deploy-preview]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
-  make bin/helm bin/helm3
+  make bin/ocp.tgz
   export PATH=$PATH:$(pwd)/bin
   echo "url: $DEPLOY_PRIME_URL" > _config_url.yml
   jekyll build --config _config.yml,_config_url.yml
   mv netlify/_redirects _site/_redirects
   cp -r ../manifests _site/
-  rm -r _site/manifest-templates
+  cp bin/ocp.tgz _site/$RELEASE_VERSION/manifests/
   '''
 
 # Deploys master branch as a separate individual site, master build is different from branch deploys
@@ -66,11 +64,11 @@
 [context.master]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
-  make bin/helm bin/helm3
+  make bin/ocp.tgz
   export PATH=$PATH:$(pwd)/bin
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
   cp -r ../manifests _site/master/
-  rm -r _site/master/manifest-templates
+  cp bin/ocp.tgz _site/master/manifests/
   '''
 
 # proxy redirect for Helm chart repo

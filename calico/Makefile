@@ -59,7 +59,7 @@ serve: bin/helm
 	  jekyll/jekyll:$(JEKYLL_VERSION) jekyll serve --incremental $(CONFIG)
 
 .PHONY: build
-_site build: bin/helm bin/helm3
+_site build: bin/helm bin/helm3 bin/ocp.tgz
 	docker run --rm \
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
@@ -71,7 +71,13 @@ _site build: bin/helm bin/helm3
 	# Move the manifests into the the generated site, and also update
 	# the repos manifests that the site generated, removing the templates dir.
 	cp -r ../manifests/ _site/manifests
-	rsync -a _site/manifest-templates/ ../manifests/ && rm -r _site/manifest-templates
+	# Move ocp.tgz into place in the generate site.
+	cp bin/ocp.tgz _site/manifests
+
+# Creates the tar file used for installing Calico on OpenShift.
+bin/ocp.tgz:
+	mkdir -p bin
+	tar czvf $@ -C ../manifests/ ocp
 
 # Update the static manifests 
 gen-manifests: clean _site
