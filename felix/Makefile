@@ -127,7 +127,27 @@ clean-generated:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: bin/calico-felix build-bpf bin/calico-felix.exe
+BUILD_TARGETS:=bin/calico-felix
+
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+# Currently CGO can be enabled in ARM64 and AMD64 builds.
+CGO_ENABLED=1
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+FV_RACE_DETECTOR_ENABLED?=true
+BUILD_TARGETS+=build-bpf
+else
+CGO_ENABLED=0
+CGO_LDFLAGS=""
+# Race detection requires CGO enabled.
+FV_RACE_DETECTOR_ENABLED?=false
+endif
+
+ifeq ($(ARCH), amd64)
+BUILD_TARGETS+=bin/calico-felix.exe
+endif
+
+build: $(BUILD_TARGETS)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -140,19 +160,6 @@ $(LIBBPF_A): $(shell find bpf-gpl/include/libbpf -type f ! -name "*.a")
 	mkdir -p bpf-gpl/include/libbpf/src/$(ARCH)
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/include/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
-
-# Currently CGO can be enabled in ARM64 and AMD64 builds.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
-CGO_ENABLED=1
-CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
-FV_RACE_DETECTOR_ENABLED?=true
-else
-CGO_ENABLED=0
-CGO_LDFLAGS=""
-# Race detection requires CGO enabled.
-FV_RACE_DETECTOR_ENABLED?=false
-endif
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)

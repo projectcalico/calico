@@ -791,7 +791,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							if ctx.Err() != nil {
 								return
 							}
-							_, err = w[1][0].RunCmd("/pktgen", w[1][0].IP, dpOnlyWorkload.IP, "udp",
+							_, err = w[1][0].RunCmd("pktgen", w[1][0].IP, dpOnlyWorkload.IP, "udp",
 								"--port-src", "30444", "--port-dst", "8057")
 							Expect(err).NotTo(HaveOccurred())
 							time.Sleep(100 * (time.Millisecond))
@@ -1121,7 +1121,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							defer tcpdump.Stop()
 
 							// send a packet from the correct workload to create a conntrack entry
-							_, err := w[1][0].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							_, err := w[1][0].RunCmd("pktgen", w[1][0].IP, w[0][0].IP, "udp",
 								"--port-src", "30444", "--port-dst", "30444")
 							Expect(err).NotTo(HaveOccurred())
 
@@ -1131,7 +1131,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							// Send a spoofed packet from a different pod. Since we hit the
 							// conntrack we would not do the WEP only RPF check.
-							_, err = w[1][1].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							_, err = w[1][1].RunCmd("pktgen", w[1][0].IP, w[0][0].IP, "udp",
 								"--port-src", "30444", "--port-dst", "30444")
 							Expect(err).NotTo(HaveOccurred())
 
@@ -1141,7 +1141,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							matcher2 := fmt.Sprintf("IP %s\\.30445 > %s\\.30445: UDP", w[1][1].IP, w[0][0].IP)
 							tcpdump.AddMatcher("UDP-30445", regexp.MustCompile(matcher2))
 
-							_, err = w[1][1].RunCmd("/pktgen", w[1][1].IP, w[0][0].IP, "udp",
+							_, err = w[1][1].RunCmd("pktgen", w[1][1].IP, w[0][0].IP, "udp",
 								"--port-src", "30445", "--port-dst", "30445")
 							Expect(err).NotTo(HaveOccurred())
 
@@ -1251,7 +1251,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							tcpdump.Start()
 							defer tcpdump.Stop()
 
-							_, err := eth20.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
+							_, err := eth20.RunCmd("pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
 								"--port-src", "30446", "--port-dst", "30446")
 							Expect(err).NotTo(HaveOccurred())
 
@@ -1276,7 +1276,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							felixes[1].Exec("ip", "route", "del", fakeWorkloadIP+"/32", "dev", "eth20")
 							felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth30")
 
-							_, err = eth30.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
+							_, err = eth30.RunCmd("pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
 								"--port-src", "30446", "--port-dst", "30446")
 							Expect(err).NotTo(HaveOccurred())
 
