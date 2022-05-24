@@ -15,14 +15,11 @@
     # generate only manifests served at /<version>
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml,$(pwd)/netlify/_manifests_only.yml --baseurl /$RELEASE_VERSION --destination _site/$RELEASE_VERSION
     cp -r ../manifests _site/$RELEASE_VERSION
-    rm -r _site/$RELEASE_VERSION/manifest-templates
-
 
     # generate the website which is served at /archive/<version>/
     # note: this must be done second since destination folders are cleaned on each builds
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
     cp -r ../manifests _site/archive/$RELEASE_VERSION
-    rm -r _site/archive/$RELEASE_VERSION/manifest-templates
     cp bin/ocp.tgz _site/archive/$RELEASE_VERSION/manifests/
 
     # move 404 page to root of the site so that netlify shows it automatically
@@ -33,13 +30,11 @@
     # generate the website which is served at root /
     jekyll build --config _config.yml,$(pwd)/netlify/_config_latest.yml --destination _site
     cp -r ../manifests _site/$RELEASE_VERSION
-    rm -r _site/$RELEASE_VERSION/manifest-templates
     cp bin/ocp.tgz _site/$RELEASE_VERSION/manifests/
 
     # generate the website which is served at /archive/<version>/
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
     cp -r ../manifests _site/archive/$RELEASE_VERSION
-    rm -r _site/archive/$RELEASE_VERSION/manifest-templates
     cp bin/ocp.tgz _site/archive/$RELEASE_VERSION/manifests/
 
     mv $(pwd)/_site/sitemap.xml $(pwd)/_site/latest-sitemap.xml
@@ -62,7 +57,6 @@
   mv netlify/_redirects _site/_redirects
   cp -r ../manifests _site/
   cp bin/ocp.tgz _site/$RELEASE_VERSION/manifests/
-  rm -r _site/manifest-templates
   '''
 
 # Deploys master branch as a separate individual site, master build is different from branch deploys
@@ -75,7 +69,6 @@
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
   cp -r ../manifests _site/master/
   cp bin/ocp.tgz _site/master/manifests/
-  rm -r _site/master/manifest-templates
   '''
 
 # proxy redirect for Helm chart repo
