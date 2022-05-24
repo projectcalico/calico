@@ -61,10 +61,11 @@ done
 # Build tigera-operator manifests for OCP.
 #
 # OCP requires resources in their own yaml files, so output to a dir.
+# Then do a bit of cleanup to reduce the directory depth to 1.
 ##########################################################################
 helm template --include-crds \
 	-n tigera-operator \
 	../charts/tigera-operator/ \
 	--set installation.kubernetesProvider=openshift \
 	-f ../charts/values/tigera-operator.yaml --output-dir ocp
-mv $(find ocp/tigera-operator -name "*.yaml") ocp/manifests && rm -r ocp/tigera-operator
+mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
