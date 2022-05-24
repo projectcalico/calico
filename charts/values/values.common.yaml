@@ -1,36 +1,36 @@
-mtu: "1440"
-ipam: "calico-ipam"
-
-# Configure the image versions to use.
+# Configure the images to use when generating manifests.
 node:
-  image: calico/node
+  image: docker.io/calico/node
   tag: master
 calicoctl:
-  image: calico/ctl
+  image: docker.io/calico/ctl
   tag: master
 typha:
-  image: calico/typha
+  image: docker.io/calico/typha
   tag: master
 cni:
-  image: calico/cni
+  image: docker.io/calico/cni
   tag: master
 kubeControllers:
-  image: calico/kube-controllers
+  image: docker.io/calico/kube-controllers
   tag: master
 flannel:
   image: coreos/flannel
   tag: master
 flannelMigration:
-  image: calico/flannel-migration
+  image: docker.io/calico/flannel-migration
   tag: master
 dikastes:
-  image: calico/dikastes
+  image: docker.io/calico/dikastes
   tag: master
 flexvol:
   tag: master
 csi-driver:
-  image: calico/csi-driver
+  image: docker.io/calico/csi-driver
   tag: master
+
+mtu: "1440"
+ipam: "calico-ipam"
 
 # Config for etcd, if needed.
 etcd:
