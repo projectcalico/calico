@@ -17,14 +17,14 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
-
+	"fmt"
+	"os"
 	"runtime"
 )
 
 // BPF dataplane is not supported in some architectures like Armv7, and at the same time
-// this binary cannot be compiled for these architectures becuase of the dependency to
-// libbpf and cgo. This file is compiled for these architectures.
+// the main logic, in main.go, cannot be compiled for these architectures as it depends
+// on libbpf and cgo. This file is compiled for these architectures.
 func main() {
-	logrus.Infof("mountns binary is not supported on %s architecture.", runtime.GOARCH)
+	fmt.Printf("%s binary is not supported on %s architecture.\n", os.Arg[0], runtime.GOARCH)
 }

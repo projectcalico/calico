@@ -39,7 +39,9 @@ func Run(bestEffort bool) {
 	err := ensureBPFFilesystem()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to mount BPF filesystem.")
-		os.Exit(2) // Using 2 just to distinguish from the usage error case.
+		if !bestEffort {
+			os.Exit(2) // Using 2 just to distinguish from the usage error case.
+		}
 	}
 
 	err = ensureCgroupV2Filesystem()
@@ -86,7 +88,7 @@ func ensureBPFFilesystem() error {
 const cgroupRootPath = "/initproc"
 
 // ensureCgroupV2Filesystem() enters the cgroup and mount namespace of the process
-// with PID 1 running on a host to allow felix running in calico-node access the root of cgroup namespace.
+// with PID 1 running on a host to allow felix running in calico-node to access the root of cgroup namespace.
 // This is needed by felix to attach CTLB programs and implement k8s services correctly.
 func ensureCgroupV2Filesystem() error {
 	// Check if the Cgroup2 filesystem is mounted at the expected location.
@@ -98,10 +100,13 @@ func ensureCgroupV2Filesystem() error {
 	}
 	scanner := bufio.NewScanner(mounts)
 	for scanner.Scan() {
+		// An example line in mountinfo file:
+		// 35 24 0:30 / /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime shared:9 - cgroup2 cgroup2 rw,nsdelegate,memory_recursiveprot
 		line := scanner.Text()
-		mountPoint := strings.Split(line, " ")[4] // 4 is the index to mount points in mountinfo files
+		mountPoint := strings.Split(line, " ")[4]                    // 4 is the index to mount points in mountinfo files
+		fsType := strings.Split(strings.Split(line, "-")[1], " ")[1] // fsType is the first string after -
 
-		if mountPoint == bpf.CgroupV2Path && strings.Contains(line, "cgroup2") {
+		if mountPoint == bpf.CgroupV2Path && fsType == "cgroup2" {
 			logrus.Info("Cgroup2 filesystem is mounted.")
 			return nil
 		}
