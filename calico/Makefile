@@ -59,7 +59,7 @@ serve: bin/helm
 	  jekyll/jekyll:$(JEKYLL_VERSION) jekyll serve --incremental $(CONFIG)
 
 .PHONY: build
-_site build: bin/helm bin/helm3 bin/ocp.tgz _site
+_site build: bin/helm bin/helm3 bin/ocp.tgz
 	docker run --rm \
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
