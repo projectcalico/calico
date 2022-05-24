@@ -43,7 +43,7 @@ CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].title')
 include ../lib.Makefile
 
 ##############################################################################
-serve: bin/helm
+serve:
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
 	# When set to 'pages', jekyll starts in safe mode which means it will not
 	# load any plugins. Since we're no longer running in github-pages, but would
@@ -58,8 +58,10 @@ serve: bin/helm
 	  -p 4000:4000 \
 	  jekyll/jekyll:$(JEKYLL_VERSION) jekyll serve --incremental $(CONFIG)
 
+DOCS_SOURCE=$(find . -name '*.md') $(find ../manifests -type f)
+
 .PHONY: build
-_site build: bin/helm bin/helm3 bin/ocp.tgz
+_site build: bin/helm bin/helm3 bin/ocp.tgz $(DOCS_SOURCE)
 	docker run --rm \
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
