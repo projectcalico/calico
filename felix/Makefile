@@ -282,7 +282,21 @@ REMOTE_DEPS=build-typha
 build-typha:
 	make -C ../typha image DEV_REGISTRIES=felix-test
 
-.PHONY: fv
+.PHONY: fv fv-prereqs fv-no-build
+
+# Build everything needed to run the FVs but don't actually run them.  The semaphore job runs
+# this target to build everything so that it can be cached and shared between downstream jobs.
+fv-prereqs: $(REMOTE_DEPS) \
+            $(FELIX_CONTAINER_CREATED) \
+            $(FV_BINARY) \
+            bin/iptables-locker \
+            bin/test-workload \
+            bin/test-connection \
+            bin/calico-bpf \
+            bin/pktgen \
+            build-bpf \
+            fv/fv.test
+
 # runs all of the fv tests
 # to run it in parallel, decide how many parallel engines you will run, and in each one call:
 #	 $(MAKE) fv FV_BATCHES_TO_RUN="<num>" FV_NUM_BATCHES=<num>
@@ -296,16 +310,11 @@ build-typha:
 #	 ...
 #	 $(MAKE) fv FV_BATCHES_TO_RUN="10" FV_NUM_BATCHES=10    # the tenth 1/10
 #	 etc.
-fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) \
-                                     $(FELIX_CONTAINER_CREATED) \
-                                     $(FV_BINARY) \
-                                     bin/iptables-locker \
-                                     bin/test-workload \
-                                     bin/test-connection \
-                                     bin/calico-bpf \
-                                     bin/pktgen \
-                                     build-bpf \
-                                     fv/fv.test
+fv fv/latency.log fv/data-races.log: fv-prereqs
+	$(MAKE) fv-no-build
+
+# The semaphore job runs this target directly to avoid accidental rebuilds.
+fv-no-prereqs:
 	rm -f fv/data-races.log fv/latency.log
 	cd fv && \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
