@@ -190,12 +190,15 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-      - make image fv/fv.test bin/test-workload bin/test-connection bin/calico-felix
+      - make build image fv-prereqs
       - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+      - 'cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test'
       - cache store go-pkg-cache .go-pkg-cache
       - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
       - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
       - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
+      - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
+      - 'cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar'
       - ../.semaphore/run-and-monitor ut.log make ut
       - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
@@ -311,7 +314,9 @@ blocks:
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
       - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore fv.test-${SEMAPHORE_GIT_SHA}'
       - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore felixtest-typha-image-${SEMAPHORE_GIT_SHA}'
       - |-
         if [ -s /etc/docker/daemon.json  ]; then
         sudo sed -i '$d' /etc/docker/daemon.json && sudo sed -i '$s/$/,/' /etc/docker/daemon.json && sudo bash -c ' cat >> /etc/docker/daemon.json << EOF
@@ -327,9 +332,20 @@ blocks:
         EOF
         ' ; fi
       - sudo systemctl restart docker
+      # Load in the docker images pre-built by the build job.
       - docker load -i /tmp/calico-felix.tar
+      - docker tag calico/felix:latest-amd64 felix:latest-amd64
       - rm /tmp/calico-felix.tar
+      - docker load -i /tmp/felixtest-typha.tar
+      - docker tag felix-test/typha:latest-amd64 typha:latest-amd64
+      - rm /tmp/felixtest-typha.tar
+      # When we restore from the cache, the files keep their old timestamps.  touch them now
+      # so they don't get rebuilt.
       - touch bin/*
+      - touch fv/fv.test
+      # Similarly, tell the makefiles that the images have already been built.
+      - touch .calico_felix.created-amd64
+      - touch ../typha/.calico_typha.created-amd64
       # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
       # routing in that first felix container chooses different source IPs than the tests are expecting.
       - sudo modprobe ipip
