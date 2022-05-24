@@ -56,7 +56,7 @@
   jekyll build --config _config.yml,_config_url.yml
   mv netlify/_redirects _site/_redirects
   cp -r ../manifests _site/
-  cp bin/ocp.tgz _site/$RELEASE_VERSION/manifests/
+  cp bin/ocp.tgz _site/manifests/
   '''
 
 # Deploys master branch as a separate individual site, master build is different from branch deploys
