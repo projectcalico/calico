@@ -42,7 +42,10 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C app-policy protobuf
-	$(MAKE) -C calico gen-manifests
+	$(MAKE) gen-manifests
+
+gen-manifests:
+	cd ./manifests && ./generate.sh
 
 # Build all Calico images for the current architecture.
 image:
