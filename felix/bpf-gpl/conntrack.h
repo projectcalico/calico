@@ -231,6 +231,7 @@ create:
 		if (i == PSNAT_RETRIES) {
 			CALI_INFO("Source collision unresolved 0x%x:%d\n",
 					bpf_htonl(ip_src), ct_value.orig_sport);
+			err = -17; /* EEXIST */
 		}
 	}
 

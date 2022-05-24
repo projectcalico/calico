@@ -759,7 +759,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		/* Mark connections that were routed via bpfnatout, but had CT miss at
 		 * HEP. That is because of SNAT happened between bpfnatout and here.
 		 * Returning packets on such a connection must go back via natbpfout
-		 * without a short-circuit to revers the service NAT.
+		 * without a short-circuit to reverse the service NAT.
 		 */
 		if (CALI_F_TO_HEP &&
 				((skb->mark & CALI_SKB_MARK_FROM_NAT_IFACE_OUT) == CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) {
@@ -1303,7 +1303,7 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 
 	switch (ct_result_rc(ctx.state->ct_result.rc)) {
 	case CALI_CT_ESTABLISHED:
-		/* Because we are on the "from host" patch, conntrack gives us
+		/* Because we are on the "from host" path, conntrack gives us
 		 * CALI_CT_ESTABLISHED only. Better to fix the corner case here than on
 		 * the generic path.
 		 */
