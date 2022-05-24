@@ -1,0 +1,41 @@
+mtu: "1440"
+ipam: "calico-ipam"
+
+# Configure the image versions to use.
+node:
+  image: calico/node
+  tag: master
+calicoctl:
+  image: calico/ctl
+  tag: master
+typha:
+  image: calico/typha
+  tag: master
+cni:
+  image: calico/cni
+  tag: master
+kubeControllers:
+  image: calico/kube-controllers
+  tag: master
+flannel:
+  image: coreos/flannel
+  tag: master
+flannelMigration:
+  image: calico/flannel-migration
+  tag: master
+dikastes:
+  image: calico/dikastes
+  tag: master
+flexvol:
+  tag: master
+csi-driver:
+  image: calico/csi-driver
+  tag: master
+
+# Config for etcd, if needed.
+etcd:
+  endpoints: "http://<ETCD_IP>:<ETCD_PORT>"
+  tls:
+    crt: null
+    ca: null
+    key: null
