@@ -306,6 +306,11 @@ func newBPFEndpointManager(
 		m.dp = m
 	}
 
+	// Anything else would prevent packets being accepted from the special
+	// service veth. It does not create a security hole since BPF does the RPF
+	// on its own.
+	m.dp.setRPFilter("all", 0)
+
 	err := m.dp.ensureBPFDevices()
 	if err != nil {
 		err = fmt.Errorf("ensure BPF devices: %w", err)
@@ -472,6 +477,16 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 		// For specific host endpoints OnHEPUpdate doesn't depend on iface state, and has
 		// already stored and mapped as needed.
 		if iface.info.ifaceIsUp {
+			// We require host interfaces to be in non-strict RPF mode so that
+			// packets can return straight to host for services bypassing CTLB.
+			switch update.Name {
+			case bpfInDev, bpfOutDev:
+				// do nothing
+			default:
+				if err := m.dp.setRPFilter(update.Name, 2); err != nil {
+					log.WithError(err).Warnf("Failed to set rp_filter for %s.", update.Name)
+				}
+			}
 			if _, hostEpConfigured := m.hostIfaceToEpMap[update.Name]; m.wildcardExists && !hostEpConfigured {
 				log.Debugf("Map host-* endpoint for %v", update.Name)
 				m.addHEPToIndexes(update.Name, &m.wildcardHostEndpoint)
@@ -1411,7 +1426,7 @@ func (m *bpfEndpointManager) setAcceptLocal(iface string, val bool) error {
 }
 
 func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
-
+	// We only support IPv4 for now.
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
 	numval := strconv.Itoa(val)
 	err := writeProcSys(path, numval)
