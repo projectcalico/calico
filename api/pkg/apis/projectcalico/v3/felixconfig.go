@@ -479,6 +479,15 @@ type RouteTableIDRange struct {
 
 type RouteTableRanges []RouteTableIDRange
 
+func (r RouteTableRanges) Len() int {
+	var len int = 0
+	for _, rng := range r {
+		len += rng.Max - rng.Min
+	}
+
+	return len
+}
+
 // ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.
 type ProtoPort struct {
 	Protocol string `json:"protocol"`
