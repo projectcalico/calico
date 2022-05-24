@@ -676,7 +676,7 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 		cmd.ip, cmd.port, cmd.protocol, cmd.sendLen, cmd.recvLen)
 
 	args := []string{"exec", cName,
-		"/test-connection", "--protocol=" + cmd.protocol,
+		"test-connection", "--protocol=" + cmd.protocol,
 		fmt.Sprintf("--duration=%d", int(cmd.duration.Seconds())),
 		fmt.Sprintf("--sendlen=%d", cmd.sendLen),
 		fmt.Sprintf("--recvlen=%d", cmd.recvLen),
@@ -834,7 +834,6 @@ func IsMessagePartOfStream(msg string) bool {
 
 // Runtime abstracts *containers.Container to avoid import loops
 type Runtime interface {
-	EnsureBinary(name string)
 	ExecMayFail(cmd ...string) error
 }
 
@@ -883,8 +882,6 @@ func (pc *PersistentConnection) Start() error {
 		namespacePath = "-"
 	}
 
-	// Ensure that the host has the 'test-connection' binary.
-	pc.Runtime.EnsureBinary("test-connection")
 	permConnIdx++
 	n := fmt.Sprintf("%s-pc%d", pc.RuntimeName, permConnIdx)
 	loopFile := fmt.Sprintf("/tmp/%s-loop", n)
@@ -897,7 +894,7 @@ func (pc *PersistentConnection) Start() error {
 	args := []string{
 		"exec",
 		pc.RuntimeName,
-		"/test-connection",
+		"test-connection",
 		namespacePath,
 		pc.IP,
 		fmt.Sprintf("%d", pc.Port),

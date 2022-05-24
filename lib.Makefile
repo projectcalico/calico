@@ -26,7 +26,7 @@ endif
 
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
-EXCLUDEARCH ?= s390x
+EXCLUDEARCH ?= s390x $(EXTRA_EXCLUDEARCH)
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
 # BUILDARCH is the host architecture
@@ -272,6 +272,10 @@ DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+
+# A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
+.PHONY: force-rebuild
+force-rebuild:
 
 ###############################################################################
 # Updating pins
