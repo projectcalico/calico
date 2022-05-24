@@ -30,11 +30,14 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
@@ -52,12 +55,20 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/ratelimited"
+	"github.com/projectcalico/calico/felix/routetable"
 )
 
-const jumpMapCleanupInterval = 10 * time.Second
+const (
+	jumpMapCleanupInterval = 10 * time.Second
+
+	bpfInDev  = "bpfin.cali"
+	bpfOutDev = "bpfout.cali"
+)
 
 var (
 	bpfEndpointsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -94,9 +105,13 @@ type bpfDataplane interface {
 	ensureProgramAttached(ap attachPoint) (bpf.MapFD, error)
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) error
+	ensureBPFDevices() error
 	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error
 	removePolicyProgram(jumpMapFD bpf.MapFD) error
 	setAcceptLocal(iface string, val bool) error
+	setRPFilter(iface string, val int) error
+	setRoute(ip string) error
+	delRoute(ip string) error
 }
 
 type bpfInterface struct {
@@ -184,6 +199,16 @@ type bpfEndpointManager struct {
 
 	// RPF mode
 	rpfStrictModeEnabled string
+
+	// Service routes
+	routeTable    *routetable.RouteTable
+	services      map[serviceKey][]string
+	dirtyServices map[serviceKey][]string
+}
+
+type serviceKey struct {
+	name      string
+	namespace string
 }
 
 type bpfAllowChainRenderer interface {
@@ -191,6 +216,7 @@ type bpfAllowChainRenderer interface {
 }
 
 func newBPFEndpointManager(
+	dp bpfDataplane,
 	config *Config,
 	bpfMapContext *bpf.MapContext,
 	fibLookupEnabled bool,
@@ -200,11 +226,12 @@ func newBPFEndpointManager(
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
-) *bpfEndpointManager {
+) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
 	}
 	m := &bpfEndpointManager{
+		dp:                      dp,
 		allWEPs:                 map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPs:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPsDirty:          true,
@@ -244,6 +271,20 @@ func newBPFEndpointManager(
 		rpfStrictModeEnabled: config.BPFEnforceRPF,
 	}
 
+	m.routeTable = routetable.New(
+		[]string{bpfInDev},
+		4,
+		false, // vxlan
+		config.NetlinkTimeout,
+		nil, // deviceRouteSourceAddress
+		config.DeviceRouteProtocol,
+		true, // removeExternalRoutes
+		254,
+		opReporter,
+	)
+	m.services = make(map[serviceKey][]string)
+	m.dirtyServices = make(map[serviceKey][]string)
+
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
 	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
 	// to preserve the semantics of untracked ingress policy.  (Therefore we are also saying
@@ -261,8 +302,24 @@ func newBPFEndpointManager(
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
 	// indirection here so that UT can simulate the dataplane and test how it's called.
-	m.dp = m
-	return m
+	if m.dp == nil {
+		m.dp = m
+	}
+
+	// Anything else would prevent packets being accepted from the special
+	// service veth. It does not create a security hole since BPF does the RPF
+	// on its own.
+	m.dp.setRPFilter("all", 0)
+
+	err := m.dp.ensureBPFDevices()
+	if err != nil {
+		err = fmt.Errorf("ensure BPF devices: %w", err)
+		m = nil
+	} else {
+		log.Infof("Created %s:%s veth pair.", bpfInDev, bpfOutDev)
+	}
+
+	return m, err
 }
 
 // withIface handles the bookkeeping for working with a particular bpfInterface value.  It
@@ -339,6 +396,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IP, no change applied")
 			}
 		}
+	case *proto.ServiceUpdate:
+		m.onServiceUpdate(msg)
+	case *proto.ServiceRemove:
+		m.onServiceRemove(msg)
 	case *proto.RouteUpdate:
 		m.onRouteUpdate(msg)
 	}
@@ -353,7 +414,7 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 		}
 		m.tunnelIP = ip
 		log.WithField("ip", update.Dst).Info("host tunnel")
-		m.dirtyIfaceNames.Add("bpfnatout")
+		m.dirtyIfaceNames.Add(bpfOutDev)
 	}
 }
 
@@ -416,6 +477,16 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 		// For specific host endpoints OnHEPUpdate doesn't depend on iface state, and has
 		// already stored and mapped as needed.
 		if iface.info.ifaceIsUp {
+			// We require host interfaces to be in non-strict RPF mode so that
+			// packets can return straight to host for services bypassing CTLB.
+			switch update.Name {
+			case bpfInDev, bpfOutDev:
+				// do nothing
+			default:
+				if err := m.dp.setRPFilter(update.Name, 2); err != nil {
+					log.WithError(err).Warnf("Failed to set rp_filter for %s.", update.Name)
+				}
+			}
 			if _, hostEpConfigured := m.hostIfaceToEpMap[update.Name]; m.wildcardExists && !hostEpConfigured {
 				log.Debugf("Map host-* endpoint for %v", update.Name)
 				m.addHEPToIndexes(update.Name, &m.wildcardHostEndpoint)
@@ -546,6 +617,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
+	m.reconcileServices()
 
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
@@ -991,6 +1063,10 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tc.EpTypeTunnel
 	} else if ifaceName == "wireguard.cali" {
 		endpointType = tc.EpTypeL3Device
+	} else if ifaceName == bpfInDev || ifaceName == bpfOutDev {
+		endpointType = tc.EpTypeNAT
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
 	} else {
@@ -1139,7 +1215,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
-	return m.dataIfaceRegex.MatchString(iface)
+	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev
 }
 
 func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
@@ -1349,11 +1425,104 @@ func (m *bpfEndpointManager) setAcceptLocal(iface string, val bool) error {
 	return nil
 }
 
+func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
+	// We only support IPv4 for now.
+	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
+	numval := strconv.Itoa(val)
+	err := writeProcSys(path, numval)
+	if err != nil {
+		log.WithField("err", err).Errorf("Failed to  set %s to %s", path, numval)
+		return err
+	}
+
+	log.Infof("%s set to %s", path, numval)
+	return nil
+}
+
 func (m *bpfEndpointManager) ensureStarted() {
 	m.startupOnce.Do(func() {
 		log.Info("Starting map cleanup runner.")
 		m.mapCleanupRunner.Start(context.Background())
 	})
+}
+
+func (m *bpfEndpointManager) ensureBPFDevices() error {
+	nl, err := netlinkshim.NewRealNetlink()
+	if err != nil {
+		return fmt.Errorf("failed to create nelink: %w", err)
+	}
+
+	var bpfout, bpfin netlink.Link
+
+	bpfin, err = nl.LinkByName(bpfInDev)
+	if err != nil {
+		nat := &netlink.Veth{
+			LinkAttrs: netlink.LinkAttrs{
+				Name: bpfInDev,
+			},
+			PeerName: bpfOutDev,
+		}
+		if err := nl.LinkAdd(nat); err != nil {
+			return fmt.Errorf("failed to add %s: %w", bpfInDev, err)
+		}
+		bpfin, err = nl.LinkByName(bpfInDev)
+		if err != nil {
+			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
+		}
+		if err := nl.LinkSetUp(bpfin); err != nil {
+			return fmt.Errorf("failed to set %s up: %w", bpfInDev, err)
+		}
+		bpfout, err = nl.LinkByName(bpfOutDev)
+		if err != nil {
+			return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
+		}
+		if err := nl.LinkSetUp(bpfout); err != nil {
+			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
+		}
+	}
+
+	if bpfout == nil {
+		bpfout, err = nl.LinkByName(bpfOutDev)
+		if err != nil {
+			return fmt.Errorf("miss %s after add: %w", bpfOutDev, err)
+		}
+	}
+
+	// Add a permanent ARP entry to point to the other side of the veth to avoid
+	// ARP requests that would not be proxied if .all.rp_filter == 1
+	arp := &netlink.Neigh{
+		State:        netlink.NUD_PERMANENT,
+		IP:           net.IPv4(169, 254, 1, 1),
+		HardwareAddr: bpfout.Attrs().HardwareAddr,
+		LinkIndex:    bpfin.Attrs().Index,
+	}
+	if err := nl.NeighAdd(arp); err != nil && err != syscall.EEXIST {
+		return fmt.Errorf("failed to update neight for %s: %w", bpfOutDev, err)
+	}
+
+	if err := configureInterface(bpfInDev, 4, "0", writeProcSys); err != nil {
+		return fmt.Errorf("failed to configure %s parameters: %w", bpfInDev, err)
+	}
+	if err := configureInterface(bpfOutDev, 4, "0", writeProcSys); err != nil {
+		return fmt.Errorf("failed to configure %s parameters: %w", bpfOutDev, err)
+	}
+
+	err = m.ensureQdisc(bpfInDev)
+	if err != nil {
+		return fmt.Errorf("failed to set qdisc on %s: %w", bpfOutDev, err)
+	}
+
+	// Setup a link local route to a non-existent link local address that would
+	// serve as a gateway to route services via bpfnat veth rather than having
+	// link local routes for each service that would trigger ARP querries.
+	cidr, _ := ip.CIDRFromString("169.254.1.1/32")
+
+	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
+		Type: routetable.TargetTypeLinkLocalUnicast,
+		CIDR: cidr,
+	})
+
+	return nil
 }
 
 func (m *bpfEndpointManager) ensureQdisc(iface string) error {
@@ -1566,4 +1735,111 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 		return &ipAddrs[0], nil
 	}
 	return nil, errors.New("interface ip address not found")
+}
+
+func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
+	log.WithFields(log.Fields{
+		"Name":      update.Name,
+		"Namespace": update.Namespace,
+	}).Info("Service Update")
+
+	ips := make([]string, 0, 2+len(update.ExternalIps))
+	if update.ClusterIp != "" {
+		ips = append(ips, update.ClusterIp)
+	}
+	if update.LoadbalancerIp != "" {
+		ips = append(ips, update.LoadbalancerIp)
+	}
+	ips = append(ips, update.ExternalIps...)
+
+	key := serviceKey{name: update.Name, namespace: update.Namespace}
+	m.dirtyServices[key] = ips
+}
+
+func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
+	log.WithFields(log.Fields{
+		"Name":      update.Name,
+		"Namespace": update.Namespace,
+	}).Info("Service Remove")
+
+	key := serviceKey{name: update.Name, namespace: update.Namespace}
+	m.dirtyServices[key] = nil
+}
+
+func (m *bpfEndpointManager) reconcileServices() {
+	for svc, ips := range m.dirtyServices {
+		errored := false
+		for _, ip := range ips {
+			if err := m.dp.setRoute(ip); err != nil {
+				log.WithError(err).Errorf("Failed to set route to %s via bpfnatin.", ip)
+				errored = true
+			}
+		}
+
+		known := m.services[svc]
+
+		for _, old := range known {
+			exist := false
+			for _, ip := range ips {
+				if ip == old {
+					exist = true
+					break
+				}
+			}
+
+			if !exist {
+				if err := m.dp.delRoute(old); err != nil {
+					log.WithError(err).Errorf("Failed to delete route to %s via bpfnatin.", old)
+					errored = true
+				}
+			}
+		}
+
+		if !errored {
+			if len(ips) > 0 {
+				m.services[svc] = ips
+			} else {
+				delete(m.services, svc)
+			}
+			delete(m.dirtyServices, svc)
+		}
+	}
+}
+
+var bpfnatGW = ip.FromNetIP(net.IPv4(169, 254, 1, 1))
+
+func (m *bpfEndpointManager) setRoute(dst string) error {
+	cidr, err := ip.CIDRFromString(dst + "/32")
+	if err != nil {
+		return err
+	}
+
+	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
+		Type: routetable.TargetTypeGlobalUnicast,
+		CIDR: cidr,
+		GW:   bpfnatGW,
+	})
+	log.WithFields(log.Fields{
+		"cidr": dst + "/32",
+	}).Debug("setRoute")
+	return nil
+}
+
+func (m *bpfEndpointManager) delRoute(dst string) error {
+	cidr, err := ip.CIDRFromString(dst + "/32")
+	if err != nil {
+		return err
+	}
+
+	m.routeTable.RouteRemove(bpfInDev, cidr)
+	log.WithFields(log.Fields{
+		"cidr": dst + "/32",
+	}).Debug("delRoute")
+	return nil
+}
+
+func (m *bpfEndpointManager) GetRouteTableSyncers() []routeTableSyncer {
+	tables := []routeTableSyncer{m.routeTable}
+
+	return tables
 }
