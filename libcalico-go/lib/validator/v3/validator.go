@@ -795,7 +795,7 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 			"RouteTableRange", "", reason("cannot be set when `RouteTableRanges` is also set"), "")
 	}
 
-	if c.RouteTableRanges != nil && c.RouteTableRanges.Len() > int(routeTableRangeMaxTables) {
+	if c.RouteTableRanges != nil && c.RouteTableRanges.NumDesignatedTables() > int(routeTableRangeMaxTables) {
 		structLevel.ReportError(reflect.ValueOf(c.RouteTableRanges),
 			"RouteTableRanges", "", reason("targets too many tables"), "")
 	}
