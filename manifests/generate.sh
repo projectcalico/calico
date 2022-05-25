@@ -20,8 +20,9 @@ EOF
 
 ${HELM} -n tigera-operator template \
 	--include-crds \
-	../charts/tigera-operator \
-	-f ../charts/values/tigera-operator.yaml >> tigera-operator.yaml
+	--set installation.enabled=false \
+	--set apiServer.enabled=false \
+	../charts/tigera-operator >> tigera-operator.yaml
 
 ##########################################################################
 # Build CRD manifest.
@@ -68,6 +69,8 @@ done
 ${HELM} template --include-crds \
 	-n tigera-operator \
 	../charts/tigera-operator/ \
+	--output-dir ocp \
 	--set installation.kubernetesProvider=openshift \
-	-f ../charts/values/tigera-operator.yaml --output-dir ocp
+	--set installation.enabled=false \
+	--set apiServer.enabled=false
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
