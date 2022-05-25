@@ -161,13 +161,16 @@ You can control enforcement of application layer policy on a per-namespace basis
 
 To enable Istio and application layer policy in a namespace, add the label `istio-injection=enabled`.
 
-```
+```bash
 kubectl label namespace <your namespace name> istio-injection=enabled
 ```
 
 If the namespace already has pods in it, you must recreate them for this to take effect.
 
->**Note**: Envoy must be able to communicate with the `istio-pilot.istio-system service`. If you apply any egress policies to your pods, you *must* enable access. For example, you could [apply a network policy]({{ "/getting-started/kubernetes/installation/manifests/app-layer-policy/allow-istio-pilot.yaml" | absolute_url }}).
+>**Note**: Envoy must be able to communicate with the `istio-pilot.istio-system service`. If you apply any egress policies to your pods, you *must* enable access. For example, you could [apply a network policy]({{ "/security/calico-network-policy" | absolute_url }}).
+```bash
+kubectl apply -f {{ "/getting-started/kubernetes/installation/manifests/app-layer-policy/allow-istio-pilot.yaml" | absolute_url }}
+```
 {: .alert .alert-info}
 
 ### Above and beyond
