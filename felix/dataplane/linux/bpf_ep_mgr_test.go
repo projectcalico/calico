@@ -240,6 +240,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					EndpointToHostAction: endpointToHostAction,
 				},
 				BPFExtToServiceConnmark: 0,
+				FeatureDetectOverrides: map[string]string{
+					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
+				},
 			},
 			bpfMapContext,
 			fibLookupEnabled,
