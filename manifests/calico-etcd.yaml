@@ -470,7 +470,8 @@ spec:
             type: Directory
         # mount /proc/1 at /initproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
         - name: init-proc
-          hostPath: /proc/1
+          hostPath:
+            path: /proc/1
         # Used to install CNI.
         - name: cni-bin-dir
           hostPath:

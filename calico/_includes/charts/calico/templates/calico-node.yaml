@@ -578,7 +578,8 @@ spec:
             type: Directory
         # mount /proc/1 at /initproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
         - name: init-proc
-          hostPath: /proc/1
+          hostPath:
+            path: /proc/1
 {{- if and (eq .Values.network "flannel") (eq .Values.datastore "kubernetes") }}
         # Used by flannel.
         - name: flannel-cfg
