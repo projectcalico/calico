@@ -103,8 +103,8 @@ func ensureCgroupV2Filesystem() error {
 		// An example line in mountinfo file:
 		// 35 24 0:30 / /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime shared:9 - cgroup2 cgroup2 rw,nsdelegate,memory_recursiveprot
 		line := scanner.Text()
-		mountPoint := strings.Split(line, " ")[4]                    // 4 is the index to mount points in mountinfo files
-		fsType := strings.Split(strings.Split(line, "-")[1], " ")[1] // fsType is the first string after -
+		mountPoint := strings.Split(line, " ")[4]                      // 4 is the index to mount points in mountinfo files
+		fsType := strings.Split(strings.Split(line, " - ")[1], " ")[0] // fsType is the first string after -
 
 		if mountPoint == bpf.CgroupV2Path && fsType == "cgroup2" {
 			logrus.Info("Cgroup2 filesystem is mounted.")
