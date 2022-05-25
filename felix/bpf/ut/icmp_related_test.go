@@ -15,6 +15,7 @@
 package ut_test
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -143,6 +144,8 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 		natPkt = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 	})
 	expectMark(tcdefs.MarkSeen)
+
+	dumpCTMap(ctMap)
 
 	natIPv4L := natPkt.Layer(layers.LayerTypeIPv4)
 	Expect(natIPv4L).NotTo(BeNil())
@@ -301,6 +304,8 @@ func checkICMP(bytes []byte, outSrc, outDst, innerSrc, innerDst net.IP,
 	innerProto layers.IPProtocol, innerPortSrc, innerPortDst uint16) {
 
 	icmpPkt := gopacket.NewPacket(bytes, layers.LayerTypeEthernet, gopacket.Default)
+
+	fmt.Printf("pktR = %+v\n", icmpPkt)
 
 	ipv4L := icmpPkt.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
