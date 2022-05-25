@@ -76,7 +76,8 @@ data:
           "nodename": "__KUBERNETES_NODE_NAME__",
           "mtu": 1500,
           "ipam": {
-              "type": "calico-ipam"
+              "type": "host-local",
+              "subnet": "usePodCidr"
           },
           "policy": {
               "type": "k8s"
@@ -4382,6 +4383,9 @@ spec:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
               value: "kubernetes"
+            # Configure route aggregation based on pod CIDR.
+            - name: USE_POD_CIDR
+              value: "true"
             # Typha support: controlled by the ConfigMap.
             - name: FELIX_TYPHAK8SSERVICENAME
               valueFrom:
@@ -4643,6 +4647,9 @@ spec:
           - name: TYPHA_DATASTORETYPE
             value: "kubernetes"
           - name: TYPHA_HEALTHENABLED
+            value: "true"
+          # Configure route aggregation based on pod CIDR.
+          - name: USE_POD_CIDR
             value: "true"
           # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
           # this opens a port on the host, which may need to be secured.

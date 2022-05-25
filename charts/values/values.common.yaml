@@ -15,8 +15,8 @@ kubeControllers:
   image: docker.io/calico/kube-controllers
   tag: master
 flannel:
-  image: coreos/flannel
-  tag: master
+  image: quay.io/coreos/flannel
+  tag: v0.15.1
 flannelMigration:
   image: docker.io/calico/flannel-migration
   tag: master
