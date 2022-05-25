@@ -201,6 +201,8 @@ type bpfEndpointManager struct {
 	rpfStrictModeEnabled string
 
 	// Service routes
+	ctlbWorkaroundEnabled bool
+
 	routeTable    *routetable.RouteTable
 	services      map[serviceKey][]string
 	dirtyServices map[serviceKey][]string
@@ -271,20 +273,6 @@ func newBPFEndpointManager(
 		rpfStrictModeEnabled: config.BPFEnforceRPF,
 	}
 
-	m.routeTable = routetable.New(
-		[]string{bpfInDev},
-		4,
-		false, // vxlan
-		config.NetlinkTimeout,
-		nil, // deviceRouteSourceAddress
-		config.DeviceRouteProtocol,
-		true, // removeExternalRoutes
-		254,
-		opReporter,
-	)
-	m.services = make(map[serviceKey][]string)
-	m.dirtyServices = make(map[serviceKey][]string)
-
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
 	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
 	// to preserve the semantics of untracked ingress policy.  (Therefore we are also saying
@@ -306,20 +294,41 @@ func newBPFEndpointManager(
 		m.dp = m
 	}
 
-	// Anything else would prevent packets being accepted from the special
-	// service veth. It does not create a security hole since BPF does the RPF
-	// on its own.
-	m.dp.setRPFilter("all", 0)
-
-	err := m.dp.ensureBPFDevices()
-	if err != nil {
-		err = fmt.Errorf("ensure BPF devices: %w", err)
-		m = nil
-	} else {
-		log.Infof("Created %s:%s veth pair.", bpfInDev, bpfOutDev)
+	if config.FeatureDetectOverrides != nil {
+		m.ctlbWorkaroundEnabled = config.FeatureDetectOverrides["BPFConnectTimeLoadBalancingWorkaround"] == "enabled"
 	}
 
-	return m, err
+	if m.ctlbWorkaroundEnabled {
+		log.Info("BPFConnectTimeLoadBalancingWorkaround is enabled")
+		m.routeTable = routetable.New(
+			[]string{bpfInDev},
+			4,
+			false, // vxlan
+			config.NetlinkTimeout,
+			nil, // deviceRouteSourceAddress
+			config.DeviceRouteProtocol,
+			true, // removeExternalRoutes
+			254,
+			opReporter,
+		)
+		m.services = make(map[serviceKey][]string)
+		m.dirtyServices = make(map[serviceKey][]string)
+
+		// Anything else would prevent packets being accepted from the special
+		// service veth. It does not create a security hole since BPF does the RPF
+		// on its own.
+		if err := m.dp.setRPFilter("all", 0); err != nil {
+			return nil, fmt.Errorf("setting rp_filter for all: %w", err)
+		}
+
+		if err := m.dp.ensureBPFDevices(); err != nil {
+			return nil, fmt.Errorf("ensure BPF devices: %w", err)
+		} else {
+			log.Infof("Created %s:%s veth pair.", bpfInDev, bpfOutDev)
+		}
+	}
+
+	return m, nil
 }
 
 // withIface handles the bookkeeping for working with a particular bpfInterface value.  It
@@ -1447,6 +1456,10 @@ func (m *bpfEndpointManager) ensureStarted() {
 }
 
 func (m *bpfEndpointManager) ensureBPFDevices() error {
+	if !m.ctlbWorkaroundEnabled {
+		return nil
+	}
+
 	nl, err := netlinkshim.NewRealNetlink()
 	if err != nil {
 		return fmt.Errorf("failed to create nelink: %w", err)
@@ -1738,6 +1751,10 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 }
 
 func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
+	if !m.ctlbWorkaroundEnabled {
+		return
+	}
+
 	log.WithFields(log.Fields{
 		"Name":      update.Name,
 		"Namespace": update.Namespace,
@@ -1757,6 +1774,10 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 }
 
 func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
+	if !m.ctlbWorkaroundEnabled {
+		return
+	}
+
 	log.WithFields(log.Fields{
 		"Name":      update.Name,
 		"Namespace": update.Namespace,
@@ -1839,6 +1860,10 @@ func (m *bpfEndpointManager) delRoute(dst string) error {
 }
 
 func (m *bpfEndpointManager) GetRouteTableSyncers() []routeTableSyncer {
+	if !m.ctlbWorkaroundEnabled {
+		return nil
+	}
+
 	tables := []routeTableSyncer{m.routeTable}
 
 	return tables
