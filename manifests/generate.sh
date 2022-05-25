@@ -34,30 +34,24 @@ for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only $FILE \
-		-f ../charts/values/calico.yaml \
-		-f ../charts/values/values.common.yaml >> crds.yaml
+		-f ../charts/values/values.common.yaml \
+		-f ../charts/values/calico.yaml >> crds.yaml
 done
 
 ##########################################################################
 # Build Calico manifests.
 #
 # To add a new manifest to this directory, define
-# a values file in ../charts/values/ and then add it to VALUES_FILES.
+# a new values file in ../charts/values/
 ##########################################################################
-VALUES_FILES="calico-typha.yaml
-	calico-bpf.yaml
-	calico-vxlan.yaml
-	calico.yaml
-	calico-etcd.yaml 
-	calico-policy-only.yaml
-	flannel-migration/calico.yaml
-	"
+VALUES_FILES=$(cd ../charts/values && find . -type f -name "*.yaml" | grep -v values.common.yaml)
 
 for FILE in $VALUES_FILES; do
+	echo "Generating manifest from charts/values/$FILE"
 	${HELM} -n kube-system template \
 		../charts/calico \
-		-f ../charts/values/$FILE \
-		-f ../charts/values/values.common.yaml > $FILE
+		-f ../charts/values/values.common.yaml \
+		-f ../charts/values/$FILE > $FILE
 done
 
 ##########################################################################
