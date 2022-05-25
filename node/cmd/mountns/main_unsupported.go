@@ -26,5 +26,5 @@ import (
 // the main logic, in main.go, cannot be compiled for these architectures as it depends
 // on libbpf and cgo. This file is compiled for these architectures.
 func main() {
-	fmt.Printf("%s binary is not supported on %s architecture.\n", os.Arg[0], runtime.GOARCH)
+	fmt.Printf("%s binary is not supported on %s architecture.\n", os.Args[0], runtime.GOARCH)
 }
