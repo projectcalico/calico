@@ -50,7 +50,6 @@ serve:
 	# like to use a docker image that comes preloaded with all the github-pages plugins,
 	# its ok to override this variable.
 	docker run --rm -it \
-	  -v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
 	  -v $(CURDIR):/srv/jekyll \
 	  -v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	  -e JEKYLL_DOCKER_TAG="" \
@@ -61,11 +60,10 @@ serve:
 DOCS_SOURCE=$(find . -name '*.md') $(find ../manifests -type f)
 
 .PHONY: build
-_site build: bin/helm bin/helm3 bin/ocp.tgz $(DOCS_SOURCE)
+_site build: bin/ocp.tgz $(DOCS_SOURCE)
 	docker run --rm \
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
-	-v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
 	-v $(CURDIR)/:/srv/jekyll \
 	-v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
@@ -94,7 +92,7 @@ clean:
 ###############################################################################
 # CI / test targets
 ###############################################################################
-ci: htmlproofer kubeval helm-tests gen-manifests check-dirty
+ci: htmlproofer kubeval
 
 htmlproofer: _site
 	docker run -ti -e JEKYLL_UID=`id -u` --rm \
@@ -114,12 +112,6 @@ kubeval: _site
 	-rm stderr.out
 	! grep -C3 -P "invalid|\t\*" filtered.out
 	rm filtered.out
-
-helm-tests: bin/helm values.yaml
-	$(DOCKER_RUN) \
-		-v $(CURDIR)/bin/helm3:/usr/local/bin/helm \
-		$(CALICO_BUILD) \
-		sh -c "$(GIT_CONFIG_SSH) ginkgo -cover -r ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)"
 
 ###############################################################################
 # Docs automation
@@ -162,15 +154,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean chart _site
 	touch $@
 
-chart: clean _includes/charts/tigera-operator/values.yaml bin/helm3
-	bin/helm3 package ./_includes/charts/tigera-operator \
-	--destination ./bin/ \
-	--version $(GIT_VERSION) \
-	--app-version $(GIT_VERSION)
-ifdef CHART_RELEASE
-	mv ./bin/tigera-operator-$(GIT_VERSION).tgz ./bin/tigera-operator-$(GIT_VERSION)-$(CHART_RELEASE).tgz
-endif
-
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
@@ -203,29 +186,6 @@ endif
 ###############################################################################
 # Utilities
 ###############################################################################
-# TODO: stop using bin/helm as an entrypoint in build scripts.
-bin/helm:
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	wget -q https://get.helm.sh/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
-	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
-	mv $(TMP)/linux-amd64/helm bin/helm
-
-bin/helm3:
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	wget -q https://get.helm.sh/helm-v3.3.1-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
-	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
-	mv $(TMP)/linux-amd64/helm bin/helm3
-
-.PHONY: values.yaml
-values.yaml: _includes/charts/calico/values.yaml _includes/charts/tigera-operator/values.yaml
-_includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
-	docker run --rm \
-	  -v $(CURDIR):/calico \
-	  -w /calico \
-	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $* > $@
-
 DOCS_TEST_CONTAINER=projectcalico/release-test
 .PHONY: release-test-image
 release-test-image:
