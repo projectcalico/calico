@@ -68,7 +68,7 @@ spec:
             name: install-resources-script
       initContainers:
         - name: create-initial-resources
-          image: calico/ctl:master
+          image: docker.io/calico/ctl:master
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
