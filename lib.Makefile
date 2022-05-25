@@ -1229,6 +1229,13 @@ kubectl $(KUBECTL):
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
 	chmod +x $@
 
+bin/helm:
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	wget -q https://get.helm.sh/helm-v3.3.1-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
+	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
+	mv $(TMP)/linux-amd64/helm bin/helm
+
 ###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################

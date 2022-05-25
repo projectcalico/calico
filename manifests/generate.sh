@@ -4,6 +4,8 @@
 # Values files for the manifests in this directory can be found in 
 # ../calico/charts/values.
 
+HELM=${HELM:-../bin/helm}
+
 ##########################################################################
 # Build the operator manifest. 
 ##########################################################################
@@ -16,7 +18,7 @@ metadata:
     name: tigera-operator
 EOF
 
-helm -n tigera-operator template \
+${HELM} -n tigera-operator template \
 	--include-crds \
 	../charts/tigera-operator \
 	-f ../charts/values/tigera-operator.yaml >> tigera-operator.yaml
@@ -28,7 +30,7 @@ helm -n tigera-operator template \
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
 for FILE in $(ls ../charts/calico/crds); do
-	helm template ../charts/calico \
+	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only $FILE \
 		-f ../charts/values/calico.yaml \
@@ -51,7 +53,7 @@ VALUES_FILES="calico-typha.yaml
 	"
 
 for FILE in $VALUES_FILES; do
-	helm -n kube-system template \
+	${HELM} -n kube-system template \
 		../charts/calico \
 		-f ../charts/values/$FILE \
 		-f ../charts/values/values.common.yaml > $FILE
@@ -63,7 +65,7 @@ done
 # OCP requires resources in their own yaml files, so output to a dir.
 # Then do a bit of cleanup to reduce the directory depth to 1.
 ##########################################################################
-helm template --include-crds \
+${HELM} template --include-crds \
 	-n tigera-operator \
 	../charts/tigera-operator/ \
 	--set installation.kubernetesProvider=openshift \
