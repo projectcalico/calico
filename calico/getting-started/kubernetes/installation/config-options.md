@@ -291,19 +291,48 @@ Open the `install/kubernetes/istio-demo-auth.yaml` file in an
 editor, and locate the `istio-sidecar-injector` ConfigMap.  In the existing `istio-proxy` container, add a new `volumeMount`.
 
 ```
-{% include non-helm-manifests/istio-proxy-volume-mounts %}
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
 ```
 
 Add a new container to the template.
 
 ```
-{% include non-helm-manifests/dikastes-container %}
+      - name: dikastes
+        image: {{page.registry}}{{page.imageNames["calico/dikastes"]}}:{{site.data.versions.first.components["calico/dikastes"].version}}
+        args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          exec:
+            command:
+            - /healthz
+            - liveness
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          exec:
+            command:
+            - /healthz
+            - readiness
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        volumeMounts:
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
+        - mountPath: /var/run/felix
+          name: felix-sync```
 ```
 
 Add two new volumes.
 
 ```
-{% include non-helm-manifests/istio-volumes %}
+      - name: dikastes-sock
+        emptyDir:
+          medium: Memory
+      - name: felix-sync
+        csi:
+          driver: "csi.tigera.io"
 ```
 
 The volumes you added are used to create Unix domain sockets that allow
