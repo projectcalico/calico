@@ -282,6 +282,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
+
+			if !testOpts.connTimeEnabled {
+				options.ExtraEnvVars["FELIX_FeatureDetectOverride"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
+			}
 		})
 
 		JustAfterEach(func() {
