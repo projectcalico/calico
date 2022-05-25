@@ -98,6 +98,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	// From host via bpfnat - first packet - conntrack miss
 	runBpfTest(t, "calico_from_nat_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -124,7 +125,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		pktBytes = res.dataOut
 	})
 
-	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut
+	expectMark(tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut)
 
 	dumpCTMap(ctMap)
 
@@ -175,7 +176,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 	// Out via wg tunnel (to intruduce ct entries)
 
-	skbMark = tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut
+	expectMark(tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut)
 
 	var hostConflictPkt []byte
 
@@ -240,7 +241,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		Expect(udpR.SrcPort).To(Equal(layers.UDPPort(22222)))
 
 		hostConflictPktAfterSNAT = res.dataOut
-	}, withPSNATPorts(22222, 22222))
+	}, withPSNATPorts(22222, 22222), withHostNetworked())
 
 	dumpCTMap(ctMap)
 
@@ -256,7 +257,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		fmt.Printf("pktR = %+v\n", pktR)
 
 		Expect(res.dataOut).To(Equal(hostConflictPktAfterSNAT))
-	}, withPSNATPorts(22222, 22222))
+	}, withPSNATPorts(22222, 22222), withHostNetworked())
 
 	// Return path
 
