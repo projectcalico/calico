@@ -1,3 +1,5 @@
+//go:build !cgo
+
 // Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,8 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nodeinit
+package main
 
-func Run(_ bool) {
-	// Unused on Windows.
+import (
+	"fmt"
+	"os"
+	"runtime"
+)
+
+// BPF dataplane is not supported in some architectures like Armv7, and at the same time
+// the main logic, in main.go, cannot be compiled for these architectures as it depends
+// on libbpf and cgo. This file is compiled for these architectures.
+func main() {
+	fmt.Printf("%s binary is not supported on %s architecture.\n", os.Args[0], runtime.GOARCH)
 }
