@@ -7,22 +7,22 @@
 # Config check.
 if ! test -n "${FV_FELIXIMAGE}"; then
     echo FV_FELIXIMAGE must be set to indicate the felix image to use.
-    exit -1
+    exit 1
 fi
 
 if ! test -n "${FV_ETCDIMAGE}"; then
     echo FV_ETCDIMAGE must be set to indicate the etcd image to use.
-    exit -1
+    exit 1
 fi
 
 if ! test -n "${FV_K8SIMAGE}"; then
     echo FV_K8SIMAGE must be set to indicate the calico/go-build image to use.
-    exit -1
+    exit 1
 fi
 
 if ! test -f "${PRIVATE_KEY}"; then
     echo PRIVATE_KEY must be set and file must exist.
-    exit -1
+    exit 1
 fi
 
 #
@@ -161,18 +161,20 @@ while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/ku
     sleep 2
 done
 
-docker run --detach --name ${prefix}-controller-manager \
+docker run \
+    --detach \
+    --name ${prefix}-controller-manager \
     -v ${CERTS_PATH}:/home/user/certs \
-          $FV_K8SIMAGE \
-	  kube-controller-manager \
-            --master=https://${k8s_ip}:6443 \
-	    --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
-	    --min-resync-period=3m \
-	    --allocate-node-cidrs=true \
-	    --cluster-cidr=192.168.0.0/16 \
-	    --v=5 \
-	    --service-account-private-key-file=/home/user/certs/service-account-key.pem \
-	    --root-ca-file=/home/user/certs/ca.pem
+    $FV_K8SIMAGE \
+    kube-controller-manager \
+      --master=https://${k8s_ip}:6443 \
+      --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+      --min-resync-period=3m \
+      --allocate-node-cidrs=true \
+      --cluster-cidr=192.168.0.0/16 \
+      --v=5 \
+      --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+      --root-ca-file=/home/user/certs/ca.pem
 
 while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/kubeconfig get serviceaccounts default; do
     sleep 2
@@ -204,7 +206,10 @@ done
 
 if ${USE_TYPHA}; then
     # Run Typha.
-    docker run --detach --privileged --name ${prefix}-typha \
+    docker run \
+       --detach \
+       --privileged \
+       --name ${prefix}-typha \
        -e CALICO_DATASTORE_TYPE=kubernetes \
        -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
        -e TYPHA_DATASTORETYPE=kubernetes \
@@ -239,6 +244,9 @@ docker run --detach --privileged --name ${prefix}-felix \
        -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
        -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
        -v ${PWD}:/testcode \
+       -v ${PWD}/bin:/usr/local/bin \
+       -v ${PWD}/${FV_BINARY}:/usr/local/bin/calico-felix \
+       -v ${PWD}/bin/bpf:/usr/lib/calico/bpf/ \
        -w /testcode/k8sfv/output \
        $FV_FELIXIMAGE
 felix_ip=$(get_container_ip ${prefix}-felix)
