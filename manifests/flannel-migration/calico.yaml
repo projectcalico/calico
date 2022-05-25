@@ -4334,7 +4334,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: calico/cni:master
+          image: docker.io/calico/cni:master
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
           - configMapRef:
@@ -4361,7 +4361,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: calico/cni:master
+          image: docker.io/calico/cni:master
           command: ["/opt/cni/bin/install"]
           envFrom:
           - configMapRef:
@@ -4404,7 +4404,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: calico/node:master
+          image: docker.io/calico/node:master
           envFrom:
           - configMapRef:
               # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -4611,7 +4611,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: calico/kube-controllers:master
+          image: docker.io/calico/kube-controllers:master
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
