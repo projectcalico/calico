@@ -1,5 +1,6 @@
+# CustomResourceDefinitions for Calico the Hard Way
 ---
-# Source: crds/calico/crd.projectcalico.org_bgpconfigurations.yaml
+# Source: crds/crd.projectcalico.org_bgpconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -179,7 +180,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_bgppeers.yaml
+# Source: crds/crd.projectcalico.org_bgppeers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -298,7 +299,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_blockaffinities.yaml
+# Source: crds/crd.projectcalico.org_blockaffinities.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -359,7 +360,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_caliconodestatuses.yaml
+# Source: crds/crd.projectcalico.org_caliconodestatuses.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -622,7 +623,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_clusterinformations.yaml
+# Source: crds/crd.projectcalico.org_clusterinformations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -686,7 +687,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_felixconfigurations.yaml
+# Source: crds/crd.projectcalico.org_felixconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1377,7 +1378,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_globalnetworkpolicies.yaml
+# Source: crds/crd.projectcalico.org_globalnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2232,7 +2233,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_globalnetworksets.yaml
+# Source: crds/crd.projectcalico.org_globalnetworksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2285,7 +2286,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_hostendpoints.yaml
+# Source: crds/crd.projectcalico.org_hostendpoints.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2393,7 +2394,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_ipamblocks.yaml
+# Source: crds/crd.projectcalico.org_ipamblocks.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2512,7 +2513,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_ipamconfigs.yaml
+# Source: crds/crd.projectcalico.org_ipamconfigs.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2568,7 +2569,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_ipamhandles.yaml
+# Source: crds/crd.projectcalico.org_ipamhandles.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2624,7 +2625,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_ippools.yaml
+# Source: crds/crd.projectcalico.org_ippools.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2733,7 +2734,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_ipreservations.yaml
+# Source: crds/crd.projectcalico.org_ipreservations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2787,7 +2788,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+# Source: crds/crd.projectcalico.org_kubecontrollersconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3040,7 +3041,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_networkpolicies.yaml
+# Source: crds/crd.projectcalico.org_networkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3876,7 +3877,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/calico/crd.projectcalico.org_networksets.yaml
+# Source: crds/crd.projectcalico.org_networksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3926,4 +3927,3 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-

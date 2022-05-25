@@ -1,0 +1,41 @@
+# Configure the images to use when generating manifests.
+node:
+  image: docker.io/calico/node
+  tag: master
+calicoctl:
+  image: docker.io/calico/ctl
+  tag: master
+typha:
+  image: docker.io/calico/typha
+  tag: master
+cni:
+  image: docker.io/calico/cni
+  tag: master
+kubeControllers:
+  image: docker.io/calico/kube-controllers
+  tag: master
+flannel:
+  image: coreos/flannel
+  tag: master
+flannelMigration:
+  image: docker.io/calico/flannel-migration
+  tag: master
+dikastes:
+  image: docker.io/calico/dikastes
+  tag: master
+flexvol:
+  tag: master
+csi-driver:
+  image: docker.io/calico/csi-driver
+  tag: master
+
+mtu: "1440"
+ipam: "calico-ipam"
+
+# Config for etcd, if needed.
+etcd:
+  endpoints: "http://<ETCD_IP>:<ETCD_PORT>"
+  tls:
+    crt: null
+    ca: null
+    key: null
