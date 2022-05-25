@@ -4374,10 +4374,10 @@ spec:
               name: cni-net-dir
           securityContext:
             privileged: true
+        # This init container mounts the necessary filesystems needed by the BPF data plane
+        # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
+        # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
         - name: "mount-bpffs"
-          # This init container mounts the necessary filesystems (bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup),
-          # needed by the BPF data plane. Calico-node initialisation is executed in best effort fashion,
-          # i.e. no failure for errors, to not disrupt pod creation in iptable mode.
           image: docker.io/calico/cni:master
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
@@ -4386,10 +4386,10 @@ spec:
               # Bidirectional is required to ensure that the new mount we make at /sys/fs/bpf propagates to the host
               # so that it outlives the init container.
               mountPropagation: Bidirectional
-              mountPath: /initproc
+            # Mount /proc/1/ from host which usually is an init program at /initproc. It's needed by mountns binary,
+            # executed by calico-node, to mount root cgroup2 fs at /run/calico/cgroup to attach CTLB programs correctly.
+            - mountPath: /initproc
               name: init-proc
-              # Mount /proc/1/ from host which usually is an init program at /initproc. It's needed by mountns binary,
-              # executed by calico-node, to mount root cgroup2 fs at /run/calico/cgroup to attach CTLB programs correctly.
               readOnly: true
           securityContext:
             privileged: true
@@ -4547,9 +4547,9 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
+        # mount /proc/1 at /initproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
         - name: init-proc
           hostPath: /proc/1
-          readOnly: true
         # Used to install CNI.
         - name: cni-bin-dir
           hostPath:

@@ -85,12 +85,12 @@ func ensureBPFFilesystem() error {
 	return nil
 }
 
-const cgroupRootPath = "/initproc"
-
 // ensureCgroupV2Filesystem() enters the cgroup and mount namespace of the process
 // with PID 1 running on a host to allow felix running in calico-node to access the root of cgroup namespace.
 // This is needed by felix to attach CTLB programs and implement k8s services correctly.
 func ensureCgroupV2Filesystem() error {
+	cgroupRootPath := "/initproc"
+
 	// Check if the Cgroup2 filesystem is mounted at the expected location.
 	logrus.Info("Checking if Cgroup2 filesystem is mounted.")
 	mountInfoFile := path.Join(cgroupRootPath, "mountinfo")
