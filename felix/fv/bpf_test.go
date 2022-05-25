@@ -224,6 +224,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			felixPanicExpected bool
 		)
 
+		ctlbWorkaround := !testOpts.connTimeEnabled
+
 		switch testOpts.protocol {
 		case "tcp":
 			numericProto = 6
@@ -283,7 +285,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 
-			if !testOpts.connTimeEnabled {
+			if ctlbWorkaround {
 				options.ExtraEnvVars["FELIX_FeatureDetectOverride"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
 			}
 		})
@@ -539,7 +541,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					expJumpMaps := func(numWorkloads int) int {
 						numHostIfaces := 1
-						specialIfaces := 1
+						specialIfaces := 0
+						if ctlbWorkaround {
+							specialIfaces = 1
+						}
 						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
 						return expectedNumMaps
 					}
@@ -2485,7 +2490,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											felix.Exec("ip", "route")
 										}
 									})
-									if !testOpts.connTimeEnabled {
+									if ctlbWorkaround {
 										It("should have connection when via clusterIP starts first", func() {
 											node1IP := felixes[1].IP
 
