@@ -1447,8 +1447,7 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 		return false
 	}
 
-	switch updateType {
-	case api.UpdateTypeKVDeleted:
+	if kvp.Value == nil {
 		// The bird templates that confd is used to render assume that some global
 		// defaults are always configured.
 		if globalDefault, ok := globalDefaults[k]; ok {
@@ -1462,7 +1461,16 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 			}
 			delete(c.cache, k)
 		}
-	case api.UpdateTypeKVNew, api.UpdateTypeKVUpdated:
+	} else {
+		// Ignore pending block affinities - we shouldn't act upon them
+		// until they are confirmed.
+		if _, ok := kvp.Key.(model.BlockAffinityKey); ok {
+			aff := kvp.Value.(*model.BlockAffinity)
+			if aff.State == model.StatePending {
+				return false
+			}
+		}
+
 		value, err := model.SerializeValue(kvp)
 		if err != nil {
 			log.Errorf("Ignoring update: unable to serialize value %v: %v", kvp.Value, err)
