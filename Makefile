@@ -44,7 +44,7 @@ generate:
 	$(MAKE) -C app-policy protobuf
 	$(MAKE) gen-manifests
 
-gen-manifests:
+gen-manifests: bin/helm
 	cd ./manifests && ./generate.sh
 
 # Build the tigera-operator helm chart.
