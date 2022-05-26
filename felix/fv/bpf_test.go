@@ -3426,18 +3426,30 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 }
 
 func checkNodeConntrack(felixes []*infrastructure.Felix) error {
+
 	for i, felix := range felixes {
 		conntrack, err := felix.ExecOutput("conntrack", "-L")
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "conntrack -L failed")
 		lines := strings.Split(conntrack, "\n")
+	lineLoop:
 		for _, line := range lines {
 			line = strings.Trim(line, " ")
 			if strings.Contains(line, "src=") {
 				// Whether traffic is generated in host namespace, or involves NAT, each
 				// contrack entry should be related to node's address
-				if !strings.Contains(line, felix.IP) {
-					return fmt.Errorf("unexpected conntrack not from host (felix[%d]): %s", i, line)
+				if strings.Contains(line, felix.IP) {
+					continue lineLoop
 				}
+				// Ignore any flows that come from the host itself.  For example, some programs send
+				// broadcast probe packets on all interfaces they can see. (Spotify, for example.)
+				myAddrs, err := net.InterfaceAddrs()
+				Expect(err).NotTo(HaveOccurred())
+				for _, a := range myAddrs {
+					if strings.Contains(line, a.String()) {
+						continue lineLoop
+					}
+				}
+				return fmt.Errorf("unexpected conntrack not from host (felix[%d]): %s", i, line)
 			}
 		}
 	}
