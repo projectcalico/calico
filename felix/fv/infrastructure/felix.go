@@ -55,6 +55,11 @@ type Felix struct {
 	ExternalIP string
 
 	startupDelayed bool
+	Workloads      []workload
+}
+
+type workload interface {
+	GetIP() string
 }
 
 func (f *Felix) GetFelixPID() int {

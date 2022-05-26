@@ -3451,11 +3451,22 @@ func conntrackCheck(felixes []*infrastructure.Felix) func() error {
 	}
 }
 
-func conntrackFlush(felixes []*infrastructure.Felix) func() {
+func conntrackFlushWorkloadEntries(felixes []*infrastructure.Felix) func() {
 	return func() {
 		for _, felix := range felixes {
-			err := felix.ExecMayFail("conntrack", "-F")
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "conntrack -F failed")
+			for _, w := range felix.Workloads {
+				if w.GetIP() == felix.GetIP() {
+					continue // Skip host-networked workloads.
+				}
+				for _, dirn := range []string{"--orig-src", "--orig-dst", "--reply-dst", "--reply-src"} {
+					err := felix.ExecMayFail("conntrack", "-D", dirn, w.GetIP())
+					if err != nil && strings.Contains(err.Error(), "0 flow entries have been deleted") {
+						// Expected "error" when there are no matching flows.
+						continue
+					}
+					ExpectWithOffset(1, err).NotTo(HaveOccurred(), "conntrack -F failed")
+				}
+			}
 		}
 	}
 }
@@ -3463,7 +3474,7 @@ func conntrackFlush(felixes []*infrastructure.Felix) func() {
 func conntrackChecks(felixes []*infrastructure.Felix) []interface{} {
 	return []interface{}{
 		CheckWithFinalTest(conntrackCheck(felixes)),
-		CheckWithBeforeRetry(conntrackFlush(felixes)),
+		CheckWithBeforeRetry(conntrackFlushWorkloadEntries(felixes)),
 	}
 }
 
