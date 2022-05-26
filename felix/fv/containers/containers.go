@@ -55,8 +55,9 @@ type Container struct {
 	stderrWatches []*watch
 	dataRaces     []string
 
-	logFinished sync.WaitGroup
-	dropAllLogs bool
+	logFinished      sync.WaitGroup
+	dropAllLogs      bool
+	ignoreEmptyLines bool
 }
 
 type watch struct {
@@ -180,11 +181,12 @@ func (c *Container) Signal(sig os.Signal) {
 }
 
 type RunOpts struct {
-	AutoRemove      bool
-	WithStdinPipe   bool
-	SameNamespace   *Container
-	StopTimeoutSecs int
-	StopSignal      string
+	AutoRemove       bool
+	WithStdinPipe    bool
+	IgnoreEmptyLines bool
+	SameNamespace    *Container
+	StopTimeoutSecs  int
+	StopSignal       string
 }
 
 func NextContainerIndex() int {
@@ -204,7 +206,10 @@ func UniqueName(namePrefix string) string {
 }
 
 func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) {
-	c = &Container{Name: name}
+	c = &Container{
+		Name:             name,
+		ignoreEmptyLines: opts.IgnoreEmptyLines,
+	}
 
 	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")
@@ -363,6 +368,10 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		if c.ignoreEmptyLines && strings.Trim(line, " \r\n\t") == "" {
+			continue
+		}
 
 		// Check if we're dropping logs (e.g. because we're tearing down the container at the end of the test).
 		c.mutex.Lock()
