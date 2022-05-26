@@ -252,7 +252,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	if (CALI_F_TO_HEP && !CALI_F_NAT_IF && sport != ct_ctx->sport &&
 			!(ct_ctx->skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
 		/* This entry is being created because we have a source port
-		 * conflict on a connection from host. We did psnat so we mak
+		 * conflict on a connection from host. We did psnat so we mark
 		 * such an entry with a 0 sport.
 		 */
 		sport = 0;
