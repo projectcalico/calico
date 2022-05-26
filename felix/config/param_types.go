@@ -591,7 +591,8 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 	return raw, nil
 }
 
-// linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
+// linux can support route-table indices up to 0xFFFFFFFF
+// however, using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
 const routeTableMaxLinux = 0xffffffff
 const routeTableRangeMaxTables = 0xffff
 
