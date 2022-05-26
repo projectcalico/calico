@@ -99,12 +99,6 @@ skip_redir_ifindex:
 #if CALI_FIB_ENABLED
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(&ctx->fwd)) {
-		/* XXX we might include the tot_len in the fwd, set it once when
-		 * we get the ip_header the first time and only adjust the value
-		 * when we modify the packet - to avoid getting the header here
-		 * again - it is simpler though.
-		 */
-
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
