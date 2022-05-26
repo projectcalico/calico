@@ -168,7 +168,7 @@ calicoctl patch felixconfig default --type=merge -p '{"spec":{"routeTableRanges"
 
 *Note*, for performance reasons, the maximum total number of routing tables that Felix will accept is 65535 (or 2*16).
 
-If both `RouteTableRanges` and `RouteTableRange` are set, `RouteTableRanges` takes precedence and `RouteTableRange` is ignored.
+Specifying both the `RouteTableRange` and `RouteTableRanges` arguments is not supported and will result in an error from the api.
 
 #### AWS IAM Role/Policy for source-destination-check configuration
 
