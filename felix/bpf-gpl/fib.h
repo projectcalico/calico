@@ -7,6 +7,7 @@
 
 #include "types.h"
 #include "skb.h"
+#include "if_state.h"
 
 #if CALI_FIB_ENABLED
 #define fwd_fib(fwd)			((fwd)->fib)
@@ -17,6 +18,32 @@
 #define fwd_fib_set(fwd, v)
 #define fwd_fib_set_flags(fwd, flags)
 #endif
+
+static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
+{
+	struct cali_tc_state *state = ctx->state;
+
+	/* To avoid forwarding packets to workloads that are not yet ready, i.e
+	 * their tc programs are not attached yet, send unconfirmed packets via
+	 * iptables that will filter out packets to non-ready workloads.
+	 */
+	if (!ct_result_is_confirmed(state->ct_result.rc)) {
+		__u32 *val;
+
+		if (!(val = (__u32 *)cali_iface_lookup_elem(&ifindex))) {
+			CALI_DEBUG("FIB succes not approved - connection to unknown ep not confirmed");
+			return false;
+		}
+
+		if (iface_is_worload(val) && !iface_is_ready(val)) {
+			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_FIB;
+			CALI_DEBUG("FIB succes not approved - connection to unready ep not confirmed");
+			return false;
+		}
+	}
+
+	return true;
+}
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
@@ -145,6 +172,9 @@ skip_redir_ifindex:
 		switch (rc) {
 		case 0:
 			CALI_DEBUG("FIB lookup succeeded - with neigh\n");
+			if (!fib_approve(ctx, fib_params.ifindex)) {
+				goto cancel_fib;
+			}
 
 			// Update the MACs.
 			struct ethhdr *eth_hdr = ctx->data_start;
@@ -161,6 +191,11 @@ skip_redir_ifindex:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
 				CALI_DEBUG("FIB lookup succeeded - not neigh - gw %x\n", bpf_ntohl(fib_params.ipv4_dst));
+
+				if (!fib_approve(ctx, fib_params.ifindex)) {
+					goto cancel_fib;
+				}
+
 				struct bpf_redir_neigh nh_params = {};
 
 				nh_params.nh_family = fib_params.family;
