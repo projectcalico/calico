@@ -190,21 +190,48 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-      - make image fv/fv.test bin/test-workload bin/test-connection bin/calico-felix
+      - make build image fv-prereqs
       - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+      - 'cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test'
       - cache store go-pkg-cache .go-pkg-cache
       - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
       - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
       - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
+      - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
+      - 'cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar'
       - ../.semaphore/run-and-monitor ut.log make ut
       - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-    - name: make image-all
+    - name: Static checks
       execution_time_limit:
         minutes: 60
       commands:
       - ../.semaphore/run-and-monitor static-checks.log make static-checks
-      - ../.semaphore/run-and-monitor image-all.log make image-all
+
+- name: "Felix: Build other architectures"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Felix: Build"]
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - cd felix
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: "Build"
+      matrix:
+      # TODO: s390x builds of felix are not working.
+      - env_var: ARCH
+        values: [ "arm64", "armv7", "ppc64le" ]
+      commands:
+      # Only building the code, not the image here because the felix image is now only used for FV tests, which
+      # only run on AMD64 at the moment.
+      - ../.semaphore/run-and-monitor build-$ARCH.log make ARCH=$ARCH build
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -220,7 +247,7 @@ blocks:
 - name: "Felix: Windows FV"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: ["Prerequisites", "Felix: Build Windows binaries"]
+  dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
     - name: banzai-secrets
@@ -279,7 +306,7 @@ blocks:
 - name: "Felix: FV Tests"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: ["Prerequisites", "Felix: Build"]
+  dependencies: ["Felix: Build"]
   task:
     prologue:
       commands:
@@ -287,7 +314,9 @@ blocks:
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
       - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore fv.test-${SEMAPHORE_GIT_SHA}'
       - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore felixtest-typha-image-${SEMAPHORE_GIT_SHA}'
       - |-
         if [ -s /etc/docker/daemon.json  ]; then
         sudo sed -i '$d' /etc/docker/daemon.json && sudo sed -i '$s/$/,/' /etc/docker/daemon.json && sudo bash -c ' cat >> /etc/docker/daemon.json << EOF
@@ -303,9 +332,13 @@ blocks:
         EOF
         ' ; fi
       - sudo systemctl restart docker
+      # Load in the docker images pre-built by the build job.
       - docker load -i /tmp/calico-felix.tar
+      - docker tag calico/felix:latest-amd64 felix:latest-amd64
       - rm /tmp/calico-felix.tar
-      - touch bin/*
+      - docker load -i /tmp/felixtest-typha.tar
+      - docker tag felix-test/typha:latest-amd64 typha:latest-amd64
+      - rm /tmp/felixtest-typha.tar
       # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
       # routing in that first felix container chooses different source IPs than the tests are expecting.
       - sudo modprobe ipip
@@ -315,7 +348,7 @@ blocks:
         minutes: 120
       commands:
       - make check-wireguard
-      - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+      - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
       parallelism: 3
     epilogue:
       always:

@@ -385,7 +385,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			By("Checking the packet stats from wg")
 			for i := range felixes {
 				rcvd, sent := getWgStatistics(felixes[i])
-				//TODO: counter compare sent/rcvd data from wg tunnel on each node.
+				// TODO: counter compare sent/rcvd data from wg tunnel on each node.
 				Expect(rcvd).NotTo(BeEmpty())
 				Expect(sent).NotTo(BeEmpty())
 			}
@@ -1010,12 +1010,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		// initialise external client
-		externalClient = containers.Run("external-client",
-			containers.RunOpts{AutoRemove: true},
-			"--privileged", // So that we can add routes inside the container.
-			utils.Config.BusyboxImage,
-			"/bin/sh", "-c", "sleep 1000")
-		externalClient.EnsureBinary("test-connection")
+		externalClient = infrastructure.RunExtClient("ext-client")
 		externalClient.Exec("ip", "route", "add", wlsByHost[0][0].IP, "via", felixes[0].IP)
 
 		for i := range felixes {
@@ -1300,7 +1295,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled bool, extraEnvs ..
 	topologyOptions.InitialFelixConfiguration = felixConfig
 
 	// Debugging.
-	//topologyOptions.ExtraEnvVars["FELIX_DebugUseShortPollIntervals"] = "true"
+	// topologyOptions.ExtraEnvVars["FELIX_DebugUseShortPollIntervals"] = "true"
 	topologyOptions.FelixLogSeverity = "debug"
 
 	return topologyOptions
