@@ -22,6 +22,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/json"
 
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	docopt "github.com/docopt/docopt-go"
@@ -198,30 +203,39 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 		}
 	}
 
-	// For each address that needs to be released, do so.
-	var notInUse map[string]libipam.ReleaseOptions
+	// Take the intersection of the reports, we only want to release the "leaked" values that show in all the reports.
+	var notInUseIPs map[string]libipam.ReleaseOptions
+	var notInUseHandles set.Set
 	for _, report := range reports {
-		merged := make(map[string]libipam.ReleaseOptions)
+		mergedIPs := make(map[string]libipam.ReleaseOptions)
 		for _, allocations := range report.Allocations {
 			for _, a := range allocations {
 				if a.InUse {
 					continue
 				}
-				if _, ok := notInUse[a.IP]; notInUse != nil && !ok {
+				if _, ok := notInUseIPs[a.IP]; notInUseIPs != nil && !ok {
 					continue
 				}
-				merged[a.IP] = libipam.ReleaseOptions{
+				mergedIPs[a.IP] = libipam.ReleaseOptions{
 					Handle:         a.Handle,
 					Address:        a.IP,
 					SequenceNumber: a.SequenceNumber,
 				}
 			}
 		}
-		notInUse = merged
+		notInUseIPs = mergedIPs
+
+		mergedHandles := set.New()
+		for _, h := range report.LeakedHandles {
+			if notInUseHandles == nil || notInUseHandles.Contains(h) {
+				mergedHandles.Add(h)
+			}
+		}
+		notInUseHandles = mergedHandles
 	}
 
 	ipsToRelease := []libipam.ReleaseOptions{}
-	for _, opts := range notInUse {
+	for _, opts := range notInUseIPs {
 		ipsToRelease = append(ipsToRelease, opts)
 	}
 	if len(ipsToRelease) == 0 {
@@ -239,6 +253,29 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 	} else {
 		fmt.Printf("Released %d IPs successfully\n", len(ipsToRelease))
 	}
+
+	fmt.Printf("Deleting %d handles...\n", notInUseHandles.Len())
+	fmt.Println("Key: '.' = Deleted OK; 'x' = already gone.")
+	// Get the backend client.
+	type accessor interface {
+		Backend() bapi.Client
+	}
+	bc := c.(accessor).Backend()
+	notInUseHandles.Iter(func(item interface{}) error {
+		handleID := item.(string)
+		handleKey := model.IPAMHandleKey{HandleID: handleID}
+		_, err := bc.Delete(ctx, handleKey, "")
+		if err != nil {
+			if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+				fmt.Print("x")
+			} else {
+				fmt.Printf("\nDeleting handle %s failed: %s.\n", err.Error())
+			}
+		} else {
+			fmt.Print(".")
+		}
+		return nil
+	})
 
 	return nil
 }
