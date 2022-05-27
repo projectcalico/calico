@@ -67,15 +67,18 @@ var (
 	cidr_3                    = ip.MustParseCIDROrIP("192.168.3.0/24")
 	cidr_4                    = ip.MustParseCIDROrIP("192.168.4.0/26")
 	cidr_5                    = ip.MustParseCIDROrIP("192.168.5.0/26")
+	cidr_6                    = ip.MustParseCIDROrIP("192.168.6.0/32") // Single IP
 	ipnet_1                   = cidr_1.ToIPNet()
 	ipnet_2                   = cidr_2.ToIPNet()
 	ipnet_3                   = cidr_3.ToIPNet()
 	ipnet_4                   = cidr_4.ToIPNet()
-	routekey_cidr_local_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_local)
-	//routekey_1_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_1)
-	//routekey_2_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_2)
-	routekey_3_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_3)
-	routekey_4_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_4)
+	ipnet_6             = cidr_6.ToIPNet()
+	routekey_cidr_local = fmt.Sprintf("%d-%s", tableIndex, cidr_local)
+	//routekey_1 = fmt.Sprintf("%d-%s", tableIndex, cidr_1)
+	//routekey_2 = fmt.Sprintf("%d-%s", tableIndex, cidr_2)
+	routekey_3 = fmt.Sprintf("%d-%s", tableIndex, cidr_3)
+	routekey_4 = fmt.Sprintf("%d-%s", tableIndex, cidr_4)
+	routekey_6 = fmt.Sprintf("%d-%s", tableIndex, cidr_6)
 )
 
 func mustGeneratePrivateKey() wgtypes.Key {
@@ -503,9 +506,73 @@ var _ = Describe("Enable wireguard", func() {
 
 				It("should contain a throw route for the local CIDR", func() {
 					Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
-					Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_cidr_local_throw))
+					Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_cidr_local))
 					Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
 					Expect(rtDataplane.DeletedRouteKeys).To(BeEmpty())
+				})
+
+				FDescribe("add local workload as a single IP", func() {
+					BeforeEach(func() {
+						// Update the routetable dataplane so it knows about the interface.
+						rtDataplane.NameToLink[ifaceName] = link
+
+						wgDataplane.ResetDeltas()
+						rtDataplane.ResetDeltas()
+						wg.RouteUpdate(hostname, cidr_6)
+						err := wg.Apply()
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("should have a throw route to the local IP", func() {
+						Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+						Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
+						Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_6))
+					})
+
+					It("should handle the IP being deleted and then moved to another node", func() {
+						wgDataplane.ResetDeltas()
+						rtDataplane.ResetDeltas()
+
+						wg.RouteRemove(cidr_6)
+						wg.RouteUpdate(peer1, cidr_6)
+						err := wg.Apply()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+						Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_6))
+						Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+						Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_6))
+					})
+
+					It("should handle the IP being moved to another node without first deleting", func() {
+						wgDataplane.ResetDeltas()
+						rtDataplane.ResetDeltas()
+
+						wg.RouteUpdate(peer1, cidr_6)
+						err := wg.Apply()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+						Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_6))
+						Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+						Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_6))
+					})
+
+					It("should handle the IP being moved to another node with a deletion in between", func() {
+						wgDataplane.ResetDeltas()
+						rtDataplane.ResetDeltas()
+
+						wg.RouteUpdate(peer1, cidr_6)
+						wg.RouteRemove(cidr_6)
+						wg.RouteUpdate(peer1, cidr_6)
+						err := wg.Apply()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+						Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_6))
+						Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+						Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_6))
+					})
 				})
 
 				Describe("public key updated to conflict on two nodes", func() {
@@ -596,9 +663,9 @@ var _ = Describe("Enable wireguard", func() {
 						BeforeEach(func() {
 							// Update the mock routing table dataplane so that it knows about the wireguard interface.
 							rtDataplane.NameToLink[ifaceName] = link
-							routekey_1 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_1)
-							routekey_2 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_2)
-							routekey_3 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_3)
+							routekey_1 = fmt.Sprintf("%d-%s", tableIndex, cidr_1)
+							routekey_2 = fmt.Sprintf("%d-%s", tableIndex, cidr_2)
+							routekey_3 = fmt.Sprintf("%d-%s", tableIndex, cidr_3)
 
 							wg.RouteUpdate(hostname, cidr_local)
 							wg.RouteUpdate(peer1, cidr_1)
@@ -636,7 +703,7 @@ var _ = Describe("Enable wireguard", func() {
 							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_1))
 							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_2))
 							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_3))
-							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_4_throw))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_4))
 							Expect(rtDataplane.RouteKeyToRoute[routekey_1]).To(Equal(netlink.Route{
 								LinkIndex: link.LinkAttrs.Index,
 								Dst:       &ipnet_1,
@@ -661,7 +728,7 @@ var _ = Describe("Enable wireguard", func() {
 								Scope:     netlink.SCOPE_LINK,
 								Table:     tableIndex,
 							}))
-							Expect(rtDataplane.RouteKeyToRoute[routekey_4_throw]).To(Equal(netlink.Route{
+							Expect(rtDataplane.RouteKeyToRoute[routekey_4]).To(Equal(netlink.Route{
 								Dst:      &ipnet_4,
 								Type:     syscall.RTN_THROW,
 								Protocol: FelixRouteProtocol,
@@ -742,8 +809,8 @@ var _ = Describe("Enable wireguard", func() {
 							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
 							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(2))
 							Expect(rtDataplane.AddedRouteKeys).NotTo(HaveKey(routekey_3))
-							Expect(rtDataplane.AddedRouteKeys).NotTo(HaveKey(routekey_3_throw))
-							Expect(rtDataplane.AddedRouteKeys).NotTo(HaveKey(routekey_4_throw))
+							Expect(rtDataplane.AddedRouteKeys).NotTo(HaveKey(routekey_3))
+							Expect(rtDataplane.AddedRouteKeys).NotTo(HaveKey(routekey_4))
 							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
 							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
 							Expect(link.WireguardPeers).To(HaveLen(1))
@@ -784,8 +851,8 @@ var _ = Describe("Enable wireguard", func() {
 								Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
 								Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
 								Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
-								Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_3_throw))
-								Expect(rtDataplane.RouteKeyToRoute[routekey_3_throw]).To(Equal(netlink.Route{
+								Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_3))
+								Expect(rtDataplane.RouteKeyToRoute[routekey_3]).To(Equal(netlink.Route{
 									Dst:      &ipnet_3,
 									Type:     syscall.RTN_THROW,
 									Protocol: FelixRouteProtocol,
@@ -836,10 +903,10 @@ var _ = Describe("Enable wireguard", func() {
 							})
 
 							It("should reprogram the route to peer3 only", func() {
-								routekey_4 := fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_4)
+								routekey_4 := fmt.Sprintf("%d-%s", tableIndex, cidr_4)
 								Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
 								Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
-								Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_4_throw))
+								Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_4))
 								Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_4))
 								Expect(rtDataplane.RouteKeyToRoute[routekey_4]).To(Equal(netlink.Route{
 									LinkIndex: link.LinkAttrs.Index,
@@ -978,9 +1045,9 @@ var _ = Describe("Enable wireguard", func() {
 				// We expect the link to exist.
 				link = wgDataplane.NameToLink[ifaceName]
 				Expect(link).ToNot(BeNil())
-				routekey_1 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_1)
-				routekey_2 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_2)
-				routekey_3 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_3)
+				routekey_1 = fmt.Sprintf("%d-%s", tableIndex, cidr_1)
+				routekey_2 = fmt.Sprintf("%d-%s", tableIndex, cidr_2)
+				routekey_3 = fmt.Sprintf("%d-%s", tableIndex, cidr_3)
 
 				// Set the interface to be up
 				wgDataplane.SetIface(ifaceName, true, true)
@@ -1024,7 +1091,7 @@ var _ = Describe("Enable wireguard", func() {
 				Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
 				Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_1))
 				Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_2))
-				Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_cidr_local_throw))
+				Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_cidr_local))
 
 				// All of these failures will trigger an attempt to get a either a new netlink or wireguard client.
 				if failFlags&(mocknetlink.FailNextNewWireguard|mocknetlink.FailNextWireguardConfigureDevice|mocknetlink.FailNextWireguardDeviceByName) != 0 {
