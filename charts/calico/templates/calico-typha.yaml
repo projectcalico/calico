@@ -63,7 +63,7 @@ spec:
       securityContext:
         fsGroup: 65534
       containers:
-      - image: {{ .Values.typha.image }}:{{.Values.typha.tag }}
+      - image: {{ .Values.typha.image }}:{{.Values.version }}
         name: calico-typha
         ports:
         - containerPort: 5473
