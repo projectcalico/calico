@@ -66,7 +66,7 @@ Ensure that your hosts and firewalls allow the necessary traffic based on your c
 {%- else if include.orch == "Kubernetes" %}
 | {{site.prodname}} networking with VXLAN enabled              | All                  | Bidirectional   | UDP 4789 |
 | {{site.prodname}} networking with Typha enabled              | Typha agent hosts    | Incoming        | TCP 5473 (default) |
-| {{site.prodname}} networking with Wireguard enabled          | All                  | Bidirectional   | UDP 51820 |
+| {{site.prodname}} networking with Wireguard enabled          | All                  | Bidirectional   | UDP 51820 (default) |
 | flannel networking (VXLAN)                                   | All                  | Bidirectional   | UDP 4789 |
 | All                                                          | kube-apiserver host  | Incoming        | Often TCP 443 or 6443\* |
 | etcd datastore                                               | etcd hosts           | Incoming        | {% include open-new-window.html text='Officially' url='http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt' %}  TCP 2379 but can vary |
