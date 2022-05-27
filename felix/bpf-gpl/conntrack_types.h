@@ -30,6 +30,9 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_RES_0x10	0x10 /* reserved */
 #define CALI_CT_FLAG_RES_0x20	0x20 /* reserved */
 #define CALI_CT_FLAG_EXT_LOCAL	0x40 /* marks traffic from external client to a local service */
+#define CALI_CT_FLAG_VIA_NAT_IF	0x80 /* marks connection first seen on the service veth */
+#define CALI_CT_FLAG_BA		0x100 /* marks that src->dst is the B->A leg */
+#define CALI_CT_FLAG_HOST_PSNAT 0x200 /* marks that this is from host port collision resolution */
 
 struct calico_ct_leg {
 	__u32 seqno;
@@ -74,7 +77,7 @@ struct calico_ct_value {
 			__u16 orig_port;                   // 48
 			__u16 orig_sport;                  // 50
 			__u32 tun_ip;                      // 52
-			__u32 pad3;                        // 56
+			__u32 orig_sip;                    // 56
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -109,6 +112,7 @@ struct ct_lookup_ctx {
 struct ct_create_ctx {
 	struct __sk_buff *skb;
 	__u8 proto;
+	__be32 orig_src;
 	__be32 src;
 	__be32 orig_dst;
 	__be32 dst;
@@ -165,26 +169,29 @@ enum calico_ct_result_type {
 	CALI_CT_INVALID = 6,
 };
 
-#define CALI_CT_RELATED         0x100
-#define CALI_CT_RPF_FAILED      0x200
-#define CALI_CT_TUN_SRC_CHANGED 0x400
-#define CALI_CT_RESERVED_800	0x800
-#define CALI_CT_SYN		0x1000
+#define CT_RES_RELATED         0x100
+#define CT_RES_RPF_FAILED      0x200
+#define CT_RES_TUN_SRC_CHANGED 0x400
+#define CT_RES_RESERVED_800	0x800
+#define CT_RES_SYN		0x1000
+#define CT_RES_CONFIRMED	0x2000
 
 #define ct_result_rc(rc)		((rc) & 0xff)
 #define ct_result_flags(rc)		((rc) & ~0xff)
 #define ct_result_set_rc(val, rc)	((val) = ct_result_flags(val) | (rc))
 #define ct_result_set_flag(val, flags)	((val) |= (flags))
 
-#define ct_result_is_related(rc)	((rc) & CALI_CT_RELATED)
-#define ct_result_rpf_failed(rc)	((rc) & CALI_CT_RPF_FAILED)
-#define ct_result_tun_src_changed(rc)	((rc) & CALI_CT_TUN_SRC_CHANGED)
-#define ct_result_is_syn(rc)		((rc) & CALI_CT_SYN)
+#define ct_result_is_related(rc)	((rc) & CT_RES_RELATED)
+#define ct_result_rpf_failed(rc)	((rc) & CT_RES_RPF_FAILED)
+#define ct_result_tun_src_changed(rc)	((rc) & CT_RES_TUN_SRC_CHANGED)
+#define ct_result_is_syn(rc)		((rc) & CT_RES_SYN)
+#define ct_result_is_confirmed(rc)	((rc) & CT_RES_CONFIRMED)
 
 struct calico_ct_result {
 	__s16 rc;
 	__u16 flags;
 	__be32 nat_ip;
+	__be32 nat_sip;
 	__u16 nat_port;
 	__u16 nat_sport;
 	__be32 tun_ip;

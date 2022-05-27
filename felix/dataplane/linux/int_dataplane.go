@@ -579,8 +579,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		defaultRPFilter = []byte{'1'}
 	}
 
-	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
-		config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeRoute, config.BPFMapSizeConntrack, config.BPFMapRepin)
+	bpfMapContext := bpfmap.CreateBPFMapContext(
+		config.BPFMapSizeIPSets,
+		config.BPFMapSizeNATFrontend,
+		config.BPFMapSizeNATBackend,
+		config.BPFMapSizeNATAffinity,
+		config.BPFMapSizeRoute,
+		config.BPFMapSizeConntrack,
+		config.BPFMapRepin,
+	)
 
 	var bpfEndpointManager *bpfEndpointManager
 
@@ -617,7 +624,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(failsafeMgr)
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
-		bpfEndpointManager = newBPFEndpointManager(
+		bpfEndpointManager, err = newBPFEndpointManager(
+			nil,
 			&config,
 			bpfMapContext,
 			fibLookupEnabled,
@@ -628,6 +636,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.reportHealth,
 			dp.loopSummarizer,
 		)
+
+		if err != nil {
+			log.WithError(err).Panic("Failed to create BPF endpoint manager.")
+		}
+
 		dp.RegisterManager(bpfEndpointManager)
 
 		bpfEndpointManager.Features = dataplaneFeatures
@@ -1375,6 +1388,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					},
 				)
 			}
+			fwdRules = append(fwdRules,
+				iptables.Rule{
+					Match:   iptables.Match().InInterface(bpfOutDev),
+					Action:  iptables.AcceptAction{},
+					Comment: []string{"From ", bpfOutDev, " device, mark verified, accept."},
+				},
+			)
 		}
 
 		t.InsertOrAppendRules("INPUT", inputRules)
