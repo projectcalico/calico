@@ -104,7 +104,6 @@ The geeky details of what you get:
 
    ```
    kubectl taint nodes --all node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master-
-
    ```
 
    It should return the following.
