@@ -1,0 +1,3 @@
+datastore: kubernetes
+network: flannel
+ipam: host-local
