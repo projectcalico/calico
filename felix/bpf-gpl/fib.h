@@ -31,13 +31,13 @@ static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 		__u32 *val;
 
 		if (!(val = (__u32 *)cali_iface_lookup_elem(&ifindex))) {
-			CALI_DEBUG("FIB succes not approved - connection to unknown ep not confirmed");
+			CALI_DEBUG("FIB succes not approved - connection to unknown ep %d not confirmed.\n", ifindex);
 			return false;
 		}
 
-		if (iface_is_worload(val) && !iface_is_ready(val)) {
+		if (iface_is_worload(*val) && !iface_is_ready(*val)) {
 			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_FIB;
-			CALI_DEBUG("FIB succes not approved - connection to unready ep not confirmed");
+			CALI_DEBUG("FIB succes not approved - connection to unready 0x%x ep %d not confirmed.\n", *val, ifindex);
 			return false;
 		}
 	}
@@ -173,7 +173,8 @@ skip_redir_ifindex:
 		case 0:
 			CALI_DEBUG("FIB lookup succeeded - with neigh\n");
 			if (!fib_approve(ctx, fib_params.ifindex)) {
-				goto cancel_fib;
+				reason = CALI_REASON_WEP_NOT_READY;
+				goto deny;
 			}
 
 			// Update the MACs.
@@ -193,7 +194,8 @@ skip_redir_ifindex:
 				CALI_DEBUG("FIB lookup succeeded - not neigh - gw %x\n", bpf_ntohl(fib_params.ipv4_dst));
 
 				if (!fib_approve(ctx, fib_params.ifindex)) {
-					goto cancel_fib;
+					reason = CALI_REASON_WEP_NOT_READY;
+					goto deny;
 				}
 
 				struct bpf_redir_neigh nh_params = {};
