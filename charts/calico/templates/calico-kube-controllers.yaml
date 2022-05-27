@@ -37,7 +37,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
+          image: {{.Values.kubeControllers.image}}:{{ .Values.version }}
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -98,7 +98,7 @@ spec:
 {{- else }}
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
+          image: {{.Values.kubeControllers.image}}:{{ .Values.version }}
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
