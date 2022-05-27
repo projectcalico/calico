@@ -45,7 +45,10 @@ generate:
 	$(MAKE) gen-manifests
 
 gen-manifests: bin/helm
-	cd ./manifests && ./generate.sh
+	cd ./manifests && \
+		OPERATOR_VERSION=$(OPERATOR_VERSION) \
+		CALICO_VERSION=$(CALICO_VERSION) \
+		./generate.sh
 
 # Build the tigera-operator helm chart.
 chart: bin/tigera-operator-$(GIT_VERSION).tgz

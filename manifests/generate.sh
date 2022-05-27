@@ -4,7 +4,16 @@
 # Values files for the manifests in this directory can be found in 
 # ../calico/charts/values.
 
+# Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
+
+# Calico version to use for install. Default to the branch name.
+CALICO_VERSION=${CALICO_VERSION:-$(git rev-parse --abbrev-ref HEAD)}
+
+# Operator version to use for install. Default to the branch name.
+OPERATOR_VERSION=${OPERATOR_VERSION:-master}
+
+echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
 ##########################################################################
 # Build the operator manifest. 
@@ -22,6 +31,8 @@ ${HELM} -n tigera-operator template \
 	--include-crds \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
+	--set tigeraOperator.version=$OPERATOR_VERSION \
+	--set calicoctl.tag=$CALICO_VERSION \
 	../charts/tigera-operator >> tigera-operator.yaml
 
 ##########################################################################
@@ -34,6 +45,7 @@ for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only $FILE \
+	        --set version=$CALICO_VERSION \
 		-f ../charts/values/values.common.yaml \
 		-f ../charts/values/calico.yaml >> crds.yaml
 done
@@ -50,6 +62,7 @@ for FILE in $VALUES_FILES; do
 	echo "Generating manifest from charts/values/$FILE"
 	${HELM} -n kube-system template \
 		../charts/calico \
+	        --set version=$CALICO_VERSION \
 		-f ../charts/values/values.common.yaml \
 		-f ../charts/values/$FILE > $FILE
 done
@@ -66,5 +79,7 @@ ${HELM} template --include-crds \
 	--output-dir ocp \
 	--set installation.kubernetesProvider=openshift \
 	--set installation.enabled=false \
-	--set apiServer.enabled=false
+	--set apiServer.enabled=false \
+	--set tigeraOperator.version=$OPERATOR_VERSION \
+	--set calicoctl.tag=$CALICO_VERSION
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
