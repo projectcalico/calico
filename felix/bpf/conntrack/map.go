@@ -32,7 +32,7 @@ import (
 //   uint16_t port_a, port_b; // HBO
 // };
 const KeySize = 16
-const ValueSize = 64
+const ValueSize = 88
 const MaxEntries = 512000
 
 type Key [KeySize]byte
@@ -118,11 +118,11 @@ const (
 	voFlags2    int = 23
 	voRevKey    int = 24
 	voLegAB     int = 24
-	voLegBA     int = 36
-	voOrigIP    int = 48
-	voOrigPort  int = 52
-	voOrigSPort int = 54
-	voTunIP     int = 56
+	voLegBA     int = 48
+	voOrigIP    int = 76
+	voOrigPort  int = 80
+	voOrigSPort int = 82
+	voTunIP     int = 72
 )
 
 type Value [ValueSize]byte
@@ -253,6 +253,8 @@ func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, leg
 }
 
 type Leg struct {
+	Bytes       uint64
+	Packets     uint32
 	Seqno       uint32
 	SynSeen     bool
 	AckSeen     bool
@@ -263,7 +265,7 @@ type Leg struct {
 	Ifindex     uint32
 }
 
-const legSize int = 12
+const legSize int = 24
 
 func setBit(bits *uint32, bit uint8, val bool) {
 	if val {
@@ -271,7 +273,7 @@ func setBit(bits *uint32, bit uint8, val bool) {
 	}
 }
 
-const legExtra = 0
+const legExtra = 12
 
 // AsBytes returns Leg serialized as a slice of bytes
 func (leg Leg) AsBytes() []byte {
@@ -286,6 +288,8 @@ func (leg Leg) AsBytes() []byte {
 	setBit(&bits, 4, leg.Whitelisted)
 	setBit(&bits, 5, leg.Opener)
 
+	binary.LittleEndian.PutUint64(bytes[0:8], leg.Bytes)
+	binary.LittleEndian.PutUint32(bytes[8:12], leg.Packets)
 	binary.LittleEndian.PutUint32(bytes[legExtra+0:legExtra+4], leg.Seqno)
 	binary.LittleEndian.PutUint32(bytes[legExtra+4:legExtra+8], bits)
 	binary.LittleEndian.PutUint32(bytes[legExtra+8:legExtra+12], leg.Ifindex)
@@ -323,6 +327,8 @@ func bitSet(bits uint32, bit uint8) bool {
 func readConntrackLeg(b []byte) Leg {
 	bits := binary.LittleEndian.Uint32(b[legExtra+4 : legExtra+8])
 	return Leg{
+		Bytes:       binary.LittleEndian.Uint64(b[0:8]),
+		Packets:     binary.LittleEndian.Uint32(b[8:12]),
 		Seqno:       binary.BigEndian.Uint32(b[legExtra+0 : legExtra+4]),
 		SynSeen:     bitSet(bits, 0),
 		AckSeen:     bitSet(bits, 1),
@@ -360,14 +366,14 @@ func (data EntryData) FINsSeenDSR() bool {
 }
 
 func (e Value) Data() EntryData {
-	ip := e[48:52]
-	tip := e[56:60]
+	ip := e[voOrigIP : voOrigIP+4]
+	tip := e[voTunIP : voTunIP+4]
 	return EntryData{
-		A2B:       readConntrackLeg(e[24:36]),
-		B2A:       readConntrackLeg(e[36:48]),
+		A2B:       readConntrackLeg(e[voLegAB : voLegAB+legSize]),
+		B2A:       readConntrackLeg(e[voLegBA : voLegBA+legSize]),
 		OrigDst:   ip,
-		OrigPort:  binary.LittleEndian.Uint16(e[52:54]),
-		OrigSPort: binary.LittleEndian.Uint16(e[54:56]),
+		OrigPort:  binary.LittleEndian.Uint16(e[voOrigPort : voOrigPort+2]),
+		OrigSPort: binary.LittleEndian.Uint16(e[voOrigPort+2 : voOrigPort+4]),
 		TunIP:     tip,
 	}
 }
@@ -428,7 +434,7 @@ var MapParams = bpf.MapParameters{
 	MaxEntries:   MaxEntries,
 	Name:         "cali_v4_ct",
 	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      2,
+	Version:      3,
 	UpdatedByBPF: true,
 }
 
