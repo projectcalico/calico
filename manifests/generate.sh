@@ -7,11 +7,9 @@
 # Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
 
-# Calico version to use for install. Default to the branch name.
-CALICO_VERSION=${CALICO_VERSION:-$(git rev-parse --abbrev-ref HEAD)}
-
-# Operator version to use for install. Default to the branch name.
-OPERATOR_VERSION=${OPERATOR_VERSION:-master}
+# Get versions to install.
+CALICO_VERSION=${CALICO_VERSION:-$(cat ${CALICO_VERSION_FILE:-../charts/calico/calico.version})}
+OPERATOR_VERSION=${OPERATOR_VERSION:-$(cat ${OPERATOR_VERSION_FILE:-../charts/tigera-operator/operator.version})}
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
