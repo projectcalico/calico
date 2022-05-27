@@ -26,6 +26,7 @@ enum calico_reason {
 	CALI_REASON_UNAUTH_SOURCE = 0xed,
 	CALI_REASON_RT_UNKNOWN = 0xdead,
 	CALI_REASON_ACCEPTED_BY_XDP = 0xd9,
+	CALI_REASON_WEP_NOT_READY = 0xffdead,
 };
 
 #endif /* __CALI_REASONS_H__ */
