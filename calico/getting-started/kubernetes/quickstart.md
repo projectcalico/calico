@@ -103,7 +103,7 @@ The geeky details of what you get:
 1. Remove the taints on the master so that you can schedule pods on it.
 
    ```
-   kubectl taint nodes --all node-role.kubernetes.io/master-
+   kubectl taint nodes --all node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master-
    ```
 
    It should return the following.
