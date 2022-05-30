@@ -47,6 +47,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
@@ -149,6 +150,8 @@ type bpfEndpointManager struct {
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
 	bpfMapContext           *bpf.MapContext
+	ifStateMap              bpf.Map
+	ifaceNameToIdx          map[string]ifaceIdx
 
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable iptablesTable
@@ -190,6 +193,11 @@ type bpfAllowChainRenderer interface {
 	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 }
 
+type ifaceIdx struct {
+	ifindex  int
+	workload bool
+}
+
 func newBPFEndpointManager(
 	config *Config,
 	bpfMapContext *bpf.MapContext,
@@ -227,6 +235,8 @@ func newBPFEndpointManager(
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
 		bpfMapContext:           bpfMapContext,
+		ifStateMap:              bpfMapContext.IfStateMap,
+		ifaceNameToIdx:          map[string]ifaceIdx{},
 		ruleRenderer:            iptablesRuleRenderer,
 		iptablesFilterTable:     iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
@@ -416,12 +426,43 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 		// For specific host endpoints OnHEPUpdate doesn't depend on iface state, and has
 		// already stored and mapped as needed.
 		if iface.info.ifaceIsUp {
+			oldIdx, ok := m.ifaceNameToIdx[update.Name]
+			if !ok || oldIdx.ifindex != update.Index {
+				val := ifaceIdx{
+					ifindex:  update.Index,
+					workload: m.isWorkloadIface(update.Name),
+				}
+				m.ifaceNameToIdx[update.Name] = val
+				flags := uint32(0)
+				if val.workload {
+					flags = ifstate.FlgWEP
+				}
+				// If it errors, we will update it when we load a program
+				err := m.ifStateMap.Update(
+					ifstate.NewKey(uint32(val.ifindex)).AsBytes(),
+					ifstate.NewValue(flags).AsBytes(),
+				)
+				if err != nil {
+					log.WithError(err).Warnf("Failed to write iface %s into BPF map.", update.Name)
+				} else {
+					log.Debugf("ifstate new %s:%d 0x%x", update.Name, val.ifindex, flags)
+				}
+			}
+
 			if _, hostEpConfigured := m.hostIfaceToEpMap[update.Name]; m.wildcardExists && !hostEpConfigured {
 				log.Debugf("Map host-* endpoint for %v", update.Name)
 				m.addHEPToIndexes(update.Name, &m.wildcardHostEndpoint)
 				m.hostIfaceToEpMap[update.Name] = m.wildcardHostEndpoint
 			}
 		} else {
+			_, ok := m.ifaceNameToIdx[update.Name]
+			if ok {
+				err := m.ifStateMap.Delete(ifstate.NewKey(uint32(update.Index)).AsBytes())
+				if err != nil && !bpf.IsNotExists(err) {
+					log.WithError(err).Warnf("Failed to delete iface %s idx %d from bpf map.", update.Name, update.Index)
+				}
+				delete(m.ifaceNameToIdx, update.Name)
+			}
 			if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
 				log.Debugf("Unmap host-* endpoint for %v", update.Name)
 				m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
@@ -671,6 +712,11 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 
 		m.opReporter.RecordOperation("update-workload-iface")
 
+		if val, ok := m.ifaceNameToIdx[ifaceName]; !ok || val.ifindex == 0 {
+			errs[ifaceName] = fmt.Errorf("unknown ifindex for dev %s", ifaceName)
+			return nil
+		}
+
 		if err := sem.Acquire(context.Background(), 1); err != nil {
 			// Should only happen if the context finishes.
 			log.WithError(err).Panic("Failed to acquire semaphore")
@@ -707,11 +753,17 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		if err == nil {
 			log.WithField("iface", ifaceName).Info("Updated workload interface.")
 			if wlID != nil && m.allWEPs[*wlID] != nil {
+				var err error
 				if m.happyWEPs[*wlID] == nil {
+					err = m.wepIfaceReady(ifaceName, true)
 					log.WithField("id", wlID).Info("Adding workload interface to iptables allow list.")
 					m.happyWEPsDirty = true
 				}
-				m.happyWEPs[*wlID] = m.allWEPs[*wlID]
+				if err == nil {
+					m.happyWEPs[*wlID] = m.allWEPs[*wlID]
+				} else {
+					delete(m.happyWEPs, *wlID)
+				}
 			}
 			return set.RemoveItem
 		} else {
@@ -719,6 +771,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 				if !isLinkNotFoundError(err) {
 					log.WithField("id", *wlID).WithError(err).Warning(
 						"Failed to add policy to workload, removing from iptables allow list")
+				}
+				if err := m.wepIfaceReady(ifaceName, false); err != nil {
+					log.WithError(err).Warnf("Failed to delete iface %s state from BPF map: %s", ifaceName, err)
 				}
 				delete(m.happyWEPs, *wlID)
 				m.happyWEPsDirty = true
@@ -736,6 +791,24 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		}).Warn("Failed to apply policy to endpoint, leaving it dirty")
 		return nil
 	})
+}
+
+func (m *bpfEndpointManager) wepIfaceReady(iface string, ready bool) error {
+	val := m.ifaceNameToIdx[iface]
+
+	flgReady := ifstate.FlgReady
+	if !ready {
+		flgReady = 0
+	}
+
+	err := m.ifStateMap.Update(
+		ifstate.NewKey(uint32(val.ifindex)).AsBytes(),
+		ifstate.NewValue(ifstate.FlgWEP|flgReady).AsBytes(),
+	)
+
+	log.WithError(err).Debugf("ifstate update %s:%d %t", iface, val.ifindex, ready)
+
+	return err
 }
 
 // applyPolicy actually applies the policy to the given workload.
