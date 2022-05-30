@@ -201,6 +201,10 @@ func (e *Value) SetLegB2A(leg Leg) {
 	copy(e[voLegBA:voLegBA+legSize], leg.AsBytes())
 }
 
+func (e *Value) SetOrigSport(sport uint16) {
+	binary.LittleEndian.PutUint16(e[voOrigSPort:voOrigSPort+2], sport)
+}
+
 func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint16) {
 	binary.LittleEndian.PutUint64(v[voCreated:voCreated+8], uint64(created))
 	binary.LittleEndian.PutUint64(v[voLastSeen:voLastSeen+8], uint64(lastSeen))

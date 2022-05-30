@@ -55,18 +55,20 @@ type Map interface {
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
+	Upgrade() error
 }
 
 type MapParameters struct {
-	Filename     string
-	Type         string
-	KeySize      int
-	ValueSize    int
-	MaxEntries   int
-	Name         string
-	Flags        int
-	Version      int
-	UpdatedByBPF bool
+	Filename      string
+	Type          string
+	KeySize       int
+	ValueSize     int
+	MaxEntries    int
+	Name          string
+	Flags         int
+	Version       int
+	UpdatedByBPF  bool
+	HandleUpgrade func() error
 }
 
 func versionedStr(ver int, str string) string {
@@ -307,6 +309,13 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k, b.ValueSize)
 }
 
+func (b *PinnedMap) Upgrade() error {
+	if b.HandleUpgrade != nil {
+		return b.HandleUpgrade()
+	}
+	return nil
+}
+
 func (b *PinnedMap) updateDeltaEntries() error {
 	numEntriesCopied := 0
 	mapMem := make(map[string]struct{})
@@ -540,6 +549,12 @@ func (b *PinnedMap) EnsureExists() error {
 				os.Remove(b.Path() + "_old")
 			}
 
+		} else {
+			// Can be a fresh install or an upgrade
+			err := b.Upgrade()
+			if err != nil {
+				logrus.WithError(err).Errorf("error upgrading map, name=%s", b.GetName())
+			}
 		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")

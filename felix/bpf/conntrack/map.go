@@ -15,6 +15,7 @@
 package conntrack
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -28,7 +29,14 @@ const KeySize = curver.KeySize
 const ValueSize = curver.ValueSize
 const MaxEntries = curver.MaxEntries
 
+var CurrentMapVersion = MapParams.Version
+
 type Key = curver.Key
+
+func init() {
+	MapParams.HandleUpgrade = Upgrade
+	fmt.Println("handle upgrade set")
+}
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
 	return curver.NewKey(proto, ipA, portA, ipB, portB)
