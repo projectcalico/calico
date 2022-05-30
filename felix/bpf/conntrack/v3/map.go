@@ -509,31 +509,3 @@ func MapMemIter(m MapMem) bpf.IterCallback {
 		return bpf.IterNone
 	}
 }
-
-// BytesToKey turns a slice of bytes into a Key
-func BytesToKey(bytes []byte) Key {
-	var k Key
-
-	copy(k[:], bytes[:])
-
-	return k
-}
-
-// StringToKey turns a string into a Key
-func StringToKey(str string) Key {
-	return BytesToKey([]byte(str))
-}
-
-// BytesToValue turns a slice of bytes into a value
-func BytesToValue(bytes []byte) Value {
-	var v Value
-
-	copy(v[:], bytes)
-
-	return v
-}
-
-// StringToValue turns a string into a Value
-func StringToValue(str string) Value {
-	return BytesToValue([]byte(str))
-}

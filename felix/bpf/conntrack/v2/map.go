@@ -430,3 +430,43 @@ var MapParams = bpf.MapParameters{
 	Version:      2,
 	UpdatedByBPF: true,
 }
+
+type MapMem map[Key]Value
+
+// LoadMapMem loads ConntrackMap into memory
+func LoadMapMem(m bpf.Map) (MapMem, error) {
+	ret := make(MapMem)
+
+	err := m.Iter(func(k, v []byte) bpf.IteratorAction {
+		ks := len(Key{})
+		vs := len(Value{})
+
+		var key Key
+		copy(key[:ks], k[:ks])
+
+		var val Value
+		copy(val[:vs], v[:vs])
+
+		ret[key] = val
+		return bpf.IterNone
+	})
+
+	return ret, err
+}
+
+// MapMemIter returns bpf.MapIter that loads the provided MapMem
+func MapMemIter(m MapMem) bpf.IterCallback {
+	ks := len(Key{})
+	vs := len(Value{})
+
+	return func(k, v []byte) bpf.IteratorAction {
+		var key Key
+		copy(key[:ks], k[:ks])
+
+		var val Value
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+		return bpf.IterNone
+	}
+}

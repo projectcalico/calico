@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -29,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	conntrackv2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 )
 
 func restoreMaps(mc *bpf.MapContext) {
@@ -43,6 +45,56 @@ func restoreMaps(mc *bpf.MapContext) {
 			logrus.WithError(err).Panic("Failed to initialise maps")
 		}
 	}
+}
+
+func TestCtMapUpgradeWithNormalEntries(t *testing.T) {
+	RegisterTestingT(t)
+	ctMap.(*bpf.PinnedMap).Close()
+	os.Remove(ctMap.Path())
+
+	mc := &bpf.MapContext{}
+	// create version 2 map
+	ctMapV2 := conntrack.MapV2(mc)
+	err := ctMapV2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create version2 ct map")
+
+	var created, lastSeen time.Duration
+	for n := 0; n < 2; n++ {
+		k := conntrackv2.NewKey(1, net.ParseIP("10.0.0.1"), uint16(n), net.ParseIP("10.0.0.2"), uint16(n>>16))
+		created = time.Duration(1 + int64(n))
+		lastSeen = time.Duration(2 + int64(n))
+		flags := conntrack.FlagNATOut | conntrack.FlagSkipFIB
+		seqNoAB := 1000 + uint32(n)
+		ifIndexAB := 2000 + uint32(n)
+		seqNoBA := 1001 + uint32(n)
+		ifIndexBA := 2001 + uint32(n)
+		legAB := conntrackv2.Leg{Seqno: seqNoAB, SynSeen: true, AckSeen: false, FinSeen: true, RstSeen: false, Whitelisted: true, Opener: false, Ifindex: ifIndexAB}
+		legBA := conntrackv2.Leg{Seqno: seqNoBA, SynSeen: false, AckSeen: true, FinSeen: false, RstSeen: true, Whitelisted: false, Opener: true, Ifindex: ifIndexBA}
+		v := conntrackv2.NewValueNormal(created, lastSeen, flags, legAB, legBA)
+		err := ctMapV2.Update(k.AsBytes(), v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	ctMapMemV2, err := conntrackv2.LoadMapMem(ctMapV2)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMapV3 := conntrack.Map(mc)
+	err = ctMapV3.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create ct map")
+
+	ctMapMemV3 := saveCTMap(ctMapV3)
+	Expect(len(ctMapMemV3)).To(Equal(len(ctMapMemV2)))
+
+	ctMapV2.(*bpf.PinnedMap).Close()
+	ctMapV3.(*bpf.PinnedMap).Close()
+
+	os.Remove(ctMapV2.Path())
+	os.Remove(ctMapV3.Path())
+	for _, m := range allMaps {
+		err := m.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	}
+
 }
 
 func TestMapResize(t *testing.T) {

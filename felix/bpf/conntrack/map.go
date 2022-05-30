@@ -15,13 +15,14 @@
 package conntrack
 
 import (
-	"fmt"
 	"net"
 	"time"
 
+	//"fmt"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	curver "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 )
 
@@ -35,7 +36,6 @@ type Key = curver.Key
 
 func init() {
 	MapParams.HandleUpgrade = Upgrade
-	fmt.Println("handle upgrade set")
 }
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
@@ -86,6 +86,10 @@ func Map(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(MapParams)
 }
 
+func MapV2(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(v2.MapParams)
+}
+
 const (
 	ProtoICMP = 1
 	ProtoTCP  = 6
@@ -110,44 +114,17 @@ func ValueFromBytes(v []byte) Value {
 	return ctVal
 }
 
-type MapMem map[Key]Value
+type MapMem = curver.MapMem
 
 // LoadMapMem loads ConntrackMap into memory
 func LoadMapMem(m bpf.Map) (MapMem, error) {
-	ret := make(MapMem)
-
-	err := m.Iter(func(k, v []byte) bpf.IteratorAction {
-		ks := len(Key{})
-		vs := len(Value{})
-
-		var key Key
-		copy(key[:ks], k[:ks])
-
-		var val Value
-		copy(val[:vs], v[:vs])
-
-		ret[key] = val
-		return bpf.IterNone
-	})
-
+	ret, err := curver.LoadMapMem(m)
 	return ret, err
 }
 
 // MapMemIter returns bpf.MapIter that loads the provided MapMem
 func MapMemIter(m MapMem) bpf.IterCallback {
-	ks := len(Key{})
-	vs := len(Value{})
-
-	return func(k, v []byte) bpf.IteratorAction {
-		var key Key
-		copy(key[:ks], k[:ks])
-
-		var val Value
-		copy(val[:vs], v[:vs])
-
-		m[key] = val
-		return bpf.IterNone
-	}
+	return curver.MapMemIter(m)
 }
 
 // BytesToKey turns a slice of bytes into a Key

@@ -46,15 +46,14 @@ func convertValueFromV2ToV3(value []byte) []byte {
 	// Incoming value is of version 2.
 	var valueV2 v2.Value
 	var valueV3 v3.Value
-	copy(valueV2[:], value[:])
+	copy(valueV2[0:v2.ValueSize], value[0:v2.ValueSize])
 
 	created := time.Duration(valueV2.Created())
 	lastSeen := time.Duration(valueV2.LastSeen())
 	ctType := valueV2.Type()
 	flags := valueV2.Flags()
 	switch ctType {
-	case TypeNormal:
-	case TypeNATReverse:
+	case TypeNormal, TypeNATReverse:
 		data := valueV2.Data()
 		v3LegAB := v3.Leg{
 			Bytes:       0,
@@ -90,6 +89,8 @@ func convertValueFromV2ToV3(value []byte) []byte {
 		revKey := valueV2.ReverseNATKey()
 		v3RevKey := v3.NewKey(revKey.Proto(), revKey.AddrA(), revKey.PortA(), revKey.AddrB(), revKey.PortB())
 		valueV3 = v3.NewValueNATForward(created, lastSeen, flags, v3RevKey)
+	default:
+		fmt.Println("invalid conntrack type")
 	}
 	return valueV3.AsBytes()
 
@@ -136,7 +137,12 @@ func Upgrade() error {
 	} else if from == 0 {
 		return nil
 	}
-	toCachingMap := cachingmap.New(MapParams, Map(mc))
+	toBpfMap := Map(mc)
+	err = toBpfMap.EnsureExists()
+	if err != nil {
+		return fmt.Errorf("error creating a handle for the new map")
+	}
+	toCachingMap := cachingmap.New(MapParams, toBpfMap)
 	if toCachingMap == nil {
 		return fmt.Errorf("error creating caching map")
 	}
@@ -153,7 +159,8 @@ func Upgrade() error {
 	}
 
 	defer fromBpfMap.(*bpf.PinnedMap).Close()
-	fromCachingMap := cachingmap.New(fromMapParams, mc.NewPinnedMap(fromMapParams))
+	defer toBpfMap.(*bpf.PinnedMap).Close()
+	fromCachingMap := cachingmap.New(fromMapParams, fromBpfMap)
 	if fromCachingMap == nil {
 		return fmt.Errorf("error creating caching map")
 	}
