@@ -85,10 +85,5 @@ func recursiveFindFiles(root string, pattern string) ([]string, error) {
 		}
 		return
 	}
-	err := filepath.Walk(root, findfile)
-	if len(files) == 0 {
-		return files, err
-	} else {
-		return files, err
-	}
+	return files, filepath.Walk(root, findfile)
 }

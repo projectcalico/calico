@@ -26,52 +26,56 @@ import (
 
 type packetTest struct {
 	Description string
-	IPv4Header  *layers.IPv4
-	NextHeader  gopacket.Layer
-	Payload     []byte
+	Pkt         Packet
 	Size        uint16
 }
 
 var malformedTestCases = []packetTest{
 	{
 		Description: "1 - A packet with IHL=4",
-		IPv4Header: &layers.IPv4{
-			Version: 4,
-			IHL:     4,
-			TTL:     64,
-			Flags:   layers.IPv4DontFragment,
-			SrcIP:   net.IPv4(4, 4, 4, 4),
-			DstIP:   net.IPv4(1, 1, 1, 1),
-		},
-		NextHeader: &layers.UDP{
-			DstPort: 53,
-			SrcPort: 54321,
+		Pkt: Packet{
+			l3: &layers.IPv4{
+				Version: 4,
+				IHL:     4,
+				TTL:     64,
+				Flags:   layers.IPv4DontFragment,
+				SrcIP:   net.IPv4(4, 4, 4, 4),
+				DstIP:   net.IPv4(1, 1, 1, 1),
+			},
+			l4: &layers.UDP{
+				DstPort: 53,
+				SrcPort: 54321,
+			},
 		},
 	},
 	{
 		Description: "2 - A packet with IHL=6",
-		IPv4Header: &layers.IPv4{
-			Version: 4,
-			IHL:     4,
-			TTL:     64,
-			Flags:   layers.IPv4DontFragment,
-			SrcIP:   net.IPv4(4, 4, 4, 4),
-			DstIP:   net.IPv4(1, 1, 1, 1),
-		},
-		NextHeader: &layers.UDP{
-			DstPort: 53,
-			SrcPort: 54321,
+		Pkt: Packet{
+			l3: &layers.IPv4{
+				Version: 4,
+				IHL:     4,
+				TTL:     64,
+				Flags:   layers.IPv4DontFragment,
+				SrcIP:   net.IPv4(4, 4, 4, 4),
+				DstIP:   net.IPv4(1, 1, 1, 1),
+			},
+			l4: &layers.UDP{
+				DstPort: 53,
+				SrcPort: 54321,
+			},
 		},
 	},
 	{
 		Description: "3 - A packet with IP PROTO=UDP but no UDP header",
-		IPv4Header: &layers.IPv4{
-			Version:  4,
-			IHL:      5,
-			TTL:      64,
-			SrcIP:    net.IPv4(1, 2, 3, 4),
-			DstIP:    net.IPv4(10, 20, 30, 40),
-			Protocol: layers.IPProtocolUDP,
+		Pkt: Packet{
+			l3: &layers.IPv4{
+				Version:  4,
+				IHL:      5,
+				TTL:      64,
+				SrcIP:    net.IPv4(1, 2, 3, 4),
+				DstIP:    net.IPv4(10, 20, 30, 40),
+				Protocol: layers.IPProtocolUDP,
+			},
 		},
 		Size: 14 + 20,
 	},
@@ -83,19 +87,20 @@ func TestMalformedPackets(t *testing.T) {
 	defer resetBPFMaps()
 
 	for _, tc := range malformedTestCases {
+		skbMark = 0
 		runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-			_, _, _, _, _, pktBytes, err := generatePacket(ethDefault, tc.IPv4Header, nil, tc.NextHeader, tc.Payload, false)
+			err := tc.Pkt.Generate()
 			Expect(err).NotTo(HaveOccurred())
 			if tc.Size != 0 {
-				pktBytes = pktBytes[:tc.Size]
+				tc.Pkt.bytes = tc.Pkt.bytes[:tc.Size]
 			}
-			res, err := bpfrun(pktBytes)
+			res, err := bpfrun(tc.Pkt.bytes)
 			Expect(err).NotTo(HaveOccurred())
 			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 			fmt.Printf("pktR = %+v\n", pktR)
 			Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected the program to return TC_ACT_SHOT")
-			Expect(res.dataOut).To(HaveLen(len(pktBytes)))
-			Expect(res.dataOut).To(Equal(pktBytes))
+			Expect(res.dataOut).To(HaveLen(len(tc.Pkt.bytes)))
+			Expect(res.dataOut).To(Equal(tc.Pkt.bytes))
 		})
 	}
 }

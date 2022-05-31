@@ -30,7 +30,7 @@ The geeky details of what you get:
    > **Note**: {{site.prodname}} networking cannot currently be installed on the EKS control plane nodes. As a result the control plane nodes
    > will not be able to initiate network connections to {{site.prodname}} pods. (This is a general limitation of EKS's custom networking support,
    > not specific to {{site.prodname}}.) As a workaround, trusted pods that require control plane nodes to connect to them, such as those implementing
-   > admission controller webhooks, can include `hostNetwork:true` in their pod spec. See the Kuberentes API
+   > admission controller webhooks, can include `hostNetwork:true` in their pod spec. See the Kubernetes API
    > {% include open-new-window.html text='pod spec' url='https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#podspec-v1-core' %}
    > definition for more information on this setting.
    {: .alert .alert-info }

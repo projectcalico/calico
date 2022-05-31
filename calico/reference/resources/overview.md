@@ -5,7 +5,7 @@ canonical_url: '/reference/resources/index'
 ---
 
 This section describes the set of valid resource types that can be managed
-through `calicoctl`.  
+through `calicoctl` or `kubectl`.
 
 While resources may be supplied in YAML or JSON format, this guide provides examples in YAML.
 

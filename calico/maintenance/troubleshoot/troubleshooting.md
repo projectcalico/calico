@@ -14,7 +14,7 @@ sudo calicoctl node diags
 
 To view logs, use the following command:
 
-`kubectl logs -n kube-system <pod_name>`
+`kubectl logs -n calico-system <pod_name>`
 
 
 To view debug logs on some Calico components, set the `LogSeverityScreen` through the associated environment variable. 
@@ -93,10 +93,6 @@ for details.
 In most cases, this "unready" status error in Kubernetes means that a particular peer is unreachable in the cluster. Check that BGP connectivity between the two peers is allowed in the environment.
 
 This error can also occur if inactive Node resources are configured for node-to-node mesh. To fix this, [decommission the stale nodes]({{ site.baseurl }}/maintenance/decommissioning-a-node).
-
-This error can also occur when BGP connections to non-mesh peers go down. If this is a common occurrence in your BGP topology, you can disable BIRD readiness checks. See [node readiness]({{ site.baseurl }}/reference/node/configuration#node-readiness)
-for more information.
-
 
 ### Linux conntrack table is out of space 
 

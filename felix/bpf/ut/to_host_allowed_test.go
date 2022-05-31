@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 
 	"github.com/google/gopacket/layers"
@@ -32,6 +33,8 @@ import (
 
 func TestToHostAllowedCTFull(t *testing.T) {
 	RegisterTestingT(t)
+
+	resetBPFMaps()
 
 	hostIP := net.IPv4(1, 1, 1, 1)
 	hostPort := uint16(666)
@@ -95,6 +98,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 
 	// No route - should not pass
 	bpfIfaceName = "ctNO"
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -104,11 +108,12 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	// Destination is a local workload - should not pass
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&destCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsLocalWorkload).AsBytes(),
+		routes.NewValue(routes.FlagsLocalWorkload|routes.FlagInIPAMPool).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "ctLW"
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -118,11 +123,12 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	// Destination is a remote workload - should not pass
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&destCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsRemoteWorkload).AsBytes(),
+		routes.NewValue(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "ctRW"
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -137,6 +143,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "ctRH"
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -151,11 +158,13 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "ctLH"
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
+	expectMark(tcdefs.MarkSeen)
 
 	// Source is the local host - should pass
 	tcpSynAck := &layers.TCP{
@@ -172,6 +181,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	_, _, _, _, synAckPkt, err := testPacket(nil, &ipv4Ret, tcpSynAck, nil)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synAckPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -189,21 +199,25 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	_, _, _, _, ackPkt, err := testPacket(nil, nil, tcpAck, nil)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(ackPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
+	expectMark(tcdefs.MarkSeenFallThrough)
 
 	// Make space in the CT table
 	err = ctMap.Delete(firstCTKey[:])
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(ackPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
+	expectMark(tcdefs.MarkSeenFallThrough)
 
 	// No conntrack created for non-SYN packet (should fall through to iptables).  We test by
 	// trying to create an entry, which should succeed.
@@ -213,6 +227,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	// Towards WEP, the feature is disabled - should not pass
 	//
 	// Such a packet would not make it here anyway due to routing.
+	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -259,6 +274,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())

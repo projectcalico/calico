@@ -4,6 +4,19 @@ description: Details for configuring the Calico CNI plugins.
 canonical_url: '/reference/cni-plugin/configuration'
 ---
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+The {{site.prodname}} CNI plugins do not need to be configured directly when installed by the operator. For a complete operator 
+configuration reference, see [the installation API reference documentation][installation].
+
+%>
+
+  <label:Manifest>
+<%
+
+
 The {{site.prodname}} CNI plugin is configured through the standard CNI
 [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration){:target="_blank"}
 
@@ -550,7 +563,7 @@ take on the following precedence, 1 being the highest:
 
 > **Note**: {{site.prodname}} IPAM will not reassign IP addresses to workloads
 > that are already running. To update running workloads with IP addresses from
-> a newly configured IP pool, they must be recreated. We recommmend doing this
+> a newly configured IP pool, they must be recreated. We recommend doing this
 > before going into production or during a maintenance window.
 {: .alert .alert-info}
 
@@ -565,3 +578,9 @@ For example:
   "num_queues": 3,
 }
 ```
+
+%>
+
+{% endtabs %}
+
+[installation]: {{site.baseurl}}/reference/installation/api

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
@@ -189,7 +191,7 @@ type Table struct {
 	IPVersion uint8
 
 	// featureDetector detects the features of the dataplane.
-	featureDetector *FeatureDetector
+	featureDetector *environment.FeatureDetector
 
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
@@ -269,7 +271,7 @@ type Table struct {
 	restoreInputBuffer RestoreInputBuilder
 
 	// Factory for making commands, used by UTs to shim exec.Command().
-	newCmd cmdFactory
+	newCmd cmdshim.CmdFactory
 	// Shims for time.XXX functions:
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
@@ -294,7 +296,7 @@ type TableOptions struct {
 	LockProbeInterval time.Duration
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
-	NewCmdOverride cmdFactory
+	NewCmdOverride cmdshim.CmdFactory
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
@@ -312,7 +314,7 @@ func NewTable(
 	ipVersion uint8,
 	hashPrefix string,
 	iptablesWriteLock sync.Locker,
-	detector *FeatureDetector,
+	featuredetector *environment.FeatureDetector,
 	options TableOptions,
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
@@ -367,7 +369,7 @@ func NewTable(
 	}
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
-	newCmd := NewRealCmd
+	newCmd := cmdshim.NewRealCmd
 	if options.NewCmdOverride != nil {
 		newCmd = options.NewCmdOverride
 	}
@@ -387,7 +389,7 @@ func NewTable(
 	table := &Table{
 		Name:                   name,
 		IPVersion:              ipVersion,
-		featureDetector:        detector,
+		featureDetector:        featuredetector,
 		chainToInsertedRules:   inserts,
 		chainToAppendedRules:   appends,
 		dirtyInsertAppend:      dirtyInsertAppend,
@@ -448,8 +450,8 @@ func NewTable(
 		table.nftablesMode = true
 	}
 
-	table.iptablesRestoreCmd = findBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
-	table.iptablesSaveCmd = findBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
+	table.iptablesRestoreCmd = environment.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
+	table.iptablesSaveCmd = environment.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
 
 	return table
 }
@@ -702,8 +704,8 @@ func (t *Table) loadDataplaneState() {
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
 // given our inserts and appends.
-// Hashes for inserted rules are caculated first. If we're in append mode, that consists of numNonCalicoRules empty strings
-// followed by our inserted hashes; in insert mode, the opposite way round. Hashes for appended rules are caculated and
+// Hashes for inserted rules are calculated first. If we're in append mode, that consists of numNonCalicoRules empty strings
+// followed by our inserted hashes; in insert mode, the opposite way round. Hashes for appended rules are calculated and
 // appended at the end.
 // To avoid recalculation, it returns the inserted rule hashes as a second output and appended rule hashes
 // a third output.
@@ -1383,7 +1385,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	return strings.Replace(rule, "-A", "-D", 1), nil
 }
 
-func calculateRuleHashes(chainName string, rules []Rule, features *Features) []string {
+func calculateRuleHashes(chainName string, rules []Rule, features *environment.Features) []string {
 	chain := Chain{
 		Name:  chainName,
 		Rules: rules,

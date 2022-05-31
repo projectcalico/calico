@@ -103,6 +103,17 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			expected = append(expected, *epskv)
 		}
 
+		// Add services.
+		svcs, err := cs.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, svc := range svcs.Items {
+			// Endpoints slices get updated frequently, so don't include the revision info.
+			svc.ResourceVersion = ""
+			svckv, err := converter.ServiceToKVP(&svc)
+			Expect(err).NotTo(HaveOccurred())
+			expected = append(expected, *svckv)
+		}
+
 		// Add resources for the namespaces we expect in the cluster.
 		namespaces, err := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -186,6 +197,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 				})
 			}
 		}
+
 	}
 
 	return
@@ -256,7 +268,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 
 			// Expect the correct updates - should have a new entry for each of these entries. Note that we don't do
 			// any more update checks below because we filter out host related updates since they are chatty outside
-			// of our control (and a lot of the tests below are focussed on host data), instead the tests below will
+			// of our control (and a lot of the tests below are focused on host data), instead the tests below will
 			// just check the final cache entry.
 			var expectedEvents []api.Update
 			for _, r := range defaultCacheEntries {
@@ -432,9 +444,9 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			// The pool will add as single entry ( +1 ), plus will also create the default
-			// Felix config with IPIP enabled.
-			expectedCacheSize += 2
+
+			// The pool will add as single entry ( +1 )
+			expectedCacheSize += 1
 			syncTester.ExpectData(model.KVPair{
 				Key: model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")},
 				Value: &model.IPPool{
@@ -446,10 +458,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Disabled:      false,
 				},
 				Revision: pool.ResourceVersion,
-			})
-			syncTester.ExpectData(model.KVPair{
-				Key:   model.GlobalConfigKey{"IpInIpEnabled"},
-				Value: "true",
 			})
 			syncTester.ExpectCacheSize(expectedCacheSize)
 

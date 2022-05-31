@@ -1,0 +1,117 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ipamblocks.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: IPAMBlock
+    listKind: IPAMBlockList
+    plural: ipamblocks
+    singular: ipamblock
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: IPAMBlockSpec contains the specification for an IPAMBlock
+              resource.
+            properties:
+              affinity:
+                description: Affinity of the block, if this block has one. If set,
+                  it will be of the form "host:<hostname>". If not set, this block
+                  is not affine to a host.
+                type: string
+              allocations:
+                description: Array of allocations in-use within this block. nil entries
+                  mean the allocation is free. For non-nil entries at index i, the
+                  index is the ordinal of the allocation within this block and the
+                  value is the index of the associated attributes in the Attributes
+                  array.
+                items:
+                  type: integer
+                  # TODO: This nullable is manually added in. We should update controller-gen
+                  # to handle []*int properly itself.
+                  nullable: true
+                type: array
+              attributes:
+                description: Attributes is an array of arbitrary metadata associated
+                  with allocations in the block. To find attributes for a given allocation,
+                  use the value of the allocation's entry in the Allocations array
+                  as the index of the element in this array.
+                items:
+                  properties:
+                    handle_id:
+                      type: string
+                    secondary:
+                      additionalProperties:
+                        type: string
+                      type: object
+                  type: object
+                type: array
+              cidr:
+                description: The block's CIDR.
+                type: string
+              deleted:
+                description: Deleted is an internal boolean used to workaround a limitation
+                  in the Kubernetes API whereby deletion will not return a conflict
+                  error if the block has been updated. It should not be set manually.
+                type: boolean
+              sequenceNumber:
+                default: 0
+                description: We store a sequence number that is updated each time
+                  the block is written. Each allocation will also store the sequence
+                  number of the block at the time of its creation. When releasing
+                  an IP, passing the sequence number associated with the allocation
+                  allows us to protect against a race condition and ensure the IP
+                  hasn't been released and re-allocated since the release request.
+                format: int64
+                type: integer
+              sequenceNumberForAllocation:
+                additionalProperties:
+                  format: int64
+                  type: integer
+                description: Map of allocated ordinal within the block to sequence
+                  number of the block at the time of allocation. Kubernetes does not
+                  allow numerical keys for maps, so the key is cast to a string.
+                type: object
+              strictAffinity:
+                description: StrictAffinity on the IPAMBlock is deprecated and no
+                  longer used by the code. Use IPAMConfig StrictAffinity instead.
+                type: boolean
+              unallocated:
+                description: Unallocated is an ordered list of allocations which are
+                  free in the block.
+                items:
+                  type: integer
+                type: array
+            required:
+            - allocations
+            - attributes
+            - cidr
+            - strictAffinity
+            - unallocated
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

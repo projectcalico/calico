@@ -15,13 +15,19 @@
 package config_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"testing"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 
 	"github.com/onsi/ginkgo/reporters"
 )
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)

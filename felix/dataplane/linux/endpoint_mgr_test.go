@@ -547,6 +547,15 @@ func chainsForIfaces(ifaceMetadata []string,
 		)
 	}
 
+	if tableKind == "untracked" {
+		chains = append(chains,
+			&iptables.Chain{
+				Name:  rules.ChainRpfSkip,
+				Rules: []iptables.Rule{},
+			},
+		)
+	}
+
 	if tableKind == "preDNAT" {
 		chains = append(chains,
 			&iptables.Chain{
@@ -630,6 +639,13 @@ type hostEpSpec struct {
 	polName   string
 }
 
+func applyUpdates(epMgr *endpointManager) {
+	err := epMgr.ResolveUpdateBatch()
+	Expect(err).ToNot(HaveOccurred())
+	err = epMgr.CompleteDeferredWork()
+	Expect(err).ToNot(HaveOccurred())
+}
+
 func endpointManagerTests(ipVersion uint8) func() {
 	return func() {
 		const (
@@ -703,9 +719,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,
 				mockProcSys.stat,
+				"1",
 				false,
 				hepListener,
 				common.NewCallbacks(),
+				true,
 			)
 		})
 
@@ -773,10 +791,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						ExpectedIpv6Addrs: spec.ipv6Addrs,
 					},
 				})
-				err := epMgr.ResolveUpdateBatch()
-				Expect(err).ToNot(HaveOccurred())
-				err = epMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
+				applyUpdates(epMgr)
 			}
 		}
 
@@ -805,6 +820,10 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 				rawTable.checkChains([][]*iptables.Chain{
 					hostDispatchEmptyNormal,
+					[]*iptables.Chain{{
+						Name:  "cali-rpf-skip",
+						Rules: []iptables.Rule{},
+					}},
 				})
 				mangleTable.checkChains([][]*iptables.Chain{
 					fromHostDispatchEmpty,
@@ -820,10 +839,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						EndpointId: id,
 					},
 				})
-				err := epMgr.ResolveUpdateBatch()
-				Expect(err).ToNot(HaveOccurred())
-				err = epMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
+				applyUpdates(epMgr)
 			}
 		}
 
@@ -845,10 +861,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					Name:  "lo",
 					Addrs: loAddrs,
 				})
-				err := epMgr.ResolveUpdateBatch()
-				Expect(err).ToNot(HaveOccurred())
-				err = epMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
+				applyUpdates(epMgr)
 			})
 
 			It("should have empty dispatch chains", expectEmptyChains())
@@ -1237,10 +1250,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
-						err := epMgr.ResolveUpdateBatch()
-						Expect(err).ToNot(HaveOccurred())
-						err = epMgr.CompleteDeferredWork()
-						Expect(err).ToNot(HaveOccurred())
+						applyUpdates(epMgr)
 					})
 
 					It("should have expected chains", expectChainsFor("eth0"))
@@ -1418,7 +1428,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}))
 				})
 			})
-
 		})
 
 		Context("with host endpoint configured before interface signaled", func() {
@@ -1443,10 +1452,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Name:  "eth0",
 						Addrs: eth0Addrs,
 					})
-					err := epMgr.ResolveUpdateBatch()
-					Expect(err).ToNot(HaveOccurred())
-					err = epMgr.CompleteDeferredWork()
-					Expect(err).ToNot(HaveOccurred())
+					applyUpdates(epMgr)
 				})
 				It("should have expected chains", expectChainsFor("eth0"))
 				It("should report id3 up", func() {
@@ -1472,7 +1478,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 		}
 
 		Describe("workload endpoints", func() {
-
 			Context("with a workload endpoint", func() {
 				wlEPID1 := proto.WorkloadEndpointID{
 					OrchestratorId: "k8s",
@@ -1498,10 +1503,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Ipv6Nets:   []string{"2001:db8:2::2/128"},
 						},
 					})
-					err := epMgr.ResolveUpdateBatch()
-					Expect(err).ToNot(HaveOccurred())
-					err = epMgr.CompleteDeferredWork()
-					Expect(err).ToNot(HaveOccurred())
+					applyUpdates(epMgr)
 				})
 
 				Context("with policy", func() {
@@ -1516,7 +1518,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 					It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
 
 					Context("with another endpoint with the same interface name and earlier workload ID, and no policy", func() {
-
 						JustBeforeEach(func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &proto.WorkloadEndpointID{
@@ -1534,30 +1535,22 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
 							})
-							err := epMgr.ResolveUpdateBatch()
-							Expect(err).ToNot(HaveOccurred())
-							err = epMgr.CompleteDeferredWork()
-							Expect(err).ToNot(HaveOccurred())
+							applyUpdates(epMgr)
 						})
 
 						It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
 
 						Context("with the first endpoint removed", func() {
-
 							JustBeforeEach(func() {
 								epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 									Id: &wlEPID1,
 								})
-								err := epMgr.ResolveUpdateBatch()
-								Expect(err).ToNot(HaveOccurred())
-								err = epMgr.CompleteDeferredWork()
-								Expect(err).ToNot(HaveOccurred())
+								applyUpdates(epMgr)
 							})
 
 							It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
 
 							Context("with the second endpoint removed", func() {
-
 								JustBeforeEach(func() {
 									epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 										Id: &proto.WorkloadEndpointID{
@@ -1566,10 +1559,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EndpointId:     "endpoint-id-11",
 										},
 									})
-									err := epMgr.ResolveUpdateBatch()
-									Expect(err).ToNot(HaveOccurred())
-									err = epMgr.CompleteDeferredWork()
-									Expect(err).ToNot(HaveOccurred())
+									applyUpdates(epMgr)
 								})
 
 								It("should have empty dispatch chains", expectEmptyChains())
@@ -1578,7 +1568,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 
 					Context("with another endpoint with the same interface name and later workload ID, and no policy", func() {
-
 						JustBeforeEach(func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &proto.WorkloadEndpointID{
@@ -1596,30 +1585,22 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
 							})
-							err := epMgr.ResolveUpdateBatch()
-							Expect(err).ToNot(HaveOccurred())
-							err = epMgr.CompleteDeferredWork()
-							Expect(err).ToNot(HaveOccurred())
+							applyUpdates(epMgr)
 						})
 
 						It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
 
 						Context("with the first endpoint removed", func() {
-
 							JustBeforeEach(func() {
 								epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 									Id: &wlEPID1,
 								})
-								err := epMgr.ResolveUpdateBatch()
-								Expect(err).ToNot(HaveOccurred())
-								err = epMgr.CompleteDeferredWork()
-								Expect(err).ToNot(HaveOccurred())
+								applyUpdates(epMgr)
 							})
 
 							It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
 
 							Context("with the second endpoint removed", func() {
-
 								JustBeforeEach(func() {
 									epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 										Id: &proto.WorkloadEndpointID{
@@ -1628,10 +1609,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EndpointId:     "endpoint-id-11",
 										},
 									})
-									err := epMgr.ResolveUpdateBatch()
-									Expect(err).ToNot(HaveOccurred())
-									err = epMgr.CompleteDeferredWork()
-									Expect(err).ToNot(HaveOccurred())
+									applyUpdates(epMgr)
 								})
 
 								It("should have empty dispatch chains", expectEmptyChains())
@@ -1694,10 +1672,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "cali12345-ab",
 							Addrs: set.New(),
 						})
-						err := epMgr.ResolveUpdateBatch()
-						Expect(err).ToNot(HaveOccurred())
-						err = epMgr.CompleteDeferredWork()
-						Expect(err).ToNot(HaveOccurred())
+						applyUpdates(epMgr)
 					})
 					It("should report the interface in error", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
@@ -1716,10 +1691,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "cali12345-ab",
 							Addrs: set.New(),
 						})
-						err := epMgr.ResolveUpdateBatch()
-						Expect(err).ToNot(HaveOccurred())
-						err = epMgr.CompleteDeferredWork()
-						Expect(err).ToNot(HaveOccurred())
+						applyUpdates(epMgr)
 					})
 
 					It("should have expected chains", expectWlChainsFor("cali12345-ab"))
@@ -1741,6 +1713,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 								"/proc/sys/net/ipv6/conf/cali12345-ab/accept_ra":      "0",
 								"/proc/sys/net/ipv4/conf/cali12345-ab/forwarding":     "1",
 								"/proc/sys/net/ipv4/conf/cali12345-ab/route_localnet": "1",
+								"/proc/sys/net/ipv4/conf/cali12345-ab/rp_filter":      "1",
 								"/proc/sys/net/ipv4/conf/cali12345-ab/proxy_arp":      "1",
 								"/proc/sys/net/ipv4/neigh/cali12345-ab/proxy_delay":   "0",
 							})
@@ -1769,10 +1742,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 									},
 								},
 							})
-							err := epMgr.ResolveUpdateBatch()
-							Expect(err).ToNot(HaveOccurred())
-							err = epMgr.CompleteDeferredWork()
-							Expect(err).ToNot(HaveOccurred())
+							applyUpdates(epMgr)
 						})
 
 						It("should have expected chains", expectWlChainsFor("cali12345-ab"))
@@ -1812,15 +1782,65 @@ func endpointManagerTests(ipVersion uint8) func() {
 						})
 					})
 
-					Context("with the endpoint removed", func() {
+					// Test that by disabling floatingIPs on the endpoint manager, even workload endpoints
+					// that have floating IP NAT addresses specified will not result in those routes being
+					// programmed.
+					Context("with floating IPs disasbled, but added to the endpoint", func() {
 						JustBeforeEach(func() {
-							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+							epMgr.floatingIPsEnabled = false
+							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &wlEPID1,
+								Endpoint: &proto.WorkloadEndpoint{
+									State:      "active",
+									Mac:        "01:02:03:04:05:06",
+									Name:       "cali12345-ab",
+									ProfileIds: []string{},
+									Tiers:      []*proto.TierInfo{},
+									Ipv4Nets:   []string{"10.0.240.2/24"},
+									Ipv6Nets:   []string{"2001:db8:2::2/128"},
+									Ipv4Nat: []*proto.NatInfo{
+										{ExtIp: "172.16.1.3", IntIp: "10.0.240.2"},
+										{ExtIp: "172.18.1.4", IntIp: "10.0.240.2"},
+									},
+									Ipv6Nat: []*proto.NatInfo{
+										{ExtIp: "2001:db8:3::2", IntIp: "2001:db8:2::2"},
+										{ExtIp: "2001:db8:4::2", IntIp: "2001:db8:4::2"},
+									},
+								},
 							})
 							err := epMgr.ResolveUpdateBatch()
 							Expect(err).ToNot(HaveOccurred())
 							err = epMgr.CompleteDeferredWork()
 							Expect(err).ToNot(HaveOccurred())
+						})
+
+						It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+
+						It("should set routes with no floating IPs", func() {
+							if ipVersion == 6 {
+								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
+									{
+										CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+									},
+								})
+							} else {
+								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
+									{
+										CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+									},
+								})
+							}
+						})
+					})
+
+					Context("with the endpoint removed", func() {
+						JustBeforeEach(func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+								Id: &wlEPID1,
+							})
+							applyUpdates(epMgr)
 						})
 
 						It("should have empty dispatch chains", expectEmptyChains())
@@ -1855,10 +1875,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
 							})
-							err := epMgr.ResolveUpdateBatch()
-							Expect(err).ToNot(HaveOccurred())
-							err = epMgr.CompleteDeferredWork()
-							Expect(err).ToNot(HaveOccurred())
+							applyUpdates(epMgr)
 						})
 
 						It("should have expected chains", expectWlChainsFor("cali12345-cd"))
@@ -1889,6 +1906,99 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 			})
 
+			Context("with RPF checking disabled", func() {
+				var (
+					wlEPID1        proto.WorkloadEndpointID
+					workloadUpdate *proto.WorkloadEndpointUpdate
+					interfaceUp    *ifaceUpdate
+				)
+
+				BeforeEach(func() {
+					wlEPID1 = proto.WorkloadEndpointID{
+						OrchestratorId: "k8s",
+						WorkloadId:     "pod-12",
+						EndpointId:     "endpoint-id-12",
+					}
+					workloadUpdate = &proto.WorkloadEndpointUpdate{
+						Id: &wlEPID1,
+						Endpoint: &proto.WorkloadEndpoint{
+							State:                      "active",
+							Mac:                        "01:02:03:04:05:06",
+							Name:                       "cali23456-cd",
+							ProfileIds:                 []string{},
+							Tiers:                      []*proto.TierInfo{},
+							Ipv4Nets:                   []string{"10.0.240.2/24"},
+							Ipv6Nets:                   []string{"2001:db8:2::2/128"},
+							AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32"},
+						},
+					}
+					interfaceUp = &ifaceUpdate{
+						Name:  "cali23456-cd",
+						State: "up",
+					}
+				})
+
+				It("should properly handle the source IP spoofing configuration", func() {
+					By("Creating a workload with IP spoofing configured")
+					epMgr.OnUpdate(workloadUpdate)
+					// Set the interface up so that the sysctls are configured
+					epMgr.OnUpdate(interfaceUp)
+					applyUpdates(epMgr)
+					if ipVersion == 4 {
+						mockProcSys.checkStateContains(map[string]string{
+							"/proc/sys/net/ipv4/conf/cali23456-cd/rp_filter": "0",
+						})
+					}
+					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
+						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{
+							iptables.Rule{
+								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
+								Action: iptables.AcceptAction{},
+							},
+						}},
+					}})
+
+					By("Re-enabling rpf check on an existing workload")
+					workloadUpdate.Endpoint.AllowSpoofedSourcePrefixes = []string{}
+					epMgr.OnUpdate(workloadUpdate)
+					applyUpdates(epMgr)
+					if ipVersion == 4 {
+						mockProcSys.checkStateContains(map[string]string{
+							"/proc/sys/net/ipv4/conf/cali23456-cd/rp_filter": "1",
+						})
+					}
+					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
+						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{}},
+					}})
+
+					By("Enabling IP spoofing on an existing workload")
+					workloadUpdate.Endpoint.AllowSpoofedSourcePrefixes = []string{"8.8.8.8/32"}
+					epMgr.OnUpdate(workloadUpdate)
+					applyUpdates(epMgr)
+					if ipVersion == 4 {
+						mockProcSys.checkStateContains(map[string]string{
+							"/proc/sys/net/ipv4/conf/cali23456-cd/rp_filter": "0",
+						})
+					}
+					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
+						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{
+							iptables.Rule{
+								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
+								Action: iptables.AcceptAction{},
+							}}},
+					}})
+
+					By("Removing a workload with IP spoofing configured")
+					epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+						Id: &wlEPID1,
+					})
+					applyUpdates(epMgr)
+					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
+						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{}},
+					}})
+				})
+			})
+
 			Context("with an inactive workload endpoint", func() {
 				wlEPID1 := proto.WorkloadEndpointID{
 					OrchestratorId: "k8s",
@@ -1908,10 +2018,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Ipv6Nets:   []string{"2001:db8:2::2/128"},
 						},
 					})
-					err := epMgr.ResolveUpdateBatch()
-					Expect(err).ToNot(HaveOccurred())
-					err = epMgr.CompleteDeferredWork()
-					Expect(err).ToNot(HaveOccurred())
+					applyUpdates(epMgr)
 				})
 
 				It("should have expected chains", func() {
@@ -1964,9 +2071,7 @@ type testProcSys struct {
 	Fail           bool
 }
 
-var (
-	procSysFail = errors.New("mock proc sys failure")
-)
+var procSysFail = errors.New("mock proc sys failure")
 
 func (t *testProcSys) write(path, value string) error {
 	t.lock.Lock()
@@ -1997,6 +2102,14 @@ func (t *testProcSys) checkState(expected map[string]string) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	Expect(t.state).To(Equal(expected))
+}
+
+func (t *testProcSys) checkStateContains(expected map[string]string) {
+	for k, v := range expected {
+		actual, ok := t.state[k]
+		Expect(ok).To(BeTrue())
+		Expect(actual).To(Equal(v))
+	}
 }
 
 type testHEPListener struct {

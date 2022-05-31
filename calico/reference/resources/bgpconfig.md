@@ -17,6 +17,7 @@ metadata:
 spec:
   logSeverityScreen: Info
   nodeToNodeMeshEnabled: true
+  nodeMeshMaxRestartTime: 120s
   asNumber: 63400
   serviceClusterIPs:
   - cidr: 10.96.0.0/12
@@ -24,6 +25,7 @@ spec:
   - cidr: 104.244.42.129/32
   - cidr: 172.217.3.0/24
   listenPort: 178
+  bindMode: NodeIP
   communities:
   - name: bgp-large-community
     value: 63400:300:100
@@ -56,6 +58,7 @@ spec:
 | serviceExternalIPs | The CIDR blocks for Kubernetes Service External IPs to be advertised over BGP. Kubernetes Service External IPs will only be advertised if they are within one of these blocks. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 or IPv6 CIDR blocks. | List of `cidr: <ip>/<prefix length>` values. | Empty List |
 | serviceLoadBalancerIPs | The CIDR blocks for Kubernetes Service status.LoadBalancer IPs to be advertised over BGP. Kubernetes LoadBalancer IPs will only be advertised if they are within one of these blocks. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 or IPv6 CIDR blocks. | List of `cidr: <ip>/<prefix length>` values. | Empty List |
 | listenPort | The port where BGP protocol should listen.| A valid port number. | integer | 179 |
+| bindMode | Indicates whether to listen for BGP connections on all addresses (None) or only on the node's canonical IP address Node.Spec.BGP.IPvXAddress (NodeIP). If this field is changed when calico-node is already running, the change will not take effect until calico-node is manually restarted.| None, NodeIP. | string | None |
 | communities | List of BGP community names and their values, communities are not advertised unless they are used in [prefixAdvertisements](#prefixadvertisements). || List of [communities](#communities) |
 | prefixAdvertisements | List of per-prefix advertisement properties, like BGP communities.|| List of [prefixAdvertisements](#prefixadvertisements) |
 | nodeMeshPassword   | BGP password for the all the peerings in a full mesh configuration. |  | [BGPPassword](bgppeer#bgppassword) | `nil` (no password) |

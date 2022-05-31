@@ -33,6 +33,7 @@
 #include "arp.h"
 #include "sendrecv.h"
 #include "fib.h"
+#include "rpf.h"
 #include "tc.h"
 #include "tcv6.h"
 #include "policy_program.h"
@@ -184,7 +185,6 @@ deny:
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 {
-	__u64 cookie;
 	/* Now we've got as far as the UDP header, check if this is one of our VXLAN packets, which we
 	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
@@ -217,6 +217,19 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 
 	/* Do conntrack lookup before anything else */
 	ctx->state->ct_result = calico_ct_v4_lookup(ctx);
+
+	calico_tc_process_ct_lookup(ctx);
+
+allow:
+finalize:
+	return forward_or_drop(ctx);
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+}
+
+static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
+{
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
 
 	/* Check if someone is trying to spoof a tunnel packet */
@@ -229,11 +242,15 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
 
-	/* We are possibly past (D)NAT, but that is ok, we need to let the IP
-	 * stack do the RPF check on the source, dest is not important.
-	 */
 	if (ct_result_rpf_failed(ctx->state->ct_result.rc)) {
-		fwd_fib_set(&ctx->fwd, false);
+		if (!CALI_F_FROM_WEP) {
+			/* We are possibly past (D)NAT, but that is ok, we need to let the
+			 * IP stack do the RPF check on the source, dest is not important.
+			 */
+			goto deny;
+		} else if (!wep_rpf_check(ctx, cali_rt_lookup(ctx->state->ip_src))) {
+			goto deny;
+		}
 	}
 
 	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
@@ -311,9 +328,13 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 
 	/* No conntrack entry, check if we should do NAT */
 	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
-	ctx->nat_dest = calico_v4_nat_lookup2(ctx->state->ip_src, ctx->state->ip_dst,
-					     ctx->state->ip_proto, ctx->state->dport,
-					     ctx->state->tun_ip != 0, &nat_res);
+
+	/* Skip NAT lookup for traffic leaving the host namespace. */
+	if (CALI_F_TO_HOST) {
+		ctx->nat_dest = calico_v4_nat_lookup2(ctx->state->ip_src, ctx->state->ip_dst,
+						      ctx->state->ip_proto, ctx->state->dport,
+						      ctx->state->tun_ip != 0, &nat_res);
+	}
 
 	if (nat_res == NAT_FE_LOOKUP_DROP) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
@@ -337,13 +358,10 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 syn_force_policy:
 	/* DNAT in state is set correctly now */
 
-	/* Unlike from WEP where we can do RPF by comparing to calico routing
-	 * info, we must rely in Linux to do it for us when receiving packets
-	 * from outside of the host. We enforce RPF failed on every new flow.
-	 * This will make it to skip fib in calico_tc_skb_accepted()
-	 */
-	if (CALI_F_FROM_HEP) {
-		ct_result_set_flag(ctx->state->ct_result.rc, CALI_CT_RPF_FAILED);
+	if (!(ctx->state->tun_ip) && CALI_F_FROM_HEP) {
+		if (!hep_rpf_check(ctx)) {
+			goto deny;
+		}
 	}
 
 	if (CALI_F_TO_WEP && !skb_seen(ctx->skb) &&
@@ -356,21 +374,9 @@ syn_force_policy:
 	}
 
 	if (CALI_F_FROM_WEP) {
-		/* Do RPF check since it's our responsibility to police that. */
-		CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n",
-				bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex);
 		struct cali_rt *r = cali_rt_lookup(ctx->state->ip_src);
-		if (!r) {
-			CALI_INFO("Workload RPF fail: missing route.\n");
-			goto deny;
-		}
-		if (!cali_rt_flags_local_workload(r->flags)) {
-			CALI_INFO("Workload RPF fail: not a local workload.\n");
-			goto deny;
-		}
-		if (r->if_index != ctx->skb->ifindex) {
-			CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n",
-					ctx->skb->ifindex, r->if_index);
+		/* Do RPF check since it's our responsibility to police that. */
+		if (!wep_rpf_check(ctx, r)) {
 			goto deny;
 		}
 
@@ -382,6 +388,7 @@ syn_force_policy:
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
+		/* If 3rd party CNI is used and dest is outside cluster. See commit fc711b192f for details. */
 		if (!(r->flags & CALI_RT_IN_POOL)) {
 			CALI_DEBUG("Source %x not in IP pool\n", bpf_ntohl(ctx->state->ip_src));
 			r = cali_rt_lookup(ctx->state->post_nat_ip_dst);
@@ -414,7 +421,7 @@ syn_force_policy:
 	// sending socket's cookie, so we can reverse a DNAT that the CTLB may have done.
 	// This allows us to give the policy program the pre-DNAT destination as well as
 	// the post-DNAT destination in all cases.
-	cookie = bpf_get_socket_cookie(ctx->skb);
+	__u64 cookie = bpf_get_socket_cookie(ctx->skb);
 	if (cookie) {
 		CALI_DEBUG("Socket cookie: %x\n", cookie);
 		struct ct_nats_key ct_nkey = {
@@ -474,12 +481,11 @@ skip_policy:
 	/* should not reach here */
 	goto deny;
 
-allow:
 finalize:
-	return forward_or_drop(ctx);
+	return;
+
 deny:
 	ctx->fwd.res = TC_ACT_SHOT;
-	goto finalize;
 }
 
 SEC("classifier/tc/accept")
@@ -539,11 +545,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
-	bool fib = false;
+	bool fib = true;
 	struct ct_create_ctx ct_ctx_nat = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
-	__u32 seen_mark;
+	__u32 seen_mark = CALI_SKB_MARK_SEEN;
 	size_t l4_csum_off = 0, l3_csum_off;
 
 	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
@@ -565,17 +571,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
 		// We are going to SNAT this traffic, using iptables SNAT so set the mark
 		// to trigger that and leave the fib lookup disabled.
+		fib = false;
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {
 		if (state->flags & CALI_ST_SKIP_FIB) {
 			fib = false;
-		} else if (CALI_F_TO_HOST && !ct_result_rpf_failed(state->ct_result.rc)) {
-			// Non-SNAT case, allow FIB lookup only if RPF check passed.
-			// Note: tried to pass in the calculated value from calico_tc but
-			// hit verifier issues so recalculate it here.
-			fib = true;
+			seen_mark = CALI_SKB_MARK_SKIP_FIB;
 		}
-		seen_mark = CALI_SKB_MARK_SEEN;
 	}
 
 	/* We check the ttl here to avoid needing complicated handling of
@@ -848,10 +850,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				goto icmp_too_big;
 			}
 			state->ip_src = HOST_IP;
-			seen_mark = CALI_SKB_MARK_SKIP_RPF;
-
-			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
-			fib = true;
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP; /* Do FIB if possible */
 
 			goto nat_encap;
 		}
@@ -1198,12 +1197,16 @@ deny:
 SEC("classifier/tc/drop")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
-	CALI_DEBUG("Entering calico_tc_skb_drop\n");
+	CALI_DEBUG("Entering calico_tc_skb_drop - DENY\n");
 
-	struct cali_tc_state *state = state_get();
-	if (!state) {
-		CALI_DEBUG("State map lookup failed: no event generated\n");
-		goto drop;
+	struct cali_tc_state *state;
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
+		state = state_get();
+		if (!state) {
+			CALI_DEBUG("State map lookup failed: no event generated\n");
+			return TC_ACT_SHOT;
+		}
 	}
 
 	CALI_DEBUG("proto=%d\n", state->ip_proto);
@@ -1216,7 +1219,6 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	CALI_DEBUG("flags=0x%x\n", state->flags);
 	CALI_DEBUG("ct_rc=%d\n", state->ct_result.rc);
 
-drop:
 	return TC_ACT_SHOT;
 }
 

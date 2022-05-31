@@ -271,7 +271,7 @@ kubectl delete ns calico-demo
   <%
 ## Installing kubectl on Windows
 
-To run the commands in this demo you need the Windows version of kubectl installed and add it to the system path. 
+To run the commands in this demo you need the Windows version of kubectl installed and add it to the system path.
 [Install kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/){:target="_blank"} and move the kubectl binary to **c:\k**.
 
 Add `c:\k` to the system path
@@ -511,7 +511,7 @@ Now that client and server pods are running on both Linux and Windows nodes, let
                         Content-Length: 49
                         Content-Type: text/plain; charset=utf-8
                         Date: Fri, 21 Aug 2020 22:45:46 GMT
-    
+
                         This is a Calico for Windows demo.
     Forms             :
     Headers           : {[Content-Length, 49], [Content-Type, text/plain;
@@ -530,7 +530,7 @@ You have now verified that communication is possible between all pods in the app
 
 In a real world deployment you would want to make sure only pods that are supposed to communicate with each other, are actually allowed to do so.
 
-To achieve this you wil apply a basic network policy which allows only the busybox pod to reach the porter pod.
+To achieve this you will apply a basic network policy which allows only the busybox pod to reach the porter pod.
 
 ### Create the network-policy.yaml file using your favorite editor on Windows
 
@@ -605,5 +605,5 @@ As the final step you can clean up all of the demo resources:
 kubectl delete namespace calico-demo
 ```
 
-  %> 
+  %>
   {% endtabs %}

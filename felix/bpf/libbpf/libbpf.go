@@ -241,7 +241,8 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 
 const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
-	GlobalsIPv6Enabled uint32 = C.CALI_GLOBALS_IPV6_ENABLED
+	GlobalsIPv6Enabled      uint32 = C.CALI_GLOBALS_IPV6_ENABLED
+	GlobalsRPFStrictEnabled uint32 = C.CALI_GLOBALS_RPF_STRICT_ENABLED
 )
 
 func TcSetGlobals(
@@ -253,6 +254,7 @@ func TcSetGlobals(
 	vxlanPort uint16,
 	psNatStart uint16,
 	psNatLen uint16,
+	hostTunnelIP uint32,
 	flags uint32,
 ) error {
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
@@ -263,7 +265,9 @@ func TcSetGlobals(
 		C.ushort(vxlanPort),
 		C.ushort(psNatStart),
 		C.ushort(psNatLen),
-		C.uint(flags))
+		C.uint(hostTunnelIP),
+		C.uint(flags),
+	)
 
 	return err
 }

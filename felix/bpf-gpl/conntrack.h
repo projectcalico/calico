@@ -10,6 +10,7 @@
 #include "bpf.h"
 #include "icmp.h"
 #include "types.h"
+#include "rpf.h"
 
 // Connection tracking.
 
@@ -120,8 +121,8 @@ create:
 		.orig_port = orig_dport,
 	};
 
-	ct_value.flags = ct_ctx->flags;
-	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
+	ct_value_set_flags(&ct_value, ct_ctx->flags);
+	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value_get_flags(&ct_value));
 
 	if (ct_ctx->type == CALI_CT_TYPE_NAT_REV && ct_ctx->tun_ip) {
 		if (ct_ctx->flags & CALI_CT_FLAG_NP_FWD) {
@@ -410,13 +411,21 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		.dport	= tc_ctx->state->dport,
 	};
 	struct ct_lookup_ctx *ct_ctx = &ct_lookup_ctx;
-	if (tc_ctx->state->ip_proto == IPPROTO_TCP) {
+
+	switch (tc_ctx->state->ip_proto) {
+	case IPPROTO_TCP:
 		if (skb_refresh_validate_ptrs(tc_ctx, TCP_SIZE)) {
 			tc_ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			bpf_exit(TC_ACT_SHOT);
 		}
 		ct_lookup_ctx.tcp = tc_tcphdr(tc_ctx);
+		break;
+	case IPPROTO_ICMP:
+		// There are no port in ICMP and the fields in state are overloaded
+		// for other use like type and code.
+		ct_lookup_ctx.dport = ct_lookup_ctx.sport = 0;
+		break;
 	}
 
 	__u8 proto_orig = ct_ctx->proto;
@@ -544,7 +553,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	__u64 now = bpf_ktime_get_ns();
 	v->last_seen = now;
 
-	result.flags = v->flags;
+	result.flags = ct_value_get_flags(v);
 
 	// Return the if_index where the CT state was created.
 	if (v->a_to_b.opener) {
@@ -568,6 +577,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		}
 		if (tcp_recycled(syn, tracking_v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			cali_v4_ct_delete_elem(&k);
+			cali_v4_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
 		}
 		result.nat_sport = v->nat_sport ? : sport;
@@ -590,7 +601,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.tun_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
-		result.flags = tracking_v->flags;
+		result.flags = ct_value_get_flags(tracking_v);
 
 		if (ct_ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -614,10 +625,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		if (tcp_recycled(syn, v)) {
-			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
-			goto out_lookup_fail;
-		}
+		// N.B. we do not check for tcp_recycled because this cannot be the first
+		// SYN that is opening a new connection. This must be returning traffic.
 		if (srcLTDest) {
 			CALI_VERB("CT-ALL REV src_to_dst A->B\n");
 			src_to_dst = &v->a_to_b;
@@ -631,7 +640,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.tun_ip = v->tun_ip;
 		CALI_CT_DEBUG("tun_ip:%x\n", bpf_ntohl(v->tun_ip));
 
-		result.flags = v->flags;
+		result.flags = ct_value_get_flags(v);
 
 		if (ct_ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
@@ -673,6 +682,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		CALI_CT_DEBUG("Hit! NORMAL entry.\n");
 		if (tcp_recycled(syn, v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			cali_v4_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
 		CALI_CT_VERB("Created: %llu.\n", v->created);
@@ -796,14 +806,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				CALI_CT_DEBUG("CT RPF failed ifindex %d != %d\n",
 						src_to_dst->ifindex, ifindex);
 			}
-			if (ct_result_rc(result.rc) == CALI_CT_ESTABLISHED_BYPASS) {
-				// Disable bypass so the kernel can do its RPF check.
-				// The next BPF program to see the packet will update the interface
-				// after the RPF has passed.
-				CALI_CT_DEBUG("Disabling bypass to allow kernel RPF.\n");
-				ct_result_set_rc(result.rc, CALI_CT_ESTABLISHED);
+			if (!ret_from_tun && !hep_rpf_check(tc_ctx)) {
+				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
+			} else {
+				src_to_dst->ifindex = ifindex;
 			}
-			ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
 		} else if (src_to_dst->ifindex != CT_INVALID_IFINDEX) {
 			/* if the devices do not match, we got here without bypassing the
 			 * host IP stack and RPF check allowed it, so update our records.
@@ -863,6 +870,7 @@ static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_c
 
 	err = calico_ct_v4_create_tracking(ct_ctx, &k);
 	if (err) {
+		CALI_DEBUG("calico_ct_v4_create_tracking err %d\n", err);
 		return err;
 	}
 

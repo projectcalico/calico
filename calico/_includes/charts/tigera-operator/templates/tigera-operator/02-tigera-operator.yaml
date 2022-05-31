@@ -37,6 +37,10 @@ spec:
             - name: var-lib-calico
               readOnly: true
               mountPath: /var/lib/calico
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: WATCH_NAMESPACE
               value: ""

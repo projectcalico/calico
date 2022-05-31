@@ -25,8 +25,12 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	kapiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
@@ -65,6 +69,8 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		})
 		eb.Flush()
 		Expect(reflect.ValueOf(messageReceived).Elem().Interface()).To(Equal(expUpdate))
+		_, err := extdataplane.WrapPayloadWithEnvelope(messageReceived, 0)
+		Expect(err).To(BeNil())
 
 		// Send in the delete and flush the buffer.  It should deposit the message
 		// via our callback.
@@ -78,6 +84,8 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		})
 		eb.Flush()
 		Expect(reflect.ValueOf(messageReceived).Elem().Interface()).To(Equal(expRemove))
+		_, err = extdataplane.WrapPayloadWithEnvelope(messageReceived, 0)
+		Expect(err).To(BeNil())
 	},
 	Entry("IPPool",
 		model.IPPoolKey{CIDR: mustParseNet("10.0.0.0/16")},
@@ -150,6 +158,42 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			ServiceLoadbalancerCidrs: []string{"255.220.0.0/24"},
 		},
 		proto.GlobalBGPConfigUpdate{}),
+	Entry("Wireguard",
+		model.WireguardKey{NodeName: "localhost"},
+		&model.Wireguard{InterfaceIPv4Addr: &testIP, PublicKey: "azerty"},
+		proto.WireguardEndpointUpdate{
+			Hostname:          "localhost",
+			PublicKey:         "azerty",
+			InterfaceIpv4Addr: "10.0.0.1",
+		},
+		proto.WireguardEndpointRemove{Hostname: "localhost"}),
+	Entry("Services",
+		model.ResourceKey{Kind: model.KindKubernetesService, Name: "svcname", Namespace: "default"},
+		&kapiv1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "svcname",
+				Namespace: "default",
+			},
+			Spec: kapiv1.ServiceSpec{
+				Type:           "ClusterIP",
+				ClusterIP:      "10.96.0.1",
+				LoadBalancerIP: "1.1.1.1",
+				ExternalIPs:    []string{"1.2.3.4"},
+			},
+		},
+		proto.ServiceUpdate{
+			Name:           "svcname",
+			Namespace:      "default",
+			Type:           "ClusterIP",
+			ClusterIp:      "10.96.0.1",
+			LoadbalancerIp: "1.1.1.1",
+			ExternalIps:    []string{"1.2.3.4"},
+		},
+		proto.ServiceRemove{
+			Name:      "svcname",
+			Namespace: "default",
+		},
+	),
 )
 
 var _ = Describe("Host IP duplicate squashing test", func() {
@@ -278,7 +322,7 @@ var _ = Describe("specific scenario tests", func() {
 			return nil
 		})
 		statsCollector.RegisterWith(calcGraph)
-		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher)
+		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher, conf)
 	})
 
 	It("should squash no-op policy updates", func() {

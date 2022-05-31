@@ -1,5 +1,22 @@
-# Calico
-<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
+[![Go Report Card](https://goreportcard.com/badge/github.com/projectcalico/calico)](https://goreportcard.com/report/github.com/projectcalico/calico)
+[![ArtifactHub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/tigera-operator)](https://artifacthub.io/packages/helm/projectcalico/tigera-operator)
+[![License](https://img.shields.io/badge/license-Apache-blue.svg)](calico/LICENSE)
+[![GoPkg](https://pkg.go.dev/badge/k8s.io/kubernetes.svg)](https://pkg.go.dev/github.com/projectcalico/api)
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6064/badge)](https://bestpractices.coreinfrastructure.org/projects/6064)
+
+<div align=center>
+<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100"> 
+<h1>Calico</h1>
+<h2>
+<a href="https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart">Quickstart</a> | 
+<a href="https://projectcalico.docs.tigera.io">Docs</a> | 
+<a href="CONTRIBUTING_CODE.md">Contribute</a> | 
+<a href="https://slack.projectcalico.org">Slack</a> |
+<a href="https://github.com/projectcalico/calico/releases">Releases</a>
+</h2>
+</div>
+
+## About
 
 Calico is a widely adopted, battle-tested open source networking and network security solution for Kubernetes, virtual machines, and bare-metal workloads.
 Calico provides two major services for Cloud Native applications:

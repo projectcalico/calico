@@ -101,7 +101,7 @@ skip_redir_ifindex:
 	if (fwd_fib(&ctx->fwd)) {
 		/* XXX we might include the tot_len in the fwd, set it once when
 		 * we get the ip_header the first time and only adjust the value
-		 * when we modify the packet - to avoid geting the header here
+		 * when we modify the packet - to avoid getting the header here
 		 * again - it is simpler though.
 		 */
 
@@ -110,6 +110,16 @@ skip_redir_ifindex:
 			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
+		}
+
+		/* Since we are going to short circuit the IP stack on
+		 * forward, check if TTL is still alive. If not, let the
+		 * IP stack handle it. It was approved by policy, so it
+		 * is safe.
+		 */
+		if ip_ttl_exceeded(ctx->ip_header) {
+			rc = TC_ACT_UNSPEC;
+			goto cancel_fib;
 		}
 
 		struct bpf_fib_lookup fib_params = {
@@ -138,18 +148,9 @@ skip_redir_ifindex:
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		rc = bpf_fib_lookup(ctx->skb, &fib_params, sizeof(fib_params), ctx->fwd.fib_flags);
-		if (rc == 0) {
-			CALI_DEBUG("FIB lookup succeeded\n");
-
-			/* Since we are going to short circuit the IP stack on
-			 * forward, check if TTL is still alive. If not, let the
-			 * IP stack handle it. It was approved by policy, so it
-			 * is safe.
-			 */
-			if ip_ttl_exceeded(ctx->ip_header) {
-				rc = TC_ACT_UNSPEC;
-				goto cancel_fib;
-			}
+		switch (rc) {
+		case 0:
+			CALI_DEBUG("FIB lookup succeeded - with neigh\n");
 
 			// Update the MACs.
 			struct ethhdr *eth_hdr = ctx->data_start;
@@ -159,16 +160,41 @@ skip_redir_ifindex:
 			// Redirect the packet.
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
 			rc = bpf_redirect(fib_params.ifindex, 0);
-			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
-			if (rc == TC_ACT_REDIRECT) {
-				ip_dec_ttl(ctx->ip_header);
+
+			break;
+
+#ifdef BPF_CORE_SUPPORTED
+		case BPF_FIB_LKUP_RET_NO_NEIGH:
+			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
+				CALI_DEBUG("FIB lookup succeeded - not neigh - gw %x\n", bpf_ntohl(fib_params.ipv4_dst));
+				struct bpf_redir_neigh nh_params = {};
+
+				nh_params.nh_family = fib_params.family;
+				nh_params.ipv4_nh = fib_params.ipv4_dst;
+
+				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
+				rc = bpf_redirect_neigh(fib_params.ifindex, &nh_params, sizeof(nh_params), 0);
+				break;
+			} else {
+				/* fallthrough to handling error */
 			}
-		} else if (rc < 0) {
-			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
-			rc = TC_ACT_UNSPEC;
-		} else {
-			CALI_DEBUG("FIB lookup failed (FIB problem): %d.\n", rc);
-			rc = TC_ACT_UNSPEC;
+#endif
+
+		default:
+			if (rc < 0) {
+				CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
+				rc = TC_ACT_UNSPEC;
+			} else {
+				CALI_DEBUG("FIB lookup failed (FIB problem): %d.\n", rc);
+				rc = TC_ACT_UNSPEC;
+			}
+
+			break;
+		}
+
+		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
+		if (rc == TC_ACT_REDIRECT) {
+			ip_dec_ttl(ctx->ip_header);
 		}
 	}
 
@@ -178,16 +204,6 @@ cancel_fib:
 skip_fib:
 
 	if (CALI_F_TO_HOST) {
-		/* If we received the packet from the tunnel and we forward it to a
-		 * workload we need to skip RPF check since there might be a better path
-		 * for the packet if the host has multiple ifaces and might get dropped.
-		 *
-		 * XXX We should check ourselves that we got our tunnel packets only from
-		 * XXX those devices where we expect them before we even decap.
-		 */
-		if (CALI_F_FROM_HEP && state->tun_ip != 0) {
-			ctx->fwd.mark = CALI_SKB_MARK_SKIP_RPF;
-		}
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
 		 */

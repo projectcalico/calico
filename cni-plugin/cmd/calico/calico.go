@@ -18,6 +18,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/cni-plugin/pkg/install"
 	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
@@ -37,7 +39,7 @@ func main() {
 	case "install":
 		err := install.Install()
 		if err != nil {
-			panic(err)
+			logrus.WithError(err).Fatal("Error installing CNI plugin")
 		}
 	default:
 		panic("Unknown binary name: " + filename)

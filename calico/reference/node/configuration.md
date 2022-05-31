@@ -4,7 +4,7 @@ description: Customize calico/node using environment variables.
 canonical_url: '/reference/node/configuration'
 ---
 
-The `{{site.nodecontainer}}` container is deployed to every node (on Kubernetes, by a DaemonSet), and runs three daemons:
+The `{{site.nodecontainer}}` container is deployed to every node (on Kubernetes, by a DaemonSet), and runs three internal daemons:
 
 * Felix, the Calico daemon that runs on every node and provides endpoints.
 * BIRD, the BGP daemon that distributes routing information to other nodes.
@@ -16,6 +16,18 @@ custom resource. `{{site.nodecontainer}}` can also be configured through the Cal
 
 The rest of this page lists the available configuration options, and is followed by specific considerations for
 various settings.
+
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+`{{site.nodecontainer}}` does not need to be configured directly when installed by the operator. For a complete operator 
+configuration reference, see [the installation API reference documentation][installation].
+
+%>
+
+  <label:Manifest>
+<%
 
 ## Environment variables
 
@@ -30,13 +42,14 @@ exist in the cluster. The following options control the parameters on the create
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
 | CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: First not used in locally of (192.168.0.0/16, 172.16.0.0/16, .., 172.31.0.0/16) ] | IPv4 CIDR |
-| CALICO_IPV4POOL_BLOCK_SIZE | Block size to use for the IPv4 POOL created at startup.  Block size for IPv4 should be in the range 20-32 (inclusive) [Default: `26`] | int |
-| CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. If set to a value other than `Never`, `CALICO_IPV4POOL_VXLAN` should not be set. [Default: `Always`] | Always, CrossSubnet, Never ("Off" is also accepted as a synonym for "Never") |
-| CALICO_IPV4POOL_VXLAN | VXLAN Mode to use for the IPv4 POOL created at start up.  If set to a value other than `Never`, `CALICO_IPV4POOL_IPIP` should not be set. [Default: `Never`] | Always, CrossSubnet, Never |
+| CALICO_IPV4POOL_BLOCK_SIZE | Block size to use for the IPv4 Pool created at startup.  Block size for IPv4 should be in the range 20-32 (inclusive) [Default: `26`] | int |
+| CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 Pool created at start up. If set to a value other than `Never`, `CALICO_IPV4POOL_VXLAN` should not be set. [Default: `Always`] | Always, CrossSubnet, Never ("Off" is also accepted as a synonym for "Never") |
+| CALICO_IPV4POOL_VXLAN | VXLAN Mode to use for the IPv4 Pool created at start up.  If set to a value other than `Never`, `CALICO_IPV4POOL_IPIP` should not be set. [Default: `Never`] | Always, CrossSubnet, Never |
 | CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. [Default: `true`] | boolean |
 | CALICO_IPV4POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv4 Pool created at start up. [Default: `all()`] | [selector]({{site.baseurl}}/reference/resources/ippool#node-selector) |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `<a randomly chosen /48 ULA>`] | IPv6 CIDR |
 | CALICO_IPV6POOL_BLOCK_SIZE | Block size to use for the IPv6 POOL created at startup.  Block size for IPv6 should be in the range 116-128 (inclusive) [Default: `122`] | int |
+| CALICO_IPV6POOL_VXLAN | VXLAN Mode to use for the IPv6 Pool created at start up. [Default: `Never`] | Always, CrossSubnet, Never |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
 | CALICO_IPV6POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv6 Pool created at start up. [Default: `all()`] | [selector]({{site.baseurl}}/reference/resources/ippool#node-selector) |
 | NO_DEFAULT_POOLS | Prevents  {{site.prodname}} from creating a default pool if one does not exist. [Default: `false`] | boolean |
@@ -295,9 +308,16 @@ Substitute `[flag]` with one or more of the following.
 
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
-in the cluster, see [decomissioning a node]({{site.baseurl}}/maintenance/decommissioning-a-node).
+in the cluster, see [decommissioning a node]({{site.baseurl}}/maintenance/decommissioning-a-node).
 
 
 ### Setting `CALICO_ROUTER_ID` for IPv6 only system
 
 Setting CALICO_ROUTER_ID to value `hash` will use a hash of the configured nodename for the router ID.  This should only be used in IPv6-only systems with no IPv4 address to use for the router ID.  Since each node chooses its own router ID in isolation, it is possible for two nodes to pick the same ID resulting in a clash.  The probability of such a clash grows with cluster size so this feature should not be used in a large cluster (500+ nodes).
+
+%>
+
+{% endtabs %}
+
+
+[installation]: {{site.baseurl}}/reference/installation/api

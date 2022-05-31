@@ -27,7 +27,7 @@ The mock data is split into 3 input formats:
 -  etcd contains etcdv3 data to configure using etcdctl.  This is done just before the tests
    and is used to configure allocation blocks that cannot be configured through calicoctl.
 -  kdd contains kubectl manifests used to configure the k8s nodes.  This is done just before
-   the tests and is required because kdd nodes canot be configured through calicoctl.
+   the tests and is required because kdd nodes cannot be configured through calicoctl.
 -  calicoctl contains most of the test data in calicoctl manifests.  The same data is shared
    by both the etcdv3 and kdd tests.
 

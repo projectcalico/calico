@@ -10,7 +10,7 @@
 1. [Create a release branch](#3-create-a-release-branch)
 1. [Performing a release](#4-performing-a-release)
 1. [Promoting to be the latest release in the docs](#5-promoting-to-be-the-latest-release-in-the-docs)
-1. [Post-release checks](#6-post-release-checks)
+1. [Post-release](#6-post-release)
 
 ## 1. Prerequisites
 
@@ -75,6 +75,8 @@ To verify that the code and GitHub are in the right state for releasing the chos
 1. [Make sure each PR with a release note is within a Milestone](https://github.com/projectcalico/calico/pulls?q=is%3Apr+label%3Arelease-note-required+is%3Aclosed+milestone%3A%22Calico+v3.21.3%22+).
 1. [Make sure CI is passing](https://tigera.semaphoreci.com/projects/calico) for the target release branch.
 
+Check the status of each of these items daily in the week leading up to the release.
+
 ## 3. Create a release branch
 
 When starting development on a new minor release, the first step is to create a release branch.
@@ -110,6 +112,12 @@ When starting development on a new minor release, the first step is to create a 
           typha:
             version: release-v4.1
         ... etc ...
+   ```
+
+1. Update manifests (and other auto-generated code) by running the following command in the repository root.
+
+   ```
+   make generate
    ```
 
 1. Create the the release notes file. This does not need to be populated now but does need to exist for the site to render. The file should match
@@ -158,6 +166,7 @@ When starting development on a new minor release, the first step is to create a 
       to = "https://calico-v3-21.netlify.app/archive/v3.21/:splat"
       status = 200
     ```
+
 1. Add another commit for the redirect.
 
    ```
@@ -181,6 +190,14 @@ When starting development on a new minor release, the first step is to create a 
 1. Cherry-pick the proxy rules commit created earlier to the latest production branch, as well as `master`.
    This will make the candidate site docs available at `projectcalico.docs.tigera.io/archive/vX.Y/` (Note: the trailing slash)
 
+### Updating milestones for the new branch
+
+Once a new branch is cut, we need to ensure a new milestone exists to represent the next release that will be cut from the master branch.
+
+1. Go to the [Calico milestones page](https://github.com/projectcalico/calico/milestones)
+
+1. Create a new release of the form `Calico vX.Y+1.0`. Leave the existing `Calico vX.Y.0` milestone open.
+
 ## 4. Performing a release
 
 ### 4.a Create a temporary branch for this release against origin
@@ -196,6 +213,12 @@ When starting development on a new minor release, the first step is to create a 
    ```
 
 1. Add the new version to the top of `calico/_data/versions.yml`
+
+1. Update manifests (and other auto-generated code) by running the following command in the repository root.
+
+   ```
+   make generate
+   ```
 
 1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
 
@@ -279,9 +302,19 @@ releases, the following steps can be skipped.
 > (Note: This site contains the `LATEST_RELEASE` environment variable in the netlify UI, from which `netlify.toml` picks up the correct build for latest release.)
 > This will cause `projectcalico.docs.tigera.io` to be updated (after a few minutes). Validate that everything looks correct.
 
-## 6. Post-release checks
+## 6. Post-release
 
-Veriy the release is working as expected. This is important, so please don't skip it.
+### Update milestones
+
+1. Go to the [Calico milestones page](https://github.com/projectcalico/calico/milestones)
+
+1. Open a new milestone of the form `Calico vX.Y.Z` for the next patch release in the series if it does not yet exist.
+
+1. Close out the milestone for the release that was just published, moving any remaining open issues and PRs to the newly created milestone.
+
+### Post-release verification
+
+Verify the release is working as expected. This is important, so please don't skip it.
 
 1. Ensure that the site is accessible by visiting `projectcalico.docs.tigera.io/archive/<version>/`.
 1. Checkout the relevant docs branch (i.e. the release-vX.Y branch)

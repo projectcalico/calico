@@ -22,6 +22,51 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
+func newBlockReleaseTracker(gracePeriod *time.Duration) *blockReleaseTracker {
+	return &blockReleaseTracker{
+		blocks:          make(map[string]time.Time),
+		leakGracePeriod: gracePeriod,
+	}
+}
+
+// blockReleaseTracker is used to track if blocks are valid for release. It ensures that the block
+// has been empty for at least two syncs.
+type blockReleaseTracker struct {
+	blocks          map[string]time.Time
+	leakGracePeriod *time.Duration
+}
+
+// MarkEmpty marks the block as empty, and returns true if the block
+// was already empty, indicating that the block can be released.
+func (t *blockReleaseTracker) markEmpty(cidr string) bool {
+	if t.leakGracePeriod != nil && *t.leakGracePeriod > 0 {
+		first, ok := t.blocks[cidr]
+		if !ok {
+			// This is the first time we've been marked empty.
+			log.WithField("block", cidr).Debugf("Block marked as empty. Will be GC'd in %s", *t.leakGracePeriod)
+			t.blocks[cidr] = time.Now()
+			return false
+		}
+
+		// OK to release if this block has been empty for over the grace period.
+		return time.Since(first) > *t.leakGracePeriod
+	}
+	log.WithField("block", cidr).Debug("No grace period set, block GC disabled")
+	return false
+}
+
+// MarkInUse indicates to the tracker that this block is still in use.
+func (t *blockReleaseTracker) markInUse(cidr string) {
+	log.WithField("block", cidr).Debug("mark block in use")
+	delete(t.blocks, cidr)
+}
+
+// OnBlockDeleted clears up any internal state associated with the block.
+func (t *blockReleaseTracker) onBlockDeleted(cidr string) {
+	log.WithField("block", cidr).Debug("block deleted")
+	delete(t.blocks, cidr)
+}
+
 // handleTracker is used to aggregate information about all known IP addresses with the given
 // handle. It can be used to ensure that all IPs with the given handle are ready for GC.
 type handleTracker struct {
@@ -72,6 +117,7 @@ type allocation struct {
 	handle         string
 	attrs          map[string]string
 	sequenceNumber uint64
+	block          string
 
 	// The Kubernetes node name hosting this allocation.
 	knode string
@@ -164,6 +210,10 @@ func (a *allocation) isConfirmedLeak() bool {
 	return a.confirmedLeak
 }
 
+func (a *allocation) isCandidateLeak() bool {
+	return a.leakedAt != nil && !a.confirmedLeak
+}
+
 func (a *allocation) isPodIP() bool {
 	ns := a.attrs[ipam.AttributeNamespace]
 	pod := a.attrs[ipam.AttributePod]
@@ -174,8 +224,9 @@ func (a *allocation) isPodIP() bool {
 func (a *allocation) isTunnelAddress() bool {
 	ipip := a.attrs[ipam.AttributeType] == ipam.AttributeTypeIPIP
 	vxlan := a.attrs[ipam.AttributeType] == ipam.AttributeTypeVXLAN
+	vxlanV6 := a.attrs[ipam.AttributeType] == ipam.AttributeTypeVXLANV6
 	wg := a.attrs[ipam.AttributeType] == ipam.AttributeTypeWireguard
-	return ipip || vxlan || wg
+	return ipip || vxlan || vxlanV6 || wg
 }
 
 func (a *allocation) isWindowsReserved() bool {

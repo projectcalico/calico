@@ -42,8 +42,10 @@ const (
 	ChainFilterForward = ChainNamePrefix + "FORWARD"
 	ChainFilterOutput  = ChainNamePrefix + "OUTPUT"
 
-	ChainRawPrerouting = ChainNamePrefix + "PREROUTING"
-	ChainRawOutput     = ChainNamePrefix + "OUTPUT"
+	ChainRawPrerouting         = ChainNamePrefix + "PREROUTING"
+	ChainRawOutput             = ChainNamePrefix + "OUTPUT"
+	ChainRawUntrackedFlows     = ChainNamePrefix + "untracked-flows"
+	ChainRawBPFUntrackedPolicy = ChainNamePrefix + "untracked-policy"
 
 	ChainFailsafeIn  = ChainNamePrefix + "failsafe-in"
 	ChainFailsafeOut = ChainNamePrefix + "failsafe-out"
@@ -89,6 +91,8 @@ const (
 
 	ChainSetWireguardIncomingMark = ChainNamePrefix + "wireguard-incoming-mark"
 
+	ChainRpfSkip = ChainNamePrefix + "rpf-skip"
+
 	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
 	WorkloadPfxSpecialAllow = "ALLOW"
 	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
@@ -99,6 +103,8 @@ const (
 	HostFromEndpointPfx        = ChainNamePrefix + "fh-"
 	HostToEndpointForwardPfx   = ChainNamePrefix + "thfw-"
 	HostFromEndpointForwardPfx = ChainNamePrefix + "fhfw-"
+
+	RPFChain = ChainNamePrefix + "rpf"
 
 	RuleHashPrefix = "cali:"
 
@@ -118,8 +124,10 @@ const (
 )
 
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
-type PolicyChainNamePrefix string
-type ProfileChainNamePrefix string
+type (
+	PolicyChainNamePrefix  string
+	ProfileChainNamePrefix string
+)
 
 var (
 	// AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
@@ -167,7 +175,7 @@ type RuleRenderer interface {
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATPostroutingChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
-	StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*iptables.Chain
+	StaticBPFModeRawChains(ipVersion uint8, wgEncryptHost, disableConntrack bool) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 	StaticFilterForwardAppendRules() []iptables.Rule
 
@@ -275,16 +283,19 @@ type Config struct {
 	OpenStackMetadataPort        uint16
 	OpenStackSpecialCasesEnabled bool
 
-	VXLANEnabled bool
-	VXLANPort    int
-	VXLANVNI     int
+	VXLANEnabled   bool
+	VXLANEnabledV6 bool
+	VXLANPort      int
+	VXLANVNI       int
 
-	IPIPEnabled bool
+	IPIPEnabled            bool
+	FelixConfigIPIPEnabled *bool
 	// IPIPTunnelAddress is an address chosen from an IPAM pool, used as a source address
 	// by the host when sending traffic to a workload over IPIP.
 	IPIPTunnelAddress net.IP
 	// Same for VXLAN.
-	VXLANTunnelAddress net.IP
+	VXLANTunnelAddress   net.IP
+	VXLANTunnelAddressV6 net.IP
 
 	AllowVXLANPacketsFromWorkloads bool
 	AllowIPIPPacketsFromWorkloads  bool

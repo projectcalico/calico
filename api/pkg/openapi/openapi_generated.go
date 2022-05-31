@@ -613,6 +613,13 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"bindMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BindMode indicates whether to listen for BGP connections on all addresses (None) or only on the node's canonical IP address Node.Spec.BGP.IPvXAddress (NodeIP). Default behaviour is to listen for BGP connections on all addresses.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -1966,8 +1973,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"ipipEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 					"ipipMTU": {
@@ -1979,13 +1987,21 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"vxlanEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for VXLAN networking. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 					"vxlanMTU": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VXLANMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]",
+							Description: "VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel device. See Configuring MTU [Default: 1410]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vxlanMTUV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANMTUV6 is the MTU to set on the IPv6 VXLAN tunnel device. See Configuring MTU [Default: 1390]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -2195,7 +2211,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"deviceRouteSourceAddress": {
 						SchemaProps: spec.SchemaProps{
-							Description: "This is the source address to use on programmed device routes. By default the source address is left blank, leaving the kernel to choose the source address used.",
+							Description: "This is the IPv4 source address to use on programmed device routes. By default the source address is left blank, leaving the kernel to choose the source address used.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"deviceRouteSourceAddressIPv6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "This is the IPv6 source address to use on programmed device routes. By default the source address is left blank, leaving the kernel to choose the source address used.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2323,7 +2346,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfExtToServiceConnmark": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFExtToServiceConnmark in BPF mode, control a 32bit mark that is set on connections from an external client to a local service. This mark allows us to control how packets of that connection are routed within the host and how is routing intepreted by RPF check. [Default: 0]",
+							Description: "BPFExtToServiceConnmark in BPF mode, control a 32bit mark that is set on connections from an external client to a local service. This mark allows us to control how packets of that connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -2393,6 +2416,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors such as \"all()\" can result in large numbers of entries (one entry per endpoint in that case).",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"bpfEnforceRPF": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFEnforceRPF enforce strict RPF on all interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled or Strict. [Default: Strict]",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"routeSource": {
@@ -2484,9 +2514,23 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"workloadSourceSpoofing": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WorkloadSourceSpoofing controls whether pods can use the allowedSourcePrefixes annotation to send traffic with a source IP address that is not theirs. This is disabled by default. When set to \"Any\", pods can request any prefix.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"mtuIfacePattern": {
 						SchemaProps: spec.SchemaProps{
 							Description: "MTUIfacePattern is a regular expression that controls which interfaces Felix should scan in order to calculate the host's MTU. This should not match workload interfaces (usually named cali...).",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"floatingIPs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FloatingIPs configures whether or not Felix will program floating IP addresses.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3236,7 +3280,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"blockSize": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 112 for IPv6.",
+							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

@@ -1,3 +1,5 @@
+# !! WARNING, DO NOT EDIT !! This file is generated from semaphore.yml.tpl.
+# To update, modify the template and then run 'make gen-semaphore-yaml'.
 version: v1.0
 name: Calico
 
@@ -61,6 +63,8 @@ global_job_config:
   prologue:
     commands:
     - checkout
+    - export REPO_DIR="$(pwd)"
+    - mkdir artifacts
     # Semaphore is doing shallow clone on a commit without tags.
     # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
     - git fetch --unshallow
@@ -77,32 +81,43 @@ global_job_config:
     - sudo apt-get install -y -u crudini
     - sudo crudini --set /etc/initramfs-tools/update-initramfs.conf '' update_initramfs no
     - cat /etc/initramfs-tools/update-initramfs.conf
+  epilogue:
+    commands:
+    - cd "$REPO_DIR"
+    - .semaphore/publish-artifacts
 
 blocks:
 
+- name: "Prerequisites"
+  dependencies: []
+  task:
+    jobs:
+    - name: "Check generated files"
+      commands:
+      - make generate
+      - make check-dirty
+
 - name: "API"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 30
-  dependencies: []
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
       - cd api
     jobs:
-    - name: "make build / ci / static-checks"
+    - name: "make ci"
       commands:
-      - make build
-      - make ci
-      - make static-checks
+      - ../.semaphore/run-and-monitor make-ci.log make ci
 
 - name: "apiserver"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/apiserver/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/apiserver/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 30
-  dependencies: []
+  dependencies: ["Prerequisites"]
   task:
     agent:
       machine:
@@ -114,23 +129,23 @@ blocks:
     jobs:
     - name: "make ci"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor make-ci.log make ci
 
 - name: "libcalico-go"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     jobs:
     - name: "libcalico-go: tests"
       commands:
       - cd libcalico-go
-      - make ci
+      - ../.semaphore/run-and-monitor make-ci.log make ci
 
 - name: "Typha"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     agent:
       machine:
@@ -140,7 +155,7 @@ blocks:
     - name: "Typha: UT and FV tests"
       commands:
       - cd typha
-      - make ci EXCEPT=k8sfv-test
+      - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
     epilogue:
       always:
         commands:
@@ -160,8 +175,8 @@ blocks:
 
 - name: "Felix: Build"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     agent:
       machine:
@@ -177,26 +192,53 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-      - make image fv/fv.test bin/test-workload bin/test-connection bin/calico-felix
+      - make build image fv-prereqs
       - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+      - 'cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test'
       - cache store go-pkg-cache .go-pkg-cache
       - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
       - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
       - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
-      - make ut
-      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-    - name: make image-all
+      - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
+      - 'cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar'
+      - ../.semaphore/run-and-monitor ut.log make ut
+      - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+      - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+    - name: Static checks
       execution_time_limit:
         minutes: 60
       commands:
-      - make static-checks
-      - make image-all
+      - ../.semaphore/run-and-monitor static-checks.log make static-checks
+
+- name: "Felix: Build other architectures"
+  run:
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Felix: Build"]
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - cd felix
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: "Build"
+      matrix:
+      # TODO: s390x builds of felix are not working.
+      - env_var: ARCH
+        values: [ "arm64", "armv7", "ppc64le" ]
+      commands:
+      # Only building the code, not the image here because the felix image is now only used for FV tests, which
+      # only run on AMD64 at the moment.
+      - ../.semaphore/run-and-monitor build-$ARCH.log make ARCH=$ARCH build
 
 - name: "Felix: Build Windows binaries"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     jobs:
     - name: "build Windows binaries"
@@ -206,7 +248,7 @@ blocks:
 
 - name: "Felix: Windows FV"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -265,7 +307,7 @@ blocks:
 
 - name: "Felix: FV Tests"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build"]
   task:
     prologue:
@@ -274,10 +316,31 @@ blocks:
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
       - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore fv.test-${SEMAPHORE_GIT_SHA}'
       - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore felixtest-typha-image-${SEMAPHORE_GIT_SHA}'
+      - |-
+        if [ -s /etc/docker/daemon.json  ]; then
+        sudo sed -i '$d' /etc/docker/daemon.json && sudo sed -i '$s/$/,/' /etc/docker/daemon.json && sudo bash -c ' cat >> /etc/docker/daemon.json << EOF
+          "ipv6": true,
+          "fixed-cidr-v6": "2001:db8:1::/64"
+        }
+        EOF
+        ' ; else sudo bash -c ' cat > /etc/docker/daemon.json << EOF
+        {
+          "ipv6": true,
+          "fixed-cidr-v6": "2001:db8:1::/64"
+        }
+        EOF
+        ' ; fi
+      - sudo systemctl restart docker
+      # Load in the docker images pre-built by the build job.
       - docker load -i /tmp/calico-felix.tar
+      - docker tag calico/felix:latest-amd64 felix:latest-amd64
       - rm /tmp/calico-felix.tar
-      - touch bin/*
+      - docker load -i /tmp/felixtest-typha.tar
+      - docker tag felix-test/typha:latest-amd64 typha:latest-amd64
+      - rm /tmp/felixtest-typha.tar
       # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
       # routing in that first felix container chooses different source IPs than the tests are expecting.
       - sudo modprobe ipip
@@ -287,7 +350,7 @@ blocks:
         minutes: 120
       commands:
       - make check-wireguard
-      - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+      - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
       parallelism: 3
     epilogue:
       always:
@@ -298,8 +361,8 @@ blocks:
 
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
@@ -330,8 +393,8 @@ blocks:
 
 - name: "confd: tests"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/confd/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/confd/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
@@ -341,12 +404,12 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-        - make ci
+        - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: "Node: Tests"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     agent:
       machine:
@@ -358,10 +421,10 @@ blocks:
     jobs:
     - name: "Node: CI"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor ci.log make ci
     - name: "Node: k8s-test"
       commands:
-      - make k8s-test
+      - ../.semaphore/run-and-monitor k8s-test.log make k8s-test
     epilogue:
       always:
         commands:
@@ -370,8 +433,8 @@ blocks:
 
 - name: "Node: build all architectures"
   run:
-    when: "change_in(['/felix/', '/confd/', '/node/'])"
-  dependencies: []
+    when: "false or change_in(['/felix/', '/confd/', '/node/'])"
+  dependencies: ["Prerequisites"]
   task:
     agent:
       machine:
@@ -387,15 +450,15 @@ blocks:
       - env_var: ARCH
         values: [ "arm64", "armv7", "ppc64le" ]
       commands:
-      - make image ARCH=$ARCH
+      - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
     - name: "Build Windows archive"
       commands:
-      - make build-windows-archive
+      - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
 
 - name: "e2e tests"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     agent:
       machine:
@@ -407,12 +470,12 @@ blocks:
       - name: E2E_FOCUS
         value: "sig-network.*Conformance"
       commands:
-      - make e2e-test
+      - .semaphore/run-and-monitor e2e-test.log make e2e-test
 
 - name: "kube-controllers: Tests"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
@@ -420,12 +483,12 @@ blocks:
     jobs:
     - name: "kube-controllers: tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: "pod2daemon"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/pod2daemon/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/pod2daemon/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
@@ -433,12 +496,12 @@ blocks:
     jobs:
     - name: "pod2daemon tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: "app-policy"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/app-policy/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/app-policy/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
@@ -446,12 +509,12 @@ blocks:
     jobs:
     - name: "app-policy tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: "calicoctl"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/calicoctl/', '/libcalico-go/', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/calicoctl/', '/libcalico-go/', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
@@ -459,12 +522,12 @@ blocks:
     jobs:
     - name: "calicoctl tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: "cni-plugin: Windows"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     secrets:
     - name: banzai-secrets
@@ -485,7 +548,7 @@ blocks:
       - sudo apt-get install -y putty-tools
       - git clone git@github.com:tigera/process.git ~/process
       - cd cni-plugin
-      - make bin/windows/calico.exe && make bin/windows/calico-ipam.exe && make bin/windows/win-fv.exe
+      - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
     epilogue:
       always:
         commands:
@@ -511,7 +574,7 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-      - ./.semaphore/run-win-fv.sh
+      - ../.semaphore/run-and-monitor win-fv-docker.log ./.semaphore/run-win-fv.sh
       env_vars:
       - name: CONTAINER_RUNTIME
         value: docker
@@ -519,7 +582,7 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-      - ./.semaphore/run-win-fv.sh
+      - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
       env_vars:
       - name: CONTAINER_RUNTIME
         value: containerd
@@ -528,8 +591,8 @@ blocks:
 
 - name: "cni-plugin"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
@@ -537,23 +600,22 @@ blocks:
     jobs:
     - name: "cni-plugin tests"
       commands:
-      - make ci
+      - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: 'networking-calico'
   run:
-    when: "change_in(['/networking-calico/'])"
-  dependencies: []
+    when: "false or change_in(['/networking-calico/'])"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
-      - checkout
       - cd networking-calico
       - sudo apt-get install -y python-all-dev python3-all-dev python3-pip
       - sudo pip3 install tox
     jobs:
       - name: 'Unit and FV tests (tox)'
         commands:
-          - tox
+          - ../.semaphore/run-and-monitor tox.log tox
       # TODO: Re-enable
       # - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
       #   commands:
@@ -575,8 +637,8 @@ blocks:
 
 - name: "Documentation"
   run:
-    when: "branch =~ '.*' or change_in(['/*', '/calico/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
+    when: "false or change_in(['/*', '/calico/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
   task:
     prologue:
       commands:
@@ -584,9 +646,9 @@ blocks:
     jobs:
     - name: "htmlproofer, kubeval, and helm tests"
       commands:
-      - make htmlproofer
-      - make kubeval
-      - make helm-tests
+      - ../.semaphore/run-and-monitor htmlproofer.log make htmlproofer
+      - ../.semaphore/run-and-monitor kubeval.log make kubeval
+      - ../.semaphore/run-and-monitor helm-tests.log make helm-tests
 
 after_pipeline:
   task:

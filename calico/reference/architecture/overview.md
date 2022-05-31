@@ -84,8 +84,7 @@ Confd dynamically generates BIRD configuration files based on the updates to dat
 
 **Main task**: Enforces network policy for Istio service mesh. Runs on a cluster as a sidecar proxy to Istio Envoy.
 
-(Optional) {{site.prodname}} enforces network policy for workloads at both the Linux kernel (using iptables, L3-L4), and at L3-L7 using a Envoy sidecar proxy called Dikastes, with cryptographic authentication of requests. Using multiple enforcement points establishes the identity of the remote endpoint based on multiple criteria. The host Linux kernel enforcement protects your workloads even if the workload pod is compromised, and the Envoy proxy is bypassed. [Dikastes]({{site.baseurl}}/reference/dikastes/configuration), and {% include open-new-window.html text='Istio docs' url='https://istio.io/latest/docs/setup/install/' %}.
-
+(Optional) {{site.prodname}} enforces network policy for workloads at both the Linux kernel (using iptables, L3-L4), and at L3-L7 using a Envoy sidecar proxy called Dikastes, with cryptographic authentication of requests. Using multiple enforcement points establishes the identity of the remote endpoint based on multiple criteria. The host Linux kernel enforcement protects your workloads even if the workload pod is compromised, and the Envoy proxy is bypassed.
 
 ### CNI plugin
 

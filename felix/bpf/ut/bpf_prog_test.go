@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -47,15 +48,24 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
+var canTestMarks bool
+
 func init() {
 	logutils.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
+
+	fd := environment.NewFeatureDetector(make(map[string]string))
+	if ok, err := fd.KernelIsAtLeast("5.9.0"); err == nil && ok {
+		canTestMarks = true
+	}
 }
 
 // Constants that are shared with the UT binaries that we build.
@@ -74,11 +84,12 @@ var (
 			}},
 		}},
 	}
-	node1ip   = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
-	node2ip   = net.IPv4(10, 10, 0, 2).To4()
-	intfIP    = net.IPv4(10, 10, 0, 3).To4()
-	node1CIDR = net.IPNet{
+	node1ip    = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2   = net.IPv4(10, 10, 2, 1).To4()
+	node1tunIP = net.IPv4(11, 11, 0, 1).To4()
+	node2ip    = net.IPv4(10, 10, 0, 2).To4()
+	intfIP     = net.IPv4(10, 10, 0, 3).To4()
+	node1CIDR  = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
@@ -131,7 +142,19 @@ var retvalToStrXDP = map[int]string{
 	resXDP_DROP:    "XDP_DROP",
 }
 
+func expectMark(expect int) {
+	if canTestMarks {
+		ExpectWithOffset(1, skbMark).To(Equal(uint32(expect)),
+			fmt.Sprintf("skbMark 0x%08x should be 0x%08x at %s", skbMark, expect, caller(2)))
+	} else {
+		// If we cannot verify the mark, set it to the expected value as the
+		// next stage expects it to be set.
+		skbMark = uint32(expect)
+	}
+}
+
 func TestCompileTemplateRun(t *testing.T) {
+	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_workload_ep", &polprog.Rules{}, func(bpfrun bpfProgRunFn) {
 		_, _, _, _, pktBytes, err := testPacketUDPDefault()
 		Expect(err).NotTo(HaveOccurred())
@@ -175,11 +198,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	maps := make([]bpf.Map, len(progMaps))
 	copy(maps, progMaps)
 
-outter:
+outer:
 	for _, m := range topts.extraMaps {
 		for i := range maps {
 			if maps[i].Path() == m.Path() {
-				continue outter
+				continue outer
 			}
 		}
 		maps = append(maps, m)
@@ -238,7 +261,13 @@ outter:
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
+	// XXX for now we both path the mark here and include it in the context as
+	// well. This needs to be done for as long as we want to run the tests on
+	// older kernels.
 	bin.PatchSkbMark(skbMark)
+	err = bin.PatchHostTunnelIPv4(node1tunIP)
+	Expect(err).NotTo(HaveOccurred())
+	bin.PatchExtToServiceConnmark(0)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -258,14 +287,20 @@ outter:
 
 	if rules != nil {
 		alloc := &forceAllocator{alloc: idalloc.New()}
-		pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
+		ipsMapFD := ipsMap.MapFD()
+		Expect(ipsMapFD).NotTo(BeZero())
+		stateMapFD := stateMap.MapFD()
+		Expect(stateMapFD).NotTo(BeZero())
+		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD())
 		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
-		polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+		var polProgFD bpf.ProgFD
 		if topts.xdp {
 			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_XDP)
+		} else {
+			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 		}
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
 		defer func() { _ = polProgFD.Close() }()
 		progFDBytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
@@ -276,20 +311,65 @@ outter:
 	runFn(bpfFsDir + "/" + section)
 }
 
+func caller(skip int) string {
+	_, f, l, ok := runtime.Caller(skip)
+	if ok {
+		return fmt.Sprintf("%s:%d", f, l)
+	}
+
+	return "<unknown>"
+}
+
 // runBpfTest runs a specific section of the entire bpf program in isolation
 func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
+	xdp := false
 	if strings.Contains(section, "xdp") == false {
 		section = "classifier_" + section
+	} else {
+		xdp = true
 	}
+
+	ctxIn := make([]byte, 18*4)
+	binary.LittleEndian.PutUint32(ctxIn[2*4:3*4], skbMark)
+	if xdp {
+		// XDP tests cannot take context and would fail.
+		ctxIn = nil
+	}
+
+	topts := testOpts{}
+
+	for _, o := range opts {
+		o(&topts)
+	}
+
+	cllr := caller(2)
+
 	setupAndRun(t, "debug", section, rules, func(progName string) {
 		t.Run(section, func(_ *testing.T) {
+			if strings.Contains(section, "calico_from_") {
+				ExpectWithOffset(2, skbMark).To(Equal(uint32(0)),
+					fmt.Sprintf("skb mark 0x%08x should be zero at %s", skbMark, cllr))
+			}
+			if !topts.hostNetworked && strings.Contains(section, "calico_to_") {
+				ExpectWithOffset(2, skbMark&uint32(tcdefs.MarkSeen) != 0).
+					To(BeTrue(), fmt.Sprintf("skb mark 0x%08x does not have tcdefs.MarkSeen 0x%08x set before tc at %s",
+						skbMark, tcdefs.MarkSeen, cllr))
+			}
+
 			testFn(func(dataIn []byte) (bpfRunResult, error) {
-				res, err := bpftoolProgRun(progName, dataIn)
+				res, err := bpftoolProgRun(progName, dataIn, ctxIn)
 				log.Debugf("dataIn  = %+v", dataIn)
 				if err == nil {
 					log.Debugf("dataOut = %+v", res.dataOut)
 				}
+
+				if res.Retval != resTC_ACT_SHOT && canTestMarks && strings.Contains(section, "calico_from_") {
+					ExpectWithOffset(3, skbMark&uint32(tcdefs.MarkSeen) != 0).
+						To(BeTrue(), fmt.Sprintf("skb mark 0x%08x does not have tcdefs.MarkSeen 0x%08x set after tc at %s",
+							skbMark, tcdefs.MarkSeen, cllr))
+				}
+
 				return res, err
 			})
 		})
@@ -433,10 +513,24 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 				return errors.Wrap(err, "failed to update jump map (policy program)")
 			}
 		}
+		if !forXDP {
+			polProgPathv6 := path.Join(bpfFsDir, "classifier_tc_policy_v6")
+			_, err = os.Stat(polProgPathv6)
+			if err == nil {
+				_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0", "value", "pinned", polProgPathv6)
+				if err != nil {
+					return errors.Wrap(err, "failed to update jump map (policy_v6 program)")
+				}
+			}
+		}
 	} else {
 		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0")
 		if err != nil {
 			log.WithError(err).Info("failed to update jump map (deleting policy program)")
+		}
+		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0")
+		if err != nil {
+			log.WithError(err).Info("failed to update jump map (deleting policy_v6 program)")
 		}
 	}
 	polProgPath := "1_1"
@@ -453,10 +547,25 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
-
 		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "3", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (drop program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (prologue_v6)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "6", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_accept_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (accept_v6 program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "7", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (icmp_v6 program)")
+		}
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "8", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop_v6"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (drop_v6 program)")
 		}
 	}
 
@@ -485,11 +594,11 @@ func (r bpfRunResult) RetvalStrXDP() string {
 	return s
 }
 
-func bpftoolProgRun(progName string, dataIn []byte) (bpfRunResult, error) {
-	return bpftoolProgRunN(progName, dataIn, 1)
+func bpftoolProgRun(progName string, dataIn, ctxIn []byte) (bpfRunResult, error) {
+	return bpftoolProgRunN(progName, dataIn, ctxIn, 1)
 }
 
-func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error) {
+func bpftoolProgRunN(progName string, dataIn, ctxIn []byte, N int) (bpfRunResult, error) {
 	var res bpfRunResult
 
 	tempDir, err := ioutil.TempDir("", "bpftool-data-")
@@ -500,11 +609,23 @@ func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error
 	dataInFname := tempDir + "/data_in"
 	dataOutFname := tempDir + "/data_out"
 
+	ctxInFname := tempDir + "/ctx_in"
+	ctxOutFname := tempDir + "/ctx_out"
+
 	if err := ioutil.WriteFile(dataInFname, dataIn, 0644); err != nil {
 		return res, errors.Errorf("failed to write input data in file: %s", err)
 	}
 
+	if ctxIn != nil {
+		if err := ioutil.WriteFile(ctxInFname, ctxIn, 0644); err != nil {
+			return res, errors.Errorf("failed to write input ctx in file: %s", err)
+		}
+	}
+
 	args := []string{"prog", "run", "pinned", progName, "data_in", dataInFname, "data_out", dataOutFname}
+	if ctxIn != nil {
+		args = append(args, "ctx_in", ctxInFname, "ctx_out", ctxOutFname)
+	}
 	if N > 1 {
 		args = append(args, "repeat", fmt.Sprintf("%d", N))
 	}
@@ -521,6 +642,14 @@ func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error
 	res.dataOut, err = ioutil.ReadFile(dataOutFname)
 	if err != nil {
 		return res, errors.Errorf("failed to read output data from file: %s", err)
+	}
+
+	if ctxIn != nil {
+		ctxOut, err := ioutil.ReadFile(ctxOutFname)
+		if err != nil {
+			return res, errors.Errorf("failed to read output ctx from file: %s", err)
+		}
+		skbMark = binary.LittleEndian.Uint32(ctxOut[2*4 : 3*4])
 	}
 
 	return res, nil
@@ -551,11 +680,11 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 	maps := make([]bpf.Map, len(progMaps))
 	copy(maps, progMaps)
 
-outter:
+outer:
 	for _, m := range topts.extraMaps {
 		for i := range maps {
 			if maps[i].Path() == m.Path() {
-				continue outter
+				continue outer
 			}
 		}
 		maps = append(maps, m)
@@ -583,6 +712,7 @@ outter:
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
+	bin.PatchExtToServiceConnmark(0)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -590,9 +720,11 @@ outter:
 	err = bpftoolProgLoadAll(tempObj, bpfFsDir, false, true, maps...)
 	Expect(err).NotTo(HaveOccurred())
 
+	ctxIn := make([]byte, 18*4)
+
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
-			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn)
+			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn, ctxIn)
 			log.Debugf("dataIn  = %+v", dataIn)
 			if err == nil {
 				log.Debugf("dataOut = %+v", res.dataOut)
@@ -611,12 +743,13 @@ outter:
 }
 
 type testOpts struct {
-	subtests  bool
-	logLevel  log.Level
-	extraMaps []bpf.Map
-	xdp       bool
-	psnaStart uint32
-	psnatEnd  uint32
+	subtests      bool
+	logLevel      log.Level
+	extraMaps     []bpf.Map
+	xdp           bool
+	psnaStart     uint32
+	psnatEnd      uint32
+	hostNetworked bool
 }
 
 type testOption func(opts *testOpts)
@@ -653,6 +786,12 @@ func withPSNATPorts(start, end uint16) testOption {
 	return func(o *testOpts) {
 		o.psnaStart = uint32(start)
 		o.psnatEnd = uint32(end)
+	}
+}
+
+func withHostNetworked() testOption {
+	return func(o *testOpts) {
+		o.hostNetworked = true
 	}
 }
 
@@ -826,12 +965,6 @@ var ethDefault = &layers.Ethernet{
 	EthernetType: layers.EthernetTypeIPv4,
 }
 
-var ethDefaultWithIPv6 = &layers.Ethernet{
-	SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
-	DstMAC:       []byte{0, 0, 0, 0, 0, 2},
-	EthernetType: layers.EthernetTypeIPv6,
-}
-
 var payloadDefault = []byte("ABCDEABCDEXXXXXXXXXXXX")
 
 var srcIP = net.IPv4(1, 1, 1, 1)
@@ -864,189 +997,163 @@ var udpDefault = &layers.UDP{
 	DstPort: 5678,
 }
 
-func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.Layer, payloadAlt []byte) (
+func testPacket(eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket.Layer, payload []byte) (
 	*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
-	eth, ipv4, _, l4, bytes, payload, err := testPacket46(ethAlt, ipv4Alt, nil, l4Alt, payloadAlt, false)
-	return eth, ipv4, l4, bytes, payload, err
+	pkt := Packet{
+		eth:     eth,
+		l3:      l3,
+		l4:      l4,
+		payload: payload,
+	}
+	err := pkt.Generate()
+	return pkt.eth, pkt.ipv4, pkt.l4, pkt.payload, pkt.bytes, err
 }
 
-func testPacketv6(ethAlt *layers.Ethernet, ipv6Alt *layers.IPv6, l4Alt gopacket.Layer, payloadAlt []byte) (
-	*layers.Ethernet, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
-	eth, _, ipv6, l4, bytes, payload, err := testPacket46(ethAlt, nil, ipv6Alt, l4Alt, payloadAlt, true)
-	return eth, ipv6, l4, bytes, payload, err
+type Packet struct {
+	eth        *layers.Ethernet
+	l3         gopacket.Layer
+	ipv4       *layers.IPv4
+	ipv6       *layers.IPv6
+	l4         gopacket.Layer
+	udp        *layers.UDP
+	tcp        *layers.TCP
+	icmp       *layers.ICMPv4
+	icmpv6     *layers.ICMPv6
+	payload    []byte
+	bytes      []byte
+	layers     []gopacket.SerializableLayer
+	length     int
+	l4Protocol layers.IPProtocol
+	l3Protocol layers.EthernetType
 }
 
-func testPacket46(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, ipv6Alt *layers.IPv6, l4Alt gopacket.Layer, payloadAlt []byte, ipv6Enabled bool) (
-	*layers.Ethernet, *layers.IPv4, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
-
-	var (
-		eth     *layers.Ethernet
-		ipv4    *layers.IPv4
-		ipv6    *layers.IPv6
-		payload []byte
-	)
-
-	if ethAlt != nil {
-		eth = ethAlt
-	} else {
-		if ipv6Enabled {
-			eth = ethDefaultWithIPv6
-		} else {
-			eth = ethDefault
-		}
+func (pkt *Packet) handlePayload() {
+	if pkt.payload == nil {
+		pkt.payload = payloadDefault
 	}
-
-	if ipv6Enabled {
-		if ipv6Alt != nil {
-			ipv6 = ipv6Alt
-		} else {
-			// Make a copy so that we do not mangle the default if we set the
-			// protocol below.
-			ipv6 = new(layers.IPv6)
-			*ipv6 = *ipv6Default
-		}
-	} else {
-		if ipv4Alt != nil {
-			ipv4 = ipv4Alt
-		} else {
-			// Make a copy so that we do not mangle the default if we set the
-			// protocol below.
-			ipv4 = new(layers.IPv4)
-			*ipv4 = *ipv4Default
-		}
-	}
-
-	if l4Alt == nil {
-		l4Alt = udpDefault
-	}
-
-	if payloadAlt != nil {
-		payload = payloadAlt
-	} else {
-		payload = payloadDefault
-	}
-
-	return generatePacket(eth, ipv4, ipv6, l4Alt, payload, ipv6Enabled)
-
+	pkt.length = len(pkt.payload)
+	pkt.layers = []gopacket.SerializableLayer{gopacket.Payload(pkt.payload)}
 }
 
-func generatePacket(eth *layers.Ethernet, ipv4 *layers.IPv4, ipv6 *layers.IPv6, l4 gopacket.Layer, payload []byte, ipv6Enabled bool) (
-	*layers.Ethernet, *layers.IPv4, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
-	var (
-		udp    *layers.UDP
-		tcp    *layers.TCP
-		icmp   *layers.ICMPv4
-		icmpv6 *layers.ICMPv6
-	)
-
-	if l4 != nil {
-		switch v := l4.(type) {
-		case *layers.UDP:
-			udp = v
-			if ipv6Enabled {
-				ipv6.NextHeader = layers.IPProtocolUDP
-			} else {
-				ipv4.Protocol = layers.IPProtocolUDP
-			}
-		case *layers.TCP:
-			tcp = v
-			if ipv6Enabled {
-				ipv6.NextHeader = layers.IPProtocolTCP
-			} else {
-				ipv4.Protocol = layers.IPProtocolTCP
-			}
-		case *layers.ICMPv4:
-			icmp = v
-			ipv4.Protocol = layers.IPProtocolICMPv4
-		case *layers.ICMPv6:
-			icmpv6 = v
-			ipv6.NextHeader = layers.IPProtocolICMPv6
-		default:
-			return nil, nil, nil, nil, nil, nil, errors.Errorf("unrecognized l4 layer type %t", l4)
-		}
+func (pkt *Packet) handleL4() error {
+	if pkt.l4 == nil {
+		pkt.l4 = udpDefault
 	}
 
-	switch {
-	case udp != nil:
-		if ipv6Enabled {
-			ipv6.Length = uint16(8 + len(payload))
-			_ = udp.SetNetworkLayerForChecksum(ipv6)
-			udp.Length = uint16(8 + len(payload))
-
-			pkt := gopacket.NewSerializeBuffer()
-			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-				eth, ipv6, udp, gopacket.Payload(payload))
-			return eth, nil, ipv6, udp, payload, pkt.Bytes(), err
-		} else {
-			ipv4.Length = uint16(5*4 + 8 + len(payload))
-			_ = udp.SetNetworkLayerForChecksum(ipv4)
-			udp.Length = uint16(8 + len(payload))
-
-			pkt := gopacket.NewSerializeBuffer()
-			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-				eth, ipv4, udp, gopacket.Payload(payload))
-			return eth, ipv4, nil, udp, payload, pkt.Bytes(), err
-		}
-	case tcp != nil:
-		if tcp == nil {
-			return nil, nil, nil, nil, nil, nil, errors.Errorf("tcp default not implemented yet")
-		}
-		if ipv6Enabled {
-			ipv6.Length = uint16(8 + len(payload))
-			_ = tcp.SetNetworkLayerForChecksum(ipv6)
-
-			pkt := gopacket.NewSerializeBuffer()
-			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-				eth, ipv6, tcp, gopacket.Payload(payload))
-
-			return eth, nil, ipv6, tcp, payload, pkt.Bytes(), err
-
-		} else {
-			ipv4.Length = uint16(5*4 + 8 + len(payload))
-			_ = tcp.SetNetworkLayerForChecksum(ipv4)
-
-			pkt := gopacket.NewSerializeBuffer()
-			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-				eth, ipv4, tcp, gopacket.Payload(payload))
-
-			return eth, ipv4, nil, tcp, payload, pkt.Bytes(), err
-		}
-	case icmp != nil:
-		ipv4.Length = uint16(5*4 + 8 + len(payload))
-
-		pkt := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-			eth, ipv4, icmp, gopacket.Payload(payload))
-
-		return eth, ipv4, nil, icmp, payload, pkt.Bytes(), err
-	case icmpv6 != nil:
-		ipv6.Length = uint16(8 + len(payload))
-
-		pkt := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-			eth, ipv6, icmp, gopacket.Payload(payload))
-
-		return eth, nil, ipv6, icmp, payload, pkt.Bytes(), err
+	switch v := pkt.l4.(type) {
+	case *layers.UDP:
+		pkt.udp = v
+		pkt.length += 8
+		pkt.udp.Length = uint16(pkt.length)
+		pkt.l4Protocol = layers.IPProtocolUDP
+		pkt.layers = append(pkt.layers, pkt.udp)
+	case *layers.TCP:
+		pkt.tcp = v
+		pkt.length += 20
+		pkt.l4Protocol = layers.IPProtocolTCP
+		pkt.layers = append(pkt.layers, pkt.tcp)
+	case *layers.ICMPv4:
+		pkt.icmp = v
+		pkt.length += 8
+		pkt.l4Protocol = layers.IPProtocolICMPv4
+		pkt.layers = append(pkt.layers, pkt.icmp)
+	case *layers.ICMPv6:
+		pkt.icmpv6 = v
+		pkt.length += 8
+		pkt.l4Protocol = layers.IPProtocolICMPv6
+		pkt.layers = append(pkt.layers, pkt.icmpv6)
 	default:
-		if ipv6Enabled {
-			ipv6.Length = uint16(8 + len(payload))
+		return errors.Errorf("unrecognized l4 layer type %t", pkt.l4)
+	}
+	return nil
+}
 
-			pkt := gopacket.NewSerializeBuffer()
-			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-				eth, ipv6, gopacket.Payload(payload))
+func (pkt *Packet) handleL3() error {
+	if pkt.l3 == nil {
+		pkt.l3 = ipv4Default
+	}
 
-			return eth, nil, ipv6, nil, payload, pkt.Bytes(), err
+	switch v := pkt.l3.(type) {
+	case *layers.IPv4:
+		pkt.ipv4 = v
+		pkt.length += 5 * 4
+		pkt.l3Protocol = layers.EthernetTypeIPv4
+		pkt.ipv4.Protocol = pkt.l4Protocol
+		pkt.ipv4.Length = uint16(pkt.length)
+		pkt.layers = append(pkt.layers, pkt.ipv4)
+	case *layers.IPv6:
+		pkt.ipv6 = v
+		pkt.l3Protocol = layers.EthernetTypeIPv6
+		pkt.ipv6.NextHeader = pkt.l4Protocol
+		pkt.ipv6.Length = uint16(pkt.length)
+		pkt.layers = append(pkt.layers, pkt.ipv6)
+	default:
+		return errors.Errorf("unrecognized l3 layer type %t", pkt.l3)
+	}
+	return nil
+}
+
+func (pkt *Packet) handleEthernet() {
+	if pkt.eth == nil {
+		pkt.eth = ethDefault
+	}
+	pkt.eth.EthernetType = pkt.l3Protocol
+	pkt.layers = append(pkt.layers, pkt.eth)
+}
+
+func (pkt *Packet) setChecksum() {
+	switch pkt.l4Protocol {
+	case layers.IPProtocolUDP:
+		if pkt.l3Protocol == layers.EthernetTypeIPv6 {
+			_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv6)
 		} else {
-			ipv4.Length = uint16(5*4 + 8 + len(payload))
-
-			pkt := gopacket.NewSerializeBuffer()
-			err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-				eth, ipv4, gopacket.Payload(payload))
-
-			return eth, ipv4, nil, nil, payload, pkt.Bytes(), err
-
+			_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv4)
+		}
+	case layers.IPProtocolTCP:
+		if pkt.l3Protocol == layers.EthernetTypeIPv6 {
+			_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv6)
+		} else {
+			_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv4)
 		}
 	}
+}
+
+func (pkt *Packet) Generate() error {
+	pkt.handlePayload()
+	err := pkt.handleL4()
+	if err != nil {
+		return err
+	}
+
+	err = pkt.handleL3()
+	if err != nil {
+		return err
+	}
+
+	pkt.handleEthernet()
+	pkt.setChecksum()
+	pkt.bytes, err = generatePacket(pkt.layers)
+	return err
+}
+
+func generatePacket(layers []gopacket.SerializableLayer) ([]byte, error) {
+	pkt := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to init packet buffer: %w", err)
+	}
+
+	for i, layer := range layers {
+		log.Infof("Layer %d: %v", i, layer)
+		if layer == nil {
+			continue
+		}
+		err = layer.SerializeTo(pkt, gopacket.SerializeOptions{ComputeChecksums: true})
+		if err != nil {
+			return nil, fmt.Errorf("Failed to serialize packet: %w", err)
+		}
+	}
+	return pkt.Bytes(), nil
 }
 
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
@@ -1068,6 +1175,8 @@ func resetBPFMaps() {
 	resetCTMap(ctMap)
 	resetRTMap(rtMap)
 	resetMap(fsafeMap)
+	resetMap(natMap)
+	resetMap(natBEMap)
 }
 
 func TestMapIterWithDelete(t *testing.T) {

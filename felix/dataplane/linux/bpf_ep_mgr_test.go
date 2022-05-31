@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -197,6 +198,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			nil,
 			logutils.NewSummarizer("test"),
 		)
+		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
 		bpfEpMgr.dp = dp
 	})
 
@@ -458,6 +460,17 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			Context("with eth0 down", func() {
 				JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateDown, 10))
+
+				It("clears host endpoint for eth0", func() {
+					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
+					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+						Tier: "default",
+						Name: "mypolicy",
+					}]).NotTo(HaveKey("eth0"))
+				})
+			})
+			Context("with eth0 deleted", func() {
+				JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateNotPresent, 10))
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())

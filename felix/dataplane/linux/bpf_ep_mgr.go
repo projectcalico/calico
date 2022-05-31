@@ -38,6 +38,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -174,6 +175,15 @@ type bpfEndpointManager struct {
 
 	// IPv6 Support
 	ipv6Enabled bool
+
+	// IP of the tunnel / overlay device
+	tunnelIP net.IP
+
+	// Detected features
+	Features *environment.Features
+
+	// RPF mode
+	rpfStrictModeEnabled string
 }
 
 type bpfAllowChainRenderer interface {
@@ -230,7 +240,8 @@ func newBPFEndpointManager(
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
-		ipv6Enabled: config.BPFIpv6Enabled,
+		ipv6Enabled:          config.BPFIpv6Enabled,
+		rpfStrictModeEnabled: config.BPFEnforceRPF,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -328,6 +339,21 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IP, no change applied")
 			}
 		}
+	case *proto.RouteUpdate:
+		m.onRouteUpdate(msg)
+	}
+}
+
+func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
+	if update.Type == proto.RouteType_LOCAL_TUNNEL {
+		ip, _, err := net.ParseCIDR(update.Dst)
+		if err != nil {
+			log.WithField("local tunnel cird", update.Dst).WithError(err).Warn("not parsable")
+			return
+		}
+		m.tunnelIP = ip
+		log.WithField("ip", update.Dst).Info("host tunnel")
+		m.dirtyIfaceNames.Add("bpfnatout")
 	}
 }
 
@@ -373,7 +399,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
-	if update.State == ifacemonitor.StateUnknown {
+	if update.State == ifacemonitor.StateNotPresent {
 		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
 			log.WithError(err).Errorf("Error in removing interface %s json file. err=%v", update.Name, err)
 		}
@@ -631,7 +657,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	errs := map[string]error{}
 	var wg sync.WaitGroup
 
-	// Limit the number of parallel workers.  Without this, all the workers vie for CPU and complete slowly.
+	// Limit the number of parallel workers.  Without this, all the workers via for CPU and complete slowly.
 	// On a constrained system, we can end up taking too long and going non-ready.
 	maxWorkers := runtime.GOMAXPROCS(0)
 	sem := semaphore.NewWeighted(int64(maxWorkers))
@@ -805,12 +831,9 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	// Host side of the veth is always configured as 169.254.1.1.
 	ap.HostIP = calicoRouterIP
-	// * VXLAN MTU should be the host ifaces MTU -50, in order to allow space for VXLAN.
-	// * We also expect that to be the MTU used on veths.
-	// * We do encap on the veths, and there's a bogus kernel MTU check in the BPF helper
-	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
-	//   when we cannot encap the packet - non-GSO & too close to veth MTU
-	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
+	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
+	// * Hence it is safe to set the tunnel mtu same as veth mtu
+	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.IntfIP = calicoRouterIP
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 
@@ -967,7 +990,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	} else if ifaceName == "tunl0" {
 		endpointType = tc.EpTypeTunnel
 	} else if ifaceName == "wireguard.cali" {
-		endpointType = tc.EpTypeWireguard
+		endpointType = tc.EpTypeL3Device
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
 	} else {
@@ -1009,7 +1032,12 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
+	ap.RPFStrictEnabled = false
+	if m.rpfStrictModeEnabled == "Strict" {
+		ap.RPFStrictEnabled = true
+	}
 
+	ap.Features = *m.Features
 	return ap
 }
 
