@@ -1,4 +1,4 @@
-// Copyright (c) 2018,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ var version = flagSet.Bool("v", false, "Display version")
 var runFelix = flagSet.Bool("felix", false, "Run Felix")
 var runBPF = flagSet.Bool("bpf", false, "Run BPF debug tool")
 var runInit = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
+var bestEffort = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occures during initialisation.")
 var runStartup = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
 var runWinUpgrade = flagSet.Bool("upgrade-windows", false, "Run Windows upgrade service.")
 var runShouldInstallWindowsUpgrade = flagSet.Bool("should-install-windows-upgrade", false, "Check if Windows upgrade service should be installed.")
@@ -136,7 +137,10 @@ func main() {
 		bpf.RunBPFCmd()
 	} else if *runInit {
 		logrus.SetFormatter(&logutils.Formatter{Component: "init"})
-		nodeinit.Run()
+		if *bestEffort {
+			logrus.SetFormatter(&logutils.Formatter{Component: "init-best-effort"})
+		}
+		nodeinit.Run(*bestEffort)
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
