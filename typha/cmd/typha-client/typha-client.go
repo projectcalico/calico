@@ -15,17 +15,16 @@
 package main
 
 import (
+	"context"
 	"os"
+	"runtime"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	"math/rand"
-	"runtime"
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 
 	"github.com/docopt/docopt-go"
-
-	"context"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/typha/pkg/buildinfo"
@@ -74,7 +73,7 @@ func (s *syncerCallbacks) OnUpdates(updates []api.Update) {
 
 func main() {
 	// Go's RNG is not seeded by default.  Do that now.
-	rand.Seed(time.Now().UTC().UnixNano())
+	seedrng.EnsureSeeded()
 
 	// Set up logging.
 	logutils.ConfigureEarlyLogging()

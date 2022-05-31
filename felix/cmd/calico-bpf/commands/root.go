@@ -20,6 +20,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
@@ -35,6 +37,9 @@ var rootCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	// Make sure the RNG is seeded.
+	seedrng.EnsureSeeded()
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
