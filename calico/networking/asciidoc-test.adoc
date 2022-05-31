@@ -1,0 +1,38 @@
+---
+title: Asciidoc test
+canonical_url: '/networking/asciidoc'
+description: Testing a plugin that lets Jekyll read Asciidoc
+show_read_time: false
+show_toc:
+---
+
+= Asciidoc test
+
+Here is a sentence.
+And another.
+
+[code, ]
+
+== H2 heading
+
+.A list of things
+* List item
+** Nested list item
+*** Nested list item
+* List item
+ ** Another nested list item
+* List item
+
+.A procedure
+. Step 1
+. Step 2
+.. Step 2a
+.. Step 2b
+. Step 3
+
+.An exciting code block
+[source, python]
+----
+print('Hello, World!')
+----
+
