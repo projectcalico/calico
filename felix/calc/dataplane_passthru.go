@@ -16,10 +16,12 @@ package calc
 
 import (
 	log "github.com/sirupsen/logrus"
+	kapiv1 "k8s.io/api/core/v1"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -93,9 +95,27 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			log.WithField("update", update).Debug("Passing through global BGPConfiguration")
 			bgpConfig, _ := update.Value.(*v3.BGPConfiguration)
 			h.callbacks.OnGlobalBGPConfigUpdate(bgpConfig)
+		} else if key.Kind == model.KindKubernetesService {
+			log.WithField("update", update).Debug("Passing through a Service")
+			if update.Value == nil {
+				h.callbacks.OnServiceRemove(&proto.ServiceRemove{Name: key.Name, Namespace: key.Namespace})
+			} else {
+				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
+			}
 		} else {
-			log.WithField("key", key).Debug("Ignoring v3 resource other than global BGPConfiguration")
+			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
 		}
 	}
 	return
+}
+
+func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
+	return &proto.ServiceUpdate{
+		Name:           s.Name,
+		Namespace:      s.Namespace,
+		Type:           string(s.Spec.Type),
+		ClusterIp:      s.Spec.ClusterIP,
+		LoadbalancerIp: s.Spec.LoadBalancerIP,
+		ExternalIps:    s.Spec.ExternalIPs,
+	}
 }

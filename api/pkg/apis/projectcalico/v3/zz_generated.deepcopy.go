@@ -140,6 +140,11 @@ func (in *BGPConfigurationSpec) DeepCopyInto(out *BGPConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.BindMode != nil {
+		in, out := &in.BindMode, &out.BindMode
+		*out = new(BindMode)
+		**out = **in
+	}
 	return
 }
 
@@ -866,6 +871,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.VXLANMTUV6 != nil {
+		in, out := &in.VXLANMTUV6, &out.VXLANMTUV6
+		*out = new(int)
+		**out = **in
+	}
 	if in.VXLANPort != nil {
 		in, out := &in.VXLANPort, &out.VXLANPort
 		*out = new(int)
@@ -1169,6 +1179,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.AWSSrcDstCheck != nil {
 		in, out := &in.AWSSrcDstCheck, &out.AWSSrcDstCheck
 		*out = new(AWSSrcDstCheckOption)
+		**out = **in
+	}
+	if in.FloatingIPs != nil {
+		in, out := &in.FloatingIPs, &out.FloatingIPs
+		*out = new(FloatingIPType)
 		**out = **in
 	}
 	return

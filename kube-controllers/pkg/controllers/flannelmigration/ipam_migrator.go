@@ -40,6 +40,7 @@ const (
 	flannelNodeAnnotationKeyBackendType = "backend-type"
 	flannelNodeAnnotationKeyPublicIP    = "public-ip"
 	defaultIpv4PoolName                 = "default-ipv4-ippool"
+	defaultIpv6PoolName                 = "default-ipv6-ippool"
 	defaultFelixConfigurationName       = "default"
 )
 
@@ -78,11 +79,24 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 		return fmt.Errorf("Failed to parse the CIDR '%s'", m.config.FlannelNetwork)
 	}
 
+	var cidrV6 *cnet.IPNet
+	if m.config.FlannelIpv6Network != "" {
+		_, cidrV6, err = cnet.ParseCIDR(m.config.FlannelIpv6Network)
+		if err != nil {
+			return fmt.Errorf("Failed to parse the CIDR '%s'", m.config.FlannelIpv6Network)
+		}
+	}
+
 	// Based on FlannelSubnetLen, work out the size of ippool.
 	blockSize := m.config.DefaultIppoolSize
 	if m.config.FlannelSubnetLen > m.config.DefaultIppoolSize {
 		// Flannel subnet is smaller than one Calico IPAM block with default size of /26.
 		blockSize = m.config.FlannelSubnetLen
+	}
+	blockSizeV6 := m.config.DefaultIppoolSizeV6
+	if m.config.FlannelIpv6SubnetLen > m.config.DefaultIppoolSizeV6 {
+		// Flannel subnet is smaller than one Calico IPAM block with default size of /122.
+		blockSizeV6 = m.config.FlannelIpv6SubnetLen
 	}
 
 	// Canal creates default ippool and FelixConfigurations with no VXLAN.
@@ -90,18 +104,25 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 	// Instead, we need to update them to enable vxlan.
 	checkVxlan := !m.config.IsRunningCanal()
 
-	// Creating default ippool with vxlan enabled will also create a global felix configuration.
+	// Create default IPv4 ippool with VXLAN enabled
 	err = createDefaultVxlanIPPool(m.ctx, m.calicoClient, cidr, blockSize, m.config.FlannelIPMasq, checkVxlan)
 	if err != nil {
-		return fmt.Errorf("Failed to create default ippool")
+		return fmt.Errorf("Failed to create default IPv4 ippool")
 	}
 
-	// Update default Felix configuration with Flannel VNI and vxlan port.
-	err = updateDefaultFelixConfigurtion(m.ctx, m.calicoClient,
-		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU,
-		checkVxlan)
+	if cidrV6 != nil {
+		// Create default IPv6 ippool with vxlan enabled
+		err = createDefaultVxlanIPPool(m.ctx, m.calicoClient, cidrV6, blockSizeV6, m.config.FlannelIPMasq, checkVxlan)
+		if err != nil {
+			return fmt.Errorf("Failed to create default IPv6 ippool")
+		}
+	}
+
+	// Update or create default Felix configuration with Flannel VNI and vxlan port.
+	err = updateOrCreateDefaultFelixConfiguration(m.ctx, m.calicoClient,
+		m.config.FlannelVNI, m.config.FlannelPort, m.config.FlannelMTU)
 	if err != nil {
-		return fmt.Errorf("Failed to create default ippool")
+		return fmt.Errorf("Failed to create or update default FelixConfiguration")
 	}
 
 	return nil
@@ -274,9 +295,19 @@ func setupCalicoNodeVxlan(ctx context.Context, c client.Interface, nodeName stri
 // - if vxlan is disabled, delete default ippool and create new one.
 // - if vxlan is enabled, validate existing ippool.
 func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, blockSize int, isNATOutgoingEnabled, checkVxlan bool) error {
+	var poolName string
+	switch cidr.Version() {
+	case 4:
+		poolName = defaultIpv4PoolName
+	case 6:
+		poolName = defaultIpv6PoolName
+	default:
+		return fmt.Errorf("Unknown IP version for CIDR: %s", cidr.String())
+
+	}
 	pool := &api.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: defaultIpv4PoolName,
+			Name: poolName,
 		},
 		Spec: api.IPPoolSpec{
 			CIDR:        cidr.String(),
@@ -287,20 +318,20 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 		},
 	}
 
-	log.Infof("Ensure default IPv4 pool (cidr %s, blockSize %d, nat %t, vxlanMode %s).", cidr.String(), blockSize, isNATOutgoingEnabled, api.VXLANModeAlways)
+	log.Infof("Ensure default IPv%d pool (cidr %s, blockSize %d, nat %t, vxlanMode %s).", cidr.Version(), cidr.String(), blockSize, isNATOutgoingEnabled, api.VXLANModeAlways)
 
 	var defaultPool *api.IPPool
 	var err error
 	createPool := true
 	if !checkVxlan {
 		// Canal will always create a default ippool with vxlan disabled.
-		defaultPool, err = client.IPPools().Get(ctx, defaultIpv4PoolName, options.GetOptions{})
+		defaultPool, err = client.IPPools().Get(ctx, poolName, options.GetOptions{})
 		if err == nil {
 			if defaultPool.Spec.VXLANMode != api.VXLANModeAlways {
 				// ippool is created by Canal. Delete it
-				_, err := client.IPPools().Delete(ctx, defaultIpv4PoolName, options.DeleteOptions{})
+				_, err := client.IPPools().Delete(ctx, poolName, options.DeleteOptions{})
 				if err != nil {
-					log.WithError(err).Errorf("Failed to delete existing default IPv4 IP pool")
+					log.WithError(err).Errorf("Failed to delete existing default IPv%d IP pool", cidr.Version())
 					return err
 				}
 			} else {
@@ -309,10 +340,10 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 			}
 		} else {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				log.WithError(err).Errorf("Failed to get default IPv4 pool for Canal")
+				log.WithError(err).Errorf("Failed to get default IPv%d pool for Canal", cidr.Version())
 				return err
 			}
-			log.WithError(err).Warnf("Default IPv4 pool for Canal not exists")
+			log.WithError(err).Warnf("Default IPv%d pool for Canal not exists", cidr.Version())
 		}
 	}
 
@@ -321,19 +352,19 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 		// Validate if pool already exists.
 		_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
 		if err == nil {
-			log.Info("Created default IPv4 pool.")
+			log.Infof("Created default IPv%d pool.", cidr.Version())
 			return nil
 		}
 
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
-			log.WithError(err).Errorf("Failed to create default IPv4 pool (%s)", cidr.String())
+			log.WithError(err).Errorf("Failed to create default IPv%d pool (%s)", cidr.Version(), cidr.String())
 			return err
 		}
 
 		// Default pool exists.
-		defaultPool, err = client.IPPools().Get(ctx, defaultIpv4PoolName, options.GetOptions{})
+		defaultPool, err = client.IPPools().Get(ctx, poolName, options.GetOptions{})
 		if err != nil {
-			log.WithError(err).Errorf("Failed to get existing default IPv4 IP pool")
+			log.WithError(err).Errorf("Failed to get existing default IPv%d IP pool", cidr.Version())
 			return err
 		}
 	}
@@ -346,7 +377,7 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 		msg := fmt.Sprintf("current [cidr:%s, blocksize:%d, nat:%t, vxlanMode %s], expected [cidr:%s, blocksize:%d, nat:%t, vxlanMode %s]",
 			defaultPool.Spec.CIDR, defaultPool.Spec.BlockSize, defaultPool.Spec.NATOutgoing, defaultPool.Spec.VXLANMode,
 			cidr.String(), blockSize, isNATOutgoingEnabled, api.VXLANModeAlways)
-		log.Errorf("Failed to validate existing default IPv4 IP pool (cidr/blocksize/nat/vxlanMode) %+v", defaultPool.Spec)
+		log.Errorf("Failed to validate existing default IPv%d IP pool (cidr/blocksize/nat/vxlanMode) %+v", cidr.Version(), defaultPool.Spec)
 		return cerrors.ErrorValidation{
 			ErroredFields: []cerrors.ErroredField{{
 				Name:   "pool.Spec",
@@ -355,7 +386,58 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 		}
 	}
 
-	log.Info("Use current default IPv4 pool.")
+	log.Infof("Use current default IPv%d pool.", cidr.Version())
+	return nil
+}
+
+type vxlanMode string
+
+const (
+	vxlanModeEnabled  vxlanMode = "enabled"
+	vxlanModeDisabled vxlanMode = "disabled"
+	vxlanModeCleared  vxlanMode = "clear"
+)
+
+func (m *ipamMigrator) SetVXLANMode(ctx context.Context, mode vxlanMode) error {
+	defaultConfig, err := m.calicoClient.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
+	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+		// Doesn't exist - create it.
+		defaultConfig = &api.FelixConfiguration{}
+		defaultConfig.Name = defaultIpv4PoolName
+	} else if err != nil {
+		log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
+		return err
+	}
+
+	switch mode {
+	case vxlanModeEnabled:
+		log.Infof("Enabling VXLAN in FelixConfiguration")
+		enabled := true
+		defaultConfig.Spec.VXLANEnabled = &enabled
+	case vxlanModeDisabled:
+		log.Infof("Disabling VXLAN in FelixConfiguration")
+		disabled := false
+		defaultConfig.Spec.VXLANEnabled = &disabled
+	case vxlanModeCleared:
+		log.Info("Clearing FelixConfiguration.Spec.VXLANEnabled")
+		defaultConfig.Spec.VXLANEnabled = nil
+	default:
+		log.Fatalf("Invalid VXLAN mode given: %s", mode)
+	}
+
+	if defaultConfig.ResourceVersion != "" {
+		_, err = m.calicoClient.FelixConfigurations().Update(ctx, defaultConfig, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to update default FelixConfiguration.")
+			return err
+		}
+	} else {
+		_, err = m.calicoClient.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to create default FelixConfiguration.")
+			return err
+		}
+	}
 	return nil
 }
 
@@ -363,31 +445,24 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 // If migrating from Flannel, return error if vxlan is not enabled.
 // If migrating from Canal, set vxlan enabled.
 // Do nothing if correct values already been set.
-func updateDefaultFelixConfigurtion(ctx context.Context, client client.Interface, vni, port, mtu int, checkVxlan bool) error {
+func updateOrCreateDefaultFelixConfiguration(ctx context.Context, client client.Interface, vni, port, mtu int) error {
 	// Get default Felix configuration. Return error if not exists.
 	defaultConfig, err := client.FelixConfigurations().Get(ctx, defaultFelixConfigurationName, options.GetOptions{})
-	if err != nil {
+	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+		// Create the default config if it doesn't already exist.
+		defaultConfig = api.NewFelixConfiguration()
+		defaultConfig.Name = defaultFelixConfigurationName
+		defaultConfig, err = client.FelixConfigurations().Create(ctx, defaultConfig, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Error creating default FelixConfiguration resource")
+			return err
+		}
+	} else if err != nil {
 		log.WithError(err).Errorf("Error getting default FelixConfiguration resource")
 		return err
 	}
 
-	if checkVxlan {
-		// Check if vxlan is enabled. Return error if not.
-		vxlanEnabled := false
-		if defaultConfig.Spec.VXLANEnabled != nil {
-			vxlanEnabled = *defaultConfig.Spec.VXLANEnabled
-		}
-		if !vxlanEnabled {
-			log.WithError(err).Errorf("vxlan is not enabled by default Felix configration")
-			return err
-		}
-	}
-
-	// Get current value for vxlanEnabled, VNI , Port and MTU.
-	currentVxlanEnabled := false
-	if defaultConfig.Spec.VXLANEnabled != nil {
-		currentVxlanEnabled = *defaultConfig.Spec.VXLANEnabled
-	}
+	// Get current value for VNI, Port and MTU.
 	currentVNI := 0
 	if defaultConfig.Spec.VXLANVNI != nil {
 		currentVNI = *defaultConfig.Spec.VXLANVNI
@@ -402,13 +477,11 @@ func updateDefaultFelixConfigurtion(ctx context.Context, client client.Interface
 	}
 
 	// Do nothing if the correct value has been set.
-	if currentVNI == vni && currentPort == port && currentMTU == mtu && currentVxlanEnabled {
-		log.Infof("Default Felix configration got correct vxlanEnabled, VNI(%d), port(%d), mtu(%d).", currentVNI, currentPort, currentMTU)
+	if currentVNI == vni && currentPort == port && currentMTU == mtu {
+		log.Infof("Default Felix configuration has correct VNI(%d), port(%d), mtu(%d).", currentVNI, currentPort, currentMTU)
 		return nil
 	}
 
-	vxlanEnabled := true
-	defaultConfig.Spec.VXLANEnabled = &vxlanEnabled
 	defaultConfig.Spec.VXLANVNI = &vni
 	defaultConfig.Spec.VXLANPort = &port
 	defaultConfig.Spec.VXLANMTU = &mtu

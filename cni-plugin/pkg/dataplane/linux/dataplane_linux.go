@@ -202,7 +202,7 @@ func (d *linuxDataplane) DoNetworking(
 				return fmt.Errorf("failed to set net.ipv6.conf.lo.disable_ipv6=0: %s", err)
 			}
 
-			// Retry several times as the LL can take a several micro/miliseconds to initialize and we may be too fast
+			// Retry several times as the LL can take a several micro/milliseconds to initialize and we may be too fast
 			// after these sysctls
 			var err error
 			var addresses []netlink.Addr
@@ -352,7 +352,7 @@ func SetupRoutes(hostVeth netlink.Link, result *cniv1.Result) error {
 				var conflict string
 
 				for _, r := range routes {
-					if r.Dst.IP.Equal(route.Dst.IP) {
+					if r.Dst != nil && r.Dst.IP.Equal(route.Dst.IP) {
 						linkName := "unknown"
 						if link, err := netlink.LinkByIndex(r.LinkIndex); err == nil {
 							linkName = link.Attrs().Name

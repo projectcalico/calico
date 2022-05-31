@@ -130,5 +130,5 @@ configure the cluster to once again read from the original etcd datastore.
 1. Unlock the etcd datastore. This allows the {{site.prodname}} resources to affect the cluster again.
 
    ```
-   calicoctl dtastore migrate unlock
+   calicoctl datastore migrate unlock
    ```

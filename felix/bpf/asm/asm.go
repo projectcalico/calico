@@ -139,7 +139,7 @@ const (
 	LoadImm64Pt2 OpCode = 0
 
 	// 64-bit comparison operations.  These do a 64-bit ALU operation between
-	// two registers and then do a relative jump ot the offset in the instruction.
+	// two registers and then do a relative jump to the offset in the instruction.
 	// The offset is relative to the next instruction (due to PC auto-increment).
 	JumpEq64  OpCode = OpClassJump64 | ALUSrcReg | JumpOpEq
 	JumpGT64  OpCode = OpClassJump64 | ALUSrcReg | JumpOpGT
@@ -154,7 +154,7 @@ const (
 	JumpSLE64 OpCode = OpClassJump64 | ALUSrcReg | JumpOpSLE
 
 	// 64-bit comparison operations.  These do a 64-bit ALU operation between
-	// a register and the immediate and then do a relative jump ot the offset in
+	// a register and the immediate and then do a relative jump to the offset in
 	// the instruction. The offset is relative to the next instruction (due to
 	// PC auto-increment).
 	JumpEqImm64  OpCode = OpClassJump64 | ALUSrcImm | JumpOpEq
@@ -178,7 +178,7 @@ const (
 	Exit OpCode = OpClassJump64 | ALUSrcImm | JumpOpExit
 
 	// 32-bit comparison operations.  These do a 32-bit ALU operation between
-	// two registers and then do a relative jump ot the offset in the instruction.
+	// two registers and then do a relative jump to the offset in the instruction.
 	// The offset is relative to the next instruction (due to PC auto-increment).
 	JumpEq32  OpCode = OpClassJump32 | ALUSrcReg | JumpOpEq
 	JumpGT32  OpCode = OpClassJump32 | ALUSrcReg | JumpOpGT
@@ -193,7 +193,7 @@ const (
 	JumpSLE32 OpCode = OpClassJump32 | ALUSrcReg | JumpOpSLE
 
 	// 32-bit comparison operations.  These do a 32-bit ALU operation between
-	// a register and the immediate and then do a relative jump ot the offset in
+	// a register and the immediate and then do a relative jump to the offset in
 	// the instruction. The offset is relative to the next instruction (due to
 	// PC auto-increment).
 	JumpEqImm32  OpCode = OpClassJump32 | ALUSrcImm | JumpOpEq

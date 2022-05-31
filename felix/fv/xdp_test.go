@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv
+package fv_test
 
 import (
 	"fmt"
@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -32,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
-	"github.com/projectcalico/calico/felix/versionparse"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -442,13 +442,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			})
 
 			It("should have expected no dropped packets in iptables in TCP", func() {
-				versionReader, err := versionparse.GetKernelVersionReader()
+				versionReader, err := environment.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
-				kernelVersion, err := versionparse.GetKernelVersion(versionReader)
+				kernelVersion, err := environment.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(versionparse.MustParseVersion("4.19.0")) < 0 {
+				if kernelVersion.Compare(environment.MustParseVersion("4.19.0")) < 0 {
 					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}
@@ -588,13 +588,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			})
 
 			It("should have expected no dropped packets in iptables in TCP", func() {
-				versionReader, err := versionparse.GetKernelVersionReader()
+				versionReader, err := environment.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
-				kernelVersion, err := versionparse.GetKernelVersion(versionReader)
+				kernelVersion, err := environment.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(versionparse.MustParseVersion("4.19.0")) < 0 {
+				if kernelVersion.Compare(environment.MustParseVersion("4.19.0")) < 0 {
 					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}

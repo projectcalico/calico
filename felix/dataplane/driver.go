@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -176,7 +177,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		failsafeInboundHostPorts := configParams.FailsafeInboundHostPorts
 		failsafeOutboundHostPorts := configParams.FailsafeOutboundHostPorts
 		if configParams.WireguardEnabled {
-			var found = false
+			found := false
 			for _, i := range failsafeInboundHostPorts {
 				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
 					log.WithFields(log.Fields{
@@ -222,7 +223,8 @@ func StartDataplaneDriver(configParams *config.Config,
 		}
 
 		dpConfig := intdataplane.Config{
-			Hostname: configParams.FelixHostname,
+			Hostname:           configParams.FelixHostname,
+			FloatingIPsEnabled: strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 				ResyncInterval:    configParams.InterfaceRefreshInterval,
@@ -257,13 +259,16 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesMarkEndpoint:        markEndpointMark,
 				IptablesMarkNonCaliEndpoint: markEndpointNonCaliEndpoint,
 
-				VXLANEnabled: configParams.VXLANEnabled,
-				VXLANPort:    configParams.VXLANPort,
-				VXLANVNI:     configParams.VXLANVNI,
+				VXLANEnabled:   configParams.Encapsulation.VXLANEnabled,
+				VXLANEnabledV6: configParams.Encapsulation.VXLANEnabledV6,
+				VXLANPort:      configParams.VXLANPort,
+				VXLANVNI:       configParams.VXLANVNI,
 
-				IPIPEnabled:        configParams.IpInIpEnabled,
-				IPIPTunnelAddress:  configParams.IpInIpTunnelAddr,
-				VXLANTunnelAddress: configParams.IPv4VXLANTunnelAddr,
+				IPIPEnabled:            configParams.Encapsulation.IPIPEnabled,
+				FelixConfigIPIPEnabled: configParams.IpInIpEnabled,
+				IPIPTunnelAddress:      configParams.IpInIpTunnelAddr,
+				VXLANTunnelAddress:     configParams.IPv4VXLANTunnelAddr,
+				VXLANTunnelAddressV6:   configParams.IPv6VXLANTunnelAddr,
 
 				AllowVXLANPacketsFromWorkloads: configParams.AllowVXLANPacketsFromWorkloads,
 				AllowIPIPPacketsFromWorkloads:  configParams.AllowIPIPPacketsFromWorkloads,
@@ -305,11 +310,13 @@ func StartDataplaneDriver(configParams *config.Config,
 			},
 			IPIPMTU:                        configParams.IpInIpMtu,
 			VXLANMTU:                       configParams.VXLANMTU,
+			VXLANMTUV6:                     configParams.VXLANMTUV6,
 			VXLANPort:                      configParams.VXLANPort,
 			IptablesBackend:                configParams.IptablesBackend,
 			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
 			RouteRefreshInterval:           configParams.RouteRefreshInterval,
 			DeviceRouteSourceAddress:       configParams.DeviceRouteSourceAddress,
+			DeviceRouteSourceAddressIPv6:   configParams.DeviceRouteSourceAddressIPv6,
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
@@ -321,6 +328,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			MaxIPSetSize:                   configParams.MaxIpsetSize,
 			IPv6Enabled:                    configParams.Ipv6Support,
 			BPFIpv6Enabled:                 configParams.BpfIpv6Support,
+			BPFHostConntrackBypass:         configParams.BPFHostConntrackBypass,
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 			XDPRefreshInterval:             configParams.XDPRefreshInterval,
 
@@ -361,6 +369,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFMapSizeNATAffinity:              configParams.BPFMapSizeNATAffinity,
 			BPFMapSizeConntrack:                configParams.BPFMapSizeConntrack,
 			BPFMapSizeIPSets:                   configParams.BPFMapSizeIPSets,
+			BPFEnforceRPF:                      configParams.BPFEnforceRPF,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
 			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable

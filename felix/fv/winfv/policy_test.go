@@ -16,6 +16,7 @@ package winfv_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -70,6 +71,11 @@ func kubectlExec(command string) error {
 		log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).WithError(err).Error("Error running kubectl command")
 		return err
 	}
+	if stderr != "" {
+		log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).WithError(err).Error("kubectl stderr indicates error")
+		return errors.New("non-empty stderr")
+	}
+	log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).Info("kubectl command succeeded")
 	return nil
 }
 

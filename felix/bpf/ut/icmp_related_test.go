@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 )
@@ -53,6 +54,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 
 	icmpUNreachable := makeICMPError(ipv4, udp, 3 /* Unreachable */, 1 /*Host unreachable error */)
 
+	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
 		Expect(err).NotTo(HaveOccurred())
@@ -62,15 +64,17 @@ func TestICMPRelatedPlain(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
@@ -101,7 +105,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -130,6 +134,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 
 	var natPkt gopacket.Packet
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
@@ -137,6 +142,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 
 		natPkt = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 	})
+	expectMark(tcdefs.MarkSeen)
 
 	natIPv4L := natPkt.Layer(layers.LayerTypeIPv4)
 	Expect(natIPv4L).NotTo(BeNil())
@@ -165,11 +171,13 @@ func TestICMPRelatedFromHost(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
+	expectMark(tcdefs.MarkSeen)
 
 	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)
 
@@ -229,14 +237,16 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	// this will create NAT tracking entries for a nodeport
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
+	expectMark(tcdefs.MarkSeenBypassForwardSourceFixup)
 
-	// we base the packet on the orignal packet before NAT as if we let the original packet through
+	// we base the packet on the original packet before NAT as if we let the original packet through
 	// before we do the actual NAT as that is where we check for TTL as doing it for the tunneled
 	// packet would be complicated
 	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)

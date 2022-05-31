@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
+
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/kardianos/osext"
@@ -77,6 +79,22 @@ func (p *BoolParam) Parse(raw string) (interface{}, error) {
 		return true, nil
 	case "false", "0", "no", "n", "f":
 		return false, nil
+	}
+	return nil, p.parseFailed(raw, "invalid boolean")
+}
+
+type BoolPtrParam struct {
+	Metadata
+}
+
+func (p *BoolPtrParam) Parse(raw string) (interface{}, error) {
+	t := true
+	f := false
+	switch strings.ToLower(raw) {
+	case "true", "1", "yes", "y", "t":
+		return &t, nil
+	case "false", "0", "no", "n", "f":
+		return &f, nil
 	}
 	return nil, p.parseFailed(raw, "invalid boolean")
 }
@@ -302,6 +320,25 @@ func (p *Ipv4Param) Parse(raw string) (result interface{}, err error) {
 	res := net.ParseIP(raw)
 	if res == nil {
 		err = p.parseFailed(raw, "invalid IP")
+	}
+	if !utils.IsIPv4(res) {
+		err = p.parseFailed(raw, "not an IPv4 address")
+	}
+	result = res
+	return
+}
+
+type Ipv6Param struct {
+	Metadata
+}
+
+func (p *Ipv6Param) Parse(raw string) (result interface{}, err error) {
+	res := net.ParseIP(raw)
+	if res == nil {
+		err = p.parseFailed(raw, "invalid IP")
+	}
+	if !utils.IsIPv6(res) {
+		err = p.parseFailed(raw, "not an IPv6 address")
 	}
 	result = res
 	return
@@ -554,7 +591,8 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 	return raw, nil
 }
 
-// linux can support route-tables with indices up to 0xfffffff, however, using all of them would likely blow up, so cap the limit at 65535
+// linux can support route-table indices up to 0xFFFFFFFF
+// however, using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
 const routeTableMaxLinux = 0xffffffff
 const routeTableRangeMaxTables = 0xffff
 

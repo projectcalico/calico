@@ -182,7 +182,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 	})
 
 	DescribeTable("Test IP pool env variables",
-		func(envList []EnvItem, expectedIPv4 string, expectedIPv6 string, expectIpv4IpipMode string, expectedIPV4NATOutgoing bool, expectedIPV6NATOutgoing bool, expectedIPv4BlockSize, expectedIPv6BlockSize int, expectedIPv4NodeSelector, expectedIPv6NodeSelector string) {
+		func(envList []EnvItem, expectedIPv4 string, expectedIPv6 string, expectIpv4IpipMode string, expectIpv4VXLANMode string, expectIpv6VXLANMode string, expectedIPV4NATOutgoing bool, expectedIPV6NATOutgoing bool, expectedIPv4BlockSize, expectedIPv6BlockSize int, expectedIPv4NodeSelector, expectedIPv6NodeSelector string) {
 			// Create a new client.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 			Expect(err).NotTo(HaveOccurred())
@@ -234,6 +234,13 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 					Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPModeNever))
 
+					// off is not a real mode value but use it instead of empty string
+					if expectIpv6VXLANMode == "Off" {
+						Expect(pool.Spec.VXLANMode).To(Equal(api.VXLANModeNever))
+					} else {
+						Expect(pool.Spec.VXLANMode).To(Equal(api.VXLANMode(expectIpv6VXLANMode)))
+					}
+
 					Expect(pool.Spec.NATOutgoing).To(Equal(expectedIPV6NATOutgoing), "Expected IPv6 to be %t but was %t", expectedIPV6NATOutgoing, pool.Spec.NATOutgoing)
 
 					Expect(pool.Spec.BlockSize).To(Equal(expectedIPv6BlockSize), "Expected IPv6 blocksize to be %d but was %d", expectedIPv6BlockSize, pool.Spec.BlockSize)
@@ -246,6 +253,13 @@ var _ = Describe("FV tests against a real etcd", func() {
 						Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPModeNever))
 					} else {
 						Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPMode(expectIpv4IpipMode)))
+					}
+
+					// off is not a real mode value but use it instead of empty string
+					if expectIpv4VXLANMode == "Off" {
+						Expect(pool.Spec.VXLANMode).To(Equal(api.VXLANModeNever))
+					} else {
+						Expect(pool.Spec.VXLANMode).To(Equal(api.VXLANMode(expectIpv4VXLANMode)))
 					}
 
 					Expect(pool.Spec.NATOutgoing).To(Equal(expectedIPV4NATOutgoing), "Expected IPv4 to be %t but was %t", expectedIPV4NATOutgoing, pool.Spec.NATOutgoing)
@@ -263,72 +277,109 @@ var _ = Describe("FV tests against a real etcd", func() {
 		},
 
 		Entry("No env variables set", []EnvItem{},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("IPv4 Pool env var set",
 			[]EnvItem{{"CALICO_IPV4POOL_CIDR", "172.16.0.0/24"}},
-			"172.16.0.0/24", randomULAPool, "Off", true, false, 26, 122, "all()", "all()"),
+			"172.16.0.0/24", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("IPv6 Pool env var set",
 			[]EnvItem{{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"}},
-			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "Off", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("Both IPv4 and IPv6 Pool env var set",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_CIDR", "172.16.0.0/24"},
 				{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"},
 			},
-			"172.16.0.0/24", "fdff:ffff:ffff:ffff:ffff::/80", "Off", true, false, 26, 122, "all()", "all()"),
+			"172.16.0.0/24", "fdff:ffff:ffff:ffff:ffff::/80", "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_IPIP set off", []EnvItem{{"CALICO_IPV4POOL_IPIP", "off"}},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_IPIP set Off", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Off"}},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_IPIP set Never", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Never"}},
-			"192.168.0.0/16", randomULAPool, "Never", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Never", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_IPIP set empty string", []EnvItem{{"CALICO_IPV4POOL_IPIP", ""}},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_IPIP set always", []EnvItem{{"CALICO_IPV4POOL_IPIP", "always"}},
-			"192.168.0.0/16", randomULAPool, "Always", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Always", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_IPIP set Always", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Always"}},
-			"192.168.0.0/16", randomULAPool, "Always", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Always", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_IPIP set cross-subnet", []EnvItem{{"CALICO_IPV4POOL_IPIP", "cross-subnet"}},
-			"192.168.0.0/16", randomULAPool, "CrossSubnet", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "CrossSubnet", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_IPIP set CrossSubnet", []EnvItem{{"CALICO_IPV4POOL_IPIP", "CrossSubnet"}},
-			"192.168.0.0/16", randomULAPool, "CrossSubnet", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "CrossSubnet", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_BLOCK_SIZE set 27", []EnvItem{{"CALICO_IPV4POOL_BLOCK_SIZE", "27"}},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 27, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 27, 122, "all()", "all()"),
 		Entry("IPv6 Pool and IPIP set",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"},
 				{"CALICO_IPV4POOL_IPIP", "always"},
 			},
-			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "Always", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "Always", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("IPv6 NATOutgoing Set Enabled",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"},
 			},
-			"192.168.0.0/16", randomULAPool, "Off", true, true, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, true, 26, 122, "all()", "all()"),
 		Entry("IPv6 NATOutgoing Set Disabled",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "false"},
 			},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("IPv4 NATOutgoing Set Disabled",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"},
 			},
-			"192.168.0.0/16", randomULAPool, "Off", false, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", false, false, 26, 122, "all()", "all()"),
 		Entry("IPv6 NAT OUTGOING and IPV4 NAT OUTGOING SET",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"},
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"},
 			},
-			"192.168.0.0/16", randomULAPool, "Off", false, true, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", false, true, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV6POOL_BLOCK_SIZE set 123", []EnvItem{{"CALICO_IPV6POOL_BLOCK_SIZE", "123"}},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 123, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 123, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_NODE_SELECTOR set all()", []EnvItem{{"CALICO_IPV4POOL_NODE_SELECTOR", "all()"}},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "all()", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
 		Entry("CALICO_IPV4POOL_NODE_SELECTOR set has(something)", []EnvItem{{"CALICO_IPV4POOL_NODE_SELECTOR", "key == 'something'"}},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "key == 'something'", "all()"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "key == 'something'", "all()"),
 		Entry("CALICO_IPV6POOL_NODE_SELECTOR set failed", []EnvItem{{"CALICO_IPV6POOL_NODE_SELECTOR", "has(something)"}},
-			"192.168.0.0/16", randomULAPool, "Off", true, false, 26, 122, "all()", "has(something)"),
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "has(something)"),
+		Entry("CALICO_IPV4POOL_VXLAN set off", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "off"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set Off", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "Off"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set Never", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "Never"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Never", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set empty string", []EnvItem{{"CALICO_IPV4POOL_VXLAN", ""}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set always", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "always"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Always", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set Always", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "Always"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Always", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set cross-subnet", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "cross-subnet"}},
+			"192.168.0.0/16", randomULAPool, "Off", "CrossSubnet", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set CrossSubnet", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "CrossSubnet"}},
+			"192.168.0.0/16", randomULAPool, "Off", "CrossSubnet", "Off", true, false, 26, 122, "all()", "all()"),
+		// Reset CALICO_IPV4POOL_VXLAN here as well
+		Entry("CALICO_IPV6POOL_VXLAN set off", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "off"}, {"CALICO_IPV6POOL_VXLAN", "off"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV6POOL_VXLAN set Off", []EnvItem{{"CALICO_IPV6POOL_VXLAN", "Off"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV6POOL_VXLAN set Never", []EnvItem{{"CALICO_IPV6POOL_VXLAN", "Never"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Never", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV6POOL_VXLAN set empty string", []EnvItem{{"CALICO_IPV6POOL_VXLAN", ""}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV6POOL_VXLAN set always", []EnvItem{{"CALICO_IPV6POOL_VXLAN", "always"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Always", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV6POOL_VXLAN set Always", []EnvItem{{"CALICO_IPV6POOL_VXLAN", "Always"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "Always", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV6POOL_VXLAN set cross-subnet", []EnvItem{{"CALICO_IPV6POOL_VXLAN", "cross-subnet"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "CrossSubnet", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV6POOL_VXLAN set CrossSubnet", []EnvItem{{"CALICO_IPV6POOL_VXLAN", "CrossSubnet"}},
+			"192.168.0.0/16", randomULAPool, "Off", "Off", "CrossSubnet", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN and CALICO_IPV6POOL_VXLAN set CrossSubnet", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "CrossSubnet"}, {"CALICO_IPV6POOL_VXLAN", "CrossSubnet"}},
+			"192.168.0.0/16", randomULAPool, "Off", "CrossSubnet", "CrossSubnet", true, false, 26, 122, "all()", "all()"),
+		Entry("CALICO_IPV4POOL_VXLAN set CrossSubnet and CALICO_IPV6POOL_VXLAN set Always", []EnvItem{{"CALICO_IPV4POOL_VXLAN", "CrossSubnet"}, {"CALICO_IPV6POOL_VXLAN", "Always"}},
+			"192.168.0.0/16", randomULAPool, "Off", "CrossSubnet", "Always", true, false, 26, 122, "all()", "all()"),
 	)
 
 	It("should properly clear node IPs", func() {
@@ -804,7 +855,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				}
 
 				configureNodeRef(node)
-				// If we receieve an invalid env var then none will be set.
+				// If we receive an invalid env var then none will be set.
 				if len(node.Spec.OrchRefs) > 0 {
 					ref := node.Spec.OrchRefs[0]
 					Expect(ref == expected).To(Equal(isEqual))

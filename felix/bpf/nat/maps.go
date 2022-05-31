@@ -420,6 +420,22 @@ func (k FrontEndAffinityKey) AsBytes() []byte {
 	return k[:]
 }
 
+func (k FrontEndAffinityKey) String() string {
+	return fmt.Sprintf("FrontEndAffinityKey{Proto:%v Addr:%v Port:%v}", k.Proto(), k.Addr(), k.Port())
+}
+
+func (k FrontEndAffinityKey) Proto() uint8 {
+	return k[6]
+}
+
+func (k FrontEndAffinityKey) Addr() net.IP {
+	return k[0:4]
+}
+
+func (k FrontEndAffinityKey) Port() uint16 {
+	return binary.LittleEndian.Uint16(k[4:6])
+}
+
 // NewAffinityKey create a new AffinityKey from a clientIP and FrontendKey
 func NewAffinityKey(clientIP net.IP, fEndKey FrontendKey) AffinityKey {
 	var k AffinityKey
@@ -448,7 +464,7 @@ func (k AffinityKey) FrontendAffinityKey() FrontEndAffinityKey {
 }
 
 func (k AffinityKey) String() string {
-	return fmt.Sprintf("AffinityKey{ClientIP:%v %v}", k.ClientIP(), k.FrontendAffinityKey())
+	return fmt.Sprintf("AffinityKey{ClientIP:%v %s}", k.ClientIP(), k.FrontendAffinityKey())
 }
 
 // AsBytes returns the key as []byte
@@ -526,6 +542,10 @@ type AffinityMapMem map[AffinityKey]AffinityValue
 func LoadAffinityMap(m bpf.Map) (AffinityMapMem, error) {
 	ret := make(AffinityMapMem)
 
+	if err := m.Open(); err != nil {
+		return nil, err
+	}
+
 	err := m.Iter(AffinityMapMemIter(ret))
 	if err != nil {
 		ret = nil
@@ -579,7 +599,7 @@ func (k SendRecvMsgKey) IP() net.IP {
 	return k[8:12]
 }
 
-// Port returns port converted to 16-bit host endianess
+// Port returns port converted to 16-bit host endianness
 func (k SendRecvMsgKey) Port() uint16 {
 	port := binary.BigEndian.Uint32(k[12:16])
 	return uint16(port >> 16)
@@ -599,7 +619,7 @@ func (v SendRecvMsgValue) IP() net.IP {
 	return v[0:4]
 }
 
-// Port returns port converted to 16-bit host endianess
+// Port returns port converted to 16-bit host endianness
 func (v SendRecvMsgValue) Port() uint16 {
 	port := binary.BigEndian.Uint32(v[4:8])
 	return uint16(port >> 16)

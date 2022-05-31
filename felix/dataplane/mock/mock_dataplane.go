@@ -22,7 +22,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
+	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -47,6 +49,7 @@ type MockDataplane struct {
 	namespaces                     map[proto.NamespaceID]*proto.NamespaceUpdate
 	config                         map[string]string
 	numEvents                      int
+	encapsulation                  proto.Encapsulation
 }
 
 func (d *MockDataplane) InSync() bool {
@@ -181,6 +184,13 @@ func (d *MockDataplane) NumEventsRecorded() int {
 	return d.numEvents
 }
 
+func (d *MockDataplane) Encapsulation() proto.Encapsulation {
+	d.Lock()
+	defer d.Unlock()
+
+	return d.encapsulation
+}
+
 func copyPolOrder(in map[string][]TierInfo) map[string][]TierInfo {
 	localCopy := map[string][]TierInfo{}
 	for k, v := range in {
@@ -238,6 +248,15 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	fmt.Fprintf(GinkgoWriter, "       <- Event: %v %v\n", evType, event)
 	Expect(event).NotTo(BeNil())
 	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Ptr))
+
+	// Test wrapping the message for the external dataplane
+	switch event := event.(type) {
+	case *calc.DatastoreNotReady:
+	default:
+		_, err := extdataplane.WrapPayloadWithEnvelope(event, 0)
+		Expect(err).To(BeNil())
+	}
+
 	switch event := event.(type) {
 	case *proto.InSync:
 		d.inSync = true
@@ -419,6 +438,8 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.VXLANTunnelEndpointRemove:
 		Expect(d.activeVTEPs).To(HaveKey(event.Node), "delete for unknown VTEP")
 		delete(d.activeVTEPs, event.Node)
+	case *proto.Encapsulation:
+		d.encapsulation = *event
 	}
 }
 

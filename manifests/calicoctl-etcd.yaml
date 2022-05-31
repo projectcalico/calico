@@ -1,0 +1,56 @@
+# Calico Version master
+# https://projectcalico.docs.tigera.io/releases#master
+# This manifest includes the following component versions:
+#   calico/ctl:master
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: calicoctl
+  namespace: kube-system
+spec:
+  nodeSelector:
+    kubernetes.io/os: linux
+  hostNetwork: true
+  containers:
+  - name: calicoctl
+    image: calico/ctl:master
+    command:
+      - /calicoctl
+    args:
+      - version
+      - --poll=1m
+    env:
+    - name: ETCD_ENDPOINTS
+      valueFrom:
+        configMapKeyRef:
+          name: calico-config
+          key: etcd_endpoints
+    # If you're using TLS enabled etcd uncomment the following.
+    # Location of the CA certificate for etcd.
+    # - name: ETCD_CA_CERT_FILE
+    #   valueFrom:
+    #     configMapKeyRef:
+    #       name: calico-config
+    #       key: etcd_ca
+    # Location of the client key for etcd.
+    # - name: ETCD_KEY_FILE
+    #   valueFrom:
+    #     configMapKeyRef:
+    #       name: calico-config
+    #       key: etcd_key
+    # Location of the client certificate for etcd.
+    # - name: ETCD_CERT_FILE
+    #   valueFrom:
+    #     configMapKeyRef:
+    #       name: calico-config
+    #       key: etcd_cert
+    # volumeMounts:
+    # - mountPath: /calico-secrets
+    #   name: etcd-certs
+  volumes:
+    # If you're using TLS enabled etcd uncomment the following.
+    # - name: etcd-certs
+    #   secret:
+    #     secretName: calico-etcd-secrets
+

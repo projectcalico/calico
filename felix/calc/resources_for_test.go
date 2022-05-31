@@ -621,6 +621,7 @@ var netSet2 = NetworkSet{
 
 var localHostIP = mustParseIP("192.168.0.1")
 var remoteHostIP = mustParseIP("192.168.0.2")
+var remoteHostIPv6 = mustParseIP("dead:beef:0001::2")
 var remoteHost2IP = mustParseIP("192.168.0.3")
 
 var localHostIPWithPrefix = "192.168.0.1/24"
@@ -634,6 +635,10 @@ var remoteHostVXLANTunnelConfigKey = HostConfigKey{
 	Hostname: remoteHostname,
 	Name:     "IPv4VXLANTunnelAddr",
 }
+var remoteHostVXLANV6TunnelConfigKey = HostConfigKey{
+	Hostname: remoteHostname,
+	Name:     "IPv6VXLANTunnelAddr",
+}
 var remoteHost2VXLANTunnelConfigKey = HostConfigKey{
 	Hostname: remoteHostname2,
 	Name:     "IPv4VXLANTunnelAddr",
@@ -644,8 +649,17 @@ var remoteHostVXLANTunnelMACConfigKey = HostConfigKey{
 	Name:     "VXLANTunnelMACAddr",
 }
 
+var remoteHostVXLANV6TunnelMACConfigKey = HostConfigKey{
+	Hostname: remoteHostname,
+	Name:     "VXLANTunnelMACAddrV6",
+}
+
 var ipPoolKey = IPPoolKey{
 	CIDR: mustParseNet("10.0.0.0/16"),
+}
+
+var ipPoolKey2 = IPPoolKey{
+	CIDR: mustParseNet("11.0.0.0/16"),
 }
 
 var hostCoveringIPPoolKey = IPPoolKey{
@@ -677,6 +691,18 @@ var ipPoolWithVXLAN = IPPool{
 	Masquerade: true,
 }
 
+var ipPool2WithVXLAN = IPPool{
+	CIDR:       mustParseNet("11.0.0.0/16"),
+	VXLANMode:  encap.Always,
+	Masquerade: true,
+}
+
+var v6IPPoolWithVXLAN = IPPool{
+	CIDR:       mustParseNet("feed:beef::/64"),
+	VXLANMode:  encap.Always,
+	Masquerade: true,
+}
+
 var workloadIPs = "WorkloadIPs"
 
 var ipPoolWithVXLANSlash32 = IPPool{
@@ -700,7 +726,7 @@ var remoteIPAMSlash32BlockKey = BlockKey{
 }
 
 var remotev6IPAMBlockKey = BlockKey{
-	CIDR: mustParseNet("feed:beef:0001::/96"),
+	CIDR: mustParseNet("feed:beef:0:0:1::/96"),
 }
 
 var localIPAMBlockKey = BlockKey{
@@ -723,7 +749,7 @@ var remoteIPAMBlockSlash32 = AllocationBlock{
 	Unallocated: []int{0},
 }
 var remotev6IPAMBlock = AllocationBlock{
-	CIDR:        mustParseNet("feed:beef:0001::/96"),
+	CIDR:        mustParseNet("feed:beef:0:0:1::/96"),
 	Affinity:    &remoteHostAffinity,
 	Allocations: make([]*int, 8),
 	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
@@ -835,6 +861,8 @@ func intPtr(i int) *int {
 
 var localHostVXLANTunnelIP = "10.0.0.0"
 var remoteHostVXLANTunnelIP = "10.0.1.0"
+var remoteHostVXLANV6TunnelIP = "feed:beef:0:0:1::0"
 var remoteHostVXLANTunnelIP2 = "10.0.1.1"
 var remoteHost2VXLANTunnelIP = "10.0.2.0"
 var remoteHostVXLANTunnelMAC = "66:74:c5:72:3f:01"
+var remoteHostVXLANV6TunnelMAC = "10:f3:27:5c:47:66"

@@ -34,7 +34,7 @@ CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
 LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
 	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION) -s -w"
+	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION)"
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -55,7 +55,7 @@ endif
 ###############################################################################
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64
+build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64
 .PHONY: build
 ## Build the binary for the current architecture and platform
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
@@ -65,7 +65,8 @@ bin/calicoctl-%-armv7: ARCH=armv7
 bin/calicoctl-%-arm64: ARCH=arm64
 bin/calicoctl-%-ppc64le: ARCH=ppc64le
 bin/calicoctl-%-s390x: ARCH=s390x
-bin/calicoctl-darwin-amd64: BUILDOS=darwin
+bin/calicoctl-darwin-amd64: BUILDOS=darwin ARCH=amd64
+bin/calicoctl-darwin-arm64: BUILDOS=darwin ARCH=arm64
 bin/calicoctl-windows-amd64: BUILDOS=windows
 bin/calicoctl-linux-%: BUILDOS=linux
 # We reinvoke make here to re-evaluate BUILDOS and ARCH so the correct values

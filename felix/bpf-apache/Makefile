@@ -34,8 +34,8 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang-11
-LD := llc-11
+CC := clang-12
+LD := llc-12
 
 C_FILES:=filter.c redir.c sockops.c
 OBJS:=$(addprefix bin/,$(C_FILES:.c=.o))
@@ -60,7 +60,10 @@ bin:
 		rm -f $@.$$$$
 
 D_FILES:=$(C_FILES:.c=.d)
+
+ifneq ($(MAKECMDGOALS),clean)
 include $(D_FILES)
+endif
 
 clean:
 	rm -f *.o *.ll *.d bin/*

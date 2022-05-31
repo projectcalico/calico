@@ -17,6 +17,7 @@
 : ${FV_NUM_BATCHES:=4}
 : ${FV_BATCHES_TO_RUN:=1 2 3 4}
 : ${FV_SLOW_SPEC_THRESH:=90}
+: ${FV_BINARY:=bin/calico-felix-amd64}
 : ${PRIVATE_KEY:=`pwd`/private.key}
 : ${GINKGO_ARGS:=}
 : ${GINKGO_FOCUS:=.*}

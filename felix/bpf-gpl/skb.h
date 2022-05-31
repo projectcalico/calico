@@ -71,7 +71,7 @@ static CALI_BPF_INLINE long skb_iphdr_offset(void)
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
 		return sizeof(struct ethhdr) + sizeof(struct iphdr);
 	} else if (CALI_F_L3) {
-		// Egress on an IPIP tunnel, or Wireguard both directions:
+		// Egress on an IPIP tunnel, or any other l3 devices (wireguard) both directions:
 		// skb is [inner IP|payload]
 		return 0;
 	} else {
@@ -160,6 +160,13 @@ static CALI_BPF_INLINE __u32 skb_ingress_ifindex(struct __sk_buff *skb)
 #endif
 }
 
-#define skb_is_gso(skb) ((skb)->gso_segs > 1)
+static CALI_BPF_INLINE bool skb_is_gso(struct __sk_buff *skb) {
+#ifdef BPF_CORE_SUPPORTED
+	if (bpf_core_field_exists(skb->gso_size)) {
+		return (skb->gso_size > 0);
+	}
+#endif
+	return (skb->gso_segs > 1);
+}
 
 #endif /* __SKB_H__ */

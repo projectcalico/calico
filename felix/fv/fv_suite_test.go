@@ -17,6 +17,8 @@
 package fv_test
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -31,6 +33,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
+var realStdout = os.Stdout
+
 func init() {
 	testutils.HookLogrusForGinkgo()
 
@@ -43,6 +47,16 @@ func TestFv(t *testing.T) {
 	junitReporter := reporters.NewJUnitReporter("../report/fv_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "FV Suite", []Reporter{junitReporter})
 }
+
+var _ = BeforeEach(func() {
+	_, _ = fmt.Fprintf(realStdout, "\nFV-TEST-START: %s", CurrentGinkgoTestDescription().FullTestText)
+})
+
+var _ = JustAfterEach(func() {
+	if CurrentGinkgoTestDescription().Failed {
+		_, _ = fmt.Fprintf(realStdout, "\n")
+	}
+})
 
 var _ = AfterEach(func() {
 	defer connectivity.UnactivatedCheckers.Clear()

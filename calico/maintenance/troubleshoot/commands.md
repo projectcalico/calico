@@ -84,7 +84,6 @@ Diags saved to /tmp/calico194224816/diags-20201127_010117.tar.gz
 
 ### Kubernetes 
 
-
 #### Verify all pods are running 
 
 ```bash
@@ -116,6 +115,7 @@ kubernetes   ClusterIP   10.49.0.1    <none>        443/TCP   2d2h
 ```bash
 kubectl get svc
 ```
+
 ```
 NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
 kubernetes   ClusterIP   10.49.0.1    <none>        443/TCP   2d2h
@@ -124,6 +124,7 @@ kubernetes   ClusterIP   10.49.0.1    <none>        443/TCP   2d2h
 ```bash
 kubectl exec -it multitool  bash
 ```
+
 ```
 bash-5.0# curl -I -k https://kubernetes
 HTTP/2 403 
@@ -250,34 +251,21 @@ items:
 
 #### Run commands across multiple nodes
 
-Export THE_COMMAND_TO_RUN=date && for calinode in:
-
 ```bash
-kubectl get pod -o wide -n calico-system | grep calico-node | awk '{print $1}'`; do echo $calinode; echo "-----"; 
+export THE_COMMAND_TO_RUN=date && for calinode in `kubectl get pod -o wide -n calico-system | grep calico-node | awk '{print $1}'`; do echo $calinode; echo "-----"; kubectl exec -n calico-system $calinode -- $THE_COMMAND_TO_RUN; printf "\n"; done
 ```
 
 ```bash
-kubectl exec -n calico-system $calinode -- $THE_COMMAND_TO_RUN; printf "\n"; done calico-node-8xfmx
-```
+calico-node-87lpx
+-----
+Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
+Thu Apr 28 13:48:06 UTC 2022
 
-```
+calico-node-x5fmm
 -----
 Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-9t8s7
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-9cjhw
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-cb7ff
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-qoxvw
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
-calico-node-wm5m2
------
-Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
+Thu Apr 28 13:48:07 UTC 2022
+
 ```
 
 #### View pod info

@@ -115,7 +115,7 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
+	It("should convert between a Kubernetes resource and the equivalent KVPair", func() {
 		// Make sure it returns the same resource if a resource is given without Calico metadata annotations.
 		kvp, err := client.convertResourceToKVPair(res1)
 		Expect(err).NotTo(HaveOccurred())

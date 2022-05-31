@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -262,7 +262,7 @@ func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Sta
 			w.ifaceUp = true
 			w.inSyncWireguard = false
 		}
-	case ifacemonitor.StateDown:
+	default: /* StateDown or StateNotPresent */
 		logCxt.Debug("Interface down")
 		w.ifaceUp = false
 	}
@@ -671,6 +671,9 @@ func (w *Wireguard) Apply() (err error) {
 			log.Info("Waiting for wireguard link to come up...")
 			return nil
 		}
+
+		// The link is now sync'd.
+		w.inSyncLink = true
 	}
 
 	// Get the wireguard client. This may not always be possible.
@@ -1225,7 +1228,7 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 	if device.PrivateKey == zeroKey || device.PublicKey == zeroKey {
 		// One of the private or public key is not set. Generate a new private key and return the corresponding
 		// public key.
-		log.Info("Generate new private/public keypair")
+		log.Info("Generate new private/public key pair")
 		pkey, err := wgtypes.GeneratePrivateKey()
 		if err != nil {
 			log.WithError(err).Error("error generating private-key")

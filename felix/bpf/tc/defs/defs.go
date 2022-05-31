@@ -22,13 +22,13 @@ const (
 	MarkSeenFallThrough              = MarkSeen | 0x04000000
 	MarkSeenFallThroughMask          = MarkSeenMask | MarkSeenFallThrough
 	MarkSeenBypassForward            = MarkSeenBypass | 0x00300000
+	MarkSeenBypassForwardMask        = MarkSeenBypassMask | 0x00f00000
 	MarkSeenBypassForwardSourceFixup = MarkSeenBypass | 0x00500000
-	MarkSeenBypassSkipRPF            = MarkSeenBypass | 0x00400000
-	MarkSeenBypassSkipRPFMask        = MarkSeenBypassMask | 0x00f00000
 	MarkSeenNATOutgoing              = MarkSeenBypass | 0x00800000
 	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | 0x00f00000
 	MarkSeenMASQ                     = MarkSeenBypass | 0x00600000
 	MarkSeenMASQMask                 = MarkSeenBypassMask | 0x00f00000
+	MarkSeenSkipFIB                  = MarkSeen | 0x00100000
 
 	MarkLinuxConntrackEstablished     = 0x08000000
 	MarkLinuxConntrackEstablishedMask = 0x08000000

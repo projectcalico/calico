@@ -1,0 +1,95 @@
+# Adapted from: https://github.com/kubernetes-sigs/sig-windows-tools/blob/master/hostprocess/calico/kube-proxy/start.ps1
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-proxy-windows
+  namespace: kube-system
+data:
+  run.ps1: |
+    $ErrorActionPreference = "Stop"
+    # otherwise kube-proxy.exe takes too long to download
+    $ProgressPreference = 'SilentlyContinue'
+
+    if (-not $env:K8S_VERSION) {
+      Write-Host "The environment variable K8S_VERSION must be specified, e.g. v1.23.4"
+      exit 1
+    }
+
+    # Download kube-proxy based on environment variable
+    $url = "https://dl.k8s.io/${env:K8S_VERSION}/bin/windows/amd64/kube-proxy.exe"
+    $kubeProxyPath = "$PSScriptRoot/kube-proxy.exe"
+    Write-Host "Downloading kube-proxy.exe from $url ..."
+    curl $url -o $kubeProxyPath
+    Write-Host "Downloaded kube-proxy.exe to $kubeProxyPath"
+
+    # Modify the kubeconfig so that references to /var/run/secrets point to this sandbox.
+    $kubeConfigPath = "$PSScriptRoot/kubeconfig.conf"
+    Write-Host "Modifying kubeconfig /var/run/secrets paths and copying to $kubeConfigPath"
+    ((Get-Content -Path ./var/lib/kube-proxy/kubeconfig.conf -Raw) -replace '/var',"$env:CONTAINER_SANDBOX_MOUNT_POINT/var") | Set-Content -Path $kubeConfigPath 
+
+    # Download kube-proxy service script
+    curl https://raw.githubusercontent.com/projectcalico/calico/master/node/windows-packaging/CalicoWindows/kubernetes/kube-proxy-service.ps1 -o $PSScriptRoot/kube-proxy-service.ps1
+
+    & "$PSScriptRoot/kube-proxy-service.ps1" -CalicoWindowsDir "/CalicoWindows" -Kubeconfig $kubeConfigPath -KubeProxy $kubeProxyPath
+
+---
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-proxy-windows
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-proxy-windows
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-proxy-windows
+    spec:
+      serviceAccountName: kube-proxy
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\system"
+      hostNetwork: true
+      volumes:
+      - name: kube-proxy
+        configMap:
+          name: kube-proxy
+      - name: kube-proxy-windows
+        configMap:
+          name: kube-proxy-windows
+      containers:
+      - name: kube-proxy
+        # Update VERSION to match your Windows server version.
+        image: mcr.microsoft.com/windows/nanoserver:VERSION
+        command:
+          - powershell
+          - -c
+          - ./kube-proxy/run.ps1
+        imagePullPolicy: Always
+        env:
+        # Update K8S_VERSION to match your cluster version. E.g. "v1.23.4"
+        - name: K8S_VERSION
+          value: "v1.23.4"
+        # Calico needs to know the name of the node on which it is running.
+        - name: NODENAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        volumeMounts:
+        - name: kube-proxy
+          mountPath: /var/lib/kube-proxy
+        - name: kube-proxy-windows
+          mountPath: /kube-proxy/run.ps1
+          subPath: run.ps1
+      nodeSelector:
+        kubernetes.io/os: windows

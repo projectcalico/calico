@@ -54,6 +54,7 @@ for batch in "${batches[@]}"; do
       -e "SUCCESS" \
       -e "Parallel test node" \
       -e "Test batch" \
+      -e "FV-TEST-START" \
       -C10 | sed 's/.*/'"${prefix}"' &/';
   ) &
   mon_pid=$!

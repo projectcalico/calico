@@ -68,8 +68,11 @@ ownership of the helm resources to the new chart location.
 1. Once the install has succeeded, you can delete any old releases in the `default` namespace.
 
    ```
-   kubectl delete secret -n default -l name=calico -l owner=helm
+   kubectl delete secret -n default -l name=calico,owner=helm --dry-run
    ```
+
+> **Note:** The above command uses --dry-run to avoid making changes to your cluster. We recommend reviewing
+> the output and then re-running the command without --dry-run to commit to the changes.
 
 ## All other upgrades
 
@@ -113,6 +116,10 @@ certs:
     cert:
     commonName:
     caBundle:
+
+# Resources for the tigera/operator pod itself.
+# By default, no resource requests or limits are specified.
+resources: {}
 
 # Configuration for the tigera operator images to deploy.
 tigeraOperator:

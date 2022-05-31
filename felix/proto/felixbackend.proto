@@ -119,6 +119,11 @@ message ToDataplane {
 
     // GlobalBGPConfigUpdate is sent when global BGPConfiguration changes.
     GlobalBGPConfigUpdate global_bgp_config_update = 29;
+
+    Encapsulation encapsulation = 30;
+
+    ServiceUpdate service_update = 31;
+    ServiceRemove service_remove = 32;
   }
 }
 
@@ -367,6 +372,7 @@ message WorkloadEndpoint {
   repeated TierInfo tiers = 7;
   repeated NatInfo ipv4_nat = 8;
   repeated NatInfo ipv6_nat = 9;
+  repeated string allow_spoofed_source_prefixes = 10;
 }
 
 message WorkloadEndpointRemove {
@@ -466,6 +472,12 @@ message IPAMPool {
   bool masquerade = 2;
 }
 
+message Encapsulation {
+  bool ipip_enabled = 1;
+  bool vxlan_enabled = 2;
+  bool vxlan_enabled_v6 = 3;
+}
+
 message ServiceAccountUpdate {
   ServiceAccountID id = 1;
   map<string, string> labels = 2;
@@ -541,6 +553,9 @@ message VXLANTunnelEndpointUpdate {
   string mac = 2;
   string ipv4_addr = 3;
   string parent_device_ip = 4;
+  string mac_v6 = 5;
+  string ipv6_addr = 6;
+  string parent_device_ipv6 = 7;
 }
 
 message VXLANTunnelEndpointRemove {
@@ -567,4 +582,18 @@ message GlobalBGPConfigUpdate {
   repeated string service_cluster_cidrs = 1;
   repeated string service_external_cidrs = 2;
   repeated string service_loadbalancer_cidrs = 3;
+}
+
+message ServiceUpdate {
+	string name = 1;
+	string namespace = 2;
+	string type = 3;
+	string cluster_ip = 4;
+	string loadbalancer_ip = 5;
+	repeated string external_ips = 6;
+}
+
+message ServiceRemove {
+	string name = 1;
+	string namespace = 2;
 }

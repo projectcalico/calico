@@ -16,7 +16,6 @@ package ut_test
 
 import (
 	"fmt"
-	"net"
 	"testing"
 
 	"github.com/google/gopacket"
@@ -31,8 +30,7 @@ type ipv6Test struct {
 	Description string
 	Section     string
 	Rules       *polprog.Rules
-	IPv6Header  *layers.IPv6
-	NextHeader  gopacket.Layer
+	pkt         Packet
 	Drop        bool
 }
 
@@ -41,15 +39,12 @@ var ipTestCases = []ipv6Test{
 		Description: "1 - A packet from host, must accept",
 		Section:     "calico_from_host_ep",
 		Rules:       nil,
-		IPv6Header: &layers.IPv6{
-			Version:  6,
-			HopLimit: 64,
-			SrcIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}),
-			DstIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}),
-		},
-		NextHeader: &layers.UDP{
-			DstPort: 53,
-			SrcPort: 54321,
+		pkt: Packet{
+			l3: ipv6Default,
+			l4: &layers.UDP{
+				DstPort: 53,
+				SrcPort: 54321,
+			},
 		},
 		Drop: false,
 	},
@@ -57,15 +52,12 @@ var ipTestCases = []ipv6Test{
 		Description: "2 - A packet from workload, must drop",
 		Section:     "calico_from_workload_ep",
 		Rules:       nil,
-		IPv6Header: &layers.IPv6{
-			Version:  6,
-			HopLimit: 64,
-			SrcIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}),
-			DstIP:    net.IP([]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}),
-		},
-		NextHeader: &layers.UDP{
-			DstPort: 53,
-			SrcPort: 54321,
+		pkt: Packet{
+			l3: ipv6Default,
+			l4: &layers.UDP{
+				DstPort: 53,
+				SrcPort: 54321,
+			},
 		},
 		Drop: true,
 	},
@@ -77,10 +69,11 @@ func TestIPv6Parsing(t *testing.T) {
 	defer resetBPFMaps()
 
 	for _, tc := range ipTestCases {
+		skbMark = 0
 		runBpfTest(t, tc.Section, tc.Rules, func(bpfrun bpfProgRunFn) {
-			_, _, _, _, pktBytes, err := testPacketv6(nil, tc.IPv6Header, tc.NextHeader, nil)
+			err := tc.pkt.Generate()
 			Expect(err).NotTo(HaveOccurred())
-			res, err := bpfrun(pktBytes)
+			res, err := bpfrun(tc.pkt.bytes)
 			Expect(err).NotTo(HaveOccurred())
 			result := "TC_ACT_UNSPEC"
 			if tc.Drop {
@@ -89,8 +82,8 @@ func TestIPv6Parsing(t *testing.T) {
 			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 			fmt.Printf("pktR = %+v\n", pktR)
 			Expect(res.RetvalStr()).To(Equal(result), fmt.Sprintf("expected the program to return %s", result))
-			Expect(res.dataOut).To(HaveLen(len(pktBytes)))
-			Expect(res.dataOut).To(Equal(pktBytes))
+			Expect(res.dataOut).To(HaveLen(len(tc.pkt.bytes)))
+			Expect(res.dataOut).To(Equal(tc.pkt.bytes))
 		})
 	}
 }

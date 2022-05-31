@@ -19,6 +19,7 @@ FROM ${UBI_IMAGE} as ubi
 FROM scratch
 
 ARG GIT_VERSION=unknown
+ARG BIN_DIR
 
 LABEL name="Calico Networking for CNI" \
       vendor="Project Calico" \
@@ -32,10 +33,12 @@ ADD licenses/ /licenses
 ADD LICENSE /licenses/
 
 # Include libraries from UBI for dynamic linking.
-COPY --from=ubi /lib64 /lib64
-COPY --from=ubi /lib /lib
+COPY --from=ubi /lib64/ld-* /lib64/
+COPY --from=ubi /lib64/libc-* /lib64/
+COPY --from=ubi /lib64/libc.* /lib64/
+COPY --from=ubi /lib64/libpthread* /lib64/
 
-ADD bin/amd64/ /opt/cni/bin/
+ADD $BIN_DIR/ /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin

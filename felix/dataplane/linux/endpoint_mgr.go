@@ -35,15 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// routeTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
-// interface state changes, hooks to queue a full resync and apply routing updates.
-type routeTableSyncer interface {
-	OnIfaceStateChanged(string, ifacemonitor.State)
-	QueueResync()
-	Apply() error
-}
-
-// routeTable is the interface provided by the standard routetable module used to progam the RIB.
+// routeTable is the interface provided by the standard routetable module used to program the RIB.
 type routeTable interface {
 	routeTableSyncer
 	SetRoutes(ifaceName string, targets []routetable.Target)
@@ -136,6 +128,7 @@ type endpointManager struct {
 	ipVersion              uint8
 	wlIfacesRegexp         *regexp.Regexp
 	kubeIPVSSupportEnabled bool
+	floatingIPsEnabled     bool
 
 	// Our dependencies.
 	rawTable     iptablesTable
@@ -172,8 +165,17 @@ type endpointManager struct {
 	// Mix of host and workload endpoint IDs.
 	epIDsToUpdateStatus set.Set
 
+	// sourceSpoofingConfig maps interface names to lists of source IPs that we accept from these interfaces
+	// these interfaces (in addition to the pod IPs)
+	sourceSpoofingConfig map[string][]string
+	// rpfSkipChainDirty is set to true when the rpf status of some endpoints is updated
+	rpfSkipChainDirty bool
+	// default configuration for new interfaces
+	// used to reset kernel settings when source spoofing is disabled
+	defaultRPFilter string
+
 	// hostIfaceToAddrs maps host interface name to the set of IPs on that interface (reported
-	// fro the dataplane).
+	// from the dataplane).
 	hostIfaceToAddrs map[string]set.Set
 	// rawHostEndpoints contains the raw (i.e. not resolved to interface) host endpoints.
 	rawHostEndpoints map[proto.HostEndpointID]*proto.HostEndpoint
@@ -219,9 +221,11 @@ func newEndpointManager(
 	kubeIPVSSupportEnabled bool,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
+	defaultRPFilter string,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
+	floatingIPsEnabled bool,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		rawTable,
@@ -236,9 +240,11 @@ func newEndpointManager(
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
 		os.Stat,
+		defaultRPFilter,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
+		floatingIPsEnabled,
 	)
 }
 
@@ -255,9 +261,11 @@ func newEndpointManagerWithShims(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
+	defaultRPFilter string,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
+	floatingIPsEnabled bool,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -268,6 +276,7 @@ func newEndpointManagerWithShims(
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
 		bpfEndpointManager:     bpfEndpointManager,
+		floatingIPsEnabled:     floatingIPsEnabled,
 
 		rawTable:     rawTable,
 		mangleTable:  mangleTable,
@@ -294,6 +303,10 @@ func newEndpointManagerWithShims(
 		wlIfaceNamesToReconfigure: set.New(),
 
 		epIDsToUpdateStatus: set.New(),
+
+		sourceSpoofingConfig: map[string][]string{},
+		rpfSkipChainDirty:    true,
+		defaultRPFilter:      defaultRPFilter,
 
 		hostIfaceToAddrs:   map[string]set.Set{},
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
@@ -388,13 +401,18 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 }
 
 func (m *endpointManager) CompleteDeferredWork() error {
-
 	m.resolveWorkloadEndpoints()
 
 	if m.hostEndpointsDirty {
 		log.Debug("Host endpoints updated, resolving them.")
 		m.updateHostEndpoints()
 		m.hostEndpointsDirty = false
+	}
+
+	if m.rpfSkipChainDirty {
+		log.Debug("Workload RPF configuration updated, applying changes")
+		m.updateRPFSkipChain()
+		m.rpfSkipChainDirty = false
 	}
 
 	if m.kubeIPVSSupportEnabled && m.needToCheckEndpointMarkChains {
@@ -546,6 +564,11 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 			delete(m.activeWlIfaceNameToID, oldWorkload.Name)
+			if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
+				logCxt.Debugf("Removing RPF configuration for old workload %s", oldWorkload.Name)
+				delete(m.sourceSpoofingConfig, oldWorkload.Name)
+				m.rpfSkipChainDirty = true
+			}
 		}
 		delete(m.activeWlEndpoints, id)
 	}
@@ -587,6 +610,11 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 					if !m.bpfEnabled {
 						m.filterTable.RemoveChains(m.activeWlIDToChains[id])
+						if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
+							logCxt.Debugf("Removing RPF configuration for workload %s", workload.Name)
+							delete(m.sourceSpoofingConfig, workload.Name)
+							m.rpfSkipChainDirty = true
+						}
 					}
 					m.routeTable.SetRoutes(oldWorkload.Name, nil)
 					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
@@ -609,6 +637,16 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					)
 					m.filterTable.UpdateChains(chains)
 					m.activeWlIDToChains[id] = chains
+
+					if len(workload.AllowSpoofedSourcePrefixes) > 0 && !m.hasSourceSpoofingConfiguration(workload.Name) {
+						logCxt.Infof("Disabling RPF check for workload %s", workload.Name)
+						m.sourceSpoofingConfig[workload.Name] = workload.AllowSpoofedSourcePrefixes
+						m.rpfSkipChainDirty = true
+					} else if m.hasSourceSpoofingConfiguration(workload.Name) && len(workload.AllowSpoofedSourcePrefixes) == 0 {
+						logCxt.Infof("Enabling RPF check for workload %s (previously disabled)", workload.Name)
+						delete(m.sourceSpoofingConfig, workload.Name)
+						m.rpfSkipChainDirty = true
+					}
 				}
 
 				// Collect the IP prefixes that we want to route locally to this endpoint:
@@ -627,7 +665,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					natInfos = workload.Ipv6Nat
 					addrSuffix = "/128"
 				}
-				if len(natInfos) != 0 {
+				if m.floatingIPsEnabled && len(natInfos) != 0 {
+					// Include any floating IP NATs if the feature is enabled.
 					old := ipStrings
 					ipStrings = make([]string, len(old)+len(natInfos))
 					copy(ipStrings, old)
@@ -733,6 +772,28 @@ func wlIdsAscending(id1, id2 *proto.WorkloadEndpointID) bool {
 	return id1.OrchestratorId < id2.OrchestratorId
 }
 
+func (m *endpointManager) hasSourceSpoofingConfiguration(interfaceName string) bool {
+	_, ok := m.sourceSpoofingConfig[interfaceName]
+	return ok
+}
+
+func (m *endpointManager) updateRPFSkipChain() {
+	log.Debug("Updating RPF skip chain")
+	chain := &iptables.Chain{
+		Name:  rules.ChainRpfSkip,
+		Rules: make([]iptables.Rule, 0),
+	}
+	for interfaceName, addresses := range m.sourceSpoofingConfig {
+		for _, addr := range addresses {
+			chain.Rules = append(chain.Rules, iptables.Rule{
+				Match:  iptables.Match().InInterface(interfaceName).SourceNet(addr),
+				Action: iptables.AcceptAction{},
+			})
+		}
+	}
+	m.rawTable.UpdateChain(chain)
+}
+
 func (m *endpointManager) resolveEndpointMarks() {
 	if m.bpfEnabled {
 		return
@@ -744,7 +805,6 @@ func (m *endpointManager) resolveEndpointMarks() {
 }
 
 func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID {
-
 	// Host endpoint resolution
 	// ------------------------
 	//
@@ -867,7 +927,6 @@ func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID
 }
 
 func (m *endpointManager) updateHostEndpoints() {
-
 	// Calculate filtered name/id maps for untracked and pre-DNAT policy, and a reverse map from
 	// each active host endpoint to the interfaces it is in use for.
 	newIfaceNameToHostEpID := m.newIfaceNameToHostEpID
@@ -1157,6 +1216,73 @@ func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
 	return true, nil
 }
 
+func configureInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
+	log.WithField("ifaceName", name).Info(
+		"Applying /proc/sys configuration to interface.")
+	if ipVersion == 4 {
+		// Enable routing to localhost.  This is required to allow for NAT to the local
+		// host.
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
+		if err != nil {
+			return err
+		}
+		// Normally, the kernel has a delay before responding to proxy ARP but we know
+		// that's not needed in a Calico network so we disable it.
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
+		if err != nil {
+			log.Warnf("failed to set net.ipv4.neigh.%s.proxy_delay=0: %s", name, err)
+		}
+		// Enable proxy ARP, this makes the host respond to all ARP requests with its own
+		// MAC.  This has a couple of advantages:
+		//
+		// - In OpenStack, we're forced to configure the guest's networking using DHCP.
+		//   Since DHCP requires a subnet and gateway, representing the Calico network
+		//   in the natural way would lose a lot of IP addresses.  For IPv4, we'd have to
+		//   advertise a distinct /30 to each guest, which would use up 4 IPs per guest.
+		//   Using proxy ARP, we can advertise the whole pool to each guest as its subnet
+		//   but have the host respond to all ARP requests and route all the traffic whether
+		//   it is on or off subnet.
+		//
+		// - For containers, we install explicit routes into the containers network
+		//   namespace and we use a link-local address for the gateway.  Turing on proxy ARP
+		//   means that we don't need to assign the link local address explicitly to each
+		//   host side of the veth, which is one fewer thing to maintain and one fewer
+		//   thing we may clash over.
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+		if err != nil {
+			return err
+		}
+		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
+		// be forwarded in both directions we need this flag to be set on the fabric-facing
+		// interface too (or for the global default to be set).
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name), "1")
+		if err != nil {
+			return err
+		}
+		// Disable kernel rpf check for interfaces that have rpf filtering explicitly disabled
+		// This is set only in IPv4 mode as there's no equivalent sysctl in IPv6
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), rpFilter)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Enable proxy NDP, similarly to proxy ARP, described above.
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
+		if err != nil {
+			return err
+		}
+		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
+		// be forwarded in both directions we need this flag to be set on the fabric-facing
+		// interface too (or for the global default to be set).
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (m *endpointManager) configureInterface(name string) error {
 	if !m.activeUpIfaces.Contains(name) {
 		log.WithField("ifaceName", name).Info(
@@ -1179,63 +1305,12 @@ func (m *endpointManager) configureInterface(name string) error {
 		}
 	}
 
-	log.WithField("ifaceName", name).Info(
-		"Applying /proc/sys configuration to interface.")
-	if m.ipVersion == 4 {
-		// Enable routing to localhost.  This is required to allow for NAT to the local
-		// host.
-		err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
-		if err != nil {
-			return err
-		}
-		// Normally, the kernel has a delay before responding to proxy ARP but we know
-		// that's not needed in a Calico network so we disable it.
-		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
-		if err != nil {
-			log.Warnf("failed to set net.ipv4.neigh.%s.proxy_delay=0: %s", name, err)
-		}
-		// Enable proxy ARP, this makes the host respond to all ARP requests with its own
-		// MAC.  This has a couple of advantages:
-		//
-		// - In OpenStack, we're forced to configure the guest's networking using DHCP.
-		//   Since DHCP requires a subnet and gateway, representing the Calico network
-		//   in the natural way would lose a lot of IP addresses.  For IPv4, we'd have to
-		//   advertise a distinct /30 to each guest, which would use up 4 IPs per guest.
-		//   Using proxy ARP, we can advertise the whole pool to each guest as its subnet
-		//   but have the host respond to all ARP requests and route all the traffic whether
-		//   it is on or off subnet.
-		//
-		// - For containers, we install explicit routes into the containers network
-		//   namespace and we use a link-local address for the gateway.  Turing on proxy ARP
-		//   means that we don't need to assign the link local address explicitly to each
-		//   host side of the veth, which is one fewer thing to maintain and one fewer
-		//   thing we may clash over.
-		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
-		if err != nil {
-			return err
-		}
-		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
-		// be forwarded in both directions we need this flag to be set on the fabric-facing
-		// interface too (or for the global default to be set).
-		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name), "1")
-		if err != nil {
-			return err
-		}
-	} else {
-		// Enable proxy NDP, similarly to proxy ARP, described above.
-		err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
-		if err != nil {
-			return err
-		}
-		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
-		// be forwarded in both directions we need this flag to be set on the fabric-facing
-		// interface too (or for the global default to be set).
-		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
-		if err != nil {
-			return err
-		}
+	rpFilter := m.defaultRPFilter
+	if m.hasSourceSpoofingConfiguration(name) {
+		rpFilter = "0"
 	}
-	return nil
+
+	return configureInterface(name, int(m.ipVersion), rpFilter, m.writeProcSys)
 }
 
 func writeProcSys(path, value string) error {

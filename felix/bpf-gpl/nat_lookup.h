@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_NAT_LOOKUP_H__
@@ -11,7 +11,6 @@
 #include <linux/udp.h>
 
 #include "bpf.h"
-#include "skb.h"
 #include "routes.h"
 #include "nat_types.h"
 
@@ -36,11 +35,6 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 	struct calico_nat_dest *nat_lv2_val;
 	struct calico_nat_v4_affinity_key affkey = {};
 	__u64 now = 0;
-
-	if (!CALI_F_TO_HOST) {
-		// Skip NAT lookup for traffic leaving the host namespace.
-		return NULL;
-	}
 
 	nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
 	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",

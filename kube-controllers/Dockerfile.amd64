@@ -42,8 +42,10 @@ COPY --from=ubi /profiles /profiles
 COPY --from=ubi /status /status
 
 COPY --from=ubi /usr/include /usr/include
-COPY --from=ubi /lib64 /lib64
-COPY --from=ubi /lib /lib
+COPY --from=ubi /lib64/ld-* /lib64/
+COPY --from=ubi /lib64/libc-* /lib64/
+COPY --from=ubi /lib64/libc.* /lib64/
+COPY --from=ubi /lib64/libpthread* /lib64/
 
 ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
 ADD bin/check-status-linux-amd64 /usr/bin/check-status

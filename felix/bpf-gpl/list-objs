@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Project Calico BPF dataplane build scripts.
-# Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 # Generate the cross-product of all the compile options, excluding some cases that don't make sense.
@@ -10,39 +10,47 @@
 # WARNING: naming and set of cases must be kept in sync with tc.ProgFilename() in Felix's compiler.go.
 
 emit_filename() {
-  echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}.o"
+  if [ "${core_support}" = "legacy" ]; then
+    echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}.o"
+  else
+    echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}_${core_support}.o"
+  fi
 }
 
-for log_level in debug info no_log; do
-  echo "bin/connect_time_${log_level}_v4.o"
-  echo "bin/connect_time_${log_level}_v6.o"
-  echo "bin/xdp_${log_level}.o"
-  for host_drop in "" "host_drop_"; do
-    if [ "${host_drop}" = "host_drop_" ]; then
-      # The workload-to-host drop setting only applies to the from-workload hook.
-      ep_types="wep"
-    else
-      ep_types="wep hep tnl wg"
-    fi
-    for fib in "" "fib_"; do
-      for ep_type in $ep_types; do
-        if [ "${host_drop}" = "host_drop_" ] || [ "${fib}" = "fib_" ]; then
-          # The workload-to-host drop setting only applies to the from-workload hook.
-          # The FIB only applies in the from-endpoint hooks.
-          directions="from"
-        else
-          directions="from to"
-        fi
-        for from_or_to in $directions; do
-          extra="dsr_"
-          if [ "${ep_type}" = "hep" ]; then
-            emit_filename
+for core_support in co-re legacy;do
+  for log_level in debug info no_log; do
+    echo "bin/connect_time_${log_level}_v4.o"
+    echo "bin/connect_time_${log_level}_v4_co-re.o"
+    echo "bin/connect_time_${log_level}_v6.o"
+    echo "bin/connect_time_${log_level}_v6_co-re.o"
+    echo "bin/xdp_${log_level}.o"
+    for host_drop in "" "host_drop_"; do
+      if [ "${host_drop}" = "host_drop_" ]; then
+        # The workload-to-host drop setting only applies to the from-workload hook.
+        ep_types="wep"
+      else
+        ep_types="wep hep tnl l3"
+      fi
+      for fib in "" "fib_"; do
+        for ep_type in $ep_types; do
+          if [ "${host_drop}" = "host_drop_" ] || [ "${fib}" = "fib_" ]; then
+            # The workload-to-host drop setting only applies to the from-workload hook.
+            # The FIB only applies in the from-endpoint hooks.
+            directions="from"
+          else
+            directions="from to"
           fi
-          if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
+          for from_or_to in $directions; do
+            extra="dsr_"
+            if [ "${ep_type}" = "hep" ]; then
+              emit_filename
+            fi
+            if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
+              emit_filename
+            fi
+            extra=""
             emit_filename
-          fi
-          extra=""
-          emit_filename
+          done
         done
       done
     done

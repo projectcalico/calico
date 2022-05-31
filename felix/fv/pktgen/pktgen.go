@@ -15,6 +15,7 @@
 package main
 
 import (
+	"math"
 	"net"
 	"strconv"
 
@@ -29,7 +30,7 @@ import (
 const usage = `pktgen: generates packets for Felix FV testing.
 
 Usage:
-  pktgen <ip_src> <ip_dst> <proto> [--port-src=<port_src>] [--port-dst=<port_dst>]`
+  pktgen <ip_src> <ip_dst> <proto> [--ip-id=<ip_id>] [--port-src=<port_src>] [--port-dst=<port_dst>]`
 
 func main() {
 	log.SetLevel(log.InfoLevel)
@@ -54,11 +55,26 @@ func main() {
 		log.Fatal("cannot handle IPv6")
 	}
 
+	ipID := uint16(0)
+	if args["--ip-id"] != nil {
+		id, err := strconv.Atoi(args["--ip-id"].(string))
+		if err != nil {
+			log.WithError(err).Fatal("IP id not a number")
+		}
+		if id > math.MaxUint16 || id < 0 {
+			log.Fatal("IP id should be between 0 and 65535")
+		}
+		ipID = uint16(id)
+	}
+
 	sport := uint16(0)
 	if args["--port-src"] != nil {
 		p, err := strconv.Atoi(args["--port-src"].(string))
 		if err != nil {
 			log.WithError(err).Fatal("source port not a number")
+		}
+		if p > math.MaxUint16 || p < 0 {
+			log.Fatal("source port should be between 0 and 65535")
 		}
 		sport = uint16(p)
 	}
@@ -68,6 +84,9 @@ func main() {
 		p, err := strconv.Atoi(args["--port-dst"].(string))
 		if err != nil {
 			log.WithError(err).Fatal("destination port not a number")
+		}
+		if p > math.MaxUint16 || p < 0 {
+			log.Fatal("destination port should be between 0 and 65535")
 		}
 		dport = uint16(p)
 	}
@@ -85,6 +104,7 @@ func main() {
 
 	ipv4 := &layers.IPv4{
 		Version:  4,
+		Id:       ipID,
 		IHL:      5,
 		TTL:      64,
 		Flags:    layers.IPv4DontFragment,

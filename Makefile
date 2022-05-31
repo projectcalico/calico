@@ -37,10 +37,12 @@ clean:
 	$(MAKE) -C calico clean
 
 generate:
+	$(MAKE) gen-semaphore-yaml
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C app-policy protobuf
+	$(MAKE) -C calico gen-manifests
 
 # Build all Calico images for the current architecture.
 image:
@@ -89,3 +91,6 @@ release-publish: hack/release/release hack/release/ghr
 # Create a release branch.
 create-release-branch: hack/release/release
 	@hack/release/release -new-branch
+
+gen-semaphore-yaml:
+	cd .semaphore && ./generate-semaphore-yaml.sh

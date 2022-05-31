@@ -46,7 +46,7 @@ enum bpf_ret_code calico_sockops(struct bpf_sock_ops *skops)
 	ip4val_to_lpm(&sip, 32, skops->local_ip4);
 	ip4val_to_lpm(&dip, 32, skops->remote_ip4);
 
-	// If neither source nor dest are present in the Felix-populated endoints
+	// If neither source nor dest are present in the Felix-populated endpoints
 	// map we do nothing because the packet is not related to Felix-managed
 	// traffic.
 	if (    NULL == bpf_map_lookup_elem(&calico_sk_endpoints, &dip)

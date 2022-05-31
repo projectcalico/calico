@@ -114,7 +114,7 @@ bin/list-gnp: examples/list-gnp/main.go
 	@echo Building list-gnp example binary...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	   	go build -v -o $@ -v $(LDFLAGS) "examples/list-gnp/main.go"' 
+		go build -v -o $@ "examples/list-gnp/main.go"'
 
 WHAT?=.
 GINKGO_FOCUS?=.*
@@ -146,4 +146,4 @@ LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused,inef
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean check-generated-files static-checks ut
+ci: clean check-generated-files build static-checks ut

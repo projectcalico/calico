@@ -723,6 +723,8 @@ func init() {
 		Entry("should reject route table ranges min negative", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: -5, Max: 250}}}, false),
 		Entry("should reject route table ranges max < min", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 50, Max: 45}}}, false),
 		Entry("should reject route table ranges max too large", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0xf00000000}}}, false),
+		Entry("should reject single route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0x10000}}}, false),
+		Entry("should reject multitple route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 2}, {Min: 3, Max: 4}, {Min: 5, Max: 0x10000}}}, false),
 
 		Entry("should reject spec with both RouteTableRanges and RouteTableRange set", api.FelixConfigurationSpec{
 			RouteTableRanges: &api.RouteTableRanges{
@@ -2516,6 +2518,7 @@ func init() {
 		Entry("should accept a valid prometheusMetricsHost value 'fe80::ea7a:70fa:cf74:25d5'", api.FelixConfigurationSpec{PrometheusMetricsHost: "fe80::ea7a:70fa:cf74:25d5"}, true),
 		Entry("should reject an invalid prometheusMetricsHost value 'localhost#'", api.FelixConfigurationSpec{PrometheusMetricsHost: "localhost#"}, false),
 		Entry("should reject an invalid prometheusMetricsHost value '0: 1::1'", api.FelixConfigurationSpec{PrometheusMetricsHost: "0: 1::1"}, false),
+		// Testcases for DeviceRouteSourceAddress address
 		Entry("should accept a valid IPv4 address",
 			api.FelixConfigurationSpec{DeviceRouteSourceAddress: ipv4_1}, true,
 		),
@@ -2527,6 +2530,19 @@ func init() {
 		),
 		Entry("should not accept a masked IP address",
 			api.FelixConfigurationSpec{DeviceRouteSourceAddress: netv4_1}, false,
+		),
+		// Testcases for DeviceRouteSourceAddressIPv6 address
+		Entry("should accept a valid IPv6 address",
+			api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: ipv6_1}, true,
+		),
+		Entry("should not accept a valid IPv4 address",
+			api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: ipv4_1}, false,
+		),
+		Entry("should not accept an invalid IPv4 address",
+			api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: bad_ipv6_1}, false,
+		),
+		Entry("should not accept a masked IPv6 address",
+			api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: netv6_1}, false,
 		),
 		Entry("should accept a valid listening port",
 			api.FelixConfigurationSpec{WireguardListeningPort: &validWireguardPortOrRulePriority}, true,
