@@ -46,6 +46,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -91,7 +92,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	BeforeSuite(func() {
 		log.Infof("CONTAINER_RUNTIME=%v", os.Getenv("CONTAINER_RUNTIME"))
 
-		//Clean-up Networks if left over in previous run
+		// Clean-up Networks if left over in previous run
 		hnsNetworkList, _ := hcsshim.HNSListNetworkRequest("GET", "", "")
 		log.WithField("hnsNetworkList: ", hnsNetworkList).Infof("List of Network")
 		for _, network := range hnsNetworkList {
@@ -102,7 +103,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 		}
 		// Create a random seed
-		rand.Seed(time.Now().UTC().UnixNano())
+		seedrng.EnsureSeeded()
 		hostname, _ = names.Hostname()
 		ctx = context.Background()
 		for i := 1; i <= 3; i++ {
@@ -1556,7 +1557,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					lastNWName = podNwName
 					nwsName = append(nwsName, podNwName)
 				}
-				//Network should  be same
+				// Network should  be same
 				Expect(nwName).Should(Equal(podNwName))
 			}
 		})
@@ -2051,7 +2052,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			log.Infof("Checking timestamp container 1 %s", containerID1)
 			justDeleted, err := utils.CheckWepJustDeleted(containerID1, 12)
 			Expect(err).ShouldNot(HaveOccurred())
-			//JustDeleted for container1 could vary because it depends on how long it takes to delete container2.
+			// JustDeleted for container1 could vary because it depends on how long it takes to delete container2.
 
 			log.Infof("Checking timestamp container 2 %s", containerID2)
 			justDeleted, err = utils.CheckWepJustDeleted(containerID2, 12)
