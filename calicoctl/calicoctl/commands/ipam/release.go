@@ -22,6 +22,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/json"
 
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	docopt "github.com/docopt/docopt-go"
@@ -35,7 +38,8 @@ import (
 	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
-// IPAM takes keyword with an IP address then calls the subcommands.
+// Release implements the "calicoctl ipam release" command, which supports releasing single IPs and releasing
+// batches of leaked IPs and handles from an IPAM report.
 func Release(args []string, version string) error {
 	doc := constants.DatastoreIntro + `Usage:
   <BINARY_NAME> ipam release [--ip=<IP>] [--from-report=<REPORT>]... [--config=<CONFIG>] [--force] [--allow-version-mismatch]
@@ -198,46 +202,98 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 		}
 	}
 
-	// For each address that needs to be released, do so.
-	var notInUse map[string]libipam.ReleaseOptions
+	// Take the intersection of the reports, we only want to release the "leaked" values that show in all the reports.
+	var notInUseIPs map[string]libipam.ReleaseOptions
+	var notInUseHandles map[string]HandleInfo
 	for _, report := range reports {
-		merged := make(map[string]libipam.ReleaseOptions)
+		mergedIPs := make(map[string]libipam.ReleaseOptions)
 		for _, allocations := range report.Allocations {
 			for _, a := range allocations {
 				if a.InUse {
 					continue
 				}
-				if _, ok := notInUse[a.IP]; notInUse != nil && !ok {
+				if _, ok := notInUseIPs[a.IP]; notInUseIPs != nil && !ok {
 					continue
 				}
-				merged[a.IP] = libipam.ReleaseOptions{
+				mergedIPs[a.IP] = libipam.ReleaseOptions{
 					Handle:         a.Handle,
 					Address:        a.IP,
 					SequenceNumber: a.SequenceNumber,
 				}
 			}
 		}
-		notInUse = merged
+		notInUseIPs = mergedIPs
+
+		mergedHandles := map[string]HandleInfo{}
+		for _, h := range report.LeakedHandles {
+			if notInUseHandles == nil {
+				// First pass, collect everything.
+				mergedHandles[h.ID] = h
+			} else if oldH, ok := notInUseHandles[h.ID]; ok && oldH.Revision == h.Revision {
+				// Subsequent pass, only collect things that haven't changed between reports.
+				mergedHandles[h.ID] = h
+			}
+		}
+		notInUseHandles = mergedHandles
 	}
 
 	ipsToRelease := []libipam.ReleaseOptions{}
-	for _, opts := range notInUse {
+	for _, opts := range notInUseIPs {
 		ipsToRelease = append(ipsToRelease, opts)
 	}
 	if len(ipsToRelease) == 0 {
 		fmt.Println("No addresses need to be released.")
 		return nil
 	}
-	fmt.Printf("Releasing %d old IPs\n", len(ipsToRelease))
+	fmt.Printf("Releasing %d old IPs...\n", len(ipsToRelease))
 
 	unallocated, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease...)
 	if err != nil {
-		return err
+		fmt.Printf("An error occured while releasing some IPs: %s.  "+
+			"Problems are often caused by an out-of-date IPAM report.  "+
+			"Try regenerating the IPAM report and retry.\n", err)
+	} else {
+		fmt.Printf("Released %d IPs successfully\n", len(ipsToRelease)-len(unallocated))
 	}
 	if len(unallocated) != 0 {
-		fmt.Println("Warning: report contained addresses which are no longer allocated")
+		fmt.Printf("%d addresses marked as leaked in the report had already been cleaned up.\n", len(unallocated))
+	}
+
+	if len(notInUseHandles) > 0 {
+		fmt.Printf("Deleting %d handles...\n", len(notInUseHandles))
+		fmt.Println("Key: '.' = Deleted OK; 'x' = skip, handle missing/changed.")
+		// Get the backend client.
+		type accessor interface {
+			Backend() bapi.Client
+		}
+		var numReleased, numConflict, numErrors int
+		bc := c.(accessor).Backend()
+		for handleID, handleInfo := range notInUseHandles {
+			handleKey := model.IPAMHandleKey{HandleID: handleID}
+			_, err := bc.Delete(ctx, handleKey, handleInfo.Revision)
+			if err != nil {
+				if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+					// Since we supply a revision, we don't actually hit this case, we end up going through the
+					// following branch.  Just in case datastore behaviour changes, handle this case too...
+					numConflict++
+					fmt.Print("x")
+				} else if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {
+					numConflict++
+					fmt.Print("x")
+				} else {
+					numErrors++
+					fmt.Printf("\nDeleting handle %s failed: %s.\n", handleID, err.Error())
+				}
+			} else {
+				numReleased++
+				fmt.Print(".")
+			}
+		}
+		fmt.Println()
+		fmt.Printf("Released %d handles; %d skipped; %d errors.\n",
+			numReleased, numConflict, numErrors)
 	} else {
-		fmt.Printf("Released %d IPs successfully\n", len(ipsToRelease))
+		fmt.Println("Report didn't contain any handles to clean up.")
 	}
 
 	return nil
