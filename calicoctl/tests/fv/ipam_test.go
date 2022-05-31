@@ -16,6 +16,9 @@ package fv_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strconv"
@@ -24,10 +27,14 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+
 	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	ipamcmd "github.com/projectcalico/calico/calicoctl/calicoctl/commands/ipam"
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -214,4 +221,114 @@ func TestIPAM(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	_, err = client.IPPools().Delete(ctx, "ipam-test-v4-b29", options.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func TestIPAMCleanup(t *testing.T) {
+	RegisterTestingT(t)
+
+	ctx := context.Background()
+
+	// Create a Calico client.
+	config := apiconfig.NewCalicoAPIConfig()
+	config.Spec.DatastoreType = "etcdv3"
+	config.Spec.EtcdEndpoints = "http://127.0.0.1:2379"
+	client, err := clientv3.New(*config)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Set Calico version in ClusterInformation
+	out, err := SetCalicoVersion(false)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(out).To(ContainSubstring("Calico version set to"))
+
+	// Create an IPv4 pool.
+	pool := v3.NewIPPool()
+	pool.Name = "ipam-test-v4-handle-clean"
+	pool.Spec.CIDR = "10.66.0.0/16"
+	_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	defer func() {
+		_, err = client.IPPools().Delete(ctx, "ipam-test-v4-handle-clean", options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	// Create a Node resource for this host.
+	node := libapi.NewNode()
+	node.Name, err = os.Hostname()
+	Expect(err).NotTo(HaveOccurred())
+	_, err = client.Nodes().Create(ctx, node, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		_, err = client.Nodes().Delete(ctx, node.Name, options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	// Assign some IPs.
+	myHandle := "TestIPAMCleanup"
+	v4Assignments, _, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+		Num4:        1,
+		Attrs:       map[string]string{"note": "reserved by ipam_test.go"},
+		HandleID:    &myHandle,
+		IntendedUse: v3.IPPoolAllowedUseWorkload,
+	})
+	_ = v4Assignments
+	Expect(err).NotTo(HaveOccurred())
+
+	// Make a raw, leaked handle for IPAM check to find.
+	type accessor interface {
+		Backend() bapi.Client
+	}
+	bc := client.(accessor).Backend()
+	createLeakedHandle := func() *model.KVPair {
+		kv, err := bc.Create(ctx, &model.KVPair{
+			Key: model.IPAMHandleKey{
+				HandleID: "leaked-handle",
+			},
+			Value: &model.IPAMHandle{
+				HandleID: "leaked-handle",
+				Block: map[string]int{
+					"10.65.79.0/26": 1,
+				},
+				Deleted: false,
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+		return kv
+	}
+	createLeakedHandle()
+
+	// Run calicoctl ipam check and parse the resulting report.
+	out = Calicoctl(false, "ipam", "check", "--show-all-ips", "-o", "/tmp/ipam_report.json")
+	t.Log("IPAM check output:", out)
+	reportFile, err := ioutil.ReadFile("/tmp/ipam_report.json")
+	Expect(err).NotTo(HaveOccurred())
+	t.Log("IPAM check report (raw JSON):", string(reportFile))
+	var report ipamcmd.Report
+	err = json.Unmarshal(reportFile, &report)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Check that handles were reported correctly.
+	Expect(out).To(ContainSubstring("Found 1 handles with no matching IPs (and 1 handles with matches)."))
+	Expect(report.LeakedHandles).To(HaveLen(1))
+	Expect(report.LeakedHandles[0].ID).To(Equal("leaked-handle"))
+	Expect(report.LeakedHandles[0].Revision).ToNot(BeEmpty())
+
+	out, err = CalicoctlMayFail(false, "ipam", "release", "--from-report=/tmp/ipam_report.json")
+	Expect(err).To(HaveOccurred(), "calicoctl ipam release should fail if datastore is not locked")
+	Expect(out).To(ContainSubstring("not locked"))
+
+	out, err = CalicoctlMayFail(false, "ipam", "release", "--from-report=/tmp/ipam_report.json", "--force")
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to run calicoctl ipam release: %s", out))
+	t.Log("calicoctl ipam release output:", out)
+	Expect(out).To(ContainSubstring("Released 1 IPs successfully"))
+	Expect(out).To(ContainSubstring("Released 1 handles; skipped 0 (already gone); 0 skipped (handle updated since report); 0 errors."))
+
+	// Both handles should now be gone.
+	handles, err := bc.List(ctx, model.IPAMHandleListOptions{}, "")
+	Expect(err).NotTo(HaveOccurred())
+	for _, kv := range handles.KVPairs {
+		hk := kv.Key.(model.IPAMHandleKey)
+		Expect(hk.HandleID).NotTo(Equal("leaked-handle"))
+		Expect(hk.HandleID).NotTo(Equal(myHandle))
+	}
 }
