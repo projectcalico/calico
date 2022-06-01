@@ -39,11 +39,11 @@ func restoreMaps(mc *bpf.MapContext) {
 	for _, m := range allMaps {
 		os.Remove(m.Path())
 		os.Remove(m.Path() + "_old")
-		switch m.(type) {
+		switch m := m.(type) {
 		case *bpf.PinnedMap:
-			m.(*bpf.PinnedMap).Close()
+			m.Close()
 		case *conntrack.MultiVersionMap:
-			m.(*conntrack.MultiVersionMap).Close()
+			m.Close()
 		}
 		err := m.EnsureExists()
 		if err != nil {
@@ -52,49 +52,48 @@ func restoreMaps(mc *bpf.MapContext) {
 	}
 }
 
-/*
 func TestCTMapUpgradeWithInvalidEntry(t *testing.T) {
-       RegisterTestingT(t)
-        ctMap.(*bpf.PinnedMap).Close()
-        os.Remove(ctMap.Path())
-        mc := &bpf.MapContext{}
-        // create version 2 map
-        ctMapV2 := conntrack.MapV2(mc)
-        err := ctMapV2.EnsureExists()
-        Expect(err).NotTo(HaveOccurred(), "Failed to create version2 ct map")
+	RegisterTestingT(t)
+	ctMap.(*conntrack.MultiVersionMap).Close()
+	os.Remove(ctMap.Path())
+	mc := &bpf.MapContext{}
+	// create version 2 map
+	ctMapV2 := conntrack.MapV2(mc)
+	err := ctMapV2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create version2 ct map")
 
-        created := time.Duration(1)
-        lastSeen := time.Duration(2)
-        flags := conntrack.FlagNATOut | conntrack.FlagSkipFIB
-        k := conntrackv2.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
-        revKey := conntrackv2.NewKey(1, net.ParseIP("10.0.0.2"), 0, net.ParseIP("10.0.0.3"), 0)
-        v := conntrackv2.NewValueNATForward(created, lastSeen, flags, revKey)
-        v.SetNATSport(uint16(4000))
+	created := time.Duration(1)
+	lastSeen := time.Duration(2)
+	flags := conntrack.FlagNATOut | conntrack.FlagSkipFIB
+	k := conntrackv2.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
+	revKey := conntrackv2.NewKey(1, net.ParseIP("10.0.0.2"), 0, net.ParseIP("10.0.0.3"), 0)
+	v := conntrackv2.NewValueNATForward(created, lastSeen, flags, revKey)
+	v.SetNATSport(uint16(4000))
 	v[16] = 4
-        err = ctMapV2.Update(k.AsBytes(), v[:])
-        Expect(err).NotTo(HaveOccurred())
+	err = ctMapV2.Update(k.AsBytes(), v[:])
+	Expect(err).NotTo(HaveOccurred())
 
-        ctMapV3 := conntrack.Map(mc)
-        err = ctMapV3.EnsureExists()
-        Expect(err).NotTo(HaveOccurred(), "Failed to create ct map")
+	ctMapV3 := conntrack.Map(mc)
+	err = ctMapV3.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create ct map")
 
-        ctMapMemV3 := saveCTMap(ctMapV3)
-        Expect(len(ctMapMemV3)).To(Equal(0))
+	ctMapMemV3 := saveCTMap(ctMapV3)
+	Expect(len(ctMapMemV3)).To(Equal(0))
 
-        ctMapV2.(*bpf.PinnedMap).Close()
-        ctMapV3.(*bpf.PinnedMap).Close()
+	ctMapV2.(*bpf.PinnedMap).Close()
+	ctMapV3.(*conntrack.MultiVersionMap).Close()
 
-        os.Remove(ctMapV2.Path())
-        os.Remove(ctMapV3.Path())
-        for _, m := range allMaps {
-                err := m.EnsureExists()
-                Expect(err).NotTo(HaveOccurred())
-        }
+	os.Remove(ctMapV2.Path())
+	os.Remove(ctMapV3.Path())
+	for _, m := range allMaps {
+		err := m.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 func TestCtMapUpgradeWithNATFwdEntries(t *testing.T) {
 	RegisterTestingT(t)
-	ctMap.(*bpf.PinnedMap).Close()
+	ctMap.(*conntrack.MultiVersionMap).Close()
 	os.Remove(ctMap.Path())
 	mc := &bpf.MapContext{}
 	// create version 2 map
@@ -133,7 +132,7 @@ func TestCtMapUpgradeWithNATFwdEntries(t *testing.T) {
 	Expect(value3.NATSPort()).To(Equal(uint16(4000)))
 
 	ctMapV2.(*bpf.PinnedMap).Close()
-	ctMapV3.(*bpf.PinnedMap).Close()
+	ctMapV3.(*conntrack.MultiVersionMap).Close()
 
 	os.Remove(ctMapV2.Path())
 	os.Remove(ctMapV3.Path())
@@ -145,7 +144,7 @@ func TestCtMapUpgradeWithNATFwdEntries(t *testing.T) {
 
 func TestCtMapUpgradeWithNATRevEntries(t *testing.T) {
 	RegisterTestingT(t)
-	ctMap.(*bpf.PinnedMap).Close()
+	ctMap.(*conntrack.MultiVersionMap).Close()
 	os.Remove(ctMap.Path())
 	mc := &bpf.MapContext{}
 	// create version 2 map
@@ -191,7 +190,7 @@ func TestCtMapUpgradeWithNATRevEntries(t *testing.T) {
 	Expect(value3.OrigPort()).To(Equal(origPort))
 	Expect(value3.OrigSPort()).To(Equal(origSport))
 	ctMapV2.(*bpf.PinnedMap).Close()
-	ctMapV3.(*bpf.PinnedMap).Close()
+	ctMapV3.(*conntrack.MultiVersionMap).Close()
 
 	os.Remove(ctMapV2.Path())
 	os.Remove(ctMapV3.Path())
@@ -199,7 +198,7 @@ func TestCtMapUpgradeWithNATRevEntries(t *testing.T) {
 		err := m.EnsureExists()
 		Expect(err).NotTo(HaveOccurred())
 	}
-}*/
+}
 
 func TestCtMapUpgradeWithNormalEntries(t *testing.T) {
 	RegisterTestingT(t)

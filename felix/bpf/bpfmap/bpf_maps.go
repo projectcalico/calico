@@ -66,11 +66,11 @@ func DestroyBPFMaps(mc *bpf.MapContext) {
 		mc.BackendMap, mc.AffinityMap, mc.RouteMap, mc.CtMap, mc.SrMsgMap, mc.CtNatsMap}
 	for _, m := range maps {
 		os.Remove(m.Path())
-		switch m.(type) {
+		switch m := m.(type) {
 		case *bpf.PinnedMap:
-			m.(*bpf.PinnedMap).Close()
+			m.Close()
 		case *conntrack.MultiVersionMap:
-			m.(*conntrack.MultiVersionMap).Close()
+			m.Close()
 		}
 	}
 }

@@ -92,10 +92,6 @@ func (m *Map) Update(k, v []byte) error {
 	return nil
 }
 
-func (m *Map) Upgrade() error {
-	return nil
-}
-
 func (m *Map) Get(k []byte) ([]byte, error) {
 	m.GetCount++
 
@@ -188,9 +184,5 @@ func (*DummyMap) Delete(k []byte) error {
 }
 
 func (*DummyMap) CopyDeltaFromOldMap() error {
-	return nil
-}
-
-func (*DummyMap) Upgrade() error {
 	return nil
 }

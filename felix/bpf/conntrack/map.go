@@ -128,7 +128,7 @@ func (m *MultiVersionMap) EnsureExists() error {
 	}
 	err = m.Upgrade()
 	if err != nil {
-		log.Debugf("error upgrading conntrack map, err=%w", err)
+		log.Debugf("error upgrading conntrack map, err=%s", err)
 	}
 	return nil
 }
