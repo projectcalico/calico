@@ -88,40 +88,40 @@ var MapParams = curVer.MapParams
 
 type MultiVersionMap struct {
 	CurVersion int
-	ctMap      bpf.Map
+	CtMap      bpf.Map
 	MapParams  []bpf.MapParameters
 }
 
 func (m *MultiVersionMap) GetName() string {
-	return m.ctMap.GetName()
+	return m.CtMap.GetName()
 }
 
 func (m *MultiVersionMap) Update(k, v []byte) error {
-	return m.ctMap.Update(k, v)
+	return m.CtMap.Update(k, v)
 }
 
 func (m *MultiVersionMap) Get(k []byte) ([]byte, error) {
-	return m.ctMap.Get(k)
+	return m.CtMap.Get(k)
 }
 
 func (m *MultiVersionMap) Delete(k []byte) error {
-	return m.ctMap.Delete(k)
+	return m.CtMap.Delete(k)
 }
 
 func (m *MultiVersionMap) Path() string {
-	return m.ctMap.Path()
+	return m.CtMap.Path()
 }
 
 func (m *MultiVersionMap) CopyDeltaFromOldMap() error {
-	return m.ctMap.CopyDeltaFromOldMap()
+	return m.CtMap.CopyDeltaFromOldMap()
 }
 
 func (m *MultiVersionMap) Iter(f bpf.IterCallback) error {
-	return m.ctMap.Iter(f)
+	return m.CtMap.Iter(f)
 }
 
 func (m *MultiVersionMap) EnsureExists() error {
-	err := m.ctMap.EnsureExists()
+	err := m.CtMap.EnsureExists()
 	if err != nil {
 		return err
 	}
@@ -133,15 +133,15 @@ func (m *MultiVersionMap) EnsureExists() error {
 }
 
 func (m *MultiVersionMap) Open() error {
-	return m.ctMap.Open()
+	return m.CtMap.Open()
 }
 
 func (m *MultiVersionMap) MapFD() bpf.MapFD {
-	return m.ctMap.MapFD()
+	return m.CtMap.MapFD()
 }
 
 func (m *MultiVersionMap) Close() {
-	m.ctMap.(*bpf.PinnedMap).Close()
+	m.CtMap.(*bpf.PinnedMap).Close()
 }
 
 // Upgrade does the actual upgrade by iterating through the
@@ -158,7 +158,7 @@ func (m *MultiVersionMap) Upgrade() error {
 		// It is a fresh install. Just return
 		return nil
 	}
-	toBpfMap := m.ctMap
+	toBpfMap := m.CtMap
 	toCachingMap := cachingmap.New(m.MapParams[to], toBpfMap)
 	if toCachingMap == nil {
 		return fmt.Errorf("error creating caching map")
@@ -216,7 +216,7 @@ func Map(mc *bpf.MapContext) bpf.Map {
 	return &MultiVersionMap{
 		CurVersion: 3,
 		MapParams:  []bpf.MapParameters{bpf.MapParameters{}, bpf.MapParameters{}, v2.MapParams, curVer.MapParams},
-		ctMap:      mc.NewPinnedMap(curVer.MapParams),
+		CtMap:      mc.NewPinnedMap(curVer.MapParams),
 	}
 }
 

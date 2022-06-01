@@ -51,6 +51,7 @@ import (
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
@@ -3377,7 +3378,7 @@ func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.IterCallback) {
 	Eventually(func() bool {
 		return felix.FileExists(m.Path())
 	}).Should(BeTrue(), fmt.Sprintf("dumpBPFMap: map %s didn't show up inside container", m.Path()))
-	cmd, err := bpf.DumpMapCmd(m)
+	cmd, err := bpfmap.DumpMapCmd(m)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map dump command: "+m.Path())
 	log.WithField("cmd", cmd).Debug("dumpBPFMap")
 	out, err := felix.ExecOutput(cmd...)

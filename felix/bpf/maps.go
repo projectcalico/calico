@@ -81,7 +81,7 @@ func (mp *MapParameters) VersionedName() string {
 	return versionedStr(mp.Version, mp.Name)
 }
 
-func (mp *MapParameters) versionedFilename() string {
+func (mp *MapParameters) VersionedFilename() string {
 	return versionedStr(mp.Version, mp.Filename)
 }
 
@@ -140,7 +140,7 @@ func (b *PinnedMap) MapFD() MapFD {
 }
 
 func (b *PinnedMap) Path() string {
-	return b.versionedFilename()
+	return b.VersionedFilename()
 }
 
 func (b *PinnedMap) Close() error {
@@ -158,39 +158,6 @@ func (b *PinnedMap) RepinningEnabled() bool {
 	return b.context.RepinningEnabled
 }
 
-func ShowMapCmd(m Map) ([]string, error) {
-	if pm, ok := m.(*PinnedMap); ok {
-		return []string{
-			"bpftool",
-			"--json",
-			"--pretty",
-			"map",
-			"show",
-			"pinned",
-			pm.versionedFilename(),
-		}, nil
-	}
-
-	return nil, errors.Errorf("unrecognized map type %T", m)
-}
-
-// DumpMapCmd returns the command that can be used to dump a map or an error
-func DumpMapCmd(m Map) ([]string, error) {
-	if pm, ok := m.(*PinnedMap); ok {
-		return []string{
-			"bpftool",
-			"--json",
-			"--pretty",
-			"map",
-			"dump",
-			"pinned",
-			pm.versionedFilename(),
-		}, nil
-	}
-
-	return nil, errors.Errorf("unrecognized map type %T", m)
-}
-
 func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 	if pm, ok := m.(*PinnedMap); ok {
 		keyData := make([]string, len(key))
@@ -204,7 +171,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 			"map",
 			"delete",
 			"pinned",
-			pm.versionedFilename(),
+			pm.VersionedFilename(),
 			"key",
 		}
 
@@ -409,7 +376,7 @@ func (b *PinnedMap) Open() error {
 		return err
 	}
 
-	_, err = os.Stat(b.versionedFilename())
+	_, err = os.Stat(b.VersionedFilename())
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return err
@@ -417,7 +384,7 @@ func (b *PinnedMap) Open() error {
 		logrus.Debug("Map file didn't exist")
 		if b.context.RepinningEnabled {
 			logrus.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
-			err = RepinMap(b.VersionedName(), b.versionedFilename())
+			err = RepinMap(b.VersionedName(), b.VersionedFilename())
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
@@ -426,10 +393,10 @@ func (b *PinnedMap) Open() error {
 
 	if err == nil {
 		logrus.Debug("Map file already exists, trying to open it")
-		b.fd, err = GetMapFDByPin(b.versionedFilename())
+		b.fd, err = GetMapFDByPin(b.VersionedFilename())
 		if err == nil {
 			b.fdLoaded = true
-			logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
+			logrus.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).
 				Info("Loaded map file descriptor.")
 			return nil
 		}
@@ -510,7 +477,7 @@ func (b *PinnedMap) EnsureExists() error {
 	}
 
 	logrus.Debug("Map didn't exist, creating it")
-	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),
+	cmd := exec.Command("bpftool", "map", "create", b.VersionedFilename(),
 		"type", b.Type,
 		"key", fmt.Sprint(b.KeySize),
 		"value", fmt.Sprint(b.ValueSize),
@@ -523,7 +490,7 @@ func (b *PinnedMap) EnsureExists() error {
 		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
 		return err
 	}
-	b.fd, err = GetMapFDByPin(b.versionedFilename())
+	b.fd, err = GetMapFDByPin(b.VersionedFilename())
 	if err == nil {
 		b.fdLoaded = true
 		// Copy data from old map to the new map
@@ -541,7 +508,7 @@ func (b *PinnedMap) EnsureExists() error {
 			}
 
 		}
-		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
+		logrus.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
 	return err

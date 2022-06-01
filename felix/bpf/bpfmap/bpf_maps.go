@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -31,6 +32,65 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
+
+// DumpMapCmd returns the command that can be used to dump a map or an error
+func DumpMapCmd(m bpf.Map) ([]string, error) {
+	if pm, ok := m.(*bpf.PinnedMap); ok {
+		return []string{
+			"bpftool",
+			"--json",
+			"--pretty",
+			"map",
+			"dump",
+			"pinned",
+			pm.VersionedFilename(),
+		}, nil
+	}
+	if mm, ok := m.(*conntrack.MultiVersionMap); ok {
+		if pm, ok := mm.CtMap.(*bpf.PinnedMap); ok {
+			return []string{
+				"bpftool",
+				"--json",
+				"--pretty",
+				"map",
+				"dump",
+				"pinned",
+				pm.VersionedFilename(),
+			}, nil
+		}
+	}
+
+	return nil, errors.Errorf("unrecognized map type %T", m)
+}
+
+func ShowMapCmd(m bpf.Map) ([]string, error) {
+	if pm, ok := m.(*bpf.PinnedMap); ok {
+		return []string{
+			"bpftool",
+			"--json",
+			"--pretty",
+			"map",
+			"show",
+			"pinned",
+			pm.VersionedFilename(),
+		}, nil
+	}
+
+	if mm, ok := m.(*conntrack.MultiVersionMap); ok {
+		if pm, ok := mm.CtMap.(*bpf.PinnedMap); ok {
+			return []string{
+				"bpftool",
+				"--json",
+				"--pretty",
+				"map",
+				"show",
+				"pinned",
+				pm.VersionedFilename(),
+			}, nil
+		}
+	}
+	return nil, errors.Errorf("unrecognized map type %T", m)
+}
 
 func CreateBPFMapContext(ipsetsMapSize, natFEMapSize, natBEMapSize, natAffMapSize, routeMapSize, ctMapSize int, repinEnabled bool) *bpf.MapContext {
 	bpfMapContext := &bpf.MapContext{
