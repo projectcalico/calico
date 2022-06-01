@@ -67,12 +67,7 @@ var (
 )
 
 func makeValue(created time.Duration, lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {
-	var e conntrack.Value
-	binary.LittleEndian.PutUint64(e[:8], uint64(created))
-	binary.LittleEndian.PutUint64(e[8:16], uint64(lastSeen))
-	binary.LittleEndian.PutUint32(e[28:32], legA.Flags())
-	binary.LittleEndian.PutUint32(e[40:44], legB.Flags())
-	return e
+	return conntrack.NewValueNormal(created, lastSeen, 0, legA, legB)
 }
 
 var _ = Describe("BPF Conntrack LivenessCalculator", func() {

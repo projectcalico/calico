@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -31,6 +32,65 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
+
+// DumpMapCmd returns the command that can be used to dump a map or an error
+func DumpMapCmd(m bpf.Map) ([]string, error) {
+	if pm, ok := m.(*bpf.PinnedMap); ok {
+		return []string{
+			"bpftool",
+			"--json",
+			"--pretty",
+			"map",
+			"dump",
+			"pinned",
+			pm.VersionedFilename(),
+		}, nil
+	}
+	if mm, ok := m.(*conntrack.MultiVersionMap); ok {
+		if pm, ok := mm.CtMap.(*bpf.PinnedMap); ok {
+			return []string{
+				"bpftool",
+				"--json",
+				"--pretty",
+				"map",
+				"dump",
+				"pinned",
+				pm.VersionedFilename(),
+			}, nil
+		}
+	}
+
+	return nil, errors.Errorf("unrecognized map type %T", m)
+}
+
+func ShowMapCmd(m bpf.Map) ([]string, error) {
+	if pm, ok := m.(*bpf.PinnedMap); ok {
+		return []string{
+			"bpftool",
+			"--json",
+			"--pretty",
+			"map",
+			"show",
+			"pinned",
+			pm.VersionedFilename(),
+		}, nil
+	}
+
+	if mm, ok := m.(*conntrack.MultiVersionMap); ok {
+		if pm, ok := mm.CtMap.(*bpf.PinnedMap); ok {
+			return []string{
+				"bpftool",
+				"--json",
+				"--pretty",
+				"map",
+				"show",
+				"pinned",
+				pm.VersionedFilename(),
+			}, nil
+		}
+	}
+	return nil, errors.Errorf("unrecognized map type %T", m)
+}
 
 func CreateBPFMapContext(ipsetsMapSize, natFEMapSize, natBEMapSize, natAffMapSize, routeMapSize, ctMapSize int, repinEnabled bool) *bpf.MapContext {
 	bpfMapContext := &bpf.MapContext{
@@ -65,8 +125,13 @@ func DestroyBPFMaps(mc *bpf.MapContext) {
 	maps := []bpf.Map{mc.IpsetsMap, mc.StateMap, mc.ArpMap, mc.FailsafesMap, mc.FrontendMap,
 		mc.BackendMap, mc.AffinityMap, mc.RouteMap, mc.CtMap, mc.SrMsgMap, mc.CtNatsMap}
 	for _, m := range maps {
-		os.Remove(m.(*bpf.PinnedMap).Path())
-		m.(*bpf.PinnedMap).Close()
+		os.Remove(m.Path())
+		switch m := m.(type) {
+		case *bpf.PinnedMap:
+			m.Close()
+		case *conntrack.MultiVersionMap:
+			m.Close()
+		}
 	}
 }
 

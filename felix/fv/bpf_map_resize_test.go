@@ -30,6 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/nat"
@@ -131,7 +132,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		Expect(getMapSize(felix, beMap)).To(Equal((beMap.(*bpf.PinnedMap)).MaxEntries))
 		Expect(getMapSize(felix, affMap)).To(Equal((affMap.(*bpf.PinnedMap)).MaxEntries))
 		Expect(getMapSize(felix, ipsMap)).To(Equal((ipsMap.(*bpf.PinnedMap)).MaxEntries))
-		Expect(getMapSize(felix, ctMap)).To(Equal((ctMap.(*bpf.PinnedMap)).MaxEntries))
+		Expect(getMapSize(felix, ctMap)).To(Equal((ctMap.(*conntrack.MultiVersionMap)).CtMap.(*bpf.PinnedMap).MaxEntries))
 
 		By("configuring route map size = 1000, nat fe size = 2000, nat be size = 3000, nat affinity size = 4000")
 		newRtSize := 1000
@@ -165,7 +166,7 @@ func getMapSize(felix *infrastructure.Felix, m bpf.Map) int {
 func showBpfMap(felix *infrastructure.Felix, m bpf.Map) map[string]interface{} {
 	fileExists := felix.FileExists(m.Path())
 	Expect(fileExists).Should(BeTrue(), fmt.Sprintf("showBpfMap: map %s didn't show up inside container", m.Path()))
-	cmd, err := bpf.ShowMapCmd(m)
+	cmd, err := bpfmap.ShowMapCmd(m)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map show command: "+m.Path())
 	log.WithField("cmd", cmd).Debug("showBPFMap")
 	out, err := felix.ExecOutput(cmd...)
