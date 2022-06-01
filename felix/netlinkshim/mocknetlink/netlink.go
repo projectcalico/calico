@@ -753,7 +753,7 @@ func KeyForRoute(route *netlink.Route) string {
 	if table == 0 {
 		table = unix.RT_TABLE_MAIN
 	}
-	key := fmt.Sprintf("%v-%v-%v", table, route.LinkIndex, route.Dst)
+	key := fmt.Sprintf("%v-%v", table, route.Dst)
 	log.WithField("routeKey", key).Debug("Calculated route key")
 	return key
 }

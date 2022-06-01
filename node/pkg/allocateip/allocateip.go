@@ -22,9 +22,11 @@ import (
 	"reflect"
 	"time"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -60,13 +62,21 @@ func Run(done <-chan struct{}) {
 		log.Panic("NODENAME environment is not set")
 	}
 
+	// Load felix environment configuration. Note that this does not perform the full hierarchical load of felix
+	// configuration nor does this watch for changes, so if it is critical that the configuration value used is correct
+	// and may be defined outside of an environment variable, do not use this.
+	felixEnvConfig := loadFelixEnvConfig()
+
 	// Load the client config from environment.
 	cfg, c := calicoclient.CreateClient()
 
-	run(nodename, cfg, c, done)
+	run(nodename, cfg, c, felixEnvConfig, done)
 }
 
-func run(nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface, done <-chan struct{}) {
+func run(
+	nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface,
+	felixEnvConfig *felixconfig.Config, done <-chan struct{},
+) {
 	// If configured to use host-local IPAM, there is no need to configure tunnel addresses as they use the
 	// first IP of the pod CIDR - this is handled in the k8s backend code in libcalico-go.
 	if cfg.Spec.K8sUsePodCIDR {
@@ -80,17 +90,18 @@ func run(nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface, do
 
 	if done == nil {
 		// Running in single shot mode, so assign addresses and exit.
-		reconcileTunnelAddrs(nodename, cfg, c)
+		reconcileTunnelAddrs(nodename, cfg, c, felixEnvConfig)
 		return
 	}
 
 	// This is running as a daemon. Create a long-running reconciler.
 	r := &reconciler{
-		nodename: nodename,
-		cfg:      cfg,
-		client:   c,
-		ch:       make(chan struct{}),
-		data:     make(map[string]interface{}),
+		nodename:       nodename,
+		cfg:            cfg,
+		client:         c,
+		ch:             make(chan struct{}),
+		data:           make(map[string]interface{}),
+		felixEnvConfig: felixEnvConfig,
 	}
 
 	// Either create a typha syncclient or a local syncer depending on configuration. This calls back into the
@@ -120,12 +131,13 @@ func run(nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface, do
 // reconciler watches IPPool and Node configuration and triggers a reconciliation of the Tunnel IP addresses whenever
 // it spots a configuration change that may impact IP selection.
 type reconciler struct {
-	nodename string
-	cfg      *apiconfig.CalicoAPIConfig
-	client   client.Interface
-	ch       chan struct{}
-	data     map[string]interface{}
-	inSync   bool
+	nodename       string
+	cfg            *apiconfig.CalicoAPIConfig
+	client         client.Interface
+	ch             chan struct{}
+	data           map[string]interface{}
+	felixEnvConfig *felixconfig.Config
+	inSync         bool
 }
 
 // run is the main reconciliation loop, it loops until done.
@@ -137,7 +149,7 @@ func (r reconciler) run(done <-chan struct{}) {
 			// Received an update that requires reconciliation.  If the reconciliation fails it will cause the daemon
 			// to exit this is fine - it will be restarted, and the syncer will trigger a reconciliation when in-sync
 			// again.
-			reconcileTunnelAddrs(r.nodename, r.cfg, r.client)
+			reconcileTunnelAddrs(r.nodename, r.cfg, r.client, r.felixEnvConfig)
 		case <-done:
 			return
 		}
@@ -207,7 +219,9 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 }
 
 // reconcileTunnelAddrs performs a single shot update of the tunnel IP allocations.
-func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface) {
+func reconcileTunnelAddrs(
+	nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface, felixEnvConfig *felixconfig.Config,
+) {
 	ctx := context.Background()
 	// Get node resource for given nodename.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -223,7 +237,7 @@ func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c cli
 
 	// If wireguard is enabled then allocate an IP for the wireguard device. We do this for all deployment types even
 	// when pod CIDRs are not managed by Calico.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeWireguard); len(cidrs) > 0 {
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeWireguard); len(cidrs) > 0 {
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeWireguard)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeWireguard)
@@ -231,7 +245,7 @@ func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c cli
 
 	// Query the IPIP enabled pools and either configure the tunnel
 	// address, or remove it.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeIPIP); len(cidrs) > 0 {
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeIPIP); len(cidrs) > 0 {
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeIPIP)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeIPIP)
@@ -239,7 +253,7 @@ func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c cli
 
 	// Query the IPv4 VXLAN enabled pools and either configure the tunnel
 	// address, or remove it.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeVXLAN); len(cidrs) > 0 {
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeVXLAN); len(cidrs) > 0 {
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeVXLAN)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeVXLAN)
@@ -247,7 +261,7 @@ func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c cli
 
 	// Query the IPv6 VXLAN enabled pools and either configure the tunnel
 	// address, or remove it.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeVXLANV6); len(cidrs) > 0 {
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeVXLANV6); len(cidrs) > 0 {
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeVXLANV6)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeVXLANV6)
@@ -659,12 +673,22 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 
 // determineEnabledPools returns all enabled pools. If vxlan is true, then it will only return VXLAN pools. Otherwise
 // it will only return IPIP enabled pools.
-func determineEnabledPoolCIDRs(node libapi.Node, ipPoolList api.IPPoolList, attrType string) []net.IPNet {
-	// For wireguard, return no valid pools if the wireguard public key has not been set. Only once wireguard has been
-	// enabled *and* the wireguard device has been initialized do we require an IP address to be configured.
-	if attrType == ipam.AttributeTypeWireguard && node.Status.WireguardPublicKey == "" {
-		log.Debugf("Wireguard is not running on node %s", node.Name)
-		return nil
+func determineEnabledPoolCIDRs(
+	node libapi.Node, ipPoolList api.IPPoolList, felixEnvConfig *felixconfig.Config, attrType string,
+) []net.IPNet {
+	// For wireguard, an IP is only allocated from a pool if wireguard is actually running (there will be a public
+	// key configured on the node), and the cluster is not running in host encryption mode (which is required for
+	// managed cloud with non-Calico CNI). When running in host encryption mode, the wireguard dataplane will use the
+	// node IP for the device.
+	if attrType == ipam.AttributeTypeWireguard {
+		if felixEnvConfig.WireguardHostEncryptionEnabled {
+			log.Debug("Wireguard is running in host encryption mode, do not allocate a device IP")
+			return nil
+		}
+		if node.Status.WireguardPublicKey == "" {
+			log.Debugf("Wireguard is not running on node %s, do not allocate a device IP", node.Name)
+			return nil
+		}
 	}
 
 	var cidrs []net.IPNet
@@ -737,4 +761,19 @@ func getLogger(attrType string) *log.Entry {
 // backendClientAccessor is an interface to access the backend client from the main v2 client.
 type backendClientAccessor interface {
 	Backend() bapi.Client
+}
+
+// loadFelixEnvConfig loads the felix configuration from environment. It does not perform a hierarchical load across
+// env, file and felixconfigurations resources and as such this is should only be used for configuration that is only
+// expected to be specified through environment.
+func loadFelixEnvConfig() *felixconfig.Config {
+	// Load locally-defined config from the environment variables.
+	configParams := felixconfig.New()
+	envConfig := felixconfig.LoadConfigFromEnvironment(os.Environ())
+	// Parse and merge the local config.
+	_, err := configParams.UpdateFrom(envConfig, felixconfig.EnvironmentVariable)
+	if err != nil {
+		log.WithError(err).Panic("Failed to parse Felix environments")
+	}
+	return configParams
 }
