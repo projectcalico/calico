@@ -36,16 +36,17 @@ type conversionKey struct {
 // Map of conversion functions. Whenever there is a version
 // update, add an entry in this map to convert values from
 // previous version to the new version.
-var conversionFns = map[conversionKey]func([]byte) []byte{
+var conversionFns = map[conversionKey]func([]byte) ([]byte, error) {
 	conversionKey{from: 2, to: 3}: convertValueFromV2ToV3,
 }
 
 // convertValueFromV2ToV3 converts conntrack value in version 2
 // to conntrack value version 3.
-func convertValueFromV2ToV3(value []byte) []byte {
+func convertValueFromV2ToV3(value []byte) ([]byte, error) {
 	// Incoming value is of version 2.
 	var valueV2 v2.Value
 	var valueV3 v3.Value
+	var err error
 	copy(valueV2[0:v2.ValueSize], value[0:v2.ValueSize])
 
 	created := time.Duration(valueV2.Created())
@@ -87,12 +88,14 @@ func convertValueFromV2ToV3(value []byte) []byte {
 		}
 	case TypeNATForward:
 		revKey := valueV2.ReverseNATKey()
+		NATSport := valueV2.NATSPort()
 		v3RevKey := v3.NewKey(revKey.Proto(), revKey.AddrA(), revKey.PortA(), revKey.AddrB(), revKey.PortB())
 		valueV3 = v3.NewValueNATForward(created, lastSeen, flags, v3RevKey)
+		valueV3.SetNATSport(NATSport)
 	default:
-		fmt.Println("invalid conntrack type")
+		err = fmt.Errorf("invalid conntrack type")
 	}
-	return valueV3.AsBytes()
+	return valueV3.AsBytes(), err
 
 }
 
@@ -120,14 +123,13 @@ func getPrevVersion(latest int, prev *int) error {
 			return err
 		}
 	}
-	fmt.Println("returning nil ", *prev)
 	return nil
 }
 
 // Upgrade does the actual upgrade by iterating through the
 // k,v pairs in the old map, applying the conversion functions
 // and writing the new k,v pair to the newly created map.
-func Upgrade() error {
+func (m *MultiVersionMap) Upgrade() error {
 	mc := &bpf.MapContext{}
 	from := 0
 	to := CurrentMapVersion
@@ -137,11 +139,7 @@ func Upgrade() error {
 	} else if from == 0 {
 		return nil
 	}
-	toBpfMap := Map(mc)
-	err = toBpfMap.EnsureExists()
-	if err != nil {
-		return fmt.Errorf("error creating a handle for the new map")
-	}
+	toBpfMap := m.ctMap
 	toCachingMap := cachingmap.New(MapParams, toBpfMap)
 	if toCachingMap == nil {
 		return fmt.Errorf("error creating caching map")
@@ -159,7 +157,6 @@ func Upgrade() error {
 	}
 
 	defer fromBpfMap.(*bpf.PinnedMap).Close()
-	defer toBpfMap.(*bpf.PinnedMap).Close()
 	fromCachingMap := cachingmap.New(fromMapParams, fromBpfMap)
 	if fromCachingMap == nil {
 		return fmt.Errorf("error creating caching map")
@@ -173,10 +170,18 @@ func Upgrade() error {
 		for i := from; i < to; i++ {
 			key := conversionKey{from: i, to: i + 1}
 			f := conversionFns[key]
-			tmp = f(tmp)
+			tmp, err = f(tmp)
+			if err != nil {
+				err =  fmt.Errorf("error upgrading conntrack map %w", err)
+				break
+			}
 		}
 		toCachingMap.SetDesired(k, tmp)
 	})
+
+	if err != nil {
+		return err
+	}
 
 	err = toCachingMap.ApplyAllChanges()
 	if err != nil {

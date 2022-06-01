@@ -122,6 +122,7 @@ const (
 	voOrigPort  int = 52
 	voOrigSPort int = 54
 	voTunIP     int = 56
+	voNATSPort  int = 54
 )
 
 const (
@@ -175,7 +176,7 @@ func (e Value) OrigSPort() uint16 {
 
 // NATSPort returns the port to SNAT to, valid only if Type() is TypeNATForward.
 func (e Value) NATSPort() uint16 {
-	return binary.LittleEndian.Uint16(e[40:42])
+	return binary.LittleEndian.Uint16(e[voNATSPort : voNATSPort+2])
 }
 
 func (e Value) ReverseNATKey() Key {
@@ -198,6 +199,14 @@ func (e *Value) SetLegA2B(leg Leg) {
 
 func (e *Value) SetLegB2A(leg Leg) {
 	copy(e[voLegBA:voLegBA+legSize], leg.AsBytes())
+}
+
+func (e *Value) SetOrigSport(sport uint16) {
+	binary.LittleEndian.PutUint16(e[voOrigSPort:voOrigSPort+2], sport)
+}
+
+func (e *Value) SetNATSport(sport uint16) {
+	binary.LittleEndian.PutUint16(e[voNATSPort:voNATSPort+2], sport)
 }
 
 func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint16) {

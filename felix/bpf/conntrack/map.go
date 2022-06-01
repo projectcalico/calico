@@ -18,31 +18,26 @@ import (
 	"net"
 	"time"
 
-	//"fmt"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
-	curver "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 )
 
-const KeySize = curver.KeySize
-const ValueSize = curver.ValueSize
-const MaxEntries = curver.MaxEntries
+const KeySize = v3.KeySize
+const ValueSize = v3.ValueSize
+const MaxEntries = v3.MaxEntries
 
 var CurrentMapVersion = MapParams.Version
 
-type Key = curver.Key
-
-func init() {
-	MapParams.HandleUpgrade = Upgrade
-}
+type Key = v3.Key
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
-	return curver.NewKey(proto, ipA, portA, ipB, portB)
+	return v3.NewKey(proto, ipA, portA, ipB, portB)
 }
 
-type Value = curver.Value
+type Value = v3.Value
 
 const (
 	TypeNormal uint8 = iota
@@ -61,29 +56,106 @@ const (
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
 func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
-	return curver.NewValueNormal(created, lastSeen, flags, legA, legB)
+	return v3.NewValueNormal(created, lastSeen, flags, legA, legB)
 }
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
 func NewValueNATForward(created, lastSeen time.Duration, flags uint16, revKey Key) Value {
-	return curver.NewValueNATForward(created, lastSeen, flags, revKey)
+	return v3.NewValueNATForward(created, lastSeen, flags, revKey)
 }
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
 func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
-	return curver.NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
+	return v3.NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 }
 
-type Leg = curver.Leg
-type EntryData = curver.EntryData
+type Leg = v3.Leg
+type EntryData = v3.EntryData
 
-var MapParams = curver.MapParams
+var MapParams = v3.MapParams
+
+type MultiVersionMap struct {
+	KeySize int
+	ValueSize int
+	CurVersion int
+	ctMap bpf.Map
+	v2Params bpf.MapParameters
+	MapParams bpf.MapParameters
+}
+
+/*
+var MapParams1 = MultiVersionMap {
+	KeySize: v3.KeySize,
+	ValueSize: v3.ValueSize,
+	CurVersion: 3,
+	v2Params: v2.MapParams,
+	MapParams: v3.MapParams,
+}*/
+
+func (m *MultiVersionMap) GetName() string {
+	return m.ctMap.GetName()
+}
+
+func (m *MultiVersionMap) Update(k, v []byte) error {
+	return m.ctMap.Update(k,v)
+}
+
+func (m *MultiVersionMap) Get(k []byte)([]byte, error) {
+	return m.ctMap.Get(k)
+}
+
+func (m *MultiVersionMap) Delete(k []byte) error {
+	return m.ctMap.Delete(k)
+}
+
+func (m *MultiVersionMap) Path() string {
+	return m.ctMap.Path()
+}
+
+func (m *MultiVersionMap) CopyDeltaFromOldMap() error {
+	return m.ctMap.CopyDeltaFromOldMap()
+}
+
+func (m *MultiVersionMap) Iter(f bpf.IterCallback) error {
+	return m.ctMap.Iter(f)
+}
+
+func (m *MultiVersionMap) EnsureExists() error {
+	err := m.ctMap.EnsureExists()
+	if err != nil{
+		return err
+	}
+	err = m.Upgrade()
+	if err != nil {
+		log.Debugf("error upgrading conntrack map, err=%w", err)
+	}
+	return nil
+}
+
+func (m *MultiVersionMap) Open() error {
+	return m.ctMap.Open()
+}
+
+func (m *MultiVersionMap) MapFD() bpf.MapFD {
+	return m.ctMap.MapFD()
+}
+
+func (m *MultiVersionMap) Close() {
+	m.ctMap.(*bpf.PinnedMap).Close()
+}
 
 func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParams)
+	return &MultiVersionMap {
+		KeySize: KeySize,
+		ValueSize: ValueSize,
+		CurVersion: 3,
+		v2Params: v2.MapParams,
+		MapParams: v3.MapParams,
+		ctMap: mc.NewPinnedMap(v3.MapParams),
+	}
 }
 
 func MapV2(mc *bpf.MapContext) bpf.Map {
@@ -114,17 +186,17 @@ func ValueFromBytes(v []byte) Value {
 	return ctVal
 }
 
-type MapMem = curver.MapMem
+type MapMem = v3.MapMem
 
 // LoadMapMem loads ConntrackMap into memory
 func LoadMapMem(m bpf.Map) (MapMem, error) {
-	ret, err := curver.LoadMapMem(m)
+	ret, err := v3.LoadMapMem(m)
 	return ret, err
 }
 
 // MapMemIter returns bpf.MapIter that loads the provided MapMem
 func MapMemIter(m MapMem) bpf.IterCallback {
-	return curver.MapMemIter(m)
+	return v3.MapMemIter(m)
 }
 
 // BytesToKey turns a slice of bytes into a Key
