@@ -16,6 +16,8 @@ package ifstate
 
 import (
 	"encoding/binary"
+	"fmt"
+	"strings"
 
 	"golang.org/x/sys/unix"
 
@@ -24,7 +26,7 @@ import (
 
 const (
 	KeySize    = 4
-	ValueSize  = 4
+	ValueSize  = 4 + 16
 	MaxEntries = 1000
 )
 
@@ -32,6 +34,11 @@ const (
 	FlgWEP   = uint32(0x1)
 	FlgReady = uint32(0x2)
 )
+
+var flagsToStr = map[uint32]string{
+	FlgWEP:   "workload",
+	FlgReady: "ready",
+}
 
 var MapParams = bpf.MapParameters{
 	Filename:     "/sys/fs/bpf/tc/globals/cali_iface",
@@ -67,12 +74,13 @@ func (k Key) IfIndex() uint32 {
 	return binary.LittleEndian.Uint32(k[:])
 }
 
-type Value [4]byte
+type Value [4 + 16]byte
 
-func NewValue(flags uint32) Value {
+func NewValue(flags uint32, name string) Value {
 	var v Value
 
 	binary.LittleEndian.PutUint32(v[:], flags)
+	copy(v[4:4+15], []byte(name))
 
 	return v
 }
@@ -83,4 +91,25 @@ func (v Value) AsBytes() []byte {
 
 func (v Value) Flags() uint32 {
 	return binary.LittleEndian.Uint32(v[:])
+}
+
+func (v Value) IfName() string {
+	return strings.TrimRight(string(v[4:]), "\x00")
+}
+
+func (v Value) String() string {
+	fstr := ""
+	f := v.Flags()
+
+	for k, v := range flagsToStr {
+		if f&k != 0 {
+			fstr = fstr + v + ","
+		}
+	}
+
+	if fstr == "" {
+		fstr = "host,"
+	}
+
+	return fmt.Sprintf("{flags: %s name: %s}", fstr, v.IfName())
 }
