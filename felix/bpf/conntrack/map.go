@@ -29,8 +29,6 @@ const KeySize = v3.KeySize
 const ValueSize = v3.ValueSize
 const MaxEntries = v3.MaxEntries
 
-var CurrentMapVersion = MapParams.Version
-
 type Key = v3.Key
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
@@ -85,12 +83,9 @@ type EntryData = v3.EntryData
 var MapParams = v3.MapParams
 
 type MultiVersionMap struct {
-	KeySize    int
-	ValueSize  int
 	CurVersion int
 	ctMap      bpf.Map
-	v2Params   bpf.MapParameters
-	MapParams  bpf.MapParameters
+	MapParams  []bpf.MapParameters
 }
 
 func (m *MultiVersionMap) GetName() string {
@@ -147,12 +142,10 @@ func (m *MultiVersionMap) Close() {
 
 func Map(mc *bpf.MapContext) bpf.Map {
 	return &MultiVersionMap{
-		KeySize:    KeySize,
-		ValueSize:  ValueSize,
 		CurVersion: 3,
-		v2Params:   v2.MapParams,
-		MapParams:  v3.MapParams,
-		ctMap:      mc.NewPinnedMap(v3.MapParams),
+		//v2Params:   v2.MapParams,
+		MapParams: []bpf.MapParameters{bpf.MapParameters{}, bpf.MapParameters{}, v2.MapParams, v3.MapParams},
+		ctMap:     mc.NewPinnedMap(v3.MapParams),
 	}
 }
 

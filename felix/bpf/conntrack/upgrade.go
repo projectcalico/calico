@@ -34,20 +34,27 @@ type conversionKey struct {
 }
 
 // Map of conversion functions. Whenever there is a version
-// update, add an entry in this map to convert values from
+// update, add an entry in this map to convert keys, values from
 // previous version to the new version.
-var conversionFns = map[conversionKey]func([]byte) ([]byte, error){
-	conversionKey{from: 2, to: 3}: convertValueFromV2ToV3,
+var conversionFns = map[conversionKey]func([]byte, []byte) ([]byte, []byte, error){
+	conversionKey{from: 2, to: 3}: convertCtFromV2ToV3,
 }
 
 // convertValueFromV2ToV3 converts conntrack value in version 2
 // to conntrack value version 3.
-func convertValueFromV2ToV3(value []byte) ([]byte, error) {
-	// Incoming value is of version 2.
+func convertCtFromV2ToV3(key, value []byte) ([]byte, []byte, error) {
+	// Incoming key, value is of version 2.
 	var valueV2 v2.Value
 	var valueV3 v3.Value
+
+	var keyV2 v2.Key
+	var keyV3 v3.Key
 	var err error
+
 	copy(valueV2[0:v2.ValueSize], value[0:v2.ValueSize])
+	copy(keyV2[0:v2.KeySize], key[0:v2.KeySize])
+
+	keyV3 = v3.NewKey(keyV2.Proto(), keyV2.AddrA(), keyV2.PortA(), keyV2.AddrB(), keyV2.PortB())
 
 	created := time.Duration(valueV2.Created())
 	lastSeen := time.Duration(valueV2.LastSeen())
@@ -95,22 +102,12 @@ func convertValueFromV2ToV3(value []byte) ([]byte, error) {
 	default:
 		err = fmt.Errorf("invalid conntrack type")
 	}
-	return valueV3.AsBytes(), err
+	return keyV3.AsBytes(), valueV3.AsBytes(), err
 
-}
-
-func getMapParams(version int) bpf.MapParameters {
-	switch version {
-	case 3:
-		return v3.MapParams
-	case 2:
-		return v2.MapParams
-	}
-	return v2.MapParams
 }
 
 // Get the previous version of the map
-func getPrevVersion(latest int, prev *int) error {
+func getOldVersion(latest int, prev *int) error {
 	for i := latest - 1; i >= 2; i-- {
 		filename := "/sys/fs/bpf/tc/globals/cali_v4_ct" + strconv.Itoa(i)
 		_, err := os.Stat(filename)
@@ -132,15 +129,16 @@ func getPrevVersion(latest int, prev *int) error {
 func (m *MultiVersionMap) Upgrade() error {
 	mc := &bpf.MapContext{}
 	from := 0
-	to := CurrentMapVersion
-	err := getPrevVersion(to, &from)
+	to := m.CurVersion
+	err := getOldVersion(to, &from)
 	if err != nil {
 		return err
 	} else if from == 0 {
+		// It is a fresh install. Just return
 		return nil
 	}
 	toBpfMap := m.ctMap
-	toCachingMap := cachingmap.New(MapParams, toBpfMap)
+	toCachingMap := cachingmap.New(m.MapParams[to], toBpfMap)
 	if toCachingMap == nil {
 		return fmt.Errorf("error creating caching map")
 	}
@@ -149,7 +147,7 @@ func (m *MultiVersionMap) Upgrade() error {
 		return err
 	}
 
-	fromMapParams := getMapParams(from)
+	fromMapParams := m.MapParams[from]
 	fromBpfMap := mc.NewPinnedMap(fromMapParams)
 	err = fromBpfMap.EnsureExists()
 	if err != nil {
@@ -166,17 +164,18 @@ func (m *MultiVersionMap) Upgrade() error {
 		return err
 	}
 	fromCachingMap.IterDataplaneCache(func(k, v []byte) {
-		tmp := v[:]
+		tmpVal := v[:]
+		tmpKey := k[:]
 		for i := from; i < to; i++ {
 			key := conversionKey{from: i, to: i + 1}
 			f := conversionFns[key]
-			tmp, err = f(tmp)
+			tmpKey, tmpVal, err = f(tmpKey, tmpVal)
 			if err != nil {
 				err = fmt.Errorf("error upgrading conntrack map %w", err)
 				break
 			}
 		}
-		toCachingMap.SetDesired(k, tmp)
+		toCachingMap.SetDesired(tmpKey, tmpVal)
 	})
 
 	if err != nil {
