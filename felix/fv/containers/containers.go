@@ -55,8 +55,9 @@ type Container struct {
 	stderrWatches []*watch
 	dataRaces     []string
 
-	logFinished sync.WaitGroup
-	dropAllLogs bool
+	logFinished      sync.WaitGroup
+	dropAllLogs      bool
+	ignoreEmptyLines bool
 }
 
 type watch struct {
@@ -180,11 +181,12 @@ func (c *Container) Signal(sig os.Signal) {
 }
 
 type RunOpts struct {
-	AutoRemove      bool
-	WithStdinPipe   bool
-	SameNamespace   *Container
-	StopTimeoutSecs int
-	StopSignal      string
+	AutoRemove       bool
+	WithStdinPipe    bool
+	IgnoreEmptyLines bool
+	SameNamespace    *Container
+	StopTimeoutSecs  int
+	StopSignal       string
 }
 
 func NextContainerIndex() int {
@@ -204,11 +206,14 @@ func UniqueName(namePrefix string) string {
 }
 
 func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) {
-	c = &Container{Name: name}
+	c = &Container{
+		Name:             name,
+		ignoreEmptyLines: opts.IgnoreEmptyLines,
+	}
 
 	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")
-	runArgs := []string{"run", "--cgroupns", "host", "--name", c.Name, "--stop-timeout", fmt.Sprint(opts.StopTimeoutSecs)}
+	runArgs := []string{"run", "--init", "--cgroupns", "host", "--name", c.Name, "--stop-timeout", fmt.Sprint(opts.StopTimeoutSecs)}
 
 	if opts.StopSignal != "" {
 		runArgs = append(runArgs, "--stop-signal", opts.StopSignal)
@@ -363,6 +368,10 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		if c.ignoreEmptyLines && strings.Trim(line, " \r\n\t") == "" {
+			continue
+		}
 
 		// Check if we're dropping logs (e.g. because we're tearing down the container at the end of the test).
 		c.mutex.Lock()
@@ -611,21 +620,6 @@ func (c *Container) WaitNotRunning(timeout time.Duration) {
 	}
 }
 
-func (c *Container) EnsureBinary(name string) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	logCtx := log.WithField("container", c.Name).WithField("binary", name)
-	logCtx.Info("Ensuring binary")
-	if !c.binaries.Contains(name) {
-		logCtx.Info("Binary not already present")
-		err := utils.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
-		if err != nil {
-			log.WithField("name", name).Panic("Failed to run 'docker cp' command")
-		}
-		c.binaries.Add(name)
-	}
-}
-
 func (c *Container) CopyFileIntoContainer(hostPath, containerPath string) error {
 	cmd := utils.Command("docker", "cp", hostPath, c.Name+":"+containerPath)
 	return cmd.Run()
@@ -703,7 +697,6 @@ func (c *Container) SourceIPs() []string {
 }
 
 func (c *Container) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
-	c.EnsureBinary(connectivity.BinaryName)
 	return connectivity.Check(c.Name, "Connection test", ip, port, protocol, opts...)
 }
 

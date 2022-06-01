@@ -52,6 +52,7 @@ const (
 	FlagReserved5 uint16 = (1 << 5)
 	FlagExtLocal  uint16 = (1 << 6)
 	FlagViaNATIf  uint16 = (1 << 7)
+	FlagSrcDstBA  uint16 = (1 << 8)
 )
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
@@ -72,38 +73,35 @@ func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, leg
 	return v3.NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 }
 
+// NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
+func NewValueNATReverseSNAT(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) Value {
+	return v3.NewValueNATReverseSNAT(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
+}
+
 type Leg = v3.Leg
 type EntryData = v3.EntryData
 
 var MapParams = v3.MapParams
 
 type MultiVersionMap struct {
-	KeySize int
-	ValueSize int
+	KeySize    int
+	ValueSize  int
 	CurVersion int
-	ctMap bpf.Map
-	v2Params bpf.MapParameters
-	MapParams bpf.MapParameters
+	ctMap      bpf.Map
+	v2Params   bpf.MapParameters
+	MapParams  bpf.MapParameters
 }
-
-/*
-var MapParams1 = MultiVersionMap {
-	KeySize: v3.KeySize,
-	ValueSize: v3.ValueSize,
-	CurVersion: 3,
-	v2Params: v2.MapParams,
-	MapParams: v3.MapParams,
-}*/
 
 func (m *MultiVersionMap) GetName() string {
 	return m.ctMap.GetName()
 }
 
 func (m *MultiVersionMap) Update(k, v []byte) error {
-	return m.ctMap.Update(k,v)
+	return m.ctMap.Update(k, v)
 }
 
-func (m *MultiVersionMap) Get(k []byte)([]byte, error) {
+func (m *MultiVersionMap) Get(k []byte) ([]byte, error) {
 	return m.ctMap.Get(k)
 }
 
@@ -125,7 +123,7 @@ func (m *MultiVersionMap) Iter(f bpf.IterCallback) error {
 
 func (m *MultiVersionMap) EnsureExists() error {
 	err := m.ctMap.EnsureExists()
-	if err != nil{
+	if err != nil {
 		return err
 	}
 	err = m.Upgrade()
@@ -148,13 +146,13 @@ func (m *MultiVersionMap) Close() {
 }
 
 func Map(mc *bpf.MapContext) bpf.Map {
-	return &MultiVersionMap {
-		KeySize: KeySize,
-		ValueSize: ValueSize,
+	return &MultiVersionMap{
+		KeySize:    KeySize,
+		ValueSize:  ValueSize,
 		CurVersion: 3,
-		v2Params: v2.MapParams,
-		MapParams: v3.MapParams,
-		ctMap: mc.NewPinnedMap(v3.MapParams),
+		v2Params:   v2.MapParams,
+		MapParams:  v3.MapParams,
+		ctMap:      mc.NewPinnedMap(v3.MapParams),
 	}
 }
 

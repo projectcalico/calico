@@ -42,6 +42,9 @@ LDFLAGS:=-ldflags "\
 # All Typha go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print)
 
+# Touchfile created when we make the typha image.
+TYPHA_CONTAINER_CREATED=.calico_typha.created-$(ARCH)
+
 .PHONY: clean
 clean:
 	# Clean .created files which indicate images / releases have been built.
@@ -52,7 +55,8 @@ clean:
 		docker-image/bin \
 		build \
 		report/*.xml \
-		release-notes-*
+		release-notes-* \
+		.calico_typha.created-*
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
@@ -98,12 +102,27 @@ sub-image-%:
 
 # Build the calico/typha docker image, which contains only Typha.
 .PHONY: image $(TYPHA_IMAGE)
-$(TYPHA_IMAGE): bin/calico-typha-$(ARCH) register
+TYPHA_IMAGE_WITH_TAG=$(TYPHA_IMAGE):latest-$(ARCH)
+TYPHA_IMAGE_ID=$(shell docker images -q $(TYPHA_IMAGE_WITH_TAG))
+
+# This target actually builds the image if any of its dependencies have changed or if it's
+# missing from docker.
+$(TYPHA_CONTAINER_CREATED): bin/calico-typha-$(ARCH) \
+                            LICENSE docker-image/licenses/* \
+                            docker-image/Dockerfile* \
+                            docker-image/nsswitch.conf \
+                            docker-image/typha.cfg \
+                            $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
+	$(MAKE) register
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	touch $(TYPHA_CONTAINER_CREATED)
+
+# This target retags the already built image, deferring the build to the target above.
+$(TYPHA_IMAGE): $(TYPHA_CONTAINER_CREATED)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 ###############################################################################

@@ -25,10 +25,15 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 )
 
 func main() {
+	// Make sure the RNG is seeded.
+	seedrng.EnsureSeeded()
+
 	logs.InitLogs()
 	defer logs.FlushLogs()
 

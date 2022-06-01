@@ -32,6 +32,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -162,7 +164,7 @@ func getKubernetesClient() *kubernetes.Clientset {
 
 var _ = Describe("Kubernetes CNI tests", func() {
 	// Create a random seed
-	rand.Seed(time.Now().UTC().UnixNano())
+	seedrng.EnsureSeeded()
 	hostname, _ := names.Hostname()
 	ctx := context.Background()
 	calicoClient, err := client.NewFromEnv()

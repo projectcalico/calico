@@ -1,5 +1,5 @@
 // Copyright (c) 2022 Tigera, Inc. All rights reserved.
-//
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,8 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nodeinit
+// Package seedrng provides a utility function seedrng.EnsureSeeded() to seed the main math/rand RNG exactly once.
+package seedrng
 
-func Run(_ bool) {
-	// Unused on Windows.
+import (
+	"math/rand"
+	"sync"
+	"time"
+)
+
+var once sync.Once
+
+// EnsureSeeded seeds the math/rand PRNG on the first call; subsequent calls are no-ops.  This allows EnsureSeeded()
+// calls to be sprinkled around the codebase in packages that actively use the PRNG.  That way, we always make
+// sure the PRNG is seeded before it is used in anger.
+func EnsureSeeded() {
+	once.Do(Reseed)
+}
+
+func Reseed() {
+	rand.Seed(time.Now().UnixNano())
 }

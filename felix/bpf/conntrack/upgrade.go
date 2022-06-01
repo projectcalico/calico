@@ -36,7 +36,7 @@ type conversionKey struct {
 // Map of conversion functions. Whenever there is a version
 // update, add an entry in this map to convert values from
 // previous version to the new version.
-var conversionFns = map[conversionKey]func([]byte) ([]byte, error) {
+var conversionFns = map[conversionKey]func([]byte) ([]byte, error){
 	conversionKey{from: 2, to: 3}: convertValueFromV2ToV3,
 }
 
@@ -83,7 +83,7 @@ func convertValueFromV2ToV3(value []byte) ([]byte, error) {
 		if ctType == TypeNormal {
 			valueV3 = v3.NewValueNormal(created, lastSeen, flags, v3LegAB, v3LegBA)
 		} else {
-			valueV3 = v3.NewValueNATReverse(created, lastSeen, flags, v3LegAB, v3LegBA, data.TunIP, data.OrigDst, data.OrigPort)
+			valueV3 = v3.NewValueNATReverseSNAT(created, lastSeen, flags, v3LegAB, v3LegBA, data.TunIP, data.OrigDst, data.OrigSrc, data.OrigPort)
 			valueV3.SetOrigSport(data.OrigSPort)
 		}
 	case TypeNATForward:
@@ -172,7 +172,7 @@ func (m *MultiVersionMap) Upgrade() error {
 			f := conversionFns[key]
 			tmp, err = f(tmp)
 			if err != nil {
-				err =  fmt.Errorf("error upgrading conntrack map %w", err)
+				err = fmt.Errorf("error upgrading conntrack map %w", err)
 				break
 			}
 		}

@@ -58,15 +58,15 @@ type Map interface {
 }
 
 type MapParameters struct {
-	Filename      string
-	Type          string
-	KeySize       int
-	ValueSize     int
-	MaxEntries    int
-	Name          string
-	Flags         int
-	Version       int
-	UpdatedByBPF  bool
+	Filename     string
+	Type         string
+	KeySize      int
+	ValueSize    int
+	MaxEntries   int
+	Name         string
+	Flags        int
+	Version      int
+	UpdatedByBPF bool
 }
 
 func versionedStr(ver int, str string) string {

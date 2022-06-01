@@ -60,6 +60,10 @@ type Workload struct {
 	MTU                   int
 }
 
+func (w *Workload) GetIP() string {
+	return w.IP
+}
+
 var workloadIdx = 0
 var sideServIdx = 0
 
@@ -131,7 +135,7 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu
 		specifiedMTU = mtu[0]
 	}
 
-	return &Workload{
+	workload := &Workload{
 		C:                  c.Container,
 		Name:               n,
 		SpoofName:          spoofN,
@@ -143,6 +147,8 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu
 		WorkloadEndpoint:   wep,
 		MTU:                specifiedMTU,
 	}
+	c.Workloads = append(c.Workloads, workload)
+	return workload
 }
 
 func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu int) (w *Workload, err error) {
@@ -152,9 +158,6 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu
 
 func (w *Workload) Start() error {
 	var err error
-
-	// Ensure that the host has the 'test-workload' binary.
-	w.C.EnsureBinary("test-workload")
 
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
@@ -169,7 +172,7 @@ func (w *Workload) Start() error {
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
-		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v '%v' '%v' '%v' %v",
+		fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v' %v",
 			w.Name,
 			protoArg,
 			w.InterfaceName,
@@ -488,14 +491,12 @@ func (w *Workload) StartSideService() *SideService {
 }
 
 func startSideService(w *Workload) (*SideService, error) {
-	// Ensure that the host has the 'test-workload' binary.
-	w.C.EnsureBinary("test-workload")
 	sideServIdx++
 	n := fmt.Sprintf("%s-ss%d", w.Name, sideServIdx)
 	pidFile := fmt.Sprintf("/tmp/%s-pid", n)
 
 	testWorkloadShArgs := []string{
-		"/test-workload",
+		"test-workload",
 	}
 	if w.Protocol == "udp" {
 		testWorkloadShArgs = append(testWorkloadShArgs, "--udp")
@@ -692,8 +693,6 @@ func canConnectTo(w *Workload, ip, port, protocol, logSuffix string, opts ...con
 	// enforce the name space as we want to execute it in the workload
 	opts = append(opts, connectivity.WithNamespacePath(w.namespacePath))
 	logMsg += " " + logSuffix
-
-	w.C.EnsureBinary(connectivity.BinaryName)
 
 	return connectivity.Check(w.C.Name, logMsg, ip, port, protocol, opts...)
 }
