@@ -352,7 +352,6 @@ func TestMapDownSize(t *testing.T) {
 	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, true)
 	defer restoreMaps(mc)
 	err := bpfmap.CreateBPFMaps(mc)
-	fmt.Println(err)
 	expectedError := fmt.Sprintf("Failed to create %s map, err=new map cannot hold all the data from the old map %s", ctMap.GetName(), ctMap.GetName())
 	Expect(err.Error()).To(Equal(expectedError))
 }

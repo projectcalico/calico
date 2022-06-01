@@ -919,7 +919,6 @@ func resetCTMap(ctMap bpf.Map) {
 }
 
 func saveCTMap(ctMap bpf.Map) conntrack.MapMem {
-	fmt.Printf("conntrack loadmap mem")
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
 	return ct
