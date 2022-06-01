@@ -15,6 +15,7 @@
 package conntrack
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -22,20 +23,23 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+
+	// When adding a new ct version, change curVer to point to the new version
+	"github.com/projectcalico/calico/felix/bpf/cachingmap"
+	curVer "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 )
 
-const KeySize = v3.KeySize
-const ValueSize = v3.ValueSize
-const MaxEntries = v3.MaxEntries
+const KeySize = curVer.KeySize
+const ValueSize = curVer.ValueSize
+const MaxEntries = curVer.MaxEntries
 
-type Key = v3.Key
+type Key = curVer.Key
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
-	return v3.NewKey(proto, ipA, portA, ipB, portB)
+	return curVer.NewKey(proto, ipA, portA, ipB, portB)
 }
 
-type Value = v3.Value
+type Value = curVer.Value
 
 const (
 	TypeNormal uint8 = iota
@@ -55,32 +59,32 @@ const (
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
 func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
-	return v3.NewValueNormal(created, lastSeen, flags, legA, legB)
+	return curVer.NewValueNormal(created, lastSeen, flags, legA, legB)
 }
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
 func NewValueNATForward(created, lastSeen time.Duration, flags uint16, revKey Key) Value {
-	return v3.NewValueNATForward(created, lastSeen, flags, revKey)
+	return curVer.NewValueNATForward(created, lastSeen, flags, revKey)
 }
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
 func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
-	return v3.NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
+	return curVer.NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 }
 
 // NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
 func NewValueNATReverseSNAT(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) Value {
-	return v3.NewValueNATReverseSNAT(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
+	return curVer.NewValueNATReverseSNAT(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
 }
 
-type Leg = v3.Leg
-type EntryData = v3.EntryData
+type Leg = curVer.Leg
+type EntryData = curVer.EntryData
 
-var MapParams = v3.MapParams
+var MapParams = curVer.MapParams
 
 type MultiVersionMap struct {
 	CurVersion int
@@ -140,12 +144,79 @@ func (m *MultiVersionMap) Close() {
 	m.ctMap.(*bpf.PinnedMap).Close()
 }
 
+// Upgrade does the actual upgrade by iterating through the
+// k,v pairs in the old map, applying the conversion functions
+// and writing the new k,v pair to the newly created map.
+func (m *MultiVersionMap) Upgrade() error {
+	mc := &bpf.MapContext{}
+	from := 0
+	to := m.CurVersion
+	err := getOldVersion(to, &from)
+	if err != nil {
+		return err
+	} else if from == 0 {
+		// It is a fresh install. Just return
+		return nil
+	}
+	toBpfMap := m.ctMap
+	toCachingMap := cachingmap.New(m.MapParams[to], toBpfMap)
+	if toCachingMap == nil {
+		return fmt.Errorf("error creating caching map")
+	}
+	err = toCachingMap.LoadCacheFromDataplane()
+	if err != nil {
+		return err
+	}
+
+	fromMapParams := m.MapParams[from]
+	fromBpfMap := mc.NewPinnedMap(fromMapParams)
+	err = fromBpfMap.EnsureExists()
+	if err != nil {
+		return fmt.Errorf("error creating a handle for the old map")
+	}
+
+	defer fromBpfMap.(*bpf.PinnedMap).Close()
+	fromCachingMap := cachingmap.New(fromMapParams, fromBpfMap)
+	if fromCachingMap == nil {
+		return fmt.Errorf("error creating caching map")
+	}
+	err = fromCachingMap.LoadCacheFromDataplane()
+	if err != nil {
+		return err
+	}
+	fromCachingMap.IterDataplaneCache(func(k, v []byte) {
+		tmpVal := v[:]
+		tmpKey := k[:]
+		for i := from; i < to; i++ {
+			key := conversionKey{from: i, to: i + 1}
+			f := conversionFns[key]
+			tmpKey, tmpVal, err = f(tmpKey, tmpVal)
+			if err != nil {
+				err = fmt.Errorf("error upgrading conntrack map %w", err)
+				break
+			}
+		}
+		toCachingMap.SetDesired(tmpKey, tmpVal)
+	})
+
+	if err != nil {
+		return err
+	}
+
+	err = toCachingMap.ApplyAllChanges()
+	if err != nil {
+		return fmt.Errorf("error upgrading new map %w", err)
+	}
+	return nil
+}
+
+// When adding a new ct map version, add an entry to the MapParams array
+// and set the CurVersion to the new map version.
 func Map(mc *bpf.MapContext) bpf.Map {
 	return &MultiVersionMap{
 		CurVersion: 3,
-		//v2Params:   v2.MapParams,
-		MapParams: []bpf.MapParameters{bpf.MapParameters{}, bpf.MapParameters{}, v2.MapParams, v3.MapParams},
-		ctMap:     mc.NewPinnedMap(v3.MapParams),
+		MapParams:  []bpf.MapParameters{bpf.MapParameters{}, bpf.MapParameters{}, v2.MapParams, curVer.MapParams},
+		ctMap:      mc.NewPinnedMap(curVer.MapParams),
 	}
 }
 
@@ -177,17 +248,17 @@ func ValueFromBytes(v []byte) Value {
 	return ctVal
 }
 
-type MapMem = v3.MapMem
+type MapMem = curVer.MapMem
 
 // LoadMapMem loads ConntrackMap into memory
 func LoadMapMem(m bpf.Map) (MapMem, error) {
-	ret, err := v3.LoadMapMem(m)
+	ret, err := curVer.LoadMapMem(m)
 	return ret, err
 }
 
 // MapMemIter returns bpf.MapIter that loads the provided MapMem
 func MapMemIter(m MapMem) bpf.IterCallback {
-	return v3.MapMemIter(m)
+	return curVer.MapMemIter(m)
 }
 
 // BytesToKey turns a slice of bytes into a Key

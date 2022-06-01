@@ -17,8 +17,6 @@ package conntrack
 import (
 	"fmt"
 
-	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 
@@ -119,72 +117,6 @@ func getOldVersion(latest int, prev *int) error {
 		} else {
 			return err
 		}
-	}
-	return nil
-}
-
-// Upgrade does the actual upgrade by iterating through the
-// k,v pairs in the old map, applying the conversion functions
-// and writing the new k,v pair to the newly created map.
-func (m *MultiVersionMap) Upgrade() error {
-	mc := &bpf.MapContext{}
-	from := 0
-	to := m.CurVersion
-	err := getOldVersion(to, &from)
-	if err != nil {
-		return err
-	} else if from == 0 {
-		// It is a fresh install. Just return
-		return nil
-	}
-	toBpfMap := m.ctMap
-	toCachingMap := cachingmap.New(m.MapParams[to], toBpfMap)
-	if toCachingMap == nil {
-		return fmt.Errorf("error creating caching map")
-	}
-	err = toCachingMap.LoadCacheFromDataplane()
-	if err != nil {
-		return err
-	}
-
-	fromMapParams := m.MapParams[from]
-	fromBpfMap := mc.NewPinnedMap(fromMapParams)
-	err = fromBpfMap.EnsureExists()
-	if err != nil {
-		return fmt.Errorf("error creating a handle for the old map")
-	}
-
-	defer fromBpfMap.(*bpf.PinnedMap).Close()
-	fromCachingMap := cachingmap.New(fromMapParams, fromBpfMap)
-	if fromCachingMap == nil {
-		return fmt.Errorf("error creating caching map")
-	}
-	err = fromCachingMap.LoadCacheFromDataplane()
-	if err != nil {
-		return err
-	}
-	fromCachingMap.IterDataplaneCache(func(k, v []byte) {
-		tmpVal := v[:]
-		tmpKey := k[:]
-		for i := from; i < to; i++ {
-			key := conversionKey{from: i, to: i + 1}
-			f := conversionFns[key]
-			tmpKey, tmpVal, err = f(tmpKey, tmpVal)
-			if err != nil {
-				err = fmt.Errorf("error upgrading conntrack map %w", err)
-				break
-			}
-		}
-		toCachingMap.SetDesired(tmpKey, tmpVal)
-	})
-
-	if err != nil {
-		return err
-	}
-
-	err = toCachingMap.ApplyAllChanges()
-	if err != nil {
-		return fmt.Errorf("error upgrading new map %w", err)
 	}
 	return nil
 }
