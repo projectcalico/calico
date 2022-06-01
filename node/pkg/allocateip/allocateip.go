@@ -659,7 +659,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 
 // determineEnabledPools returns all enabled pools. If vxlan is true, then it will only return VXLAN pools. Otherwise
 // it will only return IPIP enabled pools.
-func determineEnabledPoolCIDRs(node libapi.Node, ipPoolList api.IPPoolList, attrType string) []net.IPNet {
+func determineEnabledPoolCIDRs(node libapi.Node, ipPoolList api.IPPool List, attrType string) []net.IPNet {
 	// For wireguard, return no valid pools if the wireguard public key has not been set. Only once wireguard has been
 	// enabled *and* the wireguard device has been initialized do we require an IP address to be configured.
 	if attrType == ipam.AttributeTypeWireguard && node.Status.WireguardPublicKey == "" {

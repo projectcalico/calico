@@ -131,6 +131,7 @@ type Wireguard struct {
 	ourPublicKey                       *wgtypes.Key
 	ourIPv4InterfaceAddr               ip.Addr
 	ourPublicKeyAgreesWithDataplaneMsg bool
+	ourHostAddr                        ip.Addr
 
 	// Local workload information
 	localIPs          set.Set
@@ -271,6 +272,7 @@ func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Sta
 	w.routetable.OnIfaceStateChanged(ifaceName, state)
 }
 
+// EndpointUpdate is called when a wireguard endpoint (a node) is updated. This controls the peers addresses.
 func (w *Wireguard) EndpointUpdate(name string, ipv4Addr ip.Addr) {
 	logCxt := log.WithFields(log.Fields{"name": name, "ipv4Addr": ipv4Addr})
 	logCxt.Debug("EndpointUpdate")
@@ -278,7 +280,14 @@ func (w *Wireguard) EndpointUpdate(name string, ipv4Addr ip.Addr) {
 		logCxt.Debug("Not enabled - ignoring")
 		return
 	} else if name == w.hostname {
-		// We don't need our own IP address, just interested in the nodes.
+		// If this is the IP of the local host, host encryption is enabled *and* there is no interface IP specified,
+		// set the interface IP to be the same as the endpoint IP.
+		if w.config.EncryptHostTraffic && w.ourIPv4InterfaceAddr == nil {
+			w.EndpointWireguardUpdate(name, *w.ourPublicKey, ipv4Addr)
+		}
+		w.ourHostAddr = ipv4Addr
+
+		// We don't treat this as a peer update, so nothing else to do here.
 		return
 	}
 
@@ -293,6 +302,7 @@ func (w *Wireguard) EndpointUpdate(name string, ipv4Addr ip.Addr) {
 	w.setNodeUpdate(name, update)
 }
 
+// EndpointRemove is called when a wireguard endpoint (a node) is removed. This controls the peers addresses.
 func (w *Wireguard) EndpointRemove(name string) {
 	logCxt := log.WithField("name", name)
 	logCxt.Debug("EndpointRemove")
@@ -319,6 +329,8 @@ func (w *Wireguard) EndpointRemove(name string) {
 	}
 }
 
+// RouteUpdate is called when a route is updated. This controls the wireguard peer allowed IPs. It includes pod and
+// tunnel addresses, and for host encryption will include the host addresses.
 func (w *Wireguard) RouteUpdate(name string, cidr ip.CIDR) {
 	logCxt := log.WithFields(log.Fields{"name": name, "cidr": cidr})
 	logCxt.Debug("RouteUpdate")
@@ -348,6 +360,8 @@ func (w *Wireguard) RouteUpdate(name string, cidr ip.CIDR) {
 	}
 }
 
+// RouteRemove is called when a route is removed. This controls the wireguard peer allowed IPs. It includes pod and
+// tunnel addresses, and for host encryption will include the host addresses.
 func (w *Wireguard) RouteRemove(cidr ip.CIDR) {
 	logCxt := log.WithField("cidr", cidr)
 	logCxt.Debug("RouteRemove")
@@ -475,6 +489,8 @@ func (w *Wireguard) peerAllowedCIDRRemove(name string, cidr ip.CIDR) {
 	w.setNodeUpdate(name, update)
 }
 
+// EndpointWireguardUpdate is called when the wireguard configuration for an endpoint (a node) is updated. This controls
+// the local wireguard interface address and public key, and the peer public keys.
 func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, ipv4InterfaceAddr ip.Addr) {
 	logCxt := log.WithFields(log.Fields{"node": name, "publicKey": publicKey, "ipv4InterfaceAddr": ipv4InterfaceAddr})
 	logCxt.Debug("EndpointWireguardUpdate")
@@ -490,6 +506,12 @@ func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, 
 			// and publish.
 			logCxt.Debug("Stored public key does not match key queried from dataplane")
 			w.ourPublicKeyAgreesWithDataplaneMsg = false
+		}
+
+		if ipv4InterfaceAddr == nil && w.config.EncryptHostTraffic && w.ourHostAddr != nil {
+			// If there is no interface address explicitly and we are encrypting host traffic, use the host IP as the
+			// interface address.
+			ipv4InterfaceAddr = w.ourHostAddr
 		}
 		if w.ourIPv4InterfaceAddr != ipv4InterfaceAddr {
 			logCxt.Debug("Local interface addr updated")
@@ -514,7 +536,9 @@ func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, 
 	w.setNodeUpdate(name, update)
 }
 
-func (w *Wireguard) EndpointWireguardRemove(name string) {
+f// EndpointWireguardRemove is called when the wireguard configuration for an endpoint (a node) is removed. This
+// controls the local wireguard interface address and public key, and the peer public keys.
+unc (w *Wireguard) EndpointWireguardRemove(name string) {
 	logCxt := log.WithField("node", name)
 	logCxt.Debug("EndpointWireguardRemove")
 	if !w.config.Enabled {
