@@ -28,16 +28,17 @@ static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 	 * iptables that will filter out packets to non-ready workloads.
 	 */
 	if (!ct_result_is_confirmed(state->ct_result.rc)) {
-		__u32 *val;
+		struct ifstate_val *val;
 
-		if (!(val = (__u32 *)cali_iface_lookup_elem(&ifindex))) {
-			CALI_DEBUG("FIB succes not approved - connection to unknown ep %d not confirmed.\n", ifindex);
+		if (!(val = (struct ifstate_val *)cali_iface_lookup_elem(&ifindex))) {
+			CALI_DEBUG("FIB not approved - connection to unknown ep %d not confirmed.\n", ifindex);
 			return false;
 		}
 
-		if (iface_is_worload(*val) && !iface_is_ready(*val)) {
+		if (iface_is_workload(val->flags) && !iface_is_ready(val->flags)) {
 			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_FIB;
-			CALI_DEBUG("FIB succes not approved - connection to unready 0x%x ep %d not confirmed.\n", *val, ifindex);
+			CALI_DEBUG("FIB not approved - connection to unready 0x%x ep %s (%d) not confirmed.\n",
+					val->flags, val->name, ifindex);
 			return false;
 		}
 	}
