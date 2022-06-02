@@ -18,12 +18,16 @@ import "time"
 type Config struct {
 	// Wireguard configuration
 	Enabled             bool
+	EnabledV6           bool
 	ListeningPort       int
 	FirewallMark        int
 	RoutingRulePriority int
 	RoutingTableIndex   int
+	RoutingTableIndexV6 int
 	InterfaceName       string
+	InterfaceNameV6     string
 	MTU                 int
+	MTUV6               int
 	RouteSource         string
 	EncryptHostTraffic  bool
 	PersistentKeepAlive time.Duration
