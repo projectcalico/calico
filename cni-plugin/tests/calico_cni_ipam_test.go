@@ -37,7 +37,9 @@ var _ = Describe("Calico IPAM Tests", func() {
 		testutils.MustCreateNewIPPool(calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
 
 		// Create a unique container ID for each test.
-		cid = uuid.NewV4().String()
+		tmpCid, err := uuid.NewV4()
+		Expect(err).NotTo(HaveOccurred())
+		cid = tmpCid.String()
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var name string
