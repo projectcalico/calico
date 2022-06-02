@@ -2879,7 +2879,14 @@ func schema_libcalico_go_lib_apis_v3_NodeStatus(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"wireguardPublicKey": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WireguardPublicKey is the Wireguard public-key for this node. wireguardPublicKey validates if the string is a valid base64 encoded key.",
+							Description: "WireguardPublicKey is the IPv4 Wireguard public-key for this node. wireguardPublicKey validates if the string is a valid base64 encoded key.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"wireguardPublicKeyV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WireguardPublicKeyV6 is the IPv6 Wireguard public-key for this node. wireguardPublicKey validates if the string is a valid base64 encoded key.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2914,7 +2921,14 @@ func schema_libcalico_go_lib_apis_v3_NodeWireguardSpec(ref common.ReferenceCallb
 				Properties: map[string]spec.Schema{
 					"interfaceIPv4Address": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceIPv4Address is the IPv4 address for the Wireguard interface.",
+							Description: "InterfaceIPv4Address is the IP address for the IPv4 Wireguard interface.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"interfaceIPv6Address": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterfaceIPv6Address is the IP address for the IPv6 Wireguard interface.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
