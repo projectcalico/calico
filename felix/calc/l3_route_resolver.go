@@ -77,10 +77,11 @@ type l3rrNodeInfo struct {
 	V6CIDR ip.V6CIDR
 
 	// Tunnel IP addresses
-	IPIPAddr      ip.Addr
-	VXLANAddr     ip.Addr
-	VXLANV6Addr   ip.Addr
-	WireguardAddr ip.Addr
+	IPIPAddr        ip.Addr
+	VXLANAddr       ip.Addr
+	VXLANV6Addr     ip.Addr
+	WireguardAddr   ip.Addr
+	WireguardV6Addr ip.Addr
 
 	Addresses []ip.Addr
 }
