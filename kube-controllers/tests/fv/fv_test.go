@@ -1092,7 +1092,9 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 	It("should not create a workload endpoint when one does not already exist", func() {
 		// Create a Pod
-		podName := fmt.Sprintf("pod-fv-no-create-wep-%s", uuid.NewV4())
+		podV4Addr, err := uuid.NewV4()
+		Expect(err).NotTo(HaveOccurred())
+		podName := fmt.Sprintf("pod-fv-no-create-wep-%s", podV4Addr)
 		pod := v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      podName,
