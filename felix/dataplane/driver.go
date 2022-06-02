@@ -170,13 +170,23 @@ func StartDataplaneDriver(configParams *config.Config,
 			wireguardEnabled = configParams.WireguardEnabled
 			wireguardTableIndex = idx
 		} else {
-			log.WithError(err).Warning("Unable to assign table index for wireguard")
+			log.WithError(err).Warning("Unable to assign table index for IPv4 wireguard")
+		}
+
+		var wireguardEnabledV6 bool
+		var wireguardTableIndexV6 int
+		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
+			log.Debugf("Assigned wireguard table index: %d", idx)
+			wireguardEnabledV6 = configParams.WireguardEnabledV6
+			wireguardTableIndexV6 = idx
+		} else {
+			log.WithError(err).Warning("Unable to assign table index for IPv6 wireguard")
 		}
 
 		// If wireguard is enabled, update the failsafe ports to include the wireguard port.
 		failsafeInboundHostPorts := configParams.FailsafeInboundHostPorts
 		failsafeOutboundHostPorts := configParams.FailsafeOutboundHostPorts
-		if configParams.WireguardEnabled {
+		if configParams.WireguardEnabled || configParams.WireguardEnabledV6 {
 			found := false
 			for _, i := range failsafeInboundHostPorts {
 				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
@@ -274,7 +284,9 @@ func StartDataplaneDriver(configParams *config.Config,
 				AllowIPIPPacketsFromWorkloads:  configParams.AllowIPIPPacketsFromWorkloads,
 
 				WireguardEnabled:            configParams.WireguardEnabled,
+				WireguardEnabledV6:          configParams.WireguardEnabledV6,
 				WireguardInterfaceName:      configParams.WireguardInterfaceName,
+				WireguardInterfaceNameV6:    configParams.WireguardInterfaceNameV6,
 				WireguardIptablesMark:       markWireguard,
 				WireguardListeningPort:      configParams.WireguardListeningPort,
 				WireguardEncryptHostTraffic: configParams.WireguardHostEncryptionEnabled,
@@ -298,12 +310,16 @@ func StartDataplaneDriver(configParams *config.Config,
 			},
 			Wireguard: wireguard.Config{
 				Enabled:             wireguardEnabled,
+				EnabledV6:           wireguardEnabledV6,
 				ListeningPort:       configParams.WireguardListeningPort,
 				FirewallMark:        int(markWireguard),
 				RoutingRulePriority: configParams.WireguardRoutingRulePriority,
 				RoutingTableIndex:   wireguardTableIndex,
+				RoutingTableIndexV6: wireguardTableIndexV6,
 				InterfaceName:       configParams.WireguardInterfaceName,
+				InterfaceNameV6:     configParams.WireguardInterfaceNameV6,
 				MTU:                 configParams.WireguardMTU,
+				MTUV6:               configParams.WireguardMTUV6,
 				RouteSource:         configParams.RouteSource,
 				EncryptHostTraffic:  configParams.WireguardHostEncryptionEnabled,
 				PersistentKeepAlive: configParams.WireguardPersistentKeepAlive,
