@@ -29,7 +29,7 @@ static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_r
         return true;
 }
 
-static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx, bool relax)
 {
 	bool ret = false;
 
@@ -57,7 +57,14 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 	switch(rc) {
 		case BPF_FIB_LKUP_RET_SUCCESS:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
-			ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
+			if (!relax) {
+				ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
+			} else {
+				ret = fib_params.ifindex != CT_INVALID_IFINDEX;
+				CALI_DEBUG("Host RPF check src=%x skb iface=%d loose if %d\n",
+						bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex,
+						fib_params.ifindex);
+			}
 	}
 
 	CALI_DEBUG("Host RPF check src=%x skb iface=%d fib rc %d\n",
