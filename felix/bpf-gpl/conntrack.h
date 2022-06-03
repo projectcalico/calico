@@ -831,18 +831,26 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		// Conntrack entry records a different ingress interface than the one the
 		// packet arrived on (or it has no record yet).
 		if (CALI_F_TO_HOST) {
+			bool same_if = false;
 			// Packet is towards the host so this program is the first to see the packet.
 			if (src_to_dst->ifindex == CT_INVALID_IFINDEX) {
 				// Conntrack entry has no record of the ingress interface, this should
 				// be a response packet but we can't be 100% sure.
 				CALI_CT_DEBUG("First response packet? ifindex=%d\n", ifindex);
+				/* Check if the return packet follow the same path as the request. */
+				same_if = dst_to_src->ifindex == ifindex;
 			} else {
 				// The interface has changed; either a change to routing or someone's doing
 				// something nasty.
 				CALI_CT_DEBUG("CT RPF failed ifindex %d != %d\n",
 						src_to_dst->ifindex, ifindex);
 			}
-			if (!ret_from_tun && !hep_rpf_check(tc_ctx) && !CALI_F_NAT_IF) {
+			/* Do not worry about packets returning from the same direction as
+			 * the outgoing packets.
+			 *
+			 * Do not check if packets are returning from the NP vxlan tunnel.
+			 */
+			if (!same_if && !ret_from_tun && !hep_rpf_check(tc_ctx, false) && !CALI_F_NAT_IF) {
 				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
 			} else {
 				src_to_dst->ifindex = ifindex;
