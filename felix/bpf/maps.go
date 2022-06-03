@@ -17,9 +17,12 @@ package bpf
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -121,11 +124,12 @@ type PinnedMap struct {
 	context *MapContext
 	MapParameters
 
-	fdLoaded bool
-	fd       MapFD
-	oldfd    MapFD
-	perCPU   bool
-	oldSize  int
+	fdLoaded  bool
+	fd        MapFD
+	oldfd     MapFD
+	perCPU    bool
+	oldSize   int
+	UpgradeFn func(int, int, *MapContext) error
 }
 
 func (b *PinnedMap) GetName() string {
@@ -540,6 +544,8 @@ func (b *PinnedMap) EnsureExists() error {
 				os.Remove(b.Path() + "_old")
 			}
 
+		} else {
+			err = b.upgrade()
 		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
@@ -593,4 +599,48 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 		return fmt.Errorf("error copying data from old map %s, err=%w", b.GetName(), err)
 	}
 	return nil
+}
+
+func (b *PinnedMap) getOldMapVersion() (int, error) {
+	oldVersion := 0
+	dir, name := filepath.Split(b.Filename)
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("error reading pin path %w", err)
+	}
+	for _, f := range files {
+		if strings.Contains(f.Name(), name) {
+			mapName := f.Name()
+			oldVersion, err = strconv.Atoi(string(mapName[len(mapName)-1]))
+			if err != nil {
+				return 0, fmt.Errorf("invalid version %w", err)
+			}
+			if oldVersion < b.Version {
+				return oldVersion, nil
+			}
+			if oldVersion > b.Version {
+				return 0, fmt.Errorf("downgrade not supported %d %d", oldVersion, b.Version)
+			}
+		}
+	}
+	return oldVersion, nil
+}
+
+func (b *PinnedMap) upgrade() error {
+	if b.UpgradeFn == nil {
+		return nil
+	}
+	oldVersion, err := b.getOldMapVersion()
+	if err != nil {
+		return err
+	}
+	// fresh install
+	if oldVersion == 0 {
+		return nil
+	}
+	return b.UpgradeFn(oldVersion, b.Version, b.context)
+}
+
+type Upgradable interface {
+	Upgrade() Upgradable
 }
