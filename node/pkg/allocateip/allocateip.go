@@ -524,7 +524,7 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 			log.WithField("node", node.Name).WithError(err).Warning("Error updating node")
 		}
 
-		return nil
+		return err
 	}
 	return fmt.Errorf("Too many retries attempting to update node with tunnel address")
 }
