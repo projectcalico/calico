@@ -27,13 +27,22 @@ func init() {
 	countersCmd.AddCommand(countersDumpCmd)
 	countersCmd.AddCommand(countersFlushCmd)
 	rootCmd.AddCommand(countersCmd)
+
+	countersDumpCmd.Flags().String("iface", "", "Interface name")
+	countersFlushCmd.Flags().String("iface", "", "Interface name")
 }
 
 var countersDumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "dumps counters",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := dumpCounters(); err != nil {
+		iface, err := cmd.Flags().GetString("iface")
+		if err != nil {
+			log.WithError(err).Error("Failed to parse interface name. Will dump all counters")
+			iface = ""
+		}
+
+		if err = dumpCounters(iface); err != nil {
 			log.WithError(err).Error("Failed to dump counter map.")
 		}
 	},
@@ -43,7 +52,13 @@ var countersFlushCmd = &cobra.Command{
 	Use:   "flush",
 	Short: "flush counters",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := flushCounters(); err != nil {
+		iface, err := cmd.Flags().GetString("iface")
+		if err != nil {
+			log.WithError(err).Error("Failed to parse interface name. Will dump flush counters")
+			iface = ""
+		}
+
+		if err := flushCounters(iface); err != nil {
 			log.WithError(err).Error("Failed to flush counter map.")
 		}
 	},
@@ -55,8 +70,9 @@ var countersCmd = &cobra.Command{
 	Short: "Show and reset counters",
 }
 
-func dumpCounters() error {
-	bpfCounters := counters.NewCounters()
+func dumpCounters(iface string) error {
+	fmt.Printf("iface: %s\n", iface)
+	bpfCounters := counters.NewCounters(iface, "ingress")
 	values, err := bpfCounters.Read()
 	if err != nil {
 		return fmt.Errorf("Failed to read bpf counters: %v", err)
@@ -69,7 +85,8 @@ func dumpCounters() error {
 	return nil
 }
 
-func flushCounters() error {
+func flushCounters(iface string) error {
+	fmt.Printf("iface: %s\n", iface)
 	fmt.Println("Not yet implemented.")
 	return nil
 }

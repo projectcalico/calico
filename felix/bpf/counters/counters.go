@@ -32,11 +32,16 @@ const (
 type Counters struct {
 	numOfCpu int
 	Map      bpf.Map
+	iface    string
+	hook     string
 }
 
-func NewCounters() *Counters {
+func NewCounters(iface, hook string) *Counters {
 	var err error
-	cntr := Counters{}
+	cntr := Counters{
+		iface: iface,
+		hook:  hook,
+	}
 	cntr.numOfCpu, err = libbpf.NumPossibleCPUs()
 	if err != nil {
 		logrus.WithError(err).Error("failed to get libbpf number of possible cpu. Will use runtime information")
