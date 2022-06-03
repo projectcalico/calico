@@ -17,11 +17,12 @@ package counters
 import (
 	"encoding/binary"
 	"fmt"
-	"runtime"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -30,28 +31,22 @@ const (
 )
 
 type Counters struct {
-	numOfCpu int
-	Map      bpf.Map
-	iface    string
-	hook     string
+	Map   bpf.Map
+	iface string
 }
 
-func NewCounters(iface, hook string) *Counters {
-	var err error
+func NewCounters(iface string) *Counters {
 	cntr := Counters{
 		iface: iface,
-		hook:  hook,
-	}
-	cntr.numOfCpu, err = libbpf.NumPossibleCPUs()
-	if err != nil {
-		logrus.WithError(err).Error("failed to get libbpf number of possible cpu. Will use runtime information")
-		cntr.numOfCpu = runtime.NumCPU()
 	}
 	cntr.Map = Map(&bpf.MapContext{})
+	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY, bpf.CountersMapName(), iface, tc.HookIngress)
+	logrus.Infof("counter path: %v", pinPath)
 	return &cntr
 }
 
 func (c Counters) Read() ([]uint32, error) {
+
 	/*mapFD, err := bpf.GetCachedMapFDByPin(c.Map)
 	if err != nil {
 		return []uint32{}, fmt.Errorf("failed to get counters map fd: %v", err)
@@ -69,9 +64,13 @@ func (c Counters) Read() ([]uint32, error) {
 		return []uint32{}, fmt.Errorf("failed to read counters map: %v", err)
 	}
 
+	numOfCpu, err := libbpf.NumPossibleCPUs()
+	if err != nil {
+		return []uint32{}, fmt.Errorf("failed to get number of possible cpu - err: %v", err)
+	}
 	bpfCounters := make([]uint32, maxCounterSize)
 	for i := range bpfCounters {
-		for cpu := 0; cpu < c.numOfCpu; cpu++ {
+		for cpu := 0; cpu < numOfCpu; cpu++ {
 			begin := i*uint32Size + cpu*maxCounterSize*uint32Size
 			bpfCounters[i] += uint32(binary.LittleEndian.Uint32(values[begin : begin+uint32Size]))
 		}

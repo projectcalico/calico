@@ -22,7 +22,7 @@ var MapParameters = bpf.MapParameters{
 	KeySize:    4, //__u32
 	ValueSize:  uint32Size * maxCounterSize,
 	MaxEntries: 1,
-	Name:       "cali_counters",
+	Name:       bpf.CountersMapName(),
 }
 
 func Map(mc *bpf.MapContext) bpf.Map {

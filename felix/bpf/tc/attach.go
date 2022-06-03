@@ -142,7 +142,6 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	}
 	defer obj.Close()
 
-	baseDir := "/sys/fs/bpf/tc/"
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
 		// The values are read only for the BPF programs, but can be set to a value from
@@ -153,20 +152,11 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 			}
 			continue
 		}
-		subDir := "globals"
-		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
-			// Remove period in the interface name if any
-			ifName := strings.ReplaceAll(ap.Iface, ".", "")
-			if ap.Hook == HookIngress {
-				subDir = ifName + "_igr/"
-			} else {
-				subDir = ifName + "_egr/"
-			}
-		}
+
 		if err := ap.setMapSize(m); err != nil {
 			return "", fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
-		pinPath := path.Join(baseDir, subDir, m.Name())
+		pinPath := MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
 		if err := m.SetPinPath(pinPath); err != nil {
 			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}

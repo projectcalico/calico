@@ -72,7 +72,7 @@ var countersCmd = &cobra.Command{
 
 func dumpCounters(iface string) error {
 	fmt.Printf("iface: %s\n", iface)
-	bpfCounters := counters.NewCounters(iface, "ingress")
+	bpfCounters := counters.NewCounters(iface)
 	values, err := bpfCounters.Read()
 	if err != nil {
 		return fmt.Errorf("Failed to read bpf counters: %v", err)
