@@ -19,10 +19,10 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/cachingmap"
-	v2 "github.com/projectcalico/calico/felix/bpf/mock/v2"
-	v3 "github.com/projectcalico/calico/felix/bpf/mock/v3"
-	v4 "github.com/projectcalico/calico/felix/bpf/mock/v4"
-	v5 "github.com/projectcalico/calico/felix/bpf/mock/v5"
+	v2 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
+	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
+	v5 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v5"
 )
 
 func MapV2(mc *bpf.MapContext) bpf.Map {

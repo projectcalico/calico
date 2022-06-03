@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v2
+package v3
 
 import (
 	"encoding/binary"
@@ -20,23 +20,23 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	v3 "github.com/projectcalico/calico/felix/bpf/mock/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
 )
 
 var MockMapParams = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_mock",
 	Type:       "hash",
-	KeySize:    16,
-	ValueSize:  64,
+	KeySize:    24,
+	ValueSize:  72,
 	MaxEntries: 1024,
 	Name:       "cali_mock",
 	Flags:      unix.BPF_F_NO_PREALLOC,
-	Version:    2,
+	Version:    3,
 }
 
 const (
-	KeySize   = 16
-	ValueSize = 64
+	KeySize   = 24
+	ValueSize = 72
 )
 
 type Key [KeySize]byte
@@ -53,24 +53,24 @@ func NewKey(k uint32) Key {
 
 type Value [ValueSize]byte
 
+func (v Value) AsBytes() []byte {
+	return v[:]
+}
+
 func NewValue(v uint32) Value {
 	var val Value
 	binary.LittleEndian.PutUint32(val[:], v)
 	return val
 }
 
-func (v Value) AsBytes() []byte {
-	return v[:]
-}
-
 func (k Key) Upgrade() bpf.Upgradable {
-	var key3 v3.Key
-	copy(key3[:], k[:])
-	return key3
+	var key4 v4.Key
+	copy(key4[:], k[:])
+	return key4
 }
 
 func (v Value) Upgrade() bpf.Upgradable {
-	var val3 v3.Value
-	copy(val3[:], v[:])
-	return val3
+	var val4 v4.Value
+	copy(val4[:], v[:])
+	return val4
 }

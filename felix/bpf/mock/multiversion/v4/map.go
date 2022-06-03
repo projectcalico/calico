@@ -20,7 +20,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	v5 "github.com/projectcalico/calico/felix/bpf/mock/v5"
+	v5 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v5"
 )
 
 var MockMapParams = bpf.MapParameters{

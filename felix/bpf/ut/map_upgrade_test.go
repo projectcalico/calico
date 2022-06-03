@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/mock"
+	mock "github.com/projectcalico/calico/felix/bpf/mock/multiversion"
 )
 
 func deleteMap(bpfMap bpf.Map) {
