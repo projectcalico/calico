@@ -15,9 +15,7 @@
 package discovery
 
 import (
-	"math/rand"
 	"reflect"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -42,7 +40,6 @@ var _ = Describe("Typha address discovery", func() {
 		localNodeName = "felix-local"
 		remoteNodeName = "felix-remote"
 
-		rand.Seed(time.Now().UTC().UnixNano())
 		endpoints = &v1.Endpoints{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "v1",

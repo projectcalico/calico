@@ -58,7 +58,12 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		eds.bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
+		eds.bpfLog = containers.Run("bpf-log",
+			containers.RunOpts{
+				AutoRemove:       true,
+				IgnoreEmptyLines: true,
+			},
+			"--privileged",
 			"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 	}
 

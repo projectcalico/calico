@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/app-policy/proto"
 	"github.com/projectcalico/calico/app-policy/syncher"
 	"github.com/projectcalico/calico/app-policy/uds"
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 
 	"github.com/docopt/docopt-go"
 	authz_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
@@ -54,6 +55,9 @@ Options:
 var VERSION string
 
 func main() {
+	// Make sure the RNG is seeded.
+	seedrng.EnsureSeeded()
+
 	arguments, err := docopt.ParseArgs(usage, nil, VERSION)
 	if err != nil {
 		println(usage)
