@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v3
+package v4
 
 import (
 	"encoding/binary"
@@ -20,23 +20,23 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
+	"github.com/projectcalico/calico/felix/bpf/mock/v5"
 )
 
 var MockMapParams = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_mock",
 	Type:       "hash",
-	KeySize:    24,
-	ValueSize:  72,
+	KeySize:    32,
+	ValueSize:  80,
 	MaxEntries: 1024,
 	Name:       "cali_mock",
 	Flags:      unix.BPF_F_NO_PREALLOC,
-	Version:    3,
+	Version:    4,
 }
 
 const (
-	KeySize   = 24
-	ValueSize = 72
+	KeySize   = 32
+	ValueSize = 80
 )
 
 type Key [KeySize]byte
@@ -64,13 +64,13 @@ func NewValue(v uint32) Value {
 }
 
 func (k Key) Upgrade() bpf.Upgradable {
-	var key4 v4.Key
-	copy(key4[:], k[:])
-	return key4
+	var key5 v5.Key
+	copy(key5[:], k[:])
+	return key5
 }
 
 func (v Value) Upgrade() bpf.Upgradable {
-	var val4 v4.Value
-	copy(val4[:], v[:])
-	return val4
+	var val5 v5.Value
+	copy(val5[:], v[:])
+	return val5
 }
