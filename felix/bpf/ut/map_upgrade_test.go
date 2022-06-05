@@ -21,12 +21,15 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/mock"
-	"github.com/projectcalico/calico/felix/bpf/mock/v2"
-	"github.com/projectcalico/calico/felix/bpf/mock/v3"
-	"github.com/projectcalico/calico/felix/bpf/mock/v4"
-	"github.com/projectcalico/calico/felix/bpf/mock/v5"
+	mock "github.com/projectcalico/calico/felix/bpf/mock/multiversion"
+	v2 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
+	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
+	v5 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v5"
 )
+
+const key = 0xdeadbeef
+const val = 0xa0b1c2d3
 
 func deleteMap(bpfMap bpf.Map) {
 	bpfMap.(*bpf.PinnedMap).Close()
@@ -40,8 +43,8 @@ func TestMapUpgradeV2ToV3(t *testing.T) {
 	err := mockMapv2.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	k := v2.NewKey(1)
-	v := v2.NewValue(2)
+	k := v2.NewKey(key)
+	v := v2.NewValue(val)
 
 	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
@@ -50,8 +53,8 @@ func TestMapUpgradeV2ToV3(t *testing.T) {
 	err = mockMapv3.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	k3 := v3.NewKey(1)
-	v3 := v3.NewValue(2)
+	k3 := v3.NewKey(key)
+	v3 := v3.NewValue(val)
 	val, err := mockMapv3.Get(k3.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	Expect(val).To(Equal(v3.AsBytes()))
@@ -66,8 +69,8 @@ func TestMapUpgradeV2ToV4(t *testing.T) {
 	err := mockMapv2.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	k := v2.NewKey(3)
-	v := v2.NewValue(4)
+	k := v2.NewKey(key)
+	v := v2.NewValue(val)
 
 	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
@@ -76,8 +79,8 @@ func TestMapUpgradeV2ToV4(t *testing.T) {
 	err = mockMapv4.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	k4 := v4.NewKey(3)
-	v4 := v4.NewValue(4)
+	k4 := v4.NewKey(key)
+	v4 := v4.NewValue(val)
 	val, err := mockMapv4.Get(k4.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	Expect(val).To(Equal(v4.AsBytes()))
@@ -92,8 +95,8 @@ func TestMapUpgradeV2ToV5(t *testing.T) {
 	err := mockMapv2.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	k := v2.NewKey(5)
-	v := v2.NewValue(6)
+	k := v2.NewKey(key)
+	v := v2.NewValue(val)
 
 	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
@@ -102,8 +105,8 @@ func TestMapUpgradeV2ToV5(t *testing.T) {
 	err = mockMapv5.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	k5 := v5.NewKey(5)
-	v5 := v5.NewValue(6)
+	k5 := v5.NewKey(key)
+	v5 := v5.NewValue(val)
 	val, err := mockMapv5.Get(k5.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	Expect(val).To(Equal(v5.AsBytes()))
@@ -118,8 +121,8 @@ func TestMapUpgradeV3ToV5(t *testing.T) {
 	err := mockMapv3.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	k := v3.NewKey(7)
-	v := v3.NewValue(8)
+	k := v3.NewKey(key)
+	v := v3.NewValue(val)
 
 	err = mockMapv3.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
@@ -128,8 +131,8 @@ func TestMapUpgradeV3ToV5(t *testing.T) {
 	err = mockMapv5.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	k5 := v5.NewKey(7)
-	v5 := v5.NewValue(8)
+	k5 := v5.NewKey(key)
+	v5 := v5.NewValue(val)
 	val, err := mockMapv5.Get(k5.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	Expect(val).To(Equal(v5.AsBytes()))

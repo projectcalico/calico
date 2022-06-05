@@ -19,11 +19,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/bpfmap"
-	"github.com/projectcalico/calico/felix/bpf/mock/v2"
-	"github.com/projectcalico/calico/felix/bpf/mock/v3"
-	"github.com/projectcalico/calico/felix/bpf/mock/v4"
-	"github.com/projectcalico/calico/felix/bpf/mock/v5"
 )
 
 type Map struct {
@@ -190,86 +185,4 @@ func (*DummyMap) Delete(k []byte) error {
 
 func (*DummyMap) CopyDeltaFromOldMap() error {
 	return nil
-}
-
-func GetMapParams(version int) bpf.MapParameters {
-        switch version {
-        case 2:
-                return v2.MockMapParams
-        case 3:
-                return v3.MockMapParams
-        case 4:
-                return v4.MockMapParams
-        case 5:
-                return v5.MockMapParams
-        default:
-                return v5.MockMapParams
-        }
-}
-
-func GetKeyValueTypeFromVersion(version int, k, v []byte) (bpf.Upgradable, bpf.Upgradable) {
-        switch version {
-        case 2:
-                var key v2.Key
-                var val v2.Value
-                copy(key[:], k)
-                copy(val[:], v)
-                return key, val
-        case 3:
-                var key v3.Key
-                var val v3.Value
-                copy(key[:], k)
-                copy(val[:], v)
-                return key, val
-        case 4:
-                var key v4.Key
-                var val v4.Value
-                copy(key[:], k)
-                copy(val[:], v)
-                return key, val
-        case 5:
-                var key v5.Key
-                var val v5.Value
-                copy(key[:], k)
-                copy(val[:], v)
-                return key, val
-        default:
-                var key v5.Key
-                var val v5.Value
-                copy(key[:], k)
-                copy(val[:], v)
-                return key, val
-        }
-}
-
-func MapV2(mc *bpf.MapContext) bpf.Map {
-        b := mc.NewPinnedMap(v2.MockMapParams)
-        b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
-        b.(*bpf.PinnedMap).GetMapParams = GetMapParams
-        b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
-        return b
-}
-
-func MapV3(mc *bpf.MapContext) bpf.Map {
-        b := mc.NewPinnedMap(v3.MockMapParams)
-        b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
-        b.(*bpf.PinnedMap).GetMapParams = GetMapParams
-        b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
-        return b
-}
-
-func MapV4(mc *bpf.MapContext) bpf.Map {
-        b := mc.NewPinnedMap(v4.MockMapParams)
-        b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
-        b.(*bpf.PinnedMap).GetMapParams = GetMapParams
-        b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
-        return b
-}
-
-func MapV5(mc *bpf.MapContext) bpf.Map {
-        b := mc.NewPinnedMap(v5.MockMapParams)
-        b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
-        b.(*bpf.PinnedMap).GetMapParams = GetMapParams
-        b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
-        return b
 }

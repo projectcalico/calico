@@ -644,8 +644,11 @@ func (b *PinnedMap) upgrade() error {
 	if oldVersion == 0 {
 		return nil
 	}
-	oldMapParams := b.GetMapParams(oldVersion)
+
+	// Get a pinnedMap handle for the old map
 	ctx := b.context
+	oldMapParams := b.GetMapParams(oldVersion)
+	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := ctx.NewPinnedMap(oldMapParams)
 	err = oldBpfMap.EnsureExists()
 	if err != nil {
