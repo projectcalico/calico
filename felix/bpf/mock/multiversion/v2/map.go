@@ -20,6 +20,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	//"github.com/projectcalico/calico/felix/bpf/multiversion"
 	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
 )
 

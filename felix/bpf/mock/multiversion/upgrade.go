@@ -15,10 +15,9 @@
 package mock
 
 import (
-	"fmt"
-
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
+	bpfmap "github.com/projectcalico/calico/felix/bpf/bpfmap"
+
 	v2 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
 	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
 	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
@@ -27,25 +26,33 @@ import (
 
 func MapV2(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(v2.MockMapParams)
-	b.(*bpf.PinnedMap).UpgradeFn = Upgrade
+	b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
+	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
+	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
 func MapV3(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(v3.MockMapParams)
-	b.(*bpf.PinnedMap).UpgradeFn = Upgrade
+	b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
+	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
+	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
 func MapV4(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(v4.MockMapParams)
-	b.(*bpf.PinnedMap).UpgradeFn = Upgrade
+	b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
+	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
+	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
 func MapV5(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(v5.MockMapParams)
-	b.(*bpf.PinnedMap).UpgradeFn = Upgrade
+	b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
+	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
+	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
@@ -80,31 +87,22 @@ func NewValueV5(k uint32) v5.Value {
 	return v5.NewValue(k)
 }
 
-func getCachingMap(mapParams bpf.MapParameters, mc *bpf.MapContext) (*cachingmap.CachingMap, error) {
-	bpfMap := mc.NewPinnedMap(mapParams)
-	err := bpfMap.EnsureExists()
-	if err != nil {
-		return nil, fmt.Errorf("error ensuring map version=%d err=%w", mapParams.Version, err)
-	}
-	return cachingmap.New(mapParams, bpfMap), nil
-}
-
-func getCachingMapFromVersion(version int, mc *bpf.MapContext) (*cachingmap.CachingMap, error) {
+func GetMapParams(version int) bpf.MapParameters {
 	switch version {
 	case 2:
-		return getCachingMap(v2.MockMapParams, mc)
+		return v2.MockMapParams
 	case 3:
-		return getCachingMap(v3.MockMapParams, mc)
+		return v3.MockMapParams
 	case 4:
-		return getCachingMap(v4.MockMapParams, mc)
+		return v4.MockMapParams
 	case 5:
-		return getCachingMap(v5.MockMapParams, mc)
+		return v5.MockMapParams
 	default:
-		return getCachingMap(v5.MockMapParams, mc)
+		return v5.MockMapParams
 	}
 }
 
-func getKeyValueTypeFromVersion(version int, k, v []byte) (bpf.Upgradable, bpf.Upgradable) {
+func GetKeyValueTypeFromVersion(version int, k, v []byte) (bpf.Upgradable, bpf.Upgradable) {
 	switch version {
 	case 2:
 		var key v2.Key
@@ -137,48 +135,4 @@ func getKeyValueTypeFromVersion(version int, k, v []byte) (bpf.Upgradable, bpf.U
 		copy(val[:], v)
 		return key, val
 	}
-}
-
-func getBytesFromUpgradable(k, v bpf.Upgradable) ([]byte, []byte) {
-	switch k := k.(type) {
-	case v2.Key:
-		return k.AsBytes(), v.(v2.Value).AsBytes()
-	case v3.Key:
-		return k.AsBytes(), v.(v3.Value).AsBytes()
-	case v4.Key:
-		return k.AsBytes(), v.(v4.Value).AsBytes()
-	case v5.Key:
-		return k.AsBytes(), v.(v5.Value).AsBytes()
-	default:
-		return k.(v5.Key).AsBytes(), v.(v5.Value).AsBytes()
-	}
-}
-
-func Upgrade(oldVersion, newVersion int, mc *bpf.MapContext) error {
-	oldcachingMap, err := getCachingMapFromVersion(oldVersion, mc)
-	if err != nil {
-		return err
-	}
-	newcachingMap, err := getCachingMapFromVersion(newVersion, mc)
-	if err != nil {
-		return err
-	}
-	err = oldcachingMap.LoadCacheFromDataplane()
-	if err != nil {
-		return err
-	}
-	err = newcachingMap.LoadCacheFromDataplane()
-	if err != nil {
-		return err
-	}
-	oldcachingMap.IterDataplaneCache(func(k, v []byte) {
-		tmpK, tmpV := getKeyValueTypeFromVersion(oldVersion, k, v)
-		for i := oldVersion; i < newVersion; i++ {
-			tmpK = tmpK.Upgrade()
-			tmpV = tmpV.Upgrade()
-		}
-		newcachingMap.SetDesired(getBytesFromUpgradable(tmpK, tmpV))
-
-	})
-	return newcachingMap.ApplyAllChanges()
 }

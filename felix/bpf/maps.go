@@ -124,12 +124,15 @@ type PinnedMap struct {
 	context *MapContext
 	MapParameters
 
-	fdLoaded  bool
-	fd        MapFD
-	oldfd     MapFD
-	perCPU    bool
-	oldSize   int
-	UpgradeFn func(int, int, *MapContext) error
+	fdLoaded bool
+	fd       MapFD
+	oldfd    MapFD
+	perCPU   bool
+	oldSize  int
+	// Callbacks to handle upgrade
+	UpgradeFn      func(*PinnedMap, *PinnedMap) error
+	GetMapParams   func(int) MapParameters
+	KVasUpgradable func(int, []byte, []byte) (Upgradable, Upgradable)
 }
 
 func (b *PinnedMap) GetName() string {
@@ -630,6 +633,9 @@ func (b *PinnedMap) upgrade() error {
 	if b.UpgradeFn == nil {
 		return nil
 	}
+	if b.GetMapParams == nil || b.KVasUpgradable == nil {
+		return fmt.Errorf("upgrade callbacks not registered %s", b.Name)
+	}
 	oldVersion, err := b.getOldMapVersion()
 	if err != nil {
 		return err
@@ -638,9 +644,19 @@ func (b *PinnedMap) upgrade() error {
 	if oldVersion == 0 {
 		return nil
 	}
-	return b.UpgradeFn(oldVersion, b.Version, b.context)
+	oldMapParams := b.GetMapParams(oldVersion)
+	ctx := b.context
+	oldBpfMap := ctx.NewPinnedMap(oldMapParams)
+	err = oldBpfMap.EnsureExists()
+	if err != nil {
+		return err
+	}
+	oldBpfMap.(*PinnedMap).KVasUpgradable = b.KVasUpgradable
+
+	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
 }
 
 type Upgradable interface {
 	Upgrade() Upgradable
+	AsBytes() []byte
 }
