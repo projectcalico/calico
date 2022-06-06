@@ -81,4 +81,6 @@ ${HELM} template --include-crds \
 	--set apiServer.enabled=false \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
 	--set calicoctl.tag=$CALICO_VERSION
+# The first two lines are a newline and a yaml separator - remove them.
+find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator

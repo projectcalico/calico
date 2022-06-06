@@ -1,5 +1,3 @@
----
-# Source: tigera-operator/templates/tigera-operator/02-tigera-operator.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
