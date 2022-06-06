@@ -1462,24 +1462,35 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 			delete(c.cache, k)
 		}
 	} else {
-		// Ignore pending block affinities - we shouldn't act upon them
-		// until they are confirmed.
-		if _, ok := kvp.Key.(model.BlockAffinityKey); ok {
-			aff := kvp.Value.(*model.BlockAffinity)
-			if aff.State == model.StatePending {
-				return false
-			}
-		}
-
+		// Serialize the value and check if it needs to be updated.
 		value, err := model.SerializeValue(kvp)
 		if err != nil {
 			log.Errorf("Ignoring update: unable to serialize value %v: %v", kvp.Value, err)
 			return false
 		}
 		newValue := string(value)
-		if currentValue, isSet := c.cache[k]; isSet && currentValue == newValue {
+		currentValue, isSet := c.cache[k]
+		if isSet && currentValue == newValue {
 			return false
 		}
+
+		// Ignore pending block affinities - we shouldn't act upon them
+		// unless they are confirmed. Treat pending affinities as a delete.
+		if key, ok := kvp.Key.(model.BlockAffinityKey); ok {
+			aff := kvp.Value.(*model.BlockAffinity)
+			if aff.State == model.StatePending {
+				if isSet {
+					// Strictly speaking, a block affinity will never go from confirmed back to pending,
+					// but to be extra careful we handle that case anyway.
+					delete(c.cache, k)
+					return true
+				}
+				log.WithFields(log.Fields{"cidr": key.CIDR, "host": key.Host}).Debug("Block affinity is pending, skip")
+				return false
+			}
+		}
+
+		// Update the cache.
 		c.cache[k] = newValue
 	}
 
