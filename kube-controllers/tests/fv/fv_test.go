@@ -819,7 +819,9 @@ var _ = Describe("kube-controllers FV tests", func() {
 	Context("Pod FV tests", func() {
 		It("should not overwrite a workload endpoint's container ID", func() {
 			// Create a Pod
-			podName := fmt.Sprintf("pod-fv-container-id-%s", uuid.NewV4())
+			podV4Addr, err := uuid.NewV4()
+			Expect(err).NotTo(HaveOccurred())
+			podName := fmt.Sprintf("pod-fv-container-id-%s", podV4Addr)
 			podNamespace := "default"
 			nodeName := "127.0.0.1"
 			pod := v1.Pod{
@@ -991,7 +993,9 @@ var _ = Describe("kube-controllers FV tests", func() {
 			}, time.Second*10, 500*time.Millisecond).ShouldNot(HaveOccurred())
 
 			// Create a Pod
-			podName := fmt.Sprintf("pod-fv-container-id-%s", uuid.NewV4())
+			podV4Addr, err := uuid.NewV4()
+			Expect(err).NotTo(HaveOccurred())
+			podName := fmt.Sprintf("pod-fv-container-id-%s", podV4Addr)
 			nodeName := "127.0.0.1"
 			pod := v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1092,7 +1096,9 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 	It("should not create a workload endpoint when one does not already exist", func() {
 		// Create a Pod
-		podName := fmt.Sprintf("pod-fv-no-create-wep-%s", uuid.NewV4())
+		podV4Addr, err := uuid.NewV4()
+		Expect(err).NotTo(HaveOccurred())
+		podName := fmt.Sprintf("pod-fv-no-create-wep-%s", podV4Addr)
 		pod := v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      podName,
