@@ -16,7 +16,7 @@ package multiversion
 
 import (
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap/upgrade"
 	v2 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
 	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
 	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
@@ -75,7 +75,7 @@ func GetKeyValueTypeFromVersion(version int, k, v []byte) (bpf.Upgradable, bpf.U
 
 func MapV2(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(v2.MockMapParams)
-	b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
+	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
 	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
 	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
@@ -83,7 +83,7 @@ func MapV2(mc *bpf.MapContext) bpf.Map {
 
 func MapV3(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(v3.MockMapParams)
-	b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
+	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
 	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
 	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
@@ -91,7 +91,7 @@ func MapV3(mc *bpf.MapContext) bpf.Map {
 
 func MapV4(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(v4.MockMapParams)
-	b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
+	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
 	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
 	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
@@ -99,7 +99,7 @@ func MapV4(mc *bpf.MapContext) bpf.Map {
 
 func MapV5(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(v5.MockMapParams)
-	b.(*bpf.PinnedMap).UpgradeFn = bpfmap.Upgrade
+	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
 	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
 	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bpfmap
+package upgrade
 
 import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 )
 
-func Upgrade(oldMap, newMap *bpf.PinnedMap) error {
+func UpgradeBPFMap(oldMap, newMap *bpf.PinnedMap) error {
 	oldVersion := oldMap.Version
 	newVersion := newMap.Version
 	oldCachingMap := cachingmap.New(oldMap.MapParameters, oldMap)
