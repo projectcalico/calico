@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calico-resources
+  namespace: tigera-operator
+data:
+  # To create Calico resources before Calico components are started add
+  # an entry here and the contents of the resource under the entry.
+  # The resources here should all be projectcalico.org/v3.
+  # Multiple resources/entries can be added to this ConfigMap.
+  #
+  # If you need to remove a resource that was added to this ConfigMap
+  # you should remove it from here or else it will be re-created.
+  #
+  # example-global-network-set.yaml: |
+  #   apiVersion: projectcalico.org/v3
+  #   kind: GlobalNetworkSet
+  #   metadata:
+  #     name: a-name-for-the-set
+  #     labels:
+  #       role: external-database
+  #   spec:
+  #     nets:
+  #     - 198.51.100.0/28
+  #     - 203.0.113.0/24
