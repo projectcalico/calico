@@ -64,6 +64,7 @@ spec:
         fsGroup: 65534
       containers:
       - image: {{ .Values.typha.image }}:{{.Values.version }}
+        imagePullPolicy: {{.Values.imagePullPolicy}}
         name: calico-typha
         ports:
         - containerPort: 5473

@@ -27,6 +27,7 @@ datastore: kubernetes
 network: calico
 ipam: calico-ipam
 mtu: "1440"
+imagePullPolicy: Never
 etcd:
   endpoints: "http://<ETCD_IP>:<ETCD_PORT>"
   tls:
