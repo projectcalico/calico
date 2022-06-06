@@ -33,7 +33,7 @@ func Upgrade(oldMap, newMap *bpf.PinnedMap) error {
 		return err
 	}
 	oldCachingMap.IterDataplaneCache(func(k, v []byte) {
-		tmpK, tmpV := oldMap.KVasUpgradable(oldVersion, k, v)
+		tmpK, tmpV := newMap.KVasUpgradable(oldVersion, k, v)
 		for i := oldVersion; i < newVersion; i++ {
 			tmpK = tmpK.Upgrade()
 			tmpV = tmpV.Upgrade()
