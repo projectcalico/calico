@@ -42,7 +42,21 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C app-policy protobuf
-	$(MAKE) -C calico gen-manifests
+	$(MAKE) gen-manifests
+
+gen-manifests: bin/helm
+	cd ./manifests && \
+		OPERATOR_VERSION=$(OPERATOR_VERSION) \
+		CALICO_VERSION=$(CALICO_VERSION) \
+		./generate.sh
+
+# Build the tigera-operator helm chart.
+chart: bin/tigera-operator-$(GIT_VERSION).tgz
+bin/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+	bin/helm package ./charts/tigera-operator \
+	--destination ./bin/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
 
 # Build all Calico images for the current architecture.
 image:
