@@ -253,6 +253,7 @@ func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind st
 	ctx, cancel := context.WithCancel(ctx)
 	backend, err := c.backend.Watch(ctx, list, opts.ResourceVersion)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	w := &watcher{
