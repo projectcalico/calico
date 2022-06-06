@@ -1,4 +1,0 @@
----
-layout: null
----
-{% include non-helm-manifests/istio-app-layer-policy-envoy-v3.yaml %}
