@@ -837,11 +837,6 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 
 		m.opReporter.RecordOperation("update-workload-iface")
 
-		if val, ok := m.ifaceNameToIdx[ifaceName]; !ok || val.ifindex == 0 {
-			errs[ifaceName] = fmt.Errorf("unknown ifindex for dev %s", ifaceName)
-			return nil
-		}
-
 		if err := sem.Acquire(context.Background(), 1); err != nil {
 			// Should only happen if the context finishes.
 			log.WithError(err).Panic("Failed to acquire semaphore")
@@ -853,6 +848,18 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			defer wg.Done()
 			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
+			if err != nil {
+				if isLinkNotFoundError(err) {
+					// Interface is gone, nothing to do.
+					log.WithField("ifaceName", ifaceName).Debug(
+						"Ignoring request to program interface that is not present.")
+					err = nil
+				}
+			} else {
+				if val, ok := m.ifaceNameToIdx[ifaceName]; !ok || val.ifindex == 0 {
+					errs[ifaceName] = fmt.Errorf("unknown ifindex for dev %s", ifaceName)
+				}
+			}
 			mutex.Lock()
 			errs[ifaceName] = err
 			mutex.Unlock()
@@ -968,12 +975,6 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	// Attach the qdisc first; it is shared between the directions.
 	err := m.dp.ensureQdisc(ifaceName)
 	if err != nil {
-		if isLinkNotFoundError(err) {
-			// Interface is gone, nothing to do.
-			log.WithField("ifaceName", ifaceName).Debug(
-				"Ignoring request to program interface that is not present.")
-			return nil
-		}
 		return err
 	}
 
