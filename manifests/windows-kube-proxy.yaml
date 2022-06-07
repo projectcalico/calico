@@ -26,7 +26,7 @@ data:
     # Modify the kubeconfig so that references to /var/run/secrets point to this sandbox.
     $kubeConfigPath = "$PSScriptRoot/kubeconfig.conf"
     Write-Host "Modifying kubeconfig /var/run/secrets paths and copying to $kubeConfigPath"
-    ((Get-Content -Path ./var/lib/kube-proxy/kubeconfig.conf -Raw) -replace '/var',"$env:CONTAINER_SANDBOX_MOUNT_POINT/var") | Set-Content -Path $kubeConfigPath 
+    ((Get-Content -Path ./var/lib/kube-proxy/kubeconfig.conf -Raw) -replace '/var',"$env:CONTAINER_SANDBOX_MOUNT_POINT/var") | Set-Content -Path $kubeConfigPath
 
     # Download kube-proxy service script
     curl https://raw.githubusercontent.com/projectcalico/calico/master/node/windows-packaging/CalicoWindows/kubernetes/kube-proxy-service.ps1 -o $PSScriptRoot/kube-proxy-service.ps1

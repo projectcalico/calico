@@ -7,6 +7,6 @@ sources:
   - https://github.com/projectcalico/calico/tree/master/calico/_includes/charts/tigera-operator
   - https://github.com/tigera/operator
   - https://github.com/projectcalico/calico
- 
+
 # version will be overridden at chart compilation time via args, but still must exist in chart.yaml
 version: v0.0
