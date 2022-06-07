@@ -23,6 +23,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 )
 
 // struct calico_ct_key {
@@ -63,6 +64,12 @@ func (k Key) PortB() uint16 {
 func (k Key) String() string {
 	return fmt.Sprintf("ConntrackKey{proto=%v %v:%v <-> %v:%v}",
 		k.Proto(), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
+}
+
+func (k Key) Upgrade() bpf.Upgradable {
+	var key3 v3.Key
+	copy(key3[:], k[:])
+	return key3
 }
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
@@ -451,6 +458,57 @@ func (e Value) String() string {
 
 func (e Value) IsForwardDSR() bool {
 	return e.Flags()&FlagNATFwdDsr != 0
+}
+
+func (e Value) Upgrade() bpf.Upgradable {
+	var val3 v3.Value
+
+	created := time.Duration(e.Created())
+	lastSeen := time.Duration(e.LastSeen())
+	ctType := e.Type()
+	flags := e.Flags()
+
+	switch ctType {
+	case TypeNormal, TypeNATReverse:
+		data := e.Data()
+		v3LegAB := v3.Leg{
+			Bytes:       0,
+			Packets:     0,
+			Seqno:       data.A2B.Seqno,
+			SynSeen:     data.A2B.SynSeen,
+			AckSeen:     data.A2B.AckSeen,
+			FinSeen:     data.A2B.FinSeen,
+			RstSeen:     data.A2B.RstSeen,
+			Whitelisted: data.A2B.Whitelisted,
+			Opener:      data.A2B.Opener,
+			Ifindex:     data.A2B.Ifindex,
+		}
+		v3LegBA := v3.Leg{
+			Bytes:       0,
+			Packets:     0,
+			Seqno:       data.B2A.Seqno,
+			SynSeen:     data.B2A.SynSeen,
+			AckSeen:     data.B2A.AckSeen,
+			FinSeen:     data.B2A.FinSeen,
+			RstSeen:     data.B2A.RstSeen,
+			Whitelisted: data.B2A.Whitelisted,
+			Opener:      data.B2A.Opener,
+			Ifindex:     data.B2A.Ifindex,
+		}
+		if ctType == TypeNormal {
+			val3 = v3.NewValueNormal(created, lastSeen, flags, v3LegAB, v3LegBA)
+		} else {
+			val3 = v3.NewValueNATReverseSNAT(created, lastSeen, flags, v3LegAB, v3LegBA, data.TunIP, data.OrigDst, data.OrigSrc, data.OrigPort)
+			val3.SetOrigSport(data.OrigSPort)
+		}
+	case TypeNATForward:
+		revKey := e.ReverseNATKey()
+		NATSport := e.NATSPort()
+		v3RevKey := v3.NewKey(revKey.Proto(), revKey.AddrA(), revKey.PortA(), revKey.AddrB(), revKey.PortB())
+		val3 = v3.NewValueNATForward(created, lastSeen, flags, v3RevKey)
+		val3.SetNATSport(NATSport)
+	}
+	return val3
 }
 
 var MapParams = bpf.MapParameters{

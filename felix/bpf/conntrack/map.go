@@ -24,7 +24,8 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap/upgrade"
-	"github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+
 	// When adding a new ct version, change curVer to point to the new version
 	curVer "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 )
@@ -89,7 +90,13 @@ var MapParams = curVer.MapParams
 func Map(mc *bpf.MapContext) bpf.Map {
 	b := mc.NewPinnedMap(MapParams)
 	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
+	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
+	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
+}
+
+func MapV2(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(v2.MapParams)
 }
 
 const (
@@ -183,10 +190,10 @@ func GetKeyValueTypeFromVersion(version int, k, v []byte) (bpf.Upgradable, bpf.U
 		copy(val[:], v)
 		return key, val
 	default:
-                var key curVer.Key
-                var val curVer.Value
-                copy(key[:], k)
-                copy(val[:], v)
-                return key, val
+		var key curVer.Key
+		var val curVer.Value
+		copy(key[:], k)
+		copy(val[:], v)
+		return key, val
 	}
 }

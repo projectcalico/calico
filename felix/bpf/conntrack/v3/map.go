@@ -66,6 +66,10 @@ func (k Key) String() string {
 		k.Proto(), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
 }
 
+func (k Key) Upgrade() bpf.Upgradable {
+	return k
+}
+
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
 	var k Key
 	binary.LittleEndian.PutUint32(k[:4], uint32(proto))
@@ -460,6 +464,10 @@ func (e Value) String() string {
 
 func (e Value) IsForwardDSR() bool {
 	return e.Flags()&FlagNATFwdDsr != 0
+}
+
+func (e Value) Upgrade() bpf.Upgradable {
+	return e
 }
 
 var MapParams = bpf.MapParameters{

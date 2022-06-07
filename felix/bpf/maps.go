@@ -54,6 +54,9 @@ type Map interface {
 	// CopyDeltaFromOldMap() copies data from old map to new map
 	CopyDeltaFromOldMap() error
 
+	// UpgradeDeltaFromOldMap() copies data from old map to new map
+	UpgradeDeltaFromOldMap() error
+
 	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
@@ -604,6 +607,10 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 	return nil
 }
 
+func (b *PinnedMap) UpgradeDeltaFromOldMap() error {
+	return b.upgrade()
+}
+
 func (b *PinnedMap) getOldMapVersion() (int, error) {
 	oldVersion := 0
 	dir, name := filepath.Split(b.Filename)
@@ -654,6 +661,7 @@ func (b *PinnedMap) upgrade() error {
 	if err != nil {
 		return err
 	}
+	defer oldBpfMap.(*PinnedMap).Close()
 	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
 }
 
