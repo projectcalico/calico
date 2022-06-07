@@ -591,7 +591,8 @@ func RepinMap(name string, filename string) error {
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {
 	if b.oldfd == 0 {
-		return nil
+		// check if there is any old version of the map
+		return b.upgrade()
 	}
 
 	defer func() {
@@ -619,7 +620,9 @@ func (b *PinnedMap) getOldMapVersion() (int, error) {
 		return 0, fmt.Errorf("error reading pin path %w", err)
 	}
 	for _, f := range files {
-		if strings.Contains(f.Name(), name) {
+		fname := f.Name()
+		fname = string(fname[0:len(fname)-1])
+		if fname == name {
 			mapName := f.Name()
 			oldVersion, err = strconv.Atoi(string(mapName[len(mapName)-1]))
 			if err != nil {
@@ -661,7 +664,10 @@ func (b *PinnedMap) upgrade() error {
 	if err != nil {
 		return err
 	}
-	defer oldBpfMap.(*PinnedMap).Close()
+	defer func() {
+		oldBpfMap.(*PinnedMap).Close()
+		oldBpfMap.(*PinnedMap).fd = 0
+	}()
 	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
 }
 

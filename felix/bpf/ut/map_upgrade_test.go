@@ -156,6 +156,64 @@ func TestMapUpgradeV5ToV3(t *testing.T) {
 	err = mockMapv3.EnsureExists()
 	Expect(err).To(HaveOccurred())
 	deleteMap(mockMapv5)
+	deleteMap(mockMapv3)
+}
+
+func TestMapUpgradeWithDeltaEntries(t *testing.T) {
+	RegisterTestingT(t)
+	mc := &bpf.MapContext{}
+	mockMapv2 := mock.MapV2(mc)
+	err := mockMapv2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	k := v2.NewKey(key)
+	v := v2.NewValue(val)
+
+	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+
+	mockMapv5 := mock.MapV5(mc)
+	err = mockMapv5.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	k5 := v5.NewKey(key)
+	val5 := v5.NewValue(val)
+	val, err := mockMapv5.Get(k5.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	Expect(val).To(Equal(val5.AsBytes()))
+
+	// update v2 map with new k,v pairs
+	for i := 0; i < 10; i++ {
+		k = v2.NewKey(0x1234 + uint32(i))
+		v = v2.NewValue(0x4568 + uint32(i))
+		err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// update the value for the old entry
+	k = v2.NewKey(key)
+	v = v2.NewValue(uint32(0xabcddead))
+	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+
+	err = mockMapv5.CopyDeltaFromOldMap()
+	Expect(err).NotTo(HaveOccurred())
+
+	val, err = mockMapv5.Get(k5.AsBytes())
+	val5 = v5.NewValue(uint32(0xabcddead))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(val).To(Equal(val5.AsBytes()))
+
+	for i := 0; i < 10; i++ {
+		k5 = v5.NewKey(0x1234 + uint32(i))
+		val5 = v5.NewValue(0x4568 + uint32(i))
+		val, err = mockMapv5.Get(k5.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(val).To(Equal(val5.AsBytes()))
+	}
+
+	deleteMap(mockMapv2)
+	deleteMap(mockMapv5)
 }
 
 func TestCtMapUpgradeWithNATFwdEntries(t *testing.T) {
