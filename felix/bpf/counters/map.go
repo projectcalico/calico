@@ -20,7 +20,7 @@ var MapParameters = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_counters",
 	Type:       "percpu_array",
 	KeySize:    4, //__u32
-	ValueSize:  uint32Size * maxCounterSize,
+	ValueSize:  uint32Size * MaxCounterNumber,
 	MaxEntries: 1,
 	Name:       bpf.CountersMapName(),
 }

@@ -26,13 +26,19 @@ import (
 )
 
 const (
-	maxCounterSize int = 8
-	uint32Size     int = 4
+	MaxCounterNumber int = 8
+	uint32Size       int = 4
+)
+
+const (
+	TotalPackets = iota
+	ErrShortPacket
 )
 
 type Counters struct {
-	Map   bpf.Map
-	iface string
+	ingressMap bpf.Map
+	egressMap  bpf.Map
+	iface      string
 }
 
 func NewCounters(iface string) *Counters {
@@ -40,40 +46,88 @@ func NewCounters(iface string) *Counters {
 		iface: iface,
 	}
 	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY, bpf.CountersMapName(), iface, tc.HookIngress)
-	cntr.Map = Map(&bpf.MapContext{}, pinPath)
-	logrus.Infof("counter path: %v", pinPath)
+	cntr.ingressMap = Map(&bpf.MapContext{}, pinPath)
+	logrus.Debugf("Ingress counter map pin path: %v", pinPath)
+
+	pinPath = tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY, bpf.CountersMapName(), iface, tc.HookEgress)
+	cntr.egressMap = Map(&bpf.MapContext{}, pinPath)
+	logrus.Debugf("Counter map pin path: %v", pinPath)
 	return &cntr
 }
 
-func (c Counters) Read() ([]uint32, error) {
+func (c *Counters) ReadIngress() ([]uint32, error) {
+	return read(c.ingressMap)
+}
 
-	/*mapFD, err := bpf.GetCachedMapFDByPin(c.Map)
-	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to get counters map fd: %v", err)
-	}*/
+func (c *Counters) ReadEgress() ([]uint32, error) {
+	return read(c.egressMap)
+}
 
-	// k is the key to the counters map, and it is set to 0 since there is only one entry
-	k := make([]byte, uint32Size)
-	/*values, err := bpf.GetMapEntry(mapFD, k, maxCounterSize*uint32Size*c.numOfCpu)
-	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to read counters map: %v", err)
-	}*/
+func (c *Counters) FlushIngress() error {
+	return flush(c.ingressMap)
+}
 
-	values, err := c.Map.Get(k)
+func (c *Counters) FlushEgress() error {
+	return flush(c.egressMap)
+}
+
+func read(Map bpf.Map) ([]uint32, error) {
+	err := Map.Open()
 	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to read counters map: %v", err)
+		return []uint32{}, fmt.Errorf("failed to open counters map. err=%v", err)
 	}
+	defer func() {
+		err := Map.Close()
+		if err != nil {
+			logrus.WithError(err).Errorf("failed to close counters map.")
+		}
+	}()
 
 	numOfCpu, err := libbpf.NumPossibleCPUs()
 	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to get number of possible cpu - err: %v", err)
+		return []uint32{}, fmt.Errorf("failed to get number of possible cpu. err=%v", err)
 	}
-	bpfCounters := make([]uint32, maxCounterSize)
+
+	// k is the key to the counters map, and it is set to 0 since there is only one entry
+	k := make([]byte, uint32Size)
+	values, err := Map.Get(k)
+	if err != nil {
+		return []uint32{}, fmt.Errorf("failed to read counters map. err=%v", err)
+	}
+
+	bpfCounters := make([]uint32, MaxCounterNumber)
 	for i := range bpfCounters {
 		for cpu := 0; cpu < numOfCpu; cpu++ {
-			begin := i*uint32Size + cpu*maxCounterSize*uint32Size
+			begin := i*uint32Size + cpu*MaxCounterNumber*uint32Size
 			bpfCounters[i] += uint32(binary.LittleEndian.Uint32(values[begin : begin+uint32Size]))
 		}
 	}
 	return bpfCounters, nil
+}
+
+func flush(Map bpf.Map) error {
+	err := Map.Open()
+	if err != nil {
+		return fmt.Errorf("failed to open counters map. err=%v", err)
+	}
+	defer func() {
+		err := Map.Close()
+		if err != nil {
+			logrus.WithError(err).Errorf("failed to close counters map.")
+		}
+	}()
+
+	numOfCpu, err := libbpf.NumPossibleCPUs()
+	if err != nil {
+		return fmt.Errorf("failed to get number of possible cpu. err=%v", err)
+	}
+
+	// k is the key to the counters map, and it is set to 0 since there is only one entry
+	k := make([]byte, uint32Size)
+	v := make([]byte, uint32Size*MaxCounterNumber*numOfCpu)
+	err = Map.Update(k, v)
+	if err != nil {
+		return fmt.Errorf("failed to update counters map. err=%v", err)
+	}
+	return nil
 }

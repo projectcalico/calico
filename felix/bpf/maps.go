@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@ type Map interface {
 	EnsureExists() error
 	// Open opens the map, returns error if it does not exist.
 	Open() error
+	// Close closes the map, returns error for any error.
+	Close() error
 	// MapFD gets the file descriptor of the map, only valid after calling EnsureExists().
 	MapFD() MapFD
 	// Path returns the path that the map is (to be) pinned to.
@@ -307,7 +309,7 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 			return []byte{}, fmt.Errorf("failed to get the number of possible cpus - err: %v", err)
 		}
 		valueSize = b.ValueSize * numCPU
-		logrus.Infof("Set value size to %v for getting an entry from Per-CPU map", valueSize)
+		logrus.Debugf("Set value size to %v for getting an entry from Per-CPU map", valueSize)
 	}
 	return GetMapEntry(b.fd, k, valueSize)
 }

@@ -16,6 +16,7 @@ package commands
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/projectcalico/calico/felix/bpf/counters"
 
@@ -54,8 +55,12 @@ var countersFlushCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		iface, err := cmd.Flags().GetString("iface")
 		if err != nil {
-			log.WithError(err).Error("Failed to parse interface name. Will dump flush counters")
-			iface = ""
+			log.WithError(err).Error("Failed to parse interface name.")
+			return
+		}
+		if iface == "" {
+			log.Error("Empty interface name.")
+			return
 		}
 
 		if err := flushCounters(iface); err != nil {
@@ -71,21 +76,68 @@ var countersCmd = &cobra.Command{
 }
 
 func dumpCounters(iface string) error {
-	fmt.Printf("iface: %s\n", iface)
+	if iface != "" {
+		return dumpIfaceCounters(iface)
+	} else {
+		interfaces, err := net.Interfaces()
+		if err != nil {
+			return fmt.Errorf("failed to get list of interfaces. err=%v", err)
+		}
+		for _, i := range interfaces {
+			err = dumpIfaceCounters(i.Name)
+			if err != nil {
+				log.Errorf("Failed to dump %v counters", i.Name)
+				continue
+			}
+		}
+	}
+	return nil
+}
+
+func dumpIfaceCounters(iface string) error {
+	if iface == "" {
+		return fmt.Errorf("empty interface name")
+	}
 	bpfCounters := counters.NewCounters(iface)
-	values, err := bpfCounters.Read()
+	ingressValues, err := bpfCounters.ReadIngress()
 	if err != nil {
-		return fmt.Errorf("Failed to read bpf counters: %v", err)
+		return fmt.Errorf("Failed to read bpf ingress counters: %v", err)
+	}
+	if len(ingressValues) < counters.MaxCounterNumber {
+		return fmt.Errorf("Failed to read enough data from bpf ingress counters")
 	}
 
-	for _, c := range values {
-		fmt.Println(c)
+	egressValues, err := bpfCounters.ReadEgress()
+	if err != nil {
+		return fmt.Errorf("Failed to read bpf egress counters: %v", err)
+	}
+	if len(egressValues) < counters.MaxCounterNumber {
+		return fmt.Errorf("Failed to read enough data from bpf egress counters")
 	}
 
+	fmt.Printf("===== Interface: %s =====\n", iface)
+	fmt.Printf("Ingress:\n")
+	fmt.Printf("\tTotal Packets: %d\n", ingressValues[counters.TotalPackets])
+	fmt.Printf("\tShort Packets: %d\n", ingressValues[counters.ErrShortPacket])
+
+	fmt.Printf("\nEgress:\n")
+	fmt.Printf("\tTotal Packets: %d\n", egressValues[counters.TotalPackets])
+	fmt.Printf("\tShort Packets: %d\n", egressValues[counters.ErrShortPacket])
 	return nil
 }
 
 func flushCounters(iface string) error {
-	fmt.Printf("iface: %s\n", iface)
-	return fmt.Errorf("Not yet implemented.")
+	bpfCounters := counters.NewCounters(iface)
+	err := bpfCounters.FlushIngress()
+	if err != nil {
+		return fmt.Errorf("Failed to flush ingress bpf counters for interface %s. err=%v", iface, err)
+	}
+	log.Infof("Successfully flushed ingress counters map for interface %s", iface)
+
+	err = bpfCounters.FlushEgress()
+	if err != nil {
+		return fmt.Errorf("Failed to flush egress bpf counters for interface %s. err=%v", iface, err)
+	}
+	log.Infof("Successfully flushed egress counters map for interface %s", iface)
+	return nil
 }
