@@ -63,9 +63,9 @@ func NewValue(v uint32) Value {
 }
 
 func (k Key) Upgrade() bpf.Upgradable {
-	return k
+	panic("upgrade not supported")
 }
 
 func (v Value) Upgrade() bpf.Upgradable {
-	return v
+	panic("upgrade not supported")
 }

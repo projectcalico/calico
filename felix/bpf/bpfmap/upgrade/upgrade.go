@@ -15,6 +15,8 @@
 package upgrade
 
 import (
+	"reflect"
+
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 )
@@ -38,8 +40,10 @@ func UpgradeBPFMap(oldMap, newMap *bpf.PinnedMap) error {
 			tmpK = tmpK.Upgrade()
 			tmpV = tmpV.Upgrade()
 		}
-		newCachingMap.SetDesired(tmpK.AsBytes(), tmpV.AsBytes())
-
+		val := newCachingMap.GetDataplaneCache(tmpK.AsBytes())
+		if !reflect.DeepEqual(val, tmpV.AsBytes()) {
+			newCachingMap.SetDesired(tmpK.AsBytes(), tmpV.AsBytes())
+		}
 	})
 	return newCachingMap.ApplyAllChanges()
 
