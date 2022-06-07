@@ -1,18 +1,6 @@
-diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.projectcalico.org_ipamblocks.yaml
---- config.orig/crd/crd.projectcalico.org_ipamblocks.yaml	2020-07-12 17:30:08.454690094 -0700
-+++ config/crd/crd.projectcalico.org_ipamblocks.yaml	2020-07-12 17:28:42.742835462 -0700
-@@ -49,6 +46,9 @@
-                   array.
-                 items:
-                   type: integer
-+                  # TODO: This nullable is manually added in. We should update controller-gen
-+                  # to handle []*int properly itself.
-+                  nullable: true
-                 type: array
-               attributes:
-                 description: Attributes is an array of arbitrary metadata associated
---- config.orig/crd/crd.projectcalico.org_bgpconfigurations.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_bgpconfigurations.yaml	2020-09-15 17:43:02.428632997 +0000
+diff -Naur crd.stage/crd.projectcalico.org_bgpconfigurations.yaml config/crd/crd.projectcalico.org_bgpconfigurations.yaml
+--- crd.stage/crd.projectcalico.org_bgpconfigurations.yaml	2022-06-17 09:10:13.929443467 -0700
++++ config/crd/crd.projectcalico.org_bgpconfigurations.yaml	2022-06-17 09:12:34.081414016 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -23,8 +11,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: bgpconfigurations.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_bgppeers.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_bgppeers.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: BGPConfigurationList
+     plural: bgpconfigurations
+     singular: bgpconfiguration
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_bgppeers.yaml config/crd/crd.projectcalico.org_bgppeers.yaml
+--- crd.stage/crd.projectcalico.org_bgppeers.yaml	2022-06-17 09:10:13.933443467 -0700
++++ config/crd/crd.projectcalico.org_bgppeers.yaml	2022-06-17 09:12:34.085414014 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -35,8 +32,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: bgppeers.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_blockaffinities.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_blockaffinities.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: BGPPeerList
+     plural: bgppeers
+     singular: bgppeer
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_blockaffinities.yaml config/crd/crd.projectcalico.org_blockaffinities.yaml
+--- crd.stage/crd.projectcalico.org_blockaffinities.yaml	2022-06-17 09:10:13.945443463 -0700
++++ config/crd/crd.projectcalico.org_blockaffinities.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -47,8 +53,28 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: blockaffinities.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_clusterinformations.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_clusterinformations.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: BlockAffinityList
+     plural: blockaffinities
+     singular: blockaffinity
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_caliconodestatuses.yaml config/crd/crd.projectcalico.org_caliconodestatuses.yaml
+--- crd.stage/crd.projectcalico.org_caliconodestatuses.yaml	2022-06-17 09:10:13.949443462 -0700
++++ config/crd/crd.projectcalico.org_caliconodestatuses.yaml	2022-06-17 09:12:34.085414014 -0700
+@@ -14,6 +14,7 @@
+     listKind: CalicoNodeStatusList
+     plural: caliconodestatuses
+     singular: caliconodestatus
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_clusterinformations.yaml config/crd/crd.projectcalico.org_clusterinformations.yaml
+--- crd.stage/crd.projectcalico.org_clusterinformations.yaml	2022-06-17 09:10:13.949443462 -0700
++++ config/crd/crd.projectcalico.org_clusterinformations.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -59,8 +85,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: clusterinformations.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_felixconfigurations.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_felixconfigurations.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: ClusterInformationList
+     plural: clusterinformations
+     singular: clusterinformation
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_felixconfigurations.yaml config/crd/crd.projectcalico.org_felixconfigurations.yaml
+--- crd.stage/crd.projectcalico.org_felixconfigurations.yaml	2022-06-17 09:10:13.945443463 -0700
++++ config/crd/crd.projectcalico.org_felixconfigurations.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -71,8 +106,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: felixconfigurations.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_globalnetworkpolicies.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: FelixConfigurationList
+     plural: felixconfigurations
+     singular: felixconfiguration
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_globalnetworkpolicies.yaml config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml
+--- crd.stage/crd.projectcalico.org_globalnetworkpolicies.yaml	2022-06-17 09:10:13.957443460 -0700
++++ config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -83,8 +127,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: globalnetworkpolicies.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_globalnetworksets.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_globalnetworksets.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: GlobalNetworkPolicyList
+     plural: globalnetworkpolicies
+     singular: globalnetworkpolicy
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_globalnetworksets.yaml config/crd/crd.projectcalico.org_globalnetworksets.yaml
+--- crd.stage/crd.projectcalico.org_globalnetworksets.yaml	2022-06-17 09:10:13.961443460 -0700
++++ config/crd/crd.projectcalico.org_globalnetworksets.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -95,8 +148,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: globalnetworksets.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_hostendpoints.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_hostendpoints.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: GlobalNetworkSetList
+     plural: globalnetworksets
+     singular: globalnetworkset
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_hostendpoints.yaml config/crd/crd.projectcalico.org_hostendpoints.yaml
+--- crd.stage/crd.projectcalico.org_hostendpoints.yaml	2022-06-17 09:10:13.953443461 -0700
++++ config/crd/crd.projectcalico.org_hostendpoints.yaml	2022-06-17 09:12:34.085414014 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -107,8 +169,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: hostendpoints.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_ipamblocks.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_ipamblocks.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: HostEndpointList
+     plural: hostendpoints
+     singular: hostendpoint
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.projectcalico.org_ipamblocks.yaml
+--- crd.stage/crd.projectcalico.org_ipamblocks.yaml	2022-06-17 09:10:13.929443467 -0700
++++ config/crd/crd.projectcalico.org_ipamblocks.yaml	2022-06-17 09:12:34.081414016 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -119,8 +190,27 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: ipamblocks.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_ipamconfigs.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_ipamconfigs.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: IPAMBlockList
+     plural: ipamblocks
+     singular: ipamblock
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+@@ -49,6 +47,9 @@
+                   array.
+                 items:
+                   type: integer
++                  # TODO: This nullable is manually added in. We should update controller-gen
++                  # to handle []*int properly itself.
++                  nullable: true
+                 type: array
+               attributes:
+                 description: Attributes is an array of arbitrary metadata associated
+diff -Naur crd.stage/crd.projectcalico.org_ipamconfigs.yaml config/crd/crd.projectcalico.org_ipamconfigs.yaml
+--- crd.stage/crd.projectcalico.org_ipamconfigs.yaml	2022-06-17 09:10:13.945443463 -0700
++++ config/crd/crd.projectcalico.org_ipamconfigs.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -131,8 +221,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: ipamconfigs.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_ipamhandles.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_ipamhandles.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: IPAMConfigList
+     plural: ipamconfigs
+     singular: ipamconfig
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_ipamhandles.yaml config/crd/crd.projectcalico.org_ipamhandles.yaml
+--- crd.stage/crd.projectcalico.org_ipamhandles.yaml	2022-06-17 09:10:13.949443462 -0700
++++ config/crd/crd.projectcalico.org_ipamhandles.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -143,8 +242,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: ipamhandles.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_ippools.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_ippools.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: IPAMHandleList
+     plural: ipamhandles
+     singular: ipamhandle
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_ippools.yaml config/crd/crd.projectcalico.org_ippools.yaml
+--- crd.stage/crd.projectcalico.org_ippools.yaml	2022-06-17 09:10:13.929443467 -0700
++++ config/crd/crd.projectcalico.org_ippools.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -155,8 +263,28 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: ippools.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: IPPoolList
+     plural: ippools
+     singular: ippool
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_ipreservations.yaml config/crd/crd.projectcalico.org_ipreservations.yaml
+--- crd.stage/crd.projectcalico.org_ipreservations.yaml	2022-06-17 09:10:13.953443461 -0700
++++ config/crd/crd.projectcalico.org_ipreservations.yaml	2022-06-17 09:12:34.085414014 -0700
+@@ -14,6 +14,7 @@
+     listKind: IPReservationList
+     plural: ipreservations
+     singular: ipreservation
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_kubecontrollersconfigurations.yaml config/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+--- crd.stage/crd.projectcalico.org_kubecontrollersconfigurations.yaml	2022-06-17 09:10:13.949443462 -0700
++++ config/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -167,8 +295,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: kubecontrollersconfigurations.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_networkpolicies.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_networkpolicies.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: KubeControllersConfigurationList
+     plural: kubecontrollersconfigurations
+     singular: kubecontrollersconfiguration
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_networkpolicies.yaml config/crd/crd.projectcalico.org_networkpolicies.yaml
+--- crd.stage/crd.projectcalico.org_networkpolicies.yaml	2022-06-17 09:10:13.965443458 -0700
++++ config/crd/crd.projectcalico.org_networkpolicies.yaml	2022-06-17 09:12:34.093414013 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -179,8 +316,17 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: networkpolicies.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
---- config.orig/crd/crd.projectcalico.org_networksets.yaml	2020-09-15 17:41:44.686361905 +0000
-+++ config/crd/crd.projectcalico.org_networksets.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -14,6 +11,7 @@
+     listKind: NetworkPolicyList
+     plural: networkpolicies
+     singular: networkpolicy
++  preserveUnknownFields: false
+   scope: Namespaced
+   versions:
+   - name: v1
+diff -Naur crd.stage/crd.projectcalico.org_networksets.yaml config/crd/crd.projectcalico.org_networksets.yaml
+--- crd.stage/crd.projectcalico.org_networksets.yaml	2022-06-17 09:10:13.953443461 -0700
++++ config/crd/crd.projectcalico.org_networksets.yaml	2022-06-17 09:12:34.085414014 -0700
 @@ -3,9 +3,6 @@
  apiVersion: apiextensions.k8s.io/v1
  kind: CustomResourceDefinition
@@ -191,3 +337,11 @@ diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.
    name: networksets.crd.projectcalico.org
  spec:
    group: crd.projectcalico.org
+@@ -14,6 +11,7 @@
+     listKind: NetworkSetList
+     plural: networksets
+     singular: networkset
++  preserveUnknownFields: false
+   scope: Namespaced
+   versions:
+   - name: v1
