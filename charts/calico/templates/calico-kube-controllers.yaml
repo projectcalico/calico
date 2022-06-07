@@ -38,6 +38,7 @@ spec:
       containers:
         - name: calico-kube-controllers
           image: {{.Values.kubeControllers.image}}:{{ .Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -99,6 +100,7 @@ spec:
       containers:
         - name: calico-kube-controllers
           image: {{.Values.kubeControllers.image}}:{{ .Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS

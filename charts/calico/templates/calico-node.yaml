@@ -49,6 +49,7 @@ spec:
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
           image: {{.Values.cni.image}}:{{ .Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
           - configMapRef:
@@ -90,6 +91,7 @@ spec:
         # and CNI network config file on each node.
         - name: install-cni
           image: {{.Values.cni.image}}:{{ .Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           command: ["/opt/cni/bin/install"]
           envFrom:
           - configMapRef:
@@ -183,6 +185,7 @@ spec:
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
         - name: "mount-bpffs"
           image: {{.Values.node.image}}:{{.Values.version}}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
             - mountPath: /sys/fs
@@ -203,6 +206,7 @@ spec:
         # host.
         - name: calico-node
           image: {{.Values.node.image}}:{{.Values.version}}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           envFrom:
           - configMapRef:
               # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -445,6 +449,7 @@ spec:
         # for allocating subnets.
         - name: kube-flannel
           image: {{ .Values.flannel.image }}:{{ .Values.flannel.tag }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           command: [ "/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr" ]
           securityContext:
             privileged: true
@@ -481,6 +486,7 @@ spec:
         # container hosts.
         - name: flannel
           image: {{ .Values.flannel.image }}:{{ .Values.flannel.tag }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           env:
             # The location of the etcd cluster.
             - name: FLANNELD_ETCD_ENDPOINTS
