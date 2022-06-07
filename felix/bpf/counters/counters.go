@@ -39,8 +39,8 @@ func NewCounters(iface string) *Counters {
 	cntr := Counters{
 		iface: iface,
 	}
-	cntr.Map = Map(&bpf.MapContext{})
 	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY, bpf.CountersMapName(), iface, tc.HookIngress)
+	cntr.Map = Map(&bpf.MapContext{}, pinPath)
 	logrus.Infof("counter path: %v", pinPath)
 	return &cntr
 }

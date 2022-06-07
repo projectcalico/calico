@@ -18,13 +18,14 @@ import "github.com/projectcalico/calico/felix/bpf"
 
 var MapParameters = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_counters",
-	Type:       "per_cpu_array",
+	Type:       "percpu_array",
 	KeySize:    4, //__u32
 	ValueSize:  uint32Size * maxCounterSize,
 	MaxEntries: 1,
 	Name:       bpf.CountersMapName(),
 }
 
-func Map(mc *bpf.MapContext) bpf.Map {
+func Map(mc *bpf.MapContext, pinPath string) bpf.Map {
+	MapParameters.Filename = pinPath
 	return mc.NewPinnedMap(MapParameters)
 }

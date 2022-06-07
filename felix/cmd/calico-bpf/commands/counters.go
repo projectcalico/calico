@@ -87,6 +87,5 @@ func dumpCounters(iface string) error {
 
 func flushCounters(iface string) error {
 	fmt.Printf("iface: %s\n", iface)
-	fmt.Println("Not yet implemented.")
-	return nil
+	return fmt.Errorf("Not yet implemented.")
 }
