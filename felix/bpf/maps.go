@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,12 @@ package bpf
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -50,6 +53,9 @@ type Map interface {
 
 	// CopyDeltaFromOldMap() copies data from old map to new map
 	CopyDeltaFromOldMap() error
+
+	// UpgradeDeltaFromOldMap() copies data from old map to new map
+	UpgradeDeltaFromOldMap() error
 
 	Iter(IterCallback) error
 	Update(k, v []byte) error
@@ -126,6 +132,10 @@ type PinnedMap struct {
 	oldfd    MapFD
 	perCPU   bool
 	oldSize  int
+	// Callbacks to handle upgrade
+	UpgradeFn      func(*PinnedMap, *PinnedMap) error
+	GetMapParams   func(int) MapParameters
+	KVasUpgradable func(int, []byte, []byte) (Upgradable, Upgradable)
 }
 
 func (b *PinnedMap) GetName() string {
@@ -540,6 +550,8 @@ func (b *PinnedMap) EnsureExists() error {
 				os.Remove(b.Path() + "_old")
 			}
 
+		} else {
+			err = b.upgrade()
 		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
@@ -593,4 +605,70 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 		return fmt.Errorf("error copying data from old map %s, err=%w", b.GetName(), err)
 	}
 	return nil
+}
+
+func (b *PinnedMap) UpgradeDeltaFromOldMap() error {
+	return b.upgrade()
+}
+
+func (b *PinnedMap) getOldMapVersion() (int, error) {
+	oldVersion := 0
+	dir, name := filepath.Split(b.Filename)
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("error reading pin path %w", err)
+	}
+	for _, f := range files {
+		if strings.Contains(f.Name(), name) {
+			mapName := f.Name()
+			oldVersion, err = strconv.Atoi(string(mapName[len(mapName)-1]))
+			if err != nil {
+				return 0, fmt.Errorf("invalid version %w", err)
+			}
+			if oldVersion < b.Version {
+				return oldVersion, nil
+			}
+			if oldVersion > b.Version {
+				return 0, fmt.Errorf("downgrade not supported %d %d", oldVersion, b.Version)
+			}
+		}
+	}
+	return oldVersion, nil
+}
+
+func (b *PinnedMap) upgrade() error {
+	if b.UpgradeFn == nil {
+		return nil
+	}
+	if b.GetMapParams == nil || b.KVasUpgradable == nil {
+		return fmt.Errorf("upgrade callbacks not registered %s", b.Name)
+	}
+	oldVersion, err := b.getOldMapVersion()
+	if err != nil {
+		return err
+	}
+	// fresh install
+	if oldVersion == 0 {
+		return nil
+	}
+
+	// Get a pinnedMap handle for the old map
+	ctx := b.context
+	oldMapParams := b.GetMapParams(oldVersion)
+	oldMapParams.MaxEntries = b.MaxEntries
+	oldBpfMap := ctx.NewPinnedMap(oldMapParams)
+	err = oldBpfMap.EnsureExists()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		oldBpfMap.(*PinnedMap).Close()
+		oldBpfMap.(*PinnedMap).fd = 0
+	}()
+	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
+}
+
+type Upgradable interface {
+	Upgrade() Upgradable
+	AsBytes() []byte
 }
