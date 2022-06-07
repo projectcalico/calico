@@ -1,9 +1,9 @@
 # The Calico version to use when generating manifests.
-version: master
+version: latest-amd64
 
 # Configure the images to use when generating manifests.
 node:
-  image: docker.io/calico/node
+  image: docker.io/library/node
 calicoctl:
   image: docker.io/calico/ctl
 typha:
@@ -23,9 +23,11 @@ csi-driver:
   image: docker.io/calico/csi-driver
 
 # Some defaults used in the templates.
-imagePullPolicy: IfNotPresent
+datastore: kubernetes
+network: calico
+ipam: calico-ipam
 mtu: "1440"
-ipam: "calico-ipam"
+imagePullPolicy: Never
 etcd:
   endpoints: "http://<ETCD_IP>:<ETCD_PORT>"
   tls:

@@ -84,3 +84,12 @@ ${HELM} template --include-crds \
 # The first two lines are a newline and a yaml separator - remove them.
 find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
+
+##########################################################################
+# Build Calico manifest used for in-repo testing. This is largely the same as the 
+# one we ship, but with tweaked values.
+##########################################################################
+echo "Generating manifest from charts/values/$FILE"
+${HELM} -n kube-system template \
+	../charts/calico \
+	-f ../node/tests/k8st/infra/values.yaml > ../node/tests/k8st/infra/calico-kdd.yaml
