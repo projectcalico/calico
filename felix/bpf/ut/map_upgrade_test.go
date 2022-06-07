@@ -191,7 +191,7 @@ func TestMapUpgradeWithDeltaEntries(t *testing.T) {
 	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 
-	err = mockMapv5.UpgradeDeltaFromOldMap()
+	err = mockMapv5.CopyDeltaFromOldMap()
 	Expect(err).NotTo(HaveOccurred())
 
 	val, err = mockMapv5.Get(k5.AsBytes())

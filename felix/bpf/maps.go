@@ -54,9 +54,6 @@ type Map interface {
 	// CopyDeltaFromOldMap() copies data from old map to new map
 	CopyDeltaFromOldMap() error
 
-	// UpgradeDeltaFromOldMap() copies data from old map to new map
-	UpgradeDeltaFromOldMap() error
-
 	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
@@ -591,7 +588,8 @@ func RepinMap(name string, filename string) error {
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {
 	if b.oldfd == 0 {
-		return nil
+		// check if there is any old version of the map
+		return b.upgrade()
 	}
 
 	defer func() {
@@ -605,10 +603,6 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 		return fmt.Errorf("error copying data from old map %s, err=%w", b.GetName(), err)
 	}
 	return nil
-}
-
-func (b *PinnedMap) UpgradeDeltaFromOldMap() error {
-	return b.upgrade()
 }
 
 func (b *PinnedMap) getOldMapVersion() (int, error) {
