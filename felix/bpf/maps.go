@@ -25,8 +25,9 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/pkg/errors"
-	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
 
 type IteratorAction string

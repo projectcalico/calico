@@ -18,11 +18,12 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
+
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/tc"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -51,7 +52,7 @@ func NewCounters(iface string) *Counters {
 
 	pinPath = tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY, bpf.CountersMapName(), iface, tc.HookEgress)
 	cntr.egressMap = Map(&bpf.MapContext{}, pinPath)
-	logrus.Debugf("Counter map pin path: %v", pinPath)
+	logrus.Debugf("Egress counter map pin path: %v", pinPath)
 	return &cntr
 }
 
