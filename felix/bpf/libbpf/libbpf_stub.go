@@ -20,8 +20,6 @@ import (
 	"time"
 )
 
-const MapTypeProgrArray = 3
-
 type Obj struct {
 }
 
