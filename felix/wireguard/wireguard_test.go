@@ -55,11 +55,12 @@ var (
 	ipv4_int1 = ip.FromString("192.168.0.0")
 	ipv4_int2 = ip.FromString("192.168.10.0")
 
-	ipv4_host  = ip.FromString("1.2.3.0")
-	ipv4_peer1 = ip.FromString("1.2.3.5")
-	ipv4_peer2 = ip.FromString("1.2.3.6")
-	ipv4_peer3 = ip.FromString("10.10.20.20")
-	ipv4_peer4 = ip.FromString("10.10.20.30")
+	ipv4_host    = ip.FromString("1.2.3.0")
+	ipv4_peer1   = ip.FromString("1.2.3.5")
+	ipv4_peer2   = ip.FromString("1.2.3.6")
+	ipv4_peer2_2 = ip.FromString("1.2.3.7")
+	ipv4_peer3   = ip.FromString("10.10.20.20")
+	ipv4_peer4   = ip.FromString("10.10.20.30")
 
 	cidr_local          = ip.MustParseCIDROrIP("192.180.0.0/30")
 	cidr_1              = ip.MustParseCIDROrIP("192.168.1.0/24")
@@ -875,8 +876,261 @@ var _ = Describe("Enable wireguard", func() {
 							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_4))
 							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
 							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
-							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
 							Expect(link.WireguardPeers).To(HaveLen(1))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+						})
+
+						It("should handle deletion of a wireguard peer over multiple applies: endpoint, wireguard, route", func() {
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+
+							// Remove the endpoint. Wireguard config should be removed at this point. The route should
+							// be converted to a throw route.
+							By("Removing the node")
+							wg.EndpointRemove(peer2)
+							err := wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_3))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
+							Expect(link.WireguardPeers).To(HaveLen(1))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+							Expect(rtDataplane.RouteKeyToRoute[routekey_3]).To(Equal(netlink.Route{
+								Dst:      &ipnet_3,
+								Type:     syscall.RTN_THROW,
+								Protocol: FelixRouteProtocol,
+								Scope:    netlink.SCOPE_UNIVERSE,
+								Table:    tableIndex,
+							}))
+
+							// Remove the wireguard config for this peer. Should have no further impact.
+							By("Removing the wireguard configuration")
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+							wg.EndpointWireguardRemove(peer2)
+							err = wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeFalse())
+							Expect(link.WireguardPeers).To(HaveLen(1))
+
+							// Remove the route.
+							// This is the last bit of configuration for the peer and so the node should be removed
+							// from the cache.
+							By("Removing the route")
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+							wg.RouteRemove(cidr_3)
+							err = wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(3))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
+							Expect(link.WireguardPeers).To(HaveLen(1))
+						})
+
+						It("should handle deletion of a wireguard peer over multiple applies: route, endpoint, wireguard", func() {
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+
+							// Remove the route.
+							By("Removing the route")
+							wg.RouteRemove(cidr_3)
+							err := wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
+							Expect(rtDataplane.RouteKeyToRoute).ToNot(HaveKey(routekey_3))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
+							Expect(link.WireguardPeers).To(HaveLen(2))
+
+							// Remove the endpoint. Wireguard config should be removed at this point. The route should
+							// be converted to a throw route.
+							By("Removing the node")
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+							wg.EndpointRemove(peer2)
+							err = wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
+							Expect(link.WireguardPeers).To(HaveLen(1))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+
+							// Remove the wireguard config for this peer.
+							// This is the last bit of configuration for the peer and so the node should be removed
+							// from the cache.
+							By("Removing the wireguard configuration")
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+							wg.EndpointWireguardRemove(peer2)
+							err = wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(3))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeFalse())
+							Expect(link.WireguardPeers).To(HaveLen(1))
+						})
+
+						It("should handle deletion of a wireguard peer over multiple applies: route, endpoint, wireguard", func() {
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+
+							// Remove the wireguard config for this peer. Wireguard config should be removed at this
+							// point. The route should be converted to a throw route.
+							By("Removing the wireguard configuration")
+							wg.EndpointWireguardRemove(peer2)
+							err := wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_3))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
+							Expect(rtDataplane.RouteKeyToRoute[routekey_3]).To(Equal(netlink.Route{
+								Dst:      &ipnet_3,
+								Type:     syscall.RTN_THROW,
+								Protocol: FelixRouteProtocol,
+								Scope:    netlink.SCOPE_UNIVERSE,
+								Table:    tableIndex,
+							}))
+							Expect(link.WireguardPeers).To(HaveLen(1))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+
+							// Remove the route.
+							By("Removing the route")
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+							wg.RouteRemove(cidr_3)
+							err = wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
+							Expect(rtDataplane.RouteKeyToRoute).ToNot(HaveKey(routekey_3))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeFalse())
+							Expect(link.WireguardPeers).To(HaveLen(1))
+
+							// Remove the endpoint.
+							// This is the last bit of configuration for the peer and so the node should be removed
+							// from the cache.
+							By("Removing the node")
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+							wg.EndpointRemove(peer2)
+							err = wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(3))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeFalse())
+							Expect(link.WireguardPeers).To(HaveLen(1))
+						})
+
+						It("should handle deletion and re-adding an endpoint over multiple applies", func() {
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+
+							// Remove the endpoint. Wireguard config should be removed at this point. The route should
+							// be converted to a throw route.
+							By("Removing the node")
+							wg.EndpointRemove(peer2)
+							err := wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_3))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
+							Expect(link.WireguardPeers).To(HaveLen(1))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+							Expect(rtDataplane.RouteKeyToRoute[routekey_3]).To(Equal(netlink.Route{
+								Dst:      &ipnet_3,
+								Type:     syscall.RTN_THROW,
+								Protocol: FelixRouteProtocol,
+								Scope:    netlink.SCOPE_UNIVERSE,
+								Table:    tableIndex,
+							}))
+
+							// Re-add the endpoint. Wireguard config will be added back in.
+							By("Re-adding the node")
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+							wg.EndpointUpdate(peer2, ipv4_peer2)
+							err = wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_3))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_3))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
+							Expect(link.WireguardPeers).To(HaveLen(2))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer2))
+							Expect(rtDataplane.RouteKeyToRoute[routekey_3]).To(Equal(netlink.Route{
+								LinkIndex: link.LinkAttrs.Index,
+								Dst:       &ipnet_3,
+								Type:      syscall.RTN_UNICAST,
+								Protocol:  FelixRouteProtocol,
+								Scope:     netlink.SCOPE_LINK,
+								Table:     tableIndex,
+							}))
+						})
+
+						It("should handle deletion and re-adding an endpoint in a single apply", func() {
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+
+							// Remove the endpoint. Wireguard config should be removed at this point. The route should
+							// be converted to a throw route.
+							By("Removing the node")
+							wg.EndpointRemove(peer2)
+							wg.EndpointUpdate(peer2, ipv4_peer2)
+							err := wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeFalse())
+							Expect(link.WireguardPeers).To(HaveLen(2))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer2))
+						})
+
+						It("should handle deletion and re-adding an endpoint with a different IP in a single apply", func() {
+							wgDataplane.ResetDeltas()
+							rtDataplane.ResetDeltas()
+
+							// Remove the endpoint. Wireguard config should be removed at this point. The route should
+							// be converted to a throw route.
+							By("Removing the node")
+							wg.EndpointRemove(peer2)
+							wg.EndpointUpdate(peer2, ipv4_peer2_2)
+							err := wg.Apply()
+							Expect(err).NotTo(HaveOccurred())
+							Expect(wg.DebugNodes()).To(HaveLen(4))
+							Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+							Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
+							Expect(wgDataplane.WireguardConfigUpdated).To(BeTrue())
+							Expect(link.WireguardPeers).To(HaveLen(2))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+							Expect(link.WireguardPeers).To(HaveKey(key_peer2))
+							Expect(link.WireguardPeers[key_peer2].Endpoint.IP).To(Equal(ipv4_peer2_2.AsNetIP()))
 						})
 
 						It("should handle immediate and subsequent reuse after a node deletion", func() {
