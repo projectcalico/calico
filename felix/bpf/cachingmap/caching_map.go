@@ -154,6 +154,11 @@ func (c *CachingMap) SetDesired(k, v []byte) {
 	c.pendingUpdates.Set(k, v)
 }
 
+// GetDesired returns the desired (latest) value.
+func (c *CachingMap) GetDesired(k []byte) []byte {
+	return c.desiredStateOfDataplane.Get(k)
+}
+
 func slicesEqual(a, b []byte) bool {
 	if len(a) != len(b) {
 		return false
