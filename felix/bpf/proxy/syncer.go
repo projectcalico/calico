@@ -349,7 +349,6 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 }
 
 func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoint) error {
-
 	var id uint32
 
 	old, exists := s.prevSvcMap[skey]
@@ -493,10 +492,10 @@ func (s *Syncer) applyDerived(
 
 	switch t {
 	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:
-		if sinfo.NodeLocalExternal() {
+		if sinfo.ExternalPolicyLocal() {
 			flags |= nat.NATFlgExternalLocal
 		}
-		if sinfo.NodeLocalInternal() {
+		if sinfo.InternalPolicyLocal() {
 			flags |= nat.NATFlgInternalLocal
 		}
 	}
@@ -589,7 +588,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				npInfo := serviceInfoFromK8sServicePort(sinfo)
 				npInfo.clusterIP = npip
 				npInfo.port = nport
-				if npip.Equal(podNPIP) && sinfo.NodeLocalInternal() {
+				if npip.Equal(podNPIP) && sinfo.InternalPolicyLocal() {
 					// do not program the meta entry, program each node
 					// separately
 					continue
@@ -600,7 +599,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 					continue
 				}
 			}
-			if sinfo.NodeLocalInternal() {
+			if sinfo.InternalPolicyLocal() {
 				if miss := s.expandAndApplyNodePorts(sname, sinfo, eps, nport, s.rt.Lookup); miss != nil {
 					expNPMisses = append(expNPMisses, miss)
 				}
@@ -683,7 +682,6 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 }
 
 func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, eps []k8sp.Endpoint) (int, int, error) {
-
 	cpEps := make([]k8sp.Endpoint, 0, len(eps))
 
 	cnt := 0
@@ -1129,7 +1127,6 @@ func (s *Syncer) cleanupSticky() error {
 		}
 		return bpf.IterNone
 	})
-
 	if err != nil {
 		return errors.Errorf("NAT affinity map iterator failed: %s", err)
 	}
@@ -1213,8 +1210,8 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.loadBalancerIPStrings = sport.LoadBalancerIPStrings()
 	sinfo.loadBalancerSourceRanges = sport.LoadBalancerSourceRanges()
 	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
-	sinfo.nodeLocalExternal = sport.NodeLocalExternal()
-	sinfo.nodeLocalInternal = sport.NodeLocalInternal()
+	sinfo.nodeLocalExternal = sport.ExternalPolicyLocal()
+	sinfo.nodeLocalInternal = sport.ExternalPolicyLocal()
 	sinfo.hintsAnnotation = sport.HintsAnnotation()
 	sinfo.internalTrafficPolicy = sport.InternalTrafficPolicy()
 
@@ -1236,6 +1233,27 @@ type serviceInfo struct {
 	nodeLocalInternal        bool
 	hintsAnnotation          string
 	internalTrafficPolicy    *v1.ServiceInternalTrafficPolicyType
+}
+
+// ExternallyAccessible returns true if the service port is reachable via something
+// other than ClusterIP (NodePort/ExternalIP/LoadBalancer)
+func (info *serviceInfo) ExternallyAccessible() bool {
+	return info.NodePort() != 0 || len(info.LoadBalancerIPStrings()) != 0 || len(info.ExternalIPStrings()) != 0
+}
+
+// UsesClusterEndpoints returns true if the service port ever sends traffic to
+// endpoints based on "Cluster" traffic policy
+func (info *serviceInfo) UsesClusterEndpoints() bool {
+	// The service port uses Cluster endpoints if the internal traffic policy is "Cluster",
+	// or if it accepts external traffic at all. (Even if the external traffic policy is
+	// "Local", we need Cluster endpoints to implement short circuiting.)
+	return !info.InternalPolicyLocal() || info.ExternallyAccessible()
+}
+
+// UsesLocalEndpoints returns true if the service port ever sends traffic to
+// endpoints based on "Local" traffic policy
+func (info *serviceInfo) UsesLocalEndpoints() bool {
+	return info.InternalPolicyLocal() || (info.ExternalPolicyLocal() && info.ExternallyAccessible())
 }
 
 // String is part of ServicePort interface.
@@ -1293,13 +1311,13 @@ func (info *serviceInfo) LoadBalancerIPStrings() []string {
 	return info.loadBalancerIPStrings
 }
 
-// NodeLocalExternal is part of ServicePort interface.
-func (info *serviceInfo) NodeLocalExternal() bool {
+// ExternalPolicyLocal returns if a service has only node local endpoints for external traffic.
+func (info *serviceInfo) ExternalPolicyLocal() bool {
 	return info.nodeLocalExternal
 }
 
-// NodeLocalInternal is part of ServicePort interface
-func (info *serviceInfo) NodeLocalInternal() bool {
+// InternalPolicyLocal returns if a service has only node local endpoints for internal traffic.
+func (info *serviceInfo) InternalPolicyLocal() bool {
 	return info.nodeLocalInternal
 }
 
@@ -1344,8 +1362,8 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		a.Protocol() == b.Protocol() &&
 		a.HealthCheckNodePort() == b.HealthCheckNodePort() &&
 		a.NodePort() == b.NodePort() &&
-		a.NodeLocalExternal() == b.NodeLocalExternal() &&
-		a.NodeLocalInternal() == b.NodeLocalInternal() &&
+		a.ExternalPolicyLocal() == b.ExternalPolicyLocal() &&
+		a.InternalPolicyLocal() == b.InternalPolicyLocal() &&
 		a.HintsAnnotation() == b.HintsAnnotation() &&
 		a.InternalTrafficPolicy() == b.InternalTrafficPolicy() &&
 		stringsEqual(a.ExternalIPStrings(), b.ExternalIPStrings()) &&
@@ -1354,7 +1372,6 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 }
 
 func stringsEqual(a, b []string) bool {
-
 	if len(a) != len(b) {
 		return false
 	}
