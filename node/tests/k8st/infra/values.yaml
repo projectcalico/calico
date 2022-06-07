@@ -22,7 +22,10 @@ dikastes:
 csi-driver:
   image: docker.io/calico/csi-driver
 
-# Some defaults used in the templates.
+# CRDs are installed as part of cluster creation, so don't need them in
+# the test manifest.
+includeCRDs: false
+
 datastore: kubernetes
 network: calico
 ipam: calico-ipam
