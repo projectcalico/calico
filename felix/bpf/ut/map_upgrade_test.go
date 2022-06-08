@@ -263,6 +263,58 @@ func TestMapUpgradeWithDeltaEntries(t *testing.T) {
 	deleteMap(mockMapv5)
 }
 
+func TestMapResizeWhileUpgradeInProgress(t *testing.T) {
+	RegisterTestingT(t)
+	mc := &bpf.MapContext{}
+
+	// create v2 map and add 10 entries to it
+	mockMapv2 := mock.MapV2(mc, 20)
+	err := mockMapv2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v2.NewKey(0x1234 + uint32(i))
+		v := v2.NewValue(0x4568 + uint32(i))
+		err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// create v5 map
+	mockMapv5 := mock.MapV5(mc, 20)
+	err = mockMapv5.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v5.NewKey(0x1234 + uint32(i))
+		v := v5.NewValue(0x4568 + uint32(i))
+		val, err := mockMapv5.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(val).To(Equal(v.AsBytes()))
+	}
+
+	for i := 0; i < 5; i++ {
+		k := v5.NewKey(0x1234 + uint32(i))
+		err := mockMapv5.Delete(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	mockMapv5_new := mock.MapV5(mc, 30)
+	err = mockMapv5_new.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v5.NewKey(0x1234 + uint32(i))
+		v := v5.NewValue(0x4568 + uint32(i))
+		val, err := mockMapv5_new.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(val).To(Equal(v.AsBytes()))
+	}
+	deleteMap(mockMapv2)
+	deleteMap(mockMapv5)
+	deleteMap(mockMapv5_new)
+
+}
+
 func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	RegisterTestingT(t)
 	mc := &bpf.MapContext{}
@@ -327,7 +379,6 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 		Expect(val).To(Equal(v.AsBytes()))
 	}
 	deleteMap(mockMapv2_old)
+	deleteMap(mockMapv2)
 	deleteMap(mockMapv5)
-	deleteMap(mockMapv5)
-
 }
