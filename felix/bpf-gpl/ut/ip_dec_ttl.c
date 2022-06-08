@@ -14,6 +14,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
+		INC(&ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		return -1;
 	}

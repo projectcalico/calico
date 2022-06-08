@@ -95,9 +95,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	if (!ctx.counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		// We don't want to drop packets just because counters initialization fails, but
+		// failing here normally should not happen.
 		return TC_ACT_SHOT;
 	}
-	INC(ctx, TOTAL_PKTS);
+	INC(&ctx, TOTAL_PKTS);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -123,7 +125,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			/* we need to fix up the right src host IP */
 			if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 				ctx.fwd.reason = CALI_REASON_SHORT;
-				inc_counter(ctx.counters, ERR_SHORT_PKTS);
+				INC(&ctx, ERR_SHORT_PKTS);
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
@@ -412,6 +414,7 @@ syn_force_policy:
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
+		INC(ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -524,6 +527,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
+		INC(&ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -1096,6 +1100,8 @@ nat_encap:
 		} else {
 			if (skb_refresh_validate_ptrs(ctx, 0)) {
 				reason = CALI_REASON_SHORT;
+				INC(ctx, ERR_SHORT_PKTS);
+				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
 			__builtin_memcpy(&tc_ethhdr(ctx)->h_dest, arpv->mac_dst, ETH_ALEN);
@@ -1191,6 +1197,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 
 	if (skb_refresh_validate_ptrs(&ctx, ICMP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
+		INC(&ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
