@@ -45,6 +45,6 @@ func UpgradeBPFMap(oldMap, newMap *bpf.PinnedMap) error {
 			newCachingMap.SetDesired(tmpK.AsBytes(), tmpV.AsBytes())
 		}
 	})
-	return newCachingMap.ApplyAllChanges()
+	return newCachingMap.ApplyUpdatesOnly()
 
 }

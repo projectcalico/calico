@@ -39,12 +39,13 @@ const val = 0xa0b1c2d3
 func deleteMap(bpfMap bpf.Map) {
 	bpfMap.(*bpf.PinnedMap).Close()
 	os.Remove(bpfMap.Path())
+	os.Remove(bpfMap.Path() + "_old")
 }
 
 func TestMapUpgradeV2ToV3(t *testing.T) {
 	RegisterTestingT(t)
 	mc := &bpf.MapContext{}
-	mockMapv2 := mock.MapV2(mc)
+	mockMapv2 := mock.MapV2(mc, 0)
 	err := mockMapv2.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -54,7 +55,7 @@ func TestMapUpgradeV2ToV3(t *testing.T) {
 	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 
-	mockMapv3 := mock.MapV3(mc)
+	mockMapv3 := mock.MapV3(mc, 0)
 	err = mockMapv3.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -70,7 +71,7 @@ func TestMapUpgradeV2ToV3(t *testing.T) {
 func TestMapUpgradeV2ToV4(t *testing.T) {
 	RegisterTestingT(t)
 	mc := &bpf.MapContext{}
-	mockMapv2 := mock.MapV2(mc)
+	mockMapv2 := mock.MapV2(mc, 0)
 	err := mockMapv2.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -80,7 +81,7 @@ func TestMapUpgradeV2ToV4(t *testing.T) {
 	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 
-	mockMapv4 := mock.MapV4(mc)
+	mockMapv4 := mock.MapV4(mc, 0)
 	err = mockMapv4.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -96,7 +97,7 @@ func TestMapUpgradeV2ToV4(t *testing.T) {
 func TestMapUpgradeV2ToV5(t *testing.T) {
 	RegisterTestingT(t)
 	mc := &bpf.MapContext{}
-	mockMapv2 := mock.MapV2(mc)
+	mockMapv2 := mock.MapV2(mc, 0)
 	err := mockMapv2.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -106,7 +107,7 @@ func TestMapUpgradeV2ToV5(t *testing.T) {
 	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 
-	mockMapv5 := mock.MapV5(mc)
+	mockMapv5 := mock.MapV5(mc, 0)
 	err = mockMapv5.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -122,7 +123,7 @@ func TestMapUpgradeV2ToV5(t *testing.T) {
 func TestMapUpgradeV3ToV5(t *testing.T) {
 	RegisterTestingT(t)
 	mc := &bpf.MapContext{}
-	mockMapv3 := mock.MapV3(mc)
+	mockMapv3 := mock.MapV3(mc, 0)
 	err := mockMapv3.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -132,7 +133,7 @@ func TestMapUpgradeV3ToV5(t *testing.T) {
 	err = mockMapv3.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 
-	mockMapv5 := mock.MapV5(mc)
+	mockMapv5 := mock.MapV5(mc, 0)
 	err = mockMapv5.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -145,14 +146,65 @@ func TestMapUpgradeV3ToV5(t *testing.T) {
 	deleteMap(mockMapv5)
 }
 
+func TestMapUpgradeV3ToV5WithDifferentSize(t *testing.T) {
+	RegisterTestingT(t)
+	mc := &bpf.MapContext{}
+	mockMapv3 := mock.MapV3(mc, 10)
+	err := mockMapv3.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	k := v3.NewKey(key)
+	v := v3.NewValue(val)
+
+	err = mockMapv3.Update(k.AsBytes(), v.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+
+	mockMapv5 := mock.MapV5(mc, 20)
+	err = mockMapv5.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	k5 := v5.NewKey(key)
+	v5 := v5.NewValue(val)
+	val, err := mockMapv5.Get(k5.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	Expect(val).To(Equal(v5.AsBytes()))
+	deleteMap(mockMapv3)
+	deleteMap(mockMapv5)
+}
+
+func TestMapUpgradeV3ToV5WithLowerSize(t *testing.T) {
+	RegisterTestingT(t)
+	mc := &bpf.MapContext{}
+	mockMapv3 := mock.MapV3(mc, 10)
+	err := mockMapv3.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v3.NewKey(0x1234 + uint32(i))
+		v := v3.NewValue(0x4568 + uint32(i))
+
+		err = mockMapv3.Update(k.AsBytes(), v.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	mockMapv5 := mock.MapV5(mc, 7)
+	err = mockMapv5.EnsureExists()
+	defer func() {
+		deleteMap(mockMapv3)
+		deleteMap(mockMapv5)
+	}()
+	Expect(err).To(HaveOccurred())
+
+}
+
 func TestMapUpgradeV5ToV3(t *testing.T) {
 	RegisterTestingT(t)
 	mc := &bpf.MapContext{}
-	mockMapv5 := mock.MapV5(mc)
+	mockMapv5 := mock.MapV5(mc, 0)
 	err := mockMapv5.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	mockMapv3 := mock.MapV3(mc)
+	mockMapv3 := mock.MapV3(mc, 0)
 	err = mockMapv3.EnsureExists()
 	Expect(err).To(HaveOccurred())
 	deleteMap(mockMapv5)
@@ -162,7 +214,7 @@ func TestMapUpgradeV5ToV3(t *testing.T) {
 func TestMapUpgradeWithDeltaEntries(t *testing.T) {
 	RegisterTestingT(t)
 	mc := &bpf.MapContext{}
-	mockMapv2 := mock.MapV2(mc)
+	mockMapv2 := mock.MapV2(mc, 0)
 	err := mockMapv2.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -172,7 +224,7 @@ func TestMapUpgradeWithDeltaEntries(t *testing.T) {
 	err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 
-	mockMapv5 := mock.MapV5(mc)
+	mockMapv5 := mock.MapV5(mc, 0)
 	err = mockMapv5.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -403,4 +455,124 @@ func TestCtMapUpgradeWithNormalEntries(t *testing.T) {
 		err := m.EnsureExists()
 		Expect(err).NotTo(HaveOccurred())
 	}
+}
+
+func TestMapResizeWhileUpgradeInProgress(t *testing.T) {
+	RegisterTestingT(t)
+	mc := &bpf.MapContext{}
+
+	// create v2 map and add 10 entries to it
+	mockMapv2 := mock.MapV2(mc, 20)
+	err := mockMapv2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v2.NewKey(0x1234 + uint32(i))
+		v := v2.NewValue(0x4568 + uint32(i))
+		err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// create v5 map
+	mockMapv5 := mock.MapV5(mc, 20)
+	err = mockMapv5.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v5.NewKey(0x1234 + uint32(i))
+		v := v5.NewValue(0x4568 + uint32(i))
+		val, err := mockMapv5.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(val).To(Equal(v.AsBytes()))
+	}
+
+	for i := 0; i < 5; i++ {
+		k := v5.NewKey(0x1234 + uint32(i))
+		err := mockMapv5.Delete(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	mockMapv5_new := mock.MapV5(mc, 30)
+	err = mockMapv5_new.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v5.NewKey(0x1234 + uint32(i))
+		v := v5.NewValue(0x4568 + uint32(i))
+		val, err := mockMapv5_new.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(val).To(Equal(v.AsBytes()))
+	}
+	deleteMap(mockMapv2)
+	deleteMap(mockMapv5)
+	deleteMap(mockMapv5_new)
+
+}
+
+func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
+	RegisterTestingT(t)
+	mc := &bpf.MapContext{}
+
+	// create v2 map and add 10 entries to it
+	mockMapv2_old := mock.MapV2(mc, 20)
+	err := mockMapv2_old.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v2.NewKey(0x1234 + uint32(i))
+		v := v2.NewValue(0x4568 + uint32(i))
+		err = mockMapv2_old.Update(k.AsBytes(), v.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// repin /sys/fs/bpf/tc/globals/cali_mock2 to /sys/fs/bpt/tc/globals/cali_mock2_old1
+	err = bpf.RepinMap(mockMapv2_old.GetName(), mockMapv2_old.Path()+"_old1")
+	Expect(err).NotTo(HaveOccurred())
+	// Delete /sys/fs/bpf/tc/globals/cali_mock2
+	os.Remove(mockMapv2_old.Path())
+	mapId, err := bpf.GetMapIdFromPin(mockMapv2_old.Path() + "_old1")
+	Expect(err).NotTo(HaveOccurred())
+
+	// create another v2 map and add only the last 5 entries
+	mockMapv2 := mock.MapV2(mc, 30)
+	err = mockMapv2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 5; i < 10; i++ {
+		k := v2.NewKey(0x1234 + uint32(i))
+		v := v2.NewValue(0x4568 + uint32(i))
+		err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Reping /sys/fs/bpt/tc/globals/cali_mock2_old1 to /sys/fs/bpt/tc/globals/cali_mock2_old
+	err = bpf.RepinMapFromId(mapId, mockMapv2.Path()+"_old")
+	Expect(err).NotTo(HaveOccurred())
+	// Remove /sys/fs/bpt/tc/globals/cali_mock2_old1
+	os.Remove(mockMapv2_old.Path() + "_old1")
+
+	// At this point we /sys/fs/bpt/tc/globals/cali_mock2 with 5 entries and
+	// /sys/fs/bpt/tc/globals/cali_mock2_old with 10 entries.
+	// Now create v5 map. This should trigger the following steps
+	// 1. Create /sys/fs/bpt/tc/globals/cali_mock5
+	// 2. Reads the old version as 2
+	// 3. Calls EnsureExists with version 2 map params
+	// 4. Finds out /sys/fs/bpt/tc/globals/cali_mock2_old is present.
+	// 5. Removes /sys/fs/bpt/tc/globals/cali_mock2
+	// 6. Repins /sys/fs/bpt/tc/globals/cali_mock2_old as /sys/fs/bpt/tc/globals/cali_mock2
+	// 7. Upgrades k,v from version 2 to version 5
+	mockMapv5 := mock.MapV5(mc, 40)
+	err = mockMapv5.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		k := v5.NewKey(0x1234 + uint32(i))
+		v := v5.NewValue(0x4568 + uint32(i))
+		val, err := mockMapv5.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(val).To(Equal(v.AsBytes()))
+	}
+	deleteMap(mockMapv2_old)
+	deleteMap(mockMapv2)
+	deleteMap(mockMapv5)
 }

@@ -54,9 +54,6 @@ type Map interface {
 	// CopyDeltaFromOldMap() copies data from old map to new map
 	CopyDeltaFromOldMap() error
 
-	// UpgradeDeltaFromOldMap() copies data from old map to new map
-	UpgradeDeltaFromOldMap() error
-
 	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
@@ -536,8 +533,9 @@ func (b *PinnedMap) EnsureExists() error {
 	b.fd, err = GetMapFDByPin(b.versionedFilename())
 	if err == nil {
 		b.fdLoaded = true
-		// Copy data from old map to the new map
 		if copyData {
+			// Copy data from old map to the new map. Old map and new map are of the
+			// same version but of different size.
 			err := b.copyFromOldMap()
 			if err != nil {
 				logrus.WithError(err).Error("error copying data from old map")
@@ -550,9 +548,9 @@ func (b *PinnedMap) EnsureExists() error {
 				os.Remove(b.Path() + "_old")
 			}
 
-		} else {
-			err = b.upgrade()
 		}
+		// Handle map upgrade.
+		err = b.upgrade()
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
@@ -562,6 +560,26 @@ func (b *PinnedMap) EnsureExists() error {
 type bpftoolMapMeta struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+}
+
+func GetMapIdFromPin(pinPath string) (int, error) {
+	cmd := exec.Command("bpftool", "map", "list", "pinned", pinPath, "-j")
+	out, err := cmd.Output()
+	if err != nil {
+		return -1, errors.Wrap(err, "bpftool map list failed")
+	}
+
+	var mapData bpftoolMapMeta
+	err = json.Unmarshal(out, &mapData)
+	if err != nil {
+		return -1, errors.Wrap(err, "bpftool returned bad JSON")
+	}
+	return mapData.ID, nil
+}
+
+func RepinMapFromId(id int, path string) error {
+	cmd := exec.Command("bpftool", "map", "pin", "id", fmt.Sprint(id), path)
+	return errors.Wrap(cmd.Run(), "bpftool failed to reping map from id")
 }
 
 func RepinMap(name string, filename string) error {
@@ -590,9 +608,15 @@ func RepinMap(name string, filename string) error {
 }
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {
+	// check if there is any old version of the map.
+	// If so upgrade delta entries from the old map
+	// to the new map.
+	err := b.upgrade()
+	if err != nil {
+		return fmt.Errorf("error upgrading data from old map %s, err=%w", b.GetName(), err)
+	}
 	if b.oldfd == 0 {
-		// check if there is any old version of the map
-		return b.upgrade()
+		return nil
 	}
 
 	defer func() {
@@ -601,15 +625,11 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 		os.Remove(b.Path() + "_old")
 	}()
 
-	err := b.updateDeltaEntries()
+	err = b.updateDeltaEntries()
 	if err != nil {
 		return fmt.Errorf("error copying data from old map %s, err=%w", b.GetName(), err)
 	}
 	return nil
-}
-
-func (b *PinnedMap) UpgradeDeltaFromOldMap() error {
-	return b.upgrade()
 }
 
 func (b *PinnedMap) getOldMapVersion() (int, error) {
@@ -621,7 +641,7 @@ func (b *PinnedMap) getOldMapVersion() (int, error) {
 	}
 	for _, f := range files {
 		fname := f.Name()
-		fname = string(fname[0:len(fname)-1])
+		fname = string(fname[0 : len(fname)-1])
 		if fname == name {
 			mapName := f.Name()
 			oldVersion, err = strconv.Atoi(string(mapName[len(mapName)-1]))
@@ -634,11 +654,16 @@ func (b *PinnedMap) getOldMapVersion() (int, error) {
 			if oldVersion > b.Version {
 				return 0, fmt.Errorf("downgrade not supported %d %d", oldVersion, b.Version)
 			}
+			oldVersion = 0
 		}
 	}
 	return oldVersion, nil
 }
 
+// This function upgrades entries from one version of the map to the other.
+// Say we move from mapv2 to mapv3. Data from v2 is upgraded to v3.
+// If there is a resized version of v2, which is v2_old, data is upgraded from
+// v2_old as well to v3.
 func (b *PinnedMap) upgrade() error {
 	if b.UpgradeFn == nil {
 		return nil
