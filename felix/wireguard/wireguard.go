@@ -673,8 +673,7 @@ func (w *Wireguard) Apply() (err error) {
 				}
 
 				// Delete any nodes from the cache that no longer have any wireguard or routing configuration.
-				if !node.routingToWireguard && !node.programmedInWireguard &&
-					node.ipv4EndpointAddr == nil && node.cidrs.Len() == 0 && node.publicKey == zeroKey {
+				if node.ipv4EndpointAddr == nil && node.cidrs.Len() == 0 && node.publicKey == zeroKey {
 					log.WithField("node", name).Debug("Delete node configuration")
 					delete(w.nodes, name)
 				}
@@ -1055,18 +1054,16 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 	// Do all deletes first. Then adds or updates separately. This ensures a CIDR that has been deleted from one node
 	// and added to another will not add first then delete (which will remove the route, since the route table does not
 	// care about destination node).
-	for name, update := range w.nodeUpdates {
-		// Delete routes that are no longer required in routing.
-		node := w.getOrInitNodeData(name)
-		ifaceName := routetable.InterfaceNone
-		if node != nil && node.routingToWireguard {
-			ifaceName = w.config.InterfaceName
-		}
-		logCxt := log.WithFields(log.Fields{"node": name, "ifaceName": ifaceName})
+	for _, update := range w.nodeUpdates {
+		// Delete routes that are no longer required in routing. Just delete both the wireguard and throw routes - this
+		// is somewhat defensive as we havw the information to decide which route we need to remove - however we have
+		// also had bugs related to state tracking so deleting both is reasonable - routetable ignores the one that is
+		// not programmed.
 		update.cidrsDeleted.Iter(func(item interface{}) error {
 			cidr := item.(ip.CIDR)
-			logCxt.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
-			w.routetable.RouteRemove(ifaceName, cidr)
+			log.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
+			w.routetable.RouteRemove(w.config.InterfaceName, cidr)
+			w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
 			return nil
 		})
 	}

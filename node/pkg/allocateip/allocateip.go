@@ -764,8 +764,8 @@ type backendClientAccessor interface {
 }
 
 // loadFelixEnvConfig loads the felix configuration from environment. It does not perform a hierarchical load across
-// env, file and felixconfigurations resources as this is should only be used for configuration that should be specified
-// through environment.
+// env, file and felixconfigurations resources and as such this is should only be used for configuration that is only
+// expected to be specified through environment.
 func loadFelixEnvConfig() *felixconfig.Config {
 	// Load locally-defined config from the environment variables.
 	configParams := felixconfig.New()
