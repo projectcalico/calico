@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_NAT_H__
@@ -87,6 +87,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 
 	if (skb_refresh_validate_ptrs(ctx, new_hdrsz)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
+		INC(ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short VXLAN encap\n");
 		goto out;
 	}
@@ -257,6 +258,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	/* Revalidate the packet after the decap. */
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
+		INC(ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
