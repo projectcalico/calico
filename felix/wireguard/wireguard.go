@@ -1396,7 +1396,7 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
 	if w.config.MTU != 0 && oldMTU != w.config.MTU {
-		logCxt.WithField("oldMTU", oldMTU).Info("Wireguard device MTU needs to be updated")
+		logCxt.WithField("oldMTU", oldMTU).WithField("newMTU", w.config.MTU).Info("Wireguard device MTU needs to be updated")
 		if err := netlinkClient.LinkSetMTU(link, w.config.MTU); err != nil {
 			log.WithError(err).Warn("failed to set tunnel device MTU")
 			return false, err
