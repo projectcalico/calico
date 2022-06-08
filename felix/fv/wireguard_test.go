@@ -247,7 +247,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				Eventually(func() string {
 					out, _ := felix.ExecOutput("ip", "-d", "link", "show", ifaceName)
 					return out
-				}, "10s", "100ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
+				}, "30s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
 			}
 
 			// Expect the settings to be changed on the device.
