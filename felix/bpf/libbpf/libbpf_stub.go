@@ -17,6 +17,7 @@
 package libbpf
 
 import (
+	"runtime"
 	"time"
 )
 
@@ -100,4 +101,8 @@ func CTLBSetGlobals(_ *Map, _ time.Duration) error {
 
 func (m *Map) SetMapSize(size uint32) error {
 	panic("LIBBPF syscall stub")
+}
+
+func NumPossibleCPUs() (int, error) {
+	return runtime.NumCPU(), nil
 }

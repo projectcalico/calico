@@ -43,7 +43,7 @@ var countersDumpCmd = &cobra.Command{
 			iface = ""
 		}
 
-		if err = dumpCounters(iface); err != nil {
+		if err = dumpCounters(cmd, iface); err != nil {
 			log.WithError(err).Error("Failed to dump counter map.")
 		}
 	},
@@ -75,16 +75,16 @@ var countersCmd = &cobra.Command{
 	Short: "Show and reset counters",
 }
 
-func dumpCounters(iface string) error {
+func dumpCounters(cmd *cobra.Command, iface string) error {
 	if iface != "" {
-		return dumpIfaceCounters(iface)
+		return dumpIfaceCounters(cmd, iface)
 	} else {
 		interfaces, err := net.Interfaces()
 		if err != nil {
 			return fmt.Errorf("failed to get list of interfaces. err=%v", err)
 		}
 		for _, i := range interfaces {
-			err = dumpIfaceCounters(i.Name)
+			err = dumpIfaceCounters(cmd, i.Name)
 			if err != nil {
 				log.Errorf("Failed to dump %v counters", i.Name)
 				continue
@@ -94,7 +94,7 @@ func dumpCounters(iface string) error {
 	return nil
 }
 
-func dumpIfaceCounters(iface string) error {
+func dumpIfaceCounters(cmd *cobra.Command, iface string) error {
 	if iface == "" {
 		return fmt.Errorf("empty interface name")
 	}
@@ -115,14 +115,14 @@ func dumpIfaceCounters(iface string) error {
 		return fmt.Errorf("Failed to read enough data from bpf egress counters")
 	}
 
-	fmt.Printf("===== Interface: %s =====\n", iface)
-	fmt.Printf("Ingress:\n")
-	fmt.Printf("\tTotal Packets: %d\n", ingressValues[counters.TotalPackets])
-	fmt.Printf("\tShort Packets: %d\n", ingressValues[counters.ErrShortPacket])
+	cmd.Printf("===== Interface: %s =====\n", iface)
+	cmd.Printf("Ingress:\n")
+	cmd.Printf("\tTotal Packets: %d\n", ingressValues[counters.TotalPackets])
+	cmd.Printf("\tShort Packets: %d\n", ingressValues[counters.ErrShortPacket])
 
-	fmt.Printf("\nEgress:\n")
-	fmt.Printf("\tTotal Packets: %d\n", egressValues[counters.TotalPackets])
-	fmt.Printf("\tShort Packets: %d\n", egressValues[counters.ErrShortPacket])
+	cmd.Printf("\nEgress:\n")
+	cmd.Printf("\tTotal Packets: %d\n", egressValues[counters.TotalPackets])
+	cmd.Printf("\tShort Packets: %d\n", egressValues[counters.ErrShortPacket])
 	return nil
 }
 

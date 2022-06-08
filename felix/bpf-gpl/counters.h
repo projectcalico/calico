@@ -30,4 +30,6 @@ static CALI_BPF_INLINE void inc_counter(counters_t *counters, int type)
 	(*counters)[type]++;
 }
 
+#define INC(ctx, type) ((*(ctx.counters))[type]++)
+
 #endif /* __CALI_COUNTERS_H__ */
