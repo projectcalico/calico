@@ -74,7 +74,7 @@ The geeky details of what you get:
      calicoNetwork:
        bgp: Disabled
        ipPools:
-        - cidr: 10.244.0.0/16
+        - cidr: 192.168.0.0/16
           encapsulation: VXLAN
    ---
    apiVersion: operator.tigera.io/v1
