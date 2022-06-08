@@ -91,7 +91,7 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 			m.wireguardRouteTable.RouteUpdate(msg.DstNodeName, cidr)
 		default:
 			// It is not a workload CIDR - treat this as a route deletion.
-			log.Debug("RouteUpdate is not a workload update, treating as a deletion")
+			log.Debug("RouteUpdate is not a workload, remote host or tunnel update, treating as a deletion")
 			m.wireguardRouteTable.RouteRemove(cidr)
 		}
 	case *proto.RouteRemove:
