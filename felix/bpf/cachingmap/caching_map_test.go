@@ -31,10 +31,74 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-var cachingMapParams = bpf.MapParameters{
-	Name:      "mock-map",
-	KeySize:   2,
-	ValueSize: 4,
+type Key [2]byte
+
+func (k Key) String() string {
+	return string(k[:])
+}
+
+func (k Key) AsBytes() []byte {
+	return k[:]
+}
+
+func (k Key) FromBytes(b []byte) {
+	copy(k[:], b)
+}
+
+type Value [4]byte
+
+func (v Value) String() string {
+	return string(v[:])
+}
+
+func (v Value) AsBytes() []byte {
+	return v[:]
+}
+
+func (v Value) FromBytes(b []byte) {
+	copy(v[:], b)
+}
+
+type mockMap struct {
+	*mock.Map
+}
+
+func (m *mockMap) Update(k Key, v Value) error {
+	return m.Map.Update(k.AsBytes(), v.AsBytes())
+}
+
+func (m *mockMap) Delete(k Key) error {
+	return m.Map.Delete(k.AsBytes())
+}
+
+func (m *mockMap) Get(k Key) (Value, error) {
+	vb, err := m.Map.Get(k.AsBytes())
+
+	var v Value
+
+	if err != nil {
+		return v, err
+	}
+
+	copy(v[:], vb)
+
+	return v, nil
+}
+
+func (m *mockMap) Iter(fn func(k Key, v Value)) error {
+	return m.Map.Iter(func(kb, vb []byte) bpf.IteratorAction {
+		var (
+			k Key
+			v Value
+		)
+
+		k.FromBytes(kb)
+		v.FromBytes(vb)
+
+		fn(k, v)
+
+		return bpf.IterNone
+	})
 }
 
 // TestCachingMap_Empty verifies loading of an empty map with no changes queued.
@@ -56,7 +120,7 @@ func TestCachingMap_Errors(t *testing.T) {
 
 	// Failure should have cleared the cache again so next Apply should see this new entry.
 	mockMap.Contents = map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
 	}
 	mockMap.IterErr = nil
 	err = cm.ApplyAllChanges()
@@ -64,7 +128,7 @@ func TestCachingMap_Errors(t *testing.T) {
 	Expect(mockMap.Contents).To(BeEmpty())
 
 	// Now check errors on update
-	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 4})
+	cm.SetDesired(Key{1, 1}, Value{1, 2, 4, 4})
 	mockMap.UpdateErr = ErrFail
 	err = cm.ApplyAllChanges()
 	Expect(err).To(HaveOccurred())
@@ -74,7 +138,7 @@ func TestCachingMap_Errors(t *testing.T) {
 	err = cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.Contents).To(Equal(map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 4}),
+		Key{1, 1}.String(): Value{1, 2, 4, 4}.String(),
 	}))
 
 	// And delete.
@@ -92,8 +156,8 @@ func TestCachingMap_Errors(t *testing.T) {
 // TestCachingMap_CleanUp verifies cleaning up of a whole map.
 func TestCachingMap_CleanUp(t *testing.T) {
 	mockMap, cm := setupCachingMapTest(t)
-	_ = mockMap.Update([]byte{1, 2}, []byte{1, 2, 3, 4})
-	_ = mockMap.Update([]byte{1, 3}, []byte{1, 2, 4, 4})
+	_ = mockMap.Update(Key{1, 2}, Value{1, 2, 3, 4})
+	_ = mockMap.Update(Key{1, 3}, Value{1, 2, 4, 4})
 
 	err := cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
@@ -104,24 +168,24 @@ func TestCachingMap_CleanUp(t *testing.T) {
 func TestCachingMap_SplitUpdateAndDelete(t *testing.T) {
 	mockMap, cm := setupCachingMapTest(t)
 	mockMap.Contents = map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 4}),
-		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 4}.String(),
+		Key{1, 3}.String(): Value{1, 2, 4, 4}.String(),
 	}
 
-	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.SetDesired(Key{1, 1}, Value{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired(Key{1, 2}, Value{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired(Key{1, 4}, Value{1, 2, 3, 5}) // New K/V
 	// Shouldn't do anything until we hit apply.
 	Expect(mockMap.OpCount()).To(Equal(0))
 
 	err := cm.ApplyUpdatesOnly()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.Contents).To(Equal(map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}), // No change
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 6}), // Updated
-		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}), // Not desired but should be left alone
-		string([]byte{1, 4}): string([]byte{1, 2, 3, 5}), // Added
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(), // No change
+		Key{1, 2}.String(): Value{1, 2, 3, 6}.String(), // Updated
+		Key{1, 3}.String(): Value{1, 2, 4, 4}.String(), // Not desired but should be left alone
+		Key{1, 4}.String(): Value{1, 2, 3, 5}.String(), // Added
 	}))
 	// Two updates and an iteration to load the map initially.
 	Expect(mockMap.UpdateCount).To(Equal(2))
@@ -133,9 +197,9 @@ func TestCachingMap_SplitUpdateAndDelete(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(mockMap.Contents).To(Equal(map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 6}),
-		string([]byte{1, 4}): string([]byte{1, 2, 3, 5}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 6}.String(),
+		Key{1, 4}.String(): Value{1, 2, 3, 5}.String(),
 	}))
 	// No new updates or iterations but should get one extra deletion.
 	Expect(mockMap.UpdateCount).To(Equal(2))
@@ -154,23 +218,23 @@ func TestCachingMap_SplitUpdateAndDelete(t *testing.T) {
 func TestCachingMap_ApplyAll(t *testing.T) {
 	mockMap, cm := setupCachingMapTest(t)
 	mockMap.Contents = map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 4}),
-		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 4}.String(),
+		Key{1, 3}.String(): Value{1, 2, 4, 4}.String(),
 	}
 
-	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.SetDesired(Key{1, 1}, Value{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired(Key{1, 2}, Value{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired(Key{1, 4}, Value{1, 2, 3, 5}) // New K/V
 	// Shouldn't do anything until we hit apply.
 	Expect(mockMap.OpCount()).To(Equal(0))
 
 	err := cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.Contents).To(Equal(map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 6}),
-		string([]byte{1, 4}): string([]byte{1, 2, 3, 5}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 6}.String(),
+		Key{1, 4}.String(): Value{1, 2, 3, 5}.String(),
 	}))
 	// Two updates and an iteration to load the map initially.
 	Expect(mockMap.UpdateCount).To(Equal(2))
@@ -203,24 +267,24 @@ func TestCachingMap_ApplyAll(t *testing.T) {
 func TestCachingMap_DeleteBeforeLoad(t *testing.T) {
 	mockMap, cm := setupCachingMapTest(t)
 	mockMap.Contents = map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 4}),
-		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 4}.String(),
+		Key{1, 3}.String(): Value{1, 2, 4, 4}.String(),
 	}
 
-	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
-	cm.DeleteDesired([]byte{1, 2})                  // Changed my mind.
-	cm.DeleteDesired([]byte{1, 4})                  // Changed my mind.
-	cm.DeleteDesired([]byte{1, 8})                  // Delete of non-existent key is a no-op.
+	cm.SetDesired(Key{1, 1}, Value{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired(Key{1, 2}, Value{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired(Key{1, 4}, Value{1, 2, 3, 5}) // New K/V
+	cm.DeleteDesired(Key{1, 2})                 // Changed my mind.
+	cm.DeleteDesired(Key{1, 4})                 // Changed my mind.
+	cm.DeleteDesired(Key{1, 8})                 // Delete of non-existent key is a no-op.
 	// Shouldn't do anything until we hit apply.
 	Expect(mockMap.OpCount()).To(Equal(0))
 
 	err := cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.Contents).To(Equal(map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
 	}))
 	// Just the two deletes.
 	Expect(mockMap.UpdateCount).To(Equal(0))
@@ -239,9 +303,9 @@ func TestCachingMap_DeleteBeforeLoad(t *testing.T) {
 func TestCachingMap_PreLoad(t *testing.T) {
 	mockMap, cm := setupCachingMapTest(t)
 	mockMap.Contents = map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 4}),
-		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 4}.String(),
+		Key{1, 3}.String(): Value{1, 2, 4, 4}.String(),
 	}
 	err := cm.LoadCacheFromDataplane()
 	Expect(err).NotTo(HaveOccurred())
@@ -249,24 +313,24 @@ func TestCachingMap_PreLoad(t *testing.T) {
 	Expect(mockMap.OpCount()).To(Equal(1))
 
 	// Check we can query the cache.
-	Expect(cm.GetDataplaneCache([]byte{1, 1})).To(Equal([]byte{1, 2, 4, 3}))
-	seenValues := make(map[string]string)
-	cm.IterDataplaneCache(func(k, v []byte) {
-		seenValues[string(k)] = string(v)
+	Expect(cm.GetDataplaneCache(Key{1, 1})).To(Equal(Value{1, 2, 4, 3}))
+	seenValues := make(map[Key]Value)
+	cm.IterDataplaneCache(func(k Key, v Value) {
+		seenValues[k] = v
 	})
 	Expect(seenValues).To(Equal(mockMap.Contents))
 
-	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
-	cm.DeleteDesired([]byte{1, 8})                  // Delete of non-existent key is a no-op.
+	cm.SetDesired(Key{1, 1}, Value{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired(Key{1, 2}, Value{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired(Key{1, 4}, Value{1, 2, 3, 5}) // New K/V
+	cm.DeleteDesired(Key{1, 8})                 // Delete of non-existent key is a no-op.
 
 	err = cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.Contents).To(Equal(map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 6}),
-		string([]byte{1, 4}): string([]byte{1, 2, 3, 5}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 6}.String(),
+		Key{1, 4}.String(): Value{1, 2, 3, 5}.String(),
 	}))
 	// Two updates and an iteration to load the map initially.
 	Expect(mockMap.UpdateCount).To(Equal(2))
@@ -287,18 +351,18 @@ func TestCachingMap_PreLoad(t *testing.T) {
 func TestCachingMap_Resync(t *testing.T) {
 	mockMap, cm := setupCachingMapTest(t)
 	mockMap.Contents = map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 4}),
-		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 4}.String(),
+		Key{1, 3}.String(): Value{1, 2, 4, 4}.String(),
 	}
 	err := cm.LoadCacheFromDataplane()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.IterCount).To(Equal(1))
 	Expect(mockMap.OpCount()).To(Equal(1))
 
-	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.SetDesired(Key{1, 1}, Value{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired(Key{1, 2}, Value{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired(Key{1, 4}, Value{1, 2, 3, 5}) // New K/V
 
 	// At this point we've got some updates and a deletion queued up. Change the contents
 	// of the map:
@@ -306,7 +370,7 @@ func TestCachingMap_Resync(t *testing.T) {
 	// - Remove the key that we were about to delete.
 	// - Correct the value of the other key.
 	mockMap.Contents = map[string]string{
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 6}),
+		Key{1, 2}.String(): Value{1, 2, 3, 6}.String(),
 	}
 
 	err = cm.LoadCacheFromDataplane()
@@ -315,9 +379,9 @@ func TestCachingMap_Resync(t *testing.T) {
 	err = cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.Contents).To(Equal(map[string]string{
-		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
-		string([]byte{1, 2}): string([]byte{1, 2, 3, 6}),
-		string([]byte{1, 4}): string([]byte{1, 2, 3, 5}),
+		Key{1, 1}.String(): Value{1, 2, 4, 3}.String(),
+		Key{1, 2}.String(): Value{1, 2, 3, 6}.String(),
+		Key{1, 4}.String(): Value{1, 2, 3, 5}.String(),
 	}))
 	// Two updates and an iteration to load the map initially.
 	Expect(mockMap.UpdateCount).To(Equal(2))
@@ -332,39 +396,15 @@ func TestCachingMap_Resync(t *testing.T) {
 	Expect(mockMap.OpCount()).To(Equal(preApplyOpCount))
 }
 
-func setupCachingMapTest(t *testing.T) (*mock.Map, *CachingMap) {
+func setupCachingMapTest(t *testing.T) (*mockMap, *CachingMap[Key, Value]) {
 	RegisterTestingT(t)
-	mockMap := mock.NewMockMap(cachingMapParams)
-	cm := New(cachingMapParams, mockMap)
-	return mockMap, cm
-}
-
-func TestByteArrayToByteArrayMap(t *testing.T) {
-	RegisterTestingT(t)
-
-	m := NewByteArrayToByteArrayMap(2, 4)
-
-	Expect(m.Get([]byte{1, 2})).To(BeNil(), "New map should not contain a value")
-	m.Set([]byte{1, 2}, []byte{1, 2, 3, 4})
-	Expect(m.Get([]byte{1, 2})).To(Equal([]byte{1, 2, 3, 4}), "Map should contain set value")
-	m.Set([]byte{1, 2}, []byte{1, 2, 3, 5})
-	Expect(m.Get([]byte{1, 2})).To(Equal([]byte{1, 2, 3, 5}), "Map should record updates")
-	m.Set([]byte{3, 4}, []byte{1, 2, 3, 6})
-	Expect(m.Get([]byte{3, 4})).To(Equal([]byte{1, 2, 3, 6}), "Map should record updates")
-
-	seenValues := map[string][]byte{}
-	m.Iter(func(k, v []byte) {
-		Expect(k).To(HaveLen(2))
-		Expect(v).To(HaveLen(4))
-		vCopy := make([]byte, len(v))
-		copy(vCopy, v)
-		seenValues[string(k)] = vCopy
-	})
-	Expect(seenValues).To(Equal(map[string][]byte{
-		string([]byte{1, 2}): {1, 2, 3, 5},
-		string([]byte{3, 4}): {1, 2, 3, 6},
-	}))
-
-	m.Delete([]byte{1, 2})
-	Expect(m.Get([]byte{1, 2})).To(BeNil(), "Deletion should remove the value")
+	m := &mockMap{
+		Map: mock.NewMockMap(bpf.MapParameters{
+			Name:      "mock-map",
+			KeySize:   2,
+			ValueSize: 4,
+		}),
+	}
+	cm := New[Key, Value]("mock-map", m)
+	return m, cm
 }
