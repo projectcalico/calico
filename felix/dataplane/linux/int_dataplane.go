@@ -271,7 +271,8 @@ type InternalDataplane struct {
 
 	ipipManager *ipipManager
 
-	wireguardManager *wireguardManager
+	wireguardManager   *wireguardManager
+	wireguardManagerV6 *wireguardManager
 
 	ifaceMonitor     *ifacemonitor.InterfaceMonitor
 	ifaceUpdates     chan *ifaceUpdate
@@ -752,20 +753,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	// Add a manager for wireguard configuration. This is added irrespective of whether wireguard is actually enabled
+	// Add a manager for IPv4 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
 	// because it may need to tidy up some of the routing rules when disabled.
-	cryptoRouteTableWireguard := wireguard.New(config.Hostname, &config.Wireguard, config.NetlinkTimeout,
+	cryptoRouteTableWireguard := wireguard.New(config.Hostname, &config.Wireguard, 4, config.NetlinkTimeout,
 		config.DeviceRouteProtocol, func(publicKey wgtypes.Key) error {
 			if publicKey == zeroKey {
-				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: ""}
+				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: "", IpVersion: 4}
 			} else {
-				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String()}
+				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String(), IpVersion: 4}
 			}
 			return nil
 		},
 		dp.loopSummarizer)
-	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config)
-	dp.RegisterManager(dp.wireguardManager) // IPv4-only
+	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config, 4)
+	dp.RegisterManager(dp.wireguardManager) // IPv4
 
 	dp.RegisterManager(newServiceLoopManager(filterTableV4, ruleRenderer, 4))
 
@@ -880,6 +881,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+
+		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
+		// because it may need to tidy up some of the routing rules when disabled.
+		cryptoRouteTableWireguardV6 := wireguard.New(config.Hostname, &config.Wireguard, 6, config.NetlinkTimeout,
+			config.DeviceRouteProtocol, func(publicKey wgtypes.Key) error {
+				if publicKey == zeroKey {
+					dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: "", IpVersion: 6}
+				} else {
+					dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String(), IpVersion: 6}
+				}
+				return nil
+			},
+			dp.loopSummarizer)
+		dp.wireguardManagerV6 = newWireguardManager(cryptoRouteTableWireguardV6, config, 6)
+		dp.RegisterManager(dp.wireguardManagerV6)
 	}
 
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesMangleTables...)
