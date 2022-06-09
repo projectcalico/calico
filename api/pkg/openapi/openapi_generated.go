@@ -2454,14 +2454,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"wireguardEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WireguardEnabled controls whether Wireguard is enabled for IPv4. [Default: false]",
+							Description: "WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
 					"wireguardEnabledV6": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WireguardEnabledV6 controls whether Wireguard is enabled for IPv6. [Default: false]",
+							Description: "WireguardEnabledV6 controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network). [Default: false]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
