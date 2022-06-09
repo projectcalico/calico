@@ -3,7 +3,7 @@ ARG UBI_IMAGE
 
 FROM ${QEMU_IMAGE} as qemu
 
-FROM --platform=linux/arm64 ${UBI_IMAGE} as ubi
+FROM --platform=${TARGETPLATFORM} ${UBI_IMAGE} as ubi
 
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
@@ -16,13 +16,16 @@ RUN rm -rf /tmp
 RUN mkdir /tmp
 
 FROM scratch
+
+ARG TARGETARCH
+
 COPY  --from=ubi /code /code
 COPY  --from=ubi /tmp /tmp
 COPY  --from=ubi /lib /lib
 COPY  --from=ubi /lib64 /lib64
 
-ADD  bin/apiserver-arm64 /code/apiserver
-ADD  bin/filecheck-arm64 /code/filecheck
+ADD  bin/apiserver-${TARGETARCH} /code/apiserver
+ADD  bin/filecheck-${TARGETARCH} /code/filecheck
 
 WORKDIR /code
 
