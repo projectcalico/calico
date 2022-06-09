@@ -425,9 +425,9 @@ type FelixConfigurationSpec struct {
 	// RouteTableRange specifies the indices of the route tables that Calico should use.
 	RouteTableRange *RouteTableRange `json:"routeTableRange,omitempty" validate:"omitempty"`
 
-	// WireguardEnabled controls whether Wireguard is enabled for IPv4. [Default: false]
+	// WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`
-	// WireguardEnabledV6 controls whether Wireguard is enabled for IPv6. [Default: false]
+	// WireguardEnabledV6 controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network). [Default: false]
 	WireguardEnabledV6 *bool `json:"wireguardEnabledV6,omitempty"`
 	// WireguardListeningPort controls the listening port used by Wireguard. [Default: 51820]
 	WireguardListeningPort *int `json:"wireguardListeningPort,omitempty" validate:"omitempty,gt=0,lte=65535"`

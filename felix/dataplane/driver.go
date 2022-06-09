@@ -166,7 +166,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		var wireguardEnabled bool
 		var wireguardTableIndex int
 		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
-			log.Debugf("Assigned wireguard table index: %d", idx)
+			log.Debugf("Assigned IPv4 wireguard table index: %d", idx)
 			wireguardEnabled = configParams.WireguardEnabled
 			wireguardTableIndex = idx
 		} else {
@@ -176,7 +176,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		var wireguardEnabledV6 bool
 		var wireguardTableIndexV6 int
 		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
-			log.Debugf("Assigned wireguard table index: %d", idx)
+			log.Debugf("Assigned IPv6 wireguard table index: %d", idx)
 			wireguardEnabledV6 = configParams.WireguardEnabledV6
 			wireguardTableIndexV6 = idx
 		} else {
