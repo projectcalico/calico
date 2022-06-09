@@ -10250,7 +10250,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Description: "\n\n\nPossible enum values:\n - `\"FileSystemResizePending\"` - controller resize is finished and a file system resize is pending on node\n - `\"Resizing\"` - a user trigger resize of pvc has been started",
+							Description: "Possible enum values:\n - `\"FileSystemResizePending\"` - controller resize is finished and a file system resize is pending on node\n - `\"Resizing\"` - a user trigger resize of pvc has been started",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",

@@ -131,7 +131,7 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 	addrs[i.V6Addr] = struct{}{}
 
 	for _, a := range i.Addresses {
-		addrs[a.(ip.Addr)] = struct{}{}
+		addrs[a] = struct{}{}
 	}
 
 	cidrs := make([]ip.CIDR, len(addrs))
