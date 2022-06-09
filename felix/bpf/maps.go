@@ -35,6 +35,26 @@ const (
 	IterDelete IteratorAction = "delete"
 )
 
+type AsBytes interface {
+	AsBytes() []byte
+}
+
+type FromBytes interface {
+	FromBytes([]byte)
+}
+
+type Key interface {
+	comparable
+	AsBytes
+	FromBytes
+}
+
+type Value interface {
+	comparable
+	AsBytes
+	FromBytes
+}
+
 type IterCallback func(k, v []byte) IteratorAction
 
 type Map interface {
@@ -593,4 +613,36 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 		return fmt.Errorf("error copying data from old map %s, err=%w", b.GetName(), err)
 	}
 	return nil
+}
+
+type TypedMap[K Key, V Value] struct {
+	Map
+}
+
+func (m *TypedMap[K, V]) Update(k K, v V) error {
+	return m.Map.Update(k.AsBytes(), v.AsBytes())
+}
+
+func (m *TypedMap[K, V]) Delete(k K) error {
+	return m.Map.Delete(k.AsBytes())
+}
+
+func (m *TypedMap[K, V]) Iter(fn func(K, V)) error {
+	return m.Map.Iter(func(kb, vb []byte) IteratorAction {
+		var (
+			k K
+			v V
+		)
+
+		k.FromBytes(kb)
+		v.FromBytes(vb)
+
+		fn(k, v)
+
+		return IterNone
+	})
+}
+
+func NewTypedMap[K Key, V Value](m Map) *TypedMap[K, V] {
+	return &TypedMap[K, V]{m}
 }
