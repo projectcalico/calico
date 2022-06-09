@@ -1298,7 +1298,8 @@ func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key in
 		)
 		if err != nil {
 			log.WithError(err).Warningf("Can't read password referenced by BGP Configuration %v in secret %s:%s", v3res.Name, v3res.Spec.NodeMeshPassword.SecretKeyRef.Name, v3res.Spec.NodeMeshPassword.SecretKeyRef.Key)
-			// Skip updating the password if it is unreadable
+			// Secret or key not available, treat as a delete.
+			c.updateCache(api.UpdateTypeKVDeleted, getKVPair(meshPasswordKey))
 			return
 		}
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(meshPasswordKey, password))
