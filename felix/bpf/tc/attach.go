@@ -126,7 +126,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	}
 
 	// Using the RLock allows multiple attach calls to proceed in parallel unless
-	// CleanUpJumpMaps() (which takes the writer lock) is running.
+	// CleanUpMaps() (which takes the writer lock) is running.
 	logCxt.Debug("AttachProgram waiting for lock...")
 	tcLock.RLock()
 	defer tcLock.RUnlock()
@@ -381,14 +381,14 @@ func (ap AttachPoint) IsAttached() (bool, error) {
 // so we can clean them up when removing maps without accidentally removing other user-created dirs..
 var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr))`)
 
-// CleanUpJumpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
+// CleanUpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
 // our BPF programs.
-func CleanUpJumpMaps() {
+func CleanUpMaps() {
 	// So that we serialise with AttachProgram()
-	log.Debug("CleanUpJumpMaps waiting for lock...")
+	log.Debug("CleanUpMaps waiting for lock...")
 	tcLock.Lock()
 	defer tcLock.Unlock()
-	log.Debug("CleanUpJumpMaps got lock, cleaning up...")
+	log.Debug("CleanUpMaps got lock, cleaning up...")
 
 	// Find the maps we care about by walking the BPF filesystem.
 	mapIDToPath := make(map[int]string)
@@ -396,7 +396,8 @@ func CleanUpJumpMaps() {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) {
+		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) ||
+			strings.HasPrefix(info.Name(), bpf.CountersMapName()) {
 			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()

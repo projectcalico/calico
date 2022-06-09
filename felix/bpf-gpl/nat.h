@@ -206,6 +206,9 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 	if (!vxlan_size_ok(ctx)) {
 		/* UDP header said VXLAN but packet wasn't long enough. */
+		ctx->fwd.reason = CALI_REASON_SHORT;
+		INC(ctx, ERR_SHORT_PKTS);
+		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
 	if (!vxlan_vni_is_valid(ctx) ) {
