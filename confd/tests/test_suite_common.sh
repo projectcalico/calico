@@ -234,6 +234,7 @@ metadata:
   namespace: kube-system
 type: Opaque
 stringData:
+  a: ""
   b: new-password-b
 EOF
 
@@ -1054,6 +1055,7 @@ metadata:
   namespace: kube-system
 type: Opaque
 stringData:
+  a: ""
   b: password-b
 EOF
 
