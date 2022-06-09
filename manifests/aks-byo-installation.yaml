@@ -1,0 +1,20 @@
+# This manifest creates default Calico installation for AKS BYO cluster.
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  kubernetesProvider: AKS
+  cni:
+    type: Calico
+  calicoNetwork:
+    bgp: Disabled
+    ipPools:
+     - cidr: 192.168.0.0/16
+       encapsulation: VXLAN
+---
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+   name: default
+spec: {}

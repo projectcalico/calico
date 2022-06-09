@@ -62,27 +62,7 @@ The geeky details of what you get:
 1. Configure the {{site.prodname}} installation.
 
    ```
-   kubectl create -f - <<EOF
-   kind: Installation
-   apiVersion: operator.tigera.io/v1
-   metadata:
-     name: default
-   spec:
-     kubernetesProvider: AKS
-     cni:
-       type: Calico
-     calicoNetwork:
-       bgp: Disabled
-       ipPools:
-        - cidr: 192.168.0.0/16
-          encapsulation: VXLAN
-   ---
-   apiVersion: operator.tigera.io/v1
-   kind: APIServer
-   metadata:
-      name: default
-   spec: {}
-   EOF
+   kubectl create -f {{ "/manifests/aks-byo-installation.yaml" | absolute_url }}
    ```
 
 1. Confirm that all of the pods are running with the following command.
