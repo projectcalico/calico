@@ -147,8 +147,8 @@ func (c *CachingMap[K, V]) SetDesired(k K, v V) {
 	delete(c.pendingDeletions, k)
 
 	// Check if we think we need to update the dataplane as a result.
-	currentVal := c.cacheOfDataplane[k]
-	if currentVal == v {
+	currentVal, ok := c.cacheOfDataplane[k]
+	if ok && currentVal == v {
 		// Dataplane already agrees with the new value so clear any pending update.
 		logrus.Debug("SetDesired: Key in dataplane already, ignoring.")
 		delete(c.pendingUpdates, k)
