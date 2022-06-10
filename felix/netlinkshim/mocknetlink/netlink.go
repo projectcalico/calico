@@ -734,6 +734,10 @@ func (d *MockNetlinkDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.
 	time.Sleep(d.ConntrackSleep)
 }
 
+func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
+	return nil
+}
+
 // ----- Internals -----
 
 func (d *MockNetlinkDataplane) shouldFail(flag FailFlags) bool {
@@ -752,7 +756,7 @@ func KeyForRoute(route *netlink.Route) string {
 	if table == 0 {
 		table = unix.RT_TABLE_MAIN
 	}
-	key := fmt.Sprintf("%v-%v-%v", table, route.LinkIndex, route.Dst)
+	key := fmt.Sprintf("%v-%v", table, route.Dst)
 	log.WithField("routeKey", key).Debug("Calculated route key")
 	return key
 }

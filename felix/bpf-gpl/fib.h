@@ -215,7 +215,18 @@ skip_fib:
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL\n");
 			ctx->fwd.mark |= EXT_TO_SVC_MARK;
 		}
-		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", ctx->fwd.mark);
+
+		if (CALI_F_NAT_IF) {
+			/* We mark the packet so that next iface knows, it went through
+			 * bpfnatout - if it gets (S)NATed, a new connection is created
+			 * and we know that returning packets must go via bpfnatout again.
+			 */
+			ctx->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
+			CALI_DEBUG("marking CALI_SKB_MARK_FROM_NAT_IFACE_OUT\n");
+		}
+
+		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.\n", ctx->fwd.mark);
+
 		/* FIXME: this ignores the mask that we should be using.
 		 * However, if we mask off the bits, then clang spots that it
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,

@@ -93,6 +93,8 @@ enum cali_state_flags {
 	CALI_ST_SUPPRESS_CT_STATE = 0x10,
 	/* CALI_ST_SKIP_POLICY is set when the policy program is skipped. */
 	CALI_ST_SKIP_POLICY = 0x20,
+	/* CALI_ST_HOST_PSNAT is set when we are resolving host source port collision. */
+	CALI_ST_HOST_PSNAT = 0x40,
 };
 
 struct fwd {

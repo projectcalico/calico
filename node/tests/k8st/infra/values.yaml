@@ -1,0 +1,39 @@
+# The Calico version to use when generating manifests.
+version: latest-amd64
+
+# Configure the images to use when generating manifests.
+node:
+  image: docker.io/library/node
+calicoctl:
+  image: docker.io/calico/ctl
+typha:
+  image: docker.io/calico/typha
+cni:
+  image: docker.io/calico/cni
+kubeControllers:
+  image: docker.io/calico/kube-controllers
+flannel:
+  image: quay.io/coreos/flannel
+  tag: v0.15.1
+flannelMigration:
+  image: docker.io/calico/flannel-migration
+dikastes:
+  image: docker.io/calico/dikastes
+csi-driver:
+  image: docker.io/calico/csi-driver
+
+# CRDs are installed as part of cluster creation, so don't need them in
+# the test manifest.
+includeCRDs: false
+
+datastore: kubernetes
+network: calico
+ipam: calico-ipam
+mtu: "1440"
+imagePullPolicy: Never
+etcd:
+  endpoints: "http://<ETCD_IP>:<ETCD_PORT>"
+  tls:
+    crt: null
+    ca: null
+    key: null

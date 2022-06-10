@@ -24,12 +24,11 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/node/pkg/calicoclient"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -39,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/node/pkg/calicoclient"
 )
 
 func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
@@ -238,7 +238,7 @@ var _ = Describe("FV tests", func() {
 
 		// Run the allocateip code.
 		cfg, c := calicoclient.CreateClient()
-		reconcileTunnelAddrs(nodename, cfg, c)
+		reconcileTunnelAddrs(nodename, cfg, c, felixconfig.New())
 
 		// Assert that the node has the same IP on it.
 		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -282,7 +282,7 @@ var _ = Describe("FV tests", func() {
 
 		// Run the allocateip code.
 		cfg, c := calicoclient.CreateClient()
-		reconcileTunnelAddrs(nodename, cfg, c)
+		reconcileTunnelAddrs(nodename, cfg, c, felixconfig.New())
 
 		// Assert that the node no longer has the same IP on it.
 		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -326,7 +326,7 @@ var _ = Describe("FV tests", func() {
 
 		// Run the allocateip code.
 		cfg, c := calicoclient.CreateClient()
-		reconcileTunnelAddrs(nodename, cfg, c)
+		reconcileTunnelAddrs(nodename, cfg, c, felixconfig.New())
 
 		// Assert that the node no longer has the same IP on it.
 		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -373,7 +373,7 @@ var _ = Describe("FV tests", func() {
 
 		// Run the allocateip code.
 		cfg, c := calicoclient.CreateClient()
-		reconcileTunnelAddrs(nodename, cfg, c)
+		reconcileTunnelAddrs(nodename, cfg, c, felixconfig.New())
 
 		// Assert that the node no longer has the same IP on it.
 		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -895,7 +895,7 @@ var _ = Describe("Running as daemon", func() {
 		done := make(chan struct{})
 		completed := make(chan struct{})
 		go func() {
-			run("test.node", cfg, c, done)
+			run("test.node", cfg, c, felixconfig.New(), done)
 			close(completed)
 		}()
 
@@ -981,7 +981,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 					}}}
 
 			// Execute and test assertions.
-			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeIPIP)
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeIPIP)
 			_, cidr1, _ := net.ParseCIDR("172.0.0.1/9")
 			_, cidr2, _ := net.ParseCIDR("172.128.0.1/9")
 			Expect(cidrs).To(ContainElement(*cidr1))
@@ -1014,7 +1014,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 					}}}
 
 			// Execute and test assertions.
-			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeVXLAN)
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLAN)
 			_, cidr1, _ := net.ParseCIDR("172.0.0.1/9")
 			_, cidr2, _ := net.ParseCIDR("172.128.0.1/9")
 			Expect(cidrs).To(ContainElement(*cidr1))
@@ -1044,7 +1044,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 					}}}
 
 			// Execute and test assertions.
-			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeVXLAN)
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLAN)
 			_, cidr1, _ := net.ParseCIDR("172.0.0.1/9")
 			_, cidr2, _ := net.ParseCIDR("172.128.0.1/9")
 			Expect(cidrs).To(ContainElement(*cidr1))
@@ -1077,7 +1077,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 					}}}
 
 			// Execute and test assertions.
-			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeVXLANV6)
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLANV6)
 			_, cidr1, _ := net.ParseCIDR("2001:db8::1/64")
 			_, cidr2, _ := net.ParseCIDR("2001:db8:00:ff::1/64")
 			Expect(cidrs).To(ContainElement(*cidr1))
@@ -1107,7 +1107,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 					}}}
 
 			// Execute and test assertions.
-			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeVXLANV6)
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLANV6)
 			_, cidr1, _ := net.ParseCIDR("2001:db8::1/64")
 			_, cidr2, _ := net.ParseCIDR("2001:db8:00:ff::1/64")
 			Expect(cidrs).To(ContainElement(*cidr1))
@@ -1141,7 +1141,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 					}}}
 
 			// Execute and test assertions.
-			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeWireguard)
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguard)
 			_, cidr1, _ := net.ParseCIDR("172.0.0.1/9")
 			_, cidr2, _ := net.ParseCIDR("172.128.0.1/9")
 			Expect(cidrs).To(ContainElement(*cidr1))
@@ -1169,7 +1169,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 					}}}
 
 			// Execute and test assertions.
-			cidrs := determineEnabledPoolCIDRs(n, pl, ipam.AttributeTypeWireguard)
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguard)
 			Expect(cidrs).To(HaveLen(0))
 		})
 	})

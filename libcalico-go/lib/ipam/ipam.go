@@ -1080,7 +1080,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	err = nil
 	for i := 0; i < len(ipsByBlock); i++ {
 		r := <-resultChan
-		log.Debugf("Received response #%d from release goroutine", i)
+		log.Debugf("Received response #%d from release goroutine: %v", i, r)
 		if r.Error != nil && err == nil {
 			err = r.Error
 		}

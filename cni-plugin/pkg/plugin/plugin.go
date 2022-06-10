@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -37,6 +38,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -148,7 +151,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	// a proper error to the runtime.
 	defer func() {
 		if e := recover(); e != nil {
-			msg := fmt.Sprintf("Calico CNI panicked during ADD: %s", e)
+			msg := fmt.Sprintf("Calico CNI panicked during ADD: %s\nStack trace:\n%s", e, string(debug.Stack()))
 			if err != nil {
 				// If we're recovering and there was also an error, then we need to
 				// present both.
@@ -565,7 +568,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	// a proper error to the runtime.
 	defer func() {
 		if e := recover(); e != nil {
-			msg := fmt.Sprintf("Calico CNI panicked during DEL: %s", e)
+			msg := fmt.Sprintf("Calico CNI panicked during DEL: %s\nStack trace:\n%s", e, string(debug.Stack()))
 			if err != nil {
 				// If we're recovering and there was also an error, then we need to
 				// present both.
@@ -688,6 +691,9 @@ func cmdDummyCheck(args *skel.CmdArgs) (err error) {
 }
 
 func Main(version string) {
+	// Make sure the RNG is seeded.
+	seedrng.EnsureSeeded()
+
 	// Set up logging formatting.
 	logrus.SetFormatter(&logutils.Formatter{})
 
