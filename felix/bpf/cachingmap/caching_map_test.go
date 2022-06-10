@@ -269,10 +269,12 @@ func TestCachingMap_PreLoad(t *testing.T) {
 	Expect(mockMap.OpCount()).To(Equal(1))
 
 	// Check we can query the cache.
-	Expect(cm.GetDataplaneCache(Key{1, 1})).To(Equal(Value{1, 2, 4, 3}))
-	seenValues := make(map[Key]Value)
+	v, ok := cm.GetDataplaneCache(Key{1, 1})
+	Expect(ok).To(BeTrue())
+	Expect(v).To(Equal(Value{1, 2, 4, 3}))
+	seenValues := make(map[string]string)
 	cm.IterDataplaneCache(func(k Key, v Value) {
-		seenValues[k] = v
+		seenValues[k.String()] = v.String()
 	})
 	Expect(seenValues).To(Equal(mockMap.Contents))
 
