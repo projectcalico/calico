@@ -1328,8 +1328,14 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 		goto deny;
 	}
 
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return TC_ACT_SHOT;
+	}
+
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
+		INC(&ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -1389,7 +1395,7 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 		ctx.state = state_get();
-		if (!state) {
+		if (!ctx.state) {
 			CALI_DEBUG("State map lookup failed: no event generated\n");
 			return TC_ACT_SHOT;
 		}

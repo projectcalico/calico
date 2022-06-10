@@ -98,44 +98,46 @@ func dumpIfaceCounters(cmd *cobra.Command, iface string) error {
 	if iface == "" {
 		return fmt.Errorf("empty interface name")
 	}
-	bpfCounters := counters.NewCounters(iface)
-	ingressValues, err := bpfCounters.ReadIngress()
-	if err != nil {
-		return fmt.Errorf("Failed to read bpf ingress counters: %v", err)
-	}
-	if len(ingressValues) < counters.MaxCounterNumber {
-		return fmt.Errorf("Failed to read enough data from bpf ingress counters")
-	}
 
-	egressValues, err := bpfCounters.ReadEgress()
-	if err != nil {
-		return fmt.Errorf("Failed to read bpf egress counters: %v", err)
-	}
-	if len(egressValues) < counters.MaxCounterNumber {
-		return fmt.Errorf("Failed to read enough data from bpf egress counters")
-	}
+	values := make(map[string][]uint32)
 
 	cmd.Printf("===== Interface: %s =====\n", iface)
-	for _, hook := range []string{"Ingress", "Egress", "XDP"} {
-		cmd.Printf("%s:\n", hook)
-		cmd.Printf("\tTotal Packets: %d\n", ingressValues[counters.TotalPackets])
-		cmd.Printf("\tShort Packets: %d\n", ingressValues[counters.ErrShortPacket])
+	for _, hook := range []string{"ingress", "egress"} {
+		bpfCounters := counters.NewCounters(iface, hook)
+		val, err := bpfCounters.Read()
+		if err != nil {
+			return fmt.Errorf("Failed to read bpf counters. hook=%s err=%v", hook, err)
+		}
+		if len(val) < counters.MaxCounterNumber {
+			return fmt.Errorf("Failed to read enough data from bpf counters. hook=%s", hook)
+		}
+
+		values[hook] = val
 	}
+
+	cmd.Printf("\t\t\t\tingress\t\tegress\n")
+	cmd.Printf("Total packets: \t\t\t%d\t\t%d\n",
+		values["ingress"][counters.TotalPackets], values["egress"][counters.TotalPackets])
+
+	cmd.Printf("Accepted by policy: \t\t%d\t\t%d\n",
+		values["ingress"][counters.TotalPackets], values["egress"][counters.TotalPackets])
+
+	cmd.Printf("Dropped by policy: \t\t%d\t\t%d\n",
+		values["ingress"][counters.DroppedByPolicy], values["egress"][counters.DroppedByPolicy])
+
+	cmd.Printf("Dropped short packets: \t\t%d\t\t%d\n",
+		values["ingress"][counters.ErrShortPacket], values["egress"][counters.ErrShortPacket])
 	return nil
 }
 
 func flushCounters(iface string) error {
-	bpfCounters := counters.NewCounters(iface)
-	err := bpfCounters.FlushIngress()
-	if err != nil {
-		return fmt.Errorf("Failed to flush ingress bpf counters for interface %s. err=%v", iface, err)
+	for _, hook := range []string{"ingress", "egress"} {
+		bpfCounters := counters.NewCounters(iface, hook)
+		err := bpfCounters.Flush()
+		if err != nil {
+			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%v", iface, hook, err)
+		}
+		log.Infof("Successfully flushed counters map for interface=%s hook=%s", iface, hook)
 	}
-	log.Infof("Successfully flushed ingress counters map for interface %s", iface)
-
-	err = bpfCounters.FlushEgress()
-	if err != nil {
-		return fmt.Errorf("Failed to flush egress bpf counters for interface %s. err=%v", iface, err)
-	}
-	log.Infof("Successfully flushed egress counters map for interface %s", iface)
 	return nil
 }

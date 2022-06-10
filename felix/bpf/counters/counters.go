@@ -39,48 +39,37 @@ const (
 )
 
 type Counters struct {
-	ingressMap bpf.Map
-	egressMap  bpf.Map
+	counterMap bpf.Map
 	iface      string
 }
 
-func NewCounters(iface string) *Counters {
+func NewCounters(iface, hook string) *Counters {
 	cntr := Counters{
 		iface: iface,
 	}
-	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY, bpf.CountersMapName(), iface, tc.HookIngress)
-	cntr.ingressMap = Map(&bpf.MapContext{}, pinPath)
-	logrus.Debugf("Ingress counter map pin path: %v", pinPath)
 
-	pinPath = tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY, bpf.CountersMapName(), iface, tc.HookEgress)
-	cntr.egressMap = Map(&bpf.MapContext{}, pinPath)
-	logrus.Debugf("Egress counter map pin path: %v", pinPath)
+	switch hook {
+	case "egress":
+		pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
+			bpf.CountersMapName(), iface, tc.HookEgress)
+		cntr.counterMap = Map(&bpf.MapContext{}, pinPath)
+		logrus.Debugf("Ingress counter map pin path: %v", pinPath)
+	default:
+		pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
+			bpf.CountersMapName(), iface, tc.HookIngress)
+		cntr.counterMap = Map(&bpf.MapContext{}, pinPath)
+		logrus.Debugf("Ingress counter map pin path: %v", pinPath)
+	}
 	return &cntr
 }
 
-func (c *Counters) ReadIngress() ([]uint32, error) {
-	return read(c.ingressMap)
-}
-
-func (c *Counters) ReadEgress() ([]uint32, error) {
-	return read(c.egressMap)
-}
-
-func (c *Counters) FlushIngress() error {
-	return flush(c.ingressMap)
-}
-
-func (c *Counters) FlushEgress() error {
-	return flush(c.egressMap)
-}
-
-func read(Map bpf.Map) ([]uint32, error) {
-	err := Map.Open()
+func (c Counters) Read() ([]uint32, error) {
+	err := c.counterMap.Open()
 	if err != nil {
 		return []uint32{}, fmt.Errorf("failed to open counters map. err=%v", err)
 	}
 	defer func() {
-		err := Map.Close()
+		err := c.counterMap.Close()
 		if err != nil {
 			logrus.WithError(err).Errorf("failed to close counters map.")
 		}
@@ -93,7 +82,7 @@ func read(Map bpf.Map) ([]uint32, error) {
 
 	// k is the key to the counters map, and it is set to 0 since there is only one entry
 	k := make([]byte, uint32Size)
-	values, err := Map.Get(k)
+	values, err := c.counterMap.Get(k)
 	if err != nil {
 		return []uint32{}, fmt.Errorf("failed to read counters map. err=%v", err)
 	}
@@ -108,13 +97,13 @@ func read(Map bpf.Map) ([]uint32, error) {
 	return bpfCounters, nil
 }
 
-func flush(Map bpf.Map) error {
-	err := Map.Open()
+func (c *Counters) Flush() error {
+	err := c.counterMap.Open()
 	if err != nil {
 		return fmt.Errorf("failed to open counters map. err=%v", err)
 	}
 	defer func() {
-		err := Map.Close()
+		err := c.counterMap.Close()
 		if err != nil {
 			logrus.WithError(err).Errorf("failed to close counters map.")
 		}
@@ -128,7 +117,7 @@ func flush(Map bpf.Map) error {
 	// k is the key to the counters map, and it is set to 0 since there is only one entry
 	k := make([]byte, uint32Size)
 	v := make([]byte, uint32Size*MaxCounterNumber*numOfCpu)
-	err = Map.Update(k, v)
+	err = c.counterMap.Update(k, v)
 	if err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
 	}
