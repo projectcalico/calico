@@ -103,8 +103,10 @@ func stateToBPFMaps(state DPSyncerState) (
 		id++
 	}
 
-	feCache := cachingmap.New(nat.FrontendMapParameters.Name, bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](fe))
-	beCache := cachingmap.New(nat.BackendMapParameters.Name, bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](be))
+	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](fe, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](be, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 	return feCache, beCache
 }
@@ -162,8 +164,12 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 
 	if mockMaps {
 
-		feCache := cachingmap.New(nat.FrontendMapParameters, &mock.DummyMap{})
-		beCache := cachingmap.New(nat.BackendMapParameters, &mock.DummyMap{})
+		feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+			bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+				&mock.DummyMap{}, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+		beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+			bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+				&mock.DummyMap{}, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 		syncer, err = NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
@@ -181,8 +187,12 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 		err = beMap.EnsureExists()
 		Expect(err).ShouldNot(HaveOccurred())
 
-		feCache := cachingmap.New(nat.FrontendMapParameters, feMap)
-		beCache := cachingmap.New(nat.BackendMapParameters, beMap)
+		feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+			bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+				feMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+		beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+			bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+				beMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 		syncer, err = NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
