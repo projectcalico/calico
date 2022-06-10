@@ -90,7 +90,7 @@ func (c *CachingMap[K, V]) initCache() {
 }
 
 func (c *CachingMap[K, V]) clearCache() {
-	logrus.WithField("name", c.name).Debug("Clearing cache of BPF map")
+	logrus.WithField("name", c.name).Debug("Clearing cache of dataplane map")
 	c.cacheOfDataplane = nil
 	c.pendingDeletions = nil
 	c.pendingUpdates = nil

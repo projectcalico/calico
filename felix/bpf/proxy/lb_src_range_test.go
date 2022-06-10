@@ -17,6 +17,7 @@ package proxy_test
 import (
 	"net"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -49,8 +50,10 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 	externalIP := makeIPs([]string{"35.0.0.2"})
 	twoExternalIPs := makeIPs([]string{"35.0.0.2", "45.0.1.2"})
 
-	feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
-	beCache := cachingmap.New(nat.BackendMapParameters, eps)
+	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](svcs, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](eps, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 
@@ -205,8 +208,12 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
-			feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
-			beCache := cachingmap.New(nat.BackendMapParameters, eps)
+			feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+				bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+					svcs, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+			beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+				bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+					eps, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
@@ -220,8 +227,12 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				v1.ProtocolTCP,
 				externalIP,
 			)
-			feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
-			beCache := cachingmap.New(nat.BackendMapParameters, eps)
+			feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+				bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+					svcs, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+			beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+				bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+					eps, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
