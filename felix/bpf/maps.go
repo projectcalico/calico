@@ -42,20 +42,14 @@ type AsBytes interface {
 	AsBytes() []byte
 }
 
-type FromBytes interface {
-	FromBytes([]byte)
-}
-
 type Key interface {
 	comparable
 	AsBytes
-	FromBytes
 }
 
 type Value interface {
 	comparable
 	AsBytes
-	FromBytes
 }
 
 type IterCallback func(k, v []byte) IteratorAction
@@ -723,32 +717,48 @@ type Upgradable interface {
 
 type TypedMap[K Key, V Value] struct {
 	Map
+	kConstructor func([]byte) K
+	vConstructor func([]byte) V
 }
 
 func (m *TypedMap[K, V]) Update(k K, v V) error {
 	return m.Map.Update(k.AsBytes(), v.AsBytes())
 }
 
+func (m *TypedMap[K, V]) Get(k K) (V, error) {
+	var res V
+
+	vb, err := m.Map.Get(k.AsBytes())
+	if err != nil {
+		goto exit
+	}
+
+	res = m.vConstructor(vb)
+
+exit:
+	return res, err
+}
+
 func (m *TypedMap[K, V]) Delete(k K) error {
 	return m.Map.Delete(k.AsBytes())
 }
 
-func (m *TypedMap[K, V]) Iter(fn func(K, V)) error {
-	return m.Map.Iter(func(kb, vb []byte) IteratorAction {
-		var (
-			k K
-			v V
-		)
+func (m *TypedMap[K, V]) Load() (map[K]V, error) {
 
-		k.FromBytes(kb)
-		v.FromBytes(vb)
+	memMap := make(map[K]V)
 
-		fn(k, v)
-
+	err := m.Map.Iter(func(kb, vb []byte) IteratorAction {
+		memMap[m.kConstructor(kb)] = m.vConstructor(vb)
 		return IterNone
 	})
+
+	return memMap, err
 }
 
-func NewTypedMap[K Key, V Value](m Map) *TypedMap[K, V] {
-	return &TypedMap[K, V]{m}
+func NewTypedMap[K Key, V Value](m Map, kConstructor func([]byte) K, vConstructor func([]byte) V) *TypedMap[K, V] {
+	return &TypedMap[K, V]{
+		Map:          m,
+		kConstructor: kConstructor,
+		vConstructor: vConstructor,
+	}
 }

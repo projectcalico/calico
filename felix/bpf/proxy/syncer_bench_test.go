@@ -75,7 +75,10 @@ func makeState(svcCnt, epCnt int, opts ...K8sServicePortOption) DPSyncerState {
 	return state
 }
 
-func stateToBPFMaps(state DPSyncerState) (*cachingmap.CachingMap, *cachingmap.CachingMap) {
+func stateToBPFMaps(state DPSyncerState) (
+	*cachingmap.CachingMap[nat.FrontendKey, nat.FrontendValue],
+	*cachingmap.CachingMap[nat.BackendKey, nat.BackendValue],
+) {
 	fe := mock.NewMockMap(nat.FrontendMapParameters)
 	be := mock.NewMockMap(nat.BackendMapParameters)
 
@@ -100,8 +103,8 @@ func stateToBPFMaps(state DPSyncerState) (*cachingmap.CachingMap, *cachingmap.Ca
 		id++
 	}
 
-	feCache := cachingmap.New(nat.FrontendMapParameters, fe)
-	beCache := cachingmap.New(nat.BackendMapParameters, be)
+	feCache := cachingmap.New(nat.FrontendMapParameters.Name, bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](fe))
+	beCache := cachingmap.New(nat.BackendMapParameters.Name, bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](be))
 
 	return feCache, beCache
 }
