@@ -31,6 +31,12 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
+var cachingMapParams = bpf.MapParameters{
+	Name:      "mock-map",
+	KeySize:   2,
+	ValueSize: 4,
+}
+
 type Key [2]byte
 
 func (k Key) String() string {
@@ -41,10 +47,6 @@ func (k Key) AsBytes() []byte {
 	return k[:]
 }
 
-func (k Key) FromBytes(b []byte) {
-	copy(k[:], b)
-}
-
 type Value [4]byte
 
 func (v Value) String() string {
@@ -53,52 +55,6 @@ func (v Value) String() string {
 
 func (v Value) AsBytes() []byte {
 	return v[:]
-}
-
-func (v Value) FromBytes(b []byte) {
-	copy(v[:], b)
-}
-
-type mockMap struct {
-	*mock.Map
-}
-
-func (m *mockMap) Update(k Key, v Value) error {
-	return m.Map.Update(k.AsBytes(), v.AsBytes())
-}
-
-func (m *mockMap) Delete(k Key) error {
-	return m.Map.Delete(k.AsBytes())
-}
-
-func (m *mockMap) Get(k Key) (Value, error) {
-	vb, err := m.Map.Get(k.AsBytes())
-
-	var v Value
-
-	if err != nil {
-		return v, err
-	}
-
-	copy(v[:], vb)
-
-	return v, nil
-}
-
-func (m *mockMap) Iter(fn func(k Key, v Value)) error {
-	return m.Map.Iter(func(kb, vb []byte) bpf.IteratorAction {
-		var (
-			k Key
-			v Value
-		)
-
-		k.FromBytes(kb)
-		v.FromBytes(vb)
-
-		fn(k, v)
-
-		return bpf.IterNone
-	})
 }
 
 // TestCachingMap_Empty verifies loading of an empty map with no changes queued.
@@ -156,8 +112,8 @@ func TestCachingMap_Errors(t *testing.T) {
 // TestCachingMap_CleanUp verifies cleaning up of a whole map.
 func TestCachingMap_CleanUp(t *testing.T) {
 	mockMap, cm := setupCachingMapTest(t)
-	_ = mockMap.Update(Key{1, 2}, Value{1, 2, 3, 4})
-	_ = mockMap.Update(Key{1, 3}, Value{1, 2, 4, 4})
+	_ = mockMap.Update(Key{1, 2}.AsBytes(), Value{1, 2, 3, 4}.AsBytes())
+	_ = mockMap.Update(Key{1, 3}.AsBytes(), Value{1, 2, 4, 4}.AsBytes())
 
 	err := cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
@@ -396,15 +352,24 @@ func TestCachingMap_Resync(t *testing.T) {
 	Expect(mockMap.OpCount()).To(Equal(preApplyOpCount))
 }
 
-func setupCachingMapTest(t *testing.T) (*mockMap, *CachingMap[Key, Value]) {
+func setupCachingMapTest(t *testing.T) (*mock.Map, *CachingMap[Key, Value]) {
 	RegisterTestingT(t)
-	m := &mockMap{
-		Map: mock.NewMockMap(bpf.MapParameters{
-			Name:      "mock-map",
-			KeySize:   2,
-			ValueSize: 4,
-		}),
-	}
-	cm := New[Key, Value]("mock-map", m)
-	return m, cm
+	mockMap := mock.NewMockMap(cachingMapParams)
+
+	cm := New[Key, Value]("mock-map",
+		bpf.NewTypedMap[Key, Value](mockMap,
+			func(b []byte) Key {
+				var k Key
+				copy(k[:], b)
+				return k
+			},
+			func(b []byte) Value {
+				var v Value
+				copy(v[:], b)
+				return v
+			},
+		),
+	)
+
+	return mockMap, cm
 }
