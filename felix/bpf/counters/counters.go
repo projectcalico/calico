@@ -34,6 +34,8 @@ const (
 const (
 	TotalPackets = iota
 	ErrShortPacket
+	AcceptedByPolicy
+	DroppedByPolicy
 )
 
 type Counters struct {

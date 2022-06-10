@@ -116,13 +116,11 @@ func dumpIfaceCounters(cmd *cobra.Command, iface string) error {
 	}
 
 	cmd.Printf("===== Interface: %s =====\n", iface)
-	cmd.Printf("Ingress:\n")
-	cmd.Printf("\tTotal Packets: %d\n", ingressValues[counters.TotalPackets])
-	cmd.Printf("\tShort Packets: %d\n", ingressValues[counters.ErrShortPacket])
-
-	cmd.Printf("\nEgress:\n")
-	cmd.Printf("\tTotal Packets: %d\n", egressValues[counters.TotalPackets])
-	cmd.Printf("\tShort Packets: %d\n", egressValues[counters.ErrShortPacket])
+	for _, hook := range []string{"Ingress", "Egress", "XDP"} {
+		cmd.Printf("%s:\n", hook)
+		cmd.Printf("\tTotal Packets: %d\n", ingressValues[counters.TotalPackets])
+		cmd.Printf("\tShort Packets: %d\n", ingressValues[counters.ErrShortPacket])
+	}
 	return nil
 }
 

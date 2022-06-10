@@ -10,6 +10,8 @@
 enum counter_type {
 	TOTAL_PKTS,
 	ERR_SHORT_PKTS,
+	ACCEPTED_BY_POLICY,
+	DROPED_BY_POLICY,
 };
 
 typedef __u32 counters_t[MAX_COUNTERS_SIZE];

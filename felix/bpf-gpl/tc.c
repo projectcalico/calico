@@ -525,6 +525,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		// failing here normally should not happen.
 		return TC_ACT_SHOT;
 	}
+	INC(&ctx, ACCEPTED_BY_POLICY);
 
 	if (CALI_F_HEP) {
 		if (!(ctx.state->flags & CALI_ST_SKIP_POLICY) && (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
@@ -1235,25 +1236,34 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_drop - DENY\n");
 
-	struct cali_tc_state *state;
+	struct cali_tc_ctx ctx = {
+		.counters = counters_get(),
+	};
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return TC_ACT_SHOT;
+	}
+	INC(&ctx, DROPPED_BY_POLICY);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
-		state = state_get();
+		ctx.state = state_get();
 		if (!state) {
 			CALI_DEBUG("State map lookup failed: no event generated\n");
 			return TC_ACT_SHOT;
 		}
 	}
 
-	CALI_DEBUG("proto=%d\n", state->ip_proto);
-	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
-	CALI_DEBUG("pre_nat=%x:%d\n", bpf_ntohl(state->pre_nat_ip_dst), state->pre_nat_dport);
-	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(state->post_nat_ip_dst), state->post_nat_dport);
-	CALI_DEBUG("tun_ip=%x\n", state->tun_ip);
-	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
-	CALI_DEBUG("sport=%d\n", state->sport);
-	CALI_DEBUG("flags=0x%x\n", state->flags);
-	CALI_DEBUG("ct_rc=%d\n", state->ct_result.rc);
+	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
+	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(ctx.state->ip_src),
+			bpf_ntohl(ctx.state->ip_dst));
+	CALI_DEBUG("pre_nat=%x:%d\n", bpf_ntohl(ctx.state->pre_nat_ip_dst),
+			ctx.state->pre_nat_dport);
+	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(ctx.state->post_nat_ip_dst), ctx.state->post_nat_dport);
+	CALI_DEBUG("tun_ip=%x\n", ctx.state->tun_ip);
+	CALI_DEBUG("pol_rc=%d\n", ctx.state->pol_rc);
+	CALI_DEBUG("sport=%d\n", ctx.state->sport);
+	CALI_DEBUG("flags=0x%x\n", ctx.state->flags);
+	CALI_DEBUG("ct_rc=%d\n", ctx.state->ct_result.rc);
 
 	return TC_ACT_SHOT;
 }
