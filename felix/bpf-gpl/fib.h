@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_FIB_H__
@@ -37,6 +37,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
+			INC(ctx, ERR_SHORT_PKTS);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -75,6 +76,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
+			INC(ctx, ERR_SHORT_PKTS);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -108,6 +110,7 @@ skip_redir_ifindex:
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			ctx->fwd.reason = CALI_REASON_SHORT;
+			INC(ctx, ERR_SHORT_PKTS);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
