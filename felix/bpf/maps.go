@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
 
 type IteratorAction string
@@ -43,6 +45,8 @@ type Map interface {
 	EnsureExists() error
 	// Open opens the map, returns error if it does not exist.
 	Open() error
+	// Close closes the map, returns error for any error.
+	Close() error
 	// MapFD gets the file descriptor of the map, only valid after calling EnsureExists().
 	MapFD() MapFD
 	// Path returns the path that the map is (to be) pinned to.
@@ -287,24 +291,41 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 func (b *PinnedMap) Update(k, v []byte) error {
 	if b.perCPU {
 		// Per-CPU maps need a buffer of value-size * num-CPUs.
-		logrus.Panic("Per-CPU operations not implemented")
+		numCPU, err := libbpf.NumPossibleCPUs()
+		if err != nil {
+			return fmt.Errorf("failed to get the number of possible cpus - err: %v", err)
+		}
+		if len(v) < b.ValueSize*numCPU {
+			return fmt.Errorf("Not enough data for per-cpu map entry")
+		}
 	}
 	return UpdateMapEntry(b.fd, k, v)
 }
 
 func (b *PinnedMap) Get(k []byte) ([]byte, error) {
+	valueSize := b.ValueSize
 	if b.perCPU {
-		// Per-CPU maps need a buffer of value-size * num-CPUs.
-		logrus.Panic("Per-CPU operations not implemented")
+		numCPU, err := libbpf.NumPossibleCPUs()
+		if err != nil {
+			return []byte{}, fmt.Errorf("failed to get the number of possible cpus - err: %v", err)
+		}
+		valueSize = b.ValueSize * numCPU
+		logrus.Debugf("Set value size to %v for getting an entry from Per-CPU map", valueSize)
 	}
-	return GetMapEntry(b.fd, k, b.ValueSize)
+	return GetMapEntry(b.fd, k, valueSize)
 }
 
 func (b *PinnedMap) Delete(k []byte) error {
+	valueSize := b.ValueSize
 	if b.perCPU {
-		logrus.Panic("Per-CPU operations not implemented")
+		numCPU, err := libbpf.NumPossibleCPUs()
+		if err != nil {
+			return fmt.Errorf("failed to get the number of possible cpus - err: %v", err)
+		}
+		valueSize = b.ValueSize * numCPU
+		logrus.Infof("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
 	}
-	return DeleteMapEntry(b.fd, k, b.ValueSize)
+	return DeleteMapEntry(b.fd, k, valueSize)
 }
 
 func (b *PinnedMap) updateDeltaEntries() error {
