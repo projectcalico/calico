@@ -1,4 +1,4 @@
-{{- if eq .Values.datastore "kubernetes" -}}
+{{- if .Values.includeCRDs -}}
 {{ range $path, $_ := .Files.Glob "crds/*" }}
 {{ $.Files.Get $path }}
 ---
