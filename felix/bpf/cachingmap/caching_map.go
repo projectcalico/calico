@@ -22,13 +22,16 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
-type BaseMap[K comparable, V comparable] interface {
+// DataplaneMap is an interface of the underlying map that is being cached by the
+// CachingMap. It implements interaction with the dataplane.
+type DataplaneMap[K comparable, V comparable] interface {
 	Update(K, V) error
+	Get(K) (V, error)
 	Delete(K) error
-	Iter(func(K, V)) error
+	Load() (map[K]V, error)
 }
 
-// CachingMap provides a caching layer around a BaseMap, when one of the Apply methods is called, it applies
+// CachingMap provides a caching layer around a DataplaneMap, when one of the Apply methods is called, it applies
 // a minimal set of changes to the dataplane map to bring it into sync with the desired state.  Updating the
 // desired state in and of itself has no effect on the dataplane.
 //
@@ -36,9 +39,9 @@ type BaseMap[K comparable, V comparable] interface {
 // explicitly by calling LoadCacheFromDataplane().  This allows for client code to inspect the dataplane cache
 // with IterDataplaneCache and GetDataplaneCache.
 type CachingMap[K comparable, V comparable] struct {
-	// baseMap is the backing map in the dataplane
-	baseMap BaseMap[K, V]
-	name    string
+	// dpMap is the backing map in the dataplane
+	dpMap DataplaneMap[K, V]
+	name  string
 
 	// desiredStateOfDataplane stores the complete set of key/value pairs that we _want_ to
 	// be in the dataplane.  Calling ApplyAllChanges attempts to bring the dataplane into
@@ -53,10 +56,10 @@ type CachingMap[K comparable, V comparable] struct {
 	pendingDeletions map[K]V
 }
 
-func New[K comparable, V comparable](name string, baseMap BaseMap[K, V]) *CachingMap[K, V] {
+func New[K comparable, V comparable](name string, dpMap DataplaneMap[K, V]) *CachingMap[K, V] {
 	cm := &CachingMap[K, V]{
 		name:                    name,
-		baseMap:                 baseMap,
+		dpMap:                   dpMap,
 		desiredStateOfDataplane: make(map[K]V),
 	}
 	return cm
@@ -67,22 +70,21 @@ func New[K comparable, V comparable](name string, baseMap BaseMap[K, V]) *Cachin
 func (c *CachingMap[K, V]) LoadCacheFromDataplane() error {
 	logrus.WithField("name", c.name).Debug("Loading cache of dataplane state.")
 	c.initCache()
-	err := c.baseMap.Iter(func(k K, v V) {
-		c.cacheOfDataplane[k] = v
-	})
+	dp, err := c.dpMap.Load()
+
 	if err != nil {
 		logrus.WithError(err).WithField("name", c.name).Warn("Failed to load cache of dataplane map")
 		c.clearCache()
 		return err
 	}
+	c.cacheOfDataplane = dp
 	logrus.WithField("name", c.name).WithField("count", len(c.cacheOfDataplane)).Info(
-		"Loaded cache of BPF map")
+		"Loaded cache from dataplane.")
 	c.recalculatePendingOperations()
 	return nil
 }
 
 func (c *CachingMap[K, V]) initCache() {
-	c.cacheOfDataplane = make(map[K]V)
 	c.pendingUpdates = make(map[K]V)
 	c.pendingDeletions = make(map[K]V)
 }
@@ -240,7 +242,7 @@ func (c *CachingMap[K, V]) ApplyUpdatesOnly() error {
 	}
 	var errs ErrSlice
 	for k, v := range c.pendingUpdates {
-		err := c.baseMap.Update(k, v)
+		err := c.dpMap.Update(k, v)
 		if err != nil {
 			logrus.WithError(err).Warn("Error while updating BPF map")
 			errs = append(errs, err)
@@ -265,7 +267,7 @@ func (c *CachingMap[K, V]) ApplyDeletionsOnly() error {
 	}
 	var errs ErrSlice
 	for k := range c.pendingDeletions {
-		err := c.baseMap.Delete(k)
+		err := c.dpMap.Delete(k)
 		if err != nil && !bpf.IsNotExists(err) {
 			logrus.WithError(err).Warn("Error while deleting from BPF map")
 			errs = append(errs, err)

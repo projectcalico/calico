@@ -127,8 +127,12 @@ func (k FrontendKey) Port() uint16 {
 	return binary.LittleEndian.Uint16(k[8:10])
 }
 
-func (k FrontendKey) AsBytes() []byte {
+func (k *FrontendKey) AsBytes() []byte {
 	return k[:]
+}
+
+func (k *FrontendKey) FromBytes(b []byte) {
+	copy(k[:], b)
 }
 
 func (k FrontendKey) Affinitykey() []byte {
@@ -211,8 +215,12 @@ func (v FrontendValue) String() string {
 		v.ID(), v.Count(), v.LocalCount(), v.AffinityTimeout(), v.FlagsAsString())
 }
 
-func (v FrontendValue) AsBytes() []byte {
+func (v *FrontendValue) AsBytes() []byte {
 	return v[:]
+}
+
+func (v *FrontendValue) FromBytes(b []byte) {
+	copy(v[:], b)
 }
 
 type BackendKey [backendKeySize]byte

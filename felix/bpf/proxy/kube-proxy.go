@@ -114,8 +114,10 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	copy(withLocalNP, hostIPs)
 	withLocalNP = append(withLocalNP, podNPIP)
 
-	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters, kp.frontendMap)
-	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters, kp.backendMap)
+	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](kp.frontendMap))
+	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](kp.backendMap))
 
 	syncer, err := NewSyncer(withLocalNP, feCache, beCache, kp.affinityMap, kp.rt)
 	if err != nil {
