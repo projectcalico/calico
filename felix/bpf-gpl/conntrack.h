@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_CONNTRACK_H__
@@ -294,6 +294,7 @@ static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct 
 
 	if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
+		INC(ctx, ERR_SHORT_PKTS);
 		ctx->fwd.res = TC_ACT_SHOT;
 		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
 		return false;
@@ -435,6 +436,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	case IPPROTO_TCP:
 		if (skb_refresh_validate_ptrs(tc_ctx, TCP_SIZE)) {
 			tc_ctx->fwd.reason = CALI_REASON_SHORT;
+			INC(tc_ctx, ERR_SHORT_PKTS);
 			CALI_DEBUG("Too short\n");
 			bpf_exit(TC_ACT_SHOT);
 		}

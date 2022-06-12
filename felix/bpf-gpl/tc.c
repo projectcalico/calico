@@ -80,6 +80,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
+		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -91,6 +92,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		return TC_ACT_SHOT;
 	}
 	__builtin_memset(ctx.state, 0, sizeof(*ctx.state));
+
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		// We don't want to drop packets just because counters initialization fails, but
+		// failing here normally should not happen.
+		return TC_ACT_SHOT;
+	}
+	INC(&ctx, TOTAL_PKTS);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -116,6 +125,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			/* we need to fix up the right src host IP */
 			if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 				ctx.fwd.reason = CALI_REASON_SHORT;
+				INC(&ctx, ERR_SHORT_PKTS);
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
@@ -423,6 +433,7 @@ syn_force_policy:
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
+		INC(ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -515,6 +526,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
+		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -526,6 +538,15 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
+
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		// We don't want to drop packets just because counters initialization fails, but
+		// failing here normally should not happen.
+		return TC_ACT_SHOT;
+	}
+	INC(&ctx, ACCEPTED_BY_POLICY);
+
 	if (CALI_F_HEP) {
 		if (!(ctx.state->flags & CALI_ST_SKIP_POLICY) && (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 			// See comment above where CALI_ST_SUPPRESS_CT_STATE is set.
@@ -536,6 +557,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
+		INC(&ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -652,6 +674,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			/* Related ICMP traffic must be an error response so it should include inner IP
 			 * and 8 bytes as payload. */
 			if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+				reason = CALI_REASON_SHORT;
+				INC(ctx, ERR_SHORT_PKTS);
 				CALI_DEBUG("Failed to revalidate packet size\n");
 				goto deny;
 			}
@@ -768,6 +792,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		if (state->ip_proto == IPPROTO_TCP) {
 			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+				reason = CALI_REASON_SHORT;
+				INC(ctx, ERR_SHORT_PKTS);
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
@@ -1162,6 +1188,8 @@ nat_encap:
 		} else {
 			if (skb_refresh_validate_ptrs(ctx, 0)) {
 				reason = CALI_REASON_SHORT;
+				INC(ctx, ERR_SHORT_PKTS);
+				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
 			__builtin_memcpy(&tc_ethhdr(ctx)->h_dest, arpv->mac_dst, ETH_ALEN);
@@ -1226,6 +1254,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
+		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -1234,6 +1263,13 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");
+		return TC_ACT_SHOT;
+	}
+
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		// We don't want to drop packets just because counters initialization fails, but
+		// failing here normally should not happen.
 		return TC_ACT_SHOT;
 	}
 
@@ -1258,6 +1294,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 
 	if (skb_refresh_validate_ptrs(&ctx, ICMP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
+		INC(&ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -1277,6 +1314,7 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
+		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -1291,8 +1329,14 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 		goto deny;
 	}
 
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return TC_ACT_SHOT;
+	}
+
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
+		INC(&ctx, ERR_SHORT_PKTS);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -1341,25 +1385,34 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_drop - DENY\n");
 
-	struct cali_tc_state *state;
+	struct cali_tc_ctx ctx = {
+		.counters = counters_get(),
+	};
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return TC_ACT_SHOT;
+	}
+	INC(&ctx, DROPPED_BY_POLICY);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
-		state = state_get();
-		if (!state) {
+		ctx.state = state_get();
+		if (!ctx.state) {
 			CALI_DEBUG("State map lookup failed: no event generated\n");
 			return TC_ACT_SHOT;
 		}
 	}
 
-	CALI_DEBUG("proto=%d\n", state->ip_proto);
-	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
-	CALI_DEBUG("pre_nat=%x:%d\n", bpf_ntohl(state->pre_nat_ip_dst), state->pre_nat_dport);
-	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(state->post_nat_ip_dst), state->post_nat_dport);
-	CALI_DEBUG("tun_ip=%x\n", state->tun_ip);
-	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
-	CALI_DEBUG("sport=%d\n", state->sport);
-	CALI_DEBUG("flags=0x%x\n", state->flags);
-	CALI_DEBUG("ct_rc=%d\n", state->ct_result.rc);
+	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
+	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(ctx.state->ip_src),
+			bpf_ntohl(ctx.state->ip_dst));
+	CALI_DEBUG("pre_nat=%x:%d\n", bpf_ntohl(ctx.state->pre_nat_ip_dst),
+			ctx.state->pre_nat_dport);
+	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(ctx.state->post_nat_ip_dst), ctx.state->post_nat_dport);
+	CALI_DEBUG("tun_ip=%x\n", ctx.state->tun_ip);
+	CALI_DEBUG("pol_rc=%d\n", ctx.state->pol_rc);
+	CALI_DEBUG("sport=%d\n", ctx.state->sport);
+	CALI_DEBUG("flags=0x%x\n", ctx.state->flags);
+	CALI_DEBUG("ct_rc=%d\n", ctx.state->ct_result.rc);
 
 	return TC_ACT_SHOT;
 }
