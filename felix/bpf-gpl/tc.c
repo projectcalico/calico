@@ -1314,6 +1314,7 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
+		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
