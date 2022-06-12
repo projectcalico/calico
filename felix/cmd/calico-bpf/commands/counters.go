@@ -122,11 +122,15 @@ func dumpIfaceCounters(cmd *cobra.Command, iface string) error {
 	cmd.Printf("Accepted by policy: \t\t%d\t\t%d\n",
 		values["ingress"][counters.TotalPackets], values["egress"][counters.TotalPackets])
 
+	cmd.Printf("Accepted by failsafe: \t\t%d\t\t%d\n",
+		values["ingress"][counters.AcceptedByFailsafe], values["egress"][counters.AcceptedByPolicy])
 	cmd.Printf("Dropped by policy: \t\t%d\t\t%d\n",
 		values["ingress"][counters.DroppedByPolicy], values["egress"][counters.DroppedByPolicy])
 
 	cmd.Printf("Dropped short packets: \t\t%d\t\t%d\n",
 		values["ingress"][counters.ErrShortPacket], values["egress"][counters.ErrShortPacket])
+	cmd.Printf("Dropped incorrect checksum: \t%d\t\t%d\n",
+		values["ingress"][counters.ErrFailedCSUM], values["egress"][counters.ErrFailedCSUM])
 	return nil
 }
 

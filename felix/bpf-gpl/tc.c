@@ -145,6 +145,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
 			if (res) {
 				ctx.fwd.reason = CALI_REASON_CSUM_FAIL;
+				INC(&ctx, ERR_FAILED_CSUM);
 				goto deny;
 			}
 
@@ -475,6 +476,7 @@ syn_force_policy:
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
 		if (CALI_F_FROM_HEP && is_failsafe_in(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->ip_src)) {
 			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
+			INC(ctx, ACCEPTED_BY_FAILSAFE);
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
@@ -483,6 +485,7 @@ syn_force_policy:
 		CALI_DEBUG("Source IP is local host.\n");
 		if (CALI_F_TO_HEP && is_failsafe_out(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->post_nat_ip_dst)) {
 			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
+			INC(ctx, ACCEPTED_BY_FAILSAFE);
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_SRC_IS_HOST;
@@ -665,6 +668,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 						state->ip_src, state->ct_result.nat_ip, 4);
 				if (res) {
 					reason = CALI_REASON_CSUM_FAIL;
+					INC(ctx, ERR_FAILED_CSUM);
 					goto deny;
 				}
 				CALI_DEBUG("ICMP related: outer IP SNAT to %x\n",
@@ -983,9 +987,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			state->ip_src = state->ct_result.nat_sip;
 		}
 
-
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
+			INC(ctx, ERR_FAILED_CSUM);
 			goto deny;
 		}
 
@@ -1090,6 +1094,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
+			INC(ctx, ERR_FAILED_CSUM);
 			goto deny;
 		}
 

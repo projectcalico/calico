@@ -34,6 +34,8 @@ const (
 const (
 	TotalPackets = iota
 	ErrShortPacket
+	ErrFailedCSUM
+	AcceptedByFailsafe
 	AcceptedByPolicy
 	DroppedByPolicy
 )
