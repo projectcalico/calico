@@ -17,6 +17,7 @@ package counters
 import (
 	"encoding/binary"
 	"fmt"
+	"runtime"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -40,58 +41,70 @@ const (
 	DroppedByPolicy
 )
 
+const (
+	HookIngress = "ingress"
+	HookEgress  = "egress"
+)
+
+var Hooks = []string{HookIngress, HookEgress}
+
 type Counters struct {
-	counterMap bpf.Map
-	iface      string
+	maps     map[string]bpf.Map
+	numOfCpu int
+	iface    string
 }
 
-func NewCounters(iface, hook string) *Counters {
+func NewCounters(iface string) *Counters {
 	cntr := Counters{
 		iface: iface,
 	}
-
-	switch hook {
-	case "egress":
-		pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
-			bpf.CountersMapName(), iface, tc.HookEgress)
-		cntr.counterMap = Map(&bpf.MapContext{}, pinPath)
-		logrus.Debugf("Ingress counter map pin path: %v", pinPath)
-	default:
-		pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
-			bpf.CountersMapName(), iface, tc.HookIngress)
-		cntr.counterMap = Map(&bpf.MapContext{}, pinPath)
-		logrus.Debugf("Ingress counter map pin path: %v", pinPath)
+	var err error
+	cntr.numOfCpu, err = libbpf.NumPossibleCPUs()
+	if err != nil {
+		logrus.WithError(err).Error("failed to get libbpf number of possible cpu. Will use runtime information")
+		cntr.numOfCpu = runtime.NumCPU()
 	}
+
+	cntr.maps = make(map[string]bpf.Map)
+	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
+		bpf.CountersMapName(), iface, tc.HookIngress)
+	cntr.maps[HookIngress] = Map(&bpf.MapContext{}, pinPath)
+	logrus.Debugf("ingress counter map pin path: %v", pinPath)
+
+	pinPath = tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
+		bpf.CountersMapName(), iface, tc.HookEgress)
+	cntr.maps[HookEgress] = Map(&bpf.MapContext{}, pinPath)
+	logrus.Debugf("egress counter map pin path: %v", pinPath)
+
 	return &cntr
 }
 
-func (c Counters) Read() ([]uint32, error) {
-	err := c.counterMap.Open()
+func (c Counters) Read(hook string) ([]uint32, error) {
+	return c.read(c.maps[hook])
+}
+
+func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
+	err := cMap.Open()
 	if err != nil {
 		return []uint32{}, fmt.Errorf("failed to open counters map. err=%v", err)
 	}
 	defer func() {
-		err := c.counterMap.Close()
+		err := cMap.Close()
 		if err != nil {
 			logrus.WithError(err).Errorf("failed to close counters map.")
 		}
 	}()
 
-	numOfCpu, err := libbpf.NumPossibleCPUs()
-	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to get number of possible cpu. err=%v", err)
-	}
-
 	// k is the key to the counters map, and it is set to 0 since there is only one entry
 	k := make([]byte, uint32Size)
-	values, err := c.counterMap.Get(k)
+	values, err := cMap.Get(k)
 	if err != nil {
 		return []uint32{}, fmt.Errorf("failed to read counters map. err=%v", err)
 	}
 
 	bpfCounters := make([]uint32, MaxCounterNumber)
 	for i := range bpfCounters {
-		for cpu := 0; cpu < numOfCpu; cpu++ {
+		for cpu := 0; cpu < c.numOfCpu; cpu++ {
 			begin := i*uint32Size + cpu*MaxCounterNumber*uint32Size
 			bpfCounters[i] += uint32(binary.LittleEndian.Uint32(values[begin : begin+uint32Size]))
 		}
@@ -100,26 +113,32 @@ func (c Counters) Read() ([]uint32, error) {
 }
 
 func (c *Counters) Flush() error {
-	err := c.counterMap.Open()
+	for _, hook := range Hooks {
+		err := c.flush(c.maps[hook])
+		if err != nil {
+			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%v", c.iface, hook, err)
+		}
+		logrus.Infof("Successfully flushed counters map for interface=%s hook=%s", c.iface, hook)
+	}
+	return nil
+}
+
+func (c *Counters) flush(cMap bpf.Map) error {
+	err := cMap.Open()
 	if err != nil {
 		return fmt.Errorf("failed to open counters map. err=%v", err)
 	}
 	defer func() {
-		err := c.counterMap.Close()
+		err := cMap.Close()
 		if err != nil {
 			logrus.WithError(err).Errorf("failed to close counters map.")
 		}
 	}()
 
-	numOfCpu, err := libbpf.NumPossibleCPUs()
-	if err != nil {
-		return fmt.Errorf("failed to get number of possible cpu. err=%v", err)
-	}
-
 	// k is the key to the counters map, and it is set to 0 since there is only one entry
 	k := make([]byte, uint32Size)
-	v := make([]byte, uint32Size*MaxCounterNumber*numOfCpu)
-	err = c.counterMap.Update(k, v)
+	v := make([]byte, uint32Size*MaxCounterNumber*c.numOfCpu)
+	err = cMap.Update(k, v)
 	if err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
 	}
