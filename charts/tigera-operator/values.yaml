@@ -1,0 +1,42 @@
+imagePullSecrets: {}
+
+installation:
+  enabled: true
+  kubernetesProvider: ""
+
+apiServer:
+  enabled: true
+
+certs:
+  node:
+    key:
+    cert:
+    commonName:
+  typha:
+    key:
+    cert:
+    commonName:
+    caBundle:
+
+resources: {}
+
+# Tolerations for the tigera/operator pod itself.
+# By default, will schedule on all possible place.
+tolerations:
+- effect: NoExecute
+  operator: Exists
+- effect: NoSchedule
+  operator: Exists
+
+# NodeSelector for the tigera/operator pod itself.
+nodeSelector:
+  kubernetes.io/os: linux
+
+# Configuration for the tigera operator
+tigeraOperator:
+  image: tigera/operator
+  version: master
+  registry: quay.io
+calicoctl:
+  image: docker.io/calico/ctl
+  tag: master
