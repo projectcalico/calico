@@ -18,7 +18,7 @@ CALI_MAP(cali_iface, 2,
 #define IFACE_STATE_WEP		0x1
 #define IFACE_STATE_READY	0x2
 
-#define iface_is_worload(state)		((state) & IFACE_STATE_WEP)
+#define iface_is_workload(state)		((state) & IFACE_STATE_WEP)
 #define iface_is_ready(state)		((state) & IFACE_STATE_READY)
 
 #endif /* __CALI_IFSTATE_H__ */
