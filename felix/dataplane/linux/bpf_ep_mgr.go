@@ -742,7 +742,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	errs := map[string]error{}
 	var wg sync.WaitGroup
 
-	// Limit the number of parallel workers.  Without this, all the workers via for CPU and complete slowly.
+	// Limit the number of parallel workers.  Without this, all the workers vie for CPU and complete slowly.
 	// On a constrained system, we can end up taking too long and going non-ready.
 	maxWorkers := runtime.GOMAXPROCS(0)
 	sem := semaphore.NewWeighted(int64(maxWorkers))

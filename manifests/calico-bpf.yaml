@@ -4338,6 +4338,7 @@ spec:
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
           image: docker.io/calico/cni:master
+          imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
           - configMapRef:
@@ -4376,6 +4377,7 @@ spec:
         # and CNI network config file on each node.
         - name: install-cni
           image: docker.io/calico/cni:master
+          imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/install"]
           envFrom:
           - configMapRef:
@@ -4429,6 +4431,7 @@ spec:
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
         - name: "mount-bpffs"
           image: docker.io/calico/node:master
+          imagePullPolicy: IfNotPresent
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
             - mountPath: /sys/fs
@@ -4449,6 +4452,7 @@ spec:
         # host.
         - name: calico-node
           image: docker.io/calico/node:master
+          imagePullPolicy: IfNotPresent
           envFrom:
           - configMapRef:
               # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -4677,6 +4681,7 @@ spec:
       containers:
         - name: calico-kube-controllers
           image: docker.io/calico/kube-controllers:master
+          imagePullPolicy: IfNotPresent
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
