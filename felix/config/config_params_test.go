@@ -57,6 +57,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"VXLANTunnelMACAddr",
 		"VXLANTunnelMACAddrV6",
 		"loadClientConfigFromEnvironment",
+		"RouteSyncDisabled",
 
 		"loadClientConfigFromEnvironment",
 		"useNodeResourceUpdates",
