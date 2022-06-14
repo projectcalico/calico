@@ -396,9 +396,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	struct ct_lookup_ctx ct_lookup_ctx = {
 		.proto	= tc_ctx->state->ip_proto,
 		.src	= tc_ctx->state->ip_src,
-		.sport	= tc_ctx->state->sport,
 		.dst	= tc_ctx->state->ip_dst,
-		.dport	= tc_ctx->state->dport,
 	};
 	struct ct_lookup_ctx *ct_ctx = &ct_lookup_ctx;
 
@@ -410,11 +408,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			bpf_exit(TC_ACT_SHOT);
 		}
 		ct_lookup_ctx.tcp = tc_tcphdr(tc_ctx);
-		break;
-	case IPPROTO_ICMP:
-		// There are no port in ICMP and the fields in state are overloaded
-		// for other use like type and code.
-		ct_lookup_ctx.dport = ct_lookup_ctx.sport = 0;
+		/* fall through */
+	case IPPROTO_UDP:
+		ct_lookup_ctx.sport = tc_ctx->state->sport;
+		ct_lookup_ctx.dport = tc_ctx->state->dport;
 		break;
 	}
 
