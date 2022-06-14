@@ -15,12 +15,10 @@
 package conntrack
 
 import (
-	//"fmt"
 	"net"
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	//"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap/upgrade"
@@ -83,7 +81,6 @@ func NewValueNATReverseSNAT(created, lastSeen time.Duration, flags uint16, legA,
 }
 
 type Leg = curVer.Leg
-type EntryData = curVer.EntryData
 
 var MapParams = curVer.MapParams
 

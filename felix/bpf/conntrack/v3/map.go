@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ func (k Key) String() string {
 }
 
 func (k Key) Upgrade() bpf.Upgradable {
-	return k
+	panic("conntrack map key already at its latest version")
 }
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
@@ -467,7 +467,7 @@ func (e Value) IsForwardDSR() bool {
 }
 
 func (e Value) Upgrade() bpf.Upgradable {
-	return e
+	panic("conntrack map value already at its latest version")
 }
 
 var MapParams = bpf.MapParameters{
