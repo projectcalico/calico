@@ -576,7 +576,7 @@ message VXLANTunnelEndpointRemove {
 }
 
 message WireguardEndpointUpdate {
-  // The name of the wireguard host.
+  // The name of the IPv4 wireguard host.
   string hostname = 1;
 
   // The public key for IPv4 wireguard on this endpoint.
@@ -584,20 +584,27 @@ message WireguardEndpointUpdate {
 
   // The IP address of the IPv4 wireguard interface.
   string interface_ipv4_addr = 3;
-
-  // The public key for IPv6 wireguard on this endpoint.
-  string public_key_v6 = 4;
-
-  // The IP address of the IPv6 wireguard interface.
-  string interface_ipv6_addr = 5;
 }
 
 message WireguardEndpointRemove {
-  // The name of the wireguard host.
+  // The name of the IPv4 wireguard host.
+  string hostname = 1;
+}
+
+message WireguardEndpointV6Update {
+  // The name of the IPv6 wireguard host.
   string hostname = 1;
 
-  // The IP version of the endpoint being removed
-  IPVersion ip_version = 2;
+  // The public key for IPv6 wireguard on this endpoint.
+  string public_key_v6 = 2;
+
+  // The IP address of the IPv6 wireguard interface.
+  string interface_ipv6_addr = 3;
+}
+
+message WireguardEndpointV6Remove {
+  // The name of the IPv6 wireguard host.
+  string hostname = 1;
 }
 
 message GlobalBGPConfigUpdate {
