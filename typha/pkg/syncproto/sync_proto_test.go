@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/gob"
-	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -77,5 +76,5 @@ func TestEncodeCanned(t *testing.T) {
 	err = b64.Close()
 	Expect(err).NotTo(HaveOccurred())
 
-	t.Log(fmt.Sprintf("%q", b2.String()))
+	t.Logf("%q", b2.String())
 }

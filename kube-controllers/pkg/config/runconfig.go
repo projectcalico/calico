@@ -24,6 +24,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -32,6 +34,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
+
+var title = cases.Title(language.English)
 
 // Export for testing purposes
 var DefaultKCC *v3.KubeControllersConfiguration
@@ -624,5 +628,5 @@ func mergeLogLevel(envVars map[string]string, status *v3.KubeControllersConfigur
 			rCfg.LogLevelScreen = log.InfoLevel
 		}
 	}
-	status.RunningConfig.LogSeverityScreen = strings.Title(rCfg.LogLevelScreen.String())
+	status.RunningConfig.LogSeverityScreen = title.String(rCfg.LogLevelScreen.String())
 }

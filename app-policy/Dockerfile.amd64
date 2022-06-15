@@ -39,8 +39,9 @@ ADD bin/dikastes-amd64 /dikastes
 ADD bin/healthz-amd64 /healthz
 
 # Include libraries from UBI for dynamic linking.
-COPY --from=ubi /lib64 /lib64
-COPY --from=ubi /lib /lib
+COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
+COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
+COPY --from=ubi /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 
 # Typical Linux systems start numbering human users at 1000, reserving 1-999
 # for services, so we pick 999 to be least likely to overlap.  It's not a big
