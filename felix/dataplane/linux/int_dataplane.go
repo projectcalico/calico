@@ -579,8 +579,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		defaultRPFilter = []byte{'1'}
 	}
 
-	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
-		config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeRoute, config.BPFMapSizeConntrack, config.BPFMapRepin)
+	bpfMapContext := bpfmap.CreateBPFMapContext(
+		config.BPFMapSizeIPSets,
+		config.BPFMapSizeNATFrontend,
+		config.BPFMapSizeNATBackend,
+		config.BPFMapSizeNATAffinity,
+		config.BPFMapSizeRoute,
+		config.BPFMapSizeConntrack,
+		config.BPFMapRepin,
+	)
 
 	var bpfEndpointManager *bpfEndpointManager
 
