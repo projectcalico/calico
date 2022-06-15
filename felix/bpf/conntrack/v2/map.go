@@ -498,7 +498,12 @@ func (e Value) Upgrade() bpf.Upgradable {
 		if ctType == TypeNormal {
 			val3 = v3.NewValueNormal(created, lastSeen, flags, v3LegAB, v3LegBA)
 		} else {
-			val3 = v3.NewValueNATReverseSNAT(created, lastSeen, flags, v3LegAB, v3LegBA, data.TunIP, data.OrigDst, data.OrigSrc, data.OrigPort)
+
+			if data.OrigSrc.Equal(net.IPv4(0,0,0,0)){
+				val3 = v3.NewValueNATReverse(created, lastSeen, flags, v3LegAB, v3LegBA, data.TunIP, data.OrigDst, data.OrigPort)
+			} else {
+				val3 = v3.NewValueNATReverseSNAT(created, lastSeen, flags, v3LegAB, v3LegBA, data.TunIP, data.OrigDst, data.OrigSrc, data.OrigPort)
+			}
 			val3.SetOrigSport(data.OrigSPort)
 		}
 	case TypeNATForward:
