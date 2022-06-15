@@ -808,6 +808,12 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 						"Ignoring request to program interface that is not present.")
 					err = nil
 				}
+			} else {
+				m.ifacesLock.Lock()
+				if iface, ok := m.nameToIface[ifaceName]; !ok || iface.info.ifindex == 0 {
+					err = fmt.Errorf("unknown ifindex for dev %s", ifaceName)
+				}
+				m.ifacesLock.Unlock()
 			}
 			mutex.Lock()
 			errs[ifaceName] = err
@@ -831,14 +837,6 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 
 		err := errs[ifaceName]
 		wlID := m.nameToIface[ifaceName].info.endpointID
-
-		if m.nameToIface[ifaceName].info.ifindex == 0 {
-			log.WithFields(log.Fields{
-				"id":    wlID,
-				"iface": ifaceName,
-			}).Info("Iface has unknown index, postponing.")
-			return nil
-		}
 
 		if err == nil {
 			log.WithField("iface", ifaceName).Info("Updated workload interface.")
