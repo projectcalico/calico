@@ -166,7 +166,6 @@ type Wireguard struct {
 	// The write proc sys function.
 	writeProcSys func(path, value string) error
 
-	// Log context
 	logCtx *log.Entry
 }
 
@@ -212,11 +211,13 @@ func NewWithShims(
 	writeProcSys func(path, value string) error,
 	opRecorder logutils.OpRecorder,
 ) *Wireguard {
+	logCtx := log.WithField("ipVersion", ipVersion)
+
 	interfaceName := config.InterfaceName
 	if ipVersion == 6 {
 		interfaceName = config.InterfaceNameV6
 	} else if ipVersion != 4 {
-		log.Panicf("Unknown IP version: %d", ipVersion)
+		logCtx.Panicf("Unknown IP version: %d", ipVersion)
 	}
 	// Create routetable. We provide dummy callbacks for ARP and conntrack processing.
 	rt := routetable.NewWithShims(
@@ -246,7 +247,6 @@ func NewWithShims(
 		},
 		opRecorder,
 	)
-	logCtx := log.WithField("ipVersion", ipVersion)
 
 	if err != nil && ((ipVersion == 4 && config.Enabled) || (ipVersion == 6 && config.EnabledV6)) {
 		// Wireguard is enabled, but could not create a routerule manager. This is unexpected.
@@ -302,7 +302,7 @@ func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Sta
 func (w *Wireguard) EndpointUpdate(name string, ipAddr ip.Addr) {
 	logCtx := w.logCtx.WithFields(log.Fields{"name": name, "ipAddr": ipAddr})
 	logCtx.Debug("EndpointUpdate")
-	if (w.ipVersion == 4 && !w.config.Enabled) || (w.ipVersion == 6 && !w.config.EnabledV6) {
+	if !w.Enabled() {
 		logCtx.Debug("Not enabled - ignoring")
 		return
 	} else if name == w.hostname {
@@ -338,7 +338,7 @@ func (w *Wireguard) EndpointUpdate(name string, ipAddr ip.Addr) {
 func (w *Wireguard) EndpointRemove(name string) {
 	logCtx := w.logCtx.WithField("name", name)
 	logCtx.Debug("EndpointRemove")
-	if (w.ipVersion == 4 && !w.config.Enabled) || (w.ipVersion == 6 && !w.config.EnabledV6) {
+	if !w.Enabled() {
 		logCtx.Debug("Not enabled - ignoring")
 		return
 	} else if name == w.hostname {
@@ -357,7 +357,7 @@ func (w *Wireguard) EndpointRemove(name string) {
 func (w *Wireguard) RouteUpdate(name string, cidr ip.CIDR) {
 	logCtx := w.logCtx.WithFields(log.Fields{"name": name, "cidr": cidr})
 	logCtx.Debug("RouteUpdate")
-	if (w.ipVersion == 4 && !w.config.Enabled) || (w.ipVersion == 6 && !w.config.EnabledV6) {
+	if !w.Enabled() {
 		logCtx.Debug("Not enabled - ignoring")
 		return
 	}
@@ -388,7 +388,7 @@ func (w *Wireguard) RouteUpdate(name string, cidr ip.CIDR) {
 func (w *Wireguard) RouteRemove(cidr ip.CIDR) {
 	logCtx := w.logCtx.WithField("cidr", cidr)
 	logCtx.Debug("RouteRemove")
-	if (w.ipVersion == 4 && !w.config.Enabled) || (w.ipVersion == 6 && !w.config.EnabledV6) {
+	if !w.Enabled() {
 		logCtx.Debug("Not enabled - ignoring")
 		return
 	}
@@ -517,7 +517,7 @@ func (w *Wireguard) peerAllowedCIDRRemove(name string, cidr ip.CIDR) {
 func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, interfaceAddr ip.Addr) {
 	logCtx := w.logCtx.WithFields(log.Fields{"node": name, "publicKey": publicKey, "interfaceAddr": interfaceAddr})
 	logCtx.Debug("EndpointWireguardUpdate")
-	if (w.ipVersion == 4 && !w.config.Enabled) || (w.ipVersion == 6 && !w.config.EnabledV6) {
+	if !w.Enabled() {
 		logCtx.Debug("Not enabled - ignoring")
 		return
 	}
@@ -567,7 +567,7 @@ func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, 
 func (w *Wireguard) EndpointWireguardRemove(name string) {
 	logCtx := w.logCtx.WithField("node", name)
 	logCtx.Debug("EndpointWireguardRemove")
-	if (w.ipVersion == 4 && !w.config.Enabled) || (w.ipVersion == 6 && !w.config.EnabledV6) {
+	if !w.Enabled() {
 		logCtx.Debug("Not enabled - ignoring")
 		return
 	}
@@ -637,7 +637,7 @@ func (w *Wireguard) Apply() (err error) {
 	}
 
 	// If wireguard is not enabled, then short-circuit the processing - ensure config is deleted.
-	if (w.ipVersion == 4 && !w.config.Enabled) || (w.ipVersion == 6 && !w.config.EnabledV6) {
+	if !w.Enabled() {
 		w.logCtx.Debug("Wireguard is not enabled, skipping sync")
 		if !w.inSyncWireguard {
 			w.logCtx.Debug("Wireguard is not in-sync - verifying wireguard configuration is removed")
@@ -1765,6 +1765,17 @@ func (w *Wireguard) DebugNodes() (nodes []string) {
 		nodes = append(nodes, node)
 	}
 	return
+}
+
+// Enabled is a helper method that returns true if wireguard is enabled for this instance's IP version
+func (w *Wireguard) Enabled() bool {
+	switch w.ipVersion {
+	case 4:
+		return w.config.Enabled
+	case 6:
+		return w.config.EnabledV6
+	}
+	return false
 }
 
 // getOnlyItemInSet returns the only item in the set, or nil if the set is nil or the set does not contain only one
