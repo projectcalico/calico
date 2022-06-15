@@ -856,7 +856,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			},
 			dp.loopSummarizer)
 		dp.wireguardManagerV6 = newWireguardManager(cryptoRouteTableWireguardV6, config, 6)
-		dp.RegisterManager(dp.wireguardManagerV6) // IPv6
+		dp.RegisterManager(dp.wireguardManagerV6)
 	}
 
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesMangleTables...)
