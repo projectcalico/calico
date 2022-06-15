@@ -12,15 +12,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG QEMU_IMAGE=calico/go-build:latest
-ARG BIRD_IMAGE=calico/bird:latest
+FROM alpine:3.11 as qemu
 
-FROM ${BIRD_IMAGE} as bird
+ARG QEMU_VERSION=6.1.0-8
+ARG QEMU_ARCHS="s390x"
 
+RUN apk --update add curl
+
+# Enable non-native runs on amd64 architecture hosts
+RUN curl -L https://github.com/multiarch/qemu-user-static/releases/download/v${QEMU_VERSION}/qemu-${QEMU_ARCHS}-static.tar.gz | tar zxvf - -C /usr/bin &&\
+    chmod +x /usr/bin/qemu-s390x-static
+
+FROM calico/bird:v0.3.3-188-g0196eee4-s390x as bird
 FROM calico/bpftool:v5.3-s390x as bpftool
 
 FROM s390x/alpine:3.8 as base
-
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 ARG ARCH=s390x
 
 # Install remaining runtime deps required for felix from the global repository
@@ -37,7 +46,19 @@ COPY dist/bin/calico-node-${ARCH} /bin/calico-node
 
 COPY --from=bpftool /bpftool /bin
 
+# Add in top-level license file
+COPY LICENSE /licenses
+
 CMD ["start_runit"]
+
+# Required labels for certification
+LABEL name="Calico node" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico node handles networking and policy for Calico" \
+      description="Calico node handles networking and policy for Calico" \
+      maintainer="laurence@tigera.io"
 
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled
