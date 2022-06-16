@@ -260,8 +260,8 @@ func newBPFEndpointManager(
 		ruleRenderer:            iptablesRuleRenderer,
 		iptablesFilterTable:     iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
-			log.Debug("Jump map cleanup triggered.")
-			tc.CleanUpJumpMaps()
+			log.Debug("TC maps cleanup triggered.")
+			tc.CleanUpMaps()
 		}),
 		onStillAlive:     livenessCallback,
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
