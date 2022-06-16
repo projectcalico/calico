@@ -235,12 +235,20 @@ func reconcileTunnelAddrs(
 		log.WithError(err).Fatal("Unable to query IP pool configuration")
 	}
 
-	// If wireguard is enabled then allocate an IP for the wireguard device. We do this for all deployment types even
+	// If IPv4 wireguard is enabled then allocate an IPv4 address for the wireguard device. We do this for all deployment types even
 	// when pod CIDRs are not managed by Calico.
 	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeWireguard); len(cidrs) > 0 {
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeWireguard)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeWireguard)
+	}
+
+	// If IPv6 wireguard is enabled then allocate an IPv6 address for the wireguard device. We do this for all deployment types even
+	// when pod CIDRs are not managed by Calico.
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeWireguardV6); len(cidrs) > 0 {
+		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeWireguardV6)
+	} else {
+		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeWireguardV6)
 	}
 
 	// Query the IPIP enabled pools and either configure the tunnel
@@ -292,6 +300,10 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 	case ipam.AttributeTypeWireguard:
 		if node.Spec.Wireguard != nil {
 			addr = node.Spec.Wireguard.InterfaceIPv4Address
+		}
+	case ipam.AttributeTypeWireguardV6:
+		if node.Spec.Wireguard != nil {
+			addr = node.Spec.Wireguard.InterfaceIPv6Address
 		}
 	}
 
@@ -433,6 +445,8 @@ func generateHandleAndAttributes(nodename string, attrType string) (string, map[
 		handle = fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 	case ipam.AttributeTypeWireguard:
 		handle = fmt.Sprintf("wireguard-tunnel-addr-%s", nodename)
+	case ipam.AttributeTypeWireguardV6:
+		handle = fmt.Sprintf("wireguard-v6-tunnel-addr-%s", nodename)
 	}
 	attrs[ipam.AttributeType] = attrType
 	return handle, attrs
@@ -524,6 +538,11 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 				node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
 			}
 			node.Spec.Wireguard.InterfaceIPv4Address = addr
+		case ipam.AttributeTypeWireguardV6:
+			if node.Spec.Wireguard == nil {
+				node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
+			}
+			node.Spec.Wireguard.InterfaceIPv6Address = addr
 		}
 
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
@@ -584,6 +603,16 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 			if node.Spec.Wireguard != nil {
 				ipAddrStr = node.Spec.Wireguard.InterfaceIPv4Address
 				node.Spec.Wireguard.InterfaceIPv4Address = ""
+
+				if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
+					logCtx.Debug("Wireguard spec is now empty, setting to nil")
+					node.Spec.Wireguard = nil
+				}
+			}
+		case ipam.AttributeTypeWireguardV6:
+			if node.Spec.Wireguard != nil {
+				ipAddrStr = node.Spec.Wireguard.InterfaceIPv6Address
+				node.Spec.Wireguard.InterfaceIPv6Address = ""
 
 				if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
 					logCtx.Debug("Wireguard spec is now empty, setting to nil")
@@ -680,13 +709,23 @@ func determineEnabledPoolCIDRs(
 	// key configured on the node), and the cluster is not running in host encryption mode (which is required for
 	// managed cloud with non-Calico CNI). When running in host encryption mode, the wireguard dataplane will use the
 	// node IP for the device.
-	if attrType == ipam.AttributeTypeWireguard {
+	switch attrType {
+	case ipam.AttributeTypeWireguard:
 		if felixEnvConfig.WireguardHostEncryptionEnabled {
-			log.Debug("Wireguard is running in host encryption mode, do not allocate a device IP")
+			log.Debug("Wireguard is running in host encryption mode, do not allocate a device IPv4 address")
 			return nil
 		}
 		if node.Status.WireguardPublicKey == "" {
-			log.Debugf("Wireguard is not running on node %s, do not allocate a device IP", node.Name)
+			log.Debugf("Wireguard is not running on node %s, do not allocate a device IPv4 address", node.Name)
+			return nil
+		}
+	case ipam.AttributeTypeWireguardV6:
+		if felixEnvConfig.WireguardHostEncryptionEnabled {
+			log.Debug("Wireguard is running in host encryption mode, do not allocate a device IPv6 address")
+			return nil
+		}
+		if node.Status.WireguardPublicKeyV6 == "" {
+			log.Debugf("Wireguard is not running on node %s, do not allocate a device IPv6 address", node.Name)
 			return nil
 		}
 	}
@@ -728,6 +767,11 @@ func determineEnabledPoolCIDRs(
 			if !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
 				cidrs = append(cidrs, *poolCidr)
 			}
+		case ipam.AttributeTypeWireguardV6:
+			// Wireguard does not require a specific encap configuration on the pool.
+			if !ipPool.Spec.Disabled && poolCidr.Version() == 6 {
+				cidrs = append(cidrs, *poolCidr)
+			}
 		}
 	}
 	return cidrs
@@ -754,6 +798,8 @@ func getLogger(attrType string) *log.Entry {
 		return log.WithField("type", "ipipTunnelAddress")
 	case ipam.AttributeTypeWireguard:
 		return log.WithField("type", "wireguardTunnelAddress")
+	case ipam.AttributeTypeWireguardV6:
+		return log.WithField("type", "wireguardV6TunnelAddress")
 	}
 	return nil
 }
