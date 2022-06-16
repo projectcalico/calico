@@ -79,7 +79,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	// configured failsafe ports should be allowed and NOT be accidentally untracked.
 	if (is_failsafe_in(ctx.state->ip_proto, ctx.state->dport, ctx.state->ip_src)) {
 		CALI_DEBUG("Inbound failsafe port: %d. Skip policy\n", ctx.state->dport);
-		INC(&ctx, ACCEPTED_BY_FAILSAFE);
+		INC(&ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto allow;
 	}
@@ -93,7 +93,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	// conntrack state.
 	if (is_failsafe_out(ctx.state->ip_proto, ctx.state->sport, ctx.state->ip_src)) {
 		CALI_DEBUG("Outbound failsafe port: %d. Skip policy\n", ctx.state->sport);
-		INC(&ctx, ACCEPTED_BY_FAILSAFE);
+		INC(&ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto allow;
 	}

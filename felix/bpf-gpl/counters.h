@@ -7,15 +7,6 @@
 
 #define MAX_COUNTERS_SIZE 8
 
-enum counter_type {
-	TOTAL_PKTS,
-	ERR_SHORT_PKTS,
-	ERR_FAILED_CSUM,
-	ACCEPTED_BY_FAILSAFE,
-	ACCEPTED_BY_POLICY,
-	DROPPED_BY_POLICY,
-};
-
 typedef __u32 counters_t[MAX_COUNTERS_SIZE];
 
 CALI_MAP(cali_counters, 1,

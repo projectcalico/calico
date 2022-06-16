@@ -23,8 +23,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	 */
 	if (CALI_F_XDP) {
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
-			INC(ctx, ERR_SHORT_PKTS);
+			DENY_REASON(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -68,8 +67,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	// already done for XDP programs at the beginning of the function.
 	if (!CALI_F_XDP) {
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
-			INC(ctx, ERR_SHORT_PKTS);
+			DENY_REASON(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -123,8 +121,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
-			INC(ctx, ERR_SHORT_PKTS);
+			DENY_REASON(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}

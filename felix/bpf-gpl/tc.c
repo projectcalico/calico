@@ -99,7 +99,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		// failing here normally should not happen.
 		return TC_ACT_SHOT;
 	}
-	INC(&ctx, TOTAL_PKTS);
+	INC(&ctx, CALI_REASON_UNKNOWN); // This is used to keep the total number of packets
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -124,8 +124,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			/* we need to fix up the right src host IP */
 			if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-				ctx.fwd.reason = CALI_REASON_SHORT;
-				INC(&ctx, ERR_SHORT_PKTS);
+				DENY_REASON(&ctx, CALI_REASON_SHORT);
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
@@ -144,8 +143,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
 			if (res) {
-				ctx.fwd.reason = CALI_REASON_CSUM_FAIL;
-				INC(&ctx, ERR_FAILED_CSUM);
+				DENY_REASON(&ctx, CALI_REASON_CSUM_FAIL);
 				goto deny;
 			}
 
@@ -433,8 +431,7 @@ syn_force_policy:
 	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-		ctx->fwd.reason = CALI_REASON_SHORT;
-		INC(ctx, ERR_SHORT_PKTS);
+		DENY_REASON(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -476,7 +473,7 @@ syn_force_policy:
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
 		if (CALI_F_FROM_HEP && is_failsafe_in(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->ip_src)) {
 			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
-			INC(ctx, ACCEPTED_BY_FAILSAFE);
+			INC(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
@@ -485,7 +482,7 @@ syn_force_policy:
 		CALI_DEBUG("Source IP is local host.\n");
 		if (CALI_F_TO_HEP && is_failsafe_out(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->post_nat_ip_dst)) {
 			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
-			INC(ctx, ACCEPTED_BY_FAILSAFE);
+			INC(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_SRC_IS_HOST;
@@ -548,7 +545,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		// failing here normally should not happen.
 		return TC_ACT_SHOT;
 	}
-	INC(&ctx, ACCEPTED_BY_POLICY);
+
+	if (!(ctx.state->flags & CALI_ST_SKIP_POLICY)) {
+		INC(&ctx, CALI_REASON_ACCEPTED_BY_POLICY);
+	}
 
 	if (CALI_F_HEP) {
 		if (!(ctx.state->flags & CALI_ST_SKIP_POLICY) && (ctx.state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
@@ -559,8 +559,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		ctx.fwd.reason = CALI_REASON_SHORT;
-		INC(&ctx, ERR_SHORT_PKTS);
+		DENY_REASON(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -668,7 +667,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 						state->ip_src, state->ct_result.nat_ip, 4);
 				if (res) {
 					reason = CALI_REASON_CSUM_FAIL;
-					INC(ctx, ERR_FAILED_CSUM);
+					INC(ctx, CALI_REASON_CSUM_FAIL);
 					goto deny;
 				}
 				CALI_DEBUG("ICMP related: outer IP SNAT to %x\n",
@@ -678,8 +677,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			/* Related ICMP traffic must be an error response so it should include inner IP
 			 * and 8 bytes as payload. */
 			if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
-				reason = CALI_REASON_SHORT;
-				INC(ctx, ERR_SHORT_PKTS);
+				DENY_REASON(ctx, CALI_REASON_SHORT);
 				CALI_DEBUG("Failed to revalidate packet size\n");
 				goto deny;
 			}
@@ -796,8 +794,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		if (state->ip_proto == IPPROTO_TCP) {
 			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
-				reason = CALI_REASON_SHORT;
-				INC(ctx, ERR_SHORT_PKTS);
+				DENY_REASON(ctx, CALI_REASON_SHORT);
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
@@ -989,7 +986,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
-			INC(ctx, ERR_FAILED_CSUM);
+			INC(ctx, CALI_REASON_CSUM_FAIL);
 			goto deny;
 		}
 
@@ -1094,7 +1091,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
-			INC(ctx, ERR_FAILED_CSUM);
+			INC(ctx, CALI_REASON_CSUM_FAIL);
 			goto deny;
 		}
 
@@ -1192,8 +1189,7 @@ nat_encap:
 			/* Don't drop it yet, we might get lucky and the MAC is correct */
 		} else {
 			if (skb_refresh_validate_ptrs(ctx, 0)) {
-				reason = CALI_REASON_SHORT;
-				INC(ctx, ERR_SHORT_PKTS);
+				DENY_REASON(ctx, CALI_REASON_SHORT);
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
@@ -1298,8 +1294,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, ICMP_SIZE)) {
-		ctx.fwd.reason = CALI_REASON_SHORT;
-		INC(&ctx, ERR_SHORT_PKTS);
+		DENY_REASON(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -1340,8 +1335,7 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		ctx.fwd.reason = CALI_REASON_SHORT;
-		INC(&ctx, ERR_SHORT_PKTS);
+		DENY_REASON(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -1397,7 +1391,7 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	INC(&ctx, DROPPED_BY_POLICY);
+	INC(&ctx, CALI_REASON_DROPPED_BY_POLICY);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 		ctx.state = state_get();
