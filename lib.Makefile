@@ -234,17 +234,10 @@ TARGET_PLATFORM=--platform=linux/arm/v7
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-ifeq ($(ARCH),s390x)
-DOCKER_BUILD=docker build \
-	     --build-arg QEMU_IMAGE=$(CALICO_BUILD) \
-	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
-else
 DOCKER_BUILD=docker buildx build --pull \
 	     --build-arg QEMU_IMAGE=$(CALICO_BUILD) \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
 	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
-endif
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
