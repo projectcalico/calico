@@ -138,10 +138,6 @@ endif
 	# Check the redirect_from lines and strip the .md from the URL
 	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;
 
-update_canonical_urls:
-	# Looks through all directories and replaces previous latest release version numbers in canonical URLs with new
-	python release-scripts/update-canonical-urls.py
-
 ###############################################################################
 # Utilities
 ###############################################################################

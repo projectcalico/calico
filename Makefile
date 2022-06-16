@@ -146,19 +146,15 @@ endif
 ###############################################################################
 # Post-release validation
 ###############################################################################
-DOCS_TEST_CONTAINER=projectcalico/release-test
-.PHONY: release-test-image
-release-test-image:
-	cd release-scripts/tests && docker build -t $(DOCS_TEST_CONTAINER) . && cd -
+POSTRELEASE_IMAGE=calico/postrelease
+POSTRELEASE_IMAGE_CREATED=.calico.postrelease.created
+$(POSTRELEASE_IMAGE_CREATED):
+	cd hack/postrelease && docker build -t $(POSTRELEASE_IMAGE) .
+	touch $@
 
-.PHONY: release-test
-release-test: release-test-image
-	docker run --rm \
-	-v /var/run/docker.sock:/var/run/docker.sock \
-	-v $(CURDIR):/docs \
-	-e RELEASE_STREAM=$(RELEASE_STREAM) \
-	$(DOCS_TEST_CONTAINER) sh -c \
-	"nosetests . -e "$(EXCLUDE_REGEX)" \
-	-s -v --with-xunit \
-	--xunit-file='/docs/nosetests.xml' \
-	--with-timer $(EXTRA_NOSE_ARGS)"
+postrelease-checks: $(POSTRELEASE_IMAGE_CREATED)
+	$(DOCKER_RUN) \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-e RELEASE_STREAM=$(RELEASE_STREAM) \
+		$(POSTRELEASE_IMAGE) \
+		sh -c "nosetests hack/postrelease -e "$(EXCLUDE_REGEX)" -s -v --with-xunit --xunit-file='postrelease-checks.xml' --with-timer $(EXTRA_NOSE_ARGS)"
