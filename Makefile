@@ -94,7 +94,7 @@ hack/release/ghr:
 release: hack/release/release 
 	@hack/release/release -create
 
-# test the release code
+# Test the release code
 release-test:
 	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
 
@@ -117,8 +117,14 @@ helm-index:
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
-release-notes: #release-prereqs
-	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
+release-notes:
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set)
+endif
+ifndef VERSION
+	$(error VERSION must be set)
+endif
+	VERSION=$(VERSION) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./hack/release/generate-release-notes.py
 
 ## Update the AUTHORS.md file.
 update-authors:
@@ -127,8 +133,8 @@ ifndef GITHUB_TOKEN
 endif
 	@echo "# Calico authors" > AUTHORS.md
 	@echo "" >> AUTHORS.md
-	@echo "This file is auto-generated based on contribution records reported" >> AUTHORS.md
-	@echo "by GitHub for the core repositories within the projectcalico/ organization. It is ordered alphabetically." >> AUTHORS.md
+	@echo "This file is auto-generated based on commit records reported" >> AUTHORS.md
+	@echo "by git for the projectcalico/calico repository. It is ordered alphabetically." >> AUTHORS.md
 	@echo "" >> AUTHORS.md
 	@docker run -ti --rm --net=host \
 		-v $(REPO_ROOT):/code \

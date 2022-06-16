@@ -292,7 +292,7 @@ releases, the following steps can be skipped.
 1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
 
    ```
-   make -C calico update-authors
+   make update-authors
    ```
 
 1. Commit your changes. For example:
@@ -350,10 +350,10 @@ release notes for a given version, perform the following steps.
 1. Run the following command to collect all release notes for the given version.
 
    ```
-   make -C calico release-notes
+   make release-notes
    ```
 
-   A file called `<VERSION>-release-notes.md` will be created with the raw release note content.
+   A file called `release-notes/<VERSION>-release-notes.md` will be created with the raw release note content.
 
    > **NOTE**: If you receive a ratelimit error, you can specify a `GITHUB_TOKEN` in the above command to
    > increase the number of allowed API calls. [See here for details](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/).
@@ -367,3 +367,9 @@ release notes for a given version, perform the following steps.
 
    - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.1.0/_includes/v3.1/release-notes/v3.1.0-release-notes.md)
    - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/7d5594dbca14cb1b765b65eb11bdd8239d23dfb3/_includes/v3.0/release-notes/v3.0.5-release-notes.md)
+
+1. Add the generated file to git.
+
+   ```
+   git add release-notes/
+   ```
