@@ -19,8 +19,6 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
-MAKE_DIRS=$(shell ls -d */)
-
 clean:
 	$(MAKE) -C api clean
 	$(MAKE) -C apiserver clean
@@ -34,7 +32,6 @@ clean:
 	$(MAKE) -C node clean
 	$(MAKE) -C pod2daemon clean
 	$(MAKE) -C typha clean
-	$(MAKE) -C calico clean
 
 generate:
 	$(MAKE) gen-semaphore-yaml
@@ -49,6 +46,9 @@ gen-manifests: bin/helm
 		OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		CALICO_VERSION=$(CALICO_VERSION) \
 		./generate.sh
+
+gen-semaphore-yaml:
+	cd .semaphore && ./generate-semaphore-yaml.sh
 
 # Build the tigera-operator helm chart.
 chart: bin/tigera-operator-$(GIT_VERSION).tgz
@@ -94,7 +94,7 @@ hack/release/ghr:
 release: hack/release/release 
 	@hack/release/release -create
 
-# test the release code
+# Test the release code
 release-test:
 	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
 
@@ -106,5 +106,59 @@ release-publish: hack/release/release hack/release/ghr
 create-release-branch: hack/release/release
 	@hack/release/release -new-branch
 
-gen-semaphore-yaml:
-	cd .semaphore && ./generate-semaphore-yaml.sh
+## Kicks semaphore job which syncs github released helm charts with helm index file
+.PHONY: helm-index
+helm-index:
+	@echo "Triggering semaphore workflow to update helm index."
+	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea \
+			     SEMAPHORE_WORKFLOW_BRANCH=master \
+			     SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml \
+			     $(MAKE) semaphore-run-workflow
+
+## Generates release notes for the given version.
+.PHONY: release-notes
+release-notes:
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set)
+endif
+ifndef VERSION
+	$(error VERSION must be set)
+endif
+	VERSION=$(VERSION) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./hack/release/generate-release-notes.py
+
+## Update the AUTHORS.md file.
+update-authors:
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set)
+endif
+	@echo "# Calico authors" > AUTHORS.md
+	@echo "" >> AUTHORS.md
+	@echo "This file is auto-generated based on commit records reported" >> AUTHORS.md
+	@echo "by git for the projectcalico/calico repository. It is ordered alphabetically." >> AUTHORS.md
+	@echo "" >> AUTHORS.md
+	@docker run -ti --rm --net=host \
+		-v $(REPO_ROOT):/code \
+		-w /code \
+		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
+		python:3 \
+		bash -c '/usr/local/bin/python hack/release/get-contributors.py >> /code/AUTHORS.md'
+
+###############################################################################
+# Post-release validation
+###############################################################################
+DOCS_TEST_CONTAINER=projectcalico/release-test
+.PHONY: release-test-image
+release-test-image:
+	cd release-scripts/tests && docker build -t $(DOCS_TEST_CONTAINER) . && cd -
+
+.PHONY: release-test
+release-test: release-test-image
+	docker run --rm \
+	-v /var/run/docker.sock:/var/run/docker.sock \
+	-v $(CURDIR):/docs \
+	-e RELEASE_STREAM=$(RELEASE_STREAM) \
+	$(DOCS_TEST_CONTAINER) sh -c \
+	"nosetests . -e "$(EXCLUDE_REGEX)" \
+	-s -v --with-xunit \
+	--xunit-file='/docs/nosetests.xml' \
+	--with-timer $(EXTRA_NOSE_ARGS)"

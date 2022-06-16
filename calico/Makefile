@@ -16,7 +16,6 @@ ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
 endif
 
-include ../metadata.mk
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME = github.com/projectcalico/calico/calico
@@ -78,9 +77,6 @@ _site build: bin/ocp.tgz $(DOCS_SOURCE)
 bin/ocp.tgz:
 	mkdir -p bin
 	tar czvf $@ -C ../manifests/ ocp
-
-# Update the static manifests 
-gen-manifests: clean _site
 
 ## Clean enough that a new release build will be clean
 clean:
@@ -147,62 +143,8 @@ update_canonical_urls:
 	python release-scripts/update-canonical-urls.py
 
 ###############################################################################
-# Release targets
-###############################################################################
-release-build: .release-$(VERSION).created 
-.release-$(VERSION).created:
-	$(MAKE) clean chart _site
-	touch $@
-
-## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) helm-index
-	touch $@
-
-## Kicks semaphore job which syncs github released helm charts with helm index file
-.PHONY: helm-index
-helm-index:
-	@echo "Triggering semaphore workflow to update helm index."
-	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea SEMAPHORE_WORKFLOW_BRANCH=master SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml $(MAKE) semaphore-run-workflow
-
-## Generates release notes for the given version.
-.PHONY: release-notes
-release-notes: #release-prereqs
-	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
-
-update-authors:
-ifndef GITHUB_TOKEN
-	$(error GITHUB_TOKEN must be set)
-endif
-	@echo "# Calico authors" > AUTHORS.md
-	@echo "" >> AUTHORS.md
-	@echo "This file is auto-generated based on contribution records reported" >> AUTHORS.md
-	@echo "by GitHub for the core repositories within the projectcalico/ organization. It is ordered alphabetically." >> AUTHORS.md
-	@echo "" >> AUTHORS.md
-	@docker run -ti --rm -v $(CURDIR):/code -e GITHUB_TOKEN=$(GITHUB_TOKEN) python:3 \
-		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
-
-###############################################################################
 # Utilities
 ###############################################################################
-DOCS_TEST_CONTAINER=projectcalico/release-test
-.PHONY: release-test-image
-release-test-image:
-	cd release-scripts/tests && docker build -t $(DOCS_TEST_CONTAINER) . && cd -
-
-.PHONY: release-test
-release-test: release-test-image
-	docker run --rm \
-	-v /var/run/docker.sock:/var/run/docker.sock \
-	-v $(CURDIR):/docs \
-	-e RELEASE_STREAM=$(RELEASE_STREAM) \
-	$(DOCS_TEST_CONTAINER) sh -c \
-	"nosetests . -e "$(EXCLUDE_REGEX)" \
-	-s -v --with-xunit \
-	--xunit-file='/docs/nosetests.xml' \
-	--with-timer $(EXTRA_NOSE_ARGS)"
-
 API_GEN_REPO?=tmjd/gen-crd-api-reference-docs
 API_GEN_BRANCH?=kb_v2
 OPERATOR_VERSION?=master
