@@ -25,7 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	"github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 
 	"github.com/docopt/docopt-go"
 	"github.com/pkg/errors"
@@ -57,7 +57,7 @@ type conntrackDumpCmd struct {
 	*cobra.Command
 	Version string `docopt:"<version>"`
 
-	version  int
+	version int
 }
 
 func newConntrackDumpCmd() *cobra.Command {
@@ -103,15 +103,15 @@ func dumpCtMapV2(ctMap bpf.Map) error {
 		copy(ctKey[:], k[:])
 
 		var ctVal v2.Value
-                if len(v) != len(ctVal) {
-                        log.Panic("Value has unexpected length")
-                }
-                copy(ctVal[:], v[:])
+		if len(v) != len(ctVal) {
+			log.Panic("Value has unexpected length")
+		}
+		copy(ctVal[:], v[:])
 
-                fmt.Printf("%v -> %v", ctKey, ctVal)
-                dumpExtrav2(ctKey, ctVal)
-                fmt.Printf("\n")
-                return bpf.IterNone
+		fmt.Printf("%v -> %v", ctKey, ctVal)
+		dumpExtrav2(ctKey, ctVal)
+		fmt.Printf("\n")
+		return bpf.IterNone
 	})
 	return err
 }
@@ -159,32 +159,32 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 }
 
 func dumpExtrav2(k v2.Key, v v2.Value) {
-        now := bpf.KTimeNanos()
+	now := bpf.KTimeNanos()
 
-        fmt.Printf(" Age: %s Active ago %s",
-                time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
+	fmt.Printf(" Age: %s Active ago %s",
+		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
 
-        if k.Proto() != conntrack.ProtoTCP {
-                return
-        }
+	if k.Proto() != conntrack.ProtoTCP {
+		return
+	}
 
-        if v.Type() == conntrack.TypeNATForward {
-                return
-        }
+	if v.Type() == conntrack.TypeNATForward {
+		return
+	}
 
-        data := v.Data()
+	data := v.Data()
 
-        if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() {
-                fmt.Printf(" CLOSED")
-                return
-        }
+	if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() {
+		fmt.Printf(" CLOSED")
+		return
+	}
 
-        if data.Established() {
-                fmt.Printf(" ESTABLISHED")
-                return
-        }
+	if data.Established() {
+		fmt.Printf(" ESTABLISHED")
+		return
+	}
 
-        fmt.Printf(" SYN-SENT")
+	fmt.Printf(" SYN-SENT")
 }
 
 func dumpExtra(k conntrack.Key, v conntrack.Value) {
@@ -339,7 +339,7 @@ type conntrackCreateCmd struct {
 func newConntrackCreateCmd() *cobra.Command {
 	cmd := &conntrackCreateCmd{
 		Command: &cobra.Command{
-			Use: "create <version>",
+			Use:   "create <version>",
 			Short: "create a conntrack map of specified version",
 		},
 	}
@@ -351,15 +351,15 @@ func newConntrackCreateCmd() *cobra.Command {
 }
 
 func (cmd *conntrackCreateCmd) Args(c *cobra.Command, args []string) error {
-        a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
-        if err != nil {
-                return errors.New(err.Error())
-        }
+	a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
+	if err != nil {
+		return errors.New(err.Error())
+	}
 
-        err = a.Bind(cmd)
-        if err != nil {
-                return errors.New(err.Error())
-        }
+	err = a.Bind(cmd)
+	if err != nil {
+		return errors.New(err.Error())
+	}
 
 	switch cmd.Version {
 	case "2":
@@ -367,12 +367,12 @@ func (cmd *conntrackCreateCmd) Args(c *cobra.Command, args []string) error {
 	default:
 		cmd.version = 3
 	}
-        return nil
+	return nil
 }
 
 func (cmd *conntrackCreateCmd) Run(c *cobra.Command, _ []string) {
 	var ctMap bpf.Map
-        mc := &bpf.MapContext{}
+	mc := &bpf.MapContext{}
 	switch cmd.version {
 	case 2:
 		ctMap = conntrack.MapV2(mc)
@@ -388,11 +388,11 @@ type conntrackWriteCmd struct {
 	*cobra.Command
 
 	Version string `docopt:"<version>"`
-	Key   string `docopt:"<key>"`
-	Value string `docopt:"<value>"`
+	Key     string `docopt:"<key>"`
+	Value   string `docopt:"<value>"`
 
-	key []byte
-	val []byte
+	key     []byte
+	val     []byte
 	version int
 }
 

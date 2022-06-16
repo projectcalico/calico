@@ -129,7 +129,7 @@ const (
 	voOrigPort  int = 52
 	voOrigSPort int = 54
 	voTunIP     int = 56
-	voNATSPort  int = 54
+	voNATSPort  int = 40
 	voOrigSIP   int = 60
 )
 
@@ -463,55 +463,23 @@ func (e Value) IsForwardDSR() bool {
 func (e Value) Upgrade() bpf.Upgradable {
 	var val3 v3.Value
 
-	created := time.Duration(e.Created())
-	lastSeen := time.Duration(e.LastSeen())
 	ctType := e.Type()
-	flags := e.Flags()
+	copy(val3[v3.VoCreated:v3.VoFlags2+1], e[voCreated:voFlags2+1])
 
 	switch ctType {
 	case TypeNormal, TypeNATReverse:
 		data := e.Data()
-		v3LegAB := v3.Leg{
-			Bytes:       0,
-			Packets:     0,
-			Seqno:       data.A2B.Seqno,
-			SynSeen:     data.A2B.SynSeen,
-			AckSeen:     data.A2B.AckSeen,
-			FinSeen:     data.A2B.FinSeen,
-			RstSeen:     data.A2B.RstSeen,
-			Whitelisted: data.A2B.Whitelisted,
-			Opener:      data.A2B.Opener,
-			Ifindex:     data.A2B.Ifindex,
-		}
-		v3LegBA := v3.Leg{
-			Bytes:       0,
-			Packets:     0,
-			Seqno:       data.B2A.Seqno,
-			SynSeen:     data.B2A.SynSeen,
-			AckSeen:     data.B2A.AckSeen,
-			FinSeen:     data.B2A.FinSeen,
-			RstSeen:     data.B2A.RstSeen,
-			Whitelisted: data.B2A.Whitelisted,
-			Opener:      data.B2A.Opener,
-			Ifindex:     data.B2A.Ifindex,
-		}
-		if ctType == TypeNormal {
-			val3 = v3.NewValueNormal(created, lastSeen, flags, v3LegAB, v3LegBA)
-		} else {
-
-			if data.OrigSrc.Equal(net.IPv4(0,0,0,0)){
-				val3 = v3.NewValueNATReverse(created, lastSeen, flags, v3LegAB, v3LegBA, data.TunIP, data.OrigDst, data.OrigPort)
-			} else {
-				val3 = v3.NewValueNATReverseSNAT(created, lastSeen, flags, v3LegAB, v3LegBA, data.TunIP, data.OrigDst, data.OrigSrc, data.OrigPort)
-			}
-			val3.SetOrigSport(data.OrigSPort)
+		copy(val3[v3.VoLegAB+12:v3.VoLegAB+12+legSize], e[voLegAB:voLegAB+legSize])
+		copy(val3[v3.VoLegBA+12:v3.VoLegBA+12+legSize], e[voLegBA:voLegBA+legSize])
+		if ctType == TypeNATReverse {
+			copy(val3[v3.VoTunIP:v3.VoTunIP+4], data.TunIP.To4())
+			copy(val3[v3.VoOrigIP:v3.VoOrigIP+4], data.OrigDst.To4())
+			binary.LittleEndian.PutUint16(val3[v3.VoOrigPort:v3.VoOrigPort+2], data.OrigPort)
+			binary.LittleEndian.PutUint16(val3[v3.VoOrigSPort:v3.VoOrigSPort+2], data.OrigSPort)
+			copy(val3[v3.VoOrigSIP:v3.VoOrigSIP+4], data.OrigSrc.To4())
 		}
 	case TypeNATForward:
-		revKey := e.ReverseNATKey()
-		NATSport := e.NATSPort()
-		v3RevKey := v3.NewKey(revKey.Proto(), revKey.AddrA(), revKey.PortA(), revKey.AddrB(), revKey.PortB())
-		val3 = v3.NewValueNATForward(created, lastSeen, flags, v3RevKey)
-		val3.SetNATSport(NATSport)
+		copy(val3[v3.VoRevKey:v3.VoNATSPort+2], e[voRevKey:voNATSPort+2])
 	}
 	return val3
 }

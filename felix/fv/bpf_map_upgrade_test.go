@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build fvtests
+
 package fv_test
 
 import (
@@ -22,8 +24,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	"github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -45,7 +48,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 	BeforeEach(func() {
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		felixes,_ = infrastructure.StartNNodeTopology(1, opts, infra)
+		felixes, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 	})
 
 	AfterEach(func() {
@@ -104,11 +107,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		k3NatRev := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
 		val3NatRev := conntrack.NewValueNATReverse(now, now, 0, leg3Normal, leg3Normal, tunIP, origIP, 1234)
 
-                srcIP = net.IPv4(5, 6, 7, 8)
-                dstIP = net.IPv4(55, 66, 77, 88)
+		srcIP = net.IPv4(5, 6, 7, 8)
+		dstIP = net.IPv4(55, 66, 77, 88)
 		key = v2.NewKey(11, srcIP, 0, dstIP, 0)
-                tunIP = net.IPv4(12, 13, 15, 17)
-                origIP = net.IPv4(10, 11, 12, 15)
+		tunIP = net.IPv4(12, 13, 15, 17)
+		origIP = net.IPv4(10, 11, 12, 15)
 		origSIP := net.IPv4(16, 17, 18, 19)
 		key = v2.NewKey(11, srcIP, 0, dstIP, 0)
 		key64 = base64.StdEncoding.EncodeToString(key[:])

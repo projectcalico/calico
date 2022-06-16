@@ -481,11 +481,11 @@ func TestCtMapUpgradeWithNATRevEntries(t *testing.T) {
 
 	k3 := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
 	value3 := ctMapMemV3[k3]
-	Expect(value3.OrigIP()).To(Equal(origIP))
-	data := value3.Data()
-	Expect(data.TunIP).To(Equal(tunIP))
-	Expect(value3.OrigPort()).To(Equal(origPort))
-	Expect(value3.OrigSPort()).To(Equal(origSport))
+	legAB3 := conntrack.Leg{Seqno: seqNoAB, SynSeen: true, AckSeen: false, FinSeen: true, RstSeen: false, Whitelisted: true, Opener: false, Ifindex: ifIndexAB}
+	legBA3 := conntrack.Leg{Seqno: seqNoBA, SynSeen: false, AckSeen: true, FinSeen: false, RstSeen: true, Whitelisted: false, Opener: true, Ifindex: ifIndexBA}
+	expectedValue := conntrack.NewValueNATReverse(created, lastSeen, flags, legAB3, legBA3, tunIP, origIP, uint16(origPort))
+	expectedValue.SetOrigSport(origSport)
+	Expect(value3).To(Equal(expectedValue))
 	ctMapV2.(*bpf.PinnedMap).Close()
 	ctMapV3.(*bpf.PinnedMap).Close()
 
@@ -538,32 +538,16 @@ func TestCtMapUpgradeWithNormalEntries(t *testing.T) {
 	for n := 0; n < 2; n++ {
 		k := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), uint16(n), net.ParseIP("10.0.0.2"), uint16(n>>16))
 		value := ctMapMemV3[k]
-		Expect(value.Created()).To(Equal(1 + int64(n)))
-		Expect(value.LastSeen()).To(Equal(2 + int64(n)))
-		Expect(value.Flags()).To(Equal(flags))
-		legAB := value.Data().A2B
-		legBA := value.Data().B2A
-		Expect(legAB.Bytes).To(Equal(uint64(0)))
-		Expect(legAB.Packets).To(Equal(uint32(0)))
-		Expect(legAB.Seqno).To(Equal(uint32(1000 + n)))
-		Expect(legAB.Ifindex).To(Equal(uint32(2000 + n)))
-		Expect(legAB.SynSeen).To(Equal(true))
-		Expect(legAB.FinSeen).To(Equal(true))
-		Expect(legAB.RstSeen).To(Equal(false))
-		Expect(legAB.AckSeen).To(Equal(false))
-		Expect(legAB.Whitelisted).To(Equal(true))
-		Expect(legAB.Opener).To(Equal(false))
-
-		Expect(legBA.Bytes).To(Equal(uint64(0)))
-		Expect(legBA.Packets).To(Equal(uint32(0)))
-		Expect(legBA.Seqno).To(Equal(uint32(1001 + n)))
-		Expect(legBA.Ifindex).To(Equal(uint32(2001 + n)))
-		Expect(legBA.SynSeen).To(Equal(false))
-		Expect(legBA.FinSeen).To(Equal(false))
-		Expect(legBA.RstSeen).To(Equal(true))
-		Expect(legBA.AckSeen).To(Equal(true))
-		Expect(legBA.Whitelisted).To(Equal(false))
-		Expect(legBA.Opener).To(Equal(true))
+		created = time.Duration(1 + int64(n))
+		lastSeen = time.Duration(2 + int64(n))
+		seqNoAB := 1000 + uint32(n)
+		ifIndexAB := 2000 + uint32(n)
+		seqNoBA := 1001 + uint32(n)
+		ifIndexBA := 2001 + uint32(n)
+		legAB := conntrack.Leg{Seqno: seqNoAB, SynSeen: true, AckSeen: false, FinSeen: true, RstSeen: false, Whitelisted: true, Opener: false, Ifindex: ifIndexAB}
+		legBA := conntrack.Leg{Seqno: seqNoBA, SynSeen: false, AckSeen: true, FinSeen: false, RstSeen: true, Whitelisted: false, Opener: true, Ifindex: ifIndexBA}
+		expectedValue := conntrack.NewValueNormal(created, lastSeen, flags, legAB, legBA)
+		Expect(value).To(Equal(expectedValue))
 	}
 
 	ctMapV2.(*bpf.PinnedMap).Close()
