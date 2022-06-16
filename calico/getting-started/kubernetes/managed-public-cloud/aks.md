@@ -32,6 +32,8 @@ To enable {{site.prodname}} network policy enforcement, follow these step-by-ste
 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
+> **Note**: Bring your own Container Network Interface (CNI) plugin is a preview feature with AKS.
+{: .alert .alert-info}
 
 1. Create an Azure AKS cluster with no Kubernetes CNI pre-installed. Please refer to [Bring your own CNI with AKS](https://docs.microsoft.com/en-us/azure/aks/use-byo-cni?tabs=azure-cli) for details.
    ``` 
@@ -43,7 +45,7 @@ The geeky details of what you get:
     # Create a resource group
     az group create --name my-calico-rg --location westcentralus
 
-    az aks create --resource-group my-calico-rg --name my-calico-cluster --location westcentralus --network-plugin none
+    az aks create --resource-group my-calico-rg --name my-calico-cluster --location westcentralus --pod-cidr 192.168.0.0/16 --network-plugin none
     ```
 
 1. Get credentials to allow you to access the cluster with `kubectl`:
