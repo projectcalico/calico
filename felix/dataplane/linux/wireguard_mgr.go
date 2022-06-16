@@ -138,25 +138,21 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 		m.wireguardRouteTable.RouteRemove(cidr)
 	case *proto.WireguardEndpointUpdate:
 		logCtx.WithField("msg", msg).Debug("WireguardEndpointUpdate update")
-		publicKey := msg.PublicKey
-		if m.ipVersion == 6 {
-			publicKey = msg.PublicKeyV6
+		if m.ipVersion != 4 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
 		}
-		key, err := wgtypes.ParseKey(publicKey)
+		key, err := wgtypes.ParseKey(msg.PublicKey)
 		if err != nil {
 			logCtx.WithError(err).Errorf("error parsing wireguard public key %s for node %s", msg.PublicKey, msg.Hostname)
 		}
 		var ifaceAddr ip.Addr
-		ifaceAddrStr := msg.InterfaceIpv4Addr
-		if m.ipVersion == 6 {
-			ifaceAddrStr = msg.InterfaceIpv6Addr
-		}
-		if ifaceAddrStr != "" {
-			addr := ip.FromString(ifaceAddrStr)
+		if msg.InterfaceIpv4Addr != "" {
+			addr := ip.FromString(msg.InterfaceIpv4Addr)
 			if addr == nil {
 				// Unable to parse the wireguard interface address. We can still enable wireguard without this, so treat as
 				// an update with no interface address.
-				logCtx.WithError(err).Errorf("error parsing wireguard interface address %s for node %s", ifaceAddrStr, msg.Hostname)
+				logCtx.WithError(err).Errorf("error parsing wireguard interface address %s for node %s", msg.InterfaceIpv4Addr, msg.Hostname)
 			} else if addr.Version() == m.ipVersion {
 				ifaceAddr = addr
 			}
@@ -164,7 +160,36 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 		m.wireguardRouteTable.EndpointWireguardUpdate(msg.Hostname, key, ifaceAddr)
 	case *proto.WireguardEndpointRemove:
 		logCtx.WithField("msg", msg).Debug("WireguardEndpointRemove update")
-		if msg.IpVersion != proto.IPVersion(m.ipVersion) {
+		if m.ipVersion != 4 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
+		m.wireguardRouteTable.EndpointWireguardRemove(msg.Hostname)
+	case *proto.WireguardEndpointV6Update:
+		logCtx.WithField("msg", msg).Debug("WireguardEndpointV6Update update")
+		if m.ipVersion != 6 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
+		key, err := wgtypes.ParseKey(msg.PublicKeyV6)
+		if err != nil {
+			logCtx.WithError(err).Errorf("error parsing wireguard public key %s for node %s", msg.PublicKeyV6, msg.Hostname)
+		}
+		var ifaceAddr ip.Addr
+		if msg.InterfaceIpv6Addr != "" {
+			addr := ip.FromString(msg.InterfaceIpv6Addr)
+			if addr == nil {
+				// Unable to parse the wireguard interface address. We can still enable wireguard without this, so treat as
+				// an update with no interface address.
+				logCtx.WithError(err).Errorf("error parsing wireguard interface address %s for node %s", msg.InterfaceIpv6Addr, msg.Hostname)
+			} else if addr.Version() == m.ipVersion {
+				ifaceAddr = addr
+			}
+		}
+		m.wireguardRouteTable.EndpointWireguardUpdate(msg.Hostname, key, ifaceAddr)
+	case *proto.WireguardEndpointV6Remove:
+		logCtx.WithField("msg", msg).Debug("WireguardEndpointV6Remove update")
+		if m.ipVersion != 6 {
 			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
 			return
 		}
