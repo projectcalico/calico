@@ -2454,7 +2454,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"wireguardEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WireguardEnabled controls whether Wireguard is enabled. [Default: false]",
+							Description: "WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"wireguardEnabledV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WireguardEnabledV6 controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network). [Default: false]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -2475,14 +2482,28 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"wireguardInterfaceName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WireguardInterfaceName specifies the name to use for the Wireguard interface. [Default: wg.calico]",
+							Description: "WireguardInterfaceName specifies the name to use for the IPv4 Wireguard interface. [Default: wireguard.cali]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"wireguardInterfaceNameV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WireguardInterfaceNameV6 specifies the name to use for the IPv6 Wireguard interface. [Default: wg-v6.cali]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"wireguardMTU": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WireguardMTU controls the MTU on the Wireguard interface. See Configuring MTU [Default: 1420]",
+							Description: "WireguardMTU controls the MTU on the IPv4 Wireguard interface. See Configuring MTU [Default: 1440]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"wireguardMTUV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WireguardMTUV6 controls the MTU on the IPv6 Wireguard interface. See Configuring MTU [Default: 1420]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
