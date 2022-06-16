@@ -399,7 +399,7 @@ type conntrackWriteCmd struct {
 func newConntrackWriteCmd() *cobra.Command {
 	cmd := &conntrackWriteCmd{
 		Command: &cobra.Command{
-			Use:   "write [<version>] <key> <value>",
+			Use:   "write <key> <value> [<version>]",
 			Short: "write a key-value pair, each encoded in base64",
 		},
 	}

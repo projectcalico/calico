@@ -75,7 +75,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		key64 := base64.StdEncoding.EncodeToString(key[:])
 
 		// write a normal key
-		felixes[0].Exec("calico-bpf", "conntrack", "write", "2", key64, val64)
+		felixes[0].Exec("calico-bpf", "conntrack", "write", key64, val64, "2")
 
 		k3Normal := conntrack.NewKey(6, srcIP, 0, dstIP, 0)
 		leg3Normal := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
@@ -89,7 +89,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		val.SetNATSport(4321)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
-		felixes[0].Exec("calico-bpf", "conntrack", "write", "2", key64, val64)
+		felixes[0].Exec("calico-bpf", "conntrack", "write", key64, val64, "2")
 		k3NatFwd := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
 		val3NatFwd := conntrack.NewValueNATForward(now, now, 0, k3NatFwd)
 		val3NatFwd.SetNATSport(4321)
@@ -103,7 +103,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		val = v2.NewValueNATReverse(now, now, 0, leg, leg, tunIP, origIP, 1234)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
-		felixes[0].Exec("calico-bpf", "conntrack", "write", "2", key64, val64)
+		felixes[0].Exec("calico-bpf", "conntrack", "write", key64, val64, "2")
 		k3NatRev := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
 		val3NatRev := conntrack.NewValueNATReverse(now, now, 0, leg3Normal, leg3Normal, tunIP, origIP, 1234)
 
@@ -118,7 +118,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		val = v2.NewValueNATReverseSNAT(now, now, 0, leg, leg, tunIP, origIP, origSIP, 1234)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
-		felixes[0].Exec("calico-bpf", "conntrack", "write", "2", key64, val64)
+		felixes[0].Exec("calico-bpf", "conntrack", "write", key64, val64, "2")
 		k3NatRevSnat := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
 		val3NatRevSnat := conntrack.NewValueNATReverseSNAT(now, now, 0, leg3Normal, leg3Normal, tunIP, origIP, origSIP, 1234)
 
