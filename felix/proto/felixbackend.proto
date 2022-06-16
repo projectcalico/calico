@@ -112,9 +112,9 @@ message ToDataplane {
     // VXLANTunnelEndpointRemove is send when a route is deleted.
     VXLANTunnelEndpointRemove vtep_remove = 26;
 
-    // WireguardEndpointUpdate is sent to setup wireguard on the host.
+    // WireguardEndpointUpdate is sent to setup IPv4 wireguard on the host.
     WireguardEndpointUpdate wireguard_endpoint_update = 27;
-    // WireguardEndpointRemove is sent to undo wireguard on the host.
+    // WireguardEndpointRemove is sent to undo IPv4 wireguard on the host.
     WireguardEndpointRemove wireguard_endpoint_remove = 28;
 
     // GlobalBGPConfigUpdate is sent when global BGPConfiguration changes.
@@ -124,6 +124,11 @@ message ToDataplane {
 
     ServiceUpdate service_update = 31;
     ServiceRemove service_remove = 32;
+
+    // WireguardEndpointV6Update is sent to setup IPv6 wireguard on the host.
+    WireguardEndpointV6Update wireguard_endpoint_v6_update = 33;
+    // WireguardEndpointV6Remove is sent to undo IPv6 wireguard on the host.
+    WireguardEndpointV6Remove wireguard_endpoint_v6_remove = 34;
   }
 }
 
