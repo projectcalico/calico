@@ -230,6 +230,10 @@ func WrapPayloadWithEnvelope(msg interface{}, seqNo uint64) (*proto.ToDataplane,
 		envelope.Payload = &proto.ToDataplane_WireguardEndpointUpdate{WireguardEndpointUpdate: msg}
 	case *proto.WireguardEndpointRemove:
 		envelope.Payload = &proto.ToDataplane_WireguardEndpointRemove{WireguardEndpointRemove: msg}
+	case *proto.WireguardEndpointV6Update:
+		envelope.Payload = &proto.ToDataplane_WireguardEndpointV6Update{WireguardEndpointV6Update: msg}
+	case *proto.WireguardEndpointV6Remove:
+		envelope.Payload = &proto.ToDataplane_WireguardEndpointV6Remove{WireguardEndpointV6Remove: msg}
 	case *proto.GlobalBGPConfigUpdate:
 		envelope.Payload = &proto.ToDataplane_GlobalBgpConfigUpdate{GlobalBgpConfigUpdate: msg}
 	case *proto.Encapsulation:
