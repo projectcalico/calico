@@ -46,15 +46,13 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -85,8 +83,6 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 	// describeCommonFelixTests creates specs for Felix tests that are common between the
 	// two scenarios below (with and without Typha).
 	describeCommonFelixTests := func() {
-		var podsToCleanUp []string
-
 		Describe("with normal Felix startup", func() {
 
 			It("should become ready and stay ready", func() {
@@ -102,41 +98,16 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 
 		createLocalPod := func() {
 			testPodName := fmt.Sprintf("test-pod-%x", rand.Uint32())
-			pod := &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Name: testPodName},
-				Spec: v1.PodSpec{Containers: []v1.Container{{
-					Name:  fmt.Sprintf("container-foo"),
-					Image: "ignore",
-				}},
-					NodeName: felix.Hostname,
-				},
-				Status: v1.PodStatus{
-					Phase: v1.PodRunning,
-					Conditions: []v1.PodCondition{{
-						Type:   v1.PodScheduled,
-						Status: v1.ConditionTrue,
-					}},
-					PodIP: "10.0.0.1",
-				},
-			}
-			var err error
-			pod, err = k8sInfra.K8sClient.CoreV1().Pods("default").Create(context.Background(), pod, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			pod.Status.PodIP = "10.0.0.1"
-			_, err = k8sInfra.K8sClient.CoreV1().Pods("default").UpdateStatus(context.Background(), pod, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			podsToCleanUp = append(podsToCleanUp, testPodName)
+			podIP := "10.0.0.1"
+			pod := workload.New(felix, testPodName, "default",
+				podIP, "12345", "tcp")
+			pod.Start()
+
+			pod.ConfigureInInfra(k8sInfra)
 		}
 
 		AfterEach(func() {
-			for _, name := range podsToCleanUp {
-				// It is possible for a local pod to be deleted by GC if node is gone.
-				err := k8sInfra.K8sClient.CoreV1().Pods("default").Delete(context.Background(), name, metav1.DeleteOptions{})
-				if err != nil && !apierrs.IsNotFound(err) {
-					Expect(err).NotTo(HaveOccurred())
-				}
-			}
-			podsToCleanUp = nil
+			felix.Stop()
 		})
 
 		Describe("after removing iptables-restore", func() {

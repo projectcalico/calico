@@ -123,6 +123,11 @@ func (m *Map) CopyDeltaFromOldMap() error {
 	return nil
 }
 
+func (m *Map) ContainsKey(k []byte) bool {
+	_, ok := m.Contents[string(k)]
+	return ok
+}
+
 func NewMockMap(params bpf.MapParameters) *Map {
 	if params.KeySize <= 0 {
 		logrus.WithField("params", params).Panic("KeySize should be >0")
