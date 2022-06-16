@@ -20,7 +20,12 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"net"
+	"time"
+
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	conntrackv2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	mock "github.com/projectcalico/calico/felix/bpf/mock/multiversion"
 	v2 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
 	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
@@ -381,4 +386,177 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	deleteMap(mockMapv2_old)
 	deleteMap(mockMapv2)
 	deleteMap(mockMapv5)
+}
+
+func TestCtMapUpgradeWithNATFwdEntries(t *testing.T) {
+	RegisterTestingT(t)
+	ctMap.(*bpf.PinnedMap).Close()
+	os.Remove(ctMap.Path())
+	mc := &bpf.MapContext{}
+	// create version 2 map
+	ctMapV2 := conntrack.MapV2(mc)
+	err := ctMapV2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create version2 ct map")
+
+	created := time.Duration(1)
+	lastSeen := time.Duration(2)
+	flags := conntrack.FlagNATOut | conntrack.FlagSkipFIB
+	k := conntrackv2.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
+	revKey := conntrackv2.NewKey(1, net.ParseIP("10.0.0.2"), 0, net.ParseIP("10.0.0.3"), 0)
+	v := conntrackv2.NewValueNATForward(created, lastSeen, flags, revKey)
+	v.SetNATSport(uint16(4000))
+	err = ctMapV2.Update(k.AsBytes(), v[:])
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMapMemV2, err := conntrackv2.LoadMapMem(ctMapV2)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMapV3 := conntrack.Map(mc)
+	err = ctMapV3.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create ct map")
+
+	ctMapMemV3 := saveCTMap(ctMapV3)
+	Expect(len(ctMapMemV3)).To(Equal(len(ctMapMemV2)))
+
+	k3 := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
+	value3 := ctMapMemV3[k3]
+
+	revKey3 := conntrack.NewKey(1, net.ParseIP("10.0.0.2"), 0, net.ParseIP("10.0.0.3"), 0)
+	Expect(value3.Created()).To(Equal(int64(1)))
+	Expect(value3.LastSeen()).To(Equal(int64(2)))
+	Expect(value3.Flags()).To(Equal(flags))
+	Expect(value3.ReverseNATKey()).To(Equal(revKey3))
+	Expect(value3.NATSPort()).To(Equal(uint16(4000)))
+
+	ctMapV2.(*bpf.PinnedMap).Close()
+	ctMapV3.(*bpf.PinnedMap).Close()
+
+	os.Remove(ctMapV2.Path())
+	os.Remove(ctMapV3.Path())
+	for _, m := range allMaps {
+		err := m.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func TestCtMapUpgradeWithNATRevEntries(t *testing.T) {
+	RegisterTestingT(t)
+	ctMap.(*bpf.PinnedMap).Close()
+	os.Remove(ctMap.Path())
+	mc := &bpf.MapContext{}
+	// create version 2 map
+	ctMapV2 := conntrack.MapV2(mc)
+	err := ctMapV2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create version2 ct map")
+
+	var created, lastSeen time.Duration
+	flags := conntrack.FlagNATOut | conntrack.FlagSkipFIB
+	tunIP := net.IP{20, 0, 0, 1}
+	origIP := net.IP{30, 0, 0, 1}
+	origPort := uint16(4000)
+	origSport := uint16(5000)
+	k := conntrackv2.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
+	created = time.Duration(1)
+	lastSeen = time.Duration(2)
+	seqNoAB := uint32(1000)
+	ifIndexAB := uint32(2000)
+	seqNoBA := uint32(1001)
+	ifIndexBA := uint32(2001)
+	legAB := conntrackv2.Leg{Seqno: seqNoAB, SynSeen: true, AckSeen: false, FinSeen: true, RstSeen: false, Whitelisted: true, Opener: false, Ifindex: ifIndexAB}
+	legBA := conntrackv2.Leg{Seqno: seqNoBA, SynSeen: false, AckSeen: true, FinSeen: false, RstSeen: true, Whitelisted: false, Opener: true, Ifindex: ifIndexBA}
+	v := conntrackv2.NewValueNATReverse(created, lastSeen, flags, legAB, legBA, tunIP, origIP, uint16(origPort))
+	v.SetOrigSport(origSport)
+	err = ctMapV2.Update(k.AsBytes(), v[:])
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMapMemV2, err := conntrackv2.LoadMapMem(ctMapV2)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMapV3 := conntrack.Map(mc)
+	err = ctMapV3.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create ct map")
+
+	ctMapMemV3 := saveCTMap(ctMapV3)
+	Expect(len(ctMapMemV3)).To(Equal(len(ctMapMemV2)))
+
+	k3 := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
+	value3 := ctMapMemV3[k3]
+	legAB3 := conntrack.Leg{Seqno: seqNoAB, SynSeen: true, AckSeen: false, FinSeen: true, RstSeen: false, Whitelisted: true, Opener: false, Ifindex: ifIndexAB}
+	legBA3 := conntrack.Leg{Seqno: seqNoBA, SynSeen: false, AckSeen: true, FinSeen: false, RstSeen: true, Whitelisted: false, Opener: true, Ifindex: ifIndexBA}
+	expectedValue := conntrack.NewValueNATReverse(created, lastSeen, flags, legAB3, legBA3, tunIP, origIP, uint16(origPort))
+	expectedValue.SetOrigSport(origSport)
+	Expect(value3).To(Equal(expectedValue))
+	ctMapV2.(*bpf.PinnedMap).Close()
+	ctMapV3.(*bpf.PinnedMap).Close()
+
+	os.Remove(ctMapV2.Path())
+	os.Remove(ctMapV3.Path())
+	for _, m := range allMaps {
+		err := m.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func TestCtMapUpgradeWithNormalEntries(t *testing.T) {
+	RegisterTestingT(t)
+	ctMap.(*bpf.PinnedMap).Close()
+	os.Remove(ctMap.Path())
+
+	mc := &bpf.MapContext{}
+	// create version 2 map
+	ctMapV2 := conntrack.MapV2(mc)
+	err := ctMapV2.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create version2 ct map")
+
+	var created, lastSeen time.Duration
+	flags := conntrack.FlagNATOut | conntrack.FlagSkipFIB
+	for n := 0; n < 2; n++ {
+		k := conntrackv2.NewKey(1, net.ParseIP("10.0.0.1"), uint16(n), net.ParseIP("10.0.0.2"), uint16(n>>16))
+		created = time.Duration(1 + int64(n))
+		lastSeen = time.Duration(2 + int64(n))
+		seqNoAB := 1000 + uint32(n)
+		ifIndexAB := 2000 + uint32(n)
+		seqNoBA := 1001 + uint32(n)
+		ifIndexBA := 2001 + uint32(n)
+		legAB := conntrackv2.Leg{Seqno: seqNoAB, SynSeen: true, AckSeen: false, FinSeen: true, RstSeen: false, Whitelisted: true, Opener: false, Ifindex: ifIndexAB}
+		legBA := conntrackv2.Leg{Seqno: seqNoBA, SynSeen: false, AckSeen: true, FinSeen: false, RstSeen: true, Whitelisted: false, Opener: true, Ifindex: ifIndexBA}
+		v := conntrackv2.NewValueNormal(created, lastSeen, flags, legAB, legBA)
+		err := ctMapV2.Update(k.AsBytes(), v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	ctMapMemV2, err := conntrackv2.LoadMapMem(ctMapV2)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMapV3 := conntrack.Map(mc)
+	err = ctMapV3.EnsureExists()
+	Expect(err).NotTo(HaveOccurred(), "Failed to create ct map")
+
+	ctMapMemV3 := saveCTMap(ctMapV3)
+	Expect(len(ctMapMemV3)).To(Equal(len(ctMapMemV2)))
+
+	for n := 0; n < 2; n++ {
+		k := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), uint16(n), net.ParseIP("10.0.0.2"), uint16(n>>16))
+		value := ctMapMemV3[k]
+		created = time.Duration(1 + int64(n))
+		lastSeen = time.Duration(2 + int64(n))
+		seqNoAB := 1000 + uint32(n)
+		ifIndexAB := 2000 + uint32(n)
+		seqNoBA := 1001 + uint32(n)
+		ifIndexBA := 2001 + uint32(n)
+		legAB := conntrack.Leg{Seqno: seqNoAB, SynSeen: true, AckSeen: false, FinSeen: true, RstSeen: false, Whitelisted: true, Opener: false, Ifindex: ifIndexAB}
+		legBA := conntrack.Leg{Seqno: seqNoBA, SynSeen: false, AckSeen: true, FinSeen: false, RstSeen: true, Whitelisted: false, Opener: true, Ifindex: ifIndexBA}
+		expectedValue := conntrack.NewValueNormal(created, lastSeen, flags, legAB, legBA)
+		Expect(value).To(Equal(expectedValue))
+	}
+
+	ctMapV2.(*bpf.PinnedMap).Close()
+	ctMapV3.(*bpf.PinnedMap).Close()
+
+	os.Remove(ctMapV2.Path())
+	os.Remove(ctMapV3.Path())
+	for _, m := range allMaps {
+		err := m.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	}
 }

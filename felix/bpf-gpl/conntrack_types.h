@@ -35,6 +35,8 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_HOST_PSNAT 0x200 /* marks that this is from host port collision resolution */
 
 struct calico_ct_leg {
+	__u64 bytes;
+	__u32 packets;
 	__u32 seqno;
 
 	__u32 syn_seen:1;
@@ -70,24 +72,33 @@ struct calico_ct_value {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
 			struct calico_ct_leg a_to_b; // 24
-			struct calico_ct_leg b_to_a; // 36
+			struct calico_ct_leg b_to_a; // 48
 
 			// CALI_CT_TYPE_NAT_REV
-			__u32 orig_ip;                     // 44
-			__u16 orig_port;                   // 48
-			__u16 orig_sport;                  // 50
-			__u32 tun_ip;                      // 52
-			__u32 orig_sip;                    // 56
+			__u32 tun_ip;                      // 72
+			__u32 orig_ip;                     // 76
+			__u16 orig_port;                   // 80
+			__u16 orig_sport;                  // 82
+			__u32 orig_sip;                    // 84
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
 		struct {
 			struct calico_ct_key nat_rev_key;  // 24
 			__u16 nat_sport;
-			__u8 pad2[6];
+			__u8 pad2[46];
 		};
 	};
+
+	/* 64bit aligned by here */
 };
+
+static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-local-typedef"
+	COMPILE_TIME_ASSERT((sizeof(struct calico_ct_value) == 88))
+#pragma clang diagnostic pop
+}
 
 #define ct_value_set_flags(v, f) do {		\
 	(v)->flags |= ((f) & 0xff);		\
@@ -129,7 +140,7 @@ struct ct_create_ctx {
 	bool allow_return;
 };
 
-CALI_MAP(cali_v4_ct, 2,
+CALI_MAP(cali_v4_ct, 3,
 		BPF_MAP_TYPE_HASH,
 		struct calico_ct_key, struct calico_ct_value,
 		512000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
