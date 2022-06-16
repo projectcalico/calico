@@ -444,13 +444,13 @@ var _ = Describe("Enable wireguard", func() {
 					if enableV6 {
 						Expect(wgDataplaneV6.NumLinkAddCalls).To(Equal(1))
 						Expect(wgDataplaneV6.WireguardOpen).To(BeTrue())
-						link := wgDataplaneV6.NameToLink[ifaceNameV6]
-						Expect(link.WireguardFirewallMark).To(Equal(10))
-						Expect(link.WireguardListenPort).To(Equal(listeningPort))
-						Expect(link.WireguardPrivateKey).NotTo(Equal(zeroKey))
-						Expect(link.WireguardPrivateKey.PublicKey()).To(Equal(link.WireguardPublicKey))
+						linkV6 := wgDataplaneV6.NameToLink[ifaceNameV6]
+						Expect(linkV6.WireguardFirewallMark).To(Equal(10))
+						Expect(linkV6.WireguardListenPort).To(Equal(listeningPort))
+						Expect(linkV6.WireguardPrivateKey).NotTo(Equal(zeroKey))
+						Expect(linkV6.WireguardPrivateKey.PublicKey()).To(Equal(linkV6.WireguardPublicKey))
 						Expect(sV6.numStatusCallbacks).To(Equal(1))
-						Expect(s.statusKey).To(Equal(link.WireguardPublicKey))
+						Expect(sV6.statusKey).To(Equal(linkV6.WireguardPublicKey))
 					}
 				})
 
@@ -688,7 +688,7 @@ var _ = Describe("Enable wireguard", func() {
 						err := wgV6.Apply()
 
 						Expect(err).NotTo(HaveOccurred())
-						linkV6 = wgDataplaneV6.NameToLink[ifaceName]
+						linkV6 = wgDataplaneV6.NameToLink[ifaceNameV6]
 						Expect(linkV6.Addrs).To(HaveLen(1))
 						Expect(linkV6.Addrs[0].IP).To(Equal(ipv6.AsNetIP()))
 						Expect(wgDataplaneV6.WireguardOpen).To(BeTrue())
@@ -855,7 +855,7 @@ var _ = Describe("Enable wireguard", func() {
 						}
 						if enableV6 {
 							Expect(sV6.numStatusCallbacks).To(Equal(1))
-							wgV6.EndpointWireguardUpdate(hostname, s.statusKey, nil)
+							wgV6.EndpointWireguardUpdate(hostname, sV6.statusKey, nil)
 							keyV6_peer1 = mustGeneratePrivateKey().PublicKey()
 							wgV6.EndpointWireguardUpdate(peer1, keyV6_peer1, nil)
 							wgV6.EndpointUpdate(peer1, ipv6_peer1)
@@ -1068,7 +1068,7 @@ var _ = Describe("Enable wireguard", func() {
 
 								wgDataplaneV6.ResetDeltas()
 								rtDataplaneV6.ResetDeltas()
-								wg.RouteUpdate(hostname, cidrV6_6)
+								wgV6.RouteUpdate(hostname, cidrV6_6)
 								err := wgV6.Apply()
 								Expect(err).NotTo(HaveOccurred())
 							}
@@ -1747,7 +1747,7 @@ var _ = Describe("Enable wireguard", func() {
 									Expect(wgDataplaneV6.WireguardConfigUpdated).To(BeTrue())
 									Expect(linkV6.WireguardPeers).To(HaveLen(1))
 									Expect(linkV6.WireguardPeers).To(HaveLen(1))
-									Expect(linkV6.WireguardPeers).To(HaveKey(key_peer1))
+									Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer1))
 									Expect(rtDataplane.RouteKeyToRoute[routekeyV6_3]).To(Equal(netlink.Route{
 										LinkIndex: 1,
 										Dst:       &ipnetV6_3,
@@ -1865,7 +1865,7 @@ var _ = Describe("Enable wireguard", func() {
 									Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(0))
 									Expect(wgDataplaneV6.WireguardConfigUpdated).To(BeTrue())
 									Expect(linkV6.WireguardPeers).To(HaveLen(1))
-									Expect(linkV6.WireguardPeers).To(HaveKey(key_peer1))
+									Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer1))
 
 									// Remove the wireguard config for this peer.
 									// This is the last bit of configuration for the peer and so the node should be removed
@@ -1966,7 +1966,7 @@ var _ = Describe("Enable wireguard", func() {
 										Table:     tableIndex,
 									}))
 									Expect(linkV6.WireguardPeers).To(HaveLen(1))
-									Expect(linkV6.WireguardPeers).To(HaveKey(key_peer1))
+									Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer1))
 
 									// Remove the route.
 									By("Removing the route")
@@ -2064,15 +2064,15 @@ var _ = Describe("Enable wireguard", func() {
 									Expect(err).NotTo(HaveOccurred())
 									Expect(wgV6.DebugNodes()).To(HaveLen(4))
 									Expect(rtDataplaneV6.AddedRouteKeys).To(HaveLen(1))
-									Expect(rtDataplaneV6.AddedRouteKeys).To(HaveKey(routekey_3))
+									Expect(rtDataplaneV6.AddedRouteKeys).To(HaveKey(routekeyV6_3))
 									Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(1))
-									Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveKey(routekey_3))
+									Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveKey(routekeyV6_3))
 									Expect(wgDataplaneV6.WireguardConfigUpdated).To(BeTrue())
 									Expect(linkV6.WireguardPeers).To(HaveLen(1))
-									Expect(linkV6.WireguardPeers).To(HaveKey(key_peer1))
+									Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer1))
 									Expect(rtDataplaneV6.RouteKeyToRoute[routekeyV6_3]).To(Equal(netlink.Route{
 										LinkIndex: 1,
-										Dst:       &ipnet_3,
+										Dst:       &ipnetV6_3,
 										Type:      syscall.RTN_THROW,
 										Protocol:  FelixRouteProtocol,
 										Scope:     netlink.SCOPE_UNIVERSE,
@@ -2097,7 +2097,7 @@ var _ = Describe("Enable wireguard", func() {
 									Expect(linkV6.WireguardPeers).To(HaveKey(key_peer2))
 									Expect(rtDataplaneV6.RouteKeyToRoute[routekeyV6_3]).To(Equal(netlink.Route{
 										LinkIndex: linkV6.LinkAttrs.Index,
-										Dst:       &ipnet_3,
+										Dst:       &ipnetV6_3,
 										Type:      syscall.RTN_UNICAST,
 										Protocol:  FelixRouteProtocol,
 										Scope:     netlink.SCOPE_LINK,
@@ -2107,23 +2107,44 @@ var _ = Describe("Enable wireguard", func() {
 							})
 
 							It("should handle deletion and re-adding an endpoint in a single apply", func() {
-								wgDataplaneV6.ResetDeltas()
-								rtDataplaneV6.ResetDeltas()
+								if enableV4 {
+									wgDataplane.ResetDeltas()
+									rtDataplane.ResetDeltas()
 
-								// Remove the endpoint. Wireguard config should be removed at this point. The route should
-								// be converted to a throw route.
-								By("Removing the node")
-								wgV6.EndpointRemove(peer2)
-								wgV6.EndpointUpdate(peer2, ipv6_peer2)
-								err := wgV6.Apply()
-								Expect(err).NotTo(HaveOccurred())
-								Expect(wgV6.DebugNodes()).To(HaveLen(4))
-								Expect(rtDataplaneV6.AddedRouteKeys).To(HaveLen(0))
-								Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(0))
-								Expect(wgDataplaneV6.WireguardConfigUpdated).To(BeFalse())
-								Expect(linkV6.WireguardPeers).To(HaveLen(2))
-								Expect(linkV6.WireguardPeers).To(HaveKey(key_peer1))
-								Expect(linkV6.WireguardPeers).To(HaveKey(key_peer2))
+									// Remove the endpoint. Wireguard config should be removed at this point. The route should
+									// be converted to a throw route.
+									By("Removing the node")
+									wg.EndpointRemove(peer2)
+									wg.EndpointUpdate(peer2, ipv4_peer2)
+									err := wg.Apply()
+									Expect(err).NotTo(HaveOccurred())
+									Expect(wg.DebugNodes()).To(HaveLen(4))
+									Expect(rtDataplane.AddedRouteKeys).To(HaveLen(0))
+									Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
+									Expect(wgDataplane.WireguardConfigUpdated).To(BeFalse())
+									Expect(link.WireguardPeers).To(HaveLen(2))
+									Expect(link.WireguardPeers).To(HaveKey(key_peer1))
+									Expect(link.WireguardPeers).To(HaveKey(key_peer2))
+								}
+								if enableV6 {
+									wgDataplaneV6.ResetDeltas()
+									rtDataplaneV6.ResetDeltas()
+
+									// Remove the endpoint. Wireguard config should be removed at this point. The route should
+									// be converted to a throw route.
+									By("Removing the node")
+									wgV6.EndpointRemove(peer2)
+									wgV6.EndpointUpdate(peer2, ipv6_peer2)
+									err := wgV6.Apply()
+									Expect(err).NotTo(HaveOccurred())
+									Expect(wgV6.DebugNodes()).To(HaveLen(4))
+									Expect(rtDataplaneV6.AddedRouteKeys).To(HaveLen(0))
+									Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(0))
+									Expect(wgDataplaneV6.WireguardConfigUpdated).To(BeFalse())
+									Expect(linkV6.WireguardPeers).To(HaveLen(2))
+									Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer1))
+									Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer2))
+								}
 							})
 
 							It("should handle deletion and re-adding an endpoint with a different IP in a single apply", func() {
@@ -2163,9 +2184,9 @@ var _ = Describe("Enable wireguard", func() {
 									Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(0))
 									Expect(wgDataplaneV6.WireguardConfigUpdated).To(BeTrue())
 									Expect(linkV6.WireguardPeers).To(HaveLen(2))
-									Expect(linkV6.WireguardPeers).To(HaveKey(key_peer1))
-									Expect(linkV6.WireguardPeers).To(HaveKey(key_peer2))
-									Expect(linkV6.WireguardPeers[key_peer2].Endpoint.IP).To(Equal(ipv6_peer2_2.AsNetIP()))
+									Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer1))
+									Expect(linkV6.WireguardPeers).To(HaveKey(keyV6_peer2))
+									Expect(linkV6.WireguardPeers[keyV6_peer2].Endpoint.IP).To(Equal(ipv6_peer2_2.AsNetIP()))
 								}
 							})
 
@@ -2231,7 +2252,7 @@ var _ = Describe("Enable wireguard", func() {
 									Expect(rtDataplaneV6.AddedRouteKeys).To(HaveKey(routekeyV6_3))
 									Expect(rtDataplaneV6.RouteKeyToRoute[routekeyV6_3]).To(Equal(netlink.Route{
 										LinkIndex: 1,
-										Dst:       &ipnet_3,
+										Dst:       &ipnetV6_3,
 										Type:      syscall.RTN_THROW,
 										Protocol:  FelixRouteProtocol,
 										Scope:     netlink.SCOPE_UNIVERSE,
@@ -2442,7 +2463,7 @@ var _ = Describe("Enable wireguard", func() {
 
 								It("should reprogram the route to peer3 only", func() {
 									if enableV4 {
-										routekey_4 := fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_4)
+										routekey_4 := fmt.Sprintf("%d-%s", tableIndex, cidr_4)
 										Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
 										Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(1))
 										Expect(rtDataplane.DeletedRouteKeys).To(HaveKey(routekey_4))
@@ -2457,7 +2478,7 @@ var _ = Describe("Enable wireguard", func() {
 										}))
 									}
 									if enableV6 {
-										routekeyV6_4 := fmt.Sprintf("%d-%d-%s", tableIndex, linkV6.LinkAttrs.Index, cidrV6_4)
+										routekeyV6_4 := fmt.Sprintf("%d-%s", tableIndex, cidrV6_4)
 										Expect(rtDataplaneV6.AddedRouteKeys).To(HaveLen(1))
 										Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(1))
 										Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveKey(routekeyV6_4))
@@ -2689,9 +2710,9 @@ var _ = Describe("Enable wireguard", func() {
 						// We expect the link to exist.
 						link = wgDataplane.NameToLink[ifaceName]
 						Expect(link).ToNot(BeNil())
-						routekey_1 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_1)
-						routekey_2 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_2)
-						routekey_3 = fmt.Sprintf("%d-%d-%s", tableIndex, link.LinkAttrs.Index, cidr_3)
+						routekey_1 = fmt.Sprintf("%d-%s", tableIndex, cidr_1)
+						routekey_2 = fmt.Sprintf("%d-%s", tableIndex, cidr_2)
+						routekey_3 = fmt.Sprintf("%d-%s", tableIndex, cidr_3)
 
 						// Set the interface to be up
 						wgDataplane.SetIface(ifaceName, true, true)
@@ -2745,9 +2766,9 @@ var _ = Describe("Enable wireguard", func() {
 						// We expect the link to exist.
 						linkV6 = wgDataplaneV6.NameToLink[ifaceNameV6]
 						Expect(linkV6).ToNot(BeNil())
-						routekeyV6_1 = fmt.Sprintf("%d-%d-%s", tableIndex, linkV6.LinkAttrs.Index, cidrV6_1)
-						routekeyV6_2 = fmt.Sprintf("%d-%d-%s", tableIndex, linkV6.LinkAttrs.Index, cidrV6_2)
-						routekeyV6_3 = fmt.Sprintf("%d-%d-%s", tableIndex, linkV6.LinkAttrs.Index, cidrV6_3)
+						routekeyV6_1 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_1)
+						routekeyV6_2 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_2)
+						routekeyV6_3 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_3)
 
 						// Set the interface to be up
 						wgDataplaneV6.SetIface(ifaceNameV6, true, true)
@@ -3016,7 +3037,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						// Expect a zero key status update.
-						Expect(s.statusKey).To(Equal(zeroKey))
+						Expect(sV6.statusKey).To(Equal(zeroKey))
 						Expect(sV6.numStatusCallbacks).To(Equal(1))
 
 						// Always expect to attempt to create the netlink client
@@ -3040,7 +3061,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						// Expect an updated public key and the previously failed client to have been re-requested.
-						Expect(s.statusKey).NotTo(Equal(zeroKey))
+						Expect(sV6.statusKey).NotTo(Equal(zeroKey))
 						Expect(sV6.numStatusCallbacks).To(Equal(2))
 						if failFlags&mocknetlink.FailNextNewWireguardNotSupported != 0 {
 							// And if emulating the wireguard failure, we expect a call to that too.
