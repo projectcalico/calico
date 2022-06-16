@@ -323,15 +323,22 @@ releases, the following steps can be skipped.
 Verify the release is working as expected. This is important, so please don't skip it.
 
 1. Ensure that the site is accessible by visiting `projectcalico.docs.tigera.io/archive/<version>/`.
+
 1. Checkout the relevant docs branch (i.e. the release-vX.Y branch)
-1. Run `make release-test`.  The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
-1. check the output of the tests - if any test failed, dig in and understand why.
+
+1. Run the post-release checks. The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
+   
+   ```
+   make VERSION=... FLANNEL_VERSION=... OPERATOR_VERSION=... postrelease-checks
+   ```   
+
+1. Check the output of the tests - if any test failed, dig in and understand why.
+
 1. Kick off some e2e tests to test the contents of the release.
 
 # Release notes
 
-Release notes for a Calico release contain notable changes across Calico repositories. To write
-release notes for a given version, perform the following steps.
+Release notes for a Calico release contain notable changes across Calico repositories. To write release notes for a given version, perform the following steps.
 
 1. Check the merged pull requests in the milestone and make sure each has a release note if it needs one.
 
