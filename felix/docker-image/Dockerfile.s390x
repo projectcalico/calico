@@ -1,0 +1,67 @@
+FROM alpine:3.11 as qemu
+
+ARG QEMU_VERSION=6.1.0-8
+ARG QEMU_ARCHS="s390x"
+
+RUN apk --update add curl
+
+# Enable non-native runs on amd64 architecture hosts
+RUN curl -L https://github.com/multiarch/qemu-user-static/releases/download/v${QEMU_VERSION}/qemu-${QEMU_ARCHS}-static.tar.gz | tar zxvf - -C /usr/bin &&\
+    chmod +x /usr/bin/qemu-s390x-static
+
+FROM s390x/ubuntu:focal as wgtool
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
+RUN apt-get update && \
+    apt-get install --no-install-recommends wireguard-tools -y
+
+FROM calico/bpftool:v5.3-s390x as bpftool
+
+FROM s390x/debian:10-slim
+LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
+
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
+
+# Install remaining runtime deps required for felix from the global repository
+RUN apt-get update && apt-get install -y \
+    ipset \
+    iptables \
+    iproute2 \
+    iputils-arping \
+    iputils-ping \
+    iputils-tracepath \
+    # Need arp
+    net-tools \
+    conntrack \
+    runit \
+    # Need kmod to ensure ip6tables-save works correctly
+    kmod \
+    # Need netbase in order for ipset to work correctly
+    # See https://github.com/kubernetes/kubernetes/issues/68703
+    netbase \
+    # Also needed (provides utilities for browsing procfs like ps)
+    procps \
+    ca-certificates \
+    # Felix FV tests require these
+    wget \
+    ethtool \
+    tcpdump
+
+# Copy in wg tool from stage 1.
+COPY --from=wgtool /usr/bin/wg /usr/bin/wg
+
+# Default to the xtables backend of iptables.
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
+RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+
+ADD felix.cfg /etc/calico/felix.cfg
+ADD calico-felix-wrapper /usr/bin
+
+COPY --from=bpftool /bpftool /usr/bin
+WORKDIR /code
+
+# Run felix (via the wrapper script) by default
+CMD ["/usr/bin/calico-felix-wrapper"]
