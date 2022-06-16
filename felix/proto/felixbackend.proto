@@ -446,6 +446,9 @@ message WorkloadEndpointStatusRemove {
 message WireguardStatusUpdate {
   // Wireguard public-key set on the interface.
   string public_key = 1;
+
+  // The IP version of this update
+  IPVersion ip_version = 2;
 }
 
 message HostMetadataUpdate {
@@ -456,6 +459,16 @@ message HostMetadataUpdate {
 message HostMetadataRemove {
   string hostname = 1;
   string ipv4_addr = 2;
+}
+
+message HostMetadataV6Update {
+  string hostname = 1;
+  string ipv6_addr = 2;
+}
+
+message HostMetadataV6Remove {
+  string hostname = 1;
+  string ipv6_addr = 2;
 }
 
 message IPAMPoolUpdate {
@@ -563,18 +576,34 @@ message VXLANTunnelEndpointRemove {
 }
 
 message WireguardEndpointUpdate {
-  // The name of the wireguard host.
+  // The name of the IPv4 wireguard host.
   string hostname = 1;
 
-  // The public key for this endpoint.
+  // The public key for IPv4 wireguard on this endpoint.
   string public_key = 2;
 
-  // The IP address of the wireguard interface.
+  // The IP address of the IPv4 wireguard interface.
   string interface_ipv4_addr = 3;
 }
 
 message WireguardEndpointRemove {
-  // The name of the wireguard host.
+  // The name of the IPv4 wireguard host.
+  string hostname = 1;
+}
+
+message WireguardEndpointV6Update {
+  // The name of the IPv6 wireguard host.
+  string hostname = 1;
+
+  // The public key for IPv6 wireguard on this endpoint.
+  string public_key_v6 = 2;
+
+  // The IP address of the IPv6 wireguard interface.
+  string interface_ipv6_addr = 3;
+}
+
+message WireguardEndpointV6Remove {
+  // The name of the IPv6 wireguard host.
   string hostname = 1;
 }
 
