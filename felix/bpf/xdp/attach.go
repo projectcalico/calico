@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,9 +26,26 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
+
+type ProgName string
+
+var programNames = []ProgName{
+	"calico_tc_norm_pol_tail",
+	"calico_tc_skb_accepted_entrypoint",
+	"calico_tc_skb_send_icmp_replies",
+	"calico_tc_skb_drop",
+	"calico_tc_host_ct_conflict",
+	"calico_tc_v6",
+	"calico_tc_v6_norm_pol_tail",
+	"calico_tc_v6_skb_accepted_entrypoint",
+	"calico_tc_v6_skb_send_icmp_replies",
+	"calico_tc_v6_skb_drop",
+}
 
 type AttachPoint struct {
 	Iface    string
@@ -98,10 +115,6 @@ func (ap *AttachPoint) AlreadyAttached(object string) (string, bool) {
 }
 
 func (ap *AttachPoint) AttachProgram() (string, error) {
-	preCompiledBinary := path.Join(bpf.ObjectDir, ap.FileName())
-	sectionName := ap.SectionName()
-
-	// Patch the binary so that its log prefix is like "eth0------X".
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary directory: %w", err)
@@ -109,20 +122,86 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	defer func() {
 		_ = os.RemoveAll(tempDir)
 	}()
-	tempBinary := path.Join(tempDir, ap.FileName())
+
+	filename := ap.FileName()
+	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
+	tempBinary := path.Join(tempDir, filename)
+
+	// Patch the binary so that its log prefix is like "eth0------X".
 	err = ap.patchBinary(preCompiledBinary, tempBinary)
 	if err != nil {
 		ap.Log().WithError(err).Error("Failed to patch binary")
 		return "", err
 	}
+	ap.Log().Infof("mahnaz")
+
+	obj, err := libbpf.OpenObject(tempBinary, unix.BPF_PROG_TYPE_XDP)
+	if err != nil {
+		ap.Log().Infof("mahnaz0 err: %v", err)
+		return "", err
+	}
+	defer obj.Close()
+	ap.Log().Infof("mahnaz1")
+
+	baseDir := "/sys/fs/bpf/tc"
+	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
+		// The values are read only for the BPF programs, but can be set to a value from
+		// userspace before the program is loaded.
+
+		// TODO: Configure the internal map, i.e. <prog_name>.rodata here, similar to tc.
+
+		subDir := "globals"
+		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
+			// Remove period in the interface name if any
+			ifName := strings.ReplaceAll(ap.Iface, ".", "")
+			subDir = ifName + "_xdp/"
+		}
+		ap.Log().Infof("mahnaz2")
+
+		// TODO: We need to set map size here like tc.
+		pinPath := path.Join(baseDir, subDir, m.Name())
+		ap.Log().Infof("marmar iface: %s pinpath: %v", ap.IfaceName(), pinPath)
+		if err := m.SetPinPath(pinPath); err != nil {
+			ap.Log().Infof("mahnaz3")
+			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+		}
+	}
+	ap.Log().Infof("mahnaz4")
 
 	// Check if the bpf object is already attached, and we should skip re-attaching it
 	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
 	if isAttached {
-		ap.Log().Infof("Programs already attached, skip reattaching %s", ap.FileName())
+		ap.Log().Infof("Programs already attached, skip reattaching %s", filename)
 		return progID, nil
 	}
-	ap.Log().Infof("Continue with attaching BPF program %s", ap.FileName())
+	ap.Log().Infof("Continue with attaching BPF program %s", filename)
+
+	if err := obj.InitXDPProgram(ap.Iface); err != nil {
+		ap.Log().Warn("Failed to init XDP program")
+		return "", fmt.Errorf("error init xdp program: %w", err)
+	}
+
+	if err := obj.Load(); err != nil {
+		ap.Log().Warn("Failed to load program")
+		return "", fmt.Errorf("error loading program: %w", err)
+	}
+	ap.Log().Infof("mahnaz5")
+
+	// TODO: Add support for IPv6
+	err = updateJumpMap(obj, false, false)
+	if err != nil {
+		ap.Log().Warn("Failed to update jump map")
+		return "", fmt.Errorf("error updating jump map %v", err)
+	}
+	ap.Log().Infof("mahnaz6")
+
+	progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface)
+	if err != nil {
+		ap.Log().Warnf("Failed to attach to XDP section %s", ap.SectionName())
+		return "", err
+	}
+	ap.Log().Info("Program attached to XDP.")
 
 	// Note that there are a few considerations here.
 	//
@@ -146,7 +225,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	//   - If that failed, or we attached with an earlier mode, do `off` to remove any existing
 	//     program with this mode.
 	//   - Continue through remaining modes even if attachment already successful.
-	var errs []error
+	/*var errs []error
 	attachmentSucceeded := false
 	for _, mode := range ap.Modes {
 		ap.Log().Debugf("XDP remove/attach with mode %v", mode)
@@ -185,14 +264,15 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	progID, err = ap.ProgramID()
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the attached XDP program ID err=%v", err)
-	}
+	}*/
 
 	// program is now attached. Now we should store its information to prevent unnecessary reloads in future
-	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, progID); err != nil {
+	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, strconv.Itoa(progId)); err != nil {
 		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
 	}
 
-	return progID, nil
+	ap.Log().Infof("nina progID: %v", progId)
+	return strconv.Itoa(progId), nil
 }
 
 func (ap AttachPoint) DetachProgram() error {
@@ -315,4 +395,62 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' out=\n%v err=%w", string(out), ErrNoXDP)
+}
+
+func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
+	ipVersions := []string{"IPv4"}
+	if ipv6Enabled {
+		ipVersions = append(ipVersions, "IPv6")
+	}
+
+	for _, ipFamily := range ipVersions {
+		// Since in IPv4, we don't add prologue to the jump map, and hence the first
+		// program is policy, the base index should be set to -1 to properly offset the
+		// policy program (base+1) to the first entry in the jump map, i.e. 0. However,
+		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
+		base := -1
+		if ipFamily == "IPv6" {
+			base = 5
+		}
+
+		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
+		// of execution, and we don't need to add it into the jump map
+		if ipFamily == "IPv6" {
+			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[base]), base)
+			if err != nil {
+				return fmt.Errorf("error updating %v proglogue program: %v", ipFamily, err)
+			}
+		}
+		pIndex := base + 1
+		if !isHost {
+			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
+			if err != nil {
+				return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
+			}
+		}
+		eIndex := base + 2
+		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
+		}
+		iIndex := base + 3
+		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
+		}
+		dIndex := base + 4
+		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
+		}
+		if ipFamily != "IPv6" {
+			iIndex := base + 5
+			err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
+			if err != nil {
+				return fmt.Errorf("error updating %v host CT conflict program: %v", ipFamily, err)
+			}
+		}
+	}
+
+	return nil
 }

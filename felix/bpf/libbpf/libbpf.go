@@ -81,11 +81,11 @@ func (m *Map) IsMapInternal() bool {
 	return bool(C.bpf_map__is_internal(m.bpfMap))
 }
 
-func OpenObject(filename string) (*Obj, error) {
+func OpenObject(filename string, typ int) (*Obj, error) {
 	bpfutils.IncreaseLockedMemoryQuota()
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
-	obj, err := C.bpf_obj_open(cFilename)
+	obj, err := C.bpf_obj_open(cFilename, C.int(typ))
 	if obj == nil || err != nil {
 		return nil, fmt.Errorf("error opening libbpf object %w", err)
 	}
@@ -146,6 +146,56 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	progId, err := C.bpf_tc_query_iface(C.int(ifIndex), opts, C.int(isIngress))
 	if err != nil {
 		return -1, fmt.Errorf("Error querying interface %s: %w", ifName, err)
+	}
+	return int(progId), nil
+}
+
+func (o *Obj) InitXDPProgram(ifName string) error {
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return err
+	}
+	_, err = C.bpf_program_init_xdp(o.obj, C.int(ifIndex))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
+	cSecName := C.CString(secName)
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cSecName))
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return -1, err
+	}
+
+	_, err = C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex))
+	if err != nil {
+		return -1, fmt.Errorf("Error attaching xdp program %w", err)
+	}
+
+	progId, err := C.bpf_xdp_query_iface(C.int(ifIndex))
+	if err != nil {
+		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
+	}
+	return int(progId), nil
+}
+
+func (o *Obj) GetXDPProgramID(ifName string) (int, error) {
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return -1, err
+	}
+	progId, err := C.bpf_xdp_query_iface(C.int(ifIndex))
+	if err != nil {
+		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
 	}
 	return int(progId), nil
 }

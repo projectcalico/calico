@@ -24,8 +24,14 @@ static void set_errno(int ret) {
 	errno = ret >= 0 ? ret : -ret;
 }
 
-struct bpf_object* bpf_obj_open(char *filename) {
+struct bpf_object* bpf_obj_open(char *filename, int type) {
 	struct bpf_object *obj;
+	/*struct bpf_object_open_attr open_attr = {
+		.file = filename,
+		.prog_type = type,
+	};
+
+	obj = bpf_object__open_xattr(&open_attr);*/
 	obj = bpf_object__open(filename);
 	int err = libbpf_get_error(obj);
 	if (err) {
@@ -39,7 +45,7 @@ void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
 }
 
-struct bpf_tc_opts bpf_tc_program_attach (struct bpf_object *obj, char *secName, int ifIndex, int isIngress) {
+struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, int isIngress) {
 
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, attach);
@@ -130,6 +136,63 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
+int bpf_xdp_query_iface(int ifIndex) {
+	__u32 prog_id = 0, flags = 0;
+	int err;
+
+	err = bpf_get_link_xdp_id(ifIndex, &prog_id, flags);
+	set_errno(err);
+	return prog_id;
+}
+
+int bpf_program_init_xdp(struct bpf_object *obj, int ifIndex)
+{
+	int err = 0;
+	struct bpf_map *map;
+	struct bpf_program *prog, *first_prog = NULL;
+	bpf_object__for_each_program(prog, obj) {
+        bpf_program__set_type(prog, BPF_PROG_TYPE_XDP);
+        bpf_program__set_ifindex(prog, ifIndex);
+        if (!first_prog)
+            first_prog = prog;
+    }   
+
+    bpf_object__for_each_map(map, obj) {
+        if (!bpf_map__is_offload_neutral(map))
+            bpf_map__set_ifindex(map, ifIndex);
+    }   
+
+    if (!first_prog) {
+        err = -1;
+    }
+
+out:
+	return err;
+}
+
+struct bpf_link *bpf_program_attach_xdp(struct bpf_object *obj, char *secName, int ifIndex)
+{
+	int err = 0;
+	struct bpf_link *link = NULL;
+	struct bpf_program *prog, *first_prog = NULL;
+
+	if (!(prog = bpf_object__find_program_by_name(obj, secName))) {
+		err = ENOENT;
+		goto out;
+	}
+
+	link = bpf_program__attach_xdp(prog, ifIndex);
+	err = libbpf_get_error(link);
+	if (err) {
+		link = NULL;
+		goto out;
+	}
+
+out:
+	set_errno(err);
+	return link;
 }
 
 struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd, char *name)
