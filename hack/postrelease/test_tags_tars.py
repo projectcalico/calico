@@ -1,56 +1,10 @@
 import os
-
 import requests
 import yaml
 from parameterized import parameterized
+from versions import RELEASE_VERSION, FLANNEL_VERSION
 
-DOCS_PATH = (
-    "/docs"
-    if os.environ.get("CALICO_DOCS_PATH") is None
-    else os.environ.get("CALICO_DOCS_PATH")
-)
-RELEASE_STREAM = os.environ.get("RELEASE_STREAM")
-EXCLUDED_IMAGES = ["calico/pilot-webhook", "calico/upgrade", "quay.io/coreos/flannel"]
-
-EXPECTED_ARCHS = ["amd64", "arm64", "ppc64le"]
-
-with open("%s/_data/versions.yml" % DOCS_PATH) as f:
-    versions = yaml.safe_load(f)
-    RELEASE_VERSION = versions[0]["title"]
-    print("[INFO] using _data/versions.yaml, discovered version: %s" % RELEASE_VERSION)
-
-TAG_URL_TEMPL = (
-    "https://github.com/projectcalico/{component}/releases/tag/{component_version}"
-)
-ZIP_URL_TEMPL = (
-    "https://github.com/projectcalico/{component}/archive/{component_version}.zip"
-)
-TAR_URL_TEMPL = (
-    "https://github.com/projectcalico/{component}/archive/{component_version}.tar.gz"
-)
-
-FLANNEL_TAG_URL_TEMPL = (
-    "https://github.com/coreos/{component}/releases/tag/{component_version}"
-)
-FLANNEL_ZIP_URL_TEMPL = (
-    "https://github.com/coreos/{component}/archive/{component_version}.zip"
-)
-FLANNEL_TAR_URL_TEMPL = (
-    "https://github.com/coreos/{component}/archive/{component_version}.tar.gz"
-)
-
-DOCS_TAR_URL_TEMPL = (
-    "https://github.com/projectcalico/{component}/releases/download/"
-    "{component_version}/release-{component_version}.tgz"
-)
-
-CTL_URL_TEMPL = "https://github.com/projectcalico/calico/releases/download/{component_version}/{binary}"
-
-components = [
-    {"name": "flannel", "lookup": "flannel", "urls": []},
-    {"name": "calico", "lookup": "calico/node", "urls": []},
-]
-
+# Expected calicoctl binaries.
 calicoctl_binaries = [
     "calicoctl-darwin-amd64",
     "calicoctl-linux-amd64",
@@ -59,70 +13,40 @@ calicoctl_binaries = [
     "calicoctl-windows-amd64.exe",
 ]
 
-for component in components:
-    component["urls"] = [
-        TAG_URL_TEMPL.format(
-            component=component["name"],
-            component_version=versions[0]["components"][component["lookup"]]["version"],
-        ),
-        ZIP_URL_TEMPL.format(
-            component=component["name"],
-            component_version=versions[0]["components"][component["lookup"]]["version"],
-        ),
-        TAR_URL_TEMPL.format(
-            component=component["name"],
-            component_version=versions[0]["components"][component["lookup"]]["version"],
-        ),
+# Build out the expected URLs for a Calico release.
+calico = {
+    "name": "calico",
+    "urls": [
+        "https://github.com/projectcalico/calico/releases/tag/{v}".format(v=RELEASE_VERSION),
+        "https://github.com/projectcalico/calico/archive/{v}.zip".format(v=RELEASE_VERSION),
+        "https://github.com/projectcalico/calico/archive/{v}.tar.gz".format(v=RELEASE_VERSION),
+        "https://github.com/projectcalico/calico/releases/download/{v}/release-{v}.tgz".format(v=RELEASE_VERSION),
     ]
-    if component["name"] == "calico":
-        component["urls"].append(
-            DOCS_TAR_URL_TEMPL.format(
-                component=component["name"],
-                component_version=RELEASE_VERSION,
-            )
-        )
-        for binary in calicoctl_binaries:
-            component["urls"].append(
-                CTL_URL_TEMPL.format(
-                    component_version=RELEASE_VERSION,
-                    binary=binary,
-                )
-            )
-    if component["name"] == "flannel":
-        component["urls"] = [
-            FLANNEL_TAG_URL_TEMPL.format(
-                component=component["name"],
-                component_version=versions[0]["components"][component["lookup"]][
-                    "version"
-                ],
-            ),
-            FLANNEL_ZIP_URL_TEMPL.format(
-                component=component["name"],
-                component_version=versions[0]["components"][component["lookup"]][
-                    "version"
-                ],
-            ),
-            FLANNEL_TAR_URL_TEMPL.format(
-                component=component["name"],
-                component_version=versions[0]["components"][component["lookup"]][
-                    "version"
-                ],
-            ),
-        ]
-    # The intent of all the above looping and lookups is to generate a list of component URLs that must be present.
-    # We then pass that list of URLs into the simple test below (which gets the URL
-    # and asserts that the response code is 200)
-    #
-    # For ease of understanding, these are the release artifacts that are tested (for release 3.21.3):
-    #
-    # flannel:
-    #     https://github.com/coreos/flannel/releases/download/v0.9.1/flannel-v0.9.1-linux-amd64.tar.gz
+}
 
+# Add in calicoctl URLs.
+CTL_URL_TEMPL = "https://github.com/projectcalico/calico/releases/download/{v}/{binary}"
+for binary in calicoctl_binaries:
+    calico["urls"].append(CTL_URL_TEMPL.format(v=RELEASE_VERSION, binary=binary))
+
+
+# Build out expected URLs for flannel.
+flannel = {
+    "name": "flannel", 
+    "urls": [
+        "https://github.com/coreos/flannel/releases/tag/{v}".format(v=FLANNEL_VERSION),
+        "https://github.com/coreos/flannel/archive/{v}.zip".format(v=FLANNEL_VERSION),
+        "https://github.com/coreos/flannel/archive/{v}.tar.gz".format(v=FLANNEL_VERSION),
+    ],
+}
+
+# The intent of all the above is to generate a list of component URLs that must be present.
+# We then pass that list of URLs into the simple test below (which gets the URL
+# and asserts that the response code is 200)
 unrolled_urls = []
-for component in components:
+for component in [flannel, calico]:
     for url in component["urls"]:
         unrolled_urls.append(url)
-
 
 @parameterized(unrolled_urls)
 def test_artifact_url(url):
