@@ -130,8 +130,12 @@ endif
 	@echo "This file is auto-generated based on contribution records reported" >> AUTHORS.md
 	@echo "by GitHub for the core repositories within the projectcalico/ organization. It is ordered alphabetically." >> AUTHORS.md
 	@echo "" >> AUTHORS.md
-	@docker run -ti --rm -v $(CURDIR):/code -e GITHUB_TOKEN=$(GITHUB_TOKEN) python:3 \
-		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
+	@docker run -ti --rm --net=host \
+		-v $(REPO_ROOT):/code \
+		-w /code \
+		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
+		python:3 \
+		bash -c '/usr/local/bin/python hack/release/get-contributors.py >> /code/AUTHORS.md'
 
 ###############################################################################
 # Post-release validation

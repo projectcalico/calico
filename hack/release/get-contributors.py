@@ -1,21 +1,12 @@
 #!/usr/bin/env python
-import github
-from github import Github  # https://github.com/PyGithub/PyGithub
 import os
 import subprocess
 
-# First create a Github instance. Create a token through Github website - provide "repo" auth.
-assert os.environ.get('GITHUB_TOKEN')
-g = Github(os.environ.get('GITHUB_TOKEN'))
-
-# Orgs to filter on.
-REPOSITORIES = ["calico"]
-
 login_exists = {}
-logins_by_name = {}
+info_by_name = {}
 titles = u'| Name   | Email  |'
 header = u'|--------|--------|'
-linefmt = u'| {0:<40} | @{1} |'
+linefmt = u'| {0:<40} | {1}  |'
 
 def get_contributors():
     # Get output from git.
@@ -25,39 +16,44 @@ def get_contributors():
     stdout, _ = process.communicate()
 
     # Do our best to filter duplicates.
-    for line in stdout.split("\n"):
-        if line == "":
+    for line in stdout.splitlines():
+        if line == "" or line is None:
             continue
 
         name, login = extract_author(line)
+
+        # Downcase for comparison.
         if login in login_exists:
             pass
         elif name:
-            logins_by_name[name] = login
+            info_by_name[name.lower()] = (name, login)
         login_exists[login] = ""
 
     # Print a sorted list of contributors.
-    names = logins_by_name.keys()
+    names = info_by_name.keys()
     names = sorted(names, key=lambda x: x.lower())
     print(titles)
     print(header)
     for name in names:
-        login = logins_by_name[name]
+        info = info_by_name[name]
         try:
-            print(linefmt.format(name.decode('utf8'), login))
+            print(linefmt.format(info[0].decode('utf8'), info[1].decode('utf8')))
         except UnicodeDecodeError:
             print(name)
 
 def extract_author(line):
-    splits = line.split("\t")
+    splits = line.split(b"\t")
     if len(splits) == 2:
         # Splits is now of form:
         # [1, "First Last e@mail.com"]
-        splits = splits[1].split(" ")
+        splits = splits[1].split(b" ")
         if len(splits) >= 2:
-            return " ".join(splits[0:-1]), splits[-1]
+            return b" ".join(splits[0:-1]), extract_email(splits[-1])
 
-    raise Exception("Bad line: %s" % line)
+    raise Exception("Bad line: %s, splits=%s" % (line, splits))
+
+def extract_email(s):
+    return s.replace(b"<", b"").replace(b">", b"")
 
 if __name__ == "__main__":
     get_contributors()
