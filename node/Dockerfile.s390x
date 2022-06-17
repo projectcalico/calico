@@ -12,6 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+ARG BIRD_IMAGE=calico/bird:v0.3.3-188-g0196eee4-s390x
+
 FROM alpine:3.11 as qemu
 
 ARG QEMU_VERSION=6.1.0-8
@@ -23,8 +25,8 @@ RUN apk --update add curl
 RUN curl -L https://github.com/multiarch/qemu-user-static/releases/download/v${QEMU_VERSION}/qemu-${QEMU_ARCHS}-static.tar.gz | tar zxvf - -C /usr/bin &&\
     chmod +x /usr/bin/qemu-s390x-static
 
-FROM calico/bird:v0.3.3-188-g0196eee4-s390x as bird
 FROM calico/bpftool:v5.3-s390x as bpftool
+FROM ${BIRD_IMAGE} as bird
 
 FROM s390x/alpine:3.8 as base
 # Enable non-native builds of this image on an amd64 hosts.
