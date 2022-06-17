@@ -198,6 +198,7 @@ type Config struct {
 	BPFMapSizeNATBackend               int
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
+	BPFMapSizeIfState                  int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
@@ -586,6 +587,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.BPFMapSizeNATAffinity,
 		config.BPFMapSizeRoute,
 		config.BPFMapSizeConntrack,
+		config.BPFMapSizeIfState,
 		config.BPFMapRepin,
 	)
 
