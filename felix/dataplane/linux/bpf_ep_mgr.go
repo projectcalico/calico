@@ -50,6 +50,8 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/cachingmap"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
@@ -126,11 +128,14 @@ type bpfInterface struct {
 
 type bpfInterfaceInfo struct {
 	ifaceIsUp  bool
+	ifindex    int
 	endpointID *proto.WorkloadEndpointID
+	workload   bool
 }
 
 type bpfInterfaceState struct {
 	jumpMapFDs map[string]bpf.MapFD
+	isReady    bool
 }
 
 type bpfEndpointManager struct {
@@ -164,6 +169,7 @@ type bpfEndpointManager struct {
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
 	bpfMapContext           *bpf.MapContext
+	ifStateMap              *cachingmap.CachingMap
 
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable iptablesTable
@@ -257,6 +263,7 @@ func newBPFEndpointManager(
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
 		bpfMapContext:           bpfMapContext,
+		ifStateMap:              cachingmap.New(ifstate.MapParams, bpfMapContext.IfStateMap),
 		ruleRenderer:            iptablesRuleRenderer,
 		iptablesFilterTable:     iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
@@ -462,6 +469,33 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	}
 }
 
+func (m *bpfEndpointManager) ifStateMapSet(name string, iface *bpfInterface) {
+	flgs := uint32(0)
+	if m.isWorkloadIface(name) {
+		flgs = ifstate.FlgWEP
+	}
+	m.doIfStateMapSet(name, iface, flgs)
+}
+
+func (m *bpfEndpointManager) ifStateMapSetWorkload(name string, iface *bpfInterface) {
+	flgs := ifstate.FlgWEP
+	m.doIfStateMapSet(name, iface, flgs)
+}
+
+func (m *bpfEndpointManager) doIfStateMapSet(name string, iface *bpfInterface, flgs uint32) {
+	if iface.dpState.isReady {
+		flgs |= ifstate.FlgReady
+	}
+	m.ifStateMap.SetDesired(
+		ifstate.NewKey(uint32(iface.info.ifindex)).AsBytes(),
+		ifstate.NewValue(flgs, name).AsBytes(),
+	)
+}
+
+func (m *bpfEndpointManager) ifStateMapDelete(iface *bpfInterface) {
+	m.ifStateMap.DeleteDesired(ifstate.NewKey(uint32(iface.info.ifindex)).AsBytes())
+}
+
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
 
@@ -497,6 +531,10 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 					log.WithError(err).Warnf("Failed to set rp_filter for %s.", update.Name)
 				}
 			}
+
+			iface.info.ifindex = update.Index
+			m.ifStateMapSet(update.Name, iface)
+
 			if _, hostEpConfigured := m.hostIfaceToEpMap[update.Name]; m.wildcardExists && !hostEpConfigured {
 				log.Debugf("Map host-* endpoint for %v", update.Name)
 				m.addHEPToIndexes(update.Name, &m.wildcardHostEndpoint)
@@ -508,6 +546,9 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 				m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
+			m.ifStateMapDelete(iface)
+			iface.info.ifindex = 0
+			iface.dpState.isReady = false
 		}
 		return true // Force interface to be marked dirty in case we missed a transition during a resync.
 	})
@@ -526,6 +567,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 	m.addWEPToIndexes(wlID, wl)
 	m.withIface(wl.Name, func(iface *bpfInterface) bool {
 		iface.info.endpointID = &wlID
+		iface.info.workload = true
 		return true // Force interface to be marked dirty in case policies changed.
 	})
 }
@@ -545,6 +587,7 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 
 	m.withIface(oldWEP.Name, func(iface *bpfInterface) bool {
 		iface.info.endpointID = nil
+
 		return false
 	})
 }
@@ -631,6 +674,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
+
+	if err := m.ifStateMap.ApplyAllChanges(); err != nil {
+		log.WithError(err).Warn("Failed to write updates to ifstate BPF map.")
+		return err
+	}
 
 	if m.happyWEPsDirty {
 		chains := m.ruleRenderer.WorkloadInterfaceAllowChains(m.happyWEPs)
@@ -767,6 +815,14 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			defer wg.Done()
 			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
+			if err != nil {
+				if isLinkNotFoundError(err) {
+					// Interface is gone, nothing to do.
+					log.WithField("ifaceName", ifaceName).Debug(
+						"Ignoring request to program interface that is not present.")
+					err = nil
+				}
+			}
 			mutex.Lock()
 			errs[ifaceName] = err
 			mutex.Unlock()
@@ -788,15 +844,21 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		}
 
 		err := errs[ifaceName]
-		wlID := m.nameToIface[ifaceName].info.endpointID
+		iface := m.nameToIface[ifaceName]
+		wlID := iface.info.endpointID
+
 		if err == nil {
 			log.WithField("iface", ifaceName).Info("Updated workload interface.")
 			if wlID != nil && m.allWEPs[*wlID] != nil {
 				if m.happyWEPs[*wlID] == nil {
-					log.WithField("id", wlID).Info("Adding workload interface to iptables allow list.")
-					m.happyWEPsDirty = true
+					m.ifStateMapSetWorkload(ifaceName, &iface)
+					log.WithFields(log.Fields{
+						"id":    wlID,
+						"iface": ifaceName,
+					}).Info("Adding workload interface to iptables allow list.")
 				}
 				m.happyWEPs[*wlID] = m.allWEPs[*wlID]
+				m.happyWEPsDirty = true
 			}
 			return set.RemoveItem
 		} else {
@@ -804,6 +866,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 				if !isLinkNotFoundError(err) {
 					log.WithField("id", *wlID).WithError(err).Warning(
 						"Failed to add policy to workload, removing from iptables allow list")
+					m.ifStateMapSetWorkload(ifaceName, &iface)
 				}
 				delete(m.happyWEPs, *wlID)
 				m.happyWEPsDirty = true
@@ -826,6 +889,17 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 // applyPolicy actually applies the policy to the given workload.
 func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	startTime := time.Now()
+	isReady := false
+
+	// Update the readiness state when exiting
+	defer func() {
+		m.ifacesLock.Lock()
+		m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+			iface.dpState.isReady = isReady
+			return false // already dirty
+		})
+		m.ifacesLock.Unlock()
+	}()
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
@@ -861,12 +935,6 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	// Attach the qdisc first; it is shared between the directions.
 	err := m.dp.ensureQdisc(ifaceName)
 	if err != nil {
-		if isLinkNotFoundError(err) {
-			// Interface is gone, nothing to do.
-			log.WithField("ifaceName", ifaceName).Debug(
-				"Ignoring request to program interface that is not present.")
-			return nil
-		}
 		return err
 	}
 
@@ -897,6 +965,9 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 
 	applyTime := time.Since(startTime)
 	log.WithField("timeTaken", applyTime).Info("Finished applying BPF programs for workload")
+
+	isReady = true
+
 	return nil
 }
 
