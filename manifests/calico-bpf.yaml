@@ -912,6 +912,11 @@ spec:
                   policy.  Selectors such as "all()" can result in large numbers of
                   entries (one entry per endpoint in that case).
                 type: integer
+              bpfMapSizeIfState:
+                description: BPFMapSizeIfState sets the size for ifstate map.  The
+                  ifstate map must be large enough to hold an entry for each device
+                  (host + workloads) on a host.
+                type: integer
               bpfMapSizeNATAffinity:
                 type: integer
               bpfMapSizeNATBackend:
