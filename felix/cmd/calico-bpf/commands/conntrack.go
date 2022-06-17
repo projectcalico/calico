@@ -55,19 +55,18 @@ var conntrackCmd = &cobra.Command{
 
 type conntrackDumpCmd struct {
 	*cobra.Command
-	Version string `docopt:"<version>"`
-
-	version int
+	Version string `docopt:"--ver"`
+	version string
 }
 
 func newConntrackDumpCmd() *cobra.Command {
 	cmd := &conntrackDumpCmd{
 		Command: &cobra.Command{
-			Use:   "dump [<version>]",
+			Use:   "dump [--ver=<version>]",
 			Short: "Dumps connection tracking table",
 		},
 	}
-
+	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "version to dump from")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -79,17 +78,9 @@ func (cmd *conntrackDumpCmd) Args(c *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.New(err.Error())
 	}
-
 	err = a.Bind(cmd)
 	if err != nil {
 		return errors.New(err.Error())
-	}
-
-	switch cmd.Version {
-	case "2":
-		cmd.version = 2
-	default:
-		cmd.version = 3
 	}
 	return nil
 }
@@ -120,7 +111,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	var ctMap bpf.Map
 	mc := &bpf.MapContext{}
 	switch cmd.version {
-	case 2:
+	case "2":
 		ctMap = conntrack.MapV2(mc)
 	default:
 		ctMap = conntrack.Map(mc)
@@ -128,7 +119,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Fatal("Failed to access ConntrackMap")
 	}
-	if cmd.version == 2 {
+	if cmd.version == "2" {
 		err := dumpCtMapV2(ctMap)
 		if err != nil {
 			log.WithError(err).Fatal("Failed to iterate over conntrack entries")
@@ -330,20 +321,19 @@ func runClean(c *cobra.Command, _ []string) {
 
 type conntrackCreateCmd struct {
 	*cobra.Command
-
-	Version string `docopt:"<version>"`
-
-	version int
+	Version string `docopt:"--ver"`
+	version string
 }
 
 func newConntrackCreateCmd() *cobra.Command {
 	cmd := &conntrackCreateCmd{
 		Command: &cobra.Command{
-			Use:   "create <version>",
+			Use:   "create [--ver=<version>]",
 			Short: "create a conntrack map of specified version",
 		},
 	}
 
+	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "conntrack version to create")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -360,13 +350,6 @@ func (cmd *conntrackCreateCmd) Args(c *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.New(err.Error())
 	}
-
-	switch cmd.Version {
-	case "2":
-		cmd.version = 2
-	default:
-		cmd.version = 3
-	}
 	return nil
 }
 
@@ -374,38 +357,39 @@ func (cmd *conntrackCreateCmd) Run(c *cobra.Command, _ []string) {
 	var ctMap bpf.Map
 	mc := &bpf.MapContext{}
 	switch cmd.version {
-	case 2:
+	case "2":
 		ctMap = conntrack.MapV2(mc)
 	default:
 		ctMap = conntrack.Map(mc)
 	}
 	if err := ctMap.EnsureExists(); err != nil {
-		log.WithError(err).Errorf("Failed to create conntrackMap version %d", cmd.version)
+		log.WithError(err).Errorf("Failed to create conntrackMap version %s", cmd.version)
 	}
 }
 
 type conntrackWriteCmd struct {
 	*cobra.Command
 
-	Version string `docopt:"<version>"`
+	Version string `docopt:"--ver"`
 	Key     string `docopt:"<key>"`
 	Value   string `docopt:"<value>"`
 
 	key     []byte
 	val     []byte
-	version int
+	version string
 }
 
 func newConntrackWriteCmd() *cobra.Command {
 	cmd := &conntrackWriteCmd{
 		Command: &cobra.Command{
-			Use:   "write <key> <value> [<version>]",
+			Use:   "write [--ver=<version>] <key> <value>",
 			Short: "write a key-value pair, each encoded in base64",
 		},
 	}
 
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
+	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "conntrack map version")
 
 	return cmd.Command
 }
@@ -421,17 +405,10 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 		return errors.New(err.Error())
 	}
 
-	switch cmd.Version {
-	case "2":
-		cmd.version = 2
-	default:
-		cmd.version = 3
-	}
-
 	cmd.key, err = base64.StdEncoding.DecodeString(cmd.Key)
 	if err != nil {
 		switch cmd.version {
-		case 2:
+		case "2":
 			if len(cmd.key) != len(v2.Key{}) {
 				return errors.Errorf("failed to decode key: %s", err)
 			}
@@ -445,7 +422,7 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 	cmd.val, err = base64.StdEncoding.DecodeString(cmd.Value)
 	if err != nil {
 		switch cmd.version {
-		case 2:
+		case "2":
 			if len(cmd.val) != len(v2.Value{}) {
 				return errors.Errorf("failed to decode val: %s", err)
 			}
@@ -461,7 +438,7 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 func (cmd *conntrackWriteCmd) Run(c *cobra.Command, _ []string) {
 	mc := &bpf.MapContext{}
 	var ctMap bpf.Map
-	if cmd.version == 2 {
+	if cmd.version == "2" {
 		ctMap = conntrack.MapV2(mc)
 	} else {
 		ctMap = conntrack.Map(mc)
