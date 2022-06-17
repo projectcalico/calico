@@ -809,12 +809,6 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 						"Ignoring request to program interface that is not present.")
 					err = nil
 				}
-			} else {
-				m.ifacesLock.Lock()
-				if iface, ok := m.nameToIface[ifaceName]; !ok || iface.info.ifindex == 0 {
-					err = fmt.Errorf("unknown ifindex for dev %s", ifaceName)
-				}
-				m.ifacesLock.Unlock()
 			}
 			mutex.Lock()
 			errs[ifaceName] = err
