@@ -281,10 +281,6 @@ func newBPFEndpointManager(
 		rpfStrictModeEnabled: config.BPFEnforceRPF,
 	}
 
-	if err := m.ifStateMap.LoadCacheFromDataplane(); err != nil {
-		return nil, fmt.Errorf("loading caching map for ifstate: %w", err)
-	}
-
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
 	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
 	// to preserve the semantics of untracked ingress policy.  (Therefore we are also saying
