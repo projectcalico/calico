@@ -39,7 +39,8 @@ func CreateBPFMapContext(
 	natBEMapSize,
 	natAffMapSize,
 	routeMapSize,
-	ctMapSize int,
+	ctMapSize,
+	ifstateSize int,
 	repinEnabled bool,
 ) *bpf.MapContext {
 	bpfMapContext := &bpf.MapContext{
@@ -58,7 +59,7 @@ func CreateBPFMapContext(
 	bpfMapContext.MapSizes[failsafes.MapParams.VersionedName()] = uint32(failsafes.MapParams.MaxEntries)
 	bpfMapContext.MapSizes[nat.SendRecvMsgMapParameters.VersionedName()] = uint32(nat.SendRecvMsgMapParameters.MaxEntries)
 	bpfMapContext.MapSizes[nat.CTNATsMapParameters.VersionedName()] = uint32(nat.CTNATsMapParameters.MaxEntries)
-	bpfMapContext.MapSizes[ifstate.MapParams.VersionedName()] = uint32(ifstate.MapParams.MaxEntries)
+	bpfMapContext.MapSizes[ifstate.MapParams.VersionedName()] = uint32(ifstateSize)
 
 	return bpfMapContext
 }
