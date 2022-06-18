@@ -50,19 +50,27 @@ func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
 		n.Spec.IPv6VXLANTunnelAddr = addr
 	} else if tunnelType == ipam.AttributeTypeWireguard {
 		if addr != "" {
-			n.Spec.Wireguard = &libapi.NodeWireguardSpec{
-				InterfaceIPv4Address: addr,
+			if n.Spec.Wireguard == nil {
+				n.Spec.Wireguard = &libapi.NodeWireguardSpec{}
 			}
-		} else {
-			n.Spec.Wireguard = nil
+			n.Spec.Wireguard.InterfaceIPv4Address = addr
+		} else if n.Spec.Wireguard != nil {
+			n.Spec.Wireguard.InterfaceIPv4Address = ""
+			if n.Spec.Wireguard.InterfaceIPv4Address == "" && n.Spec.Wireguard.InterfaceIPv6Address == "" {
+				n.Spec.Wireguard = nil
+			}
 		}
 	} else if tunnelType == ipam.AttributeTypeWireguardV6 {
 		if addr != "" {
-			n.Spec.Wireguard = &libapi.NodeWireguardSpec{
-				InterfaceIPv6Address: addr,
+			if n.Spec.Wireguard == nil {
+				n.Spec.Wireguard = &libapi.NodeWireguardSpec{}
 			}
-		} else {
-			n.Spec.Wireguard = nil
+			n.Spec.Wireguard.InterfaceIPv6Address = addr
+		} else if n.Spec.Wireguard != nil {
+			n.Spec.Wireguard.InterfaceIPv6Address = ""
+			if n.Spec.Wireguard.InterfaceIPv4Address == "" && n.Spec.Wireguard.InterfaceIPv6Address == "" {
+				n.Spec.Wireguard = nil
+			}
 		}
 	} else {
 		panic(fmt.Errorf("Unknown tunnelType, %s", tunnelType))
@@ -96,9 +104,9 @@ func getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType string) (pool1CIDR, po
 		fallthrough
 	case ipam.AttributeTypeWireguard:
 		return getEnsureCIDRAndExpectedAddrForIPVersion(4)
-	case ipam.AttributeTypeWireguardV6:
-		return getEnsureCIDRAndExpectedAddrForIPVersion(6)
 	case ipam.AttributeTypeVXLANV6:
+		return getEnsureCIDRAndExpectedAddrForIPVersion(6)
+	case ipam.AttributeTypeWireguardV6:
 		return getEnsureCIDRAndExpectedAddrForIPVersion(6)
 	default:
 		panic(fmt.Errorf("Invalid tunnelType %v", tunnelType))
@@ -131,9 +139,9 @@ func getRemoveCIDRAndAddrForTunnelType(tunnelType string) (poolCIDR, expectedAdd
 		fallthrough
 	case ipam.AttributeTypeWireguard:
 		return getRemoveCIDRAndAddrForIPVersion(4)
-	case ipam.AttributeTypeWireguardV6:
-		return getRemoveCIDRAndAddrForIPVersion(6)
 	case ipam.AttributeTypeVXLANV6:
+		fallthrough
+	case ipam.AttributeTypeWireguardV6:
 		return getRemoveCIDRAndAddrForIPVersion(6)
 	default:
 		panic(fmt.Errorf("Invalid tunnelType %v", tunnelType))
@@ -664,9 +672,9 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 			fallthrough
 		case ipam.AttributeTypeWireguard:
 			expectedAddr1 = "172.16.0.0"
-		case ipam.AttributeTypeWireguardV6:
-			expectedAddr1 = "2001:db8::0"
 		case ipam.AttributeTypeVXLANV6:
+			fallthrough
+		case ipam.AttributeTypeWireguardV6:
 			expectedAddr1 = "2001:db8::0"
 		default:
 			panic(fmt.Errorf("Invalid tunnelType %v", tunnelType))
@@ -919,7 +927,6 @@ var _ = Describe("Running as daemon", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	//TODO
 	It("should handle adding and removing the tunnel IP after config updates", func() {
 		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
 		node.Name = "test.node"
@@ -1151,6 +1158,82 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 	})
 
+	Context("Dual stack VXLAN tests", func() {
+		It("should match both IPv4 and IPv6 pools", func() {
+			// Mock out the node and ip pools
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			pl := api.IPPoolList{
+				Items: []api.IPPool{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-v4"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "172.0.0.0/9",
+							NodeSelector: `foo == "bar"`,
+							VXLANMode:    api.VXLANModeAlways,
+						},
+					}, {
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-v6"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "2001:db8::/64",
+							NodeSelector: `foo == "bar"`,
+							VXLANMode:    api.VXLANModeAlways,
+						},
+					},
+				}}
+
+			// Execute and test assertions.
+			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
+			_, cidrV6, _ := net.ParseCIDR("2001:db8::1/64")
+
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLAN)
+			Expect(cidrs).To(ContainElement(*cidrV4))
+			Expect(cidrs).ToNot(ContainElement(*cidrV6))
+
+			cidrs = determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLANV6)
+			Expect(cidrs).ToNot(ContainElement(*cidrV4))
+			Expect(cidrs).To(ContainElement(*cidrV6))
+		})
+
+		It("should match both IPv4 and IPv6 pools for VXLANMode CrossSubnet", func() {
+			// Mock out the node and ip pools
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			pl := api.IPPoolList{
+				Items: []api.IPPool{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-v4"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "172.0.0.0/9",
+							NodeSelector: `foo == "bar"`,
+							VXLANMode:    api.VXLANModeCrossSubnet,
+						},
+					}, {
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-v6"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "2001:db8::/64",
+							NodeSelector: `foo == "bar"`,
+							VXLANMode:    api.VXLANModeCrossSubnet,
+						},
+					},
+				}}
+
+			// Execute and test assertions.
+			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
+			_, cidrV6, _ := net.ParseCIDR("2001:db8::1/64")
+
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLAN)
+			Expect(cidrs).To(ContainElement(*cidrV4))
+			Expect(cidrs).ToNot(ContainElement(*cidrV6))
+
+			cidrs = determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLANV6)
+			Expect(cidrs).ToNot(ContainElement(*cidrV4))
+			Expect(cidrs).To(ContainElement(*cidrV6))
+		})
+	})
+
 	Context("IPv4 Wireguard tests", func() {
 		It("node has public key - should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
@@ -1266,6 +1349,49 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguardV6)
 			Expect(cidrs).To(HaveLen(0))
+		})
+	})
+
+	Context("Dual Stack Wireguard tests", func() {
+		It("node has both IPv4 and IPv6 public keys - should match both pools", func() {
+			// Mock out the node and ip pools
+			n := libapi.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}},
+				Status: libapi.NodeStatus{
+					WireguardPublicKey:   "abcde",
+					WireguardPublicKeyV6: "fghij",
+				},
+			}
+			pl := api.IPPoolList{
+				Items: []api.IPPool{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-v4"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "172.0.0.0/9",
+							NodeSelector: `foo == "bar"`,
+						},
+					}, {
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-v6"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "2001:db8::/64",
+							NodeSelector: `foo == "bar"`,
+						},
+					},
+				}}
+
+			// Execute and test assertions.
+			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
+			_, cidrV6, _ := net.ParseCIDR("2001:db8::1/64")
+
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguard)
+			Expect(cidrs).To(ContainElement(*cidrV4))
+			Expect(cidrs).ToNot(ContainElement(*cidrV6))
+
+			cidrs = determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguardV6)
+			Expect(cidrs).ToNot(ContainElement(*cidrV4))
+			Expect(cidrs).To(ContainElement(*cidrV6))
 		})
 	})
 })
