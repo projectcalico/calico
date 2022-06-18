@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG BIRD_IMAGE=calico/bird:v0.3.3-188-g0196eee4-s390x
+ARG BIRD_IMAGE
 
 FROM alpine:3.11 as qemu
 
