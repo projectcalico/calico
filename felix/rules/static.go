@@ -272,6 +272,19 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		)
 	}
 
+	if ipVersion == 4 && r.WireguardEnabled {
+		inputRules = append(inputRules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.WireguardListeningPort)).
+					DestAddrType(AddrTypeLocal),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow incoming IPv4 Wireguard packets"},
+			},
+			// No drop rule is added because wireguard does its own validation of authenticity of incoming packets
+		)
+	}
+
 	// Note that we do not need to do this filtering for wireguard because it already has the peering and allowed IPs
 	// baked into the crypto routing table.
 

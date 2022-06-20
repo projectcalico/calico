@@ -1435,6 +1435,42 @@ var _ = Describe("Static", func() {
 
 		var ipVersion uint8 = 4
 
+		It("should include the expected input chain in the filter chains", func() {
+			rules := []Rule{
+				// Wireguard rules
+				{Match: Match().
+					ProtocolNum(17).
+					DestPorts(51820).
+					DestAddrType("LOCAL"),
+
+					Action:  AcceptAction{},
+					Comment: []string{"Allow incoming IPv4 Wireguard packets"}},
+				// Per-prefix workload jump rules.  Note use of goto so that we
+				// don't return here.
+				{Match: Match().InInterface("cali+"),
+					Action: GotoAction{Target: "cali-wl-to-host"}},
+
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSingleBitSet(0x10),
+					Action: AcceptAction{},
+				},
+
+				// Non-workload traffic, send to host chains.
+				{Action: ClearMarkAction{Mark: 0xf0}},
+				{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+				{
+					Match:   Match().MarkSingleBitSet(0x10),
+					Action:  AcceptAction{},
+					Comment: []string{"Host endpoint policy accepted packet."},
+				},
+			}
+
+			Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-INPUT")).To(Equal(&Chain{
+				Name:  "cali-INPUT",
+				Rules: rules,
+			}))
+		})
+
 		It("should include the expected WireGuard PREROUTING chain in the raw chains", func() {
 			Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-PREROUTING")).To(Equal(&Chain{
 				Name: "cali-PREROUTING",
