@@ -1,6 +1,7 @@
 ---
 title: What is Project Calico?
 description: Learn the value of Project Calico.
+canonical url: '/about/about-calico'
 ---
 
 ### What is Project Calico?
@@ -33,7 +34,7 @@ Project Calico is an open-source networking and network security solution for co
 | Feature    | Description                                                  |
 | ---------- | ------------------------------------------------------------ |
 | Dataplanes | eBPF, standard Linux, and Windows.                           |
-| Install    | Install Calico using operator or manifest install. <br />Extensive platform support.<br />Support for workloads and non-cluster hosts. |
+| Install    | - Install Calico using operator or manifest install. <br />- Extensive platform support.<br />- Support for workloads and non-cluster hosts. |
 | Upgrade    | Seamless upgrade from Calico to Calico Cloud and Calico Enterprise. |
 | Networking | High-performance scalable pod networking using BPG or overlay networking. |
 |            | Advanced IP address management.                              |
@@ -46,5 +47,5 @@ Project Calico is an open-source networking and network security solution for co
 |            | Policy examples for services, hosts, extreme traffic.        |
 | Operations | Monitor and visualize Calico component metrics using Prometheus and Grafana. |
 |            | Manage TLS certificates.                                     |
-| CRDs       | Customize resources using Calico Customize Resource Definitions and APIs. |
-| CLIs       | Supports kubectl and calicoctl command line tools.           |
+| CRDs       | Customize resources using Calico Customize Resource Definitions. |
+| CLIs       | Supports `kubectl` and `calicoctl` command line tools.           |
