@@ -66,6 +66,7 @@ NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
 NODE_CONTAINER_BIN_DIR=./dist/bin/
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
+TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 
@@ -195,7 +196,7 @@ clean-windows:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(NODE_CONTAINER_BINARY)
+build: $(NODE_CONTAINER_BINARY) $(TOOLS_MOUNTNS_BINARY)
 
 # Pull in config from confd.
 filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
@@ -251,6 +252,9 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -o $@ $(LDFLAGS) ./cmd/calico-ipam'
 
+$(TOOLS_MOUNTNS_BINARY):
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/mountns'
+
 ###############################################################################
 # Building the image
 ###############################################################################
@@ -260,7 +264,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) 
+$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
 	$(DOCKER_BUILD) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
