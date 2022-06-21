@@ -40,7 +40,7 @@ Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CT
 
 **Resource Center**
 
-% include open-new-window.html text='Videos, case studies, datasheets, etc.' url='https://www.tigera.io/resources/' %}
+{% include open-new-window.html text='Videos, case studies, datasheets, etc.' url='https://www.tigera.io/resources/' %}
 
 ### Community
 
