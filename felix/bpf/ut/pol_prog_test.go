@@ -153,6 +153,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 			}},
 		}}})
 
+	fmt.Printf("%v", insns.Comments)
 	Expect(err).NotTo(HaveOccurred())
 	fd, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())

@@ -658,7 +658,7 @@ func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) 
 	if negate {
 		comment = fmt.Sprintf("If ICMP type == %d and code == %d,skip to next rule\n", icmpType, icmpCode)
 	} else {
-		comment = fmt.Sprintf("If ICMP type != %d and code != %d,skip to next rule\n", icmpType, icmpCode)
+		comment = fmt.Sprintf("If ICMP type != %d or code != %d,skip to next rule\n", icmpType, icmpCode)
 	}
 	p.b.WriteComments(comment)
 	p.b.Load16(R1, R9, stateOffICMPType)
@@ -716,6 +716,13 @@ func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
 		if id == 0 {
 			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
 		}
+		comment := ""
+		if negate {
+			comment = fmt.Sprintf("If %s doesn't match ipset %s,skip to next rule\n", leg, ipSetID)
+		} else {
+			comment = fmt.Sprintf("If %s matches ipset %s,skip to next rule\n", leg, ipSetID)
+		}
+		p.b.WriteComments(comment)
 
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
@@ -747,6 +754,9 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
 		}
 
+		comment := fmt.Sprintf("If %s does not match ipset %s, jump to next ipset\n", leg, ipSetID)
+		p.b.WriteComments(comment)
+
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
 		p.b.LoadMapFD(R1, uint32(p.ipSetMapFD))
@@ -760,6 +770,8 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 	}
 
 	// If packet reaches here, it hasn't matched any of the IP sets.
+	comment := fmt.Sprintf("If %s doesn't match any of the IP sets, skip to next rule\n", leg)
+	p.b.WriteComments(comment)
 	p.b.Jump(p.endOfRuleLabel())
 	// Label the next match so we can skip to it on success.
 	p.b.LabelNextInsn(onMatchLabel)
@@ -777,9 +789,20 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 		onMatchLabel = p.freshPerRuleLabel()
 	}
 
+	portRangeStr := "{"
+	for _, portRange := range ports {
+		portRangeStr = portRangeStr + fmt.Sprintf("[%d-%d],", portRange.First, portRange.Last)
+	}
+	portRangeStr = portRangeStr + "}"
+	comment := ""
+	if negate {
+		comment = fmt.Sprintf("If %s port is within any of %s, skip to next rule\n", leg, portRangeStr)
+	} else {
+		comment = fmt.Sprintf("If %s port is not within any of %s, skip to next rule\n", leg, portRangeStr)
+	}
+	p.b.WriteComments(comment)
 	// R1 = port to test against.
 	p.b.Load16(R1, R9, leg.offsetToStatePortField())
-
 	for _, portRange := range ports {
 		if portRange.First == portRange.Last {
 			// Optimisation, single port, just do a comparison.
@@ -800,12 +823,25 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 		}
 	}
 
+	namedPortStr := "["
+	for _, ipSetID := range namedPorts {
+		namedPortStr = namedPortStr + ipSetID + ","
+
+	}
+	namedPortStr = namedPortStr + "]"
+	comment = ""
+	if negate {
+		comment = fmt.Sprintf("If %s port matches any of the named ports %s, skip to next rule\n", leg, namedPortStr)
+	} else {
+		comment = fmt.Sprintf("If %s port does not match any of the named ports %s, skip to next rule\n", leg, namedPortStr)
+	}
+	p.b.WriteComments(comment)
+
 	for _, ipSetID := range namedPorts {
 		id := p.ipSetIDProvider.GetNoAlloc(ipSetID)
 		if id == 0 {
 			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
 		}
-
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
 		p.b.LoadMapFD(R1, uint32(p.ipSetMapFD))
