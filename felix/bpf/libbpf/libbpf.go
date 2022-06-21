@@ -36,8 +36,6 @@ type Map struct {
 	bpfObj *C.struct_bpf_object
 }
 
-const MapTypeProgrArray = C.BPF_MAP_TYPE_PROG_ARRAY
-
 type QdiskHook string
 
 const (
