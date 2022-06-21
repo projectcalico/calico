@@ -47,7 +47,7 @@ func init() {
 // conntrackCmd represents the conntrack command
 var natCmd = &cobra.Command{
 	Use:   "nat",
-	Short: "Nanipulates network address translation (nat)",
+	Short: "Manipulates network address translation (nat)",
 	Long: "nat manipulates network address translation (nat), " +
 		"which implements the bpf-based replacement for kube-proxy",
 }

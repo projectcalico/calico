@@ -2240,3 +2240,9 @@ const jumpMapVersion = 2
 func JumpMapName() string {
 	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
 }
+
+const countersMapVersion = 1
+
+func CountersMapName() string {
+	return fmt.Sprintf("cali_counters%d", countersMapVersion)
+}

@@ -64,7 +64,7 @@ import (
 )
 
 const (
-	jumpMapCleanupInterval = 10 * time.Second
+	mapCleanupInterval = 10 * time.Second
 
 	bpfInDev  = "bpfin.cali"
 	bpfOutDev = "bpfout.cali"
@@ -259,9 +259,9 @@ func newBPFEndpointManager(
 		bpfMapContext:           bpfMapContext,
 		ruleRenderer:            iptablesRuleRenderer,
 		iptablesFilterTable:     iptablesFilterTable,
-		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
-			log.Debug("Jump map cleanup triggered.")
-			tc.CleanUpJumpMaps()
+		mapCleanupRunner: ratelimited.NewRunner(mapCleanupInterval, func(ctx context.Context) {
+			log.Debug("TC maps cleanup triggered.")
+			tc.CleanUpMaps()
 		}),
 		onStillAlive:     livenessCallback,
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
