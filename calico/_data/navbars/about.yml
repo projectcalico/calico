@@ -3,8 +3,7 @@ description: /about/
 path: /about/
 order: 0
 section:
-- title: What is ProjectCalico?
-  path: /about/what-is-calico
+- title: What is Project Calico?
+  path: /about/about-project-calico
 - title: Get started resources
   path: /about/about-calico
-

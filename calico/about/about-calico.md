@@ -19,7 +19,7 @@ canonical_url: '/about/about-calico'
 
 **eBook: Introduction to Kubernetes Networking and Security**
 
-Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CTO and Co-Founder of Tigera and Co-Creator of Project Calico. The eBook shares everything you need to confidently approach Kubernetes networking and security, starting with basic networking concepts, all the way through to advanced Kubernetes networking with eBPF.
+Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CTO and Co-Founder of Tigera and Co-Creator of Project Calico. Everything you need to confidently approach Kubernetes networking and security, starting with basic networking concepts, all the way through to advanced Kubernetes networking with eBPF.
 
 {% include open-new-window.html text='Download ebook' url='https://www.tigera.io/lp/kubernetes-networking-ebook/' %}
 
@@ -36,11 +36,11 @@ Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CT
 
 **Blog**
 
-- {% include open-new-window.html text='Technical blog' url='https://www.tigera.io/blog/' %}
+{% include open-new-window.html text='Technical blog' url='https://www.tigera.io/blog/' %}
 
 **Resource Center**
 
-- {% include open-new-window.html text='Videos, case studies, datasheets, etc.' url='https://www.tigera.io/resources/' %}
+% include open-new-window.html text='Videos, case studies, datasheets, etc.' url='https://www.tigera.io/resources/' %}
 
 ### Community
 
@@ -58,7 +58,7 @@ Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CT
 
 ### Report a bug
 
-- {% include open-new-window.html text='Report an issue' url='https://github.com/projectcalico/calico/issues' %}
+{% include open-new-window.html text='Report an issue' url='https://github.com/projectcalico/calico/issues' %}
 
 ### Support
 
