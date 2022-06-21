@@ -46,6 +46,11 @@ func (m *Map) Open() error {
 	return nil
 }
 
+func (m *Map) Close() error {
+	m.logCxt.Info("Close called")
+	return nil
+}
+
 func (m *Map) EnsureExists() error {
 	m.logCxt.Info("EnsureExists called")
 	return nil
@@ -152,6 +157,10 @@ func (*DummyMap) GetName() string {
 }
 
 func (*DummyMap) Open() error {
+	return nil
+}
+
+func (*DummyMap) Close() error {
 	return nil
 }
 
