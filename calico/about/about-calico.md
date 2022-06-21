@@ -17,28 +17,28 @@ canonical_url: '/about/about-calico'
 
 ### Training and certification
 
-**eBook: Introduction to Kubernetes Networking and Security**
+#### eBook: Introduction to Kubernetes Networking and Security
 
 Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CTO and Co-Founder of Tigera and Co-Creator of Project Calico. Everything you need to confidently approach Kubernetes networking and security, starting with basic networking concepts, all the way through to advanced Kubernetes networking with eBPF.
 
 {% include open-new-window.html text='Download ebook' url='https://www.tigera.io/lp/kubernetes-networking-ebook/' %}
 
-**Certified Calico Operator training**
+#### Certified Calico Operator training
 
 - {% include open-new-window.html text='Level 1' url='https://academy.tigera.io/course/certified-calico-operator-level-1/' %}
 - {% include open-new-window.html text='AWS Expert' url='https://academy.tigera.io/course/certified-calico-operator-aws-expert/' %}
 - {% include open-new-window.html text='eBPF' url='https://academy.tigera.io/course/certified-calico-operator-ebpf/' %}
 - {% include open-new-window.html text='Azure' url='https://academy.tigera.io/course/certified-calico-operator-azure-expert/' %}
 
-**Workshops**
+#### Workshops
 
 {% include open-new-window.html text='Workshops and events' url='https://www.tigera.io/events/' %}
 
-**Blog**
+#### Blog
 
 {% include open-new-window.html text='Technical blog' url='https://www.tigera.io/blog/' %}
 
-**Resource Center**
+#### Resource Center
 
 {% include open-new-window.html text='Videos, case studies, datasheets, etc.' url='https://www.tigera.io/resources/' %}
 
