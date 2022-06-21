@@ -17,24 +17,13 @@ MILESTONE="Calico %s" % VERSION
 RELEASE_STREAM = ".".join(VERSION.split(".")[:2])
 
 # The file where we'll store the release notes.
-FILENAME="_includes/release-notes/%s-release-notes.md" % VERSION
+FILENAME="release-notes/%s-release-notes.md" % VERSION
 
 # Repositories we care about. Add repositories here to include them in release
 # note generation.
 REPOS = [
         "calico",
-        "node",
-        "felix",
-        "typha",
-        "libcalico-go",
-        "kube-controllers",
-        "routereflector",
-        "cni-plugin",
-        "confd",
         "bird",
-        "calico-bgp-daemon",
-        "app-policy",
-        "pod2daemon",
 ]
 
 # Returns a dictionary where the keys are repositories, and the values are
@@ -84,6 +73,9 @@ if __name__ == "__main__":
 
     # Get date in the right format.
     date = datetime.date.today().strftime("%d %b %Y")
+
+    # Make the directory, if needed.
+    os.makedirs("release-notes")
 
     # Write release notes out to a file.
     with io.open(FILENAME, "w", encoding='utf-8') as f:
