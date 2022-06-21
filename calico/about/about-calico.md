@@ -4,14 +4,14 @@ description: Links to Calico resources for onboarding and training.
 canonical_url: '/about/about-calico'
 ---
 
-- [Get a cluster up in under 15 minutes](#get-a-cluster-up-in-under-15-minutes)
+- [Get a Calico cluster up in 15 minutes](#get-a-calico-cluster-up-in-15-minutes)
 - [Training and certification](#training-and-certification)
 - [Community](#community)
 - [Stay connected](#stay-connected)
 - [Report a bug](#report-a-bug)
 - [Support](#support)
 
-### Get a cluster up in 15 minutes
+### Get a Calico cluster in 15 minutes
 
 [Quickstart]({{site.baseurl}}/getting-started/kubernetes/quickstart)
 
