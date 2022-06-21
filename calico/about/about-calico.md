@@ -1,8 +1,11 @@
 ---
 title: Get started resources
 description: Links to Calico resources for onboarding and training.
+show_title: false
 canonical_url: '/about/about-calico'
 ---
+
+### Get started resources
 
 | Resource                                                  | URL                                                          |
 | --------------------------------------------------------- | ------------------------------------------------------------ |
