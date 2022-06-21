@@ -150,8 +150,28 @@ func (d *linuxDataplane) DoNetworking(
 			return fmt.Errorf("failed to set %q up: %w", contVethName, err)
 		}
 
-		// Fetch the MAC from the container Veth. This is needed by Calico.
-		contVethMAC = contVeth.Attrs().HardwareAddr.String()
+		// Check if there is an annotation requesting a specific fixed MAC address for the container Veth, otherwise
+		// use kernel-assigned MAC.
+		if requestedContVethMac, found := annotations["cni.projectcalico.org/hwAddr"]; found {
+			tmpContVethMAC, err := net.ParseMAC(requestedContVethMac)
+			if err != nil {
+				return fmt.Errorf("failed to parse MAC address %v provided via cni.projectcalico.org/hwAddr: %v",
+					requestedContVethMac, err)
+			}
+
+			err = netlink.LinkSetHardwareAddr(contVeth, tmpContVethMAC)
+			if err != nil {
+				return fmt.Errorf("failed to set container veth MAC to %v as requested via cni.projectcalico.org/hwAddr: %v",
+					requestedContVethMac, err)
+			}
+
+			contVethMAC = tmpContVethMAC.String()
+			d.logger.Infof("successfully configured container veth MAC to %v as requested via cni.projectcalico.org/hwAddr",
+				contVethMAC)
+		} else {
+			contVethMAC = contVeth.Attrs().HardwareAddr.String()
+		}
+
 		d.logger.WithField("MAC", contVethMAC).Debug("Found MAC for container veth")
 
 		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
