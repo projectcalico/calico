@@ -29,3 +29,7 @@ func Map(mc *bpf.MapContext, pinPath string) bpf.Map {
 	MapParameters.Filename = pinPath
 	return mc.NewPinnedMap(MapParameters)
 }
+
+func MapForTest(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(MapParameters)
+}
