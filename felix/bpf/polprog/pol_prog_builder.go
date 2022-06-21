@@ -175,7 +175,7 @@ const (
 	TierEndPass  TierEndAction = "pass"
 )
 
-func (p *Builder) Instructions(rules Rules) (Insns, error) {
+func (p *Builder) Instructions(rules Rules) (*Insns, error) {
 	p.b = NewBlock()
 	p.writeProgramHeader()
 
@@ -378,6 +378,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		actionLabels["next-tier"] = endOfTierLabel
 
 		log.Debugf("Start of tier %d %q", p.tierID, tier.Name)
+		p.b.WriteComments(fmt.Sprintf("Start of tier %q\n", tier.Name))
 		for _, pol := range tier.Policies {
 			p.writePolicy(pol, actionLabels, destLeg)
 		}
@@ -387,6 +388,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		if action == TierEndUndef {
 			action = TierEndDeny
 		}
+		p.b.WriteComments(fmt.Sprintf("End of tier %q\n", tier.Name))
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
 			Rule: &proto.Rule{},
@@ -411,6 +413,7 @@ func (p *Builder) writeProfiles(profiles []Policy, allowLabel string) {
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
+		p.b.WriteComments(fmt.Sprintf("Start of rule %q\n", rule))
 		action := strings.ToLower(rule.Action)
 		if action == "log" {
 			log.Debug("Skipping log rule.  Not supported in BPF mode.")
@@ -422,9 +425,11 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 }
 
 func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
+	p.b.WriteComments(fmt.Sprintf("Start of policy %q\n", policy.Name))
 	log.Debugf("Start of policy %q %d", policy.Name, p.policyID)
 	p.writePolicyRules(policy, actionLabels, destLeg)
 	log.Debugf("End of policy %q %d", policy.Name, p.policyID)
+	p.b.WriteComments(fmt.Sprintf("End of policy %q\n", policy.Name))
 	p.policyID++
 }
 
@@ -615,6 +620,14 @@ func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 }
 
 func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
+	comment := ""
+	if negate {
+		comment = fmt.Sprintf("If protocol == %s,skip to next rule\n", protocolToName(protocol))
+	} else {
+		comment = fmt.Sprintf("If protocol != %s,skip to next rule\n", protocolToName(protocol))
+	}
+	p.b.WriteComments(comment)
+
 	p.b.Load8(R1, R9, stateOffIPProto)
 	protoNum := protocolToNumber(protocol)
 	if negate {
@@ -625,6 +638,13 @@ func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
 }
 
 func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
+	comment := ""
+	if negate {
+		comment = fmt.Sprintf("If ICMP type == %d,skip to next rule\n", icmpType)
+	} else {
+		comment = fmt.Sprintf("If ICMP type != %d,skip to next rule\n", icmpType)
+	}
+	p.b.WriteComments(comment)
 	p.b.Load8(R1, R9, stateOffICMPType)
 	if negate {
 		p.b.JumpEqImm64(R1, int32(icmpType), p.endOfRuleLabel())
@@ -634,6 +654,13 @@ func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
 }
 
 func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) {
+	comment := ""
+	if negate {
+		comment = fmt.Sprintf("If ICMP type == %d and code == %d,skip to next rule\n", icmpType, icmpCode)
+	} else {
+		comment = fmt.Sprintf("If ICMP type != %d and code != %d,skip to next rule\n", icmpType, icmpCode)
+	}
+	p.b.WriteComments(comment)
 	p.b.Load16(R1, R9, stateOffICMPType)
 	if negate {
 		p.b.JumpEqImm64(R1, (int32(icmpCode)<<8)|int32(icmpType), p.endOfRuleLabel())
@@ -642,6 +669,18 @@ func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) 
 	}
 }
 func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
+	comment := ""
+	cidrStrings := ""
+	for _, cidrStr := range cidrs {
+		cidrStrings = cidrStrings + fmt.Sprintf("%s,", cidrStr)
+	}
+	if negate {
+		comment = fmt.Sprintf("If %s in %s, skip to next rule\n", leg, cidrStrings)
+	} else {
+		comment = fmt.Sprintf("If %s not in %s, skip to next rule\n", leg, cidrStrings)
+	}
+
+	p.b.WriteComments(comment)
 	p.b.Load32(R1, R9, leg.offsetToStateIPAddressField())
 
 	var onMatchLabel string
@@ -811,6 +850,26 @@ func protocolToNumber(protocol *proto.Protocol) uint8 {
 		}
 	case *proto.Protocol_Number:
 		pcol = uint8(p.Number)
+	}
+	return pcol
+}
+
+func protocolToName(protocol *proto.Protocol) string {
+	var pcol string
+	switch p := protocol.NumberOrName.(type) {
+	case *proto.Protocol_Name:
+		return strings.ToLower(p.Name)
+	case *proto.Protocol_Number:
+		switch p.Number {
+		case 6:
+			pcol = "tcp"
+		case 11:
+			pcol = "udp"
+		case 1:
+			pcol = "icmp"
+		case 132:
+			pcol = "sctp"
+		}
 	}
 	return pcol
 }

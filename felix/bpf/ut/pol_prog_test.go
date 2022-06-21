@@ -45,7 +45,7 @@ func TestLoadAllowAllProgram(t *testing.T) {
 	insns, err := b.Assemble()
 	Expect(err).NotTo(HaveOccurred())
 
-	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	fd, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
 	defer func() {
@@ -79,7 +79,7 @@ func TestLoadProgramWithMapAccess(t *testing.T) {
 	insns, err := b.Assemble()
 	Expect(err).NotTo(HaveOccurred())
 
-	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	fd, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
 	defer func() {
@@ -154,7 +154,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 		}}})
 
 	Expect(err).NotTo(HaveOccurred())
-	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	fd, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
 	Expect(fd.Close()).NotTo(HaveOccurred())
@@ -166,7 +166,7 @@ func TestLoadGarbageProgram(t *testing.T) {
 	var insns asm.Insns
 	for i := 0; i < 256; i++ {
 		i := uint8(i)
-		insns = append(insns, asm.Insn{i, i, i, i, i, i, i, i})
+		insns.Instructions = append(insns.Instructions, asm.Insn{i, i, i, i, i, i, i, i})
 	}
 
 	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
@@ -270,6 +270,7 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 		},
 	},
+
 	{
 		PolicyName: "unreachable tier",
 		Policy: polprog.Rules{
@@ -1678,7 +1679,7 @@ func runTest(t *testing.T, tp testPolicy) {
 
 	// Load the program into the kernel.  We don't pin it so it'll be removed when the
 	// test process exits (or by the defer).
-	polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	polProgFD, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 	Expect(polProgFD).NotTo(BeZero())
 	defer func() {
@@ -1729,7 +1730,7 @@ func installAllowedProgram(jumpMap bpf.Map) bpf.ProgFD {
 
 	epiInsns, err := b.Assemble()
 	Expect(err).NotTo(HaveOccurred())
-	epiFD, err := bpf.LoadBPFProgramFromInsns(epiInsns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	epiFD, err := bpf.LoadBPFProgramFromInsns(*epiInsns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 	Expect(epiFD).NotTo(BeZero())
 

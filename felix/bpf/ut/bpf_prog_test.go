@@ -40,6 +40,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
@@ -169,7 +170,9 @@ func TestCompileTemplateRun(t *testing.T) {
 
 func TestLoadZeroProgram(t *testing.T) {
 	RegisterTestingT(t)
-	fd, err := bpf.LoadBPFProgramFromInsns(nil, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	var insns asm.Insns
+	insns.Instructions = nil
+	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	if err == nil {
 		_ = fd.Close()
 	}
@@ -302,9 +305,9 @@ outer:
 		Expect(err).NotTo(HaveOccurred())
 		var polProgFD bpf.ProgFD
 		if topts.xdp {
-			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_XDP)
+			polProgFD, err = bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_XDP)
 		} else {
-			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+			polProgFD, err = bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 		}
 		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
 		defer func() { _ = polProgFD.Close() }()
@@ -1301,7 +1304,7 @@ func TestJumpMap(t *testing.T) {
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)
 	Expect(err).NotTo(HaveOccurred())
-	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	progFD, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 
 	k := make([]byte, 4)
