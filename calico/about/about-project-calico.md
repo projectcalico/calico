@@ -1,6 +1,7 @@
 ---
 title: What is Project Calico?
 description: Learn the value of Project Calico.
+canonical url: '/about/about-project-calico'
 ---
 
 ### What is Project Calico?
