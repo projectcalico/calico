@@ -152,20 +152,22 @@ func (d *linuxDataplane) DoNetworking(
 
 		// Check if there is an annotation requesting a specific fixed MAC address for the container Veth, otherwise
 		// use kernel-assigned MAC.
-		requestedContVethMac, found := annotations["cni.projectcalico.org/hwAddr"]
-		if found {
+		if requestedContVethMac, found := annotations["cni.projectcalico.org/hwAddr"]; found {
 			tmpContVethMAC, err := net.ParseMAC(requestedContVethMac)
-			if err == nil {
-				err = netlink.LinkSetHardwareAddr(contVeth, tmpContVethMAC)
-			}
 			if err != nil {
-				return fmt.Errorf("failed to set container veth MAC to %v as requested via annotation: %v",
+				return fmt.Errorf("failed to parse MAC address %v provided via cni.projectcalico.org/hwAddr: %v",
 					requestedContVethMac, err)
-			} else {
-				contVethMAC = tmpContVethMAC.String()
-				d.logger.Infof("successfully configured container veth MAC to %v as requested via annotation",
-					contVethMAC)
 			}
+
+			err = netlink.LinkSetHardwareAddr(contVeth, tmpContVethMAC)
+			if err != nil {
+				return fmt.Errorf("failed to set container veth MAC to %v as requested via cni.projectcalico.org/hwAddr: %v",
+					requestedContVethMac, err)
+			}
+
+			contVethMAC = tmpContVethMAC.String()
+			d.logger.Infof("successfully configured container veth MAC to %v as requested via cni.projectcalico.org/hwAddr",
+				contVethMAC)
 		} else {
 			contVethMAC = contVeth.Attrs().HardwareAddr.String()
 		}
