@@ -4,8 +4,6 @@ description: Learn the value of Project Calico.
 canonical url: '/about/about-calico'
 ---
 
-### What is Project Calico?
-
 Project Calico is an open-source networking and network security solution for containers, virtual machines, and native host-based workloads. It runs in public clouds, on-premises, on a single node, or across a multi-thousand node cluster. {{site.prodname}} powers over 2M nodes daily across 166 countries.
 
 ### Why use Calico?
