@@ -33,12 +33,16 @@ const (
 )
 
 const (
+	// The following values are used as index to counters map, and should be kept in sync
+	// with constants defined in bpf-gpl/reasons.h.
 	TotalPackets = iota
-	ErrShortPacket
-	ErrFailedCSUM
 	AcceptedByFailsafe
 	AcceptedByPolicy
 	DroppedByPolicy
+	DroppedShortPacket
+	DroppedFailedCSUM
+	DroppedIPOptions
+	DroppredIPMalformed
 )
 
 const (

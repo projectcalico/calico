@@ -75,15 +75,15 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 
 	// Drop malformed IP packets
 	if (ctx->ip_header->ihl < 5) {
-		ctx->fwd.reason = CALI_REASON_IP_MALFORMED;
 		CALI_DEBUG("Drop malformed IP packets\n");
+		DENY_REASON(ctx, CALI_REASON_IP_MALFORMED);
 		goto deny;
 	} else if (ctx->ip_header->ihl > 5) {
 		/* Drop packets with IP options from/to WEP.
 		 * Also drop packets with IP options if the dest IP is not host IP
 		 */
 		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ctx->ip_header->daddr))) {
-			ctx->fwd.reason = CALI_REASON_IP_OPTIONS;
+			DENY_REASON(ctx, CALI_REASON_IP_OPTIONS);
 			CALI_DEBUG("Drop packets with IP options\n");
 			goto deny;
 		}

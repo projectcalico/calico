@@ -689,7 +689,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			ctx->ip_header = (struct iphdr *)(tc_icmphdr(ctx) + 1); /* skip to inner ip */
 			if (ctx->ip_header->ihl != 5) {
 				CALI_INFO("ICMP inner IP header has options; unsupported\n");
-				ctx->fwd.reason = CALI_REASON_IP_OPTIONS;
+				DENY_REASON(ctx, CALI_REASON_IP_OPTIONS);
 				ctx->fwd.res = TC_ACT_SHOT;
 				goto deny;
 			}

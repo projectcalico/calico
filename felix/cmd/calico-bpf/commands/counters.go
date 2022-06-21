@@ -119,22 +119,25 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 		values[hook] = val
 	}
 
-	cmd.Printf("\t\t\t\tingress\t\tegress\n")
-	cmd.Printf("Total packets: \t\t\t%d\t\t%d\n",
+	cmd.Printf("\t\t\t\t\tingress\t\tegress\n")
+	cmd.Printf("Total packets: \t\t\t\t%d\t\t%d\n",
 		values["ingress"][counters.TotalPackets], values["egress"][counters.TotalPackets])
 
-	cmd.Printf("Accepted by policy: \t\t%d\t\t%d\n",
-		values["ingress"][counters.TotalPackets], values["egress"][counters.TotalPackets])
-
-	cmd.Printf("Accepted by failsafe: \t\t%d\t\t%d\n",
+	cmd.Printf("Accepted by failsafe: \t\t\t%d\t\t%d\n",
 		values["ingress"][counters.AcceptedByFailsafe], values["egress"][counters.AcceptedByPolicy])
-	cmd.Printf("Dropped by policy: \t\t%d\t\t%d\n",
-		values["ingress"][counters.DroppedByPolicy], values["egress"][counters.DroppedByPolicy])
+	cmd.Printf("Accepted by policy: \t\t\t%d\t\t%d\n",
+		values["ingress"][counters.AcceptedByPolicy], values["egress"][counters.AcceptedByPolicy])
 
-	cmd.Printf("Dropped short packets: \t\t%d\t\t%d\n",
-		values["ingress"][counters.ErrShortPacket], values["egress"][counters.ErrShortPacket])
-	cmd.Printf("Dropped incorrect checksum: \t%d\t\t%d\n",
-		values["ingress"][counters.ErrFailedCSUM], values["egress"][counters.ErrFailedCSUM])
+	cmd.Printf("Dropped by policy: \t\t\t%d\t\t%d\n",
+		values["ingress"][counters.DroppedByPolicy], values["egress"][counters.DroppedByPolicy])
+	cmd.Printf("Dropped short packets: \t\t\t%d\t\t%d\n",
+		values["ingress"][counters.DroppedShortPacket], values["egress"][counters.DroppedShortPacket])
+	cmd.Printf("Dropped incorrect checksum: \t\t%d\t\t%d\n",
+		values["ingress"][counters.DroppedFailedCSUM], values["egress"][counters.DroppedFailedCSUM])
+	cmd.Printf("Dropped Packets with IP options: \t%d\t\t%d\n",
+		values["ingress"][counters.DroppedIPOptions], values["egress"][counters.DroppedIPOptions])
+	cmd.Printf("Dropped malformed IP packets: \t\t%d\t\t%d\n",
+		values["ingress"][counters.DroppredIPMalformed], values["egress"][counters.DroppredIPMalformed])
 	return nil
 }
 
