@@ -3,19 +3,7 @@ description: /about/
 path: /about/
 order: 0
 section:
-- title: Calico
+- title: What is Project Calico?
+  path: /about/about-project-calico
+- title: Get started resources
   path: /about/about-calico
-- title: Networking
-  path: /about/about-networking
-- title: Kubernetes Networking
-  path: /about/about-k8s-networking
-- title: Network Policy
-  path: /about/about-network-policy
-- title: Kubernetes Services
-  path: /about/about-kubernetes-services
-- title: Kubernetes Ingress
-  path: /about/about-kubernetes-ingress
-- title: Kubernetes Egress
-  path: /about/about-kubernetes-egress
-- title: eBPF
-  path: /about/about-ebpf
