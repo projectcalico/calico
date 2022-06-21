@@ -1,13 +1,19 @@
 ---
-title: Calico resources
-description: Links to Calico resources.
-show_title: false
+title: Get started resources
+description: Links to Calico resources for onboarding and training.
 canonical_url: '/about/about-calico'
 ---
 
-### About Project Calico
+- [Get a cluster up in under 15 minutes](#get-a-cluster-up-in-under-15-minutes)
+- [Training and certification](#training-and-certification)
+- [Community](#community)
+- [Stay connected](#stay-connected)
+- [Report a bug](#report-a-bug)
+- [Support](#support)
 
-{% include open-new-window.html text='What is Project Calico?' url='https://www.tigera.io/tigera-products/calico/' %}
+### Get a cluster up in 15 minutes
+
+[Quickstart]({{site.baseurl}}/getting-started/kubernetes/quickstart)
 
 ### Training and certification
 
@@ -15,7 +21,7 @@ canonical_url: '/about/about-calico'
 
 Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CTO and Co-Founder of Tigera and Co-Creator of Project Calico. The eBook shares everything you need to confidently approach Kubernetes networking and security, starting with basic networking concepts, all the way through to advanced Kubernetes networking with eBPF.
 
-[Download]
+{% include open-new-window.html text='Download ebook' url='https://www.tigera.io/lp/kubernetes-networking-ebook/' %}
 
 **Certified Calico Operator training**
 
@@ -42,7 +48,7 @@ Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CT
 - {% include open-new-window.html text='Contribute to documentation' url='https://github.com/projectcalico/calico/blob/master/CONTRIBUTING_DOCS.md' %} 
 - {% include open-new-window.html text='Become a Big Cat Ambassador' url='https://www.tigera.io/project-calico/calico-big-cats-ambassador-program/' %} and get a chance to share your experience with other users in the community.
 
-### Get updates
+### Stay connected
 
 - {% include open-new-window.html text='Github' url='https://github.com/projectcalico/calico' %}
 - {% include open-new-window.html text='Calico YouTube channel' url='https://www.youtube.com/channel/UCFpTnXDNcBoXI4gqCDmegFA' %}
@@ -52,12 +58,8 @@ Learn about Kubernetes Networking in this free eBook written by Alex Pollitt, CT
 
 ### Report a bug
 
-- [Report an issue](https://www.tigera.io/tigera-products/calico/)
-https://github.com/projectcalico/calico/issues
-
+- {% include open-new-window.html text='Report an issue' url='https://github.com/projectcalico/calico/issues' %}
 
 ### Support
 
 {% include open-new-window.html text='Get help from Support' url='https://tigera.force.com/help/s/' %} 
-
-
