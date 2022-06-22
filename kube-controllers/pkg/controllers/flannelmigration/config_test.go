@@ -79,7 +79,7 @@ var _ = Describe("flannel migration config", func() {
 		Expect(config.FlannelIpv6Network).To(Equal(""))
 		Expect(config.FlannelMTU).To(Equal(0))
 		Expect(config.FlannelIPMasq).To(Equal(true))
-		Expect(config.FlannelDaemonsetName).To(Equal("kube-flannel-ds-amd64"))
+		Expect(config.FlannelDaemonsetName).To(Equal("kube-flannel-ds"))
 		Expect(config.FlannelSubnetLen).To(Equal(24))
 		Expect(config.FlannelIpv6SubnetLen).To(Equal(64))
 		Expect(config.FlannelAnnotationPrefix).To(Equal("flannel.alpha.coreos.com"))
