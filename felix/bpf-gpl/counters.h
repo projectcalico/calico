@@ -5,7 +5,7 @@
 #ifndef __CALI_COUNTERS_H__
 #define __CALI_COUNTERS_H__
 
-#define MAX_COUNTERS_SIZE 8
+#define MAX_COUNTERS_SIZE 13
 
 typedef __u32 counters_t[MAX_COUNTERS_SIZE];
 
@@ -20,6 +20,6 @@ static CALI_BPF_INLINE counters_t *counters_get(void)
 	return cali_counters_lookup_elem(&zero);
 }
 
-#define INC(ctx, type) ((*((ctx)->counters))[type]++)
+#define COUNTER_INC(ctx, type) ((*((ctx)->counters))[type]++)
 
 #endif /* __CALI_COUNTERS_H__ */

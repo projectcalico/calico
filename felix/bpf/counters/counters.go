@@ -28,21 +28,26 @@ import (
 )
 
 const (
-	MaxCounterNumber int = 8
+	MaxCounterNumber int = 13
 	uint32Size       int = 4
 )
 
+// The following values are used as index to counters map, and should be kept in sync
+// with constants defined in bpf-gpl/reasons.h.
 const (
-	// The following values are used as index to counters map, and should be kept in sync
-	// with constants defined in bpf-gpl/reasons.h.
 	TotalPackets = iota
 	AcceptedByFailsafe
 	AcceptedByPolicy
+	AcceptedByAnotherProgram
 	DroppedByPolicy
 	DroppedShortPacket
 	DroppedFailedCSUM
 	DroppedIPOptions
 	DroppredIPMalformed
+	DroppedFailedEncap
+	DroppedFailedDecap
+	DroppedUnauthSource
+	DroppedUnknownRoute
 )
 
 const (
@@ -65,7 +70,7 @@ func NewCounters(iface string) *Counters {
 	var err error
 	cntr.numOfCpu, err = libbpf.NumPossibleCPUs()
 	if err != nil {
-		logrus.WithError(err).Error("failed to get libbpf number of possible cpu. Will use runtime information")
+		logrus.WithError(err).Error("Failed to get libbpf number of possible cpu. Will use runtime information.")
 		cntr.numOfCpu = runtime.NumCPU()
 	}
 
@@ -90,7 +95,7 @@ func (c Counters) Read(hook string) ([]uint32, error) {
 func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 	err := cMap.Open()
 	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to open counters map. err=%v", err)
+		return []uint32{}, fmt.Errorf("failed to open counters map. err=%w", err)
 	}
 	defer func() {
 		err := cMap.Close()
@@ -103,7 +108,7 @@ func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 	k := make([]byte, uint32Size)
 	values, err := cMap.Get(k)
 	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to read counters map. err=%v", err)
+		return []uint32{}, fmt.Errorf("failed to read counters map. err=%w", err)
 	}
 
 	bpfCounters := make([]uint32, MaxCounterNumber)
@@ -120,7 +125,7 @@ func (c *Counters) Flush() error {
 	for _, hook := range Hooks {
 		err := c.flush(c.maps[hook])
 		if err != nil {
-			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%v", c.iface, hook, err)
+			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%w", c.iface, hook, err)
 		}
 		logrus.Infof("Successfully flushed counters map for interface=%s hook=%s", c.iface, hook)
 	}

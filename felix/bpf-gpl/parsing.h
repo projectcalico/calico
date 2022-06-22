@@ -162,7 +162,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 		if (CALI_F_TUNNEL | CALI_F_L3_DEV) {
 			// IPIP should never be sent down the tunnel.
 			CALI_DEBUG("IPIP traffic to/from tunnel: drop\n");
-			ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+			DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
 			goto deny;
 		}
 		if (CALI_F_FROM_HEP) {
@@ -171,7 +171,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 				goto allow;
 			} else {
 				CALI_DEBUG("IPIP packet from unknown source, drop.\n");
-				ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+				DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
 				goto deny;
 			}
 		} else if (CALI_F_TO_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV) {
@@ -180,13 +180,13 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 				goto allow;
 			} else {
 				CALI_DEBUG("IPIP packet to unknown dest, drop.\n");
-				ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+				DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
 				goto deny;
 			}
 		}
 		if (CALI_F_FROM_WEP) {
 			CALI_DEBUG("IPIP traffic from workload: drop\n");
-			ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+			DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
 			goto deny;
 		}
 	default:

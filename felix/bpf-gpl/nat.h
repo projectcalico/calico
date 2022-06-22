@@ -229,13 +229,13 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 	if (!rt_addr_is_remote_host(ctx->ip_header->saddr)) {
 		CALI_DEBUG("VXLAN with our VNI from unexpected source.\n");
-		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+		DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
 	if (!vxlan_udp_csum_ok(tc_udphdr(ctx))) {
 		/* Our VNI but checksum is incorrect (we always use check=0). */
 		CALI_DEBUG("VXLAN with our VNI but incorrect checksum.\n");
-		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+		DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
 
@@ -252,7 +252,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	ctx->state->tun_ip = ctx->ip_header->saddr;
 	CALI_DEBUG("vxlan decap\n");
 	if (vxlan_v4_decap(ctx->skb)) {
-		ctx->fwd.reason = CALI_REASON_DECAP_FAIL;
+		DENY_REASON(ctx, CALI_REASON_DECAP_FAIL);
 		goto deny;
 	}
 

@@ -130,11 +130,11 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 
 	cmd.Printf("Dropped by policy: \t\t\t%d\t\t%d\n",
 		values["ingress"][counters.DroppedByPolicy], values["egress"][counters.DroppedByPolicy])
-	cmd.Printf("Dropped short packets: \t\t\t%d\t\t%d\n",
+	cmd.Printf("Dropped too short packets: \t\t\t%d\t\t%d\n",
 		values["ingress"][counters.DroppedShortPacket], values["egress"][counters.DroppedShortPacket])
 	cmd.Printf("Dropped incorrect checksum: \t\t%d\t\t%d\n",
 		values["ingress"][counters.DroppedFailedCSUM], values["egress"][counters.DroppedFailedCSUM])
-	cmd.Printf("Dropped Packets with IP options: \t%d\t\t%d\n",
+	cmd.Printf("Dropped packets with unsupported IP options: \t%d\t\t%d\n",
 		values["ingress"][counters.DroppedIPOptions], values["egress"][counters.DroppedIPOptions])
 	cmd.Printf("Dropped malformed IP packets: \t\t%d\t\t%d\n",
 		values["ingress"][counters.DroppredIPMalformed], values["egress"][counters.DroppredIPMalformed])
