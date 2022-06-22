@@ -69,7 +69,7 @@ func TestPolicySanityCheck(t *testing.T) {
 	})
 
 	Expect(err).NotTo(HaveOccurred())
-	for i, in := range insns {
+	for i, in := range insns.Instructions {
 		t.Log(i, ": ", in)
 	}
 }
@@ -98,5 +98,5 @@ func TestLogActionIgnored(t *testing.T) {
 			Policies: []Policy{},
 		}}})
 	Expect(err).NotTo(HaveOccurred())
-	Expect(noOpInsns).To(Equal(insns))
+	Expect(noOpInsns.Instructions).To(Equal(insns.Instructions))
 }

@@ -718,9 +718,9 @@ func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
 		}
 		comment := ""
 		if negate {
-			comment = fmt.Sprintf("If %s doesn't match ipset %s,skip to next rule\n", leg, ipSetID)
-		} else {
 			comment = fmt.Sprintf("If %s matches ipset %s,skip to next rule\n", leg, ipSetID)
+		} else {
+			comment = fmt.Sprintf("If %s doesn't match ipset %s,skip to next rule\n", leg, ipSetID)
 		}
 		p.b.WriteComments(comment)
 
@@ -829,7 +829,6 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 
 	}
 	namedPortStr = namedPortStr + "]"
-	comment = ""
 	if negate {
 		comment = fmt.Sprintf("If %s port matches any of the named ports %s, skip to next rule\n", leg, namedPortStr)
 	} else {
