@@ -163,13 +163,13 @@ worker-2     NotReady   <none>   5s      v1.17.2
 On the controller, install {{site.prodname}} using the operator:
 
 ```
-kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
 ```
 
 Download the custom resources necessary to configure {{site.prodname}}
 
 ```
-curl {{ "/manifests/custom-resources.yaml" | absolute_url}} -O
+curl {{site.data.versions.first.manifests_url}}/manifests/custom-resources.yaml -O
 ```
 
 If you wish to customize the {{site.prodname}} install, customize the downloaded custom-resources.yaml manifest.  Then create the manifest to install {{site.prodname}}.

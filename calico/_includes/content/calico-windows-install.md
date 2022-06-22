@@ -1,6 +1,6 @@
 {%- if include.networkingType == "vxlan" %}
 1. Ensure that BGP is disabled.
-   - If you installed {{site.prodname}} using the {% include open-new-window.html text='manifest' url='https://projectcalico.docs.tigera.io/manifests/calico-vxlan.yaml' %}, BGP is already disabled.
+   - If you installed {{site.prodname}} using the manifest, BGP is already disabled.
    - If you installed {{site.prodname}} using the operator, run this command:
 
    ```bash
@@ -38,9 +38,9 @@
 
    ```bash
 {%- if include.networkingType == "vxlan" %}
-   curl {{ "/manifests/calico-windows-vxlan.yaml" | absolute_url }} -o calico-windows.yaml
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico-windows-vxlan.yaml -o calico-windows.yaml
 {%- else %}
-   curl {{ "/manifests/calico-windows-bgp.yaml" | absolute_url }} -o calico-windows.yaml
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico-windows-bgp.yaml -o calico-windows.yaml
 {%- endif %}
    ```
 
@@ -97,7 +97,7 @@
 
    - Download the kube-proxy manifest:
    ```bash
-   curl {{ "/manifests/windows-kube-proxy.yaml" | absolute_url }} -o windows-kube-proxy.yaml
+   curl {{site.data.versions.first.manifests_url}}/manifests/windows-kube-proxy.yaml -o windows-kube-proxy.yaml
    ```
    - Edit the downloaded manifest
        - Replace `VERSION` with your Windows nodes' server version. E.g. `1809`.
