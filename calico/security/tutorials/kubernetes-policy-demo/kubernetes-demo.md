@@ -16,6 +16,7 @@ one of our [getting started guides]({{ site.baseurl }}/getting-started/).
 ### 1) Create the frontend, backend, client, and management-ui apps.
 
 ```shell
+{{site.data.versions.first.manifests_url}}
 kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/00-namespace.yaml" | absolute_url }}
 kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/01-management-ui.yaml" | absolute_url }}
 kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/02-backend.yaml" | absolute_url }}

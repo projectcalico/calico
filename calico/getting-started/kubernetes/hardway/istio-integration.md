@@ -16,7 +16,7 @@ running in each pod.  It mounts a shared volume into which Felix inserts a Unix 
 Execute the following command to install the CSI driver.
 
 ```bash
-kubectl apply -f {{ site.baseurl }}/manifests/csi-driver.yaml
+kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/csi-driver.yaml
 ```
 
 Verify the `csi-node-driver` pods are running.
