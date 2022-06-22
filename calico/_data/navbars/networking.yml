@@ -21,6 +21,8 @@ section:
     path: /networking/use-ipvs
   - title: Accelerate Istio network performance
     path: /networking/sidecar-acceleration
+  - title: Use a specific MAC address for a pod
+    path: /networking/pod-mac-address
 - title: Customize IP address management
   path: /networking/ipam
   section:
