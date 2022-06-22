@@ -60,7 +60,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 1. Install the operator.
 
    ```bash
-   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
 
 1. Configure the {{site.prodname}} installation.
@@ -87,7 +87,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 1. Install the {{site.prodname}} manifest.
 
    ```bash
-   kubectl apply -f {{ "/manifests/calico-vxlan.yaml" | absolute_url }}
+   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/calico-vxlan.yaml
    ```
 
 1. Configure {{site.prodname}} to disable AWS src/dst checks.

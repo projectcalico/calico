@@ -53,7 +53,7 @@ and calculate how to take ownership of them. The operator will maintain existing
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions.
 
    ```
-   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
 
 1. Trigger the operator to start a migration by creating an `Installation` resource. The operator will auto-detect your existing {{site.prodname}} settings and fill out the spec section.
