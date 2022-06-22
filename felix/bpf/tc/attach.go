@@ -503,6 +503,10 @@ func CleanUpJumpMaps() {
 			log.WithError(err).Warn("Removed stale BPF map pin.")
 		}
 		log.WithFields(log.Fields{"id": id, "path": p}).Info("Removed stale BPF map pin.")
+		// delete policy debug info
+		dirnames := strings.Split(p, "/")
+		polFileName := dirnames[len(dirnames)-2]
+		os.Remove("/var/run/calico/bpf/pol/" + polFileName + ".txt")
 	}
 
 	// Look for empty dirs.

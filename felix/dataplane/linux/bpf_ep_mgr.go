@@ -466,7 +466,6 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
-
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
 	m.ifacesLock.Lock()
@@ -1038,7 +1037,12 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 		return nil
 	}
 
-	return m.dp.removePolicyProgram(jumpMapFD)
+	err = m.dp.removePolicyProgram(jumpMapFD)
+	if err != nil {
+		return err
+	}
+	removePolicyDebugInfo(ap.Iface, ap.Hook)
+	return nil
 }
 
 func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint) error {
@@ -1657,6 +1661,11 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 	})
 }
 
+func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+	filename := bpf.RuntimePolDir + "/" + ifaceName + "_" + string(hook) + ".txt"
+	os.Remove(filename)
+}
+
 func writePolicyDebugInfo(comments []string, ifaceName string, hook tc.Hook) error {
 	if comments == nil {
 		return nil
@@ -1664,11 +1673,15 @@ func writePolicyDebugInfo(comments []string, ifaceName string, hook tc.Hook) err
 	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
 		return err
 	}
-	filename := bpf.RuntimePolDir + "/" + ifaceName + "_" + string(hook) + ".txt"
+	filename := bpf.RuntimePolDir + "/" + ifaceName + "_"
+	if hook == tc.HookIngress {
+		filename = filename + "igr.txt"
+	} else {
+		filename = filename + "egr.txt"
+	}
 	if err := ioutil.WriteFile(filename, []byte(strings.Join(comments, "")), 0600); err != nil {
 		return err
 	}
-	fmt.Println("writePolicyDebugInfo ", ifaceName, string(hook), filename)
 	return nil
 }
 
