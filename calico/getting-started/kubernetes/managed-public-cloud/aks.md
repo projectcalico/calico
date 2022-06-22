@@ -58,7 +58,7 @@ The geeky details of what you get:
 1. Install the operator.
 
    ```
-   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
 
 1. Configure the {{site.prodname}} installation.

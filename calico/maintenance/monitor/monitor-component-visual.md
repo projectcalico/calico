@@ -106,7 +106,7 @@ EOF
 Here you will create a configmap with Felix and Typha dashboards.
 
 ```bash
-kubectl apply -f {{ "/manifests/grafana-dashboards.yaml" | absolute_url }}
+kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/grafana-dashboards.yaml
 ```
 
 ##### **3. Creating Grafana pod**
