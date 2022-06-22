@@ -9,6 +9,7 @@ spec:
     listKind: ClusterInformationList
     plural: clusterinformations
     singular: clusterinformation
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1
