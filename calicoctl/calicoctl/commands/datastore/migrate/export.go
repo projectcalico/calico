@@ -147,7 +147,7 @@ Description:
 
 	// Check that the datastore is locked.
 	ctx := context.Background()
-	locked, err := checkLocked(ctx, client)
+	locked, err := common.CheckLocked(ctx, client)
 	if err != nil {
 		return fmt.Errorf("Error while checking if datastore was locked: %s", err)
 	} else if !locked {
