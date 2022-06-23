@@ -26,7 +26,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
-	"github.com/projectcalico/calico/felix/bpf/libbpf"
 
 	"golang.org/x/sys/unix"
 )
@@ -264,7 +263,7 @@ func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
 	switch mapInfo.Type {
 	case unix.BPF_MAP_TYPE_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_ARRAY, unix.BPF_MAP_TYPE_LRU_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE:
 		// The actual size of per cpu maps is equal to the value size * number of cpu
-		ncpus, err := libbpf.NumPossibleCPUs()
+		ncpus, err := NumPossibleCPUs()
 		if err != nil {
 			log.WithError(err).Panic("Failed to get number of possible cpus")
 		}

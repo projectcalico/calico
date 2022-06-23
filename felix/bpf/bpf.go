@@ -35,11 +35,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex"
 )
@@ -2233,6 +2235,22 @@ func KTimeNanos() int64 {
 		log.WithError(err).Panic("Failed to read system clock")
 	}
 	return ts.Nano()
+}
+
+var (
+	cachedNumPossibleCPUs    int
+	cachedNumPossibleCPUsOne sync.Once
+)
+
+func NumPossibleCPUs() int {
+	cachedNumPossibleCPUsOne.Do(func() {
+		var err error
+		cachedNumPossibleCPUs, err = libbpf.NumPossibleCPUs()
+		if err != nil {
+			log.WithError(err).Panic("Failed to read the number of possible CPUs from libbpf.")
+		}
+	})
+	return cachedNumPossibleCPUs
 }
 
 const jumpMapVersion = 2

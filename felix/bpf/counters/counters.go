@@ -17,13 +17,11 @@ package counters
 import (
 	"encoding/binary"
 	"fmt"
-	"runtime"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 )
 
@@ -83,12 +81,7 @@ func NewCounters(iface string) *Counters {
 	cntr := Counters{
 		iface: iface,
 	}
-	var err error
-	cntr.numOfCpu, err = libbpf.NumPossibleCPUs()
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get libbpf number of possible cpu. Will use runtime information.")
-		cntr.numOfCpu = runtime.NumCPU()
-	}
+	cntr.numOfCpu = bpf.NumPossibleCPUs()
 
 	cntr.maps = make(map[string]bpf.Map)
 	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,

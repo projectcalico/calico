@@ -26,8 +26,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
 
 type IteratorAction string
@@ -291,11 +289,7 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 func (b *PinnedMap) Update(k, v []byte) error {
 	if b.perCPU {
 		// Per-CPU maps need a buffer of value-size * num-CPUs.
-		numCPU, err := libbpf.NumPossibleCPUs()
-		if err != nil {
-			return fmt.Errorf("failed to get the number of possible cpus - err: %v", err)
-		}
-		if len(v) < b.ValueSize*numCPU {
+		if len(v) < b.ValueSize*NumPossibleCPUs() {
 			return fmt.Errorf("Not enough data for per-cpu map entry")
 		}
 	}
@@ -305,11 +299,7 @@ func (b *PinnedMap) Update(k, v []byte) error {
 func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 	valueSize := b.ValueSize
 	if b.perCPU {
-		numCPU, err := libbpf.NumPossibleCPUs()
-		if err != nil {
-			return []byte{}, fmt.Errorf("failed to get the number of possible cpus - err: %v", err)
-		}
-		valueSize = b.ValueSize * numCPU
+		valueSize = b.ValueSize * NumPossibleCPUs()
 		logrus.Debugf("Set value size to %v for getting an entry from Per-CPU map", valueSize)
 	}
 	return GetMapEntry(b.fd, k, valueSize)
@@ -318,11 +308,7 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 func (b *PinnedMap) Delete(k []byte) error {
 	valueSize := b.ValueSize
 	if b.perCPU {
-		numCPU, err := libbpf.NumPossibleCPUs()
-		if err != nil {
-			return fmt.Errorf("failed to get the number of possible cpus - err: %v", err)
-		}
-		valueSize = b.ValueSize * numCPU
+		valueSize = b.ValueSize * NumPossibleCPUs()
 		logrus.Infof("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
 	}
 	return DeleteMapEntry(b.fd, k, valueSize)
