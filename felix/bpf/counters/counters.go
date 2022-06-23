@@ -50,6 +50,22 @@ const (
 	DroppedUnknownRoute
 )
 
+var Descriptions []string = []string{
+	"Total packets",
+	"Accepted by failsafe",
+	"Accepted by policy",
+	"Accepted by another program",
+	"Dropped by policy",
+	"Dropped too short packets",
+	"Dropped incorrect checksum",
+	"Dropped packets with unsupported IP options",
+	"Dropped malformed IP packets",
+	"Dropped failed encapsulation",
+	"Dropped failed decapsulation",
+	"Dropped packets with unknown source",
+	"Dropped packets with unknown route",
+}
+
 const (
 	HookIngress = "ingress"
 	HookEgress  = "egress"
