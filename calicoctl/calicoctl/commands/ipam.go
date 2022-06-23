@@ -34,6 +34,8 @@ func IPAM(args []string) error {
     release          Release a Calico assigned IP address.
     show             Show details of a Calico configuration,
                      assigned IP address, or of overall IP usage.
+    split            Split the IP pool specified by the CIDR into
+                     the specified number of smaller IPPools.
     configure        Configure IPAM
 
 Options:
@@ -73,6 +75,8 @@ Description:
 		return ipam.Show(args)
 	case "configure":
 		return ipam.Configure(args)
+	case "split":
+		return ipam.Split(args)
 	default:
 		fmt.Println(doc)
 	}

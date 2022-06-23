@@ -40,6 +40,8 @@ type IPPoolInterface interface {
 	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.IPPool, error)
 	List(ctx context.Context, opts options.ListOptions) (*apiv3.IPPoolList, error)
 	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
+	UnsafeCreate(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error)
+	UnsafeDelete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.IPPool, error)
 }
 
 // ipPools implements IPPoolInterface
@@ -57,7 +59,7 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		res = &resCopy
 	}
 	// Validate the IPPool before creating the resource.
-	if err := r.validateAndSetDefaults(ctx, res, nil); err != nil {
+	if err := r.validateAndSetDefaults(ctx, res, nil, false); err != nil {
 		return nil, err
 	}
 
@@ -129,7 +131,7 @@ func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	}
 
 	// Validate the IPPool updating the resource.
-	if err := r.validateAndSetDefaults(ctx, res, old); err != nil {
+	if err := r.validateAndSetDefaults(ctx, res, old, false); err != nil {
 		return nil, err
 	}
 
@@ -282,7 +284,7 @@ func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Int
 // validateAndSetDefaults validates IPPool fields and sets default values that are
 // not assigned.
 // The old pool will be unassigned for a Create.
-func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPPool) error {
+func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPPool, skipCIDROverlap bool) error {
 	errFields := []cerrors.ErroredField{}
 
 	// Spec.CIDR field must not be empty.
@@ -384,7 +386,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 
 	// If there was no previous pool then this must be a Create.  Check that the CIDR
 	// does not overlap with any other pool CIDRs.
-	if old == nil {
+	if old == nil && !skipCIDROverlap {
 		allPools, err := r.List(ctx, options.ListOptions{})
 		if err != nil {
 			return err
@@ -485,4 +487,74 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 	}
 
 	return nil
+}
+
+// UnsafeCreate takes the representation of an IPPool and creates it the same as Create.
+// It is unsafe because it will skip checks against overlapping blocks. This is only
+// used to create child pools during operations to split IP pools.
+func (r ipPools) UnsafeCreate(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
+	// Validate the IPPool before creating the resource.
+	if err := r.validateAndSetDefaults(ctx, res, nil, true); err != nil {
+		return nil, err
+	}
+
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
+	out, err := r.client.resources.Create(ctx, opts, apiv3.KindIPPool, res)
+	if out != nil {
+		return out.(*apiv3.IPPool), err
+	}
+	return nil, err
+}
+
+// UnsafeDelete deletes the IP pool similar to Delete except it does not delete the associated
+// block affinities. This should only be used to remove an old IP pool after the split IP pools
+// operations are complete.
+func (r ipPools) UnsafeDelete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.IPPool, error) {
+	// Get the pool so that we can find the CIDR associated with it.
+	pool, err := r.Get(ctx, name, options.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	logCxt := log.WithFields(log.Fields{
+		"CIDR": pool.Spec.CIDR,
+		"Name": name,
+	})
+
+	// If the pool is active, set the disabled flag to ensure we stop allocating from this pool.
+	if !pool.Spec.Disabled {
+		logCxt.Debug("Disabling pool to release affinities")
+		pool.Spec.Disabled = true
+
+		// If the Delete has been called with a ResourceVersion then use that to perform the
+		// update - that way we'll catch update conflicts (we could actually check here, but
+		// the most likely scenario is there isn't one - so just pass it through and let the
+		// Update handle any conflicts).
+		if opts.ResourceVersion != "" {
+			pool.ResourceVersion = opts.ResourceVersion
+		}
+		if _, err := r.Update(ctx, pool, options.SetOptions{}); err != nil {
+			return nil, err
+		}
+
+		// Reset the resource version before the actual delete since the version of that resource
+		// will now have been updated.
+		opts.ResourceVersion = ""
+	}
+
+	// And finally, delete the pool.
+	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindIPPool, noNamespace, name)
+	if out != nil {
+		return out.(*apiv3.IPPool), err
+	}
+	return nil, err
 }
