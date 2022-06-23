@@ -1,5 +1,5 @@
 ---
-title: Get started resources
+title: Training and resources
 description: Links to Calico resources for onboarding and training.
 show_title: false
 canonical_url: '/about/about-calico'

@@ -1,9 +1,9 @@
-title: "About"
+title: "Get started"
 description: /about/
 path: /about/
 order: 0
 section:
 - title: What is Project Calico?
   path: /about/about-project-calico
-- title: Get started resources
+- title: Training and resources
   path: /about/about-calico
