@@ -157,6 +157,7 @@ postrelease-checks: $(POSTRELEASE_IMAGE_CREATED)
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-e VERSION=$(VERSION) \
 		-e FLANNEL_VERSION=$(FLANNEL_VERSION) \
+		-e VPP_VERSION=$(VPP_VERSION) \
 		-e OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		$(POSTRELEASE_IMAGE) \
 		sh -c "nosetests hack/postrelease -e "$(EXCLUDE_REGEX)" -s -v --with-xunit --xunit-file='postrelease-checks.xml' --with-timer $(EXTRA_NOSE_ARGS)"

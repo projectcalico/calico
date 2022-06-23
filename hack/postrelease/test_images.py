@@ -3,7 +3,7 @@ import os
 import requests
 import subprocess
 import yaml
-from versions import RELEASE_VERSION, OPERATOR_VERSION
+from versions import RELEASE_VERSION, OPERATOR_VERSION, VPP_VERSION
 
 OPERATOR_IMAGE = "quay.io/tigera/operator:%s" % OPERATOR_VERSION
 
@@ -107,7 +107,7 @@ def test_docker_release_tag_present():
     
     for image in VPP_IMAGES:
         print("[INFO] checking %s:%s" % (image_name, RELEASE_VERSION))
-        image_name = "%s:%s-calico%s" % (image, VPP_RELEASE, RELEASE_VERSION,)
+        image_name = "%s:%s-calico%s" % (image, VPP_VERSION, RELEASE_VERSION,)
         cmd = 'docker manifest inspect %s | jq -r "."' % image_name
         req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         assert not req.stdout.read().startswith("no such manifest"), (
@@ -145,11 +145,10 @@ def test_operator_images():
 
 # VPP specific tests.
 VPP_IMAGES = ["calicovpp/agent", "calicovpp/vpp", "calicovpp/init-eks"]
-VPP_RELEASE = os.getenv("VPP_BRANCH")
 VPP_EXPECTED_ARCHS = ["amd64"]
 
 def test_vpp_branch():
-    assert VPP_RELEASE != "master", "vppbranch cannot be 'master' for a release"
+    assert VPP_VERSION != "master", "vppbranch cannot be 'master' for a release"
 
 
 def test_operator_image_present():
