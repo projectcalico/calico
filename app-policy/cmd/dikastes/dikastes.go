@@ -189,7 +189,9 @@ type terminationHandler struct {
 
 func (h *terminationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.sigChan <- syscall.SIGTERM
-	io.WriteString(w, "terminating Dikastes\n")
+	if _, err := io.WriteString(w, "terminating Dikastes\n"); err != nil {
+		log.Fatalf("error writing HTTP response: %v", err)
+	}
 }
 
 func (h *terminationHandler) RunHttpServer(arguments map[string]interface{}) (*http.Server, *sync.WaitGroup) {
