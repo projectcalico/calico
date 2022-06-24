@@ -55,6 +55,13 @@ type MapInfo struct {
 	MaxEntries int
 }
 
+// PolicyDebugInfo describes policy debug info
+type PolicyDebugInfo struct {
+	IfaceName  string   `json:"ifacename"`
+	Hook       string   `json:"hook"`
+	PolicyInfo []string `json:"policyInfo"`
+}
+
 const (
 	ObjectDir      = "/usr/lib/calico/bpf"
 	RuntimeProgDir = "/var/run/calico/bpf/prog"

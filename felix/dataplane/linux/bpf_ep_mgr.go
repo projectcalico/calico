@@ -222,13 +222,6 @@ type bpfAllowChainRenderer interface {
 	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 }
 
-// PolicyDebugInfo describes policy debug info
-type PolicyDebugInfo struct {
-	IfaceName  string   `json:"ifacename"`
-	Hook       string   `json:"hook"`
-	PolicyInfo []string `json:"policyInfo"`
-}
-
 func newBPFEndpointManager(
 	dp bpfDataplane,
 	config *Config,
@@ -1690,7 +1683,7 @@ func writePolicyDebugInfo(comments []string, ifaceName string, hook tc.Hook) err
 		return err
 	}
 
-	var policyDebugInfo = PolicyDebugInfo{
+	var policyDebugInfo = bpf.PolicyDebugInfo{
 		IfaceName:  ifaceName,
 		Hook:       string(hook),
 		PolicyInfo: comments,
