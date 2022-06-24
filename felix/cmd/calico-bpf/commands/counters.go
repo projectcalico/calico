@@ -17,7 +17,6 @@ package commands
 import (
 	"fmt"
 	"net"
-	"sort"
 
 	"github.com/projectcalico/calico/felix/bpf/counters"
 
@@ -105,31 +104,16 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	}
 
 	bpfCounters := counters.NewCounters(iface)
-	values := make(map[string][]uint32)
+	values, err := bpfCounters.Read()
+	if err != nil {
+		return fmt.Errorf("Failed to read bpf counters. iface=%s err=%v", iface, err)
+	}
 
 	cmd.Printf("===== Interface: %s =====\n", iface)
-	for _, hook := range counters.Hooks {
-		val, err := bpfCounters.Read(hook)
-		if err != nil {
-			return fmt.Errorf("Failed to read bpf counters. hook=%s err=%v", hook, err)
-		}
-		if len(val) < counters.MaxCounterNumber {
-			return fmt.Errorf("Failed to read enough data from bpf counters. hook=%s", hook)
-		}
-
-		values[hook] = val
-	}
-
-	keys := make([]int, 0)
-	for k := range counters.Descriptions {
-		keys = append(keys, k)
-	}
-	sort.Ints(keys)
-
 	cmd.Printf("\t\t\t\t\tingress\t\tegress\n")
-	for _, c := range keys {
+	for c := 0; c < counters.MaxCounterNumber; c++ {
 		cmd.Printf("%v: \t\t\t\t%d\t\t%d\n", counters.Descriptions[c],
-			values["ingress"][c], values["egress"][c])
+			values[counters.HookIngress][c], values[counters.HookEgress][c])
 	}
 	return nil
 }

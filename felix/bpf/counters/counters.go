@@ -65,26 +65,25 @@ var Descriptions map[int]string = map[int]string{
 }
 
 const (
-	HookIngress = "ingress"
-	HookEgress  = "egress"
+	HookIngress = iota
+	HookEgress
 )
 
-var Hooks = []string{HookIngress, HookEgress}
+var HooksName = []string{"ingress", "egress"}
 
 type Counters struct {
-	maps     map[string]bpf.Map
-	numOfCpu int
 	iface    string
+	numOfCpu int
+	maps     []bpf.Map
 }
 
 func NewCounters(iface string) *Counters {
 	cntr := Counters{
 		iface:    iface,
 		numOfCpu: bpf.NumPossibleCPUs(),
+		maps:     make([]bpf.Map, len(HooksName)),
 	}
-	logrus.Infof("marmar %v", cntr.numOfCpu)
 
-	cntr.maps = make(map[string]bpf.Map)
 	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
 		bpf.CountersMapName(), iface, tc.HookIngress)
 	cntr.maps[HookIngress] = Map(&bpf.MapContext{}, pinPath)
@@ -98,8 +97,25 @@ func NewCounters(iface string) *Counters {
 	return &cntr
 }
 
-func (c Counters) Read(hook string) ([]uint32, error) {
-	return c.read(c.maps[hook])
+func (c Counters) Read() ([][]uint32, error) {
+	values := make([][]uint32, len(HooksName))
+	for i := range values {
+		values[i] = make([]uint32, MaxCounterNumber)
+	}
+
+	for hook, name := range HooksName {
+		val, err := c.read(c.maps[hook])
+		if err != nil {
+			return values, fmt.Errorf("Failed to read bpf counters. hook=%s err=%v", name, err)
+		}
+		if len(values[hook]) < MaxCounterNumber {
+			return values, fmt.Errorf("Failed to read enough data from bpf counters. hook=%s", name)
+		}
+
+		values[hook] = val
+	}
+
+	return values, nil
 }
 
 func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
@@ -138,12 +154,12 @@ func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 }
 
 func (c *Counters) Flush() error {
-	for _, hook := range Hooks {
+	for hook, name := range HooksName {
 		err := c.flush(c.maps[hook])
 		if err != nil {
-			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%w", c.iface, hook, err)
+			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%w", c.iface, name, err)
 		}
-		logrus.Infof("Successfully flushed counters map for interface=%s hook=%s", c.iface, hook)
+		logrus.Infof("Successfully flushed counters map for interface=%s hook=%s", c.iface, name)
 	}
 	return nil
 }

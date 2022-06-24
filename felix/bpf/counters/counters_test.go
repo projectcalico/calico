@@ -22,10 +22,10 @@ import (
 
 func TestCounterMapSize(t *testing.T) {
 	RegisterTestingT(t)
-	Expect(MaxCounterNumber).Should(Equal(len(Descriptions)))
 
 	// Entries in the counter map should be aligned
-	var isEven = func(i int) bool { return i&2 == 0 }
-	Expect(MaxCounterNumber).To(Satisfy(isEven))
+	Expect(MaxCounterNumber%2 == 0).To(BeTrue())
 
+	noOfDescriptions := len(Descriptions)
+	Expect(MaxCounterNumber).Should(Equal(noOfDescriptions + noOfDescriptions%2))
 }
