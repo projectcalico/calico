@@ -273,6 +273,9 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 
 	if ipVersion == 4 && r.WireguardEnabled {
+		// When IPv4 Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
+		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
+		// connectivity problems.
 		inputRules = append(inputRules,
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
@@ -281,12 +284,10 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 				Action:  r.filterAllowAction,
 				Comment: []string{"Allow incoming IPv4 Wireguard packets"},
 			},
-			// No drop rule is added because wireguard does its own validation of authenticity of incoming packets
+			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
+			// baked into the crypto routing table.
 		)
 	}
-
-	// Note that we do not need to do this filtering for wireguard because it already has the peering and allowed IPs
-	// baked into the crypto routing table.
 
 	if r.KubeIPVSSupportEnabled {
 		// Check if packet belongs to forwarded traffic. (e.g. part of an ipvs connection).
@@ -749,9 +750,22 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		)
 	}
 
-	// TODO(rlb): For wireguard, we add the destination port to the failsafes. We may want to revisit this so that we
-	// only include nodes that support wireguard. This will tie in with whether or not we want to include external
-	// wireguard destinations.
+	if ipVersion == 4 && r.WireguardEnabled {
+		// When IPv4 Wireguard is enabled, auto-allow Wireguard traffic to other Calico nodes.  Without this,
+		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
+		// connectivity problems.
+		rules = append(rules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.WireguardListeningPort)).
+					// Note that we do not need to limit the destination hosts to Calico nodes because allowed peers are
+					// programmed separately
+					SrcAddrType(AddrTypeLocal, false),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow outgoing IPv4 Wireguard packets"},
+			},
+		)
+	}
 
 	// Apply host endpoint policy to traffic that has not been DNAT'd.  In the DNAT case we
 	// can't correctly apply policy here because the packet's OIF is still the OIF from a

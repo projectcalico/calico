@@ -447,17 +447,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 		for _, ai := range []bool{true, false} {
 			allInterfaces := ai
-			desc := "should add wireguard port as a failsafe"
+			desc := "wireguard traffic is allowed with a blocking host endpoint policy"
 			if ai {
 				desc += " (using * HostEndpoint)"
 			} else {
 				desc += " (using eth0 HostEndpoint)"
 			}
 			It(desc, func() {
-				By("Creating policy to deny wireguard port on main felix host endpoint")
+				By("Creating policy to deny wireguard port on main felix host endpoint.")
 				policy := api.NewGlobalNetworkPolicy()
 				policy.Name = "deny-wg-port"
-				prot := numorstring.ProtocolFromString(numorstring.ProtocolUDP)
+				port := numorstring.ProtocolFromString(numorstring.ProtocolUDP)
 				policy.Spec.Egress = []api.Rule{
 					{
 						// Deny egress UDP to the wireguard port.
@@ -474,7 +474,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					{
 						// Deny all UDP traffic to the hosts.
 						Action:   api.Deny,
-						Protocol: &prot,
+						Protocol: &port,
 						Destination: api.EntityRule{
 							Selector: "has(host-endpoint)",
 							Ports:    []numorstring.Port{numorstring.SinglePort(wireguardListeningPortDefault)},
