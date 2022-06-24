@@ -80,6 +80,10 @@ section:
       path: /getting-started/kubernetes/k3s/quickstart
     - title: Multi-node install
       path: /getting-started/kubernetes/k3s/multi-node-install
+  - title: MicroK8s
+    path: /getting-started/kubernetes/microk8s
+  - title: Minikube
+    path: /getting-started/kubernetes/minikube 
   - title: OpenShift
     path: /getting-started/openshift/
     section:
@@ -107,7 +111,7 @@ section:
         path: /getting-started/openstack/installation/devstack
       - title: Verify your deployment
         path: /getting-started/openstack/verification
-  - title: Rancher Kubernetes Engine
+  - title: RKE
     path: /getting-started/kubernetes/rancher 
   - title: Calico for Windows
     path: /getting-started/windows-calico/
@@ -140,7 +144,7 @@ section:
         path: /getting-started/windows-calico/troubleshoot
   - title: System requirements
     path: /getting-started/kubernetes/requirements
-- title: Pull Calico images
+- title: Deploy images from registries
   path: /maintenance/image-options/
   section:
   - title: Install images by registry digest
