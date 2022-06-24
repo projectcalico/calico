@@ -66,7 +66,7 @@ func TestPolicySanityCheck(t *testing.T) {
 				}},
 			}},
 		}},
-	})
+	}, false)
 
 	Expect(err).NotTo(HaveOccurred())
 	for i, in := range insns.Instructions {
@@ -88,7 +88,7 @@ func TestLogActionIgnored(t *testing.T) {
 					Action: "Log",
 				}}},
 			}},
-		}}})
+		}}}, false)
 	Expect(err).NotTo(HaveOccurred())
 
 	pg = NewBuilder(alloc, 1, 2, 3)
@@ -96,7 +96,7 @@ func TestLogActionIgnored(t *testing.T) {
 		Tiers: []Tier{{
 			Name:     "default",
 			Policies: []Policy{},
-		}}})
+		}}}, false)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(noOpInsns.Instructions).To(Equal(insns.Instructions))
 }

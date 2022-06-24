@@ -325,20 +325,22 @@ func (n Insn) Imm() int32 {
 }
 
 type Block struct {
-	insns             Insns
-	fixUps            []fixUp
-	labelToInsnIdx    map[string]int
-	insnIdxToLabels   map[int][]string
-	insnIdxToComments map[int][]string
-	inUseJumpTargets  set.Set
+	insns              Insns
+	fixUps             []fixUp
+	labelToInsnIdx     map[string]int
+	insnIdxToLabels    map[int][]string
+	insnIdxToComments  map[int][]string
+	inUseJumpTargets   set.Set
+	policyDebugEnabled bool
 }
 
-func NewBlock() *Block {
+func NewBlock(policyDebugEnabled bool) *Block {
 	return &Block{
-		labelToInsnIdx:    map[string]int{},
-		insnIdxToLabels:   map[int][]string{},
-		inUseJumpTargets:  set.New(),
-		insnIdxToComments: map[int][]string{},
+		labelToInsnIdx:     map[string]int{},
+		insnIdxToLabels:    map[int][]string{},
+		inUseJumpTargets:   set.New(),
+		insnIdxToComments:  map[int][]string{},
+		policyDebugEnabled: policyDebugEnabled,
 	}
 }
 
@@ -588,19 +590,21 @@ func (b *Block) Assemble() (*Insns, error) {
 		binary.LittleEndian.PutUint16(b.insns.Instructions[f.origInsnIdx][2:4], uint16(offset))
 	}
 
-	for idx, insns := range b.insns.Instructions {
-		if labels, ok := b.insnIdxToLabels[idx]; ok {
-			for _, label := range labels {
-				b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%s:\n", label))
+	if b.policyDebugEnabled {
+		for idx, insns := range b.insns.Instructions {
+			if labels, ok := b.insnIdxToLabels[idx]; ok {
+				for _, label := range labels {
+					b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%s:\n", label))
+				}
 			}
-		}
-		if comments, ok := b.insnIdxToComments[idx]; ok {
-			for _, comment := range comments {
-				comment = fmt.Sprintf("// %s", comment)
-				b.insns.Comments = append(b.insns.Comments, comment)
+			if comments, ok := b.insnIdxToComments[idx]; ok {
+				for _, comment := range comments {
+					comment = fmt.Sprintf("// %s", comment)
+					b.insns.Comments = append(b.insns.Comments, comment)
+				}
 			}
+			b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%d:%s\n", idx, insns))
 		}
-		b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%d:%s\n", idx, insns))
 	}
 	return &b.insns, nil
 }
@@ -611,7 +615,9 @@ func (b *Block) LabelNextInsn(label string) {
 }
 
 func (b *Block) WriteComments(comment string) {
-	b.insnIdxToComments[len(b.insns.Instructions)] = append(b.insnIdxToComments[len(b.insns.Instructions)], comment)
+	if b.policyDebugEnabled {
+		b.insnIdxToComments[len(b.insns.Instructions)] = append(b.insnIdxToComments[len(b.insns.Instructions)], comment)
+	}
 }
 
 func (b *Block) nextInsnReachble() bool {

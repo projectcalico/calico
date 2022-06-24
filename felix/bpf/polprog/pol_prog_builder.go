@@ -175,8 +175,8 @@ const (
 	TierEndPass  TierEndAction = "pass"
 )
 
-func (p *Builder) Instructions(rules Rules) (*Insns, error) {
-	p.b = NewBlock()
+func (p *Builder) Instructions(rules Rules, policyDebugEnabled bool) (*Insns, error) {
+	p.b = NewBlock(policyDebugEnabled)
 	p.writeProgramHeader()
 
 	if rules.ForXDP {

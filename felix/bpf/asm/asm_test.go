@@ -22,21 +22,21 @@ import (
 
 func TestBlock_Mov64(t *testing.T) {
 	RegisterTestingT(t)
-	b := NewBlock()
+	b := NewBlock(false)
 	b.Mov64(6, 1)
 	Expect(b.insns.Instructions).To(Equal([]Insn{{0xbf, 0x16, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}))
 }
 
 func TestBlock_MovImm64(t *testing.T) {
 	RegisterTestingT(t)
-	b := NewBlock()
+	b := NewBlock(false)
 	b.MovImm64(1, 0x1eadbeef)
 	Expect(b.insns.Instructions).To(Equal([]Insn{{0xb7, 0x01, 0, 0, 0xef, 0xbe, 0xad, 0x1e}}))
 }
 
 func TestBlock_JumpLE64(t *testing.T) {
 	RegisterTestingT(t)
-	b := NewBlock()
+	b := NewBlock(false)
 	b.JumpLE64(1, 2, "foo")
 	b.MovImm64(1, 0x1eadbeef)
 	b.MovImm64(1, 0x2eadbeef)
@@ -55,7 +55,7 @@ func TestBlock_JumpLE64(t *testing.T) {
 
 func TestBlock_Mainline(t *testing.T) {
 	RegisterTestingT(t)
-	b := NewBlock()
+	b := NewBlock(false)
 
 	// Pre-amble to the policy program.
 	b.Mov64(R6, R1) // Save R1 (context) in R6.

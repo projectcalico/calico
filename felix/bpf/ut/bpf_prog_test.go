@@ -301,7 +301,7 @@ outer:
 		stateMapFD := stateMap.MapFD()
 		Expect(stateMapFD).NotTo(BeZero())
 		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD())
-		insns, err := pg.Instructions(*rules)
+		insns, err := pg.Instructions(*rules, false)
 		Expect(err).NotTo(HaveOccurred())
 		var polProgFD bpf.ProgFD
 		if topts.xdp {
@@ -1302,7 +1302,7 @@ func TestJumpMap(t *testing.T) {
 	jumpMapFD := tcJumpMap.MapFD()
 	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD)
 	rules := polprog.Rules{}
-	insns, err := pg.Instructions(rules)
+	insns, err := pg.Instructions(rules, false)
 	Expect(err).NotTo(HaveOccurred())
 	progFD, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())

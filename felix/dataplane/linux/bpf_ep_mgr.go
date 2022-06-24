@@ -206,6 +206,8 @@ type bpfEndpointManager struct {
 	// Service routes
 	ctlbWorkaroundEnabled bool
 
+	bpfPolicyDebugEnabled bool
+
 	routeTable    *routetable.RouteTable
 	services      map[serviceKey][]string
 	dirtyServices map[serviceKey][]string
@@ -272,8 +274,9 @@ func newBPFEndpointManager(
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
-		ipv6Enabled:          config.BPFIpv6Enabled,
-		rpfStrictModeEnabled: config.BPFEnforceRPF,
+		ipv6Enabled:           config.BPFIpv6Enabled,
+		rpfStrictModeEnabled:  config.BPFEnforceRPF,
+		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -1687,7 +1690,7 @@ func writePolicyDebugInfo(comments []string, ifaceName string, hook tc.Hook) err
 
 func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) ([]string, error) {
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD)
-	insns, err := pg.Instructions(rules)
+	insns, err := pg.Instructions(rules, m.bpfPolicyDebugEnabled)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate policy bytecode: %w", err)
 	}
