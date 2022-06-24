@@ -17,9 +17,12 @@ package commands
 import (
 	"fmt"
 	"net"
+	"os"
+	"strings"
 
 	"github.com/projectcalico/calico/felix/bpf/counters"
 
+	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -109,12 +112,31 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 		return fmt.Errorf("Failed to read bpf counters. iface=%s err=%v", iface, err)
 	}
 
-	cmd.Printf("===== Interface: %s =====\n", iface)
-	cmd.Printf("\t\t\t\t\tingress\t\tegress\n")
-	for c := 0; c < counters.MaxCounterNumber; c++ {
-		cmd.Printf("%v: \t\t\t\t%d\t\t%d\n", counters.Descriptions[c],
-			values[counters.HookIngress][c], values[counters.HookEgress][c])
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"", iface, "INGRESS", "EGRESS"})
+	genRow := func(description string, ingress, egress uint32) []string {
+		fields := strings.Split(description, " ")
+		category := fields[0]
+		caption := strings.Join(fields[1:], " ")
+		return []string{
+			category,
+			caption,
+			fmt.Sprintf("%v", ingress),
+			fmt.Sprintf("%v", egress),
+		}
 	}
+
+	var rows [][]string
+
+	noOfCounters := len(counters.Descriptions)
+	for c := 0; c < noOfCounters; c++ {
+		rows = append(rows, genRow(counters.Descriptions[c],
+			values[counters.HookIngress][c], values[counters.HookEgress][c]))
+	}
+	table.AppendBulk(rows)
+	table.SetAutoMergeCells(true)
+	table.SetAutoMergeCellsByColumnIndex([]int{0, 1})
+	table.Render()
 	return nil
 }
 

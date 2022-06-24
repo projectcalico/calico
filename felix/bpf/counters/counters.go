@@ -143,13 +143,8 @@ func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 			begin := i*uint32Size + cpu*MaxCounterNumber*uint32Size
 			data := uint32(binary.LittleEndian.Uint32(values[begin : begin+uint32Size]))
 			bpfCounters[i] += data
-			logrus.Infof("counter: %v - data: %v ", i, data)
 		}
-		logrus.Info("-------")
-
 	}
-	logrus.Infof("values: %v", values)
-	logrus.Infof("Output: %v", bpfCounters)
 	return bpfCounters, nil
 }
 
