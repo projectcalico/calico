@@ -389,7 +389,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
-		os.Remove(bpf.RuntimePolDir)
+		err := os.RemoveAll(bpf.RuntimePolDir)
+		if err != nil {
+			log.Debug("error removing policy dump info")
+		}
 	}
 
 	// However, the NAT tables need an extra cleanup regex.
