@@ -1,6 +1,6 @@
 title: "Security"
 path: /security/
-order: 3
+order: 4
 section:
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust
@@ -80,8 +80,6 @@ section:
     path: /security/high-connection-workloads
   - title: Defend against DoS attacks
     path: /security/defend-dos-attack
-- title: Encrypt in-cluster pod traffic
-  path: /security/encrypt-cluster-pod-traffic
 - title: Secure Calico component communications
   path: /security/comms/
   section:
