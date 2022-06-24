@@ -5,15 +5,8 @@ section:
 - title: Install on clusters
   path: /getting-started/kubernetes/
   section:
-  - title: Quickstarts
-    path: /getting-started/kubernetes/quickstart
-    section: 
-    - title: Single-host cluster
-      path: /getting-started/kubernetes/quickstart
-    - title: Single-node minikube cluster
-      path: /getting-started/kubernetes/minikube 
-    - title: Single-node MicroK8s cluster
-      path: /getting-started/kubernetes/microk8s     
+  - title: Quickstart
+    path: /getting-started/kubernetes/quickstart   
   - title: On-premises
     path: /getting-started/kubernetes/self-managed-onprem/
     section:
@@ -131,17 +124,17 @@ section:
         path: /getting-started/windows-calico/kubernetes/standard
       - title: Install Calico for Windows on Rancher RKE
         path: /getting-started/windows-calico/kubernetes/rancher
-     - title: OpenShift
-        path: /getting-started/windows-calico/openshift/
-        section:
-        - title: Install Calico for Windows on OpenShift
-          path: /getting-started/windows-calico/openshift/installation
-        - title: Create kubeconfig for Windows nodes
-          path: /getting-started/windows-calico/kubeconfig
-        - title: Start and stop Calico for Windows services
-          path: /getting-started/windows-calico/maintain
-      - title: Troubleshoot Calico for Windows
-        path: /getting-started/windows-calico/troubleshoot
+    - title: OpenShift
+      path: /getting-started/windows-calico/openshift/
+      section:
+      - title: Install Calico for Windows on OpenShift
+        path: /getting-started/windows-calico/openshift/installation
+      - title: Create kubeconfig for Windows nodes
+        path: /getting-started/windows-calico/kubeconfig
+      - title: Start and stop Calico for Windows services
+        path: /getting-started/windows-calico/maintain
+    - title: Troubleshoot Calico for Windows
+      path: /getting-started/windows-calico/troubleshoot
   - title: System requirements
     path: /getting-started/kubernetes/requirements
 - title: Deploy images from registries
@@ -151,7 +144,7 @@ section:
     path: /maintenance/image-options/imageset
   - title: Configure use of your image registry
     path: /maintenance/image-options/alternate-registry  
-- title: Non-cluster hosts
+- title: Install on non-cluster hosts
   path: /getting-started/bare-metal/
   section:
   - title: About non-cluster hosts
@@ -175,4 +168,4 @@ section:
   - title: OpenShift
     path: /maintenance/openshift-upgrade
   - title: OpenStack
-    path: /maintenance/openstack-upgrade
+    path: /maintenance/openstack-upgrad
