@@ -2,5 +2,4 @@ title: Data encryption
 path: /encryption/
 order: 5
 toc:
-- title: Encrypt in-cluster pod traffic
-  path: /security/encrypt-cluster-pod-traffic
+
