@@ -19,6 +19,7 @@ package wireguard
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -132,19 +133,81 @@ func BootstrapAndFilterTyphaAddresses(
 	calicoClient clientv3.Interface,
 	typhas []discovery.Typha,
 ) ([]discovery.Typha, error) {
-	wgDeviceName := configParams.WireguardInterfaceName
+	var (
+		typhasV4, typhasV6 []discovery.Typha
+		errV4, errV6       error
+		errors             []error
+	)
+
+	// Split typhas slice into separate v4 and v6 slices
+	for _, typha := range typhas {
+		ipStr, _, err := net.SplitHostPort(typha.Addr)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("error parsing Typha address %v: %w", typha.Addr, err))
+		}
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			errors = append(errors, fmt.Errorf("could not parse Typha address %v", typha.Addr))
+		}
+
+		if ip.To4() != nil {
+			typhasV4 = append(typhasV4, typha)
+		} else {
+			typhasV6 = append(typhasV6, typha)
+		}
+	}
+
+	typhasV4, errV4 = bootstrapAndFilterTyphaAddressesForIPVersion(configParams, getNetlinkHandle, getWireguardHandle, calicoClient, typhasV4, 4)
+	if errV4 != nil {
+		errors = append(errors, fmt.Errorf("error bootstrapping IPv4 wireguard: %w", errV4))
+	}
+
+	typhasV6, errV6 = bootstrapAndFilterTyphaAddressesForIPVersion(configParams, getNetlinkHandle, getWireguardHandle, calicoClient, typhasV6, 6)
+	if errV6 != nil {
+		errors = append(errors, fmt.Errorf("error bootstrapping IPv6 wireguard: %w", errV6))
+	}
+
+	// Merge filtered v4 and v6 typhas back
+	filteredTyphas := append(typhasV4, typhasV6...)
+
+	if len(errors) > 0 {
+		return typhas, fmt.Errorf("encountered errors during wireguard bootstrap: %v", errors)
+	}
+
+	return filteredTyphas, nil
+}
+
+func bootstrapAndFilterTyphaAddressesForIPVersion(
+	configParams *config.Config,
+	getNetlinkHandle func() (netlinkshim.Interface, error),
+	getWireguardHandle func() (netlinkshim.Wireguard, error),
+	calicoClient clientv3.Interface,
+	typhas []discovery.Typha,
+	ipVersion uint8,
+) ([]discovery.Typha, error) {
 	nodeName := configParams.FelixHostname
 
-	logCxt := log.WithFields(log.Fields{
-		"iface":    wgDeviceName,
-		"nodeName": nodeName,
-	})
-	logCxt.Debug("Bootstrapping wireguard")
+	wgEnabled := configParams.WireguardEnabled
+	wgDeviceName := configParams.WireguardInterfaceName
 
-	if !configParams.WireguardEnabled || configParams.WireguardInterfaceName == "" {
+	if ipVersion == 6 {
+		wgEnabled = configParams.WireguardEnabledV6
+		wgDeviceName = configParams.WireguardInterfaceNameV6
+	} else if ipVersion != 4 {
+		return typhas, fmt.Errorf("unknown IP version: %d", ipVersion)
+	}
+
+	logCtx := log.WithFields(log.Fields{
+		"ipVersion": ipVersion,
+		"iface":     wgDeviceName,
+		"nodeName":  nodeName,
+	})
+	logCtx.Debug("Bootstrapping wireguard")
+
+	if !wgEnabled || wgDeviceName == "" {
 		// Always remove wireguard configuration if not enabled.
-		logCxt.Info("Wireguard is not enabled - ensure no wireguard config")
-		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
+		logCtx.Info("Wireguard is not enabled - ensure no wireguard config")
+		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient, ipVersion)
 	}
 
 	// FELIX_DBG_WGBOOTSTRAP provides a backdoor way to execute the remaining code without enabling host encryption -
@@ -153,21 +216,21 @@ func BootstrapAndFilterTyphaAddresses(
 
 	if !configParams.WireguardHostEncryptionEnabled && !dbgBootstrapExists {
 		// The remaining of the bootstrap processing is only required on clusters that have host encryption enabled
-		logCxt.Debug("Host encryption is not enabled - no wireguard bootstrapping required")
+		logCtx.Debug("Host encryption is not enabled - no wireguard bootstrapping required")
 		return typhas, nil
 	}
 
 	// Get the local public key and the peer public keys currently programmed in the kernel.
-	kernelPublicKey, kernelPeerKeys := getWireguardDeviceInfo(logCxt, wgDeviceName, getWireguardHandle)
+	kernelPublicKey, kernelPeerKeys := getWireguardDeviceInfo(logCtx, wgDeviceName, getWireguardHandle)
 
 	// If there is no useful wireguard configuration in the kernel then remove all traces of wireguard.
 	if kernelPublicKey == "" || kernelPeerKeys.Len() == 0 {
-		logCxt.Info("No valid wireguard kernel routing - removing wireguard configuration completely")
-		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
+		logCtx.Info("No valid wireguard kernel routing - removing wireguard configuration completely")
+		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient, ipVersion)
 	}
 
 	// Get the published public key for this node.
-	storedPublicKey, err := getPublicKeyForNode(logCxt, nodeName, calicoClient, bootstrapMaxRetries)
+	storedPublicKey, err := getPublicKeyForNode(logCtx, nodeName, calicoClient, bootstrapMaxRetries, ipVersion)
 	if err != nil {
 		return typhas, err
 	}
@@ -175,24 +238,24 @@ func BootstrapAndFilterTyphaAddresses(
 	if storedPublicKey != kernelPublicKey {
 		// The public key configured in the kernel differs from the value stored in the node. Remove all wireguard
 		// configuration.
-		logCxt.Info("Found mismatch between kernel and datastore wireguard keys - removing wireguard configuration")
-		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
+		logCtx.Info("Found mismatch between kernel and datastore wireguard keys - removing wireguard configuration")
+		return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient, ipVersion)
 	}
 
 	// The configured and stored wireguard key match.
-	logCxt.WithField("peerKeys", kernelPeerKeys).Info("Wireguard public key matches kernel")
+	logCtx.WithField("peerKeys", kernelPeerKeys).Info("Wireguard public key matches kernel")
 
 	// If we have any typha endpoints then filter them based on whether wireguard asymmetry will prevent access.
 	// It is possible, that there will be no typhas - in this case the nodes are connecting directly to the API server.
 	if len(typhas) > 0 {
-		filtered := filterTyphaEndpoints(configParams, calicoClient, typhas, kernelPeerKeys)
+		filtered := filterTyphaEndpoints(configParams, calicoClient, typhas, kernelPeerKeys, ipVersion)
 
 		if len(filtered) == 0 {
 			// We have filtered out all of the typha endpoints, i.e. with our current wireguard configuration none of
 			// the typhas will be accessible due to asymmetric routing. Best thing to do is just delete our wireguard
 			// configuration after which all of the typha endpoints should eventually become acceessible.
-			log.Warning("None of the typhas will be accessible due to wireguard routing asymmetry - remove wireguard")
-			return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
+			logCtx.Warning("None of the typhas will be accessible due to wireguard routing asymmetry - remove wireguard")
+			return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient, ipVersion)
 		}
 
 		return filtered, nil
@@ -214,17 +277,44 @@ func RemoveWireguardConditionallyOnBootstrap(
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	calicoClient clientv3.Interface,
 ) error {
+	var errors []error
+
+	errV4 := removeWireguardConditionallyOnBootstrapForIPVersion(configParams, getNetlinkHandle, calicoClient, 4)
+	if errV4 != nil {
+		errors = append(errors, fmt.Errorf("error removing IPv4 wireguard: %w", errV4))
+	}
+
+	errV6 := removeWireguardConditionallyOnBootstrapForIPVersion(configParams, getNetlinkHandle, calicoClient, 6)
+	if errV6 != nil {
+		errors = append(errors, fmt.Errorf("error removing IPv6 wireguard: %w", errV6))
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("encountered errors during wireguard bootstrap: %v", errors)
+	}
+
+	return nil
+}
+
+func removeWireguardConditionallyOnBootstrapForIPVersion(
+	configParams *config.Config,
+	getNetlinkHandle func() (netlinkshim.Interface, error),
+	calicoClient clientv3.Interface,
+	ipVersion uint8,
+) error {
+	logCtx := log.WithField("ipVersion", ipVersion)
+
 	if !configParams.WireguardEnabled {
-		log.Debug("Wireguard is not enabled - configuration will have been removed in initial bootstrap")
+		logCtx.Debug("Wireguard is not enabled - configuration will have been removed in initial bootstrap")
 		return nil
 	}
 	if !configParams.WireguardHostEncryptionEnabled {
-		log.Debug("No host encryption - not necessary to remove wireguard configuration")
+		logCtx.Debug("No host encryption - not necessary to remove wireguard configuration")
 		return nil
 	}
 
-	log.Info("Removing wireguard device for bootstrapping")
-	return removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient)
+	logCtx.Info("Removing wireguard device for bootstrapping")
+	return removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient, ipVersion)
 }
 
 // filterTyphaEndpoints filters the supplied set of typha endpoints to the set where wireguard routing is most likely
@@ -234,24 +324,27 @@ func filterTyphaEndpoints(
 	calicoClient clientv3.Interface,
 	typhas []discovery.Typha,
 	peers set.Set,
+	ipVersion uint8,
 ) []discovery.Typha {
-	log.Debugf("Filtering typha endpoints for wireguard: %v", typhas)
+	logCtx := log.WithField("ipVersion", ipVersion)
+
+	logCtx.Debugf("Filtering typha endpoints for wireguard: %v", typhas)
 
 	var filtered []discovery.Typha
 
 	for _, typha := range typhas {
-		logCxt := log.WithField("typhaAddr", typha.Addr)
+		logCtx = logCtx.WithField("typhaAddr", typha.Addr)
 		if typha.NodeName == nil {
-			logCxt.Debug("Typha endpoint has no node information - include typha endpoint")
+			logCtx.Debug("Typha endpoint has no node information - include typha endpoint")
 			filtered = append(filtered, typha)
 			continue
 		}
 
 		typhaNodeName := *typha.NodeName
-		logCxt = logCxt.WithField("typhaNodeName", typhaNodeName)
+		logCtx = logCtx.WithField("typhaNodeName", typhaNodeName)
 		if typhaNodeName == configParams.FelixHostname {
 			// This is a local typha. We should always be able to connect.
-			logCxt.Info("Typha endpoint is local - include typha endpoint")
+			logCtx.Info("Typha endpoint is local - include typha endpoint")
 			filtered = append(filtered, typha)
 			continue
 		}
@@ -261,31 +354,31 @@ func filterTyphaEndpoints(
 		// route to us via wireguard - so if we do not have a wireguard route to this node then there is no point in
 		// attempting to connect to this node. That said, it is better to include too many nodes, so fail fast when
 		// getting querying the node.
-		typhaNodeKey, err := getPublicKeyForNode(logCxt, typhaNodeName, calicoClient, bootstrapMaxRetriesFailFast)
+		typhaNodeKey, err := getPublicKeyForNode(logCtx, typhaNodeName, calicoClient, bootstrapMaxRetriesFailFast, ipVersion)
 		if err != nil {
 			// If we were unable to determine the public key then just include the endpoint.
-			logCxt.WithError(err).Info("Unable to determine public key for node")
+			logCtx.WithError(err).Info("Unable to determine public key for node")
 			filtered = append(filtered, typha)
 			continue
 		}
-		logCxt = logCxt.WithField("typhaNodeKey", typhaNodeKey)
+		logCtx = logCtx.WithField("typhaNodeKey", typhaNodeKey)
 
 		if typhaNodeKey == "" {
 			// There is no key configured and we don't have it in our kernel routing table. Include this typha.
-			logCxt.Info("Typha node does not have a wireguard key and not in kernel - include typha endpoint")
+			logCtx.Info("Typha node does not have a wireguard key and not in kernel - include typha endpoint")
 			filtered = append(filtered, typha)
 		} else if peers.Contains(typhaNodeKey) {
 			// The public key on the typha node is configured in the local routing table. Include this typha.
-			logCxt.Debug("Typha node has a wireguard key that is in the local wireguard routing table - include typha endpoint")
+			logCtx.Debug("Typha node has a wireguard key that is in the local wireguard routing table - include typha endpoint")
 			filtered = append(filtered, typha)
 		} else {
 			// The public key on the typha node is not configured in the local routing table. There is no point in
 			// including this typha because routing will not work and we'll take longer to find a working typha.
-			logCxt.Warning("Typha node has wireguard key that is not in the local wireguard routing table - exclude typha endpoint")
+			logCtx.Warning("Typha node has wireguard key that is not in the local wireguard routing table - exclude typha endpoint")
 		}
 	}
 
-	log.Infof("Filtered typha endpoints: %v", filtered)
+	logCtx.Infof("Filtered typha endpoints: %v", filtered)
 
 	return filtered
 }
@@ -297,13 +390,14 @@ func removeWireguardForBootstrapping(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	calicoClient clientv3.Interface,
+	ipVersion uint8,
 ) error {
 	var errors []error
 	// Remove all wireguard configuration that we can.
-	if err := removeWireguardDevice(configParams, getNetlinkHandle); err != nil {
+	if err := removeWireguardDevice(configParams, getNetlinkHandle, ipVersion); err != nil {
 		errors = append(errors, fmt.Errorf("cannot remove wireguard device: %w", err))
 	}
-	if err2 := removeWireguardPublicKey(configParams, calicoClient); err2 != nil {
+	if err2 := removeWireguardPublicKey(configParams.FelixHostname, calicoClient, ipVersion); err2 != nil {
 		errors = append(errors, fmt.Errorf("cannot remove wireguard public key: %w", err2))
 	}
 	if len(errors) > 0 {
@@ -314,7 +408,7 @@ func removeWireguardForBootstrapping(
 }
 
 // getPublicKeyForNode returns the configured wireguard public key for a given node.
-func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient clientv3.Interface, maxRetries int) (string, error) {
+func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient clientv3.Interface, maxRetries int, ipVersion uint8) (string, error) {
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
 		bootstrapBackoffMax,
@@ -323,6 +417,10 @@ func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient client
 		bootstrapJitter,
 		clock.RealClock{},
 	)
+	if ipVersion != 4 && ipVersion != 6 {
+		return "", fmt.Errorf("unknown IP version: %d", ipVersion)
+	}
+
 	defer expBackoffMgr.Backoff().Stop()
 
 	var err error
@@ -333,15 +431,20 @@ func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient client
 		cancel()
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// If the node does not exist then it's not going to have a wireguard public key configured.
-			logCxt.Info("Node does not exist - no published wireguard key")
+			logCtx.Info("Node does not exist - no published wireguard key")
 			return "", nil
 		} else if err != nil {
-			logCxt.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
+			logCtx.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
 			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
 			continue
 		}
 
-		return node.Status.WireguardPublicKey, nil
+		key := node.Status.WireguardPublicKey
+		if ipVersion == 6 {
+			key = node.Status.WireguardPublicKeyV6
+		}
+
+		return key, nil
 	}
 
 	return "", fmt.Errorf("couldn't determine public key configured for node after %d retries: %v", maxRetries, err)
@@ -351,28 +454,28 @@ func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient client
 // - Public key
 // - Set of peer public keys
 func getWireguardDeviceInfo(
-	logCxt *log.Entry, wgIfaceName string, getWireguardHandle func() (netlinkshim.Wireguard, error),
+	logCtx *log.Entry, wgIfaceName string, getWireguardHandle func() (netlinkshim.Wireguard, error),
 ) (string, set.Set) {
 	wg, err := getWireguardHandle()
 	if err != nil {
-		logCxt.Info("Couldn't acquire wireguard handle")
+		logCtx.Info("Couldn't acquire wireguard handle")
 		return "", nil
 	}
 	defer func() {
 		if err = wg.Close(); err != nil {
-			logCxt.WithError(err).Info("Couldn't close wireguard handle")
+			logCtx.WithError(err).Info("Couldn't close wireguard handle")
 		}
 	}()
 
 	dev, err := wg.DeviceByName(wgIfaceName)
 	if err != nil {
-		logCxt.WithError(err).Info("Couldn't find wireguard device, assuming no wireguard config")
+		logCtx.WithError(err).Info("Couldn't find wireguard device, assuming no wireguard config")
 		return "", nil
 	}
 
 	if dev.PublicKey == zeroKey {
 		// No public key on device - treat as no config.
-		logCxt.Info("No public key configured on device")
+		logCtx.Info("No public key configured on device")
 		return "", nil
 	}
 
@@ -392,21 +495,28 @@ func getWireguardDeviceInfo(
 func removeWireguardDevice(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
+	ipVersion uint8,
 ) error {
 	wgDeviceName := configParams.WireguardInterfaceName
+	if ipVersion == 6 {
+		wgDeviceName = configParams.WireguardInterfaceNameV6
+	} else if ipVersion != 4 {
+		return fmt.Errorf("unknown IP version: %d", ipVersion)
+	}
 	nodeName := configParams.FelixHostname
 
-	logCxt := log.WithFields(log.Fields{
-		"iface":    wgDeviceName,
-		"nodeName": nodeName,
+	logCtx := log.WithFields(log.Fields{
+		"ipVersion": ipVersion,
+		"iface":     wgDeviceName,
+		"nodeName":  nodeName,
 	})
 
 	if wgDeviceName == "" {
-		logCxt.Debug("No wireguard device specified")
+		logCtx.Debug("No wireguard device specified")
 		return nil
 	}
 
-	logCxt.Debug("Removing wireguard device")
+	logCtx.Debug("Removing wireguard device")
 
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
@@ -429,7 +539,7 @@ func removeWireguardDevice(
 			}
 			defer handle.Delete()
 		}
-		if err = removeDevice(logCxt, wgDeviceName, handle); err != nil {
+		if err = removeDevice(logCtx, wgDeviceName, handle); err != nil {
 			<-expBackoffMgr.Backoff().C()
 			continue
 		}
@@ -441,16 +551,20 @@ func removeWireguardDevice(
 
 // removeWireguardPublicKey removes the public key from the node.
 func removeWireguardPublicKey(
-	configParams *config.Config,
+	nodeName string,
 	calicoClient clientv3.Interface,
+	ipVersion uint8,
 ) error {
-	nodeName := configParams.FelixHostname
-
-	logCxt := log.WithFields(log.Fields{
-		"nodeName": nodeName,
+	logCtx := log.WithFields(log.Fields{
+		"ipVersion": ipVersion,
+		"nodeName":  nodeName,
 	})
 
-	logCxt.Debug("Removing wireguard public key")
+	logCtx.Debug("Removing wireguard public key")
+
+	if ipVersion != 4 && ipVersion != 6 {
+		return fmt.Errorf("unknown IP version: %d", ipVersion)
+	}
 
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
@@ -471,34 +585,39 @@ func removeWireguardPublicKey(
 		cancel()
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// If the node does not exist then it's not going to have a wireguard public key configured.
-			logCxt.Info("Node does not exist - no published wireguard key to remove")
+			logCtx.Info("Node does not exist - no published wireguard key to remove")
 			return nil
 		} else if err != nil {
-			logCxt.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
+			logCtx.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
 			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
 			continue
 		}
 
 		// if there is any config mismatch, wipe the datastore's publickey (forces peers to send unencrypted traffic)
-		if thisNode.Status.WireguardPublicKey != "" {
-			logCxt.Info("Wireguard key set on node - removing")
-			thisNode.Status.WireguardPublicKey = ""
+		if ipVersion == 4 && thisNode.Status.WireguardPublicKey != "" || ipVersion == 6 && thisNode.Status.WireguardPublicKeyV6 != "" {
+			logCtx.Info("Wireguard key set on node - removing")
+			switch ipVersion {
+			case 4:
+				thisNode.Status.WireguardPublicKey = ""
+			case 6:
+				thisNode.Status.WireguardPublicKeyV6 = ""
+			}
 			cxt, cancel = context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
 			_, err = calicoClient.Nodes().Update(cxt, thisNode, options.SetOptions{})
 			cancel()
 			if err != nil {
 				switch err.(type) {
 				case cerrors.ErrorResourceUpdateConflict:
-					logCxt.Infof("Conflict while clearing wireguard config, retrying update (%v)", err)
+					logCtx.Infof("Conflict while clearing wireguard config, retrying update (%v)", err)
 				default:
-					logCxt.Errorf("Failed to clear wireguard config: %v", err)
+					logCtx.Errorf("Failed to clear wireguard config: %v", err)
 				}
 				<-expBackoffMgr.Backoff().C()
 				continue
 			}
-			logCxt.Info("Cleared wireguard public key from datastore")
+			logCtx.Info("Cleared wireguard public key from datastore")
 		} else {
-			logCxt.Info("Wireguard public key not set in datastore")
+			logCtx.Info("Wireguard public key not set in datastore")
 		}
 		return nil
 	}
@@ -507,19 +626,19 @@ func removeWireguardPublicKey(
 }
 
 // removeDevice removes the named link.
-func removeDevice(logCxt *log.Entry, name string, netlinkClient netlinkshim.Interface) error {
+func removeDevice(logCtx *log.Entry, name string, netlinkClient netlinkshim.Interface) error {
 	link, err := netlinkClient.LinkByName(name)
 	if err == nil {
-		logCxt.Info("Deleting device")
+		logCtx.Info("Deleting device")
 		if err := netlinkClient.LinkDel(link); err != nil {
-			log.WithError(err).Error("Error deleting device")
+			logCtx.WithError(err).Error("Error deleting device")
 			return err
 		}
-		logCxt.Info("Deleted wireguard device")
+		logCtx.Info("Deleted wireguard device")
 	} else if netlinkshim.IsNotExist(err) {
-		logCxt.Debug("Device does not exist")
+		logCtx.Debug("Device does not exist")
 	} else if err != nil {
-		logCxt.WithError(err).Error("Unable to determine if device exists")
+		logCtx.WithError(err).Error("Unable to determine if device exists")
 		return err
 	}
 	return nil
