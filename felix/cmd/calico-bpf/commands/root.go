@@ -97,8 +97,7 @@ func makeDocUsage(cmd *cobra.Command) string {
 
 func setLogLevel() {
 	var err error
-	level := log.WarnLevel
-	level, err = log.ParseLevel(logLevel)
+	level, err := log.ParseLevel(logLevel)
 	if err != nil {
 		level = log.WarnLevel
 	}

@@ -5,7 +5,7 @@
 #ifndef __CALI_COUNTERS_H__
 #define __CALI_COUNTERS_H__
 
-#define MAX_COUNTERS_SIZE 13
+#define MAX_COUNTERS_SIZE 14
 
 typedef __u32 counters_t[MAX_COUNTERS_SIZE];
 

@@ -17,6 +17,7 @@ package commands
 import (
 	"fmt"
 	"net"
+	"sort"
 
 	"github.com/projectcalico/calico/felix/bpf/counters"
 
@@ -119,25 +120,17 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 		values[hook] = val
 	}
 
+	keys := make([]int, 0)
+	for k := range counters.Descriptions {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+
 	cmd.Printf("\t\t\t\t\tingress\t\tegress\n")
-	cmd.Printf("Total packets: \t\t\t\t%d\t\t%d\n",
-		values["ingress"][counters.TotalPackets], values["egress"][counters.TotalPackets])
-
-	cmd.Printf("Accepted by failsafe: \t\t\t%d\t\t%d\n",
-		values["ingress"][counters.AcceptedByFailsafe], values["egress"][counters.AcceptedByPolicy])
-	cmd.Printf("Accepted by policy: \t\t\t%d\t\t%d\n",
-		values["ingress"][counters.AcceptedByPolicy], values["egress"][counters.AcceptedByPolicy])
-
-	cmd.Printf("Dropped by policy: \t\t\t%d\t\t%d\n",
-		values["ingress"][counters.DroppedByPolicy], values["egress"][counters.DroppedByPolicy])
-	cmd.Printf("Dropped too short packets: \t\t\t%d\t\t%d\n",
-		values["ingress"][counters.DroppedShortPacket], values["egress"][counters.DroppedShortPacket])
-	cmd.Printf("Dropped incorrect checksum: \t\t%d\t\t%d\n",
-		values["ingress"][counters.DroppedFailedCSUM], values["egress"][counters.DroppedFailedCSUM])
-	cmd.Printf("Dropped packets with unsupported IP options: \t%d\t\t%d\n",
-		values["ingress"][counters.DroppedIPOptions], values["egress"][counters.DroppedIPOptions])
-	cmd.Printf("Dropped malformed IP packets: \t\t%d\t\t%d\n",
-		values["ingress"][counters.DroppredIPMalformed], values["egress"][counters.DroppredIPMalformed])
+	for _, c := range keys {
+		cmd.Printf("%v: \t\t\t\t%d\t\t%d\n", counters.Descriptions[c],
+			values["ingress"][c], values["egress"][c])
+	}
 	return nil
 }
 

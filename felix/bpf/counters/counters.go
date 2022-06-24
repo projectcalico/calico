@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	MaxCounterNumber int = 13
+	MaxCounterNumber int = 14
 	uint32Size       int = 4
 )
 
@@ -48,20 +48,20 @@ const (
 	DroppedUnknownRoute
 )
 
-var Descriptions []string = []string{
-	"Total packets",
-	"Accepted by failsafe",
-	"Accepted by policy",
-	"Accepted by another program",
-	"Dropped by policy",
-	"Dropped too short packets",
-	"Dropped incorrect checksum",
-	"Dropped packets with unsupported IP options",
-	"Dropped malformed IP packets",
-	"Dropped failed encapsulation",
-	"Dropped failed decapsulation",
-	"Dropped packets with unknown source",
-	"Dropped packets with unknown route",
+var Descriptions map[int]string = map[int]string{
+	TotalPackets:             "Total packets",
+	AcceptedByFailsafe:       "Accepted by failsafe",
+	AcceptedByPolicy:         "Accepted by policy",
+	AcceptedByAnotherProgram: "Accepted by another program",
+	DroppedByPolicy:          "Dropped by policy",
+	DroppedShortPacket:       "Dropped too short packets",
+	DroppedFailedCSUM:        "Dropped incorrect checksum",
+	DroppedIPOptions:         "Dropped packets with unsupported IP options",
+	DroppredIPMalformed:      "Dropped malformed IP packets",
+	DroppedFailedEncap:       "Dropped failed encapsulation",
+	DroppedFailedDecap:       "Dropped failed decapsulation",
+	DroppedUnauthSource:      "Dropped packets with unknown source",
+	DroppedUnknownRoute:      "Dropped packets with unknown route",
 }
 
 const (
@@ -79,9 +79,10 @@ type Counters struct {
 
 func NewCounters(iface string) *Counters {
 	cntr := Counters{
-		iface: iface,
+		iface:    iface,
+		numOfCpu: bpf.NumPossibleCPUs(),
 	}
-	cntr.numOfCpu = bpf.NumPossibleCPUs()
+	logrus.Infof("marmar %v", cntr.numOfCpu)
 
 	cntr.maps = make(map[string]bpf.Map)
 	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
@@ -124,9 +125,15 @@ func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 	for i := range bpfCounters {
 		for cpu := 0; cpu < c.numOfCpu; cpu++ {
 			begin := i*uint32Size + cpu*MaxCounterNumber*uint32Size
-			bpfCounters[i] += uint32(binary.LittleEndian.Uint32(values[begin : begin+uint32Size]))
+			data := uint32(binary.LittleEndian.Uint32(values[begin : begin+uint32Size]))
+			bpfCounters[i] += data
+			logrus.Infof("counter: %v - data: %v ", i, data)
 		}
+		logrus.Info("-------")
+
 	}
+	logrus.Infof("values: %v", values)
+	logrus.Infof("Output: %v", bpfCounters)
 	return bpfCounters, nil
 }
 
