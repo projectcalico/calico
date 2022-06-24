@@ -222,6 +222,13 @@ type bpfAllowChainRenderer interface {
 	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 }
 
+// PolicyDebugInfo describes policy debug info
+type PolicyDebugInfo struct {
+	IfaceName  string   `json:"ifacename"`
+	Hook       string   `json:"hook"`
+	PolicyInfo []string `json:"policyInfo"`
+}
+
 func newBPFEndpointManager(
 	dp bpfDataplane,
 	config *Config,
@@ -1665,7 +1672,13 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 }
 
 func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
-	filename := bpf.RuntimePolDir + "/" + ifaceName + "_" + string(hook) + ".txt"
+	ifaceName = strings.ReplaceAll(ifaceName, ".", "")
+	filename := bpf.RuntimePolDir + "/" + ifaceName + "_"
+	if hook == tc.HookIngress {
+		filename = filename + "igr.json"
+	} else {
+		filename = filename + "egr.json"
+	}
 	os.Remove(filename)
 }
 
@@ -1676,13 +1689,26 @@ func writePolicyDebugInfo(comments []string, ifaceName string, hook tc.Hook) err
 	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
 		return err
 	}
+
+	var policyDebugInfo = PolicyDebugInfo{
+		IfaceName:  ifaceName,
+		Hook:       string(hook),
+		PolicyInfo: comments,
+	}
+
+	ifaceName = strings.ReplaceAll(ifaceName, ".", "")
 	filename := bpf.RuntimePolDir + "/" + ifaceName + "_"
 	if hook == tc.HookIngress {
-		filename = filename + "igr.txt"
+		filename = filename + "igr.json"
 	} else {
-		filename = filename + "egr.txt"
+		filename = filename + "egr.json"
 	}
-	if err := ioutil.WriteFile(filename, []byte(strings.Join(comments, "")), 0600); err != nil {
+	bytesToWrite, err := json.Marshal(policyDebugInfo)
+	if err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(filename, bytesToWrite, 0600); err != nil {
 		return err
 	}
 	return nil

@@ -507,7 +507,7 @@ func CleanUpJumpMaps() {
 		// delete policy debug info
 		dirnames := strings.Split(p, "/")
 		polFileName := dirnames[len(dirnames)-2]
-		os.Remove("/var/run/calico/bpf/pol/" + polFileName + ".txt")
+		os.Remove("/var/run/calico/bpf/pol/" + polFileName + ".json")
 	}
 
 	// Look for empty dirs.
