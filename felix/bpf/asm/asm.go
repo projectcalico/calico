@@ -278,11 +278,16 @@ const insnSize = 8
 
 type Insn [insnSize]uint8
 
-type Insns []Insn
+type Insns struct {
+	Instructions []Insn
+	Comments     []string
+}
+
+//type Insns []Insn
 
 func (ns Insns) AsBytes() []byte {
-	bs := make([]byte, 0, len(ns)*insnSize)
-	for _, n := range ns {
+	bs := make([]byte, 0, len(ns.Instructions)*insnSize)
+	for _, n := range ns.Instructions {
 		bs = append(bs, n[:]...)
 	}
 	return bs
@@ -320,18 +325,22 @@ func (n Insn) Imm() int32 {
 }
 
 type Block struct {
-	insns            Insns
-	fixUps           []fixUp
-	labelToInsnIdx   map[string]int
-	insnIdxToLabels  map[int][]string
-	inUseJumpTargets set.Set
+	insns              Insns
+	fixUps             []fixUp
+	labelToInsnIdx     map[string]int
+	insnIdxToLabels    map[int][]string
+	insnIdxToComments  map[int][]string
+	inUseJumpTargets   set.Set
+	policyDebugEnabled bool
 }
 
-func NewBlock() *Block {
+func NewBlock(policyDebugEnabled bool) *Block {
 	return &Block{
-		labelToInsnIdx:   map[string]int{},
-		insnIdxToLabels:  map[int][]string{},
-		inUseJumpTargets: set.New(),
+		labelToInsnIdx:     map[string]int{},
+		insnIdxToLabels:    map[int][]string{},
+		inUseJumpTargets:   set.New(),
+		insnIdxToComments:  map[int][]string{},
+		policyDebugEnabled: policyDebugEnabled,
 	}
 }
 
@@ -545,24 +554,24 @@ func (b *Block) addInsn(insn Insn) {
 type OffsetFixer func(origInsn Insn) Insn
 
 func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
-	insnLabel := strings.Join(b.insnIdxToLabels[len(b.insns)], ",")
+	insnLabel := strings.Join(b.insnIdxToLabels[len(b.insns.Instructions)], ",")
 	if !b.nextInsnReachble() {
 		log.Debugf("Asm: %v UU:    %v [UNREACHABLE]", insnLabel, insn)
-		for _, l := range b.insnIdxToLabels[len(b.insns)] {
+		for _, l := range b.insnIdxToLabels[len(b.insns.Instructions)] {
 			delete(b.labelToInsnIdx, l)
 		}
-		delete(b.insnIdxToLabels, len(b.insns))
+		delete(b.insnIdxToLabels, len(b.insns.Instructions))
 		return
 	}
 	var comment string
 	if targetLabel != "" {
 		comment = " -> " + targetLabel
 	}
-	log.Debugf("Asm: %v %d:    %v%s", insnLabel, len(b.insns), insn, comment)
-	b.insns = append(b.insns, insn)
+	log.Debugf("Asm: %v %d:    %v%s", insnLabel, len(b.insns.Instructions), insn, comment)
+	b.insns.Instructions = append(b.insns.Instructions, insn)
 	if targetLabel != "" {
 		b.inUseJumpTargets.Add(targetLabel)
-		b.fixUps = append(b.fixUps, fixUp{label: targetLabel, origInsnIdx: len(b.insns) - 1})
+		b.fixUps = append(b.fixUps, fixUp{label: targetLabel, origInsnIdx: len(b.insns.Instructions) - 1})
 	}
 }
 
@@ -570,7 +579,7 @@ func (b *Block) TargetIsUsed(label string) bool {
 	return b.inUseJumpTargets.Contains(label)
 }
 
-func (b *Block) Assemble() (Insns, error) {
+func (b *Block) Assemble() (*Insns, error) {
 	for _, f := range b.fixUps {
 		labelIdx, ok := b.labelToInsnIdx[f.label]
 		if !ok {
@@ -578,26 +587,49 @@ func (b *Block) Assemble() (Insns, error) {
 		}
 		// Offset is relative to the next instruction since the PC is auto-incremented.
 		offset := labelIdx - f.origInsnIdx - 1
-		binary.LittleEndian.PutUint16(b.insns[f.origInsnIdx][2:4], uint16(offset))
+		binary.LittleEndian.PutUint16(b.insns.Instructions[f.origInsnIdx][2:4], uint16(offset))
 	}
-	return b.insns, nil
+
+	if b.policyDebugEnabled {
+		for idx, insns := range b.insns.Instructions {
+			if labels, ok := b.insnIdxToLabels[idx]; ok {
+				for _, label := range labels {
+					b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%s:", label))
+				}
+			}
+			if comments, ok := b.insnIdxToComments[idx]; ok {
+				for _, comment := range comments {
+					comment = fmt.Sprintf("// %s", comment)
+					b.insns.Comments = append(b.insns.Comments, comment)
+				}
+			}
+			b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%d:%s", idx, insns))
+		}
+	}
+	return &b.insns, nil
 }
 
 func (b *Block) LabelNextInsn(label string) {
-	b.labelToInsnIdx[label] = len(b.insns)
-	b.insnIdxToLabels[len(b.insns)] = append(b.insnIdxToLabels[len(b.insns)], label)
+	b.labelToInsnIdx[label] = len(b.insns.Instructions)
+	b.insnIdxToLabels[len(b.insns.Instructions)] = append(b.insnIdxToLabels[len(b.insns.Instructions)], label)
+}
+
+func (b *Block) WriteComments(comment string) {
+	if b.policyDebugEnabled {
+		b.insnIdxToComments[len(b.insns.Instructions)] = append(b.insnIdxToComments[len(b.insns.Instructions)], comment)
+	}
 }
 
 func (b *Block) nextInsnReachble() bool {
-	if len(b.insns) == 0 {
+	if len(b.insns.Instructions) == 0 {
 		return true // First instruction is always reachable.
 	}
-	for _, l := range b.insnIdxToLabels[len(b.insns)] {
+	for _, l := range b.insnIdxToLabels[len(b.insns.Instructions)] {
 		if b.inUseJumpTargets.Contains(l) {
 			return true // Previous instruction jumps to this one, we're reachable.
 		}
 	}
-	lastInsn := b.insns[len(b.insns)-1]
+	lastInsn := b.insns.Instructions[len(b.insns.Instructions)-1]
 	switch lastInsn.OpCode() {
 	case JumpA, Exit:
 		// Previous instruction jumps or returns and it doesn't jump here so we're not reachable.
