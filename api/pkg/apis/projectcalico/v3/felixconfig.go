@@ -406,6 +406,9 @@ type FelixConfigurationSpec struct {
 	// for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors
 	// such as "all()" can result in large numbers of entries (one entry per endpoint in that case).
 	BPFMapSizeIPSets *int `json:"bpfMapSizeIPSets,omitempty"`
+	// BPFMapSizeIfState sets the size for ifstate map.  The ifstate map must be large enough to hold an entry
+	// for each device (host + workloads) on a host.
+	BPFMapSizeIfState *int `json:"bpfMapSizeIfState,omitempty"`
 	// BPFEnforceRPF enforce strict RPF on all interfaces with BPF programs regardless of
 	// what is the per-interfaces or global setting. Possible values are Disabled or
 	// Strict. [Default: Strict]
