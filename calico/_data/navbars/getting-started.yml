@@ -168,4 +168,4 @@ section:
   - title: OpenShift
     path: /maintenance/openshift-upgrade
   - title: OpenStack
-    path: /maintenance/openstack-upgrad
+    path: /maintenance/openstack-upgrade
