@@ -11,7 +11,7 @@ section:
     path: /getting-started/kubernetes/self-managed-onprem/
     section:
     - title: Standard install
-      path: /getting-started/kubernetes/self-managed-onprem/standard  
+      path: /getting-started/kubernetes/self-managed-onprem/onpremises  
     - title: Customize install
       path: /getting-started/kubernetes/installation/config-options
     - title: Helm install
