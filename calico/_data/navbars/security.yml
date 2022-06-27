@@ -1,4 +1,4 @@
-title: "Security"
+title: "Network policy"
 path: /security/
 order: 4
 section:
@@ -91,20 +91,3 @@ section:
     path: /security/comms/secure-metrics
   - title: Secure BGP sessions
     path: /security/comms/secure-bgp
-- title: Calico Enterprise
-  path: /security/calico-enterprise/
-  section:
-  - title: Network visibility
-    path: /security/calico-enterprise/network-visibility
-  - title: Advanced egress access controls
-    path: /security/calico-enterprise/egress-access-controls
-  - title: Advanced compliance controls
-    path: /security/calico-enterprise/compliance
-  - title: Federation
-    path: /security/calico-enterprise/federation
-  - title: Threat defense
-    path: /security/calico-enterprise/threat-defense
-  - title: User console
-    path: /security/calico-enterprise/user-console
-  - title: Policy workflow
-    path: /security/calico-enterprise/policy-workflow

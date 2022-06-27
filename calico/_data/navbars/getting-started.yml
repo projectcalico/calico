@@ -14,7 +14,7 @@ section:
       path: /getting-started/kubernetes/self-managed-onprem/standard  
     - title: Customize install
       path: /getting-started/kubernetes/installation/config-options
-    - title: Helm 3 install
+    - title: Helm install
       path: /getting-started/kubernetes/helm
     - title: Calico the hard way
       path: /getting-started/kubernetes/hardway/
@@ -137,7 +137,7 @@ section:
       path: /getting-started/windows-calico/troubleshoot
   - title: System requirements
     path: /getting-started/kubernetes/requirements
-- title: Deploy images from registries
+- title: Install using images
   path: /maintenance/image-options/
   section:
   - title: Install images by registry digest
