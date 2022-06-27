@@ -132,7 +132,7 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, p
 		defer C.free(logBuf)
 	}
 
-	C.bpf_attr_setup_load_prog(bpfAttr, (C.uint)(progType), C.uint(len(insns)), cInsnBytes, cLicense, (C.uint)(logLevel), (C.uint)(logSize), logBuf)
+	C.bpf_attr_setup_load_prog(bpfAttr, (C.uint)(progType), C.uint(len(insns.Instructions)), cInsnBytes, cLicense, (C.uint)(logLevel), (C.uint)(logSize), logBuf)
 	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_LOAD, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 
 	if errno != 0 && errno != unix.ENOSPC /* log buffer too small */ {
