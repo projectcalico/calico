@@ -850,8 +850,8 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		if err == nil {
 			log.WithField("iface", ifaceName).Info("Updated workload interface.")
 			if wlID != nil && m.allWEPs[*wlID] != nil {
+				m.ifStateMapSetWorkload(ifaceName, &iface)
 				if m.happyWEPs[*wlID] == nil {
-					m.ifStateMapSetWorkload(ifaceName, &iface)
 					log.WithFields(log.Fields{
 						"id":    wlID,
 						"iface": ifaceName,
@@ -964,7 +964,8 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	}
 
 	applyTime := time.Since(startTime)
-	log.WithField("timeTaken", applyTime).Info("Finished applying BPF programs for workload")
+	log.WithFields(log.Fields{"timeTaken": applyTime, "ifaceName": ifaceName}).
+		Info("Finished applying BPF programs for workload")
 
 	isReady = true
 
