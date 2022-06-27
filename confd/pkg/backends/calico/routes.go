@@ -302,6 +302,9 @@ func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
 		// Advertise route if not already advertised for this key.
 		if _, ok := advertisedRoutes[route]; !ok {
 			rg.advertiseRoute(key, route)
+			// Ensure route is added after config change
+		} else if staticRouteExists := rg.client.StaticRouteExists(route); !staticRouteExists {
+			rg.client.AddStaticRoutes([]string{route})
 		}
 	}
 }
@@ -390,8 +393,8 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return false
 	}
 
-	// we only need to advertise local services, since we advertise the entire cluster IP range.
-	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
+	// we only need to advertise local services for non-LoadBalancer service, since we advertise the entire cluster IP range.
+	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal && svc.Spec.Type != v1.ServiceTypeLoadBalancer {
 		logc.Debugf("Skipping service with non-local external traffic policy '%s'", svc.Spec.ExternalTrafficPolicy)
 		return false
 	}
