@@ -2,10 +2,12 @@
 report/
 bin/
 *.created*
+*.pyc
 .idea
 .vscode
 vendor/
 artifacts/
+postrelease-checks.xml
 
 /* Produced as part of release */
 hack/release/release

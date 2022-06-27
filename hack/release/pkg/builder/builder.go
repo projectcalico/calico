@@ -388,7 +388,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 
 func (r *ReleaseBuilder) publishGithubRelease(ver string) error {
 	releaseNoteTemplate := `
-Release notes can be found at https://projectcalico.docs.tigera.io/archive/{release_stream}/release-notes/
+Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/calico/release-notes/{version}-release-notes.md)
 
 Attached to this release are the following artifacts:
 
@@ -404,6 +404,7 @@ Attached to this release are the following artifacts:
 		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
 		// so we replace anything that needs to be backticked into it here.
 		"{version}", ver,
+		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major, sv.Minor),
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major, sv.Minor),
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", ver),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", ver),
