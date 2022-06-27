@@ -1,16 +1,40 @@
 title: "Operations"
 path: /maintenance/
-order: 4
+order: 6
 section:
-- title: Upgrade
-  path: /maintenance/upgrading
+- title: Secure Calico component communications
+  path: /security/comms/
   section:
-  - title: Kubernetes
-    path: /maintenance/kubernetes-upgrade
-  - title: OpenShift
-    path: /maintenance/openshift-upgrade
-  - title: OpenStack
-    path: /maintenance/openstack-upgrade
+  - title: Configure encryption and authentication
+    path: /security/comms/crypto-auth
+  - title: Schedule Typha to well-known-nodes
+    path: /security/comms/reduce-nodes
+  - title: Secure Calico Prometheus endpoints
+    path: /security/comms/secure-metrics
+  - title: Secure BGP sessions
+    path: /security/comms/secure-bgp  
+- title: eBPF dataplane
+  path: /maintenance/ebpf/
+  section:
+  - title: eBPF use cases
+    path: /maintenance/ebpf/use-cases-ebpf
+  - title: Enable the eBPF dataplane
+    path: /maintenance/ebpf/enabling-ebpf
+  - title: Install in eBPF mode
+    path: /maintenance/ebpf/install
+  - title: Troubleshoot eBPF dataplane
+    path: /maintenance/ebpf/troubleshoot-ebpf  
+- title: VPP dataplane
+  path: /getting-started/kubernetes/vpp/
+  section:
+  - title: Get started with VPP networking
+    path: /getting-started/kubernetes/vpp/getting-started
+  - title: Enable IPsec encryption between nodes
+    path: /getting-started/kubernetes/vpp/ipsec
+  - title: Details of VPP implementation & known-issues
+    path: /getting-started/kubernetes/vpp/specifics 
+  - title: VPP dataplane troubleshooting
+    path: /maintenance/troubleshoot/vpp   
 - title: calicoctl
   path: /maintenance/clis/calicoctl
   section:
@@ -25,30 +49,14 @@ section:
       path: /maintenance/clis/calicoctl/configure/etcd
     - title: Configure calicoctl to connect to the Kubernetes API datastore
       path: /maintenance/clis/calicoctl/configure/kdd
-- title: Deploy image options
-  path: /maintenance/image-options/
-  section:
-  - title: Install images by registry digest
-    path: /maintenance/image-options/imageset
-  - title: Configure use of your image registry
-    path: /maintenance/image-options/alternate-registry
+- title: Run Calico node as non-privileged and non-root
+  path: /security/non-privileged
 - title: Migrate datastore from etcd to Kubernetes
   path: /maintenance/datastore-migration
 - title: Migrate Calico to an operator-managed installation
   path: /maintenance/operator-migration
 - title: Enable kubectl to manage Calico APIs
   path: /maintenance/install-apiserver
-- title: eBPF
-  path: /maintenance/ebpf/
-  section:
-  - title: eBPF use cases
-    path: /maintenance/ebpf/use-cases-ebpf
-  - title: Enable the eBPF dataplane
-    path: /maintenance/ebpf/enabling-ebpf
-  - title: Install in eBPF mode
-    path: /maintenance/ebpf/install
-  - title: Troubleshoot eBPF dataplane
-    path: /maintenance/ebpf/troubleshoot-ebpf
 - title: Monitor
   path: /maintenance/monitor/
   section: 
@@ -66,10 +74,6 @@ section:
   - title: Troubleshooting commands
     path: /maintenance/troubleshoot/commands  
   - title: Component logs
-    path: /maintenance/troubleshoot/component-logs
-  - title: eBPF Dataplane
-    path: /maintenance/ebpf/troubleshoot-ebpf
-  - title: VPP dataplane troubleshooting
-    path: /maintenance/troubleshoot/vpp
+    path: /maintenance/troubleshoot/component-logs 
 - title: Certificate Management
   path: /maintenance/certificate-management

@@ -1,9 +1,11 @@
 title: "Networking"
 path: /networking/
-order: 2
+order: 3
 section:
 - title: Determine best networking option
   path: /networking/determine-best-networking
+- title: Encrypt in-cluster pod traffic
+  path: /security/encrypt-cluster-pod-traffic  
 - title: Configure networking
   path: /networking/configuring
   section:
@@ -72,13 +74,4 @@ section:
   - title: Kuryr
     path: /networking/openstack/kuryr
   - title: Calico's interpretation of Neutron API calls
-    path: /networking/openstack/neutron-api
-- title: Calico Enterprise
-  path: /networking/calico-enterprise/
-  section: 
-  - title: Network visibility
-    path: /networking/calico-enterprise/network-visibility
-  - title: Federation
-    path: /networking/calico-enterprise/federation
-  - title: User console
-    path: /networking/calico-enterprise/user-console      
+    path: /networking/openstack/neutron-api    
