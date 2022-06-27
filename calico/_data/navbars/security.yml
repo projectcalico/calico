@@ -4,8 +4,6 @@ order: 4
 section:
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust
-- title: Run Calico node as non-privileged and non-root
-  path: /security/non-privileged
 - title: Get started with policy
   path: /security/get-started
   section:
@@ -80,14 +78,3 @@ section:
     path: /security/high-connection-workloads
   - title: Defend against DoS attacks
     path: /security/defend-dos-attack
-- title: Secure Calico component communications
-  path: /security/comms/
-  section:
-  - title: Configure encryption and authentication
-    path: /security/comms/crypto-auth
-  - title: Schedule Typha to well-known-nodes
-    path: /security/comms/reduce-nodes
-  - title: Secure Calico Prometheus endpoints
-    path: /security/comms/secure-metrics
-  - title: Secure BGP sessions
-    path: /security/comms/secure-bgp

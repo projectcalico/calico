@@ -2,6 +2,17 @@ title: "Operations"
 path: /maintenance/
 order: 6
 section:
+- title: Secure Calico component communications
+  path: /security/comms/
+  section:
+  - title: Configure encryption and authentication
+    path: /security/comms/crypto-auth
+  - title: Schedule Typha to well-known-nodes
+    path: /security/comms/reduce-nodes
+  - title: Secure Calico Prometheus endpoints
+    path: /security/comms/secure-metrics
+  - title: Secure BGP sessions
+    path: /security/comms/secure-bgp  
 - title: eBPF dataplane
   path: /maintenance/ebpf/
   section:
@@ -21,7 +32,9 @@ section:
   - title: Enable IPsec encryption between nodes
     path: /getting-started/kubernetes/vpp/ipsec
   - title: Details of VPP implementation & known-issues
-    path: /getting-started/kubernetes/vpp/specifics  
+    path: /getting-started/kubernetes/vpp/specifics 
+  - title: VPP dataplane troubleshooting
+    path: /maintenance/troubleshoot/vpp   
 - title: calicoctl
   path: /maintenance/clis/calicoctl
   section:
@@ -36,6 +49,8 @@ section:
       path: /maintenance/clis/calicoctl/configure/etcd
     - title: Configure calicoctl to connect to the Kubernetes API datastore
       path: /maintenance/clis/calicoctl/configure/kdd
+- title: Run Calico node as non-privileged and non-root
+  path: /security/non-privileged
 - title: Migrate datastore from etcd to Kubernetes
   path: /maintenance/datastore-migration
 - title: Migrate Calico to an operator-managed installation
@@ -59,10 +74,6 @@ section:
   - title: Troubleshooting commands
     path: /maintenance/troubleshoot/commands  
   - title: Component logs
-    path: /maintenance/troubleshoot/component-logs
-  - title: eBPF Dataplane
-    path: /maintenance/ebpf/troubleshoot-ebpf
-  - title: VPP dataplane troubleshooting
-    path: /maintenance/troubleshoot/vpp
+    path: /maintenance/troubleshoot/component-logs 
 - title: Certificate Management
   path: /maintenance/certificate-management
