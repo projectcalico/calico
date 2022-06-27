@@ -2240,3 +2240,7 @@ const jumpMapVersion = 2
 func JumpMapName() string {
 	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
 }
+
+func PolicyDebugJSONFileName(iface, dir string) string {
+	return (RuntimePolDir + "/" + iface + "_" + dir + ".json")
+}

@@ -32,7 +32,6 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -551,6 +550,9 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 		iface.info.endpointID = nil
 		return false
 	})
+	// Remove policy debug info if any
+	removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
+	removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -1665,17 +1667,11 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 }
 
 func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
-	ifaceName = strings.ReplaceAll(ifaceName, ".", "")
-	filename := bpf.RuntimePolDir + "/" + ifaceName + "_"
-	if hook == tc.HookIngress {
-		filename = filename + "igr.json"
-	} else {
-		filename = filename + "egr.json"
-	}
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook))
 	os.Remove(filename)
 }
 
-func writePolicyDebugInfo(comments []string, ifaceName string, hook tc.Hook) error {
+func writePolicyDebugInfo(comments []string, ifaceName string, tcHook tc.Hook) error {
 	if comments == nil {
 		return nil
 	}
@@ -1683,19 +1679,17 @@ func writePolicyDebugInfo(comments []string, ifaceName string, hook tc.Hook) err
 		return err
 	}
 
+	polDir := "ingress"
+	if tcHook == tc.HookIngress {
+		polDir = "egress"
+	}
 	var policyDebugInfo = bpf.PolicyDebugInfo{
 		IfaceName:  ifaceName,
-		Hook:       string(hook),
+		TcHook:     string(tcHook),
 		PolicyInfo: comments,
 	}
 
-	ifaceName = strings.ReplaceAll(ifaceName, ".", "")
-	filename := bpf.RuntimePolDir + "/" + ifaceName + "_"
-	if hook == tc.HookIngress {
-		filename = filename + "igr.json"
-	} else {
-		filename = filename + "egr.json"
-	}
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, polDir)
 	bytesToWrite, err := json.Marshal(policyDebugInfo)
 	if err != nil {
 		return err

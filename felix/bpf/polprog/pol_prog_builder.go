@@ -378,7 +378,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		actionLabels["next-tier"] = endOfTierLabel
 
 		log.Debugf("Start of tier %d %q", p.tierID, tier.Name)
-		p.b.WriteComments(fmt.Sprintf("Start of tier %q\n", tier.Name))
+		p.b.WriteComments(fmt.Sprintf("Start of tier %q", tier.Name))
 		for _, pol := range tier.Policies {
 			p.writePolicy(pol, actionLabels, destLeg)
 		}
@@ -388,7 +388,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		if action == TierEndUndef {
 			action = TierEndDeny
 		}
-		p.b.WriteComments(fmt.Sprintf("End of tier %q\n", tier.Name))
+		p.b.WriteComments(fmt.Sprintf("End of tier %q", tier.Name))
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
 			Rule: &proto.Rule{},
@@ -413,7 +413,7 @@ func (p *Builder) writeProfiles(profiles []Policy, allowLabel string) {
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
-		p.b.WriteComments(fmt.Sprintf("Start of rule %q\n", rule))
+		p.b.WriteComments(fmt.Sprintf("Start of rule %q", rule))
 		action := strings.ToLower(rule.Action)
 		if action == "log" {
 			log.Debug("Skipping log rule.  Not supported in BPF mode.")
@@ -425,11 +425,11 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 }
 
 func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
-	p.b.WriteComments(fmt.Sprintf("Start of policy %q\n", policy.Name))
+	p.b.WriteComments(fmt.Sprintf("Start of policy %q", policy.Name))
 	log.Debugf("Start of policy %q %d", policy.Name, p.policyID)
 	p.writePolicyRules(policy, actionLabels, destLeg)
 	log.Debugf("End of policy %q %d", policy.Name, p.policyID)
-	p.b.WriteComments(fmt.Sprintf("End of policy %q\n", policy.Name))
+	p.b.WriteComments(fmt.Sprintf("End of policy %q", policy.Name))
 	p.policyID++
 }
 
@@ -622,9 +622,9 @@ func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
 	comment := ""
 	if negate {
-		comment = fmt.Sprintf("If protocol == %s,skip to next rule\n", protocolToName(protocol))
+		comment = fmt.Sprintf("If protocol == %s,skip to next rule", protocolToName(protocol))
 	} else {
-		comment = fmt.Sprintf("If protocol != %s,skip to next rule\n", protocolToName(protocol))
+		comment = fmt.Sprintf("If protocol != %s,skip to next rule", protocolToName(protocol))
 	}
 	p.b.WriteComments(comment)
 
@@ -640,9 +640,9 @@ func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
 func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
 	comment := ""
 	if negate {
-		comment = fmt.Sprintf("If ICMP type == %d,skip to next rule\n", icmpType)
+		comment = fmt.Sprintf("If ICMP type == %d,skip to next rule", icmpType)
 	} else {
-		comment = fmt.Sprintf("If ICMP type != %d,skip to next rule\n", icmpType)
+		comment = fmt.Sprintf("If ICMP type != %d,skip to next rule", icmpType)
 	}
 	p.b.WriteComments(comment)
 	p.b.Load8(R1, R9, stateOffICMPType)
@@ -656,9 +656,9 @@ func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
 func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) {
 	comment := ""
 	if negate {
-		comment = fmt.Sprintf("If ICMP type == %d and code == %d,skip to next rule\n", icmpType, icmpCode)
+		comment = fmt.Sprintf("If ICMP type == %d and code == %d,skip to next rule", icmpType, icmpCode)
 	} else {
-		comment = fmt.Sprintf("If ICMP type != %d or code != %d,skip to next rule\n", icmpType, icmpCode)
+		comment = fmt.Sprintf("If ICMP type != %d or code != %d,skip to next rule", icmpType, icmpCode)
 	}
 	p.b.WriteComments(comment)
 	p.b.Load16(R1, R9, stateOffICMPType)
@@ -675,9 +675,9 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 		cidrStrings = cidrStrings + fmt.Sprintf("%s,", cidrStr)
 	}
 	if negate {
-		comment = fmt.Sprintf("If %s in %s, skip to next rule\n", leg, cidrStrings)
+		comment = fmt.Sprintf("If %s in %s, skip to next rule", leg, cidrStrings)
 	} else {
-		comment = fmt.Sprintf("If %s not in %s, skip to next rule\n", leg, cidrStrings)
+		comment = fmt.Sprintf("If %s not in %s, skip to next rule", leg, cidrStrings)
 	}
 
 	p.b.WriteComments(comment)
@@ -718,9 +718,9 @@ func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
 		}
 		comment := ""
 		if negate {
-			comment = fmt.Sprintf("If %s matches ipset %s,skip to next rule\n", leg, ipSetID)
+			comment = fmt.Sprintf("If %s matches ipset %s,skip to next rule", leg, ipSetID)
 		} else {
-			comment = fmt.Sprintf("If %s doesn't match ipset %s,skip to next rule\n", leg, ipSetID)
+			comment = fmt.Sprintf("If %s doesn't match ipset %s,skip to next rule", leg, ipSetID)
 		}
 		p.b.WriteComments(comment)
 
@@ -754,7 +754,7 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
 		}
 
-		comment := fmt.Sprintf("If %s does not match ipset %s, jump to next ipset\n", leg, ipSetID)
+		comment := fmt.Sprintf("If %s does not match ipset %s, jump to next ipset", leg, ipSetID)
 		p.b.WriteComments(comment)
 
 		keyOffset := leg.stackOffsetToIPSetKey()
@@ -770,7 +770,7 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 	}
 
 	// If packet reaches here, it hasn't matched any of the IP sets.
-	comment := fmt.Sprintf("If %s doesn't match any of the IP sets, skip to next rule\n", leg)
+	comment := fmt.Sprintf("If %s doesn't match any of the IP sets, skip to next rule", leg)
 	p.b.WriteComments(comment)
 	p.b.Jump(p.endOfRuleLabel())
 	// Label the next match so we can skip to it on success.
@@ -796,9 +796,9 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 	portRangeStr = portRangeStr + "}"
 	comment := ""
 	if negate {
-		comment = fmt.Sprintf("If %s port is within any of %s, skip to next rule\n", leg, portRangeStr)
+		comment = fmt.Sprintf("If %s port is within any of %s, skip to next rule", leg, portRangeStr)
 	} else {
-		comment = fmt.Sprintf("If %s port is not within any of %s, skip to next rule\n", leg, portRangeStr)
+		comment = fmt.Sprintf("If %s port is not within any of %s, skip to next rule", leg, portRangeStr)
 	}
 	p.b.WriteComments(comment)
 	// R1 = port to test against.
@@ -830,9 +830,9 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 	}
 	namedPortStr = namedPortStr + "]"
 	if negate {
-		comment = fmt.Sprintf("If %s port matches any of the named ports %s, skip to next rule\n", leg, namedPortStr)
+		comment = fmt.Sprintf("If %s port matches any of the named ports %s, skip to next rule", leg, namedPortStr)
 	} else {
-		comment = fmt.Sprintf("If %s port does not match any of the named ports %s, skip to next rule\n", leg, namedPortStr)
+		comment = fmt.Sprintf("If %s port does not match any of the named ports %s, skip to next rule", leg, namedPortStr)
 	}
 	p.b.WriteComments(comment)
 

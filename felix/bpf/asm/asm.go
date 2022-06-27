@@ -594,7 +594,7 @@ func (b *Block) Assemble() (*Insns, error) {
 		for idx, insns := range b.insns.Instructions {
 			if labels, ok := b.insnIdxToLabels[idx]; ok {
 				for _, label := range labels {
-					b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%s:\n", label))
+					b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%s:", label))
 				}
 			}
 			if comments, ok := b.insnIdxToComments[idx]; ok {
@@ -603,7 +603,7 @@ func (b *Block) Assemble() (*Insns, error) {
 					b.insns.Comments = append(b.insns.Comments, comment)
 				}
 			}
-			b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%d:%s\n", idx, insns))
+			b.insns.Comments = append(b.insns.Comments, fmt.Sprintf("%d:%s", idx, insns))
 		}
 	}
 	return &b.insns, nil

@@ -58,7 +58,7 @@ type MapInfo struct {
 // PolicyDebugInfo describes policy debug info
 type PolicyDebugInfo struct {
 	IfaceName  string   `json:"ifacename"`
-	Hook       string   `json:"hook"`
+	TcHook     string   `json:"tchook"`
 	PolicyInfo []string `json:"policyInfo"`
 }
 

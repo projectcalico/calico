@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/projectcalico/calico/felix/bpf"
 
@@ -40,7 +39,7 @@ func init() {
 }
 
 var policyDumpCmd = &cobra.Command{
-	Use:   "dump",
+	Use:   "dump <interface> <hook>",
 	Short: "dumps policy",
 	Run: func(cmd *cobra.Command, args []string) {
 		iface, hook, err := parseArgs(args)
@@ -66,13 +65,7 @@ func parseArgs(args []string) (string, string, error) {
 
 func dumpPolicyInfo(iface, hook string) error {
 	var policyDbg bpf.PolicyDebugInfo
-	iface = strings.ReplaceAll(iface, ".", "")
-	filename := bpf.RuntimePolDir + "/" + iface
-	if hook == "egress" {
-		filename = filename + "_egr.json"
-	} else {
-		filename = filename + "_igr.json"
-	}
+	filename := bpf.PolicyDebugJSONFileName(iface, hook)
 	_, err := os.Stat(filename)
 	if err != nil {
 		return err
