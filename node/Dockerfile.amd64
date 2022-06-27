@@ -219,6 +219,7 @@ RUN /clean-up-filesystem.sh
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
 # that have been removed in our later layers.
 FROM scratch
+# base ubi image has been cleaned from  clean-up-filesystem.sh of all unecessary imports
 COPY --from=ubi / /
 
 # Add in top-level license file
