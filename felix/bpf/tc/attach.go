@@ -156,7 +156,8 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		subDir := "globals"
 		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
 			// Remove period in the interface name if any
-			ifName := strings.ReplaceAll(ap.Iface, ".", "")
+			//ifName := strings.ReplaceAll(ap.Iface, ".", "")
+			ifName := ap.Iface
 			if ap.Hook == HookIngress {
 				subDir = ifName + "_igr/"
 			} else {
@@ -503,6 +504,10 @@ func CleanUpJumpMaps() {
 			log.WithError(err).Warn("Removed stale BPF map pin.")
 		}
 		log.WithFields(log.Fields{"id": id, "path": p}).Info("Removed stale BPF map pin.")
+		// delete policy debug info
+		dirnames := strings.Split(p, "/")
+		polFileName := dirnames[len(dirnames)-2]
+		os.Remove("/var/run/calico/bpf/pol/" + polFileName + ".json")
 	}
 
 	// Look for empty dirs.
