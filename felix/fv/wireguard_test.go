@@ -462,7 +462,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					{
 						// Deny egress UDP to the wireguard port.
 						Action:   api.Deny,
-						Protocol: &prot,
+						Protocol: &port,
 						Destination: api.EntityRule{
 							Selector: "has(host-endpoint)",
 							Ports:    []numorstring.Port{numorstring.SinglePort(wireguardListeningPortDefault)},
