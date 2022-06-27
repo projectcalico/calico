@@ -83,11 +83,14 @@ func dumpPolicyInfo(iface, hook string) error {
 		return err
 	}
 	byteValue, _ := ioutil.ReadAll(jsonFile)
-	json.Unmarshal(byteValue, &policyDbg)
+	err = json.Unmarshal(byteValue, &policyDbg)
+	if err != nil {
+		return err
+	}
 
 	b, err := json.MarshalIndent(policyDbg, "", "  ")
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 	fmt.Print(string(b))
 
