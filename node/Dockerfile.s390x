@@ -12,23 +12,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG QEMU_IMAGE=calico/go-build:latest
-ARG BIRD_IMAGE=calico/bird:latest
+ARG BIRD_IMAGE
 
-FROM ${QEMU_IMAGE} as qemu
-FROM ${BIRD_IMAGE} as bird
+FROM alpine:3.11 as qemu
+
+ARG QEMU_VERSION=6.1.0-8
+ARG QEMU_ARCHS="s390x"
+
+RUN apk --update add curl
+
+# Enable non-native runs on amd64 architecture hosts
+RUN curl -L https://github.com/multiarch/qemu-user-static/releases/download/v${QEMU_VERSION}/qemu-${QEMU_ARCHS}-static.tar.gz | tar zxvf - -C /usr/bin &&\
+    chmod +x /usr/bin/qemu-s390x-static
 
 FROM calico/bpftool:v5.3-s390x as bpftool
+FROM ${BIRD_IMAGE} as bird
 
 FROM s390x/alpine:3.8 as base
-
-ARG ARCH=s390x
-
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
-# we only need this for the intermediate "base" image, so we can run all the apk and other commands
-# when running on a kernel >= 4.8, this will become less relevant
-COPY --from=qemu /usr/bin/qemu-${ARCH}-static /usr/bin/
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
+ARG ARCH=s390x
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
@@ -50,9 +54,19 @@ RUN chmod u+s /bin/mountns
 
 COPY --from=bpftool /bpftool /bin
 
-RUN rm /usr/bin/qemu-${ARCH}-static
+# Add in top-level license file
+COPY LICENSE /licenses
 
 CMD ["start_runit"]
+
+# Required labels for certification
+LABEL name="Calico node" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico node handles networking and policy for Calico" \
+      description="Calico node handles networking and policy for Calico" \
+      maintainer="laurence@tigera.io"
 
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled
