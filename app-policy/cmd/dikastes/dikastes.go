@@ -134,8 +134,6 @@ func runServer(arguments map[string]interface{}) {
 		}
 	}()
 
-	var httpServer *http.Server = nil
-	var httpServerWg *sync.WaitGroup = nil
 	th := httpTerminationHandler{make(chan bool, 1)}
 	if httpPort, ok := arguments["--http-port"].(string); ok {
 		i, err := strconv.Atoi(httpPort)
@@ -144,7 +142,7 @@ func runServer(arguments map[string]interface{}) {
 		} else if i < 1 {
 			log.Fatal("please provide non-zero, non-negative port number for HTTP listening port")
 		}
-		httpServer, httpServerWg = th.RunHTTPServer(arguments)
+		httpServer, httpServerWg := th.RunHTTPServer(arguments)
 		defer httpServerWg.Wait()
 		defer func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -153,7 +151,6 @@ func runServer(arguments map[string]interface{}) {
 				log.Fatalf("error while shutting down HTTP server: %v", err)
 			}
 		}()
-
 	}
 
 	// Use a buffered channel so we don't miss any signals
