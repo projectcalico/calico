@@ -123,6 +123,7 @@ spec:
 | bpfMapSizeNATFrontend | In eBPF dataplane mode, controls the size of the NAT front end map. | int | int | 65536 |
 | bpfMapSizeNATBackend | In eBPF dataplane mode, controls the size of the NAT back end map. | int | int | 262144 |
 | bpfMapSizeRoute | In eBPF dataplane mode, controls the size of the route map. | int | int | 262144 |
+| bpfPolicyDebugEnabled              | In eBPF dataplane mode, controls whether felix will collect policy dump for each interface. | true, false | boolean | true |
 | routeSource                        | Where Felix gets is routing information from for VXLAN and the BPF dataplane. The CalicoIPAM setting is more efficient because it supports route aggregation, but it only works when Calico's IPAM or host-local IPAM is in use. Use the WorkloadIPs setting if you are using Calico's VXLAN or BPF dataplane and not using Calico IPAM or host-local IPAM. | CalicoIPAM,WorkloadIPs | string | `CalicoIPAM` |
 | mtuIfacePattern                    | Pattern used to discover the host's interface for MTU auto-detection. | regex | string | `^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)` |
 

@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -106,7 +107,7 @@ type bpfDataplane interface {
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) error
 	ensureBPFDevices() error
-	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error
+	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) ([]string, error)
 	removePolicyProgram(jumpMapFD bpf.MapFD) error
 	setAcceptLocal(iface string, val bool) error
 	setRPFilter(iface string, val int) error
@@ -204,6 +205,8 @@ type bpfEndpointManager struct {
 	// Service routes
 	ctlbWorkaroundEnabled bool
 
+	bpfPolicyDebugEnabled bool
+
 	routeTable    *routetable.RouteTable
 	services      map[serviceKey][]string
 	dirtyServices map[serviceKey][]string
@@ -270,8 +273,9 @@ func newBPFEndpointManager(
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
-		ipv6Enabled:          config.BPFIpv6Enabled,
-		rpfStrictModeEnabled: config.BPFEnforceRPF,
+		ipv6Enabled:           config.BPFIpv6Enabled,
+		rpfStrictModeEnabled:  config.BPFEnforceRPF,
+		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -464,7 +468,6 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
-
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
 	m.ifacesLock.Lock()
@@ -547,6 +550,9 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 		iface.info.endpointID = nil
 		return false
 	})
+	// Remove policy debug info if any
+	removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
+	removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -959,7 +965,15 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return m.dp.updatePolicyProgram(jumpMapFD, rules)
+	comments, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
+	if err != nil {
+		return err
+	}
+	err = writePolicyDebugInfo(comments, ap.Iface, ap.Hook)
+	if err != nil {
+		log.Debugf("error writing policy debug information %s", err)
+	}
+	return nil
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -1017,10 +1031,23 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 			ForHostInterface: true,
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules)
+		comments, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
+		if err != nil {
+			return err
+		}
+		err = writePolicyDebugInfo(comments, ap.Iface, ap.Hook)
+		if err != nil {
+			log.Debugf("error writing policy debug info %s", err)
+		}
+		return nil
 	}
 
-	return m.dp.removePolicyProgram(jumpMapFD)
+	err = m.dp.removePolicyProgram(jumpMapFD)
+	if err != nil {
+		return err
+	}
+	removePolicyDebugInfo(ap.Iface, ap.Hook)
+	return nil
 }
 
 func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint) error {
@@ -1043,7 +1070,8 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules)
+		_, err = m.dp.updatePolicyProgram(jumpMapFD, rules)
+		return err
 	} else {
 		return m.dp.ensureNoProgram(&ap)
 	}
@@ -1638,19 +1666,54 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 	})
 }
 
-func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error {
-	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD)
-	insns, err := pg.Instructions(rules)
+func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook))
+	os.Remove(filename)
+}
+
+func writePolicyDebugInfo(comments []string, ifaceName string, tcHook tc.Hook) error {
+	if comments == nil {
+		return nil
+	}
+	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
+		return err
+	}
+
+	polDir := "ingress"
+	if tcHook == tc.HookIngress {
+		polDir = "egress"
+	}
+	var policyDebugInfo = bpf.PolicyDebugInfo{
+		IfaceName:  ifaceName,
+		TcHook:     string(tcHook),
+		PolicyInfo: comments,
+	}
+
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, polDir)
+	bytesToWrite, err := json.Marshal(policyDebugInfo)
 	if err != nil {
-		return fmt.Errorf("failed to generate policy bytecode: %w", err)
+		return err
+	}
+
+	if err := ioutil.WriteFile(filename, bytesToWrite, 0600); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) ([]string, error) {
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD)
+	insns, err := pg.Instructions(rules, m.bpfPolicyDebugEnabled)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate policy bytecode: %w", err)
 	}
 	progType := unix.BPF_PROG_TYPE_SCHED_CLS
 	if rules.ForXDP {
 		progType = unix.BPF_PROG_TYPE_XDP
 	}
-	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", uint32(progType))
+	progFD, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", uint32(progType))
 	if err != nil {
-		return fmt.Errorf("failed to load BPF policy program: %w", err)
+		return nil, fmt.Errorf("failed to load BPF policy program: %w", err)
 	}
 	defer func() {
 		// Once we've put the program in the map, we don't need its FD any more.
@@ -1664,9 +1727,9 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
 	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
 	if err != nil {
-		return fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
+		return nil, fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
 	}
-	return nil
+	return insns.Comments, nil
 }
 
 func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD) error {
