@@ -2238,12 +2238,12 @@ func KTimeNanos() int64 {
 }
 
 var (
-	cachedNumPossibleCPUs    int
-	cachedNumPossibleCPUsOne sync.Once
+	cachedNumPossibleCPUs     int
+	cachedNumPossibleCPUsOnce sync.Once
 )
 
 func NumPossibleCPUs() int {
-	cachedNumPossibleCPUsOne.Do(func() {
+	cachedNumPossibleCPUsOnce.Do(func() {
 		var err error
 		cachedNumPossibleCPUs, err = libbpf.NumPossibleCPUs()
 		if err != nil {

@@ -26,6 +26,6 @@ func TestCounterMapSize(t *testing.T) {
 	// Entries in the counter map should be aligned
 	Expect(MaxCounterNumber%2 == 0).To(BeTrue())
 
-	noOfDescriptions := len(Descriptions)
+	noOfDescriptions := len(Descriptions())
 	Expect(MaxCounterNumber).Should(Equal(noOfDescriptions + noOfDescriptions%2))
 }

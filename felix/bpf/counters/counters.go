@@ -17,6 +17,7 @@ package counters
 import (
 	"encoding/binary"
 	"fmt"
+	"sort"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -48,20 +49,87 @@ const (
 	DroppedUnknownRoute
 )
 
-var Descriptions map[int]string = map[int]string{
-	TotalPackets:             "Total packets",
-	AcceptedByFailsafe:       "Accepted by failsafe",
-	AcceptedByPolicy:         "Accepted by policy",
-	AcceptedByAnotherProgram: "Accepted by another program",
-	DroppedByPolicy:          "Dropped by policy",
-	DroppedShortPacket:       "Dropped too short packets",
-	DroppedFailedCSUM:        "Dropped incorrect checksum",
-	DroppedIPOptions:         "Dropped packets with unsupported IP options",
-	DroppredIPMalformed:      "Dropped malformed IP packets",
-	DroppedFailedEncap:       "Dropped failed encapsulation",
-	DroppedFailedDecap:       "Dropped failed decapsulation",
-	DroppedUnauthSource:      "Dropped packets with unknown source",
-	DroppedUnknownRoute:      "Dropped packets with unknown route",
+type Description struct {
+	Category string
+	Caption  string
+	Counter  int
+}
+
+type DescList []Description
+
+func (d DescList) Len() int {
+	return len(d)
+}
+
+func (d DescList) Less(i, j int) bool {
+	if d[i].Category == d[j].Category {
+		return d[i].Caption < d[j].Caption
+	}
+	return d[i].Category < d[j].Category
+}
+
+func (d DescList) Swap(i, j int) {
+	d[i], d[j] = d[j], d[i]
+}
+
+var descriptions DescList = DescList{
+	{
+		Counter:  TotalPackets,
+		Category: "Total", Caption: "packets",
+	},
+	{
+		Counter:  AcceptedByFailsafe,
+		Category: "Accepted", Caption: "by failsafe",
+	},
+	{
+		Counter:  AcceptedByPolicy,
+		Category: "Accepted", Caption: "by policy",
+	},
+	{
+		Counter:  AcceptedByAnotherProgram,
+		Category: "Accepted", Caption: "by another program",
+	},
+	{
+		Counter:  DroppedByPolicy,
+		Category: "Dropped", Caption: "by policy",
+	},
+	{
+		Counter:  DroppedShortPacket,
+		Category: "Dropped", Caption: "too short packets",
+	},
+	{
+		Counter:  DroppedFailedCSUM,
+		Category: "Dropped", Caption: "incorrect checksum",
+	},
+	{
+		Counter:  DroppedIPOptions,
+		Category: "Dropped", Caption: "packets with unsupported IP options",
+	},
+	{
+		Counter:  DroppredIPMalformed,
+		Category: "Dropped", Caption: "malformed IP packets",
+	},
+	{
+		Counter:  DroppedFailedEncap,
+		Category: "Dropped", Caption: "failed encapsulation",
+	},
+	{
+		Counter:  DroppedFailedDecap,
+		Category: "Dropped", Caption: "failed decapsulation",
+	},
+	{
+		Counter:  DroppedUnauthSource,
+		Category: "Dropped", Caption: "packets with unknown source",
+	},
+	{
+		Counter:  DroppedUnknownRoute,
+		Category: "Dropped", Caption: "packets with unknown route",
+	},
+}
+
+func Descriptions() DescList {
+	sort.Stable(descriptions)
+	return descriptions
 }
 
 const (

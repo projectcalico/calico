@@ -99,7 +99,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		// failing here normally should not happen.
 		return TC_ACT_SHOT;
 	}
-	COUNTER_INC(&ctx, CALI_REASON_UNKNOWN); // This is used to keep the total number of packets
+	COUNTER_INC(&ctx, COUNTER_TOTAL_PACKETS);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -116,12 +116,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		switch (skb->mark & CALI_SKB_MARK_BYPASS_MASK) {
 		case CALI_SKB_MARK_BYPASS_FWD:
 			CALI_DEBUG("Packet approved for forward.\n");
-			ctx.fwd.reason = CALI_REASON_BYPASS;
 			COUNTER_INC(&ctx, CALI_REASON_BYPASS);
 			goto allow;
 		case CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP:
 			CALI_DEBUG("Packet approved for forward - src ip fixup\n");
-			ctx.fwd.reason = CALI_REASON_BYPASS;
 			COUNTER_INC(&ctx, CALI_REASON_BYPASS);
 
 			/* we need to fix up the right src host IP */
