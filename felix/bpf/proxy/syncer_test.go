@@ -54,8 +54,12 @@ var _ = Describe("BPF Syncer", func() {
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
-	beCache := cachingmap.New(nat.BackendMapParameters, eps)
+	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+			svcs, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+			eps, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 
