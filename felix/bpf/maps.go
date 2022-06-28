@@ -101,6 +101,7 @@ type MapContext struct {
 	CtMap            Map
 	SrMsgMap         Map
 	CtNatsMap        Map
+	IfStateMap       Map
 	MapSizes         map[string]uint32
 }
 
