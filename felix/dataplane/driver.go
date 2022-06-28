@@ -173,55 +173,6 @@ func StartDataplaneDriver(configParams *config.Config,
 			log.WithError(err).Warning("Unable to assign table index for wireguard")
 		}
 
-		// If wireguard is enabled, update the failsafe ports to include the wireguard port.
-		failsafeInboundHostPorts := configParams.FailsafeInboundHostPorts
-		failsafeOutboundHostPorts := configParams.FailsafeOutboundHostPorts
-		if configParams.WireguardEnabled {
-			found := false
-			for _, i := range failsafeInboundHostPorts {
-				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
-					log.WithFields(log.Fields{
-						"net":      i.Net,
-						"port":     i.Port,
-						"protocol": i.Protocol,
-					}).Debug("FailsafeInboundHostPorts is already configured for wireguard")
-					found = true
-					break
-				}
-			}
-			if !found {
-				failsafeInboundHostPorts = make([]config.ProtoPort, len(configParams.FailsafeInboundHostPorts)+1)
-				copy(failsafeInboundHostPorts, configParams.FailsafeInboundHostPorts)
-				log.Debug("Adding permissive FailsafeInboundHostPorts for wireguard")
-				failsafeInboundHostPorts[len(configParams.FailsafeInboundHostPorts)] = config.ProtoPort{
-					Port:     uint16(configParams.WireguardListeningPort),
-					Protocol: "udp",
-				}
-			}
-
-			found = false
-			for _, i := range failsafeOutboundHostPorts {
-				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
-					log.WithFields(log.Fields{
-						"net":      i.Net,
-						"port":     i.Port,
-						"protocol": i.Protocol,
-					}).Debug("FailsafeOutboundHostPorts is already configured for wireguard")
-					found = true
-					break
-				}
-			}
-			if !found {
-				failsafeOutboundHostPorts = make([]config.ProtoPort, len(configParams.FailsafeOutboundHostPorts)+1)
-				copy(failsafeOutboundHostPorts, configParams.FailsafeOutboundHostPorts)
-				log.Debug("Adding permissive FailsafeOutboundHostPorts for wireguard")
-				failsafeOutboundHostPorts[len(configParams.FailsafeOutboundHostPorts)] = config.ProtoPort{
-					Port:     uint16(configParams.WireguardListeningPort),
-					Protocol: "udp",
-				}
-			}
-		}
-
 		dpConfig := intdataplane.Config{
 			Hostname:           configParams.FelixHostname,
 			FloatingIPsEnabled: strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
@@ -285,8 +236,8 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesFilterAllowAction: configParams.IptablesFilterAllowAction,
 				IptablesMangleAllowAction: configParams.IptablesMangleAllowAction,
 
-				FailsafeInboundHostPorts:  failsafeInboundHostPorts,
-				FailsafeOutboundHostPorts: failsafeOutboundHostPorts,
+				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
+				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,
 
 				DisableConntrackInvalid: configParams.DisableConntrackInvalidCheck,
 
