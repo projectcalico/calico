@@ -15,36 +15,37 @@
 package upgrade
 
 import (
-	"reflect"
+	"fmt"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 )
 
 func UpgradeBPFMap(oldMap, newMap *bpf.PinnedMap) error {
 	oldVersion := oldMap.Version
 	newVersion := newMap.Version
-	oldCachingMap := cachingmap.New(oldMap.MapParameters, oldMap)
-	newCachingMap := cachingmap.New(newMap.MapParameters, newMap)
-	err := oldCachingMap.LoadCacheFromDataplane()
-	if err != nil {
-		return err
-	}
-	err = newCachingMap.LoadCacheFromDataplane()
-	if err != nil {
-		return err
-	}
-	oldCachingMap.IterDataplaneCache(func(k, v []byte) {
+
+	newCache := make(map[string]string)
+
+	err := oldMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		tmpK, tmpV := newMap.KVasUpgradable(oldVersion, k, v)
 		for i := oldVersion; i < newVersion; i++ {
 			tmpK = tmpK.Upgrade()
 			tmpV = tmpV.Upgrade()
 		}
-		val := newCachingMap.GetDataplaneCache(tmpK.AsBytes())
-		if !reflect.DeepEqual(val, tmpV.AsBytes()) {
-			newCachingMap.SetDesired(tmpK.AsBytes(), tmpV.AsBytes())
-		}
-	})
-	return newCachingMap.ApplyUpdatesOnly()
+		newCache[string(tmpK.AsBytes())] = string(tmpV.AsBytes())
 
+		return bpf.IterNone
+	})
+
+	if err != nil {
+		return fmt.Errorf("iterating old map failed: %w", err)
+	}
+
+	for k, v := range newCache {
+		if err := newMap.Update([]byte(k), []byte(v)); err != nil {
+			return fmt.Errorf("new map update failed: %w", err)
+		}
+	}
+
+	return nil
 }
