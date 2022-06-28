@@ -224,13 +224,16 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
-# Set the platform correctly for building docker images so that 
+# Set the platform correctly for building docker images so that
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
 TARGET_PLATFORM=--platform=linux/arm64/v8
 endif
 ifeq ($(ARCH),armv7)
 TARGET_PLATFORM=--platform=linux/arm/v7
+endif
+ifeq ($(ARCH),ppc64le)
+TARGET_PLATFORM=--platform=linux/ppc64le
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.

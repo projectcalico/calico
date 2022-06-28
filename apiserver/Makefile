@@ -62,10 +62,8 @@ else
 CGO_ENABLED=0
 endif
 
-ifeq ($(ARCH),arm64)
-# Forces ARM64 build image to be used in a crosscompilation run.
+# Use ARCH specific build image.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-endif
 
 ###############################################################################
 # Static checks
@@ -124,7 +122,7 @@ check-boring-ssl: $(BINDIR)/apiserver-$(ARCH)
 		go tool nm $(BINDIR)/apiserver-$(ARCH) > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
 	-rm -f $(BINDIR)/tags.txt
 
-.PHONY: ut 
+.PHONY: ut
 ut: lint-cache-dir run-etcd
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" go test $(UNIT_TEST_FLAGS) \
@@ -216,7 +214,7 @@ clean-hack-lib:
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
