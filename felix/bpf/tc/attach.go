@@ -156,8 +156,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		subDir := "globals"
 		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
 			// Remove period in the interface name if any
-			//ifName := strings.ReplaceAll(ap.Iface, ".", "")
-			ifName := ap.Iface
+			ifName := strings.ReplaceAll(ap.Iface, ".", "")
 			if ap.Hook == HookIngress {
 				subDir = ifName + "_igr/"
 			} else {
