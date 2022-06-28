@@ -100,6 +100,12 @@ The geeky details of what you get:
    > the `kube-system` namespace instead.
    {: .alert .alert-info}
 
+#### Choose your dataplane
+
+{% include dataplanes.html %}
+
+#### Remove cluster taint
+
 1. Remove the taints on the master so that you can schedule pods on it.
 
    ```
@@ -138,4 +144,3 @@ Congratulations! You now have a single-host Kubernetes cluster with {{site.prodn
 - [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic)
 - [Control ingress and egress traffic using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-advanced)
 - [Run a tutorial that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
-
