@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_ICMP_H__
@@ -21,7 +21,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	/* ICMP is on the slow path so we may as well revalidate here to keep calling code
 	 * simple.  We only need to look at the IP header before we resize the packet. */
 	if (skb_refresh_validate_ptrs(ctx, 0)) {
-		ctx->fwd.reason = CALI_REASON_SHORT;
+		DENY_REASON(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("ICMP v4 reply: too short\n");
 		return -1;
 	}
@@ -70,7 +70,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 
 	/* ICMP reply carries the IP header + at least 8 bytes of data. */
 	if (skb_refresh_validate_ptrs(ctx, len - skb_iphdr_offset() - IP_SIZE)) {
-		ctx->fwd.reason = CALI_REASON_SHORT;
+		DENY_REASON(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
 		return -1;
 	}
