@@ -1,0 +1,75 @@
+{{site.prodname}} has multiple dataplanes and a modular architecture to give you an optimal outcome in any environment.
+
+Use the following command to view which dataplane is currently in use in your cluster.
+```
+kubectl get installation.operator.tigera.io default -o jsonpath='{.spec.calicoNetwork.linuxDataplane}{"\n"}'
+```
+
+{% tabs %}
+<label:Iptables>
+<%
+
+The `Standard Linux dataplane` utilizes the power of Linux IPTables to provide a reliable networking experience. It is a Software Defined Networking solution designed for compatibility and performance to provide 10GBit or more throughput in any environment.
+
+> **Note:** Looking for more throughput? try Calico's eBPF dataplane.
+{: .alert .alert-info}
+
+Use the following command to change your dataplane to `IPTables`. 
+```
+kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Iptables", "hostPorts":null}}}'
+```
+
+%>
+<label:eBPF,active:true>
+<%
+
+{{site.prodname}}'s eBPF dataplane pushes the performance and latency further than possible by utilizing the superpower of eBPF technology. Designed for 40GBit or higher throughput, its minimal resource utilization allows you to scale your cluster without a worry.
+
+> **Note:** [Click here]({{site.baseurl}}/about/about-ebpf), if you like to know more about eBPF networking.
+{: .alert .alert-info}
+
+Use the following command to determine your control plane address; in a cloud environment, the control plane address is usually an FQDN DNS record.
+```
+kubectl cluster-info
+```
+
+You should see a result similar to:
+```
+Kubernetes control plane is running at https://<API server host>:<API server port>
+```
+
+Replace `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT` values with the ones you received earlier and execute the following command.
+```
+kubectl apply -f - <<EOF
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: tigera-operator
+data:
+  KUBERNETES_SERVICE_HOST: "<API server host>"
+  KUBERNETES_SERVICE_PORT: "<API server port>"
+EOF
+```
+
+Use the following command to activate {{site.prodname}}'s dataplane.
+```
+kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"BPF", "hostPorts":null}}}'
+```
+
+Use the following command to disable the `kube-proxy` daemons.
+```
+kubectl patch ds -n kube-system kube-proxy -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": "true"}}}}}'
+```
+
+%>
+<label:VPP>
+<%
+
+The Vector Packet Processor (VPP) is a high-performance, open-source userspace network dataplane written in C, developed under the {% include open-new-window.html text='fd.io' url='fd.io' %} umbrella. It supports many standard networking features (L2 switching, L3 routing, NAT, encapsulations), and is easily extensible using plugins. The VPP dataplane uses plugins to efficiently implement Kubernetes services load balancing and Calico policies.
+
+Calico's VPP dataplane is currently in its `developmenet stages`, [click here]({{site.baseurl}}/getting-started/kubernetes/vpp/getting-started) to learn more about VPP.
+
+
+%>
+{% endtabs %}
