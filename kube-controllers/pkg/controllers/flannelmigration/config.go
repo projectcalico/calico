@@ -44,8 +44,8 @@ type Config struct {
 
 	// Name of Flannel daemonset in kube-system namespace.
 	// This could be a Canal daemonset where the controller will autodetect.
-	// Default is kube-flannel-ds-amd64
-	FlannelDaemonsetName string `default:"kube-flannel-ds-amd64" split_words:"true"`
+	// Default is kube-flannel-ds
+	FlannelDaemonsetName string `default:"kube-flannel-ds" split_words:"true"`
 
 	// FlannelMTU is the mtu used by flannel vxlan tunnel interface.
 	// This config item is auto detected from /run/flannel/subnet.env.

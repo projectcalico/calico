@@ -22,6 +22,8 @@ import (
 
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +38,8 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 )
+
+var title = cases.Title(language.English)
 
 // All of the resources we can retrieve via the v3 API.
 // Any resources which have references to node names MUST come after
@@ -200,7 +204,6 @@ Description:
 				rom.SetCreationTimestamp(v1.Time{})
 				rom.SetDeletionTimestamp(nil)
 				rom.SetDeletionGracePeriodSeconds(nil)
-				rom.SetClusterName("")
 				return nil
 			})
 			if err != nil {
@@ -389,14 +392,14 @@ Description:
 // ConvertIptablesFields ensures that all iptables fields are valid for the v3 API.
 func ConvertIptablesFields(felixConfig *apiv3.FelixConfiguration) {
 	if felixConfig.Spec.DefaultEndpointToHostAction != "" {
-		felixConfig.Spec.DefaultEndpointToHostAction = strings.Title(strings.ToLower(felixConfig.Spec.DefaultEndpointToHostAction))
+		felixConfig.Spec.DefaultEndpointToHostAction = title.String(strings.ToLower(felixConfig.Spec.DefaultEndpointToHostAction))
 	}
 
 	if felixConfig.Spec.IptablesFilterAllowAction != "" {
-		felixConfig.Spec.IptablesFilterAllowAction = strings.Title(strings.ToLower(felixConfig.Spec.IptablesFilterAllowAction))
+		felixConfig.Spec.IptablesFilterAllowAction = title.String(strings.ToLower(felixConfig.Spec.IptablesFilterAllowAction))
 	}
 
 	if felixConfig.Spec.IptablesMangleAllowAction != "" {
-		felixConfig.Spec.IptablesMangleAllowAction = strings.Title(strings.ToLower(felixConfig.Spec.IptablesMangleAllowAction))
+		felixConfig.Spec.IptablesMangleAllowAction = title.String(strings.ToLower(felixConfig.Spec.IptablesMangleAllowAction))
 	}
 }

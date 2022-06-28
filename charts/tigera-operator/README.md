@@ -133,6 +133,12 @@ tolerations:
 nodeSelector:
   kubernetes.io/os: linux
 
+# Custom annotations for the tigera/operator pod itself
+podAnnotations: {}
+
+# Custom labels for the tigera/operator pod itself
+podLabels: {}
+
 # Configuration for the tigera operator images to deploy.
 tigeraOperator:
   image: tigera/operator

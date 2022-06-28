@@ -1257,6 +1257,10 @@ spec:
                   information. - WorkloadIPs: use workload endpoints to construct
                   routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
                 type: string
+              routeSyncDisabled:
+                description: RouteSyncDisabled will disable all operations performed
+                  on the route table. Set to true to run in network-policy mode only.
+                type: boolean
               routeTableRange:
                 description: Deprecated in favor of RouteTableRanges. Calico programs
                   additional Linux route tables for various purposes. RouteTableRange
@@ -4539,6 +4543,7 @@ spec:
                 - AKS
                 - OpenShift
                 - DockerEnterprise
+                - RKE2
                 type: string
               nodeMetricsPort:
                 description: NodeMetricsPort specifies which port calico/node serves
@@ -5289,6 +5294,7 @@ spec:
                     - AKS
                     - OpenShift
                     - DockerEnterprise
+                    - RKE2
                     type: string
                   nodeMetricsPort:
                     description: NodeMetricsPort specifies which port calico/node
@@ -5751,53 +5757,6 @@ status:
   conditions: []
   storedVersions: []
 
----
-# Source: tigera-operator/templates/tigera-operator/02-podsecuritypolicy-tigera-operator.yaml
-# This should not be rendered for an OpenShift install.
-# OpenShift uses SecurityContextConstraints instead.
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
-metadata:
-  name: tigera-operator
-  annotations:
-    seccomp.security.alpha.kubernetes.io/allowedProfileNames: '*'
-spec:
-  privileged: false
-  allowPrivilegeEscalation: false
-  requiredDropCapabilities:
-  - ALL
-  volumes:
-  - 'hostPath'
-  - 'configMap'
-  - 'emptyDir'
-  - 'projected'
-  - 'secret'
-  - 'downwardAPI'
-  # Assume that persistentVolumes set up by the cluster admin are safe to use.
-  - 'persistentVolumeClaim'
-  hostNetwork: true
-  hostPorts:
-  - min: 0
-    max: 65535
-  hostIPC: false
-  hostPID: false
-  runAsUser:
-    rule: 'MustRunAsNonRoot'
-  seLinux:
-    rule: 'RunAsAny'
-  supplementalGroups:
-    rule: 'MustRunAs'
-    ranges:
-      # Forbid adding the root group.
-      - min: 1
-        max: 65535
-  fsGroup:
-    rule: 'MustRunAs'
-    ranges:
-      # Forbid adding the root group.
-      - min: 1
-        max: 65535
-  readOnlyRootFilesystem: false
 ---
 # Source: tigera-operator/templates/tigera-operator/02-serviceaccount-tigera-operator.yaml
 apiVersion: v1

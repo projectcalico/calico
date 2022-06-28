@@ -17,9 +17,12 @@ package bpf
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -128,6 +131,10 @@ type PinnedMap struct {
 	oldfd    MapFD
 	perCPU   bool
 	oldSize  int
+	// Callbacks to handle upgrade
+	UpgradeFn      func(*PinnedMap, *PinnedMap) error
+	GetMapParams   func(int) MapParameters
+	KVasUpgradable func(int, []byte, []byte) (Upgradable, Upgradable)
 }
 
 func (b *PinnedMap) GetName() string {
@@ -533,8 +540,9 @@ func (b *PinnedMap) EnsureExists() error {
 	b.fd, err = GetMapFDByPin(b.versionedFilename())
 	if err == nil {
 		b.fdLoaded = true
-		// Copy data from old map to the new map
 		if copyData {
+			// Copy data from old map to the new map. Old map and new map are of the
+			// same version but of different size.
 			err := b.copyFromOldMap()
 			if err != nil {
 				logrus.WithError(err).Error("error copying data from old map")
@@ -548,6 +556,8 @@ func (b *PinnedMap) EnsureExists() error {
 			}
 
 		}
+		// Handle map upgrade.
+		err = b.upgrade()
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
@@ -557,6 +567,26 @@ func (b *PinnedMap) EnsureExists() error {
 type bpftoolMapMeta struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+}
+
+func GetMapIdFromPin(pinPath string) (int, error) {
+	cmd := exec.Command("bpftool", "map", "list", "pinned", pinPath, "-j")
+	out, err := cmd.Output()
+	if err != nil {
+		return -1, errors.Wrap(err, "bpftool map list failed")
+	}
+
+	var mapData bpftoolMapMeta
+	err = json.Unmarshal(out, &mapData)
+	if err != nil {
+		return -1, errors.Wrap(err, "bpftool returned bad JSON")
+	}
+	return mapData.ID, nil
+}
+
+func RepinMapFromId(id int, path string) error {
+	cmd := exec.Command("bpftool", "map", "pin", "id", fmt.Sprint(id), path)
+	return errors.Wrap(cmd.Run(), "bpftool failed to reping map from id")
 }
 
 func RepinMap(name string, filename string) error {
@@ -585,6 +615,13 @@ func RepinMap(name string, filename string) error {
 }
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {
+	// check if there is any old version of the map.
+	// If so upgrade delta entries from the old map
+	// to the new map.
+	err := b.upgrade()
+	if err != nil {
+		return fmt.Errorf("error upgrading data from old map %s, err=%w", b.GetName(), err)
+	}
 	if b.oldfd == 0 {
 		return nil
 	}
@@ -595,9 +632,78 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 		os.Remove(b.Path() + "_old")
 	}()
 
-	err := b.updateDeltaEntries()
+	err = b.updateDeltaEntries()
 	if err != nil {
 		return fmt.Errorf("error copying data from old map %s, err=%w", b.GetName(), err)
 	}
 	return nil
+}
+
+func (b *PinnedMap) getOldMapVersion() (int, error) {
+	oldVersion := 0
+	dir, name := filepath.Split(b.Filename)
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("error reading pin path %w", err)
+	}
+	for _, f := range files {
+		fname := f.Name()
+		fname = string(fname[0 : len(fname)-1])
+		if fname == name {
+			mapName := f.Name()
+			oldVersion, err = strconv.Atoi(string(mapName[len(mapName)-1]))
+			if err != nil {
+				return 0, fmt.Errorf("invalid version %w", err)
+			}
+			if oldVersion < b.Version {
+				return oldVersion, nil
+			}
+			if oldVersion > b.Version {
+				return 0, fmt.Errorf("downgrade not supported %d %d", oldVersion, b.Version)
+			}
+			oldVersion = 0
+		}
+	}
+	return oldVersion, nil
+}
+
+// This function upgrades entries from one version of the map to the other.
+// Say we move from mapv2 to mapv3. Data from v2 is upgraded to v3.
+// If there is a resized version of v2, which is v2_old, data is upgraded from
+// v2_old as well to v3.
+func (b *PinnedMap) upgrade() error {
+	if b.UpgradeFn == nil {
+		return nil
+	}
+	if b.GetMapParams == nil || b.KVasUpgradable == nil {
+		return fmt.Errorf("upgrade callbacks not registered %s", b.Name)
+	}
+	oldVersion, err := b.getOldMapVersion()
+	if err != nil {
+		return err
+	}
+	// fresh install
+	if oldVersion == 0 {
+		return nil
+	}
+
+	// Get a pinnedMap handle for the old map
+	ctx := b.context
+	oldMapParams := b.GetMapParams(oldVersion)
+	oldMapParams.MaxEntries = b.MaxEntries
+	oldBpfMap := ctx.NewPinnedMap(oldMapParams)
+	err = oldBpfMap.EnsureExists()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		oldBpfMap.(*PinnedMap).Close()
+		oldBpfMap.(*PinnedMap).fd = 0
+	}()
+	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
+}
+
+type Upgradable interface {
+	Upgrade() Upgradable
+	AsBytes() []byte
 }

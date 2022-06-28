@@ -2452,6 +2452,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange"),
 						},
 					},
+					"routeSyncDisabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RouteSyncDisabled will disable all operations performed on the route table. Set to true to run in network-policy mode only.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"wireguardEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WireguardEnabled controls whether Wireguard is enabled. [Default: false]",
@@ -10250,7 +10257,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Description: "\n\n\nPossible enum values:\n - `\"FileSystemResizePending\"` - controller resize is finished and a file system resize is pending on node\n - `\"Resizing\"` - a user trigger resize of pvc has been started",
+							Description: "Possible enum values:\n - `\"FileSystemResizePending\"` - controller resize is finished and a file system resize is pending on node\n - `\"Resizing\"` - a user trigger resize of pvc has been started",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",

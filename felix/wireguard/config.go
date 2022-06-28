@@ -27,4 +27,5 @@ type Config struct {
 	RouteSource         string
 	EncryptHostTraffic  bool
 	PersistentKeepAlive time.Duration
+	RouteSyncDisabled   bool
 }
