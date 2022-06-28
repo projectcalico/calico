@@ -1,0 +1,30 @@
+ARG QEMU_IMAGE
+ARG UBI_IMAGE
+
+FROM ${QEMU_IMAGE} as qemu
+
+FROM --platform=linux/ppc64le ${UBI_IMAGE} as ubi
+
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
+
+RUN microdnf update
+
+# At runtime, apiserver generate certificates in /code directory
+# hence, provide RW permission for user 1001
+RUN mkdir /code
+RUN rm -rf /tmp
+RUN mkdir /tmp
+
+FROM scratch
+COPY  --from=ubi /code /code
+COPY  --from=ubi /tmp /tmp
+# copies the shared linux libs requred by apiserver
+COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
+COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
+
+ADD  bin/apiserver-ppc64le /code/apiserver
+ADD  bin/filecheck-ppc64le /code/filecheck
+
+WORKDIR /code
+
+ENTRYPOINT ["./apiserver"]
