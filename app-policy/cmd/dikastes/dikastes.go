@@ -17,10 +17,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/projectcalico/calico/app-policy/checker"
 	"github.com/projectcalico/calico/app-policy/health"
@@ -50,6 +55,7 @@ Options:
   -h --help              Show this screen.
   -l --listen <port>     Unix domain socket path [default: /var/run/dikastes/dikastes.sock]
   -d --dial <target>     Target to dial. [default: localhost:50051]
+  -h --http-port <port>  Local port number to listen for HTTP requests on. Used to gracefully terminate.
   --debug                Log at Debug level.`
 
 var VERSION string
@@ -128,12 +134,40 @@ func runServer(arguments map[string]interface{}) {
 		}
 	}()
 
+	var httpServer *http.Server = nil
+	var httpServerWg *sync.WaitGroup = nil
+	th := httpTerminationHandler{make(chan bool, 1)}
+	if httpPort, ok := arguments["--http-port"].(string); ok {
+		i, err := strconv.Atoi(httpPort)
+		if err != nil {
+			log.Fatalf("error parsing provided HTTP port: %v", err)
+		} else if i < 1 {
+			log.Fatal("please provide non-zero, non-negative port number for HTTP listening port")
+		}
+		httpServer, httpServerWg = th.RunHTTPServer(arguments)
+		defer httpServerWg.Wait()
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+			if err = httpServer.Shutdown(ctx); err != nil {
+				log.Fatalf("error while shutting down HTTP server: %v", err)
+			}
+		}()
+
+	}
+
 	// Use a buffered channel so we don't miss any signals
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	// Block until a signal is received.
-	log.Infof("Got signal: %v", <-c)
+	select {
+	case sig := <-sigChan:
+		log.Infof("Got signal: %v", sig)
+	case <-th.termChan:
+		log.Info("Received HTTP termination request")
+	}
+
 	gs.GracefulStop()
 }
 
@@ -171,4 +205,35 @@ func runClient(arguments map[string]interface{}) {
 		log.Fatalf("Failed %v", err)
 	}
 	log.Infof("Check response:\n %v", resp)
+}
+
+type httpTerminationHandler struct {
+	termChan chan bool
+}
+
+func (h *httpTerminationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.termChan <- true
+	if _, err := io.WriteString(w, "terminating Dikastes\n"); err != nil {
+		log.Fatalf("error writing HTTP response: %v", err)
+	}
+}
+
+func (h *httpTerminationHandler) RunHTTPServer(arguments map[string]interface{}) (*http.Server, *sync.WaitGroup) {
+	httpServerPort := arguments["--http-port"].(string)
+	httpServerPortStr := fmt.Sprintf(":%s", httpServerPort)
+	httpServer := &http.Server{Addr: httpServerPortStr}
+	httpServerWg := &sync.WaitGroup{}
+	httpServerWg.Add(1)
+
+	http.Handle("/terminate", h)
+
+	go func() {
+		defer httpServerWg.Done()
+		log.Infof("starting HTTP server on port %v", httpServerPort)
+		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatalf("HTTP server closed unexpectedly: %v", err)
+		}
+	}()
+
+	return httpServer, httpServerWg
 }
