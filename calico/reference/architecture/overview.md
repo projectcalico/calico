@@ -86,7 +86,7 @@ Confd dynamically generates BIRD configuration files based on the updates to dat
 
 (Optional) {{site.prodname}} enforces network policy for workloads at both the Linux kernel (using iptables, L3-L4), and at L3-L7 using a Envoy sidecar proxy called Dikastes, with cryptographic authentication of requests. Using multiple enforcement points establishes the identity of the remote endpoint based on multiple criteria. The host Linux kernel enforcement protects your workloads even if the workload pod is compromised, and the Envoy proxy is bypassed.
 
-> **Note**: Dikastes can be terminated by issuing an HTTP POST request to /terminate on localhost at the HTTP port specified with the --http-port option when starting Dikastes (default 7777). This is to allow for graceful termination so that Kubernetes Jobs can complete successfully and is analogous to Envoy's /quitquitquit. eg. `curl -XPOST http://127.0.0.1:7777/terminate`
+> **Note**: Dikastes can be terminated by issuing an HTTP POST request to /terminate on localhost at the HTTP port specified with the `--http-port` option when starting Dikastes. This is to allow for graceful termination so that Kubernetes Jobs can complete successfully and is analogous to Envoy's /quitquitquit. eg. `curl -XPOST http://127.0.0.1:7777/terminate`
 {: .alert .alert-info}
 ### CNI plugin
 

@@ -17,13 +17,11 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"syscall"
 	"testing"
 )
 
 func TestTerminationHandler_ServeHTTP(t *testing.T) {
-	th := terminationHandler{make(chan os.Signal, 2)}
+	th := httpTerminationHandler{make(chan bool, 1)}
 	req := httptest.NewRequest("POST", "http://127.0.0.1:7777/terminate", nil)
 	w := httptest.NewRecorder()
 	th.ServeHTTP(w, req)
@@ -36,10 +34,8 @@ func TestTerminationHandler_ServeHTTP(t *testing.T) {
 	}
 
 	select {
-	case rcvSig := <-th.sigChan:
-		if rcvSig != syscall.SIGTERM {
-			t.Errorf("expect syscall.SIGTERM but instead got %v", rcvSig)
-		}
+	case <-th.termChan:
+		return
 	default:
 		t.Error("termination handler did not write to channel as expected")
 	}
