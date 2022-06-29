@@ -856,6 +856,11 @@ spec:
                   are inclusive. [Default: 20000:29999]'
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
+              bpfPolicyDebugEnabled:
+                description: 'BPFPolicyDebugEnabled, when set to true collects debug
+                  information for the policy programs attached to interfaces. [Default:
+                  true]'
+                type: boolean
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s
                   top-level iptables chains by inserting a rule at the top of the
