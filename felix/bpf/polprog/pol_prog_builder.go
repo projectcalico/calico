@@ -175,7 +175,7 @@ const (
 	TierEndPass  TierEndAction = "pass"
 )
 
-func (p *Builder) Instructions(rules Rules, policyDebugEnabled bool) (*Insns, error) {
+func (p *Builder) Instructions(rules Rules, policyDebugEnabled bool) (Insns, error) {
 	p.b = NewBlock(policyDebugEnabled)
 	p.writeProgramHeader()
 
@@ -378,7 +378,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		actionLabels["next-tier"] = endOfTierLabel
 
 		log.Debugf("Start of tier %d %q", p.tierID, tier.Name)
-		p.b.WriteComments(fmt.Sprintf("Start of tier %q", tier.Name))
+		p.b.WriteComments(fmt.Sprintf("Start of tier %s", tier.Name))
 		for _, pol := range tier.Policies {
 			p.writePolicy(pol, actionLabels, destLeg)
 		}
@@ -388,7 +388,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		if action == TierEndUndef {
 			action = TierEndDeny
 		}
-		p.b.WriteComments(fmt.Sprintf("End of tier %q", tier.Name))
+		p.b.WriteComments(fmt.Sprintf("End of tier %s", tier.Name))
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
 			Rule: &proto.Rule{},
@@ -413,7 +413,7 @@ func (p *Builder) writeProfiles(profiles []Policy, allowLabel string) {
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
-		p.b.WriteComments(fmt.Sprintf("Start of rule %q", rule))
+		p.b.WriteComments(fmt.Sprintf("Start of rule %s", rule))
 		action := strings.ToLower(rule.Action)
 		if action == "log" {
 			log.Debug("Skipping log rule.  Not supported in BPF mode.")
@@ -421,15 +421,16 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		}
 		p.writeRule(rule, actionLabels[action], destLeg)
 		log.Debugf("End of rule %d", ruleIdx)
+		p.b.WriteComments(fmt.Sprintf("End of rule %s", rule.RuleId))
 	}
 }
 
 func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
-	p.b.WriteComments(fmt.Sprintf("Start of policy %q", policy.Name))
+	p.b.WriteComments(fmt.Sprintf("Start of policy %s", policy.Name))
 	log.Debugf("Start of policy %q %d", policy.Name, p.policyID)
 	p.writePolicyRules(policy, actionLabels, destLeg)
 	log.Debugf("End of policy %q %d", policy.Name, p.policyID)
-	p.b.WriteComments(fmt.Sprintf("End of policy %q", policy.Name))
+	p.b.WriteComments(fmt.Sprintf("End of policy %s", policy.Name))
 	p.policyID++
 }
 

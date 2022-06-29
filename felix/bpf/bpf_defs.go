@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/bpf/asm"
 )
 
 type MapFD uint32
@@ -57,9 +59,9 @@ type MapInfo struct {
 
 // PolicyDebugInfo describes policy debug info
 type PolicyDebugInfo struct {
-	IfaceName  string   `json:"ifacename"`
-	TcHook     string   `json:"tchook"`
-	PolicyInfo []string `json:"policyInfo"`
+	IfaceName  string    `json:"ifacename"`
+	Hook       string    `json:"hook"`
+	PolicyInfo asm.Insns `json:"policyInfo"`
 }
 
 const (

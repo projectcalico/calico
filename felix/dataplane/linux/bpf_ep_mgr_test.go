@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -92,7 +93,7 @@ func (m *mockDataplane) ensureQdisc(iface string) error {
 	return nil
 }
 
-func (m *mockDataplane) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) ([]string, error) {
+func (m *mockDataplane) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) (asm.Insns, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.state[uint32(jumpMapFD)] = rules

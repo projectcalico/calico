@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -107,7 +108,7 @@ type bpfDataplane interface {
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) error
 	ensureBPFDevices() error
-	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) ([]string, error)
+	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) (asm.Insns, error)
 	removePolicyProgram(jumpMapFD bpf.MapFD) error
 	setAcceptLocal(iface string, val bool) error
 	setRPFilter(iface string, val int) error
@@ -965,11 +966,11 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	comments, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
+	insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
 	if err != nil {
 		return err
 	}
-	err = writePolicyDebugInfo(comments, ap.Iface, ap.Hook)
+	err = writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
 	if err != nil {
 		log.Debugf("error writing policy debug information %s", err)
 	}
@@ -1031,11 +1032,11 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 			ForHostInterface: true,
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
-		comments, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
+		insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
 		if err != nil {
 			return err
 		}
-		err = writePolicyDebugInfo(comments, ap.Iface, ap.Hook)
+		err = writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
 		if err != nil {
 			log.Debugf("error writing policy debug info %s", err)
 		}
@@ -1671,10 +1672,7 @@ func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
 	os.Remove(filename)
 }
 
-func writePolicyDebugInfo(comments []string, ifaceName string, tcHook tc.Hook) error {
-	if comments == nil {
-		return nil
-	}
+func writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook) error {
 	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
 		return err
 	}
@@ -1685,23 +1683,26 @@ func writePolicyDebugInfo(comments []string, ifaceName string, tcHook tc.Hook) e
 	}
 	var policyDebugInfo = bpf.PolicyDebugInfo{
 		IfaceName:  ifaceName,
-		TcHook:     string(tcHook),
-		PolicyInfo: comments,
+		Hook:       "tc " + string(tcHook),
+		PolicyInfo: insns,
 	}
 
 	filename := bpf.PolicyDebugJSONFileName(ifaceName, polDir)
-	bytesToWrite, err := json.Marshal(policyDebugInfo)
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(policyDebugInfo)
 	if err != nil {
 		return err
 	}
 
-	if err := ioutil.WriteFile(filename, bytesToWrite, 0600); err != nil {
+	if err := ioutil.WriteFile(filename, buffer.Bytes(), 0600); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) ([]string, error) {
+func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) (asm.Insns, error) {
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD)
 	insns, err := pg.Instructions(rules, m.bpfPolicyDebugEnabled)
 	if err != nil {
@@ -1711,7 +1712,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	if rules.ForXDP {
 		progType = unix.BPF_PROG_TYPE_XDP
 	}
-	progFD, err := bpf.LoadBPFProgramFromInsns(*insns, "Apache-2.0", uint32(progType))
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", uint32(progType))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load BPF policy program: %w", err)
 	}
@@ -1729,7 +1730,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	if err != nil {
 		return nil, fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
 	}
-	return insns.Comments, nil
+	return insns, nil
 }
 
 func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD) error {

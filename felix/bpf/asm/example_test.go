@@ -43,7 +43,7 @@ func ExampleBlock() {
 	}
 
 	fmt.Println("Instructions:")
-	for _, i := range insns.Instructions {
+	for _, i := range insns {
 		fmt.Println(i)
 	}
 
@@ -97,7 +97,7 @@ func ExampleBlock_Call() {
 	}
 
 	fmt.Println("Instructions:")
-	for _, i := range insns.Instructions {
+	for _, i := range insns {
 		fmt.Println(i)
 	}
 

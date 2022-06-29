@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/projectcalico/calico/felix/bpf"
 
@@ -75,17 +76,24 @@ func dumpPolicyInfo(iface, hook string) error {
 	if err != nil {
 		return err
 	}
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	err = json.Unmarshal(byteValue, &policyDbg)
-	if err != nil {
-		return err
-	}
 
-	b, err := json.MarshalIndent(policyDbg, "", "  ")
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+	dec := json.NewDecoder(strings.NewReader(string(byteValue)))
+	err = dec.Decode(&policyDbg)
 	if err != nil {
 		return err
 	}
-	fmt.Print(string(b))
+	fmt.Printf("IfaceName: %s\n", policyDbg.IfaceName)
+	fmt.Printf("Hook: %s\n", policyDbg.Hook)
+	for _, insn := range policyDbg.PolicyInfo {
+		for _, label := range insn.Labels {
+			fmt.Printf("%s:\n", label)
+		}
+		for _, comment := range insn.Comments {
+			fmt.Printf("\t// %s\n", comment)
+		}
+		fmt.Printf("\t%v\n", insn.Instruction)
+	}
 
 	return nil
 }
