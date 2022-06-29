@@ -1132,6 +1132,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.BPFMapSizeIfState != nil {
+		in, out := &in.BPFMapSizeIfState, &out.BPFMapSizeIfState
+		*out = new(int)
+		**out = **in
+	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges
 		*out = new(RouteTableRanges)

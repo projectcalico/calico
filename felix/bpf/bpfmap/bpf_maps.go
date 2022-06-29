@@ -26,13 +26,23 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
 
-func CreateBPFMapContext(ipsetsMapSize, natFEMapSize, natBEMapSize, natAffMapSize, routeMapSize, ctMapSize int, repinEnabled bool) *bpf.MapContext {
+func CreateBPFMapContext(
+	ipsetsMapSize,
+	natFEMapSize,
+	natBEMapSize,
+	natAffMapSize,
+	routeMapSize,
+	ctMapSize,
+	ifstateSize int,
+	repinEnabled bool,
+) *bpf.MapContext {
 	bpfMapContext := &bpf.MapContext{
 		RepinningEnabled: repinEnabled,
 		MapSizes:         map[string]uint32{},
@@ -49,6 +59,7 @@ func CreateBPFMapContext(ipsetsMapSize, natFEMapSize, natBEMapSize, natAffMapSiz
 	bpfMapContext.MapSizes[failsafes.MapParams.VersionedName()] = uint32(failsafes.MapParams.MaxEntries)
 	bpfMapContext.MapSizes[nat.SendRecvMsgMapParameters.VersionedName()] = uint32(nat.SendRecvMsgMapParameters.MaxEntries)
 	bpfMapContext.MapSizes[nat.CTNATsMapParameters.VersionedName()] = uint32(nat.CTNATsMapParameters.MaxEntries)
+	bpfMapContext.MapSizes[ifstate.MapParams.VersionedName()] = uint32(ifstateSize)
 
 	return bpfMapContext
 }
@@ -105,6 +116,9 @@ func CreateBPFMaps(mc *bpf.MapContext) error {
 
 	mc.CtNatsMap = nat.AllNATsMsgMap(mc)
 	maps = append(maps, mc.CtNatsMap)
+
+	mc.IfStateMap = ifstate.Map(mc)
+	maps = append(maps, mc.IfStateMap)
 
 	for _, bpfMap := range maps {
 		err := bpfMap.EnsureExists()
