@@ -106,7 +106,7 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetCaption(true, fmt.Sprintf("%s counters.", iface))
+	table.SetCaption(true, fmt.Sprintf("dumped %s counters.", iface))
 	table.SetHeader([]string{"CATEGORY", "TYPE", "INGRESS", "EGRESS"})
 	genRow := func(category, caption string, ingress, egress uint32) []string {
 		return []string{
