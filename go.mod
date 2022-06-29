@@ -295,6 +295,11 @@ replace (
 	github.com/projectcalico/api => ./api
 	github.com/prometheus/common => github.com/prometheus/common v0.26.0
 
+	// Pick up fix for netlink unsafe pointer bug, which hasn't merged upstream yet.
+	// https://github.com/vishvananda/netlink/issues/780
+	// https://github.com/vishvananda/netlink/issues/781
+	github.com/vishvananda/netlink => github.com/fasaxc/netlink v1.0.1-0.20220629103609-edfba9db9596
+
 	google.golang.org/grpc => google.golang.org/grpc v1.40.0
 	k8s.io/api => k8s.io/api v0.24.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.0
