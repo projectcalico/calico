@@ -39,7 +39,7 @@ import (
 type linkModel struct {
 	index int
 	state string
-	addrs set.Set
+	addrs set.Set[string]
 }
 
 type netlinkTest struct {
@@ -61,7 +61,7 @@ type netlinkTest struct {
 
 type addrState struct {
 	ifaceName string
-	addrs     set.Set
+	addrs     set.Set[string]
 }
 
 type linkUpdate struct {
@@ -90,7 +90,7 @@ func (nl *netlinkTest) addLinkNoSignal(name string) {
 	nl.links[name] = linkModel{
 		index: nl.nextIndex,
 		state: "down",
-		addrs: set.New(),
+		addrs: set.New[string](),
 	}
 	nl.nextIndex++
 	nl.linksMutex.Unlock()
@@ -264,8 +264,7 @@ func (nl *netlinkTest) ListLocalRoutes(link netlink.Link, family int) ([]netlink
 	model, prs := nl.links[name]
 	var routes []netlink.Route
 	if prs {
-		model.addrs.Iter(func(item interface{}) error {
-			addr := item.(string)
+		model.addrs.Iter(func(addr string) error {
 			net, err := netlink.ParseIPNet(addr)
 			if err != nil {
 				panic("Address parsing failed")
@@ -298,8 +297,7 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 	model, prs := nl.links[name]
 	addrs := []netlink.Addr{}
 	if prs {
-		model.addrs.Iter(func(item interface{}) error {
-			addr := item.(string)
+		model.addrs.Iter(func(addr string) error {
 			net, err := netlink.ParseIPNet(addr)
 			if err != nil {
 				panic("Address parsing failed")
@@ -347,7 +345,7 @@ func (dp *mockDataplane) notExpectLinkStateCb() {
 	ConsistentlyWithOffset(1, dp.linkC, "50ms", "5ms").ShouldNot(Receive())
 }
 
-func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
+func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set[string]) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"addrs":     addrs,

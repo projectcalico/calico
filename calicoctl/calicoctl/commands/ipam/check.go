@@ -132,7 +132,7 @@ func NewIPAMChecker(k8sClient kubernetes.Interface,
 		allocationsByPod:  map[string][]*Allocation{},
 
 		inUseIPs:     map[string][]ownerRecord{},
-		inUseHandles: set.New(),
+		inUseHandles: set.New[string](),
 
 		k8sClient:     k8sClient,
 		v3Client:      v3Client,
@@ -152,7 +152,7 @@ type IPAMChecker struct {
 	allocationsByPod  map[string][]*Allocation
 	leakedHandles     []HandleInfo
 	inUseIPs          map[string][]ownerRecord
-	inUseHandles      set.Set
+	inUseHandles      set.Set[string]
 
 	clusterType         string
 	clusterInfoRevision string
@@ -403,8 +403,7 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 	var missingHandles []string
 	{
 		fmt.Printf("Scanning for IPs with missing handle...\n")
-		c.inUseHandles.Iter(func(item interface{}) error {
-			handleID := item.(string)
+		c.inUseHandles.Iter(func(handleID string) error {
 			if _, ok := handles[handleID]; ok {
 				return nil
 			}
