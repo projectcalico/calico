@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -64,6 +65,15 @@ func parseArgs(args []string) (string, string, error) {
 	return args[0], args[1], nil
 }
 
+func printInsn(insn asm.Insn) {
+	fmt.Printf("\t")
+	for _, value:= range insn.Instruction {
+		fmt.Printf("%02x", value)
+	}
+	fmt.Printf(" %v\n",insn)
+	//fmt.Println()
+}
+
 func dumpPolicyInfo(iface, hook string) error {
 	var policyDbg bpf.PolicyDebugInfo
 	filename := bpf.PolicyDebugJSONFileName(iface, hook)
@@ -85,6 +95,7 @@ func dumpPolicyInfo(iface, hook string) error {
 	}
 	fmt.Printf("IfaceName: %s\n", policyDbg.IfaceName)
 	fmt.Printf("Hook: %s\n", policyDbg.Hook)
+	fmt.Println("Policy Info:")
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, label := range insn.Labels {
 			fmt.Printf("%s:\n", label)
@@ -92,7 +103,7 @@ func dumpPolicyInfo(iface, hook string) error {
 		for _, comment := range insn.Comments {
 			fmt.Printf("\t// %s\n", comment)
 		}
-		fmt.Printf("\t%v\n", insn.Instruction)
+		printInsn(insn)
 	}
 
 	return nil

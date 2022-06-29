@@ -261,11 +261,13 @@ func (p *Builder) writeProgramHeader() {
 	p.b.AddImm64(R2, int32(offStateKey))
 	// Load map file descriptor into R1.
 	// clang uses a 64-bit load so copy that for now.
+	p.b.WriteComments("Load state map fd")
 	p.b.LoadMapFD(R1, uint32(p.stateMapFD)) // R1 = 0 (64-bit immediate)
 	p.b.Call(HelperMapLookupElem)           // Call helper
 	// Check return value for NULL.
 	p.b.JumpEqImm64(R0, 0, "exit")
 	// Save state pointer in R9.
+	p.b.WriteComments("Save state pointer in register R9")
 	p.b.Mov64(R9, R0)
 	p.b.LabelNextInsn("policy")
 }
