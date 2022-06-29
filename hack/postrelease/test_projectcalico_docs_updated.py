@@ -1,9 +1,7 @@
 import os
 from bs4 import BeautifulSoup
-
 import requests
-
-RELEASE_STREAM = os.environ.get("RELEASE_STREAM")
+from versions import RELEASE_STREAM
 
 
 def test_http_redirects_correctly():

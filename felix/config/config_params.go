@@ -354,8 +354,9 @@ type Config struct {
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
 	// RouteTableRange is deprecated in favor of RouteTableRanges,
-	RouteTableRange  idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
-	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
+	RouteTableRange   idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
+	RouteTableRanges  []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
+	RouteSyncDisabled bool                 `config:"bool;false"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
