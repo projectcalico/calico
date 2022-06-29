@@ -67,10 +67,10 @@ func parseArgs(args []string) (string, string, error) {
 
 func printInsn(insn asm.Insn) {
 	fmt.Printf("\t")
-	for _, value:= range insn.Instruction {
+	for _, value := range insn.Instruction {
 		fmt.Printf("%02x", value)
 	}
-	fmt.Printf(" %v\n",insn)
+	fmt.Printf(" %v\n", insn)
 	//fmt.Println()
 }
 
