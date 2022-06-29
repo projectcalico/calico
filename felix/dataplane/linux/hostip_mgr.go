@@ -29,7 +29,7 @@ import (
 type hostIPManager struct {
 	nonHostIfacesRegexp *regexp.Regexp
 	// hostIfaceToAddrs maps host interface name to the set of IPs on that interface (reported from the dataplane).
-	hostIfaceToAddrs map[string]set.Set
+	hostIfaceToAddrs map[string]set.Set[string]
 
 	hostIPSetID     string
 	ipsetsDataplane common.IPSetsDataplane
@@ -59,7 +59,7 @@ func newHostIPManagerWithShims(wlIfacesPrefixes []string,
 
 	return &hostIPManager{
 		nonHostIfacesRegexp: wlIfacesRegexp,
-		hostIfaceToAddrs:    map[string]set.Set{},
+		hostIfaceToAddrs:    map[string]set.Set[string]{},
 		hostIPSetID:         ipSetID,
 		ipsetsDataplane:     ipsets,
 		maxSize:             maxIPSetSize,
@@ -69,8 +69,7 @@ func newHostIPManagerWithShims(wlIfacesPrefixes []string,
 func (m *hostIPManager) getCurrentMembers() []string {
 	members := []string{}
 	for _, addrs := range m.hostIfaceToAddrs {
-		addrs.Iter(func(item interface{}) error {
-			ip := item.(string)
+		addrs.Iter(func(ip string) error {
 			members = append(members, ip)
 			return nil
 		})

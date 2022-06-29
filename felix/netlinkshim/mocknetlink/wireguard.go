@@ -220,7 +220,7 @@ func (d *MockNetlinkDataplane) ConfigureDevice(name string, cfg wgtypes.Config) 
 
 			// Construct the set of allowed IPs and then transfer to the slice for storage. We sort these so our tests
 			// can be deterministic.
-			allowedIPs := set.New()
+			allowedIPs := set.New[string]()
 			if !peerCfg.ReplaceAllowedIPs {
 				for _, ipnet := range peer.AllowedIPs {
 					allowedIPs.Add(ipnet.String())
@@ -233,8 +233,8 @@ func (d *MockNetlinkDataplane) ConfigureDevice(name string, cfg wgtypes.Config) 
 			}
 
 			var allowedIPStr []string
-			allowedIPs.Iter(func(item interface{}) error {
-				allowedIPStr = append(allowedIPStr, item.(string))
+			allowedIPs.Iter(func(allowedIP string) error {
+				allowedIPStr = append(allowedIPStr, allowedIP)
 				return nil
 			})
 			sort.Strings(allowedIPStr)

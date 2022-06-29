@@ -21,25 +21,37 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func New[T comparable]() Typed[T] {
-	return make(Typed[T])
+// NewBoxed creates a new "boxed" Set, where the items stored in the set are boxed inside an interface.  The values
+// placed into the set must be comparable (i.e. suitable for use as a map key).  This is checked at runtime and the
+// code will panic on trying to add a non-comparable entry.
+//
+// This implementation exists because Go's generics currently have a gap.  The type set of the "comparable"
+// constraint currently doesn't include interface types, which under Go's normal rules _are_ comparable (but may
+// panic at runtime if the interface happens to contain a non-comparable object).  If possible use a typed map
+// via New() or From(); use this if you really need a Set[any] or Set[SomeInterface].
+func NewBoxed[T any]() Boxed[T] {
+	return make(Boxed[T])
 }
 
-func From[T comparable](members ...T) Typed[T] {
-	s := New[T]()
+func FromBoxed[T any](members ...T) Boxed[T] {
+	s := NewBoxed[T]()
 	s.AddAll(members)
 	return s
 }
 
-func FromArray[T comparable](membersArray []T) Typed[T] {
-	s := New[T]()
+func FromArrayBoxed[T any](membersArray []T) Boxed[T] {
+	s := NewBoxed[T]()
 	s.AddAll(membersArray)
 	return s
 }
 
-type Typed[T comparable] map[T]v
+func Empty[T any]() Set[T] {
+	return (Boxed[T])(nil)
+}
 
-func (set Typed[T]) String() string {
+type Boxed[T any] map[any]v
+
+func (set Boxed[T]) String() string {
 	var buf bytes.Buffer
 	_, _ = buf.WriteString("set.Set{")
 	first := true
@@ -56,46 +68,47 @@ func (set Typed[T]) String() string {
 	return buf.String()
 }
 
-func (set Typed[T]) Len() int {
+func (set Boxed[T]) Len() int {
 	return len(set)
 }
 
-func (set Typed[T]) Add(item T) {
+func (set Boxed[T]) Add(item T) {
 	set[item] = emptyValue
 }
 
-func (set Typed[T]) AddAll(itemArray []T) {
+func (set Boxed[T]) AddAll(itemArray []T) {
 	for _, v := range itemArray {
 		set.Add(v)
 	}
 }
 
 // AddSet adds the contents of set "other" into the set.
-func (set Typed[T]) AddSet(other Set[T]) {
+func (set Boxed[T]) AddSet(other Set[T]) {
 	other.Iter(func(item T) error {
 		set.Add(item)
 		return nil
 	})
 }
 
-func (set Typed[T]) Discard(item T) {
+func (set Boxed[T]) Discard(item T) {
 	delete(set, item)
 }
 
-func (set Typed[T]) Clear() {
+func (set Boxed[T]) Clear() {
 	for item := range set {
 		delete(set, item)
 	}
 }
 
-func (set Typed[T]) Contains(item T) bool {
+func (set Boxed[T]) Contains(item T) bool {
 	_, present := set[item]
 	return present
 }
 
-func (set Typed[T]) Iter(visitor func(item T) error) {
+func (set Boxed[T]) Iter(visitor func(item T) error) {
 loop:
 	for item := range set {
+		item := item.(T)
 		err := visitor(item)
 		switch err {
 		case StopIteration:
@@ -110,26 +123,29 @@ loop:
 	}
 }
 
-func (set Typed[T]) Copy() Set[T] {
-	cpy := New[T]()
+func (set Boxed[T]) Copy() Set[T] {
+	cpy := NewBoxed[T]()
 	for item := range set {
+		item := item.(T)
 		cpy.Add(item)
 	}
 	return cpy
 }
 
-func (set Typed[T]) Slice() (s []T) {
+func (set Boxed[T]) Slice() (s []T) {
 	for item := range set {
+		item := item.(T)
 		s = append(s, item)
 	}
 	return
 }
 
-func (set Typed[T]) Equals(other Set[T]) bool {
+func (set Boxed[T]) Equals(other Set[T]) bool {
 	if set.Len() != other.Len() {
 		return false
 	}
 	for item := range set {
+		item := item.(T)
 		if !other.Contains(item) {
 			return false
 		}
@@ -137,7 +153,7 @@ func (set Typed[T]) Equals(other Set[T]) bool {
 	return true
 }
 
-func (set Typed[T]) ContainsAll(other Set[T]) bool {
+func (set Boxed[T]) ContainsAll(other Set[T]) bool {
 	result := true
 	other.Iter(func(item T) error {
 		if !set.Contains(item) {
