@@ -563,9 +563,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		tc.CleanUpProgramsAndPins()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, func(neededIPSets set.Set) {
-			ipSetsV4.SetFilter(neededIPSets)
-		}))
+		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4,
+			func(neededIPSets set.Set[string]) {
+				ipSetsV4.SetFilter(neededIPSets)
+			}))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -1197,7 +1198,7 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 
 // onIfaceAddrsChange is our interface address monitor callback.  It gets called
 // from the monitor's thread.
-func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) {
+func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[string]) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
@@ -1210,7 +1211,7 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) 
 
 type ifaceAddrsUpdate struct {
 	Name  string
-	Addrs set.Set
+	Addrs set.Set[string]
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {

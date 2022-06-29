@@ -50,7 +50,7 @@ type RouteRules struct {
 	IPVersion int
 
 	// Routing table indexes which is exclusively managed by us.
-	tableIndexSet set.Set
+	tableIndexSet set.Set[int]
 
 	netlinkFamily  int
 	netlinkTimeout time.Duration
@@ -72,7 +72,7 @@ type RouteRules struct {
 	matchForRemove RulesMatchFunc
 
 	// activeRules holds rules which should be programmed.
-	activeRules set.Set
+	activeRules set.Set[*Rule] // FIXME Seems odd to have a set of pointers?
 	inSync      bool
 
 	// Testing shims, swapped with mock versions for UT
@@ -83,7 +83,7 @@ type RouteRules struct {
 
 func New(
 	ipVersion int,
-	tableIndexSet set.Set,
+	tableIndexSet set.Set[int],
 	updateFunc RulesMatchFunc,
 	removeFunc RulesMatchFunc,
 	netlinkTimeout time.Duration,
@@ -95,8 +95,7 @@ func New(
 	}
 
 	indexOK := true
-	tableIndexSet.Iter(func(item interface{}) error {
-		i := item.(int)
+	tableIndexSet.Iter(func(i int) error {
 		if (i == 0) ||
 			int64(i) >= int64(linuxRTTableMax) ||
 			i == unix.RT_TABLE_DEFAULT ||
@@ -120,7 +119,7 @@ func New(
 		matchForUpdate:   updateFunc,
 		matchForRemove:   removeFunc,
 		tableIndexSet:    tableIndexSet,
-		activeRules:      set.New(),
+		activeRules:      set.New[*Rule](),
 		netlinkFamily:    ipVersionToNetlinkFamily(ipVersion),
 		newNetlinkHandle: newNetlinkHandle,
 		netlinkTimeout:   netlinkTimeout,
@@ -132,8 +131,7 @@ func New(
 // Return nil if no active Rule exists.
 func (r *RouteRules) getActiveRule(rule *Rule, f RulesMatchFunc) *Rule {
 	var active *Rule
-	r.activeRules.Iter(func(item interface{}) error {
-		p := item.(*Rule)
+	r.activeRules.Iter(func(p *Rule) error {
 		if f(p, rule) {
 			active = p
 			return set.StopIteration
@@ -221,8 +219,7 @@ func (r *RouteRules) closeNetlinkHandle() {
 
 func (r *RouteRules) PrintCurrentRules() {
 	log.WithField("count", r.activeRules.Len()).Info("summary of active rules")
-	r.activeRules.Iter(func(item interface{}) error {
-		p := item.(*Rule)
+	r.activeRules.Iter(func(p *Rule) error {
 		p.LogCxt().Info("active rule")
 		return nil
 	})
@@ -257,7 +254,7 @@ func (r *RouteRules) Apply() error {
 
 	// Work out two sets, rules to add and rules to remove.
 	toAdd := r.activeRules.Copy()
-	toRemove := set.New()
+	toRemove := set.New[*Rule]()
 	for _, nlRule := range nlRules {
 		// Give each loop a fresh copy of nlRule since we would need to use pointer later.
 		nlRule := nlRule
@@ -276,8 +273,7 @@ func (r *RouteRules) Apply() error {
 
 	updatesFailed := false
 
-	toRemove.Iter(func(item interface{}) error {
-		rule := item.(*Rule)
+	toRemove.Iter(func(rule *Rule) error {
 		if err := nl.RuleDel(rule.nlRule); err != nil {
 			rule.LogCxt().WithError(err).Warnf("Failed to remove rule from dataplane.")
 			updatesFailed = true
@@ -287,8 +283,7 @@ func (r *RouteRules) Apply() error {
 		return nil
 	})
 
-	toAdd.Iter(func(item interface{}) error {
-		rule := item.(*Rule)
+	toAdd.Iter(func(rule *Rule) error {
 		if err := nl.RuleAdd(rule.nlRule); err != nil {
 			rule.LogCxt().WithError(err).Warnf("Failed to add rule from dataplane.")
 			updatesFailed = true

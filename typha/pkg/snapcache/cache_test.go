@@ -15,18 +15,17 @@
 package snapcache_test
 
 import (
+	"context"
+	"fmt"
 	"strconv"
+	"sync"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
-
-	"context"
-	"fmt"
-	"sync"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -357,7 +356,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 	generateUpdates := func(num int) []api.Update {
 		var updates []api.Update
-		var seenKeys = set.New()
+		var seenKeys = set.New[string]()
 		for i := 0; i < num; i++ {
 			configIdx := i % 100
 			value := fmt.Sprintf("config%v", i%55)
@@ -604,7 +603,7 @@ func (f *follower) Loop(cxt context.Context) {
 			break
 		}
 		crumb = newCrumb
-		//logCxt.WithField("crumb", crumb.SequenceNumber).Info("Got next crumb")
+		// logCxt.WithField("crumb", crumb.SequenceNumber).Info("Got next crumb")
 		for _, upd := range crumb.Deltas {
 			f.storeKV(upd)
 		}

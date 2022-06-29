@@ -1044,7 +1044,7 @@ var _ = Describe("UT for node name determination", func() {
 
 var _ = Describe("UT for GenerateIPv6ULAPrefix", func() {
 	It("should generate a different address each time", func() {
-		seen := set.New()
+		seen := set.New[string]()
 		for i := 0; i < 100; i++ {
 			newAddr, err := GenerateIPv6ULAPrefix()
 			Expect(err).NotTo(HaveOccurred())

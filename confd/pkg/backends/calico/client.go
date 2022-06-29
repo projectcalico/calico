@@ -1093,7 +1093,7 @@ func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, ke
 		for _, prefixAdvertisement := range v3res.Spec.PrefixAdvertisements {
 			cidr := prefixAdvertisement.CIDR
 
-			communitiesSet := set.New()
+			communitiesSet := set.New[string]()
 			for _, c := range prefixAdvertisement.Communities {
 				isCommunity := isValidCommunity(c)
 				// if c is a community value, use it directly, else get the community value from defined definedCommunities.
@@ -1312,12 +1312,8 @@ func getNodeName(nodeName string) string {
 	return strings.TrimPrefix(nodeName, perNodeConfigNamePrefix)
 }
 
-func getCommunitiesArray(communitiesSet set.Set) []string {
-	var communityValue []string
-	communitiesSet.Iter(func(item interface{}) error {
-		communityValue = append(communityValue, item.(string))
-		return nil
-	})
+func getCommunitiesArray(communitiesSet set.Set[string]) []string {
+	communityValue := communitiesSet.Slice()
 	sort.Strings(communityValue)
 	return communityValue
 }

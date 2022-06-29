@@ -138,7 +138,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 	}
 
 	// Calculate what should be there as a whole, then, below, we'll remove items that are already there from this set.
-	netPolsToAdd := set.New()
+	netPolsToAdd := set.New[hcn.RemoteSubnetRoutePolicySetting]()
 	for dest, route := range m.routesByDest {
 		logrus.WithFields(logrus.Fields{
 			"node":  dest,
@@ -163,7 +163,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 	}
 
 	// Load what's actually there.
-	netPolsToRemove := set.New()
+	netPolsToRemove := set.New[hcn.RemoteSubnetRoutePolicySetting]()
 	for _, policy := range network.Policies {
 		if policy.Type == hcn.RemoteSubnetRoute {
 			existingPolSettings := hcn.RemoteSubnetRoutePolicySetting{}
@@ -208,8 +208,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 	}
 
 	// Remove routes that are no longer needed.
-	netPolsToRemove.Iter(func(item interface{}) error {
-		polSetting := item.(hcn.RemoteSubnetRoutePolicySetting)
+	netPolsToRemove.Iter(func(polSetting hcn.RemoteSubnetRoutePolicySetting) error {
 		polReq := wrapPolSettings(polSetting)
 		if polReq == nil {
 			return nil
@@ -223,8 +222,8 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 	})
 
 	// Add new routes.
-	netPolsToAdd.Iter(func(item interface{}) error {
-		polReq := wrapPolSettings(item.(hcn.RemoteSubnetRoutePolicySetting))
+	netPolsToAdd.Iter(func(item hcn.RemoteSubnetRoutePolicySetting) error {
+		polReq := wrapPolSettings(item)
 		if polReq == nil {
 			return nil
 		}
