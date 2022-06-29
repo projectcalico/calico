@@ -347,6 +347,29 @@ func (rg *routeGenerator) isAllowedLoadBalancerIP(loadBalancerIP string) bool {
 	return false
 }
 
+// isSingleLoadBalancerIP determines if the given IP is in the list of
+// whitelisted LoadBalancer CIDRs given in the default bgpconfiguration
+// and is a single IP entry (/32 for IPV4 or /128 for IPV6)
+func (rg *routeGenerator) isSingleLoadBalancerIP(loadBalancerIP string) bool {
+
+	ip := net.ParseIP(loadBalancerIP)
+	if ip == nil {
+		log.Errorf("Could not parse service LB IP: %s", loadBalancerIP)
+		return false
+	}
+
+	for _, allowedNet := range rg.client.GetLoadBalancerIPs() {
+		if allowedNet.Contains(ip) {
+			if ones, bits := allowedNet.Mask.Size(); ones == bits {
+				return true
+			}
+		}
+	}
+
+	// Guilty until proven innocent
+	return false
+}
+
 // addFullIPLength returns a new slice, with the full IP length appended onto every item.
 func addFullIPLength(items []string) []string {
 	res := make([]string, 0)
@@ -393,8 +416,16 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return false
 	}
 
-	// we only need to advertise local services for non-LoadBalancer service, since we advertise the entire cluster IP range.
-	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal && svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+	// we need to announce single IPs for services of type LoadBalancer and externalTrafficPolicy Cluster
+	if svc.Spec.Type == v1.ServiceTypeLoadBalancer && svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster {
+		if rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
+			logc.Debug("Advertising load balancer of type cluster because of single IP definition")
+			return true
+		}
+	}
+
+	// we only need to advertise local services, since we advertise the entire cluster IP range.
+	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
 		logc.Debugf("Skipping service with non-local external traffic policy '%s'", svc.Spec.ExternalTrafficPolicy)
 		return false
 	}
