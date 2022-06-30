@@ -869,20 +869,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	})
 }
 
-// applyPolicy actually applies the policy to the given workload.
-func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
+func (m *bpfEndpointManager) doApplyPolicy(ifaceName string, isReady *bool) error {
 	startTime := time.Now()
-	isReady := false
-
-	// Update the readiness state when exiting
-	defer func() {
-		m.ifacesLock.Lock()
-		m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
-			iface.dpState.isReady = isReady
-			return false // already dirty
-		})
-		m.ifacesLock.Unlock()
-	}()
+	*isReady = false
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
@@ -956,9 +945,25 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	log.WithFields(log.Fields{"timeTaken": applyTime, "ifaceName": ifaceName}).
 		Info("Finished applying BPF programs for workload")
 
-	isReady = true
+	*isReady = true
 
 	return nil
+}
+
+// applyPolicy actually applies the policy to the given workload.
+func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
+	isReady := false
+
+	err := m.doApplyPolicy(ifaceName, &isReady)
+
+	m.ifacesLock.Lock()
+	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+		iface.dpState.isReady = isReady
+		return false // already dirty
+	})
+	m.ifacesLock.Unlock()
+
+	return err
 }
 
 func isLinkNotFoundError(err error) bool {
