@@ -2182,7 +2182,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							if setAffinity {
 								// Sync with NAT tables to prevent creating extra entry when
-								// CTLB misses but regulat DNAT hits, but connection fails and
+								// CTLB misses but regular DNAT hits, but connection fails and
 								// then CTLB succeeds.
 								natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
 								Eventually(func() bool {
