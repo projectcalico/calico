@@ -486,7 +486,7 @@ current-context: calico-context`
 	if err != nil {
 		logrus.WithError(err).Fatal("Unable to create client for generating CNI token")
 	}
-	tr := cni.NewTokenRefresher(clientset, cni.NamespaceOfUsedServiceAccount(), cni.DefaultServiceAccountName)
+	tr := cni.NewTokenRefresher(clientset, cni.NamespaceOfUsedServiceAccount(), cni.CNIServiceAccountName())
 	tu, err := tr.UpdateToken()
 	if err != nil {
 		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
