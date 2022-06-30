@@ -802,14 +802,6 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			defer wg.Done()
 			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
-			if err != nil {
-				if isLinkNotFoundError(err) {
-					// Interface is gone, nothing to do.
-					log.WithField("ifaceName", ifaceName).Debug(
-						"Ignoring request to program interface that is not present.")
-					err = nil
-				}
-			}
 			mutex.Lock()
 			errs[ifaceName] = err
 			mutex.Unlock()
@@ -923,6 +915,12 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	// Attach the qdisc first; it is shared between the directions.
 	err := m.dp.ensureQdisc(ifaceName)
 	if err != nil {
+		if isLinkNotFoundError(err) {
+			// Interface is gone, nothing to do.
+			log.WithField("ifaceName", ifaceName).Debug(
+				"Ignoring request to program interface that is not present.")
+			return nil
+		}
 		return err
 	}
 
