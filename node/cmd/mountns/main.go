@@ -64,10 +64,18 @@ func main() {
 	}
 	mountPoint := os.Args[1]
 	fmt.Println("Trying to mount root cgroup fs.")
-	err := syscall.Mount("none", mountPoint, "cgroup2", 0, "")
+
+	err := os.MkdirAll(mountPoint, 0700)
 	if err != nil {
-		fmt.Printf("Failed to mount Cgroup filesystem. err: %v\n", err)
+		fmt.Printf("Failed to prepare mount point: %v. err: %v.\n", mountPoint, err)
 		os.Exit(1)
 	}
-	fmt.Println("Successfully mounted root cgroup fs.")
+	fmt.Printf("Mount point %s is ready for mounting root cgroup2 fs.\n", mountPoint)
+
+	err = syscall.Mount("none", mountPoint, "cgroup2", 0, "")
+	if err != nil {
+		fmt.Printf("Failed to mount cgroup2 filesystem. err: %v.\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("Successfully mounted root cgroup2 fs.")
 }
