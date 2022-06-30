@@ -870,7 +870,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					sort.Strings(filteredLines)
 					return strings.Join(filteredLines, "\n")
 				}
-				Eventually(dumpRoutes, "5s", "200ms").Should(Equal(expectedRoutes), dumpRoutes)
+				Eventually(dumpRoutes, "10s", "200ms").Should(Equal(expectedRoutes), dumpRoutes)
 			})
 
 			It("should only allow traffic from the local host by default", func() {
