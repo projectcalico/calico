@@ -217,7 +217,7 @@ func Run() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create in cluster client set")
 	}
-	tr := NewTokenRefresher(clientset, NamespaceOfUsedServiceAccount(), cniServiceAccountName())
+	tr := NewTokenRefresher(clientset, NamespaceOfUsedServiceAccount(), CNIServiceAccountName())
 	tokenChan := tr.TokenChan()
 	go tr.Run()
 
@@ -237,9 +237,9 @@ func Run() {
 	}
 }
 
-// cniServiceAccountName returns the name of the serviceaccount to use for the CNI plugin token request.
+// CNIServiceAccountName returns the name of the serviceaccount to use for the CNI plugin token request.
 // This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-node" otherwise.
-func cniServiceAccountName() string {
+func CNIServiceAccountName() string {
 	if sa := os.Getenv("CALICO_CNI_SERVICE_ACCOUNT"); sa != "" {
 		logrus.WithField("name", sa).Debug("Using service account from CALICO_CNI_SERVICE_ACCOUNT")
 		return sa

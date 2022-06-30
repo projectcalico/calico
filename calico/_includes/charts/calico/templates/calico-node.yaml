@@ -97,6 +97,14 @@ spec:
               name: kubernetes-services-endpoint
               optional: true
           env:
+{{- if eq .Values.network "flannel" }}
+            # Set the serviceaccount name to use for the Calico CNI plugin.
+            # We use canal-node instead of calico-node when using flannel networking.
+            - name: CALICO_CNI_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+{{- end }}
 {{- if .Values.bpf }}
             # Overrides for kubernetes API server host/port. Needed in BPF mode.
             - name: KUBERNETES_SERVICE_HOST
