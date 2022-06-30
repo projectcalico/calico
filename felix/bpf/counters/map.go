@@ -19,8 +19,8 @@ import "github.com/projectcalico/calico/felix/bpf"
 var MapParameters = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_counters",
 	Type:       "percpu_array",
-	KeySize:    4, // __u32
-	ValueSize:  uint32Size * MaxCounterNumber,
+	KeySize:    counterMapKeySize, // __u32
+	ValueSize:  counterMapValueSize * MaxCounterNumber,
 	MaxEntries: 1,
 	Name:       bpf.CountersMapName(),
 }

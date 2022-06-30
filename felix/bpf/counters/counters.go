@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	MaxCounterNumber int = 14
-	uint32Size       int = 4
+	MaxCounterNumber    int = 14
+	counterMapKeySize   int = 4
+	counterMapValueSize int = 8
 )
 
 // The following values are used as index to counters map, and should be kept in sync
@@ -199,7 +200,7 @@ func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 	}()
 
 	// k is the key to the counters map, and it is set to 0 since there is only one entry
-	k := make([]byte, uint32Size)
+	k := make([]byte, counterMapKeySize)
 	values, err := cMap.Get(k)
 	if err != nil {
 		return []uint32{}, fmt.Errorf("failed to read counters map. err=%w", err)
@@ -208,8 +209,8 @@ func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 	bpfCounters := make([]uint32, MaxCounterNumber)
 	for i := range bpfCounters {
 		for cpu := 0; cpu < c.numOfCpu; cpu++ {
-			begin := i*uint32Size + cpu*MaxCounterNumber*uint32Size
-			data := uint32(binary.LittleEndian.Uint32(values[begin : begin+uint32Size]))
+			begin := i*counterMapValueSize + cpu*MaxCounterNumber*counterMapValueSize
+			data := uint32(binary.LittleEndian.Uint32(values[begin : begin+counterMapValueSize]))
 			bpfCounters[i] += data
 		}
 	}
@@ -240,8 +241,8 @@ func (c *Counters) flush(cMap bpf.Map) error {
 	}()
 
 	// k is the key to the counters map, and it is set to 0 since there is only one entry
-	k := make([]byte, uint32Size)
-	v := make([]byte, uint32Size*MaxCounterNumber*c.numOfCpu)
+	k := make([]byte, counterMapKeySize)
+	v := make([]byte, counterMapValueSize*MaxCounterNumber*c.numOfCpu)
 	err = cMap.Update(k, v)
 	if err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)

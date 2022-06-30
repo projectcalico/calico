@@ -7,7 +7,7 @@
 
 #define MAX_COUNTERS_SIZE 14
 
-typedef __u32 counters_t[MAX_COUNTERS_SIZE];
+typedef __u64 counters_t[MAX_COUNTERS_SIZE];
 
 CALI_MAP(cali_counters, 1,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
