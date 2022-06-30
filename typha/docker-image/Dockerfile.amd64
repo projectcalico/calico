@@ -41,10 +41,11 @@ COPY --from=ubi /sbin/tini /sbin/tini
 COPY --from=ubi /licenses /licenses
 
 COPY --from=ubi /usr/include /usr/include
-COPY --from=ubi /lib64/ld-* /lib64/
-COPY --from=ubi /lib64/libc-* /lib64/
-COPY --from=ubi /lib64/libc.* /lib64/
-COPY --from=ubi /lib64/libpthread* /lib64/
+
+# lib dependencies for typha
+COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
+COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
+COPY --from=ubi /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the build artefacts from the container.

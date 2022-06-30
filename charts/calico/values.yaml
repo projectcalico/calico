@@ -23,6 +23,8 @@ csi-driver:
   image: docker.io/calico/csi-driver
 
 # Some defaults used in the templates.
+includeCRDs: true
+imagePullPolicy: IfNotPresent
 mtu: "1440"
 ipam: "calico-ipam"
 etcd:

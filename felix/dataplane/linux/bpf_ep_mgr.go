@@ -169,6 +169,7 @@ type bpfEndpointManager struct {
 	iptablesFilterTable iptablesTable
 
 	startupOnce      sync.Once
+	copyDeltaOnce    sync.Once
 	mapCleanupRunner *ratelimited.Runner
 
 	// onStillAlive is called from loops to reset the watchdog.
@@ -638,7 +639,10 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	}
 	bpfHappyEndpointsGauge.Set(float64(len(m.happyWEPs)))
 	// Copy data from old map to the new map
-	bpfmap.MigrateDataFromOldMap(m.bpfMapContext)
+	m.copyDeltaOnce.Do(func() {
+		log.Info("Copy delta entries from old map to the new map")
+		bpfmap.MigrateDataFromOldMap(m.bpfMapContext)
+	})
 	return nil
 }
 
@@ -738,7 +742,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	errs := map[string]error{}
 	var wg sync.WaitGroup
 
-	// Limit the number of parallel workers.  Without this, all the workers via for CPU and complete slowly.
+	// Limit the number of parallel workers.  Without this, all the workers vie for CPU and complete slowly.
 	// On a constrained system, we can end up taking too long and going non-ready.
 	maxWorkers := runtime.GOMAXPROCS(0)
 	sem := semaphore.NewWeighted(int64(maxWorkers))

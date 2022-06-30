@@ -18,8 +18,9 @@ RUN mkdir /tmp
 FROM scratch
 COPY  --from=ubi /code /code
 COPY  --from=ubi /tmp /tmp
-COPY  --from=ubi /lib /lib
-COPY  --from=ubi /lib64 /lib64
+# copies the shared linux libs requred by apiserver
+COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
+COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 
 ADD  bin/apiserver-arm64 /code/apiserver
 ADD  bin/filecheck-arm64 /code/filecheck

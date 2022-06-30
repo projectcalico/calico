@@ -395,7 +395,7 @@ There are two annotations to request a specific IP address:
    ```
 
 - `cni.projectcalico.org/ipAddrsNoIpam`: A list of IPv4 and/or IPv6 addresses to assign to the Pod, bypassing IPAM. Any IP conflicts and routing have to be taken care of manually or by some other system.
-{{site.prodname}} will only distribute routes to a Pod if its IP address falls within a {{site.prodname}} IP pool. If you assign an IP address that is not in a {{site.prodname}} IP pool, you must ensure that routing to that IP address is taken care of through another mechanism.
+{{site.prodname}} will only distribute routes to a Pod if its IP address falls within a {{site.prodname}} IP pool using BGP mode. Calico will not distribute ipAddrsNoIpam routes when operating in VXLAN mode. If you assign an IP address that is not in a {{site.prodname}} IP pool or if its IP address falls within a {{site.prodname}} IP pool that uses VXLAN encapsulation, you must ensure that routing to that IP address is taken care of through another mechanism.
 
   Example:
 

@@ -20,6 +20,24 @@ certs:
 
 resources: {}
 
+# Tolerations for the tigera/operator pod itself.
+# By default, will schedule on all possible place.
+tolerations:
+- effect: NoExecute
+  operator: Exists
+- effect: NoSchedule
+  operator: Exists
+
+# NodeSelector for the tigera/operator pod itself.
+nodeSelector:
+  kubernetes.io/os: linux
+
+# Custom annotations for the tigera/operator pod itself
+podAnnotations: {}
+
+# Custom labels for the tigera/operator pod itself
+podLabels: {}
+
 # Configuration for the tigera operator
 tigeraOperator:
   image: tigera/operator

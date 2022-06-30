@@ -15,14 +15,22 @@ spec:
       labels:
         name: tigera-operator
         k8s-app: tigera-operator
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
+      {{- with .Values.nodeSelector }}
       nodeSelector:
-        kubernetes.io/os: linux
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
       tolerations:
-        - effect: NoExecute
-          operator: Exists
-        - effect: NoSchedule
-          operator: Exists
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       serviceAccountName: tigera-operator
       hostNetwork: true
       # This must be set when hostNetwork is true or else the cluster services won't resolve

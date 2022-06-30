@@ -51,7 +51,7 @@ const (
 	// Master node Name.
 	masterNodeName = "node-1"
 
-	flannelDs = "kube-flannel-ds-amd64"
+	flannelDs = "kube-flannel-ds"
 
 	flannelSubnetEnv = "FLANNEL_NETWORK=192.168.0.0/16;FLANNEL_SUBNET=192.168.1.1/24;FLANNEL_MTU=8951;FLANNEL_IPMASQ=true;"
 )

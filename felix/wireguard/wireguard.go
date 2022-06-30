@@ -95,7 +95,7 @@ type nodeUpdateData struct {
 	cidrsAdded   set.Set
 	cidrsDeleted set.Set
 
-	// Only used for nodes.
+	// Only used for peers.
 	deleted          bool
 	ipv4EndpointAddr *ip.Addr
 	publicKey        *wgtypes.Key
@@ -131,13 +131,21 @@ type Wireguard struct {
 	ourPublicKey                       *wgtypes.Key
 	ourIPv4InterfaceAddr               ip.Addr
 	ourPublicKeyAgreesWithDataplaneMsg bool
+	ourHostAddr                        ip.Addr
 
-	// Local workload information
+	// Local route information. This contains the complete set of local routes: workloads, tunnels, hosts (for host
+	// encryption). This is always updated directly from the various update methods.
 	localIPs          set.Set
 	localCIDRs        set.Set
 	localCIDRsUpdated bool
 
-	// Current configuration
+	// CIDR to node mappings. This is always updated directly from the various update methods.
+	cidrToNodeName map[ip.CIDR]string
+
+	// Pending updates to apply to `nodes` and to the dataplane.
+	nodeUpdates map[string]*nodeUpdateData
+
+	// Current expected configuration for all nodes.
 	// - all nodeData information
 	// - mapping between CIDRs and nodeData
 	// - mapping between public key and nodes - this does not include the "zero" key, and will not include the local
@@ -145,19 +153,16 @@ type Wireguard struct {
 	nodes                map[string]*nodeData
 	publicKeyToNodeNames map[wgtypes.Key]set.Set
 
-	// Pending updates
-	nodeUpdates map[string]*nodeUpdateData
-
-	// CIDR to node mappings - this is updated synchronously.
-	cidrToNodeName map[ip.CIDR]string
-
 	// Wireguard routing table and rule managers
-	routetable *routetable.RouteTable
+	routetable routeTable
 	routerule  *routerule.RouteRules
 
 	// Callback function used to notify of public key updates for the local nodeData
 	statusCallback func(publicKey wgtypes.Key) error
 	opRecorder     logutils.OpRecorder
+
+	// The write proc sys function.
+	writeProcSys func(path, value string) error
 }
 
 func New(
@@ -179,6 +184,7 @@ func New(
 		timeshim.RealTime(),
 		deviceRouteProtocol,
 		statusCallback,
+		writeProcSys,
 		opRecorder,
 	)
 }
@@ -195,24 +201,34 @@ func NewWithShims(
 	timeShim timeshim.Interface,
 	deviceRouteProtocol netlink.RouteProtocol,
 	statusCallback func(publicKey wgtypes.Key) error,
+	writeProcSys func(path, value string) error,
 	opRecorder logutils.OpRecorder,
 ) *Wireguard {
+
+	var rt routeTable
+	if !config.RouteSyncDisabled {
+		log.Debug("RouteSyncDisabled is false.")
+		rt = routetable.NewWithShims(
+			[]string{"^" + config.InterfaceName + "$", routetable.InterfaceNone},
+			ipVersion,
+			newRoutetableNetlink,
+			false, // vxlan
+			netlinkTimeout,
+			func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
+			&noOpConnTrack{},
+			timeShim,
+			nil, // deviceRouteSourceAddress
+			deviceRouteProtocol,
+			true, // removeExternalRoutes
+			config.RoutingTableIndex,
+			opRecorder,
+		)
+	} else {
+		log.Info("RouteSyncDisabled is true, using DummyTable.")
+		rt = &routetable.DummyTable{}
+	}
 	// Create routetable. We provide dummy callbacks for ARP and conntrack processing.
-	rt := routetable.NewWithShims(
-		[]string{"^" + config.InterfaceName + "$", routetable.InterfaceNone},
-		ipVersion,
-		newRoutetableNetlink,
-		false, // vxlan
-		netlinkTimeout,
-		func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
-		&noOpConnTrack{},
-		timeShim,
-		nil, // deviceRouteSourceAddress
-		deviceRouteProtocol,
-		true, // removeExternalRoutes
-		config.RoutingTableIndex,
-		opRecorder,
-	)
+
 	// Create routerule.
 	rr, err := routerule.New(
 		ipVersion,
@@ -245,6 +261,7 @@ func NewWithShims(
 		statusCallback:       statusCallback,
 		localIPs:             set.New(),
 		localCIDRs:           set.New(),
+		writeProcSys:         writeProcSys,
 		opRecorder:           opRecorder,
 	}
 }
@@ -271,6 +288,7 @@ func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Sta
 	w.routetable.OnIfaceStateChanged(ifaceName, state)
 }
 
+// EndpointUpdate is called when a wireguard endpoint (a node) is updated. This controls which peers to configure.
 func (w *Wireguard) EndpointUpdate(name string, ipv4Addr ip.Addr) {
 	logCxt := log.WithFields(log.Fields{"name": name, "ipv4Addr": ipv4Addr})
 	logCxt.Debug("EndpointUpdate")
@@ -278,7 +296,19 @@ func (w *Wireguard) EndpointUpdate(name string, ipv4Addr ip.Addr) {
 		logCxt.Debug("Not enabled - ignoring")
 		return
 	} else if name == w.hostname {
-		// We don't need our own IP address, just interested in the nodes.
+		// This is the IP of the local host.
+		w.ourHostAddr = ipv4Addr
+		logCxt.Debug("Storing local host IP")
+
+		// Host encryption is enabled *and* there is no interface IP specified set the interface IP to be the same as
+		// the node IP. An update from EndpointWireguardUpdate may overwrite this.
+		if w.config.EncryptHostTraffic && w.ourIPv4InterfaceAddr == nil {
+			logCxt.Debug("Use node IP as wireguard device IP for host encryption when no tunnel address specified")
+			w.ourIPv4InterfaceAddr = ipv4Addr
+			w.inSyncInterfaceAddr = false
+		}
+
+		// We don't treat this as a peer update, so nothing else to do here.
 		return
 	}
 
@@ -290,9 +320,11 @@ func (w *Wireguard) EndpointUpdate(name string, ipv4Addr ip.Addr) {
 		logCxt.Debug("Update contains new IPv4 address")
 		update.ipv4EndpointAddr = &ipv4Addr
 	}
+	update.deleted = false
 	w.setNodeUpdate(name, update)
 }
 
+// EndpointRemove is called when a wireguard endpoint (a node) is removed. This controls which peers to configure.
 func (w *Wireguard) EndpointRemove(name string) {
 	logCxt := log.WithField("name", name)
 	logCxt.Debug("EndpointRemove")
@@ -304,21 +336,14 @@ func (w *Wireguard) EndpointRemove(name string) {
 		return
 	}
 
-	if _, ok := w.nodes[name]; ok {
-		// Node data exists, so store a blank update with a deleted flag. The delete will be applied first, and then any
-		// subsequent updates. There is no need to remove the pending CIDR to node mappings since the route resolver
-		// provides self consistent route updates (i.e. we will get route removes or updates for these CIDRs).
-		logCxt.Debug("Existing node is flagged for removal")
-		nu := newNodeUpdateData()
-		nu.deleted = true
-		w.setNodeUpdate(name, nu)
-	} else {
-		// Node data is not yet programmed so just delete the pending update.
-		logCxt.Debug("Node removed which has not yet been programmed - remove any pending update")
-		delete(w.nodeUpdates, name)
-	}
+	update := w.getOrInitNodeUpdateData(name)
+	update.deleted = true
+	update.ipv4EndpointAddr = nil
+	w.setNodeUpdate(name, update)
 }
 
+// RouteUpdate is called when a route is updated. This controls the wireguard peer allowed IPs. It includes pod and
+// tunnel addresses, and for host encryption will include the host addresses.
 func (w *Wireguard) RouteUpdate(name string, cidr ip.CIDR) {
 	logCxt := log.WithFields(log.Fields{"name": name, "cidr": cidr})
 	logCxt.Debug("RouteUpdate")
@@ -348,6 +373,8 @@ func (w *Wireguard) RouteUpdate(name string, cidr ip.CIDR) {
 	}
 }
 
+// RouteRemove is called when a route is removed. This controls the wireguard peer allowed IPs. It includes pod and
+// tunnel addresses, and for host encryption will include the host addresses.
 func (w *Wireguard) RouteRemove(cidr ip.CIDR) {
 	logCxt := log.WithField("cidr", cidr)
 	logCxt.Debug("RouteRemove")
@@ -356,7 +383,7 @@ func (w *Wireguard) RouteRemove(cidr ip.CIDR) {
 		return
 	}
 
-	// Determine which node this CIDR belongs to. Check the updates first and then the processed.
+	// Determine which node this CIDR belongs to.
 	name, ok := w.cidrToNodeName[cidr]
 	if !ok {
 		// The wireguard manager filters out some of the CIDR updates, but not the removes, so it's possible to get
@@ -475,6 +502,8 @@ func (w *Wireguard) peerAllowedCIDRRemove(name string, cidr ip.CIDR) {
 	w.setNodeUpdate(name, update)
 }
 
+// EndpointWireguardUpdate is called when the wireguard configuration for an endpoint (a node) is updated. This controls
+// the local wireguard interface address and public key, and the peer public keys.
 func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, ipv4InterfaceAddr ip.Addr) {
 	logCxt := log.WithFields(log.Fields{"node": name, "publicKey": publicKey, "ipv4InterfaceAddr": ipv4InterfaceAddr})
 	logCxt.Debug("EndpointWireguardUpdate")
@@ -489,7 +518,16 @@ func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, 
 			// Public key does not match that stored. Flag as not in-sync, we will update the value from the dataplane
 			// and publish.
 			logCxt.Debug("Stored public key does not match key queried from dataplane")
-			w.ourPublicKeyAgreesWithDataplaneMsg = false
+			w.ourPublicKey = &publicKey
+			w.inSyncWireguard = false
+		}
+
+		if ipv4InterfaceAddr == nil && w.config.EncryptHostTraffic && w.ourHostAddr != nil {
+			// If there is no interface address configured and we are encrypting host traffic, use the host IP as the
+			// interface address.
+			logCxt = log.WithField("ipv4InterfaceAddr", w.ourHostAddr)
+			logCxt.Debug("Use node IP as wireguard device IP for host encryption without IPPools")
+			ipv4InterfaceAddr = w.ourHostAddr
 		}
 		if w.ourIPv4InterfaceAddr != ipv4InterfaceAddr {
 			logCxt.Debug("Local interface addr updated")
@@ -514,6 +552,8 @@ func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, 
 	w.setNodeUpdate(name, update)
 }
 
+// EndpointWireguardRemove is called when the wireguard configuration for an endpoint (a node) is removed. This
+// controls the local wireguard interface address and public key, and the peer public keys.
 func (w *Wireguard) EndpointWireguardRemove(name string) {
 	logCxt := log.WithField("node", name)
 	logCxt.Debug("EndpointWireguardRemove")
@@ -622,9 +662,8 @@ func (w *Wireguard) Apply() (err error) {
 	// 3. Update of route table routes.
 	// 4. Construction of wireguard delta (if performing deltas, or re-sync of wireguard configuration)
 	// 5. Simultaneous updates of wireguard and routes.
-	var conflictingKeys = set.New()
-	wireguardPeerDelete := w.handlePeerAndRouteDeletionFromNodeUpdates(conflictingKeys)
-	w.updateCacheFromNodeUpdates(conflictingKeys)
+	wireguardPeerDelete := w.prepareWireguardPeerDeletion()
+	conflictingKeys := w.updateCacheFromNodeUpdates()
 	w.updateRouteTableFromNodeUpdates()
 
 	defer func() {
@@ -640,6 +679,12 @@ func (w *Wireguard) Apply() (err error) {
 				} else {
 					log.WithField("node", name).Debug("Flag node as not programmed")
 					node.programmedInWireguard = false
+				}
+
+				// Delete any nodes from the cache that no longer have any wireguard or routing configuration.
+				if node.ipv4EndpointAddr == nil && node.cidrs.Len() == 0 && node.publicKey == zeroKey {
+					log.WithField("node", name).Debug("Delete node configuration")
+					delete(w.nodes, name)
 				}
 			}
 		}
@@ -874,13 +919,19 @@ func (w *Wireguard) getLocalNodeCIDRUpdates() *nodeUpdateData {
 	return nodeUpdate
 }
 
-// handlePeerAndRouteDeletionFromNodeUpdates handles wireguard peer deletion preparation:
-// -  Updates routing table to remove routes for permantently deleted nodes
-// -  Creates a wireguard config update for deleted nodes, or for nodes whose public key has changed (which for
-//    wireguard is effectively a different peer)
+// prepareWireguardPeerDeletion handles wireguard peer deletion. It creates a wireguard config update for deleted nodes,
+// or for nodes whose public key has changed (which for wireguard is effectively a different peer). It also updates the
+// nodes to indicate that wireguard is not programmed.
 //
 // This method does not perform any dataplane updates.
-func (w *Wireguard) handlePeerAndRouteDeletionFromNodeUpdates(conflictingKeys set.Set) *wgtypes.Config {
+func (w *Wireguard) prepareWireguardPeerDeletion() *wgtypes.Config {
+	if !w.inSyncWireguard {
+		// Wireguard is not in-sync. We don't bother constructing a delete from the deltas because we'll just handle
+		// any deltas during the re-sync.
+		log.Debug("Wireguard is not in-sync")
+		return nil
+	}
+
 	var wireguardPeerDelete wgtypes.Config
 	for name, update := range w.nodeUpdates {
 		// Get existing peer configuration. If peer not seen before then no deletion processing is required.
@@ -892,56 +943,28 @@ func (w *Wireguard) handlePeerAndRouteDeletionFromNodeUpdates(conflictingKeys se
 			continue
 		}
 
-		if update.deleted {
-			// Node is deleted, so remove the node configuration and the associated routes.
-			logCxt.Info("Node is deleted, remove associated routes and wireguard peer")
-			delete(w.nodes, name)
-
-			// Delete all of the node routes for the nodeData and remove CIDR->node association. Note that we always
-			// update the routing table routes using delta updates even during a full resync. The routetable component
-			// takes care of its own kernel-cache synchronization.
-			node.cidrs.Iter(func(item interface{}) error {
-				cidr := item.(ip.CIDR)
-				w.routetable.RouteRemove(w.config.InterfaceName, cidr)
-				delete(w.cidrToNodeName, cidr)
-				logCxt.WithField("cidr", cidr).Debug("Deleting route")
-				return nil
-			})
-		} else if update.publicKey == nil || *update.publicKey == node.publicKey {
-			// It's not a delete, and the public key hasn't changed so no key deletion processing required.
-			logCxt.Debug("Node updated, but public key is the same - no wireguard peer deletion required")
+		if !node.programmedInWireguard {
+			// The node is not programmed in wireguard, so no need to delete the node.
+			logCxt.Debug("Node had no public key assigned")
 			continue
-		}
-
-		if node.publicKey == zeroKey {
-			// The node did not have a key assigned, so no peer tidy-up required.
-			logCxt.Debug("Node had no public key assigned - no deletion of wireguard peer necessary")
-			continue
-		}
-
-		// If we aren't doing a full re-sync then delete the associated peer if it was previously configured.
-		if node.programmedInWireguard && w.inSyncWireguard {
-			logCxt.WithField("publicKey", node.publicKey).Debug("Adding peer deletion config update for key")
-			wireguardPeerDelete.Peers = append(wireguardPeerDelete.Peers, wgtypes.PeerConfig{
-				PublicKey: node.publicKey,
-				Remove:    true,
-			})
-			node.programmedInWireguard = false
-		}
-
-		// Remove the key to node reference.
-		nodenames := w.publicKeyToNodeNames[node.publicKey]
-		nodenames.Discard(name)
-		if nodenames.Len() == 0 {
-			// This was the only node with its public key
-			logCxt.WithField("publicKey", node.publicKey).Debug("Removed the only node claiming public key")
-			delete(w.publicKeyToNodeNames, node.publicKey)
+		} else if update.deleted {
+			// We have received a node deletion message and the peer is programmed in wireguard. We need to send a
+			// delete.
+			logCxt.Info("Node is deleted, remove wireguard peer")
+		} else if update.publicKey != nil && *update.publicKey != node.publicKey {
+			// The public key has changed. We need to send a delete.
+			logCxt.Debug("Peer public key updated - remove wireguard peer")
 		} else {
-			// This is or was a conflicting key. Recheck the nodes associated with this key at the end.
-			log.WithField("publicKey", node.publicKey).Info("Removed node which claimed the same public key as at least one other node")
-			conflictingKeys.Add(node.publicKey)
+			// No peer deletion required for this peer.
+			continue
 		}
-		node.publicKey = zeroKey
+
+		logCxt.WithField("publicKey", node.publicKey).Debug("Adding peer deletion config update for key")
+		wireguardPeerDelete.Peers = append(wireguardPeerDelete.Peers, wgtypes.PeerConfig{
+			PublicKey: node.publicKey,
+			Remove:    true,
+		})
+		node.programmedInWireguard = false
 	}
 
 	if len(wireguardPeerDelete.Peers) > 0 {
@@ -955,7 +978,8 @@ func (w *Wireguard) handlePeerAndRouteDeletionFromNodeUpdates(conflictingKeys se
 //
 // This method applies the current set of node updates on top of the current cache. It removes updates that are no
 // ops so that they are not re-processed further down the pipeline.
-func (w *Wireguard) updateCacheFromNodeUpdates(conflictingKeys set.Set) {
+func (w *Wireguard) updateCacheFromNodeUpdates() (conflictingKeys set.Set) {
+	conflictingKeys = set.New()
 	for name, update := range w.nodeUpdates {
 		node := w.getOrInitNodeData(name)
 
@@ -967,9 +991,30 @@ func (w *Wireguard) updateCacheFromNodeUpdates(conflictingKeys set.Set) {
 			logCxt.WithField("ipv4EndpointAddr", *update.ipv4EndpointAddr).Debug("Store IPv4 address")
 			node.ipv4EndpointAddr = *update.ipv4EndpointAddr
 			updated = true
+		} else if update.deleted {
+			logCxt.Debug("Peer deleted")
+			node.ipv4EndpointAddr = nil
+			updated = true
 		}
+
 		if update.publicKey != nil {
 			logCxt.WithField("publicKey", *update.publicKey).Debug("Store public key")
+			if node.publicKey != zeroKey {
+				// Remove the key to node reference.
+				nodenames := w.publicKeyToNodeNames[node.publicKey]
+				nodenames.Discard(name)
+				if nodenames.Len() == 0 {
+					// This was the only node with its public key
+					logCxt.WithField("publicKey", node.publicKey).Debug("Removed the only node claiming public key")
+					delete(w.publicKeyToNodeNames, node.publicKey)
+				} else {
+					// This is or was a conflicting key. Recheck the nodes associated with this key at the end.
+					log.WithField("publicKey", node.publicKey).Info("Removed node which claimed the same public key as at least one other node")
+					conflictingKeys.Add(node.publicKey)
+				}
+			}
+
+			// Update the node public key and the key to node mapping.
 			node.publicKey = *update.publicKey
 			if node.publicKey != zeroKey {
 				if nodenames := w.publicKeyToNodeNames[node.publicKey]; nodenames == nil {
@@ -983,6 +1028,7 @@ func (w *Wireguard) updateCacheFromNodeUpdates(conflictingKeys set.Set) {
 			}
 			updated = true
 		}
+
 		update.cidrsDeleted.Iter(func(item interface{}) error {
 			cidr := item.(ip.CIDR)
 			logCxt.WithField("cidr", cidr).Debug("Discarding CIDR")
@@ -1008,25 +1054,25 @@ func (w *Wireguard) updateCacheFromNodeUpdates(conflictingKeys set.Set) {
 			delete(w.nodeUpdates, name)
 		}
 	}
+
+	return conflictingKeys
 }
 
 // updateRouteTable updates the route table from the node updates.
 func (w *Wireguard) updateRouteTableFromNodeUpdates() {
-	// Do all deletes first. Then adds or updates separarately. This ensures a CIDR that has been deleted from one node
+	// Do all deletes first. Then adds or updates separately. This ensures a CIDR that has been deleted from one node
 	// and added to another will not add first then delete (which will remove the route, since the route table does not
 	// care about destination node).
-	for name, update := range w.nodeUpdates {
-		// Delete routes that are no longer required in routing.
-		node := w.getOrInitNodeData(name)
-		ifaceName := routetable.InterfaceNone
-		if node != nil && node.programmedInWireguard {
-			ifaceName = w.config.InterfaceName
-		}
-		logCxt := log.WithFields(log.Fields{"node": name, "ifaceName": ifaceName})
+	for _, update := range w.nodeUpdates {
+		// Delete routes that are no longer required in routing. Just delete both the wireguard and throw routes - this
+		// is somewhat defensive as we have the information to decide which route we need to remove - however we have
+		// also had bugs related to state tracking so deleting both is reasonable - routetable ignores the one that is
+		// not programmed.
 		update.cidrsDeleted.Iter(func(item interface{}) error {
 			cidr := item.(ip.CIDR)
-			logCxt.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
-			w.routetable.RouteRemove(ifaceName, cidr)
+			log.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
+			w.routetable.RouteRemove(w.config.InterfaceName, cidr)
+			w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
 			return nil
 		})
 	}
@@ -1051,20 +1097,18 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 		}
 
 		var targetType routetable.TargetType
-		var ifaceName, deleteIfaceName string
+		var ifaceName string
 		if !shouldRouteToWireguard {
 			// If we should not route to wireguard then we need to use a throw directive to skip wireguard routing and
 			// return to normal routing. We may also need to delete the existing route to wireguard.
 			logCxt.Debug("Not routing to wireguard - set route type to throw")
 			targetType = routetable.TargetTypeThrow
 			ifaceName = routetable.InterfaceNone
-			deleteIfaceName = w.config.InterfaceName
 		} else {
 			// If we should route to wireguard then route to the wireguard interface. We may also need to delete the
 			// existing throw route that was used to circumvent wireguard routing.
 			logCxt.Debug("Routing to wireguard interface")
 			ifaceName = w.config.InterfaceName
-			deleteIfaceName = routetable.InterfaceNone
 		}
 
 		updateSet.Iter(func(item interface{}) error {
@@ -1076,8 +1120,12 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 				// never added - the routetable component handles that gracefully. We need to do these deletes because
 				// routetable component groups by interface and we are essentially moving routes between the wireguard
 				// interface and the "none" interface.
-				updateLogCxt.WithField("ifacename", deleteIfaceName).Debug("Wireguard routing has changed - delete previous route for interface")
-				w.routetable.RouteRemove(deleteIfaceName, cidr)
+				// Just delete both the wireguard and throw routes - this is somewhat defensive as we have the
+				// information to decide which route we need to remove - however we have also had bugs related to state
+				// tracking so deleting both is reasonable - routetable ignores the one that is not programmed.
+				updateLogCxt.Debug("Wireguard routing has changed - delete previous route")
+				w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
+				w.routetable.RouteRemove(w.config.InterfaceName, cidr)
 			}
 			w.routetable.RouteUpdate(ifaceName, routetable.Target{
 				Type: targetType,
@@ -1353,8 +1401,8 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 	logCxt := log.WithField("ifaceName", w.config.InterfaceName)
 
 	if w.config.EncryptHostTraffic {
-		log.Info("Enabling src valid mark for WireGuard")
-		if err := writeProcSys(allSrcValidMarkPath, "1"); err != nil {
+		log.Debug("Enabling src valid mark for WireGuard")
+		if err := w.writeProcSys(allSrcValidMarkPath, "1"); err != nil {
 			return false, err
 		}
 	}
@@ -1684,6 +1732,14 @@ func (w *Wireguard) setAllInSync(inSync bool) {
 	w.inSyncWireguard = inSync
 	w.inSyncLink = inSync
 	w.inSyncInterfaceAddr = inSync
+}
+
+// DebugNodes returns the set of nodes in the internal cache. Used for testing purposes to test node cleanup.
+func (w *Wireguard) DebugNodes() (nodes []string) {
+	for node := range w.nodes {
+		nodes = append(nodes, node)
+	}
+	return
 }
 
 // getOnlyItemInSet returns the only item in the set, or nil if the set is nil or the set does not contain only one
