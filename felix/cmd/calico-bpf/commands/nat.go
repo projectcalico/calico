@@ -90,7 +90,7 @@ func dumpAff(cmd *cobra.Command) (err error) {
 	}
 
 	for k, v := range affMap {
-		cmd.Printf("%-40s %s", k, v)
+		cmd.Printf("%-40s %s\n", k, v)
 	}
 
 	cmd.Printf("\n")
