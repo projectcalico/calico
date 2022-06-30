@@ -552,8 +552,8 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 		return false
 	})
 	// Remove policy debug info if any
-	removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
-	removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
+	m.removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
+	m.removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -970,7 +970,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	if err != nil {
 		return err
 	}
-	err = writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
+	err = m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
 	if err != nil {
 		log.Debugf("error writing policy debug information %s", err)
 	}
@@ -1036,7 +1036,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 		if err != nil {
 			return err
 		}
-		err = writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
+		err = m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
 		if err != nil {
 			log.Debugf("error writing policy debug info %s", err)
 		}
@@ -1047,7 +1047,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	if err != nil {
 		return err
 	}
-	removePolicyDebugInfo(ap.Iface, ap.Hook)
+	m.removePolicyDebugInfo(ap.Iface, ap.Hook)
 	return nil
 }
 
@@ -1667,12 +1667,18 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 	})
 }
 
-func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+	if !m.bpfPolicyDebugEnabled {
+		return
+	}
 	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook))
 	os.Remove(filename)
 }
 
-func writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook) error {
+	if !m.bpfPolicyDebugEnabled {
+		return nil
+	}
 	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
 		return err
 	}
