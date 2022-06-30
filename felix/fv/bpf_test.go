@@ -309,6 +309,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("calico-bpf", "nat", "aff")
 					felix.Exec("calico-bpf", "conntrack", "dump")
 					felix.Exec("calico-bpf", "arp", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
@@ -601,7 +602,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 
 						By("handling egress program removal")
 						felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
@@ -614,7 +616,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 
 						By("Handling qdisc removal")
@@ -627,11 +630,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
 
@@ -870,7 +875,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					sort.Strings(filteredLines)
 					return strings.Join(filteredLines, "\n")
 				}
-				Eventually(dumpRoutes, "5s", "200ms").Should(Equal(expectedRoutes), dumpRoutes)
+				Eventually(dumpRoutes, "10s", "200ms").Should(Equal(expectedRoutes), dumpRoutes)
 			})
 
 			It("should only allow traffic from the local host by default", func() {
