@@ -46,7 +46,7 @@ const (
 )
 
 type InterfaceStateCallback func(ifaceName string, ifaceState State, ifIndex int)
-type AddrStateCallback func(ifaceName string, addrs set.Set)
+type AddrStateCallback func(ifaceName string, addrs set.Set[string])
 
 type Config struct {
 	// InterfaceExcludes is a list of interface names that we don't want callbacks for.
@@ -74,7 +74,7 @@ type ifaceInfo struct {
 	Name       string
 	State      State
 	TrackAddrs bool
-	Addrs      set.Set
+	Addrs      set.Set[string]
 }
 
 func New(config Config, fatalErrCallback func(error)) *InterfaceMonitor {
@@ -309,7 +309,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 				Idx:        ifIndex,
 				Name:       ifaceName,
 				TrackAddrs: trackAddrs,
-				Addrs:      set.New(),
+				Addrs:      set.New[string](),
 			}
 		}
 		m.ifaceNameToIdx[ifaceName] = ifIndex
@@ -350,7 +350,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	// channels.  We deliberately do this regardless of the link state, as in some cases this
 	// will allow us to secure a Host Endpoint interface _before_ it comes up, and so eliminate
 	// a small window of insecurity.
-	newAddrs := set.New()
+	newAddrs := set.New[string]()
 	for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 		routes, err := m.netlinkStub.ListLocalRoutes(link, family)
 		if err != nil {
@@ -383,7 +383,7 @@ func (m *InterfaceMonitor) resync() error {
 		log.WithError(err).Warn("Netlink list operation failed.")
 		return err
 	}
-	currentIfaces := set.New()
+	currentIfaces := set.New[string]()
 	for _, link := range links {
 		attrs := link.Attrs()
 		if attrs == nil {

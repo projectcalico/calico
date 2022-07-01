@@ -160,7 +160,7 @@ func CleanAttachedProgDir() {
 		log.Errorf("Failed to get list of interfaces. err=%v", err)
 	}
 
-	expectedJSONFiles := set.New()
+	expectedJSONFiles := set.New[string]()
 	for _, iface := range interfaces {
 		for _, hook := range runtimeJSONsuffixes {
 			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, hook))

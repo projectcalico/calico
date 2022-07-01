@@ -324,14 +324,14 @@ type Block struct {
 	fixUps           []fixUp
 	labelToInsnIdx   map[string]int
 	insnIdxToLabels  map[int][]string
-	inUseJumpTargets set.Set
+	inUseJumpTargets set.Set[string]
 }
 
 func NewBlock() *Block {
 	return &Block{
 		labelToInsnIdx:   map[string]int{},
 		insnIdxToLabels:  map[int][]string{},
-		inUseJumpTargets: set.New(),
+		inUseJumpTargets: set.New[string](),
 	}
 }
 
