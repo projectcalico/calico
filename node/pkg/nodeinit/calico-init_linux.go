@@ -124,8 +124,8 @@ func ensureCgroupV2Filesystem() error {
 
 	mountCmd := exec.Command("mountns", bpf.CgroupV2Path)
 	out, err := mountCmd.Output()
+	logrus.Debugf("Executed %v. err:%v out:\n%s", mountCmd, err, out)
 	if err != nil {
-		logrus.Errorf("Mouting cgroup2 fs failed. output: %v", out)
 		return fmt.Errorf("failed to mount cgroup2 filesystem: %w", err)
 	}
 
