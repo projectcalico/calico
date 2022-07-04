@@ -3659,21 +3659,46 @@ func conntrackChecks(felixes []*infrastructure.Felix) []interface{} {
 }
 
 func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
+	allStr := strconv.Itoa(all)
+	mainStr := strconv.Itoa(main)
+
+	var wg sync.WaitGroup
+
 	for _, felix := range felixes {
-		// N.B. we only support environment with not so strict RPF - can be
-		// strict per iface, but not for all.
-		felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+strconv.Itoa(all))
-		switch tunnel {
-		case "none":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+strconv.Itoa(main))
-		case "ipip":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+strconv.Itoa(main))
-		case "wireguard":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+strconv.Itoa(main))
-		case "vxlan":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+strconv.Itoa(main))
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			Eventually(func() error {
+				// N.B. we only support environment with not so strict RPF - can be
+				// strict per iface, but not for all.
+				if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+allStr); err != nil {
+					return err
+				}
+				switch tunnel {
+				case "none":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "ipip":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "wireguard":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "vxlan":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			}, "5s", "200ms").Should(Succeed())
+		}()
 	}
+
+	wg.Wait()
 }
 
 func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
