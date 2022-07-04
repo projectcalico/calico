@@ -67,7 +67,7 @@ type PolicyDebugInfo struct {
 const (
 	ObjectDir      = "/usr/lib/calico/bpf"
 	RuntimeProgDir = "/var/run/calico/bpf/prog"
-	RuntimePolDir  = "/var/run/calico/bpf/pol"
+	RuntimePolDir  = "/var/run/calico/bpf/policy"
 )
 
 // ErrIterationFinished is returned by the MapIterator's Next() method when there are no more keys.

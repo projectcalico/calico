@@ -609,7 +609,7 @@ func (b *Block) LabelNextInsn(label string) {
 	b.insnIdxToLabels[len(b.insns)] = append(b.insnIdxToLabels[len(b.insns)], label)
 }
 
-func (b *Block) WriteComments(comment string) {
+func (b *Block) AddComment(comment string) {
 	if b.policyDebugEnabled {
 		b.insnIdxToComments[len(b.insns)] = append(b.insnIdxToComments[len(b.insns)], comment)
 	}

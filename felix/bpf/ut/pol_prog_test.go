@@ -120,7 +120,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 
 	cleanIPSetMap()
 
-	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), tcJumpMap.MapFD())
+	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), tcJumpMap.MapFD(), false)
 	insns, err := pg.Instructions(polprog.Rules{
 		Tiers: []polprog.Tier{{
 			Name: "base tier",
@@ -151,7 +151,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 					NotDstNamedPortIpSetIds: []string{allocID("n:0bcdef1234567890")},
 				}}},
 			}},
-		}}}, false)
+		}}})
 
 	Expect(err).NotTo(HaveOccurred())
 	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
@@ -1673,8 +1673,8 @@ func runTest(t *testing.T, tp testPolicy) {
 	setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
 
 	// Build the program.
-	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), tcJumpMap.MapFD())
-	insns, err := pg.Instructions(tp.Policy(), false)
+	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), tcJumpMap.MapFD(), false)
+	insns, err := pg.Instructions(tp.Policy())
 	Expect(err).NotTo(HaveOccurred(), "failed to assemble program")
 
 	// Load the program into the kernel.  We don't pin it so it'll be removed when the

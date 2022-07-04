@@ -972,7 +972,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	}
 	err = writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
 	if err != nil {
-		log.Debugf("error writing policy debug information %s", err)
+		log.WithError(err).Warn("error writing policy debug information")
 	}
 	return nil
 }
@@ -1703,8 +1703,8 @@ func writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook) err
 }
 
 func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) (asm.Insns, error) {
-	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD)
-	insns, err := pg.Instructions(rules, m.bpfPolicyDebugEnabled)
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
+	insns, err := pg.Instructions(rules)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate policy bytecode: %w", err)
 	}

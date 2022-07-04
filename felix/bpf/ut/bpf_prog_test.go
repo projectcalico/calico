@@ -297,8 +297,8 @@ outer:
 		Expect(ipsMapFD).NotTo(BeZero())
 		stateMapFD := stateMap.MapFD()
 		Expect(stateMapFD).NotTo(BeZero())
-		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD())
-		insns, err := pg.Instructions(*rules, false)
+		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD(), false)
+		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
 		var polProgFD bpf.ProgFD
 		if topts.xdp {
@@ -1297,9 +1297,9 @@ func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
 	jumpMapFD := tcJumpMap.MapFD()
-	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD)
+	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, false)
 	rules := polprog.Rules{}
-	insns, err := pg.Instructions(rules, false)
+	insns, err := pg.Instructions(rules)
 	Expect(err).NotTo(HaveOccurred())
 	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
