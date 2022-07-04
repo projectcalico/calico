@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/bpf/asm"
 )
 
 type MapFD uint32
@@ -55,9 +57,18 @@ type MapInfo struct {
 	MaxEntries int
 }
 
+// PolicyDebugInfo describes policy debug info
+type PolicyDebugInfo struct {
+	IfaceName  string    `json:"ifacename"`
+	Hook       string    `json:"hook"`
+	PolicyInfo asm.Insns `json:"policyInfo"`
+	Error      string    `json:"error"`
+}
+
 const (
 	ObjectDir      = "/usr/lib/calico/bpf"
 	RuntimeProgDir = "/var/run/calico/bpf/prog"
+	RuntimePolDir  = "/var/run/calico/bpf/policy"
 )
 
 // ErrIterationFinished is returned by the MapIterator's Next() method when there are no more keys.

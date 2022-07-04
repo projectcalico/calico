@@ -33,7 +33,7 @@ func TestPolicySanityCheck(t *testing.T) {
 		alloc.GetOrAlloc(id)
 		return id
 	}
-	pg := NewBuilder(alloc, 1, 2, 3)
+	pg := NewBuilder(alloc, 1, 2, 3, false)
 	insns, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Policies: []Policy{{
@@ -70,7 +70,7 @@ func TestPolicySanityCheck(t *testing.T) {
 
 	Expect(err).NotTo(HaveOccurred())
 	for i, in := range insns {
-		t.Log(i, ": ", in)
+		t.Log(i, ": ", in.Instruction)
 	}
 }
 
@@ -78,7 +78,7 @@ func TestLogActionIgnored(t *testing.T) {
 	RegisterTestingT(t)
 	alloc := idalloc.New()
 
-	pg := NewBuilder(alloc, 1, 2, 3)
+	pg := NewBuilder(alloc, 1, 2, 3, false)
 	insns, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Name: "default",
@@ -91,7 +91,7 @@ func TestLogActionIgnored(t *testing.T) {
 		}}})
 	Expect(err).NotTo(HaveOccurred())
 
-	pg = NewBuilder(alloc, 1, 2, 3)
+	pg = NewBuilder(alloc, 1, 2, 3, false)
 	noOpInsns, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Name:     "default",

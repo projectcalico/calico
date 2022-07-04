@@ -297,7 +297,7 @@ outer:
 		Expect(ipsMapFD).NotTo(BeZero())
 		stateMapFD := stateMap.MapFD()
 		Expect(stateMapFD).NotTo(BeZero())
-		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD())
+		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD(), false)
 		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
 		var polProgFD bpf.ProgFD
@@ -1297,7 +1297,7 @@ func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
 	jumpMapFD := tcJumpMap.MapFD()
-	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD)
+	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, false)
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)
 	Expect(err).NotTo(HaveOccurred())
