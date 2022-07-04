@@ -77,13 +77,19 @@ type l3rrNodeInfo struct {
 	V6CIDR ip.V6CIDR
 
 	// Tunnel IP addresses
-	IPIPAddr      ip.Addr
-	VXLANAddr     ip.Addr
-	VXLANV6Addr   ip.Addr
-	WireguardAddr ip.Addr
+	IPIPAddr        ip.Addr
+	VXLANAddr       ip.Addr
+	VXLANV6Addr     ip.Addr
+	WireguardAddr   ip.Addr
+	WireguardV6Addr ip.Addr
 
 	Addresses []ip.Addr
 }
+
+var (
+	emptyV4Addr ip.V4Addr
+	emptyV6Addr ip.V6Addr
+)
 
 func (i l3rrNodeInfo) Equal(b l3rrNodeInfo) bool {
 	if i.V4Addr == b.V4Addr &&
@@ -132,6 +138,13 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 
 	for _, a := range i.Addresses {
 		addrs[a] = struct{}{}
+	}
+
+	// Clean up empty (uninitialized) addresses
+	for a := range addrs {
+		if a == emptyV4Addr || a == emptyV6Addr {
+			delete(addrs, a)
+		}
 	}
 
 	cidrs := make([]ip.CIDR, len(addrs))
@@ -463,7 +476,7 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 		}
 		if oldNodeInfo.V4CIDR != myNewV4CIDR {
 			// This node's CIDR has changed; some routes may now have an incorrect value for same-subnet.
-			c.visitAllRoutes(c.trie.v4T, func(r nodenameRoute) {
+			c.visitAllRoutes(c.trie.trieForCIDR(myNewV4CIDR), func(r nodenameRoute) {
 				if r.nodeName == c.myNodeName {
 					return // Ignore self.
 				}
@@ -482,7 +495,7 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 		}
 		if oldNodeInfo.V6CIDR != myNewV6CIDR {
 			// This node's CIDR has changed; some routes may now have an incorrect value for same-subnet.
-			c.visitAllRoutes(c.trie.v4T, func(r nodenameRoute) {
+			c.visitAllRoutes(c.trie.trieForCIDR(myNewV6CIDR), func(r nodenameRoute) {
 				if r.nodeName == c.myNodeName {
 					return // Ignore self.
 				}
@@ -773,9 +786,6 @@ func (c *L3RouteResolver) flush() {
 				}
 			}
 		}
-
-		var emptyV4Addr ip.V4Addr
-		var emptyV6Addr ip.V6Addr
 
 		if rt.DstNodeName != "" {
 			dstNodeInfo, exists := c.nodeNameToNodeInfo[rt.DstNodeName]
