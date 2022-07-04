@@ -623,6 +623,7 @@ var localHostIP = mustParseIP("192.168.0.1")
 var remoteHostIP = mustParseIP("192.168.0.2")
 var remoteHostIPv6 = mustParseIP("dead:beef:0001::2")
 var remoteHost2IP = mustParseIP("192.168.0.3")
+var remoteHost2IPv6 = mustParseIP("dead:beef:0001::3")
 
 var localHostIPWithPrefix = "192.168.0.1/24"
 var remoteHostIPWithPrefix = "192.168.0.2/24"
