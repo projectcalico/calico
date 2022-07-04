@@ -99,7 +99,8 @@ func (i l3rrNodeInfo) Equal(b l3rrNodeInfo) bool {
 		i.IPIPAddr == b.IPIPAddr &&
 		i.VXLANAddr == b.VXLANAddr &&
 		i.VXLANV6Addr == b.VXLANV6Addr &&
-		i.WireguardAddr == b.WireguardAddr {
+		i.WireguardAddr == b.WireguardAddr &&
+		i.WireguardV6Addr == b.WireguardV6Addr {
 
 		if len(i.Addresses) != len(b.Addresses) {
 			return false
@@ -396,6 +397,10 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 				nodeInfo.WireguardAddr = ip.FromString(node.Spec.Wireguard.InterfaceIPv4Address)
 			}
 
+			if node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv6Address != "" {
+				nodeInfo.WireguardV6Addr = ip.FromString(node.Spec.Wireguard.InterfaceIPv6Address)
+			}
+
 			if node.Spec.BGP != nil && node.Spec.BGP.IPv4IPIPTunnelAddr != "" {
 				nodeInfo.IPIPAddr = ip.FromString(node.Spec.BGP.IPv4IPIPTunnelAddr)
 			}
@@ -524,6 +529,9 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 		if newNodeInfo.WireguardAddr != nil {
 			c.trie.AddRef(newNodeInfo.WireguardAddr.AsCIDR(), nodeName, RefTypeWireguard)
 		}
+		if newNodeInfo.WireguardV6Addr != nil {
+			c.trie.AddRef(newNodeInfo.WireguardV6Addr.AsCIDR(), nodeName, RefTypeWireguard)
+		}
 	}
 	if nodeExisted {
 		if oldNodeInfo.IPIPAddr != nil {
@@ -537,6 +545,9 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 		}
 		if oldNodeInfo.WireguardAddr != nil {
 			c.trie.RemoveRef(oldNodeInfo.WireguardAddr.AsCIDR(), nodeName, RefTypeWireguard)
+		}
+		if oldNodeInfo.WireguardV6Addr != nil {
+			c.trie.RemoveRef(oldNodeInfo.WireguardV6Addr.AsCIDR(), nodeName, RefTypeWireguard)
 		}
 	}
 

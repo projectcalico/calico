@@ -2424,6 +2424,101 @@ var encapWithIPIPAndVXLANPool = empty.withKVUpdates(
 	routeUpdateIPPool2VXLAN,
 ).withName("Encap with IPIP and VXLAN Pools")
 
+var wireguardV4 = empty.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: localHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv4Address: remoteHostIP.String() + "/24",
+			},
+			Wireguard: &apiv3.NodeWireguardSpec{
+				InterfaceIPv4Address: remoteHost2IP.String(),
+			},
+		},
+	}},
+).withName("Wireguard IPv4").withRoutes(
+	[]proto.RouteUpdate{
+		routeUpdateRemoteHost,
+		{
+			Type:        proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_NONE,
+			Dst:         remoteHost2IP.String() + "/32",
+			DstNodeName: remoteHostname,
+			DstNodeIp:   remoteHostIP.String(),
+			TunnelType:  &proto.TunnelType{Wireguard: true},
+		},
+	}...,
+)
+
+var wireguardV6 = empty.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: localHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv6Address: remoteHostIPv6.String() + "/96",
+			},
+			Wireguard: &apiv3.NodeWireguardSpec{
+				InterfaceIPv6Address: remoteHost2IPv6.String(),
+			},
+		},
+	}},
+).withName("Wireguard IPv6").withRoutes(
+	[]proto.RouteUpdate{
+		routeUpdateRemoteHostV6,
+		{
+			Type:        proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_NONE,
+			Dst:         remoteHost2IPv6.String() + "/128",
+			DstNodeName: remoteHostname,
+			DstNodeIp:   remoteHostIPv6.String(),
+			TunnelType:  &proto.TunnelType{Wireguard: true},
+		},
+	}...,
+)
+
+var wireguardV4V6 = empty.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: localHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv4Address: remoteHostIP.String() + "/24",
+				IPv6Address: remoteHostIPv6.String() + "/96",
+			},
+			Wireguard: &apiv3.NodeWireguardSpec{
+				InterfaceIPv4Address: remoteHost2IP.String(),
+				InterfaceIPv6Address: remoteHost2IPv6.String(),
+			},
+		},
+	}},
+).withName("Wireguard IPv4+IPv6").withRoutes(
+	[]proto.RouteUpdate{
+		routeUpdateRemoteHost,
+		routeUpdateRemoteHostV6,
+		{
+			Type:        proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_NONE,
+			Dst:         remoteHost2IP.String() + "/32",
+			DstNodeName: remoteHostname,
+			DstNodeIp:   remoteHostIP.String(),
+			TunnelType:  &proto.TunnelType{Wireguard: true},
+		},
+		{
+			Type:        proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_NONE,
+			Dst:         remoteHost2IPv6.String() + "/128",
+			DstNodeName: remoteHostname,
+			DstNodeIp:   remoteHostIPv6.String(),
+			TunnelType:  &proto.TunnelType{Wireguard: true},
+		},
+	}...,
+)
+
 type StateList []State
 
 func (l StateList) String() string {
