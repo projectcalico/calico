@@ -49,8 +49,18 @@ var policyDumpCmd = &cobra.Command{
 			log.WithError(err).Error("Failed to dump policy info.")
 			return
 		}
-		if err := dumpPolicyInfo(cmd, iface, hook); err != nil {
-			log.WithError(err).Error("Failed to dump policy info.")
+		hooks := []string{}
+		if hook == "all" {
+			hooks = []string{"ingress", "egress"}
+		} else {
+			hooks = append(hooks, hook)
+		}
+
+		for _, dir := range hooks {
+			err := dumpPolicyInfo(cmd, iface, dir)
+			if err != nil {
+				log.WithError(err).Error("Failed to dump policy info.")
+			}
 		}
 	},
 }
@@ -59,7 +69,7 @@ func parseArgs(args []string) (string, string, error) {
 	if len(args) != 2 {
 		return "", "", fmt.Errorf("Insufficient arguments")
 	}
-	if (args[1] != "ingress" && args[1] != "egress") || args[0] == "" {
+	if (args[1] != "ingress" && args[1] != "egress" && args[1] != "all") || args[0] == "" {
 		return "", "", fmt.Errorf("Invalid argument")
 	}
 	return args[0], args[1], nil

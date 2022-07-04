@@ -967,7 +967,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	}
 
 	insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
-	perr := writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+	perr := m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
 	if perr != nil {
 		log.WithError(perr).Warn("error writing policy debug information")
 	}
@@ -1030,7 +1030,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
 		insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
-		perr := writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+		perr := m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
 		}
@@ -1680,6 +1680,9 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 		return err
 	}
 
+	// policy programs are attached to interfaces from the host. The direction
+	// is in reference with the host. Workload's ingress is host's egress and
+	// vice versa.
 	polDir := "ingress"
 	if tcHook == tc.HookIngress {
 		polDir = "egress"
