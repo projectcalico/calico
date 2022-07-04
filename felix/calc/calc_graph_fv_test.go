@@ -490,6 +490,11 @@ var baseTests = []StateList{
 		vxlanV4V6WithV6MAC,
 		vxlanV4V6WithBlock,
 	},
+	{
+		wireguardV4,
+		wireguardV6,
+		wireguardV4V6,
+	},
 }
 
 var logOnce sync.Once
