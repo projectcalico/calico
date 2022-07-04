@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -49,6 +50,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -106,7 +108,7 @@ type bpfDataplane interface {
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) error
 	ensureBPFDevices() error
-	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error
+	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) (asm.Insns, error)
 	removePolicyProgram(jumpMapFD bpf.MapFD) error
 	setAcceptLocal(iface string, val bool) error
 	setRPFilter(iface string, val int) error
@@ -204,6 +206,8 @@ type bpfEndpointManager struct {
 	// Service routes
 	ctlbWorkaroundEnabled bool
 
+	bpfPolicyDebugEnabled bool
+
 	routeTable    *routetable.RouteTable
 	services      map[serviceKey][]string
 	dirtyServices map[serviceKey][]string
@@ -270,8 +274,9 @@ func newBPFEndpointManager(
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
-		ipv6Enabled:          config.BPFIpv6Enabled,
-		rpfStrictModeEnabled: config.BPFEnforceRPF,
+		ipv6Enabled:           config.BPFIpv6Enabled,
+		rpfStrictModeEnabled:  config.BPFEnforceRPF,
+		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -464,7 +469,6 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
-
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
 	m.ifacesLock.Lock()
@@ -547,6 +551,9 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 		iface.info.endpointID = nil
 		return false
 	})
+	// Remove policy debug info if any
+	m.removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
+	m.removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -959,7 +966,12 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return m.dp.updatePolicyProgram(jumpMapFD, rules)
+	insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
+	perr := m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+	if perr != nil {
+		log.WithError(perr).Warn("error writing policy debug information")
+	}
+	return err
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -1017,10 +1029,20 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 			ForHostInterface: true,
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules)
+		insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
+		perr := m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+		if perr != nil {
+			log.WithError(perr).Warn("error writing policy debug information")
+		}
+		return err
 	}
 
-	return m.dp.removePolicyProgram(jumpMapFD)
+	err = m.dp.removePolicyProgram(jumpMapFD)
+	if err != nil {
+		return err
+	}
+	m.removePolicyDebugInfo(ap.Iface, ap.Hook)
+	return nil
 }
 
 func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint) error {
@@ -1043,7 +1065,8 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules)
+		_, err = m.dp.updatePolicyProgram(jumpMapFD, rules)
+		return err
 	} else {
 		return m.dp.ensureNoProgram(&ap)
 	}
@@ -1638,11 +1661,64 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 	})
 }
 
-func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error {
-	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD)
+func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+	if !m.bpfPolicyDebugEnabled {
+		return
+	}
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook))
+	err := os.Remove(filename)
+	if err != nil {
+		log.WithError(err).Debugf("Failed to remove the policy debug file %v. Ignoring", filename)
+	}
+}
+
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook, polErr error) error {
+	if !m.bpfPolicyDebugEnabled {
+		return nil
+	}
+	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
+		return err
+	}
+
+	// policy programs are attached to interfaces from the host. The direction
+	// is in reference with the host. Workload's ingress is host's egress and
+	// vice versa.
+	polDir := "ingress"
+	if tcHook == tc.HookIngress {
+		polDir = "egress"
+	}
+
+	errStr := ""
+	if polErr != nil {
+		errStr = polErr.Error()
+	}
+
+	var policyDebugInfo = bpf.PolicyDebugInfo{
+		IfaceName:  ifaceName,
+		Hook:       "tc " + string(tcHook),
+		PolicyInfo: insns,
+		Error:      errStr,
+	}
+
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, polDir)
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	err := encoder.Encode(policyDebugInfo)
+	if err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(filename, buffer.Bytes(), 0600); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) (asm.Insns, error) {
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
 	insns, err := pg.Instructions(rules)
 	if err != nil {
-		return fmt.Errorf("failed to generate policy bytecode: %w", err)
+		return nil, fmt.Errorf("failed to generate policy bytecode: %w", err)
 	}
 	progType := unix.BPF_PROG_TYPE_SCHED_CLS
 	if rules.ForXDP {
@@ -1650,7 +1726,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	}
 	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", uint32(progType))
 	if err != nil {
-		return fmt.Errorf("failed to load BPF policy program: %w", err)
+		return nil, fmt.Errorf("failed to load BPF policy program: %w", err)
 	}
 	defer func() {
 		// Once we've put the program in the map, we don't need its FD any more.
@@ -1664,9 +1740,9 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
 	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
 	if err != nil {
-		return fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
+		return nil, fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
 	}
-	return nil
+	return insns, nil
 }
 
 func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD) error {
