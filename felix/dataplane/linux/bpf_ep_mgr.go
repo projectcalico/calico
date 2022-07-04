@@ -967,14 +967,11 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	}
 
 	insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
-	if err != nil {
-		return err
+	perr := writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+	if perr != nil {
+		log.WithError(perr).Warn("error writing policy debug information")
 	}
-	err = writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
-	if err != nil {
-		log.WithError(err).Warn("error writing policy debug information")
-	}
-	return nil
+	return err
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -1033,14 +1030,11 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
 		insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
-		if err != nil {
-			return err
+		perr := writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+		if perr != nil {
+			log.WithError(perr).Warn("error writing policy debug information")
 		}
-		err = writePolicyDebugInfo(insns, ap.Iface, ap.Hook)
-		if err != nil {
-			log.Debugf("error writing policy debug info %s", err)
-		}
-		return nil
+		return err
 	}
 
 	err = m.dp.removePolicyProgram(jumpMapFD)
@@ -1669,10 +1663,13 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 
 func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
 	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook))
-	os.Remove(filename)
+	err := os.Remove(filename)
+	if err != nil {
+		log.WithError(err).Debugf("Failed to remove the policy debug file %v. Ignoring", filename)
+	}
 }
 
-func writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook) error {
+func writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook, polErr error) error {
 	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
 		return err
 	}
@@ -1681,16 +1678,22 @@ func writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook) err
 	if tcHook == tc.HookIngress {
 		polDir = "egress"
 	}
+
+	errStr := ""
+	if polErr != nil {
+		errStr = polErr.Error()
+	}
+
 	var policyDebugInfo = bpf.PolicyDebugInfo{
 		IfaceName:  ifaceName,
 		Hook:       "tc " + string(tcHook),
 		PolicyInfo: insns,
+		Error:      errStr,
 	}
 
 	filename := bpf.PolicyDebugJSONFileName(ifaceName, polDir)
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
-	encoder.SetEscapeHTML(false)
 	err := encoder.Encode(policyDebugInfo)
 	if err != nil {
 		return err

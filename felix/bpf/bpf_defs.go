@@ -62,6 +62,7 @@ type PolicyDebugInfo struct {
 	IfaceName  string    `json:"ifacename"`
 	Hook       string    `json:"hook"`
 	PolicyInfo asm.Insns `json:"policyInfo"`
+	Error      string    `json:"error"`
 }
 
 const (

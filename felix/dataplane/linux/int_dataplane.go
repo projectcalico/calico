@@ -391,8 +391,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
 		err := os.RemoveAll(bpf.RuntimePolDir)
-		if err != nil {
-			log.Debug("error removing policy dump info")
+		if err != nil && !os.IsNotExist(err) {
+			log.WithError(err).Info("Policy debug disabled but failed to remove the debug directory.  Ignoring.")
 		}
 	}
 
