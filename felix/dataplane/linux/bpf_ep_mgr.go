@@ -552,8 +552,8 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 		return false
 	})
 	// Remove policy debug info if any
-	removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
-	removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
+	m.removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
+	m.removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -1041,7 +1041,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	if err != nil {
 		return err
 	}
-	removePolicyDebugInfo(ap.Iface, ap.Hook)
+	m.removePolicyDebugInfo(ap.Iface, ap.Hook)
 	return nil
 }
 
@@ -1661,7 +1661,10 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 	})
 }
 
-func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+	if !m.bpfPolicyDebugEnabled {
+		return
+	}
 	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook))
 	err := os.Remove(filename)
 	if err != nil {
@@ -1669,7 +1672,10 @@ func removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
 	}
 }
 
-func writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook, polErr error) error {
+	if !m.bpfPolicyDebugEnabled {
+		return nil
+	}
 	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
 		return err
 	}

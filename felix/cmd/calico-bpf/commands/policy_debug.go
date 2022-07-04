@@ -49,7 +49,7 @@ var policyDumpCmd = &cobra.Command{
 			log.WithError(err).Error("Failed to dump policy info.")
 			return
 		}
-		if err := dumpPolicyInfo(iface, hook); err != nil {
+		if err := dumpPolicyInfo(cmd, iface, hook); err != nil {
 			log.WithError(err).Error("Failed to dump policy info.")
 		}
 	},
@@ -65,16 +65,15 @@ func parseArgs(args []string) (string, string, error) {
 	return args[0], args[1], nil
 }
 
-func printInsn(insn asm.Insn) {
-	fmt.Printf("\t")
+func printInsn(cmd *cobra.Command, insn asm.Insn) {
+	cmd.Printf("      ")
 	for _, value := range insn.Instruction {
-		fmt.Printf("%02x", value)
+		cmd.Printf("%02x", value)
 	}
-	fmt.Printf(" %v\n", insn)
-	//fmt.Println()
+	cmd.Printf(" %v\n", insn)
 }
 
-func dumpPolicyInfo(iface, hook string) error {
+func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
 	var policyDbg bpf.PolicyDebugInfo
 	filename := bpf.PolicyDebugJSONFileName(iface, hook)
 	_, err := os.Stat(filename)
@@ -93,18 +92,17 @@ func dumpPolicyInfo(iface, hook string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("IfaceName: %s\n", policyDbg.IfaceName)
-	fmt.Printf("Hook: %s\n", policyDbg.Hook)
-	fmt.Println("Policy Info:")
+	cmd.Printf("IfaceName: %s\n", policyDbg.IfaceName)
+	cmd.Printf("Hook: %s\n", policyDbg.Hook)
+	cmd.Println("Policy Info:")
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, label := range insn.Labels {
-			fmt.Printf("%s:\n", label)
+			cmd.Printf("%s:\n", label)
 		}
 		for _, comment := range insn.Comments {
-			fmt.Printf("\t// %s\n", comment)
+			cmd.Printf("      // %s\n", comment)
 		}
-		printInsn(insn)
+		printInsn(cmd, insn)
 	}
-
 	return nil
 }
