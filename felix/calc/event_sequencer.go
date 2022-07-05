@@ -60,6 +60,8 @@ type EventSequencer struct {
 	pendingEndpointDeletes       set.Set
 	pendingHostIPUpdates         map[string]*net.IP
 	pendingHostIPDeletes         set.Set
+	pendingHostIPv6Updates       map[string]*net.IP
+	pendingHostIPv6Deletes       set.Set
 	pendingIPPoolUpdates         map[ip.CIDR]*model.IPPool
 	pendingIPPoolDeletes         set.Set
 	pendingNotReady              bool
@@ -85,12 +87,14 @@ type EventSequencer struct {
 	sentProfiles        set.Set
 	sentEndpoints       set.Set
 	sentHostIPs         set.Set
+	sentHostIPv6s       set.Set
 	sentIPPools         set.Set
 	sentServiceAccounts set.Set
 	sentNamespaces      set.Set
 	sentRoutes          set.Set
 	sentVTEPs           set.Set
 	sentWireguard       set.Set
+	sentWireguardV6     set.Set
 	sentServices        set.Set
 
 	Callback EventHandler
@@ -128,6 +132,8 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingEndpointDeletes:       set.New(),
 		pendingHostIPUpdates:         map[string]*net.IP{},
 		pendingHostIPDeletes:         set.New(),
+		pendingHostIPv6Updates:       map[string]*net.IP{},
+		pendingHostIPv6Deletes:       set.New(),
 		pendingIPPoolUpdates:         map[ip.CIDR]*model.IPPool{},
 		pendingIPPoolDeletes:         set.New(),
 		pendingServiceAccountUpdates: map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{},
@@ -149,12 +155,14 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		sentProfiles:        set.New(),
 		sentEndpoints:       set.New(),
 		sentHostIPs:         set.New(),
+		sentHostIPv6s:       set.New(),
 		sentIPPools:         set.New(),
 		sentServiceAccounts: set.New(),
 		sentNamespaces:      set.New(),
 		sentRoutes:          set.New(),
 		sentVTEPs:           set.New(),
 		sentWireguard:       set.New(),
+		sentWireguardV6:     set.New(),
 		sentServices:        set.New(),
 	}
 	return buf
@@ -533,6 +541,44 @@ func (buf *EventSequencer) flushHostIPDeletes() {
 	})
 }
 
+func (buf *EventSequencer) OnHostIPv6Update(hostname string, ip *net.IP) {
+	log.WithFields(log.Fields{
+		"hostname": hostname,
+		"ip":       ip,
+	}).Debug("Host IPv6 update")
+	buf.pendingHostIPv6Deletes.Discard(hostname)
+	buf.pendingHostIPv6Updates[hostname] = ip
+}
+
+func (buf *EventSequencer) flushHostIPv6Updates() {
+	for hostname, hostIP := range buf.pendingHostIPv6Updates {
+		buf.Callback(&proto.HostMetadataV6Update{
+			Hostname: hostname,
+			Ipv6Addr: hostIP.IP.String(),
+		})
+		buf.sentHostIPv6s.Add(hostname)
+		delete(buf.pendingHostIPv6Updates, hostname)
+	}
+}
+
+func (buf *EventSequencer) OnHostIPv6Remove(hostname string) {
+	log.WithField("hostname", hostname).Debug("Host IPv6 removed")
+	delete(buf.pendingHostIPv6Updates, hostname)
+	if buf.sentHostIPv6s.Contains(hostname) {
+		buf.pendingHostIPv6Deletes.Add(hostname)
+	}
+}
+
+func (buf *EventSequencer) flushHostIPv6Deletes() {
+	buf.pendingHostIPv6Deletes.Iter(func(item interface{}) error {
+		buf.Callback(&proto.HostMetadataV6Remove{
+			Hostname: item.(string),
+		})
+		buf.sentHostIPv6s.Discard(item)
+		return set.RemoveItem
+	})
+}
+
 func (buf *EventSequencer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPool) {
 	log.WithFields(log.Fields{
 		"key":  key,
@@ -559,17 +605,51 @@ func (buf *EventSequencer) flushIPPoolUpdates() {
 
 func (buf *EventSequencer) flushHostWireguardUpdates() {
 	for nodename, wg := range buf.pendingWireguardUpdates {
-		var ipstr string
-		if wg.InterfaceIPv4Addr != nil {
-			ipstr = wg.InterfaceIPv4Addr.String()
+		log.WithFields(log.Fields{"nodename": nodename, "wg": wg}).Debug("Processing pending wireguard update")
+
+		var ipv4Str, ipv6Str string
+
+		if wg.PublicKey != "" {
+			if wg.InterfaceIPv4Addr != nil {
+				ipv4Str = wg.InterfaceIPv4Addr.String()
+			}
+			log.WithField("ipv4Str", ipv4Str).Debug("Sending IPv4 wireguard endpoint update")
+			buf.Callback(&proto.WireguardEndpointUpdate{
+				Hostname:          nodename,
+				PublicKey:         wg.PublicKey,
+				InterfaceIpv4Addr: ipv4Str,
+			})
+			buf.sentWireguard.Add(nodename)
+		} else if buf.sentWireguard.Contains(nodename) {
+			log.Debug("Sending IPv4 wireguard endpoint remove")
+			buf.Callback(&proto.WireguardEndpointRemove{
+				Hostname: nodename,
+			})
+			buf.sentWireguard.Discard(nodename)
 		}
-		buf.Callback(&proto.WireguardEndpointUpdate{
-			Hostname:          nodename,
-			PublicKey:         wg.PublicKey,
-			InterfaceIpv4Addr: ipstr,
-		})
-		buf.sentWireguard.Add(nodename)
+
+		if wg.PublicKeyV6 != "" {
+			if wg.InterfaceIPv6Addr != nil {
+				ipv6Str = wg.InterfaceIPv6Addr.String()
+			}
+			log.WithField("ipv6Str", ipv6Str).Debug("Sending IPv6 wireguard endpoint update")
+			buf.Callback(&proto.WireguardEndpointV6Update{
+				Hostname:          nodename,
+				PublicKeyV6:       wg.PublicKeyV6,
+				InterfaceIpv6Addr: ipv6Str,
+			})
+			buf.sentWireguardV6.Add(nodename)
+		} else if buf.sentWireguardV6.Contains(nodename) {
+			log.Debug("Sending IPv6 wireguard endpoint remove")
+			buf.Callback(&proto.WireguardEndpointV6Remove{
+				Hostname: nodename,
+			})
+			buf.sentWireguardV6.Discard(nodename)
+		}
+
 		delete(buf.pendingWireguardUpdates, nodename)
+
+		log.Debug("Done flushing wireguard updates")
 	}
 }
 
@@ -596,14 +676,24 @@ func (buf *EventSequencer) flushIPPoolDeletes() {
 func (buf *EventSequencer) flushHostWireguardDeletes() {
 	buf.pendingWireguardDeletes.Iter(func(item interface{}) error {
 		key := item.(string)
+		log.WithField("nodename", key).Debug("Processing pending wireguard delete")
 		if buf.sentWireguard.Contains(key) {
+			log.Debug("Sending IPv4 wireguard endpoint remove")
 			buf.Callback(&proto.WireguardEndpointRemove{
 				Hostname: key,
 			})
 			buf.sentWireguard.Discard(key)
 		}
+		if buf.sentWireguardV6.Contains(key) {
+			log.Debug("Sending IPv6 wireguard endpoint remove")
+			buf.Callback(&proto.WireguardEndpointV6Remove{
+				Hostname: key,
+			})
+			buf.sentWireguardV6.Discard(key)
+		}
 		return set.RemoveItem
 	})
+	log.Debug("Done flushing wireguard removes")
 }
 
 func (buf *EventSequencer) flushAddedIPSets() {
