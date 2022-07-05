@@ -39,6 +39,8 @@ type MockDataplane struct {
 	activePreDNATPolicies          set.Set[proto.PolicyID]
 	activeProfiles                 set.Set[proto.ProfileID]
 	activeVTEPs                    map[string]proto.VXLANTunnelEndpointUpdate
+	activeWireguardEndpoints       map[string]proto.WireguardEndpointUpdate
+	activeWireguardV6Endpoints     map[string]proto.WireguardEndpointV6Update
 	activeRoutes                   set.Set[proto.RouteUpdate]
 	endpointToPolicyOrder          map[string][]TierInfo
 	endpointToUntrackedPolicyOrder map[string][]TierInfo
@@ -113,6 +115,28 @@ func (d *MockDataplane) ActiveVTEPs() set.Set[proto.VXLANTunnelEndpointUpdate] {
 
 	cp := set.New[proto.VXLANTunnelEndpointUpdate]()
 	for _, v := range d.activeVTEPs {
+		cp.Add(v)
+	}
+
+	return cp
+}
+func (d *MockDataplane) ActiveWireguardEndpoints() set.Set[proto.WireguardEndpointUpdate] {
+	d.Lock()
+	defer d.Unlock()
+
+	cp := set.New[proto.WireguardEndpointUpdate]()
+	for _, v := range d.activeWireguardEndpoints {
+		cp.Add(v)
+	}
+
+	return cp
+}
+func (d *MockDataplane) ActiveWireguardV6Endpoints() set.Set[proto.WireguardEndpointV6Update] {
+	d.Lock()
+	defer d.Unlock()
+
+	cp := set.New[proto.WireguardEndpointV6Update]()
+	for _, v := range d.activeWireguardV6Endpoints {
 		cp.Add(v)
 	}
 
@@ -227,6 +251,8 @@ func NewMockDataplane() *MockDataplane {
 		activePreDNATPolicies:          set.New[proto.PolicyID](),
 		activeRoutes:                   set.New[proto.RouteUpdate](),
 		activeVTEPs:                    make(map[string]proto.VXLANTunnelEndpointUpdate),
+		activeWireguardEndpoints:       make(map[string]proto.WireguardEndpointUpdate),
+		activeWireguardV6Endpoints:     make(map[string]proto.WireguardEndpointV6Update),
 		endpointToPolicyOrder:          make(map[string][]TierInfo),
 		endpointToUntrackedPolicyOrder: make(map[string][]TierInfo),
 		endpointToPreDNATPolicyOrder:   make(map[string][]TierInfo),
@@ -436,6 +462,16 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.VXLANTunnelEndpointRemove:
 		Expect(d.activeVTEPs).To(HaveKey(event.Node), "delete for unknown VTEP")
 		delete(d.activeVTEPs, event.Node)
+	case *proto.WireguardEndpointUpdate:
+		d.activeWireguardEndpoints[event.Hostname] = *event
+	case *proto.WireguardEndpointRemove:
+		Expect(d.activeWireguardEndpoints).To(HaveKey(event.Hostname), "delete for unknown IPv4 Wireguard Endpoint")
+		delete(d.activeWireguardEndpoints, event.Hostname)
+	case *proto.WireguardEndpointV6Update:
+		d.activeWireguardV6Endpoints[event.Hostname] = *event
+	case *proto.WireguardEndpointV6Remove:
+		Expect(d.activeWireguardV6Endpoints).To(HaveKey(event.Hostname), "delete for unknown IPv6 Wireguard Endpoint")
+		delete(d.activeWireguardV6Endpoints, event.Hostname)
 	case *proto.Encapsulation:
 		d.encapsulation = *event
 	}
