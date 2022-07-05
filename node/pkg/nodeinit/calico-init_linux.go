@@ -29,6 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
 
@@ -89,14 +90,19 @@ func ensureBPFFilesystem() error {
 // with PID 1 running on a host to allow felix running in calico-node to access the root of cgroup namespace.
 // This is needed by felix to attach CTLB programs and implement k8s services correctly.
 func ensureCgroupV2Filesystem() error {
-	cgroupRootPath := "/initproc"
+	cgroupRootPath := "/nodeproc/"
+	initProcPid, err := bpfutils.PidOfLongestLivedProcess(cgroupRootPath)
+	if err != nil {
+		return fmt.Errorf("failed to find init process. err: %w", err)
+	}
 
 	// Check if the Cgroup2 filesystem is mounted at the expected location.
-	logrus.Info("Checking if Cgroup2 filesystem is mounted.")
-	mountInfoFile := path.Join(cgroupRootPath, "mountinfo")
+	logrus.Info("Checking if cgroup2 filesystem is mounted.")
+	mountInfoFile := path.Join(cgroupRootPath, fmt.Sprintf("%d", initProcPid), "mountinfo")
+	logrus.Debugf("Using mount info file %s", mountInfoFile)
 	mounts, err := os.Open(mountInfoFile)
 	if err != nil {
-		return fmt.Errorf("failed to open %s: %w", mountInfoFile, err)
+		return fmt.Errorf("failed to open %s. err: %w", mountInfoFile, err)
 	}
 	scanner := bufio.NewScanner(mounts)
 	for scanner.Scan() {
@@ -121,6 +127,12 @@ func ensureCgroupV2Filesystem() error {
 
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
 	logrus.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
+
+	err = os.MkdirAll(bpf.CgroupV2Path, 0700)
+	if err != nil {
+		return fmt.Errorf("failed to prepare mount point: %v. err: %w.", bpf.CgroupV2Path, err)
+	}
+	logrus.Infof("Mount point %s is ready for mounting root cgroup2 fs.", bpf.CgroupV2Path)
 
 	mountCmd := exec.Command("mountns", bpf.CgroupV2Path)
 	out, err := mountCmd.Output()
