@@ -2281,10 +2281,30 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
-						By("make connection to a service and set affinity")
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
+						By("Syncing with NAT tables", func() {
+							// Sync with NAT tables to prevent creating extra entry when
+							// CTLB misses but regular DNAT hits, but connection fails and
+							// then CTLB succeeds.
+							natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+							Eventually(func() bool {
+								m := dumpNATMap(felixes[0])
+								v, ok := m[natFtKey]
+								if !ok || v.Count() == 0 {
+									return false
+								}
+
+								beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+								be := dumpEPMap(felixes[0])
+								_, ok = be[beKey]
+								return ok
+							}, 5*time.Second).Should(BeTrue())
+						})
+
+						By("make connection to a service and set affinity")
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.CheckConnectivity()
 
