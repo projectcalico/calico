@@ -333,6 +333,10 @@ func (c *autoHostEndpointController) getAutoHostendpointExpectedIPs(node *libapi
 		expectedIPs = append(expectedIPs, node.Spec.Wireguard.InterfaceIPv4Address)
 		ipMap[node.Spec.Wireguard.InterfaceIPv4Address] = struct{}{}
 	}
+	if node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv6Address != "" {
+		expectedIPs = append(expectedIPs, node.Spec.Wireguard.InterfaceIPv6Address)
+		ipMap[node.Spec.Wireguard.InterfaceIPv6Address] = struct{}{}
+	}
 	for _, addr := range node.Spec.Addresses {
 		// Add internal IPs only
 		if addr.Type == libapi.InternalIP {
