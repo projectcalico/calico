@@ -126,8 +126,10 @@ func (m *Manager) ResyncFailsafes() error {
 		unknownKeys.Discard(k)
 		err = m.failsafesMap.Update(k.ToSlice(), Value())
 		if err != nil {
-			log.WithError(err).Error("Failed to update failsafe port.")
+			log.WithError(err).WithField("key", k).Error("Failed to update failsafe port.")
 			syncFailed = true
+		} else {
+			log.WithField("key", k).Debug("Installed failsafe port.")
 		}
 	}
 
@@ -144,6 +146,8 @@ func (m *Manager) ResyncFailsafes() error {
 		if err != nil {
 			log.WithError(err).WithField("key", k).Warn("Failed to remove failsafe port from map.")
 			syncFailed = true
+		} else {
+			log.WithField("key", k).Debug("Deleted failsafe port.")
 		}
 		return nil
 	})
