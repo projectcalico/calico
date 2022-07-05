@@ -39,7 +39,7 @@ import (
 func TestLoadAllowAllProgram(t *testing.T) {
 	RegisterTestingT(t)
 
-	b := asm.NewBlock()
+	b := asm.NewBlock(false)
 	b.MovImm32(asm.R0, -1)
 	b.Exit()
 	insns, err := b.Assemble()
@@ -64,7 +64,7 @@ func TestLoadProgramWithMapAccess(t *testing.T) {
 	Expect(ipsMap.EnsureExists()).NotTo(HaveOccurred())
 	Expect(ipsMap.MapFD()).NotTo(BeZero())
 
-	b := asm.NewBlock()
+	b := asm.NewBlock(false)
 	b.MovImm64(asm.R1, 0)
 	b.StoreStack64(asm.R1, -8)
 	b.StoreStack64(asm.R1, -16)
@@ -120,7 +120,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 
 	cleanIPSetMap()
 
-	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), tcJumpMap.MapFD())
+	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), tcJumpMap.MapFD(), false)
 	insns, err := pg.Instructions(polprog.Rules{
 		Tiers: []polprog.Tier{{
 			Name: "base tier",
@@ -166,7 +166,7 @@ func TestLoadGarbageProgram(t *testing.T) {
 	var insns asm.Insns
 	for i := 0; i < 256; i++ {
 		i := uint8(i)
-		insns = append(insns, asm.Insn{i, i, i, i, i, i, i, i})
+		insns = append(insns, asm.Insn{Instruction: [8]uint8{i, i, i, i, i, i, i, i}})
 	}
 
 	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
@@ -270,6 +270,7 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 		},
 	},
+
 	{
 		PolicyName: "unreachable tier",
 		Policy: polprog.Rules{
@@ -1672,7 +1673,7 @@ func runTest(t *testing.T, tp testPolicy) {
 	setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
 
 	// Build the program.
-	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), tcJumpMap.MapFD())
+	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), tcJumpMap.MapFD(), false)
 	insns, err := pg.Instructions(tp.Policy())
 	Expect(err).NotTo(HaveOccurred(), "failed to assemble program")
 
@@ -1720,7 +1721,7 @@ func runTest(t *testing.T, tp testPolicy) {
 
 // installAllowedProgram installs a trivial BPF program into the jump table that returns RCAllowedReached.
 func installAllowedProgram(jumpMap bpf.Map) bpf.ProgFD {
-	b := asm.NewBlock()
+	b := asm.NewBlock(false)
 
 	// Load the RC into the return register.
 	b.MovImm64(asm.R0, RCAllowedReached)
