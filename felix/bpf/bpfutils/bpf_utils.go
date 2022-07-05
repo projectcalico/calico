@@ -15,6 +15,10 @@
 package bpfutils
 
 import (
+	"fmt"
+	"io/ioutil"
+	"regexp"
+	"strconv"
 	"sync"
 
 	"os"
@@ -46,4 +50,25 @@ func IncreaseLockedMemoryQuota() {
 			log.WithError(err).Error("Failed to increase RLIMIT_MEMLOCK, loading BPF programs may fail")
 		}
 	})
+}
+
+var numbersRegex = regexp.MustCompile(`\d+`)
+
+func PidOfLongestLivedProcess(procPath string) (int, error) {
+	proc, err := ioutil.ReadDir(procPath)
+	if err != nil {
+		return -1, fmt.Errorf("error reading path %s %w", procPath, err)
+	}
+	for _, f := range proc {
+		if f.IsDir() && numbersRegex.MatchString(f.Name()) {
+			mountInfoPath := fmt.Sprintf("/proc/%s/mountinfo", f.Name())
+			_, err := os.Stat(mountInfoPath)
+			if err != nil {
+				continue
+			}
+			pid, _ := strconv.Atoi(f.Name())
+			return pid, nil
+		}
+	}
+	return -1, fmt.Errorf("longest lived process not found")
 }
