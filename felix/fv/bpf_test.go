@@ -871,7 +871,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					sort.Strings(filteredLines)
 					return strings.Join(filteredLines, "\n")
 				}
-				Eventually(dumpRoutes, "5s", "200ms").Should(Equal(expectedRoutes), dumpRoutes)
+				Eventually(dumpRoutes, "10s", "200ms").Should(Equal(expectedRoutes), dumpRoutes)
 			})
 
 			It("should only allow traffic from the local host by default", func() {
@@ -2181,6 +2181,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
+							if setAffinity {
+								// Sync with NAT tables to prevent creating extra entry when
+								// CTLB misses but regular DNAT hits, but connection fails and
+								// then CTLB succeeds.
+								natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+								Eventually(func() bool {
+									m := dumpNATMap(felixes[0])
+									v, ok := m[natFtKey]
+									if !ok || v.Count() == 0 {
+										return false
+									}
+
+									beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+									be := dumpEPMap(felixes[0])
+									_, ok = be[beKey]
+									return ok
+								}, 5*time.Second).Should(BeTrue())
+							}
+
 							cc.ExpectSome(w[0][1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 
@@ -2262,10 +2282,30 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
-						By("make connection to a service and set affinity")
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
+						By("Syncing with NAT tables", func() {
+							// Sync with NAT tables to prevent creating extra entry when
+							// CTLB misses but regular DNAT hits, but connection fails and
+							// then CTLB succeeds.
+							natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+							Eventually(func() bool {
+								m := dumpNATMap(felixes[0])
+								v, ok := m[natFtKey]
+								if !ok || v.Count() == 0 {
+									return false
+								}
+
+								beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+								be := dumpEPMap(felixes[0])
+								_, ok = be[beKey]
+								return ok
+							}, 5*time.Second).Should(BeTrue())
+						})
+
+						By("make connection to a service and set affinity")
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.CheckConnectivity()
 
@@ -3640,21 +3680,46 @@ func conntrackChecks(felixes []*infrastructure.Felix) []interface{} {
 }
 
 func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
+	allStr := strconv.Itoa(all)
+	mainStr := strconv.Itoa(main)
+
+	var wg sync.WaitGroup
+
 	for _, felix := range felixes {
-		// N.B. we only support environment with not so strict RPF - can be
-		// strict per iface, but not for all.
-		felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+strconv.Itoa(all))
-		switch tunnel {
-		case "none":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+strconv.Itoa(main))
-		case "ipip":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+strconv.Itoa(main))
-		case "wireguard":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+strconv.Itoa(main))
-		case "vxlan":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+strconv.Itoa(main))
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			Eventually(func() error {
+				// N.B. we only support environment with not so strict RPF - can be
+				// strict per iface, but not for all.
+				if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+allStr); err != nil {
+					return err
+				}
+				switch tunnel {
+				case "none":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "ipip":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "wireguard":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "vxlan":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			}, "5s", "200ms").Should(Succeed())
+		}()
 	}
+
+	wg.Wait()
 }
 
 func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
