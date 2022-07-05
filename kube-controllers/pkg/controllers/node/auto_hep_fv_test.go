@@ -167,15 +167,16 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
-		// Update the wireguard IP.
+		// Update the wireguard IPs.
 		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
 			cn.Spec.Wireguard = &libapi.NodeWireguardSpec{
 				InterfaceIPv4Address: "192.168.100.1",
+				InterfaceIPv6Address: "dead:beef::100:1",
 			}
 		})).NotTo(HaveOccurred())
 
-		// Expect the HEP to include the wireguard IP.
-		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "dead:beef::1", "192.168.100.1"}
+		// Expect the HEP to include the wireguard IPs.
+		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "dead:beef::1", "192.168.100.1", "dead:beef::100:1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
