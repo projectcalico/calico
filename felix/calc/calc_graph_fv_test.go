@@ -673,6 +673,12 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
 		"Active VTEPs were incorrect after moving to state: %v",
 		state.Name)
+	Expect(mockDataplane.ActiveWireguardEndpoints()).To(Equal(state.ExpectedWireguardEndpoints),
+		"Active IPv4 Wireguard Endpoints were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveWireguardV6Endpoints()).To(Equal(state.ExpectedWireguardV6Endpoints),
+		"Active IPv6 Wireguard Endpoints were incorrect after moving to state: %v",
+		state.Name)
 	// Comparing stringified versions of the routes here so that, on failure, we get much more readable output.
 	Expect(stringifyRoutes(mockDataplane.ActiveRoutes())).To(Equal(stringifyRoutes(state.ExpectedRoutes)),
 		"Active routes were incorrect after moving to state: %v",
