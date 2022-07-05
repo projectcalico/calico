@@ -41,6 +41,8 @@ type State struct {
 	ExpectedProfileIDs                   set.Set
 	ExpectedRoutes                       set.Set
 	ExpectedVTEPs                        set.Set
+	ExpectedWireguardEndpoints           set.Set
+	ExpectedWireguardV6Endpoints         set.Set
 	ExpectedEndpointPolicyOrder          map[string][]mock.TierInfo
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
@@ -65,6 +67,8 @@ func NewState() State {
 		ExpectedProfileIDs:                   set.New(),
 		ExpectedRoutes:                       set.New(),
 		ExpectedVTEPs:                        set.New(),
+		ExpectedWireguardEndpoints:           set.New(),
+		ExpectedWireguardV6Endpoints:         set.New(),
 		ExpectedEndpointPolicyOrder:          make(map[string][]mock.TierInfo),
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
@@ -94,6 +98,8 @@ func (s State) Copy() State {
 	cpy.ExpectedProfileIDs = s.ExpectedProfileIDs.Copy()
 	cpy.ExpectedRoutes = s.ExpectedRoutes.Copy()
 	cpy.ExpectedVTEPs = s.ExpectedVTEPs.Copy()
+	cpy.ExpectedWireguardEndpoints = s.ExpectedWireguardEndpoints.Copy()
+	cpy.ExpectedWireguardV6Endpoints = s.ExpectedWireguardV6Endpoints.Copy()
 	cpy.ExpectedNumberOfALPPolicies = s.ExpectedNumberOfALPPolicies
 	cpy.ExpectedEncapsulation = s.ExpectedEncapsulation
 
@@ -235,6 +241,18 @@ func (s State) withRoutes(routes ...proto.RouteUpdate) (newState State) {
 func (s State) withExpectedEncapsulation(encap proto.Encapsulation) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedEncapsulation = encap
+	return newState
+}
+
+func (s State) withWireguardEndpoints(endpoints ...proto.WireguardEndpointUpdate) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedWireguardEndpoints = set.FromArray(endpoints)
+	return newState
+}
+
+func (s State) withWireguardV6Endpoints(endpoints ...proto.WireguardEndpointV6Update) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedWireguardV6Endpoints = set.FromArray(endpoints)
 	return newState
 }
 
