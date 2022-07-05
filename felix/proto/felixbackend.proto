@@ -129,6 +129,11 @@ message ToDataplane {
     WireguardEndpointV6Update wireguard_endpoint_v6_update = 33;
     // WireguardEndpointV6Remove is sent to undo IPv6 wireguard on the host.
     WireguardEndpointV6Remove wireguard_endpoint_v6_remove = 34;
+
+    // HostMetadataV6Update is sent when a host IPv6 address is added or updated.
+    HostMetadataV6Update host_metadata_v6_update = 35;
+    // HostMetadataV6Remove is sent when a host IPv6 address is removed.
+    HostMetadataV6Remove host_metadata_v6_remove = 36;
   }
 }
 
