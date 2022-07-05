@@ -674,18 +674,26 @@ func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) 
 	}
 }
 func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
-	comment := ""
-	cidrStrings := ""
-	for _, cidrStr := range cidrs {
-		cidrStrings = cidrStrings + fmt.Sprintf("%s,", cidrStr)
-	}
-	if negate {
-		comment = fmt.Sprintf("If %s in %s, skip to next rule", leg, cidrStrings)
-	} else {
-		comment = fmt.Sprintf("If %s not in %s, skip to next rule", leg, cidrStrings)
-	}
+	if p.policyDebugEnabled {
+		comment := ""
+		cidrStrings := "{"
+		if len(cidrs) == 0 {
+			cidrStrings = "{}"
+		}
 
-	p.b.AddComment(comment)
+		for _, cidrStr := range cidrs {
+			cidrStrings = cidrStrings + fmt.Sprintf("%s,", cidrStr)
+		}
+		cidrStrings = cidrStrings[:len(cidrStrings)-1] + "}"
+
+		if negate {
+			comment = fmt.Sprintf("If %s in %s, skip to next rule", leg, cidrStrings)
+		} else {
+			comment = fmt.Sprintf("If %s not in %s, skip to next rule", leg, cidrStrings)
+		}
+
+		p.b.AddComment(comment)
+	}
 	p.b.Load32(R1, R9, leg.offsetToStateIPAddressField())
 
 	var onMatchLabel string
@@ -759,7 +767,12 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
 		}
 
-		comment := fmt.Sprintf("If %s does not match ipset %s, jump to next ipset", leg, ipSetID)
+		comment := ""
+		if len(ipSets) == 1 {
+			comment = fmt.Sprintf("If %s doesn't match ipset %s, skip to next rule", leg, ipSetID)
+		} else {
+			comment = fmt.Sprintf("If %s doesn't match ipset %s, jump to next ipset", leg, ipSetID)
+		}
 		p.b.AddComment(comment)
 
 		keyOffset := leg.stackOffsetToIPSetKey()
@@ -775,8 +788,10 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 	}
 
 	// If packet reaches here, it hasn't matched any of the IP sets.
-	comment := fmt.Sprintf("If %s doesn't match any of the IP sets, skip to next rule", leg)
-	p.b.AddComment(comment)
+	if len(ipSets) > 1 {
+		comment := fmt.Sprintf("If %s doesn't match any of the IP sets, skip to next rule", leg)
+		p.b.AddComment(comment)
+	}
 	p.b.Jump(p.endOfRuleLabel())
 	// Label the next match so we can skip to it on success.
 	p.b.LabelNextInsn(onMatchLabel)
