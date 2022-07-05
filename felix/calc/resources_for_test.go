@@ -18,6 +18,7 @@ package calc_test
 // the model package.
 
 import (
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -867,3 +868,10 @@ var remoteHostVXLANTunnelIP2 = "10.0.1.1"
 var remoteHost2VXLANTunnelIP = "10.0.2.0"
 var remoteHostVXLANTunnelMAC = "66:74:c5:72:3f:01"
 var remoteHostVXLANV6TunnelMAC = "10:f3:27:5c:47:66"
+
+var t = true
+
+var wgPrivateKey1, _ = wgtypes.GeneratePrivateKey()
+var wgPublicKey1 = wgPrivateKey1.PublicKey()
+var wgPrivateKey2, _ = wgtypes.GeneratePrivateKey()
+var wgPublicKey2 = wgPrivateKey2.PublicKey()
