@@ -55,6 +55,7 @@ type AttachPoint struct {
 	DSR                  bool
 	TunnelMTU            uint16
 	VXLANPort            uint16
+	WgPort               uint16
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
@@ -639,7 +640,8 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	}
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP, flags)
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP,
+		flags, ap.WgPort)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
