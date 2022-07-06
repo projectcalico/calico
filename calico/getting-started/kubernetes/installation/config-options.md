@@ -176,12 +176,12 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico-etcd.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{ "/manifests/canal.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/canal.yaml -O
    ```
 
 1. Within the `ConfigMap` section, uncomment the `etcd_ca`, `etcd_key`, and `etcd_cert`
@@ -341,7 +341,7 @@ Felix.  Once created, a Unix domain socket is an in-memory communications
 channel. The volumes are not used for any kind of stateful storage on disk.
 
 Refer to the
-[Calico ConfigMap manifest](/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
+[Calico ConfigMap manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
 example with the above changes.
 
 %>
