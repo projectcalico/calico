@@ -162,7 +162,7 @@ The tool is embedded in the {{site.nodecontainer}} container image. To run the t
   ```
 
   Also, it is possible to fetch various counters from BPF dataplane using the same tool.
-  For example, to dump the BPF counters of `eth0` inteface:
+  For example, to dump the BPF counters of `eth0` interface:
   ```
   $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf counters dump --iface=eth0
   +----------+--------------------------------+---------+--------+
