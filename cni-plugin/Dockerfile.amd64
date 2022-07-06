@@ -36,6 +36,10 @@ ADD LICENSE /licenses/
 COPY --from=ubi /lib64 /lib64
 COPY --from=ubi /lib /lib
 
+# Copy hostname configuration files from UBI so glibc hostname lookups work.
+COPY --from=ubi /etc/host.conf /etc/host.conf
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
+
 ADD $BIN_DIR/ /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
