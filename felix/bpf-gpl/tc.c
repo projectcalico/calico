@@ -1379,24 +1379,22 @@ deny:
 SEC("classifier/tc/drop")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
-	CALI_DEBUG("Entering calico_tc_skb_drop - DENY\n");
-
+	CALI_DEBUG("Entering calico_tc_skb_drop\n");
 	struct cali_tc_ctx ctx = {
+		.state = states_get(),
 		.counters = counters_get(),
 	};
+	
+	if (!ctx.state) {
+		CALI_DEBUG("State map lookup failed: no event generated\n");
+		return TC_ACT_SHOT;
+	}
+	
 	if (!ctx.counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
 	COUNTER_INC(&ctx, CALI_REASON_DROPPED_BY_POLICY);
-
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
-		ctx.state = state_get();
-		if (!ctx.state) {
-			CALI_DEBUG("State map lookup failed: no event generated\n");
-			return TC_ACT_SHOT;
-		}
-	}
 
 	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
 	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(ctx.state->ip_src),
@@ -1410,6 +1408,47 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	CALI_DEBUG("flags=0x%x\n", ctx.state->flags);
 	CALI_DEBUG("ct_rc=%d\n", ctx.state->ct_result.rc);
 
+	/* This is a policy override for Wireguard traffic. It is regular UDP
+	 * traffic on known ports between known hosts. We want to let this
+	 * traffic through so that a user does not shoot him/herself in a foot
+	 * by blocking this traffic by a HEP policy.
+	 *
+	 * If such traffic is allowed here, it will create regular CT entry and
+	 * thus every subsequent packet will save itself the trouble of going
+	 * through policy and ending up here over and over again.
+	 */
+	if (CALI_F_HEP &&
+			state->ip_proto == IPPROTO_UDP &&
+			state->pre_nat_dport == state->post_nat_dport &&
+			state->pre_nat_dport == WG_PORT &&
+			state->sport == WG_PORT) {
+		if ((CALI_F_FROM_HEP &&
+				rt_addr_is_local_host(state->ip_dst) &&
+				rt_addr_is_remote_host(state->ip_src)) ||
+			(CALI_F_TO_HEP &&
+				rt_addr_is_remote_host(state->ip_dst) &&
+				rt_addr_is_local_host(state->ip_src))) {
+			/* This is info as it is supposed to be low intensity (only when a
+			 * new flow detected - should happen exactly once in a blue moon ;-) )
+			 * but would be good to know about for issue debugging.
+			 */
+			CALI_INFO("Allowing WG %x <-> %x despite blocked by policy - known hosts.\n",
+					bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
+			goto allow;
+		}
+	}
+
+	goto deny;
+
+allow:
+	state->pol_rc = CALI_POL_ALLOW;
+	state->flags |= CALI_ST_SKIP_POLICY;
+	CALI_JUMP_TO(skb, PROG_INDEX_ALLOWED);
+	/* should not reach here */
+	CALI_DEBUG("Failed to jump to allow program.");
+
+deny:
+	CALI_DEBUG("DENY due to policy");
 	return TC_ACT_SHOT;
 }
 
