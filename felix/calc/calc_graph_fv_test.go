@@ -490,6 +490,11 @@ var baseTests = []StateList{
 		vxlanV4V6WithV6MAC,
 		vxlanV4V6WithBlock,
 	},
+	{
+		wireguardV4,
+		wireguardV6,
+		wireguardV4V6,
+	},
 }
 
 var logOnce sync.Once
@@ -667,6 +672,12 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 		state.Name)
 	Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
 		"Active VTEPs were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveWireguardEndpoints()).To(Equal(state.ExpectedWireguardEndpoints),
+		"Active IPv4 Wireguard Endpoints were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveWireguardV6Endpoints()).To(Equal(state.ExpectedWireguardV6Endpoints),
+		"Active IPv6 Wireguard Endpoints were incorrect after moving to state: %v",
 		state.Name)
 	// Comparing stringified versions of the routes here so that, on failure, we get much more readable output.
 	Expect(stringifyRoutes(mockDataplane.ActiveRoutes())).To(Equal(stringifyRoutes(state.ExpectedRoutes)),
