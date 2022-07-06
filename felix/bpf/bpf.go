@@ -35,11 +35,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex"
 )
@@ -2235,8 +2237,30 @@ func KTimeNanos() int64 {
 	return ts.Nano()
 }
 
+var (
+	cachedNumPossibleCPUs     int
+	cachedNumPossibleCPUsOnce sync.Once
+)
+
+func NumPossibleCPUs() int {
+	cachedNumPossibleCPUsOnce.Do(func() {
+		var err error
+		cachedNumPossibleCPUs, err = libbpf.NumPossibleCPUs()
+		if err != nil {
+			log.WithError(err).Panic("Failed to read the number of possible CPUs from libbpf.")
+		}
+	})
+	return cachedNumPossibleCPUs
+}
+
 const jumpMapVersion = 2
 
 func JumpMapName() string {
 	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
+}
+
+const countersMapVersion = 1
+
+func CountersMapName() string {
+	return fmt.Sprintf("cali_counters%d", countersMapVersion)
 }
