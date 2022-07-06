@@ -139,15 +139,17 @@ The tool is embedded in the {{site.nodecontainer}} container image. To run the t
     arp          Manipulates arp
     connect-time Manipulates connect-time load balancing programs
     conntrack    Manipulates connection tracking
+    counters     Show and reset counters
     help         Help about any command
     ipsets       Manipulates ipsets
-    nat          Nanipulates network address translation (nat)
+    nat          Manipulates network address translation (nat)
     routes       Manipulates routes
     version      Prints the version and exits
   
   Flags:
     --config string   config file (default is $HOME/.calico-bpf.yaml)
     -h, --help            help for calico-bpf
+        --log-level string   Set log level (default "warn")
     -t, --toggle          Help message for toggle
   ```
   (Since the tool is embedded in the main `calico-node` binary the `--help` option is not available, but running
@@ -157,6 +159,31 @@ The tool is embedded in the {{site.nodecontainer}} container image. To run the t
   ```
   $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf conntrack dump
   ...
+  ```
+
+  Also, it is possible to fetch various counters from BPF dataplane using the same tool.
+  For example, to dump the BPF counters of `eth0` inteface:
+  ```
+  $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf counters dump --iface=eth0
+  +----------+--------------------------------+---------+--------+
+  | CATEGORY |              TYPE              | INGRESS | EGRESS |
+  +----------+--------------------------------+---------+--------+
+  | Accepted | by another program             |       0 |      0 |
+  |          | by failsafe                    |       0 |      4 |
+  |          | by policy                      |      21 |      0 |
+  | Dropped  | by policy                      |       4 |      0 |
+  |          | failed decapsulation           |       0 |      0 |
+  |          | failed encapsulation           |       0 |      0 |
+  |          | incorrect checksum             |       0 |      0 |
+  |          | malformed IP packets           |       0 |      0 |
+  |          | packets with unknown route     |       0 |      0 |
+  |          | packets with unknown source    |       0 |      0 |
+  |          | packets with unsupported IP    |       0 |      0 |
+  |          | options                        |         |        |
+  |          | too short packets              |       0 |      0 |
+  | Total    | packets                        |    1593 |   1973 |
+  +----------+--------------------------------+---------+--------+
+  dumped eth0 counters.
   ```
 
 ### Poor performance
