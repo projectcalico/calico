@@ -22,14 +22,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
 
@@ -90,16 +88,9 @@ func ensureBPFFilesystem() error {
 // with PID 1 running on a host to allow felix running in calico-node to access the root of cgroup namespace.
 // This is needed by felix to attach CTLB programs and implement k8s services correctly.
 func ensureCgroupV2Filesystem() error {
-	cgroupRootPath := "/nodeproc/"
-	initProcPid, err := bpfutils.PidOfLongestLivedProcess(cgroupRootPath)
-	if err != nil {
-		return fmt.Errorf("failed to find init process. err: %w", err)
-	}
-
 	// Check if the Cgroup2 filesystem is mounted at the expected location.
 	logrus.Info("Checking if cgroup2 filesystem is mounted.")
-	mountInfoFile := path.Join(cgroupRootPath, fmt.Sprintf("%d", initProcPid), "mountinfo")
-	logrus.Debugf("Using mount info file %s", mountInfoFile)
+	mountInfoFile := "/nodeproc/1/mountinfo"
 	mounts, err := os.Open(mountInfoFile)
 	if err != nil {
 		return fmt.Errorf("failed to open %s. err: %w", mountInfoFile, err)
