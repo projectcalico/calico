@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,6 +43,11 @@ func (m *Map) MapFD() bpf.MapFD {
 
 func (m *Map) Open() error {
 	m.logCxt.Info("Open called")
+	return nil
+}
+
+func (m *Map) Close() error {
+	m.logCxt.Info("Close called")
 	return nil
 }
 
@@ -152,6 +157,10 @@ func (*DummyMap) GetName() string {
 }
 
 func (*DummyMap) Open() error {
+	return nil
+}
+
+func (*DummyMap) Close() error {
 	return nil
 }
 

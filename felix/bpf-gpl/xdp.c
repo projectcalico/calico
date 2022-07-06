@@ -32,6 +32,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
+		.counters = counters_get(),
 		.xdp = xdp,
 		.fwd = {
 			.res = XDP_PASS, // TODO: Adjust based on the design
@@ -43,8 +44,14 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 		CALI_DEBUG("State map lookup failed: PASS\n");
 		return XDP_PASS; // TODO: Adjust base on the design
 	}
-
 	__builtin_memset(ctx.state, 0, sizeof(*ctx.state));
+
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		// We don't want to drop packets just because counters initialization fails, but
+		// failing here normally should not happen.
+		return TC_ACT_SHOT;
+	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -72,6 +79,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	// configured failsafe ports should be allowed and NOT be accidentally untracked.
 	if (is_failsafe_in(ctx.state->ip_proto, ctx.state->dport, ctx.state->ip_src)) {
 		CALI_DEBUG("Inbound failsafe port: %d. Skip policy\n", ctx.state->dport);
+		COUNTER_INC(&ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto allow;
 	}
@@ -85,6 +93,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	// conntrack state.
 	if (is_failsafe_out(ctx.state->ip_proto, ctx.state->sport, ctx.state->ip_src)) {
 		CALI_DEBUG("Outbound failsafe port: %d. Skip policy\n", ctx.state->sport);
+		COUNTER_INC(&ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto allow;
 	}
