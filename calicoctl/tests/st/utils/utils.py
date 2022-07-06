@@ -51,6 +51,8 @@ KUBERNETES_NP = "kubernetes network policies must be managed through the kuberne
 NOT_LOCKED = "Datastore is not locked. Run the `calicoctl datastore migrate lock` command in order to begin migration."
 NOT_KUBERNETES = "Invalid datastore type: etcdv3 to import to for datastore migration. Datastore type must be kubernetes"
 NO_IPAM = "No IPAM resources specified in file"
+NOT_LOCKED_SPLIT = "Datastore is not locked. Run the `calicoctl datastore migrate lock` command in order split the IP pools."
+POOL_NOT_EXIST_CIDR = "Unable to find IP pool covering the specified CIDR"
 
 class CalicoctlOutput:
     """
