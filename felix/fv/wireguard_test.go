@@ -507,6 +507,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					Expect(err).NotTo(HaveOccurred())
 				}
 
+				By("Waiting for the policy to apply")
+				// XXX this is lame, but will have to do until we have a way do
+				// XXX to confirm policy applied in BPF. Then we will fix both
+				// XXX iptables and BPF properly.
+				time.Sleep(30 * time.Second)
+
 				By("Checking there is eventually and consistently connectivity between the workloads using wg")
 				Eventually(checkConn, "5s", "100ms").ShouldNot(HaveOccurred())
 				Consistently(checkConn, "2s", "100ms").ShouldNot(HaveOccurred())

@@ -162,6 +162,7 @@ type bpfEndpointManager struct {
 	epToHostAction          string
 	vxlanMTU                int
 	vxlanPort               uint16
+	wgPort                  uint16
 	dsrEnabled              bool
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
@@ -257,6 +258,7 @@ func newBPFEndpointManager(
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
+		wgPort:                  uint16(config.Wireguard.ListeningPort),
 		dsrEnabled:              config.BPFNodePortDSREnabled,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
@@ -1117,6 +1119,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 			ap.Hook = tc.HookIngress
 		}
 	} else {
+		ap.WgPort = m.wgPort
 		// Host endpoints have the natural relationship between policy direction and hook.
 		if policyDirection == PolDirnIngress {
 			ap.Hook = tc.HookIngress
