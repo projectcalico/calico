@@ -77,6 +77,87 @@ ippool_name1_rev2_v4 = {
     }
 }
 
+ippool_name1_rev3_v4 = {
+    'apiVersion': API_VERSION,
+    'kind': 'IPPool',
+    'metadata': {
+        'name': 'ippool-name1'
+    },
+    'spec': {
+        'cidr': "10.0.1.0/24",
+        'ipipMode': 'Always',
+        'vxlanMode': 'Never',
+        'blockSize': 27,
+        'allowedUses': ["Workload", "Tunnel"],
+        'nodeSelector': "foo == 'bar'",
+        'disabled': True,
+    }
+}
+
+ippool_name1_rev1_split1_v4 = {
+    'apiVersion': API_VERSION,
+    'kind': 'IPPool',
+    'metadata': {
+        'name': 'split-ippool-name1-1'
+    },
+    'spec': {
+        'cidr': "10.0.1.0/26",
+        'ipipMode': 'Always',
+        'vxlanMode': 'Never',
+        'blockSize': 27,
+        'allowedUses': ["Workload", "Tunnel"],
+        'nodeSelector': "foo == 'bar'",
+    }
+}
+
+ippool_name1_rev1_split2_v4 = {
+    'apiVersion': API_VERSION,
+    'kind': 'IPPool',
+    'metadata': {
+        'name': 'split-ippool-name1-2'
+    },
+    'spec': {
+        'cidr': "10.0.1.64/26",
+        'ipipMode': 'Always',
+        'vxlanMode': 'Never',
+        'blockSize': 27,
+        'allowedUses': ["Workload", "Tunnel"],
+        'nodeSelector': "foo == 'bar'",
+    }
+}
+
+ippool_name1_rev1_split3_v4 = {
+    'apiVersion': API_VERSION,
+    'kind': 'IPPool',
+    'metadata': {
+        'name': 'split-ippool-name1-3'
+    },
+    'spec': {
+        'cidr': "10.0.1.128/26",
+        'ipipMode': 'Always',
+        'vxlanMode': 'Never',
+        'blockSize': 27,
+        'allowedUses': ["Workload", "Tunnel"],
+        'nodeSelector': "foo == 'bar'",
+    }
+}
+
+ippool_name1_rev1_split4_v4 = {
+    'apiVersion': API_VERSION,
+    'kind': 'IPPool',
+    'metadata': {
+        'name': 'split-ippool-name1-4'
+    },
+    'spec': {
+        'cidr': "10.0.1.192/26",
+        'ipipMode': 'Always',
+        'vxlanMode': 'Never',
+        'blockSize': 27,
+        'allowedUses': ["Workload", "Tunnel"],
+        'nodeSelector': "foo == 'bar'",
+    }
+}
+
 ippool_name2_rev1_v6 = {
     'apiVersion': API_VERSION,
     'kind': 'IPPool',
