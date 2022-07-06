@@ -652,7 +652,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		if (CALI_F_FROM_HEP && tc_ctx->state->tun_ip && result.tun_ip && result.tun_ip != tc_ctx->state->tun_ip) {
 			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
 					bpf_ntohl(result.tun_ip), bpf_ntohl(tc_ctx->state->tun_ip));
-			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
+			ct_result_set_flag(result.rc, CT_RES_TUN_SRC_CHANGED);
+		}
+
+		if (tracking_v->a_to_b.whitelisted && tracking_v->b_to_a.whitelisted) {
+			ct_result_set_flag(result.rc, CT_RES_CONFIRMED);
 		}
 
 		break;
@@ -713,6 +717,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
+
+		if (v->a_to_b.whitelisted && v->b_to_a.whitelisted) {
+			ct_result_set_flag(result.rc, CT_RES_CONFIRMED);
+		}
+
 		break;
 
 	case CALI_CT_TYPE_NORMAL:
@@ -743,6 +752,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 		if (v->a_to_b.whitelisted && v->b_to_a.whitelisted) {
 			result.rc = CALI_CT_ESTABLISHED_BYPASS;
+			ct_result_set_flag(result.rc, CT_RES_CONFIRMED);
 		} else {
 			result.rc = CALI_CT_ESTABLISHED;
 		}
@@ -763,7 +773,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 	int ret_from_tun = CALI_F_FROM_HEP &&
 				tc_ctx->state->tun_ip &&
-				result.rc == CALI_CT_ESTABLISHED_DNAT &&
+				ct_result_rc(result.rc) == CALI_CT_ESTABLISHED_DNAT &&
 				src_to_dst->whitelisted &&
 				result.flags & CALI_CT_FLAG_NP_FWD;
 
@@ -851,7 +861,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			 * Do not check if packets are returning from the NP vxlan tunnel.
 			 */
 			if (!same_if && !ret_from_tun && !hep_rpf_check(tc_ctx, false) && !CALI_F_NAT_IF) {
-				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
+				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
 			} else {
 				src_to_dst->ifindex = ifindex;
 			}
@@ -875,14 +885,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 	if (syn) {
 		CALI_CT_DEBUG("packet is SYN\n");
-		ct_result_set_flag(result.rc, CALI_CT_SYN);
+		ct_result_set_flag(result.rc, CT_RES_SYN);
 	}
 
 
 	CALI_CT_DEBUG("result: 0x%x\n", result.rc);
 
 	if (related) {
-		ct_result_set_flag(result.rc, CALI_CT_RELATED);
+		ct_result_set_flag(result.rc, CT_RES_RELATED);
 		CALI_CT_DEBUG("result: related\n");
 	}
 
