@@ -1381,7 +1381,7 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_drop\n");
 	struct cali_tc_ctx ctx = {
-		.state = states_get(),
+		.state = state_get(),
 		.counters = counters_get(),
 	};
 	
@@ -1418,22 +1418,22 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	 * through policy and ending up here over and over again.
 	 */
 	if (CALI_F_HEP &&
-			state->ip_proto == IPPROTO_UDP &&
-			state->pre_nat_dport == state->post_nat_dport &&
-			state->pre_nat_dport == WG_PORT &&
-			state->sport == WG_PORT) {
+			ctx.state->ip_proto == IPPROTO_UDP &&
+			ctx.state->pre_nat_dport == ctx.state->post_nat_dport &&
+			ctx.state->pre_nat_dport == WG_PORT &&
+			ctx.state->sport == WG_PORT) {
 		if ((CALI_F_FROM_HEP &&
-				rt_addr_is_local_host(state->ip_dst) &&
-				rt_addr_is_remote_host(state->ip_src)) ||
+				rt_addr_is_local_host(ctx.state->ip_dst) &&
+				rt_addr_is_remote_host(ctx.state->ip_src)) ||
 			(CALI_F_TO_HEP &&
-				rt_addr_is_remote_host(state->ip_dst) &&
-				rt_addr_is_local_host(state->ip_src))) {
+				rt_addr_is_remote_host(ctx.state->ip_dst) &&
+				rt_addr_is_local_host(ctx.state->ip_src))) {
 			/* This is info as it is supposed to be low intensity (only when a
 			 * new flow detected - should happen exactly once in a blue moon ;-) )
 			 * but would be good to know about for issue debugging.
 			 */
 			CALI_INFO("Allowing WG %x <-> %x despite blocked by policy - known hosts.\n",
-					bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
+					bpf_ntohl(ctx.state->ip_src), bpf_ntohl(ctx.state->ip_dst));
 			goto allow;
 		}
 	}
@@ -1441,8 +1441,8 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	goto deny;
 
 allow:
-	state->pol_rc = CALI_POL_ALLOW;
-	state->flags |= CALI_ST_SKIP_POLICY;
+	ctx.state->pol_rc = CALI_POL_ALLOW;
+	ctx.state->flags |= CALI_ST_SKIP_POLICY;
 	CALI_JUMP_TO(skb, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	CALI_DEBUG("Failed to jump to allow program.");
