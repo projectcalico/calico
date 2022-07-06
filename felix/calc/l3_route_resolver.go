@@ -61,7 +61,7 @@ type L3RouteResolver struct {
 	// Store node metadata indexed by node name, and routes by the
 	// block that contributed them.
 	nodeNameToNodeInfo     map[string]l3rrNodeInfo
-	blockToRoutes          map[string]set.Set
+	blockToRoutes          map[string]set.Set[nodenameRoute]
 	nodeRoutes             nodeRoutes
 	allPools               map[string]model.IPPool
 	workloadIDToCIDRs      map[model.WorkloadEndpointKey][]cnet.IPNet
@@ -153,7 +153,7 @@ func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeRes
 		trie: NewRouteTrie(),
 
 		nodeNameToNodeInfo:     map[string]l3rrNodeInfo{},
-		blockToRoutes:          map[string]set.Set{},
+		blockToRoutes:          map[string]set.Set[nodenameRoute]{},
 		allPools:               map[string]model.IPPool{},
 		workloadIDToCIDRs:      map[model.WorkloadEndpointKey][]cnet.IPNet{},
 		useNodeResourceUpdates: useNodeResourceUpdates,
@@ -239,8 +239,8 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 	// Update the routes map based on the provided block update.
 	key := update.Key.String()
 
-	deletes := set.New()
-	adds := set.New()
+	deletes := set.NewBoxed[nodenameRoute]()
+	adds := set.NewBoxed[nodenameRoute]()
 	if update.Value != nil {
 		// Block has been created or updated.
 		// We don't allow multiple blocks with the same CIDR, so no need to check
@@ -250,15 +250,13 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		logrus.WithField("numRoutes", len(newRoutes)).Debug("IPAM block update")
 		cachedRoutes, ok := c.blockToRoutes[key]
 		if !ok {
-			cachedRoutes = set.New()
+			cachedRoutes = set.NewBoxed[nodenameRoute]()
 			c.blockToRoutes[key] = cachedRoutes
 		}
 
 		// Now scan the old routes, looking for any that are no-longer associated with the block.
 		// Remove no longer active routes from the cache and queue up deletions.
-		cachedRoutes.Iter(func(item interface{}) error {
-			r := item.(nodenameRoute)
-
+		cachedRoutes.Iter(func(r nodenameRoute) error {
 			// For each existing route which is no longer present, we need to delete it.
 			// Note: since r.Key() only contains the destination, we need to check equality too in case
 			// the gateway has changed.
@@ -289,14 +287,12 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 
 		// At this point we've determined the correct diff to perform based on the block update. Queue up
 		// updates.
-		deletes.Iter(func(item interface{}) error {
-			nr := item.(nodenameRoute)
+		deletes.Iter(func(nr nodenameRoute) error {
 			c.trie.RemoveBlockRoute(nr.dst)
 			c.nodeRoutes.Remove(nr)
 			return nil
 		})
-		adds.Iter(func(item interface{}) error {
-			nr := item.(nodenameRoute)
+		adds.Iter(func(nr nodenameRoute) error {
 			c.trie.UpdateBlockRoute(nr.dst, nr.nodeName)
 			c.nodeRoutes.Add(nr)
 			return nil
@@ -306,8 +302,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		logrus.WithField("update", update).Debug("IPAM block deleted")
 		routes := c.blockToRoutes[key]
 		if routes != nil {
-			routes.Iter(func(item interface{}) error {
-				nr := item.(nodenameRoute)
+			routes.Iter(func(nr nodenameRoute) error {
 				c.trie.RemoveBlockRoute(nr.dst)
 				return nil
 			})
@@ -657,11 +652,9 @@ func (c *L3RouteResolver) routesFromBlock(b *model.AllocationBlock) map[string]n
 // that it finds.
 func (c *L3RouteResolver) flush() {
 	var buf []ip.CIDRTrieEntry
-	c.trie.dirtyCIDRs.Iter(func(item interface{}) error {
-		logCxt := logrus.WithField("cidr", item)
+	c.trie.dirtyCIDRs.Iter(func(cidr ip.CIDR) error {
+		logCxt := logrus.WithField("cidr", cidr)
 		logCxt.Debug("Flushing dirty route")
-
-		cidr := item.(ip.CIDR)
 		trie := c.trie.trieForCIDR(cidr)
 
 		// We know the CIDR may be dirty, look up the path through the trie to the CIDR.  This will
@@ -867,14 +860,14 @@ func (r nodenameRoute) String() string {
 type RouteTrie struct {
 	v4T        *ip.CIDRTrie
 	v6T        *ip.CIDRTrie
-	dirtyCIDRs set.Set
+	dirtyCIDRs set.Set[ip.CIDR]
 }
 
 func NewRouteTrie() *RouteTrie {
 	return &RouteTrie{
 		v4T:        &ip.CIDRTrie{},
 		v6T:        &ip.CIDRTrie{},
-		dirtyCIDRs: set.New(),
+		dirtyCIDRs: set.NewBoxed[ip.CIDR](),
 	}
 }
 

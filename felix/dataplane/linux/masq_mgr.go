@@ -42,7 +42,7 @@ type masqManager struct {
 	ipsetsDataplane common.IPSetsDataplane
 	natTable        iptablesTable
 	activePools     map[string]*proto.IPAMPool
-	masqPools       set.Set
+	masqPools       set.Set[string]
 	dirty           bool
 	ruleRenderer    rules.RuleRenderer
 
@@ -75,7 +75,7 @@ func newMasqManager(
 		ipsetsDataplane: ipsetsDataplane,
 		natTable:        natTable,
 		activePools:     map[string]*proto.IPAMPool{},
-		masqPools:       set.New(),
+		masqPools:       set.New[string](),
 		dirty:           true,
 		ruleRenderer:    ruleRenderer,
 		logCxt:          log.WithField("ipVersion", ipVersion),

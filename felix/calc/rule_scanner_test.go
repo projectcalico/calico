@@ -15,18 +15,16 @@
 package calc_test
 
 import (
-	. "github.com/projectcalico/calico/felix/calc"
-
+	"fmt"
 	"reflect"
+	"sort"
 	"strings"
+
+	. "github.com/projectcalico/calico/felix/calc"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
-	"fmt"
-
-	"sort"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -204,7 +202,7 @@ var _ = Describe("ParsedRule", func() {
 		// is deprecated.
 		prType := reflect.TypeOf(ParsedRule{})
 		numPRFields := prType.NumField()
-		prFields := set.New()
+		prFields := set.New[string]()
 
 		// Build a set of ParsedRule fields, minus the IPSetIDs variants.
 		for i := 0; i < numPRFields; i++ {
@@ -224,7 +222,7 @@ var _ = Describe("ParsedRule", func() {
 		// those which aren't copied through to the ParsedRule.
 		mrType := reflect.TypeOf(model.Rule{})
 		numMRFields := mrType.NumField()
-		mrFields := set.New()
+		mrFields := set.New[string]()
 		for i := 0; i < numMRFields; i++ {
 			name := mrType.Field(i).Name
 			if strings.Contains(name, "Tag") ||
@@ -295,7 +293,7 @@ var _ = Describe("ParsedRule", func() {
 })
 
 type scanUpdateRecorder struct {
-	activeSelectors set.Set
+	activeSelectors set.Set[string]
 	activeRules     map[model.Key]*ParsedRules
 }
 
@@ -331,7 +329,7 @@ func (ur *scanUpdateRecorder) ipSetInactive(ipSet *IPSetData) {
 func newHookedRulesScanner() (*RuleScanner, *scanUpdateRecorder) {
 	rs := NewRuleScanner()
 	ur := &scanUpdateRecorder{
-		activeSelectors: set.New(),
+		activeSelectors: set.New[string](),
 		activeRules:     make(map[model.Key]*ParsedRules),
 	}
 	rs.RulesUpdateCallbacks = ur

@@ -35,8 +35,8 @@ type EndpointStatusReporter struct {
 	stop               chan bool
 	datastore          datastore
 	epStatusIDToStatus map[model.Key]string
-	queuedDirtyIDs     set.Set
-	activeDirtyIDs     set.Set
+	queuedDirtyIDs     set.Set[model.Key]
+	activeDirtyIDs     set.Set[model.Key]
 	reportingDelay     time.Duration
 	resyncInterval     time.Duration
 	resyncTicker       stoppable
@@ -92,8 +92,8 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 		inSync:             inSync,
 		stop:               make(chan bool),
 		epStatusIDToStatus: make(map[model.Key]string),
-		queuedDirtyIDs:     set.New(),
-		activeDirtyIDs:     set.New(),
+		queuedDirtyIDs:     set.NewBoxed[model.Key](),
+		activeDirtyIDs:     set.NewBoxed[model.Key](),
 		resyncTicker:       resyncTicker,
 		resyncTickerC:      resyncTickerChan,
 		rateLimitTicker:    rateLimitTicker,
@@ -219,8 +219,8 @@ loop:
 				log.WithField("numDirtyEndpoints", esr.activeDirtyIDs.Len()).Debug(
 					"Unthrottled and updates pending")
 				var statID model.Key
-				esr.activeDirtyIDs.Iter(func(item interface{}) error {
-					statID = item.(model.Key)
+				esr.activeDirtyIDs.Iter(func(item model.Key) error {
+					statID = item
 					return set.StopIteration
 				})
 				// Then try to write the update to the datastore.
@@ -244,11 +244,11 @@ loop:
 				// queued set.
 				log.WithField("numQueuedUpdates", esr.queuedDirtyIDs.Len()).Debug(
 					"Copying queued set to dirty set")
-				esr.queuedDirtyIDs.Iter(func(item interface{}) error {
+				esr.queuedDirtyIDs.Iter(func(item model.Key) error {
 					esr.activeDirtyIDs.Add(item)
 					return nil
 				})
-				esr.queuedDirtyIDs = set.New()
+				esr.queuedDirtyIDs = set.NewBoxed[model.Key]()
 			}
 		}
 	}

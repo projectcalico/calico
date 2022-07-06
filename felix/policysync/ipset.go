@@ -15,8 +15,6 @@
 package policysync
 
 import (
-	"fmt"
-
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -26,7 +24,7 @@ import (
 
 type ipSetInfo struct {
 	ipsets.IPSetMetadata
-	members set.Set
+	members set.Set[ipsets.IPSetMember]
 }
 
 func newIPSet(update *proto.IPSetUpdate) *ipSetInfo {
@@ -52,7 +50,7 @@ func newIPSet(update *proto.IPSetUpdate) *ipSetInfo {
 }
 
 func (s *ipSetInfo) replaceMembers(update *proto.IPSetUpdate) {
-	s.members = set.New()
+	s.members = set.NewBoxed[ipsets.IPSetMember]()
 	for _, ms := range update.GetMembers() {
 		s.members.Add(s.Type.CanonicaliseMember(ms))
 	}
@@ -69,9 +67,8 @@ func (s *ipSetInfo) deltaUpdate(update *proto.IPSetDeltaUpdate) {
 
 func (s *ipSetInfo) getIPSetUpdate() *proto.IPSetUpdate {
 	u := &proto.IPSetUpdate{Id: s.SetID, Type: s.getProtoType()}
-	s.members.Iter(func(item interface{}) error {
-		m := item.(fmt.Stringer)
-		u.Members = append(u.Members, m.String())
+	s.members.Iter(func(item ipsets.IPSetMember) error {
+		u.Members = append(u.Members, item.String())
 		return nil
 	})
 	return u
