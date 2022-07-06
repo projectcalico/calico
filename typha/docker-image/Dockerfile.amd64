@@ -43,6 +43,10 @@ COPY --from=base /usr/include /usr/include
 COPY --from=base /lib64 /lib64
 COPY --from=base /lib /lib
 
+# Copy hostname configuration files from the UBI image so glibc hostname lookups work.
+COPY --from=ubi /etc/host.conf /etc/host.conf
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
+
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the build artefacts from the container.
 ADD bin/calico-typha-amd64 /code/calico-typha
