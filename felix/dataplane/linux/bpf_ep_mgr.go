@@ -174,7 +174,7 @@ type bpfEndpointManager struct {
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
 	bpfMapContext           *bpf.MapContext
-	ifStateMap              *cachingmap.CachingMap
+	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
 
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable iptablesTable
@@ -271,9 +271,12 @@ func newBPFEndpointManager(
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
 		bpfMapContext:           bpfMapContext,
-		ifStateMap:              cachingmap.New(ifstate.MapParams, bpfMapContext.IfStateMap),
-		ruleRenderer:            iptablesRuleRenderer,
-		iptablesFilterTable:     iptablesFilterTable,
+		ifStateMap: cachingmap.New[ifstate.Key, ifstate.Value](ifstate.MapParams.Name,
+			bpf.NewTypedMap[ifstate.Key, ifstate.Value](
+				bpfMapContext.IfStateMap, ifstate.KeyFromBytes, ifstate.ValueFromBytes,
+			)),
+		ruleRenderer:        iptablesRuleRenderer,
+		iptablesFilterTable: iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(mapCleanupInterval, func(ctx context.Context) {
 			log.Debug("TC maps cleanup triggered.")
 			tc.CleanUpMaps()
@@ -479,7 +482,7 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 }
 
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
-	k := ifstate.NewKey(uint32(iface.info.ifIndex)).AsBytes()
+	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
 		flags := uint32(0)
 		if m.isWorkloadIface(name) {
@@ -488,7 +491,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if iface.dpState.isReady {
 			flags |= ifstate.FlgReady
 		}
-		v := ifstate.NewValue(flags, name).AsBytes()
+		v := ifstate.NewValue(flags, name)
 		m.ifStateMap.SetDesired(k, v)
 	} else {
 		m.ifStateMap.DeleteDesired(k)
