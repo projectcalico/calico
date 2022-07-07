@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+ARG UBI_IMAGE
+FROM ${UBI_IMAGE} as ubi
 
 FROM scratch
 SHELL ["/bin/sh", "-c"]
@@ -24,6 +26,10 @@ LABEL name="Calico CSI Driver" \
       summary="Calico CSI driver to setup secure connections from Kubernetes pods to local daemons" \
       description="Calico CSI driver to setup secure connections from Kubernetes pods to local daemons" \
       maintainer="Matt Leung <matt.leung@tigera.io>"
+
+# Copy hostname configuration files from the UBI image so glibc hostname lookups work.
+COPY --from=ubi /etc/host.conf /etc/host.conf
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
 
 ADD bin/csi-driver-amd64 /usr/local/bin/csi-driver
 

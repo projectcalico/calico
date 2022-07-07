@@ -330,7 +330,7 @@ type Block struct {
 	labelToInsnIdx     map[string]int
 	insnIdxToLabels    map[int][]string
 	insnIdxToComments  map[int][]string
-	inUseJumpTargets   set.Set
+	inUseJumpTargets   set.Set[string]
 	policyDebugEnabled bool
 }
 
@@ -338,7 +338,7 @@ func NewBlock(policyDebugEnabled bool) *Block {
 	return &Block{
 		labelToInsnIdx:     map[string]int{},
 		insnIdxToLabels:    map[int][]string{},
-		inUseJumpTargets:   set.New(),
+		inUseJumpTargets:   set.New[string](),
 		insnIdxToComments:  map[int][]string{},
 		policyDebugEnabled: policyDebugEnabled,
 	}

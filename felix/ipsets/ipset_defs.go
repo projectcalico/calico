@@ -15,15 +15,14 @@
 package ipsets
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
-
-	"regexp"
-	"strings"
-
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
+	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 
@@ -116,7 +115,7 @@ func (t IPSetType) IsMemberIPV6(member string) bool {
 
 // CanonicaliseMember converts the string representation of an IP set member to a canonical
 // object of some kind.  The object is required to by hashable.
-func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
+func (t IPSetType) CanonicaliseMember(member string) IPSetMember {
 	switch t {
 	case IPSetTypeHashIP:
 		// Convert the string into our ip.Addr type, which is backed by an array.
@@ -183,7 +182,7 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 	return nil
 }
 
-type ipSetMember interface {
+type IPSetMember interface {
 	String() string
 }
 
@@ -235,19 +234,19 @@ type ipSet struct {
 
 	// members either contains the members that we've programmed or is nil, indicating that
 	// we're out of sync.
-	members set.Set /*<ipSetMember>*/
+	members set.Set[IPSetMember]
 
 	// pendingReplace is either nil to indicate that there is no pending replace or a set
 	// containing all the entries that we want to write.
-	pendingReplace set.Set /*<ipSetMember>*/
+	pendingReplace set.Set[IPSetMember]
 	// pendingAdds contains members that are queued up to add to the IP set.  If pendingReplace
 	// is non-nil then pendingAdds is empty (and we add members directly to pendingReplace
 	// instead).
-	pendingAdds set.Set /*<ipSetMember>*/
+	pendingAdds set.Set[IPSetMember]
 	// pendingDeletions contains members that are queued up for deletion.  If pendingReplace
 	// is non-nil then pendingDeletions is empty (and we delete members directly from
 	// pendingReplace instead).
-	pendingDeletions set.Set /*<ipSetMember>*/
+	pendingDeletions set.Set[IPSetMember]
 }
 
 // IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by

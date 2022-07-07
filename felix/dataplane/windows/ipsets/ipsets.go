@@ -90,7 +90,7 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 		"setID":           setID,
 		"filteredMembers": filteredMembers,
 	}).Debug("Adding new members to IP set")
-	filteredMembers.Iter(func(m interface{}) error {
+	filteredMembers.Iter(func(m string) error {
 		ipSet.Members.Add(m)
 		return nil
 	})
@@ -113,7 +113,7 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 		"filteredMembers": filteredMembers,
 	}).Debug("Removing members from IP set")
 
-	filteredMembers.Iter(func(m interface{}) error {
+	filteredMembers.Iter(func(m string) error {
 		ipSet.Members.Discard(m)
 		return nil
 	})
@@ -129,8 +129,7 @@ func (s *IPSets) GetIPSetMembers(setID string) []string {
 		return nil
 	}
 
-	ipSet.Members.Iter(func(item interface{}) error {
-		member := item.(string)
+	ipSet.Members.Iter(func(member string) error {
 		retVal = append(retVal, member)
 		return nil
 	})
@@ -142,8 +141,8 @@ func (s *IPSets) GetIPSetMembers(setID string) []string {
 
 // filterMembers filters out any members which are not of the correct
 // ip family for the IPSet
-func (s *IPSets) filterMembers(members []string, setType IPSetType) set.Set {
-	filtered := set.New()
+func (s *IPSets) filterMembers(members []string, setType IPSetType) set.Set[string] {
+	filtered := set.New[string]()
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
 
 	// IPSet members can come in two forms: IP, or IP and port.
@@ -181,7 +180,7 @@ func (m *IPSets) GetTypeOf(setID string) (IPSetType, error) {
 	panic("Not implemented")
 }
 
-func (m *IPSets) GetMembers(setID string) (set.Set, error) {
+func (m *IPSets) GetMembers(setID string) (set.Set[string], error) {
 	// GetMembers is only called from XDPState, and XDPState does not coexist with
 	// config.BPFEnabled.
 	panic("Not implemented")
@@ -193,6 +192,6 @@ func (m *IPSets) ApplyUpdates() {
 func (m *IPSets) ApplyDeletions() {
 }
 
-func (s *IPSets) SetFilter(ipSetNames set.Set) {
+func (s *IPSets) SetFilter(ipSetNames set.Set[string]) {
 	// Not needed for Windows.
 }

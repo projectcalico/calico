@@ -20,14 +20,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/dispatcher"
+	"github.com/projectcalico/calico/felix/proto"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
-	"github.com/projectcalico/calico/felix/dispatcher"
-	"github.com/projectcalico/calico/felix/proto"
 )
 
 // VXLANResolver is responsible for resolving node IPs and node config to calculate the
@@ -63,7 +61,6 @@ type VXLANResolver struct {
 	nodeNameToIPv6Addr          map[string]string
 	nodeNameToVXLANMacV6        map[string]string
 	nodeNameToSentVTEP          map[string]*proto.VXLANTunnelEndpointUpdate
-	blockToRoutes               map[string]set.Set
 	vxlanPools                  map[string]model.IPPool
 	useNodeResourceUpdates      bool
 }
@@ -80,7 +77,6 @@ func NewVXLANResolver(hostname string, callbacks vxlanCallbacks, useNodeResource
 		nodeNameToIPv6Addr:          map[string]string{},
 		nodeNameToVXLANMacV6:        map[string]string{},
 		nodeNameToSentVTEP:          map[string]*proto.VXLANTunnelEndpointUpdate{},
-		blockToRoutes:               map[string]set.Set{},
 		vxlanPools:                  map[string]model.IPPool{},
 		useNodeResourceUpdates:      useNodeResourceUpdates,
 	}

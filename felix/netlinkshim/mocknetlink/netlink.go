@@ -199,19 +199,19 @@ func (f FailFlags) String() string {
 
 type MockNetlinkDataplane struct {
 	NameToLink   map[string]*MockLink
-	AddedLinks   set.Set
-	DeletedLinks set.Set
-	AddedAddrs   set.Set
-	DeletedAddrs set.Set
+	AddedLinks   set.Set[string]
+	DeletedLinks set.Set[string]
+	AddedAddrs   set.Set[string]
+	DeletedAddrs set.Set[string]
 
 	Rules        []netlink.Rule
 	AddedRules   []netlink.Rule
 	DeletedRules []netlink.Rule
 
 	RouteKeyToRoute  map[string]netlink.Route
-	AddedRouteKeys   set.Set
-	DeletedRouteKeys set.Set
-	UpdatedRouteKeys set.Set
+	AddedRouteKeys   set.Set[string]
+	DeletedRouteKeys set.Set[string]
+	UpdatedRouteKeys set.Set[string]
 
 	NumNewNetlinkCalls     int
 	NetlinkOpen            bool
@@ -231,22 +231,22 @@ type MockNetlinkDataplane struct {
 	PersistFailures    bool
 	FailuresToSimulate FailFlags
 
-	addedArpEntries set.Set
+	addedArpEntries set.Set[string]
 
 	mutex                   sync.Mutex
-	deletedConntrackEntries set.Set
+	deletedConntrackEntries set.Set[ip.Addr]
 	ConntrackSleep          time.Duration
 }
 
 func (d *MockNetlinkDataplane) ResetDeltas() {
-	d.AddedLinks = set.New()
-	d.DeletedLinks = set.New()
-	d.AddedAddrs = set.New()
-	d.DeletedAddrs = set.New()
-	d.AddedRouteKeys = set.New()
-	d.DeletedRouteKeys = set.New()
-	d.UpdatedRouteKeys = set.New()
-	d.addedArpEntries = set.New()
+	d.AddedLinks = set.New[string]()
+	d.DeletedLinks = set.New[string]()
+	d.AddedAddrs = set.New[string]()
+	d.DeletedAddrs = set.New[string]()
+	d.AddedRouteKeys = set.New[string]()
+	d.DeletedRouteKeys = set.New[string]()
+	d.UpdatedRouteKeys = set.New[string]()
+	d.addedArpEntries = set.New[string]()
 	d.NumLinkAddCalls = 0
 	d.NumLinkDeleteCalls = 0
 	d.NumNewNetlinkCalls = 0
@@ -257,7 +257,7 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.AddedRules = nil
 	d.DeletedRules = nil
 	d.WireguardConfigUpdated = false
-	d.deletedConntrackEntries = set.New()
+	d.deletedConntrackEntries = set.NewBoxed[ip.Addr]()
 }
 
 // ----- Mock dataplane management functions for test code -----
@@ -268,8 +268,8 @@ func (d *MockNetlinkDataplane) GetDeletedConntrackEntries() []net.IP {
 	defer GinkgoRecover()
 
 	cpy := make([]net.IP, 0, d.deletedConntrackEntries.Len())
-	d.deletedConntrackEntries.Iter(func(item interface{}) error {
-		cpy = append(cpy, item.(ip.Addr).AsNetIP())
+	d.deletedConntrackEntries.Iter(func(addr ip.Addr) error {
+		cpy = append(cpy, addr.AsNetIP())
 		return nil
 	})
 	return cpy

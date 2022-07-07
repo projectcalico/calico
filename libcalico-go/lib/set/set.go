@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,63 +16,34 @@ package set
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"reflect"
 
 	log "github.com/sirupsen/logrus"
 )
 
-type Set interface {
-	Len() int
-	Add(interface{})
-	AddAll(itemArray interface{})
-	Discard(interface{})
-	Clear()
-	Contains(interface{}) bool
-	Iter(func(item interface{}) error)
-	Copy() Set
-	Equals(Set) bool
-	ContainsAll(Set) bool
-	fmt.Stringer
+func New[T comparable]() Typed[T] {
+	return make(Typed[T])
 }
 
-type empty struct{}
-
-var emptyValue = empty{}
-
-var (
-	StopIteration = errors.New("Stop iteration")
-	RemoveItem    = errors.New("Remove item")
-)
-
-func New() Set {
-	return make(mapSet)
-}
-
-func From(members ...interface{}) Set {
-	s := New()
+func From[T comparable](members ...T) Typed[T] {
+	s := New[T]()
 	s.AddAll(members)
 	return s
 }
 
-func FromArray(membersArray interface{}) Set {
-	s := New()
+func FromArray[T comparable](membersArray []T) Typed[T] {
+	s := New[T]()
 	s.AddAll(membersArray)
 	return s
 }
 
-func Empty() Set {
-	return mapSet(nil)
-}
+type Typed[T comparable] map[T]v
 
-type mapSet map[interface{}]empty
-
-func (set mapSet) String() string {
+func (set Typed[T]) String() string {
 	var buf bytes.Buffer
-	_, _ = buf.WriteString("set.mapSet{")
+	_, _ = buf.WriteString("set.Set{")
 	first := true
-	set.Iter(func(item interface{}) error {
+	set.Iter(func(item T) error {
 		if !first {
 			buf.WriteString(",")
 		} else {
@@ -85,37 +56,44 @@ func (set mapSet) String() string {
 	return buf.String()
 }
 
-func (set mapSet) Len() int {
+func (set Typed[T]) Len() int {
 	return len(set)
 }
 
-func (set mapSet) Add(item interface{}) {
+func (set Typed[T]) Add(item T) {
 	set[item] = emptyValue
 }
 
-func (set mapSet) AddAll(itemArray interface{}) {
-	arrVal := reflect.ValueOf(itemArray)
-	for i := 0; i < arrVal.Len(); i++ {
-		set.Add(arrVal.Index(i).Interface())
+func (set Typed[T]) AddAll(itemArray []T) {
+	for _, v := range itemArray {
+		set.Add(v)
 	}
 }
 
-func (set mapSet) Discard(item interface{}) {
+// AddSet adds the contents of set "other" into the set.
+func (set Typed[T]) AddSet(other Set[T]) {
+	other.Iter(func(item T) error {
+		set.Add(item)
+		return nil
+	})
+}
+
+func (set Typed[T]) Discard(item T) {
 	delete(set, item)
 }
 
-func (set mapSet) Clear() {
+func (set Typed[T]) Clear() {
 	for item := range set {
 		delete(set, item)
 	}
 }
 
-func (set mapSet) Contains(item interface{}) bool {
+func (set Typed[T]) Contains(item T) bool {
 	_, present := set[item]
 	return present
 }
 
-func (set mapSet) Iter(visitor func(item interface{}) error) {
+func (set Typed[T]) Iter(visitor func(item T) error) {
 loop:
 	for item := range set {
 		err := visitor(item)
@@ -132,15 +110,22 @@ loop:
 	}
 }
 
-func (set mapSet) Copy() Set {
-	cpy := New()
+func (set Typed[T]) Copy() Set[T] {
+	cpy := New[T]()
 	for item := range set {
 		cpy.Add(item)
 	}
 	return cpy
 }
 
-func (set mapSet) Equals(other Set) bool {
+func (set Typed[T]) Slice() (s []T) {
+	for item := range set {
+		s = append(s, item)
+	}
+	return
+}
+
+func (set Typed[T]) Equals(other Set[T]) bool {
 	if set.Len() != other.Len() {
 		return false
 	}
@@ -152,9 +137,9 @@ func (set mapSet) Equals(other Set) bool {
 	return true
 }
 
-func (set mapSet) ContainsAll(other Set) bool {
+func (set Typed[T]) ContainsAll(other Set[T]) bool {
 	result := true
-	other.Iter(func(item interface{}) error {
+	other.Iter(func(item T) error {
 		if !set.Contains(item) {
 			result = false
 			return StopIteration

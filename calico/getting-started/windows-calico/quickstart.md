@@ -85,7 +85,7 @@ Note: if {{site.prodname}} is installed in kube-system, update the `namespace` i
    ```bash
    kubectl patch installation default --type=merge -p '{"spec": {"calicoNetwork": {"bgp": "Disabled"}}}'
    ```
-   If you installed Calico using the manifest from https://projectcalico.docs.tigera.io/manifests/calico-vxlan.yaml then BGP is already disabled.
+   If you installed Calico using the manifest then BGP is already disabled.
 
 1. Prepare the directory for Kubernetes files on Windows node.
 

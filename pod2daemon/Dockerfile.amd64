@@ -59,6 +59,10 @@ COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
 COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
 
+# Copy hostname configuration files from the UBI image so glibc hostname lookups work.
+COPY --from=ubi /etc/host.conf /etc/host.conf
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
+
 ADD bin/flexvol-amd64 /usr/local/bin/flexvol
 
 ENTRYPOINT ["/usr/local/bin/flexvol.sh"]

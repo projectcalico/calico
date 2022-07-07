@@ -167,12 +167,8 @@ func aggregateCommentsAndLabels(insns *asm.Insns) ([]string, []string) {
 	labels := []string{}
 	comments := []string{}
 	for _, in := range *insns {
-		for _, label := range in.Labels {
-			labels = append(labels, label)
-		}
-		for _, comment := range in.Comments {
-			comments = append(comments, comment)
-		}
+		labels = append(labels, in.Labels...)
+		comments = append(comments, in.Comments...)
 	}
 	return labels, comments
 }

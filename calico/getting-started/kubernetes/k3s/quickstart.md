@@ -54,13 +54,13 @@ curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--fla
 Install the {{site.prodname}} operator and custom resource definitions.
 
    ```bash
-   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
 
 Install {{site.prodname}} by creating the necessary custom resource. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
    ```bash
-   kubectl create -f {{ "/manifests/custom-resources.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/custom-resources.yaml
    ```
 
    > **Note**: Before creating this manifest, read its contents and make sure its settings are correct for your environment. For example,
@@ -73,11 +73,11 @@ Install {{site.prodname}} by creating the necessary custom resource. For more in
    Install {{site.prodname}} by using the following command.
 
    ```bash
-   kubectl apply -f {{ "/manifests/calico.yaml" | absolute_url }}
+   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/calico.yaml
    ```
 
    > **Note**: You can also
-   > [view the YAML in a new tab]({{ "/manifests/calico.yaml" | absolute_url }}){:target="_blank"}.
+   > [view the YAML in a new tab]({{site.data.versions.first.manifests_url}}/manifests/calico.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
    You should see the following output.

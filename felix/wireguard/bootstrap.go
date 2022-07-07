@@ -233,7 +233,7 @@ func filterTyphaEndpoints(
 	configParams *config.Config,
 	calicoClient clientv3.Interface,
 	typhas []discovery.Typha,
-	peers set.Set,
+	peers set.Set[string],
 ) []discovery.Typha {
 	log.Debugf("Filtering typha endpoints for wireguard: %v", typhas)
 
@@ -352,7 +352,7 @@ func getPublicKeyForNode(logCxt *log.Entry, nodeName string, calicoClient client
 // - Set of peer public keys
 func getWireguardDeviceInfo(
 	logCxt *log.Entry, wgIfaceName string, getWireguardHandle func() (netlinkshim.Wireguard, error),
-) (string, set.Set) {
+) (string, set.Set[string]) {
 	wg, err := getWireguardHandle()
 	if err != nil {
 		logCxt.Info("Couldn't acquire wireguard handle")
@@ -377,7 +377,7 @@ func getWireguardDeviceInfo(
 	}
 
 	// Construct the set of peer public keys.
-	peers := set.New()
+	peers := set.New[string]()
 	for _, peer := range dev.Peers {
 		if peer.PublicKey != zeroKey {
 			peers.Add(peer.PublicKey.String())

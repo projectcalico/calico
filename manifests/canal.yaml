@@ -4376,6 +4376,12 @@ spec:
               name: kubernetes-services-endpoint
               optional: true
           env:
+            # Set the serviceaccount name to use for the Calico CNI plugin.
+            # We use canal-node instead of calico-node when using flannel networking.
+            - name: CALICO_CNI_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
             # Name of the CNI config file to create.
             - name: CNI_CONF_NAME
               value: "10-canal.conflist"
@@ -4453,6 +4459,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Set the serviceaccount name to use for the Calico CNI plugin.
+            # We use canal-node instead of calico-node when using flannel networking.
+            - name: CALICO_CNI_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
             # Don't enable BGP.
             - name: CALICO_NETWORKING_BACKEND
               value: "none"
