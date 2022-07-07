@@ -43,10 +43,23 @@ LABEL name="Calico FlexVolume driver installer" \
 
 COPY --from=ubi /licenses /licenses
 COPY --from=ubi /bin /bin
-COPY --from=ubi /lib64 /lib64
-COPY --from=ubi /usr/lib64 /usr/lib64
-COPY --from=ubi /usr/bin /usr/bin
-COPY --from=ubi /usr/local/bin/flexvol.sh /usr/local/bin/flexvol.sh
+
+# copy only the required libs, identified by running 'ldd' on the '/usr/local/bin/flexvol' binary, as well as on the remaining binaries on '/bin' and '/usr/bin' that were left after running 'clean.sh'
+COPY --from=ubi /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
+COPY --from=ubi /lib64/libacl.so.1 /lib64/libacl.so.1
+COPY --from=ubi /lib64/libattr.so.1 /lib64/libattr.so.1
+COPY --from=ubi /lib64/libcap.so.2 /lib64/libcap.so.2
+COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
+COPY --from=ubi /lib64/libdl.so.2 /lib64/libdl.so.2
+COPY --from=ubi /lib64/libpcre2-8.so.0 /lib64/libpcre2-8.so.0
+COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
+COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
+COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
+COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
+
+# Copy hostname configuration files from the UBI image so glibc hostname lookups work.
+COPY --from=ubi /etc/host.conf /etc/host.conf
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
 
 ADD bin/flexvol-amd64 /usr/local/bin/flexvol
 
