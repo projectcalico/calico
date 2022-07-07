@@ -24,10 +24,10 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	mock "github.com/projectcalico/calico/felix/bpf/mock/multiversion"
-	"github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
-	"github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
-	"github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
-	"github.com/projectcalico/calico/felix/bpf/mock/multiversion/v5"
+	v2 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
+	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
+	v5 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v5"
 )
 
 const key = 0xdeadbeef
