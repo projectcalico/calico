@@ -168,6 +168,9 @@ func (b *PinnedMap) Path() string {
 
 func (b *PinnedMap) Close() error {
 	err := b.fd.Close()
+	if b.oldfd > 0 {
+		b.oldfd.Close()
+	}
 	b.fdLoaded = false
 	b.oldfd = 0
 	b.fd = 0
