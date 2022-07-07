@@ -169,6 +169,7 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-ebpf) for ste
 | BPFMapSizeIPSets / <br/> FELIX_BPFMapSizeIPSets | Controls the size of the IPSets map. The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors such as "all()" can result in large numbers of entries (one entry per endpoint in that case). | int | 1048576 |
 | BPFMapSizeRoute / <br/> FELIX_BPFMapSizeRoute | Controls the size of the route map. The routes map should be large enough to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and tunnel IPs). | int | 262144 |
 | BPFHostConntrackBypass / <br/> FELIX_BPFHostConntrackBypass | Controls whether to bypass Linux conntrack in BPF mode for workloads and services. | true,false | true |
+| BPFPolicyDebugEnabled  / <br/> FELIX_BPFPOLICYDEBUGENABLED    | In eBPF dataplane mode, Felix records detailed information about the BPF policy programs, which can be examined with the calico-bpf command-line tool. | true, false |  true |
 
 #### Kubernetes-specific configuration
 

@@ -410,6 +410,9 @@ type FelixConfigurationSpec struct {
 	// what is the per-interfaces or global setting. Possible values are Disabled or
 	// Strict. [Default: Strict]
 	BPFEnforceRPF string `json:"bpfEnforceRPF,omitempty"`
+	// BPFPolicyDebugEnabled when true, Felix records detailed information
+	// about the BPF policy programs, which can be examined with the calico-bpf command-line tool.
+	BPFPolicyDebugEnabled *bool `json:"bpfPolicyDebugEnabled,omitempty"`
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
