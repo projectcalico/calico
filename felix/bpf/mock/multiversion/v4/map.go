@@ -24,15 +24,14 @@ import (
 )
 
 var MockMapParams = bpf.MapParameters{
-	Filename:     "/sys/fs/bpf/tc/globals/cali_mock",
-	Type:         "hash",
-	KeySize:      32,
-	ValueSize:    80,
-	MaxEntries:   1024,
-	Name:         "cali_mock",
-	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      4,
-	UpdatedByBPF: true,
+	Filename:   "/sys/fs/bpf/tc/globals/cali_mock",
+	Type:       "hash",
+	KeySize:    32,
+	ValueSize:  80,
+	MaxEntries: 1024,
+	Name:       "cali_mock",
+	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    4,
 }
 
 const (
