@@ -37,7 +37,7 @@ installed directly on the cluster as a Deployment, and is configured through one
   <label:Operator,active:true>
 <%
 
-1. First, install the operator on your cluster.
+1. Install the {{site.prodname}} operator on your cluster.
 
    ```
    kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
