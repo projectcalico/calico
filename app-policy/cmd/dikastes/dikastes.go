@@ -55,7 +55,6 @@ Options:
   -h --help              Show this screen.
   -l --listen <port>     Unix domain socket path [default: /var/run/dikastes/dikastes.sock]
   -d --dial <target>     Target to dial. [default: localhost:50051]
-  -h --http-port <port>  Local port number to listen for HTTP requests on. Used to gracefully terminate.
   --debug                Log at Debug level.`
 
 var VERSION string
