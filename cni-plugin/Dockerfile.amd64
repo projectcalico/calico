@@ -35,6 +35,10 @@ COPY --from=base /lib /lib
 
 ADD bin/amd64/ /opt/cni/bin/
 
+# Copy hostname configuration files from UBI so glibc hostname lookups work.
+COPY --from=base /etc/host.conf /etc/host.conf
+COPY --from=base /etc/nsswitch.conf /etc/nsswitch.conf
+
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
 CMD ["/opt/cni/bin/install"]
