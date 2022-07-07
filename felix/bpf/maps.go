@@ -559,6 +559,9 @@ func (b *PinnedMap) EnsureExists() error {
 			// same version but of different size.
 			err := b.copyFromOldMap()
 			if err != nil {
+				b.fd.Close()
+				b.fd = 0
+				b.fdLoaded = false
 				logrus.WithError(err).Error("error copying data from old map")
 				return err
 			}
@@ -572,6 +575,12 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 		// Handle map upgrade.
 		err = b.upgrade()
+		if err != nil {
+			b.fd.Close()
+			b.fd = 0
+			b.fdLoaded = false
+			return err
+		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
