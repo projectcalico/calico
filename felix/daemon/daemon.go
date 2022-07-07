@@ -977,7 +977,6 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		fc.shutDownProcess("Failed to read messages from dataplane")
 	}()
 	log.Info("Reading from dataplane driver pipe...")
-	ctx := context.Background()
 	for {
 		payload, err := fc.dataplane.RecvMessage()
 		if err != nil {
@@ -987,7 +986,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		log.WithField("payload", payload).Debug("New message from dataplane")
 		switch msg := payload.(type) {
 		case *proto.ProcessStatusUpdate:
-			fc.handleProcessStatusUpdate(ctx, msg)
+			fc.handleProcessStatusUpdate(context.TODO(), msg)
 		case *proto.WorkloadEndpointStatusUpdate:
 			if fc.statusReporter != nil {
 				fc.StatusUpdatesFromDataplane <- msg
