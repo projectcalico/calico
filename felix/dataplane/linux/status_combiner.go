@@ -25,14 +25,14 @@ import (
 // endpoint managers.  Where conflicts occur, it reports the "worse" status.
 type endpointStatusCombiner struct {
 	ipVersionToStatuses map[uint8]map[interface{}]string
-	dirtyIDs            set.Set
+	dirtyIDs            set.Set[any] /* FIXME HEP or WEP ID */
 	fromDataplane       chan interface{}
 }
 
 func newEndpointStatusCombiner(fromDataplane chan interface{}, ipv6Enabled bool) *endpointStatusCombiner {
 	e := &endpointStatusCombiner{
 		ipVersionToStatuses: map[uint8]map[interface{}]string{},
-		dirtyIDs:            set.New(),
+		dirtyIDs:            set.NewBoxed[any](),
 		fromDataplane:       fromDataplane,
 	}
 

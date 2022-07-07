@@ -205,7 +205,7 @@ var _ = Describe("IP sets dataplane", func() {
 		rules.AllHistoricIPSetNamePrefixes,
 		rules.LegacyV4IPSetNames,
 	)
-	//v6VersionConf := NewIPVersionConfig(IPFamilyV6, "cali", nil, nil)
+	// v6VersionConf := NewIPVersionConfig(IPFamilyV6, "cali", nil, nil)
 
 	apply := func() {
 		ipsets.ApplyUpdates()
@@ -277,7 +277,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 	Describe("with left-over IP sets in place", func() {
 		BeforeEach(func() {
-			dataplane.IPSetMembers = map[string]set.Set{
+			dataplane.IPSetMembers = map[string]set.Set[string]{
 				v4MainIPSetName:  set.From("10.0.0.1"),
 				v4TempIPSetName1: set.From("10.0.0.2"),
 				v4MainIPSetName2: set.From("10.0.0.3"),
@@ -292,7 +292,7 @@ var _ = Describe("IP sets dataplane", func() {
 		It("should rewrite IP set correctly and clean up temp set", func() {
 			ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
 			apply()
-			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
 				v4MainIPSetName: set.From("10.0.0.1", "10.0.0.2"),
 			}))
 			// It shouldn't try to double-delete the temp IP set.
@@ -317,8 +317,8 @@ var _ = Describe("IP sets dataplane", func() {
 			apply()
 
 			By("Creating the main IP set and leaving the temp IP set left over.")
-			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
-				v4TempIPSetName0: set.From(),
+			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
+				v4TempIPSetName0: set.From[string](),
 				v4MainIPSetName:  set.From("10.0.0.1", "10.0.0.2"),
 			}))
 
@@ -341,7 +341,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 	Describe("with a persistent failure to delete a pre-existing temporary IP set", func() {
 		BeforeEach(func() {
-			dataplane.IPSetMembers = map[string]set.Set{
+			dataplane.IPSetMembers = map[string]set.Set[string]{
 				v4MainIPSetName:  set.From("10.0.0.1"),
 				v4TempIPSetName1: set.From("10.0.0.2"),
 				v4TempIPSetName2: set.From("10.0.0.2"),
@@ -360,7 +360,7 @@ var _ = Describe("IP sets dataplane", func() {
 			BeforeEach(apply)
 
 			It("should clean up what it can on the first apply()", func() {
-				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
 					v4TempIPSetName1: set.From("10.0.0.2"),
 				}))
 				Expect(dataplane.AttemptedDestroys).To(ConsistOf(
@@ -376,7 +376,7 @@ var _ = Describe("IP sets dataplane", func() {
 				dataplane.AttemptedDestroys = nil
 				apply()
 
-				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
 					v4TempIPSetName1: set.From("10.0.0.2"),
 				}))
 				Expect(dataplane.AttemptedDestroys).To(BeEmpty())
@@ -387,7 +387,7 @@ var _ = Describe("IP sets dataplane", func() {
 				ipsets.QueueResync()
 				apply()
 
-				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
 					v4TempIPSetName1: set.From("10.0.0.2"),
 				}))
 				Expect(dataplane.AttemptedDestroys).To(ConsistOf(
@@ -407,7 +407,7 @@ var _ = Describe("IP sets dataplane", func() {
 				ipsets.QueueResync()
 				apply()
 
-				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{}))
+				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{}))
 				Expect(dataplane.AttemptedDestroys).To(Equal([]string{v4TempIPSetName1}))
 
 				By("And should be idempotent")
@@ -420,7 +420,7 @@ var _ = Describe("IP sets dataplane", func() {
 		It("should rewrite IP set correctly on first apply()", func() {
 			ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
 			apply()
-			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
 				v4TempIPSetName1: set.From("10.0.0.2"),
 				v4MainIPSetName:  set.From("10.0.0.1", "10.0.0.2"),
 			}))
@@ -553,7 +553,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 			Describe("after another process flushes an IP set", func() {
 				BeforeEach(func() {
-					dataplane.IPSetMembers[v4MainIPSetName] = set.New()
+					dataplane.IPSetMembers[v4MainIPSetName] = set.New[string]()
 				})
 
 				It("should be detected and fixed by a resync", func() {
@@ -780,7 +780,7 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.ExpectMembers(map[string][]string{})
 	})
 	It("cleanup should remove unknown IP sets", func() {
-		staleSet := set.New()
+		staleSet := set.New[string]()
 		staleSet.Add("10.0.0.1")
 		staleSet.Add("10.0.0.2")
 		dataplane.IPSetMembers["cali40unknown"] = staleSet
@@ -810,7 +810,7 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.ExpectMembers(map[string][]string{v4MainIPSetName: v4Members1And2})
 	})
 	It("cleanup should ignore non-calico IP sets", func() {
-		nonCaliSet := set.New()
+		nonCaliSet := set.New[string]()
 		nonCaliSet.Add("10.0.0.1")
 		nonCaliSet.Add("10.0.0.2")
 		dataplane.IPSetMembers["noncali"] = nonCaliSet

@@ -33,13 +33,13 @@ type MockDataplane struct {
 	sync.Mutex
 
 	inSync                         bool
-	ipSets                         map[string]set.Set
+	ipSets                         map[string]set.Set[string]
 	activePolicies                 map[proto.PolicyID]*proto.Policy
-	activeUntrackedPolicies        set.Set
-	activePreDNATPolicies          set.Set
-	activeProfiles                 set.Set
+	activeUntrackedPolicies        set.Set[proto.PolicyID]
+	activePreDNATPolicies          set.Set[proto.PolicyID]
+	activeProfiles                 set.Set[proto.ProfileID]
 	activeVTEPs                    map[string]proto.VXLANTunnelEndpointUpdate
-	activeRoutes                   set.Set
+	activeRoutes                   set.Set[proto.RouteUpdate]
 	endpointToPolicyOrder          map[string][]TierInfo
 	endpointToUntrackedPolicyOrder map[string][]TierInfo
 	endpointToPreDNATPolicyOrder   map[string][]TierInfo
@@ -59,22 +59,22 @@ func (d *MockDataplane) InSync() bool {
 	return d.inSync
 }
 
-func (d *MockDataplane) IPSets() map[string]set.Set {
+func (d *MockDataplane) IPSets() map[string]set.Set[string] {
 	d.Lock()
 	defer d.Unlock()
 
-	copy := map[string]set.Set{}
+	copy := map[string]set.Set[string]{}
 	for k, v := range d.ipSets {
 		copy[k] = v.Copy()
 	}
 	return copy
 }
 
-func (d *MockDataplane) ActivePolicies() set.Set {
+func (d *MockDataplane) ActivePolicies() set.Set[proto.PolicyID] {
 	d.Lock()
 	defer d.Unlock()
 
-	policyIDs := set.New()
+	policyIDs := set.New[proto.PolicyID]()
 	for k := range d.activePolicies {
 		policyIDs.Add(k)
 	}
@@ -89,36 +89,36 @@ func (d *MockDataplane) ActivePolicy(k proto.PolicyID) *proto.Policy {
 	return d.activePolicies[k]
 }
 
-func (d *MockDataplane) ActiveUntrackedPolicies() set.Set {
+func (d *MockDataplane) ActiveUntrackedPolicies() set.Set[proto.PolicyID] {
 	d.Lock()
 	defer d.Unlock()
 
 	return d.activeUntrackedPolicies.Copy()
 }
-func (d *MockDataplane) ActivePreDNATPolicies() set.Set {
+func (d *MockDataplane) ActivePreDNATPolicies() set.Set[proto.PolicyID] {
 	d.Lock()
 	defer d.Unlock()
 
 	return d.activePreDNATPolicies.Copy()
 }
-func (d *MockDataplane) ActiveProfiles() set.Set {
+func (d *MockDataplane) ActiveProfiles() set.Set[proto.ProfileID] {
 	d.Lock()
 	defer d.Unlock()
 
 	return d.activeProfiles.Copy()
 }
-func (d *MockDataplane) ActiveVTEPs() set.Set {
+func (d *MockDataplane) ActiveVTEPs() set.Set[proto.VXLANTunnelEndpointUpdate] {
 	d.Lock()
 	defer d.Unlock()
 
-	cp := set.New()
+	cp := set.New[proto.VXLANTunnelEndpointUpdate]()
 	for _, v := range d.activeVTEPs {
 		cp.Add(v)
 	}
 
 	return cp
 }
-func (d *MockDataplane) ActiveRoutes() set.Set {
+func (d *MockDataplane) ActiveRoutes() set.Set[proto.RouteUpdate] {
 	d.Lock()
 	defer d.Unlock()
 
@@ -220,12 +220,12 @@ func (d *MockDataplane) Config() map[string]string {
 
 func NewMockDataplane() *MockDataplane {
 	s := &MockDataplane{
-		ipSets:                         make(map[string]set.Set),
+		ipSets:                         make(map[string]set.Set[string]),
 		activePolicies:                 map[proto.PolicyID]*proto.Policy{},
-		activeProfiles:                 set.New(),
-		activeUntrackedPolicies:        set.New(),
-		activePreDNATPolicies:          set.New(),
-		activeRoutes:                   set.New(),
+		activeProfiles:                 set.New[proto.ProfileID](),
+		activeUntrackedPolicies:        set.New[proto.PolicyID](),
+		activePreDNATPolicies:          set.New[proto.PolicyID](),
+		activeRoutes:                   set.New[proto.RouteUpdate](),
 		activeVTEPs:                    make(map[string]proto.VXLANTunnelEndpointUpdate),
 		endpointToPolicyOrder:          make(map[string][]TierInfo),
 		endpointToUntrackedPolicyOrder: make(map[string][]TierInfo),
@@ -261,7 +261,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.InSync:
 		d.inSync = true
 	case *proto.IPSetUpdate:
-		newMembers := set.New()
+		newMembers := set.New[string]()
 		for _, ip := range event.Members {
 			newMembers.Add(ip)
 		}
@@ -417,8 +417,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		Expect(d.namespaces).To(HaveKey(id))
 		delete(d.namespaces, id)
 	case *proto.RouteUpdate:
-		d.activeRoutes.Iter(func(item interface{}) error {
-			r := item.(proto.RouteUpdate)
+		d.activeRoutes.Iter(func(r proto.RouteUpdate) error {
 			if event.Dst == r.Dst {
 				return set.RemoveItem
 			}
@@ -426,8 +425,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		})
 		d.activeRoutes.Add(*event)
 	case *proto.RouteRemove:
-		d.activeRoutes.Iter(func(item interface{}) error {
-			r := item.(proto.RouteUpdate)
+		d.activeRoutes.Iter(func(r proto.RouteUpdate) error {
 			if event.Dst == r.Dst {
 				return set.RemoveItem
 			}

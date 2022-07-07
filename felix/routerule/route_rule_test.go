@@ -44,13 +44,13 @@ var _ = Describe("RouteRules Construct", func() {
 	BeforeEach(func() {
 		dataplane = &mockDataplane{
 			ruleKeyToRule:   map[string]netlink.Rule{},
-			addedRuleKeys:   set.New(),
-			deletedRuleKeys: set.New(),
+			addedRuleKeys:   set.New[string](),
+			deletedRuleKeys: set.New[string](),
 		}
 	})
 
 	It("should not be constructable with no table index", func() {
-		tableIndexSet := set.New()
+		tableIndexSet := set.New[int]()
 		_, err := New(
 			4,
 			tableIndexSet,
@@ -64,9 +64,7 @@ var _ = Describe("RouteRules Construct", func() {
 	})
 
 	It("should not be constructable with wrong table index", func() {
-		tableIndexSet := set.New()
-		tableIndexSet.Add(0)
-		tableIndexSet.Add(10)
+		tableIndexSet := set.From(0, 10)
 		_, err := New(
 			4,
 			tableIndexSet,
@@ -106,10 +104,7 @@ var _ = Describe("RouteRules Construct", func() {
 	})
 
 	It("should be constructable", func() {
-		tableIndexSet := set.New()
-		tableIndexSet.Add(1)
-		tableIndexSet.Add(10)
-		tableIndexSet.Add(250)
+		tableIndexSet := set.From(1, 10, 250)
 		_, err := New(
 			4,
 			tableIndexSet,
@@ -130,14 +125,11 @@ var _ = Describe("RouteRules", func() {
 	BeforeEach(func() {
 		dataplane = &mockDataplane{
 			ruleKeyToRule:   map[string]netlink.Rule{},
-			addedRuleKeys:   set.New(),
-			deletedRuleKeys: set.New(),
+			addedRuleKeys:   set.New[string](),
+			deletedRuleKeys: set.New[string](),
 		}
 
-		tableIndexSet := set.New()
-		tableIndexSet.Add(1)
-		tableIndexSet.Add(10)
-		tableIndexSet.Add(250)
+		tableIndexSet := set.From(1, 10, 250)
 
 		var err error
 		rrs, err = New(
@@ -247,7 +239,7 @@ var _ = Describe("RouteRules", func() {
 			})
 
 			It("should re-add the rule on resync if deleted out-of-band", func() {
-				dataplane.addedRuleKeys = set.New()
+				dataplane.addedRuleKeys = set.New[string]()
 				dataplane.removeMockRule(&netlinkRule)
 
 				// Next apply should be a no-op.
@@ -453,8 +445,8 @@ func (f failFlags) String() string {
 
 type mockDataplane struct {
 	ruleKeyToRule   map[string]netlink.Rule
-	addedRuleKeys   set.Set
-	deletedRuleKeys set.Set
+	addedRuleKeys   set.Set[string]
+	deletedRuleKeys set.Set[string]
 
 	NumNewNetlinkCalls int
 	NetlinkOpen        bool

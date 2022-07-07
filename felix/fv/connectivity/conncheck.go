@@ -599,7 +599,7 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 	return true
 }
 
-var UnactivatedCheckers = set.New()
+var UnactivatedCheckers = set.New[*Checker]()
 
 // MTUPair is a pair of MTU value recorded before and after data were transferred
 type MTUPair struct {
