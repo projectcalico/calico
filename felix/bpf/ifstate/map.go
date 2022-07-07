@@ -74,6 +74,12 @@ func (k Key) IfIndex() uint32 {
 	return binary.LittleEndian.Uint32(k[:])
 }
 
+func KeyFromBytes(b []byte) Key {
+	var k Key
+	copy(k[:], b)
+	return k
+}
+
 type Value [4 + 16]byte
 
 func NewValue(flags uint32, name string) Value {
@@ -112,4 +118,10 @@ func (v Value) String() string {
 	}
 
 	return fmt.Sprintf("{flags: %s name: %s}", fstr, v.IfName())
+}
+
+func ValueFromBytes(b []byte) Value {
+	var v Value
+	copy(v[:], b)
+	return v
 }
