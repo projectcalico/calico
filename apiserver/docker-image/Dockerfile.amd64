@@ -16,6 +16,10 @@ COPY  --from=ubi /tmp /tmp
 COPY  --from=ubi /lib /lib
 COPY  --from=ubi /lib64 /lib64
 
+# Copy hostname configuration files from UBI so glibc hostname lookups work.
+COPY --from=ubi /etc/host.conf /etc/host.conf
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
+
 ADD  bin/apiserver-amd64 /code/apiserver
 ADD  bin/filecheck-amd64 /code/filecheck
 
