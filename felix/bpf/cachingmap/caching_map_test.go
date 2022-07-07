@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cachingmap
+package cachingmap_test
 
 import (
 	"fmt"
@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	. "github.com/projectcalico/calico/felix/bpf/cachingmap"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/logutils"
 )
