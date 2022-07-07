@@ -40,6 +40,10 @@ ADD bin/healthz-amd64 /healthz
 COPY --from=build /lib64 /lib64
 COPY --from=build /lib /lib
 
+# Copy hostname configuration files from UBI so glibc hostname lookups work.
+COPY --from=ubi /etc/host.conf /etc/host.conf
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
+
 # Typical Linux systems start numbering human users at 1000, reserving 1-999
 # for services, so we pick 999 to be least likely to overlap.  It's not a big
 # deal if we happen to overlap, as it would take a container escape for
