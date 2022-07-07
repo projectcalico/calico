@@ -16,21 +16,28 @@ package ut_test
 
 import (
 	"os"
+	"os/exec"
+
 	"testing"
 
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	mock "github.com/projectcalico/calico/felix/bpf/mock/multiversion"
-	v2 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
-	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
-	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
-	v5 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v5"
+	"github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
+	"github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
+	"github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
+	"github.com/projectcalico/calico/felix/bpf/mock/multiversion/v5"
 )
 
 const key = 0xdeadbeef
 const val = 0xa0b1c2d3
 
+func bpfMapList() string {
+	cmd := exec.Command("bpftool", "map", "list", "-j")
+	out, _ := cmd.CombinedOutput()
+	return string(out)
+}
 func deleteMap(bpfMap bpf.Map) {
 	bpfMap.(*bpf.PinnedMap).Close()
 	os.Remove(bpfMap.Path())
@@ -61,6 +68,8 @@ func TestMapUpgradeV2ToV3(t *testing.T) {
 	Expect(val).To(Equal(v3.AsBytes()))
 	deleteMap(mockMapv2)
 	deleteMap(mockMapv3)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv3.GetName()))
 }
 
 func TestMapUpgradeV2ToV4(t *testing.T) {
@@ -87,6 +96,8 @@ func TestMapUpgradeV2ToV4(t *testing.T) {
 	Expect(val).To(Equal(v4.AsBytes()))
 	deleteMap(mockMapv2)
 	deleteMap(mockMapv4)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv4.GetName()))
 }
 
 func TestMapUpgradeV2ToV5(t *testing.T) {
@@ -113,6 +124,8 @@ func TestMapUpgradeV2ToV5(t *testing.T) {
 	Expect(val).To(Equal(v5.AsBytes()))
 	deleteMap(mockMapv2)
 	deleteMap(mockMapv5)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv5.GetName()))
 }
 
 func TestMapUpgradeV3ToV5(t *testing.T) {
@@ -139,6 +152,8 @@ func TestMapUpgradeV3ToV5(t *testing.T) {
 	Expect(val).To(Equal(v5.AsBytes()))
 	deleteMap(mockMapv3)
 	deleteMap(mockMapv5)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv5.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv3.GetName()))
 }
 
 func TestMapUpgradeV3ToV5WithDifferentSize(t *testing.T) {
@@ -165,6 +180,8 @@ func TestMapUpgradeV3ToV5WithDifferentSize(t *testing.T) {
 	Expect(val).To(Equal(v5.AsBytes()))
 	deleteMap(mockMapv3)
 	deleteMap(mockMapv5)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv5.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv3.GetName()))
 }
 
 func TestMapUpgradeV3ToV5WithLowerSize(t *testing.T) {
@@ -184,12 +201,11 @@ func TestMapUpgradeV3ToV5WithLowerSize(t *testing.T) {
 
 	mockMapv5 := mock.MapV5(mc, 7)
 	err = mockMapv5.EnsureExists()
-	defer func() {
-		deleteMap(mockMapv3)
-		deleteMap(mockMapv5)
-	}()
 	Expect(err).To(HaveOccurred())
-
+	deleteMap(mockMapv3)
+	deleteMap(mockMapv5)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv5.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv3.GetName()))
 }
 
 func TestMapUpgradeV5ToV3(t *testing.T) {
@@ -204,6 +220,8 @@ func TestMapUpgradeV5ToV3(t *testing.T) {
 	Expect(err).To(HaveOccurred())
 	deleteMap(mockMapv5)
 	deleteMap(mockMapv3)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv5.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv3.GetName()))
 }
 
 func TestMapUpgradeWithDeltaEntries(t *testing.T) {
@@ -261,6 +279,8 @@ func TestMapUpgradeWithDeltaEntries(t *testing.T) {
 
 	deleteMap(mockMapv2)
 	deleteMap(mockMapv5)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv5.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
 }
 
 func TestMapResizeWhileUpgradeInProgress(t *testing.T) {
@@ -312,7 +332,8 @@ func TestMapResizeWhileUpgradeInProgress(t *testing.T) {
 	deleteMap(mockMapv2)
 	deleteMap(mockMapv5)
 	deleteMap(mockMapv5_new)
-
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv5.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
 }
 
 func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
@@ -381,4 +402,6 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	deleteMap(mockMapv2_old)
 	deleteMap(mockMapv2)
 	deleteMap(mockMapv5)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv5.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
 }
