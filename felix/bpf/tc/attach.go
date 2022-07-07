@@ -450,7 +450,7 @@ func CleanUpMaps() {
 	if err != nil {
 		log.WithError(err).WithField("dump", string(out)).Error("Failed to parse list of attached BPF programs")
 	}
-	attachedProgs := set.New()
+	attachedProgs := set.New[int]()
 	for _, prog := range attached[0].TC {
 		log.WithField("prog", prog).Debug("Adding TC prog to attached set")
 		attachedProgs.Add(prog.ID)
@@ -498,7 +498,7 @@ func CleanUpMaps() {
 	}
 
 	// Look for empty dirs.
-	emptyAutoDirs := set.New()
+	emptyAutoDirs := set.New[string]()
 	err = filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -524,8 +524,7 @@ func CleanUpMaps() {
 		log.WithError(err).Error("Error while looking for maps.")
 	}
 
-	emptyAutoDirs.Iter(func(item interface{}) error {
-		p := item.(string)
+	emptyAutoDirs.Iter(func(p string) error {
 		log.WithField("path", p).Debug("Removing empty dir.")
 		err := os.Remove(p)
 		if err != nil {

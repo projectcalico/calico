@@ -399,7 +399,7 @@ var _ = Describe("CIDRTrie tests", func() {
 			cidrs = append(cidrs, cidrs...)
 			permute(cidrs, func(cidrs []string) {
 				// expected tracks the CIDRs that should be in the trie.
-				expected := set.New()
+				expected := set.New[string]()
 				for _, c := range cidrs {
 					// Add or remove the given CIDR depending on whether it should be there or not.
 					if expected.Contains(c) {
@@ -410,8 +410,7 @@ var _ = Describe("CIDRTrie tests", func() {
 						update(c)
 					}
 					var expSlice []string
-					expected.Iter(func(item interface{}) error {
-						cidr := item.(string)
+					expected.Iter(func(cidr string) error {
 						expSlice = append(expSlice, cidr)
 
 						path := lookup(cidr)
