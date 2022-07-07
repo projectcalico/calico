@@ -17,6 +17,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 )
 
@@ -38,5 +39,60 @@ func TestTerminationHandler_ServeHTTP(t *testing.T) {
 		return
 	default:
 		t.Error("termination handler did not write to channel as expected")
+	}
+}
+
+func TestHttpTerminationHandler_RunHTTPServer(t *testing.T) {
+	th := httpTerminationHandler{make(chan bool, 1)}
+	type input struct {
+		addr, port string
+	}
+	type output struct {
+		addr, err string
+	}
+	tests := []struct {
+		name string
+		in   input
+		want output
+	}{
+		{
+			name: "no addr empty port",
+			in:   input{"", ""},
+			want: output{"", "error parsing provided HTTP listen port: strconv.Atoi: parsing \"\": invalid syntax"},
+		},
+		{
+			name: "no addr zero port",
+			in:   input{"", "0"},
+			want: output{"", "please provide non-zero, non-negative port number for HTTP listening port"},
+		},
+		{
+			name: "no addr valid port",
+			in:   input{"", "7777"},
+			want: output{":7777", ""},
+		},
+		{
+			name: "invalid addr valid port",
+			in:   input{"invalid", "7777"},
+			want: output{"", "invalid HTTP bind address \"invalid\""},
+		},
+		{
+			name: "valid addr valid port",
+			in:   input{"127.0.0.1", "7777"},
+			want: output{"127.0.0.1:7777", ""},
+		},
+	}
+
+	for _, tc := range tests {
+		gotSvr, _, gotErr := th.RunHTTPServer(tc.in.addr, tc.in.port)
+		got := output{"", ""}
+		if gotSvr != nil {
+			got.addr = gotSvr.Addr
+		}
+		if gotErr != nil {
+			got.err = gotErr.Error()
+		}
+		if !reflect.DeepEqual(tc.want, got) {
+			t.Fatalf("%s: expected: %v got: %v", tc.name, tc.want, got)
+		}
 	}
 }

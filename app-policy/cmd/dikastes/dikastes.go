@@ -135,22 +135,20 @@ func runServer(arguments map[string]interface{}) {
 	}()
 
 	th := httpTerminationHandler{make(chan bool, 1)}
-	if httpPort, ok := arguments["--http-port"].(string); ok {
-		i, err := strconv.Atoi(httpPort)
-		if err != nil {
-			log.Fatalf("error parsing provided HTTP port: %v", err)
-		} else if i < 1 {
-			log.Fatal("please provide non-zero, non-negative port number for HTTP listening port")
+	if httpServerPort := os.Getenv("DIKASTES_HTTP_BIND_PORT"); httpServerPort != "" {
+		httpServerAddr := os.Getenv("DIKASTES_HTTP_BIND_ADDR")
+		if httpServer, httpServerWg, err := th.RunHTTPServer(httpServerAddr, httpServerPort); err == nil {
+			defer httpServerWg.Wait()
+			defer func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err = httpServer.Shutdown(ctx); err != nil {
+					log.Fatalf("error while shutting down HTTP server: %v", err)
+				}
+			}()
+		} else {
+			log.Fatal(err)
 		}
-		httpServer, httpServerWg := th.RunHTTPServer(arguments)
-		defer httpServerWg.Wait()
-		defer func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			defer cancel()
-			if err = httpServer.Shutdown(ctx); err != nil {
-				log.Fatalf("error while shutting down HTTP server: %v", err)
-			}
-		}()
 	}
 
 	// Use a buffered channel so we don't miss any signals
@@ -215,22 +213,35 @@ func (h *httpTerminationHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (h *httpTerminationHandler) RunHTTPServer(arguments map[string]interface{}) (*http.Server, *sync.WaitGroup) {
-	httpServerPort := arguments["--http-port"].(string)
-	httpServerPortStr := fmt.Sprintf(":%s", httpServerPort)
-	httpServer := &http.Server{Addr: httpServerPortStr}
+func (h *httpTerminationHandler) RunHTTPServer(addr string, port string) (*http.Server, *sync.WaitGroup, error) {
+	if i, err := strconv.Atoi(port); err != nil {
+		err = fmt.Errorf("error parsing provided HTTP listen port: %v", err)
+		return nil, nil, err
+	} else if i < 1 {
+		err = fmt.Errorf("please provide non-zero, non-negative port number for HTTP listening port")
+		return nil, nil, err
+	}
+
+	if addr != "" {
+		if ip := net.ParseIP(addr); ip == nil {
+			err := fmt.Errorf("invalid HTTP bind address \"%v\"", addr)
+			return nil, nil, err
+		}
+	}
+
+	httpServerSockAddr := fmt.Sprintf("%s:%s", addr, port)
+	httpServerMux := http.NewServeMux()
+	httpServerMux.Handle("/terminate", h)
+	httpServer := &http.Server{Addr: httpServerSockAddr, Handler: httpServerMux}
 	httpServerWg := &sync.WaitGroup{}
 	httpServerWg.Add(1)
 
-	http.Handle("/terminate", h)
-
 	go func() {
 		defer httpServerWg.Done()
-		log.Infof("starting HTTP server on port %v", httpServerPort)
+		log.Infof("starting HTTP server on %v", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("HTTP server closed unexpectedly: %v", err)
 		}
 	}()
-
-	return httpServer, httpServerWg
+	return httpServer, httpServerWg, nil
 }
