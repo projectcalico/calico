@@ -956,9 +956,9 @@ spec:
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
               bpfPolicyDebugEnabled:
-                description: 'BPFPolicyDebugEnabled, when set to true collects debug
-                  information for the policy programs attached to interfaces. [Default:
-                  true]'
+                description: BPFPolicyDebugEnabled when true, Felix records detailed
+                  information about the BPF policy programs, which can be examined
+                  with the calico-bpf command-line tool.
                 type: boolean
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s

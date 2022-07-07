@@ -2427,7 +2427,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfPolicyDebugEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFPolicyDebugEnabled, when set to true collects debug information for the policy programs attached to interfaces. [Default: true]",
+							Description: "BPFPolicyDebugEnabled when true, Felix records detailed information about the BPF policy programs, which can be examined with the calico-bpf command-line tool.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
