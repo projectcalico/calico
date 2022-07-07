@@ -38,6 +38,10 @@ COPY --from=base /usr/include /usr/include
 COPY --from=base /lib64 /lib64
 COPY --from=base /lib /lib
 
+# Copy hostname configuration files from UBI so glibc hostname lookups work.
+COPY --from=base /etc/host.conf /etc/host.conf
+COPY --from=base /etc/nsswitch.conf /etc/nsswitch.conf
+
 ADD bin/kubectl-amd64 /usr/bin/kubectl
 ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
 ADD bin/check-status-linux-amd64 /usr/bin/check-status

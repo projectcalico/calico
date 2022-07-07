@@ -28,6 +28,10 @@ LABEL name="Calico CLI tool" \
       description="calicoctl(1) is a command line tool used to interface with the Calico datastore " \
       maintainer="maintainers@projectcalico.org"
 
+# Copy hostname configuration files from UBI so glibc hostname lookups work.
+COPY --from=ubi /etc/host.conf /etc/host.conf
+COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
+
 COPY --from=ubi /licenses /licenses
 ADD bin/calicoctl-linux-amd64 /calicoctl
 
