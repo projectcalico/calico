@@ -718,14 +718,14 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams := b.GetMapParams(oldVersion)
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := ctx.NewPinnedMap(oldMapParams)
-	err = oldBpfMap.EnsureExists()
-	if err != nil {
-		return err
-	}
 	defer func() {
 		oldBpfMap.(*PinnedMap).Close()
 		oldBpfMap.(*PinnedMap).fd = 0
 	}()
+	err = oldBpfMap.EnsureExists()
+	if err != nil {
+		return err
+	}
 	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
 }
 
