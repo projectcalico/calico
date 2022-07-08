@@ -4391,10 +4391,15 @@ spec:
               # Bidirectional is required to ensure that the new mount we make at /sys/fs/bpf propagates to the host
               # so that it outlives the init container.
               mountPropagation: Bidirectional
-            # Mount /proc/1/ from host which usually is an init program at /initproc. It's needed by mountns binary,
+            - mountPath: /var/run/calico
+              name: var-run-calico
+              # Bidirectional is required to ensure that the new mount we make at /run/calico/cgroup propagates to the host
+              # so that it outlives the init container.
+              mountPropagation: Bidirectional
+            # Mount /proc/ from host which usually is an init program at /nodeproc. It's needed by mountns binary,
             # executed by calico-node, to mount root cgroup2 fs at /run/calico/cgroup to attach CTLB programs correctly.
-            - mountPath: /initproc
-              name: init-proc
+            - mountPath: /nodeproc
+              name: nodeproc
               readOnly: true
           securityContext:
             privileged: true
@@ -4532,10 +4537,10 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
-        # mount /proc/1 at /initproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
-        - name: init-proc
+        # mount /proc at /nodeproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
+        - name: nodeproc
           hostPath:
-            path: /proc/1
+            path: /proc
         # Used to install CNI.
         - name: cni-bin-dir
           hostPath:
