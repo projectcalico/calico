@@ -168,6 +168,9 @@ func (b *PinnedMap) Path() string {
 
 func (b *PinnedMap) Close() error {
 	err := b.fd.Close()
+	if b.oldfd > 0 {
+		b.oldfd.Close()
+	}
 	b.fdLoaded = false
 	b.oldfd = 0
 	b.fd = 0
@@ -559,6 +562,9 @@ func (b *PinnedMap) EnsureExists() error {
 			// same version but of different size.
 			err := b.copyFromOldMap()
 			if err != nil {
+				b.fd.Close()
+				b.fd = 0
+				b.fdLoaded = false
 				logrus.WithError(err).Error("error copying data from old map")
 				return err
 			}
@@ -572,6 +578,12 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 		// Handle map upgrade.
 		err = b.upgrade()
+		if err != nil {
+			b.fd.Close()
+			b.fd = 0
+			b.fdLoaded = false
+			return err
+		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
@@ -706,14 +718,14 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams := b.GetMapParams(oldVersion)
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := ctx.NewPinnedMap(oldMapParams)
-	err = oldBpfMap.EnsureExists()
-	if err != nil {
-		return err
-	}
 	defer func() {
 		oldBpfMap.(*PinnedMap).Close()
 		oldBpfMap.(*PinnedMap).fd = 0
 	}()
+	err = oldBpfMap.EnsureExists()
+	if err != nil {
+		return err
+	}
 	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
 }
 
