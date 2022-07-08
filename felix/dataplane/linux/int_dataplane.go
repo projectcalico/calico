@@ -271,7 +271,8 @@ type InternalDataplane struct {
 
 	ipipManager *ipipManager
 
-	wireguardManager *wireguardManager
+	wireguardManager   *wireguardManager
+	wireguardManagerV6 *wireguardManager
 
 	ifaceMonitor     *ifacemonitor.InterfaceMonitor
 	ifaceUpdates     chan *ifaceUpdate
@@ -322,11 +323,12 @@ const (
 	healthName     = "int_dataplane"
 	healthInterval = 10 * time.Second
 
-	ipipMTUOverhead      = 20
-	vxlanMTUOverhead     = 50
-	vxlanV6MTUOverhead   = 70
-	wireguardMTUOverhead = 60
-	aksMTUOverhead       = 100
+	ipipMTUOverhead        = 20
+	vxlanMTUOverhead       = 50
+	vxlanV6MTUOverhead     = 70
+	wireguardMTUOverhead   = 60
+	wireguardV6MTUOverhead = 80
+	aksMTUOverhead         = 100
 )
 
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
@@ -752,20 +754,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	// Add a manager for wireguard configuration. This is added irrespective of whether wireguard is actually enabled
+	// Add a manager for IPv4 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
 	// because it may need to tidy up some of the routing rules when disabled.
-	cryptoRouteTableWireguard := wireguard.New(config.Hostname, &config.Wireguard, config.NetlinkTimeout,
+	cryptoRouteTableWireguard := wireguard.New(config.Hostname, &config.Wireguard, 4, config.NetlinkTimeout,
 		config.DeviceRouteProtocol, func(publicKey wgtypes.Key) error {
 			if publicKey == zeroKey {
-				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: ""}
+				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: "", IpVersion: 4}
 			} else {
-				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String()}
+				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String(), IpVersion: 4}
 			}
 			return nil
 		},
 		dp.loopSummarizer)
-	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config)
-	dp.RegisterManager(dp.wireguardManager) // IPv4-only
+	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config, 4)
+	dp.RegisterManager(dp.wireguardManager) // IPv4
 
 	dp.RegisterManager(newServiceLoopManager(filterTableV4, ruleRenderer, 4))
 
@@ -880,6 +882,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+
+		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
+		// because it may need to tidy up some of the routing rules when disabled.
+		cryptoRouteTableWireguardV6 := wireguard.New(config.Hostname, &config.Wireguard, 6, config.NetlinkTimeout,
+			config.DeviceRouteProtocol, func(publicKey wgtypes.Key) error {
+				if publicKey == zeroKey {
+					dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: "", IpVersion: 6}
+				} else {
+					dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String(), IpVersion: 6}
+				}
+				return nil
+			},
+			dp.loopSummarizer)
+		dp.wireguardManagerV6 = newWireguardManager(cryptoRouteTableWireguardV6, config, 6)
+		dp.RegisterManager(dp.wireguardManagerV6)
 	}
 
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesMangleTables...)
@@ -977,6 +994,7 @@ func determinePodMTU(config Config) int {
 		{config.VXLANMTU, config.RulesConfig.VXLANEnabled},
 		{config.VXLANMTUV6, config.RulesConfig.VXLANEnabledV6},
 		{config.Wireguard.MTU, config.Wireguard.Enabled},
+		{config.Wireguard.MTUV6, config.Wireguard.EnabledV6},
 	} {
 		if s.enabled && s.mtu != 0 && (s.mtu < mtu || mtu == 0) {
 			mtu = s.mtu
@@ -1019,11 +1037,26 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 			// Additionally, Wireguard sets the DF bit on its packets, and so if the MTU is set too high large packets
 			// will be dropped. Therefore it is necessary to allow for the difference between the MTU of the host and
 			// the underlying network.
-			log.Debug("Defaulting Wireguard MTU based on host and AKS with WorkloadIPs")
+			log.Debug("Defaulting IPv4 Wireguard MTU based on host and AKS with WorkloadIPs")
 			c.Wireguard.MTU = hostMTU - aksMTUOverhead - wireguardMTUOverhead
 		} else {
-			log.Debug("Defaulting Wireguard MTU based on host")
+			log.Debug("Defaulting IPv4 Wireguard MTU based on host")
 			c.Wireguard.MTU = hostMTU - wireguardMTUOverhead
+		}
+	}
+	if c.Wireguard.MTUV6 == 0 {
+		if c.KubernetesProvider == config.ProviderAKS && c.Wireguard.EncryptHostTraffic {
+			// The default MTU on Azure is 1500, but the underlying network stack will fragment packets at 1400 bytes,
+			// see https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning#azure-and-vm-mtu
+			// for details.
+			// Additionally, Wireguard sets the DF bit on its packets, and so if the MTU is set too high large packets
+			// will be dropped. Therefore it is necessary to allow for the difference between the MTU of the host and
+			// the underlying network.
+			log.Debug("Defaulting IPv6 Wireguard MTU based on host and AKS with WorkloadIPs")
+			c.Wireguard.MTUV6 = hostMTU - aksMTUOverhead - wireguardV6MTUOverhead
+		} else {
+			log.Debug("Defaulting IPv6 Wireguard MTU based on host")
+			c.Wireguard.MTUV6 = hostMTU - wireguardV6MTUOverhead
 		}
 	}
 }
@@ -1832,7 +1865,7 @@ func (d *InternalDataplane) configureKernel() {
 			log.WithError(err).Error("Failed to set unprivileged_bpf_disabled sysctl")
 		}
 	}
-	if d.config.Wireguard.Enabled {
+	if d.config.Wireguard.Enabled || d.config.Wireguard.EnabledV6 {
 		// wireguard module is available in linux kernel >= 5.6
 		mpwg := newModProbe(moduleWireguard, newRealCmd)
 		out, err = mpwg.Exec()

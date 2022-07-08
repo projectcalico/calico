@@ -38,6 +38,7 @@ type wireguardManager struct {
 	// Our dependencies.
 	wireguardRouteTable *wireguard.Wireguard
 	dpConfig            Config
+	ipVersion           uint8
 }
 
 type WireguardStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
@@ -45,36 +46,64 @@ type WireguardStatusUpdateCallback func(ipVersion uint8, id interface{}, status 
 func newWireguardManager(
 	wireguardRouteTable *wireguard.Wireguard,
 	dpConfig Config,
+	ipVersion uint8,
 ) *wireguardManager {
+	if ipVersion != 4 && ipVersion != 6 {
+		log.Panicf("Unknown IP version: %d", ipVersion)
+	}
 	return &wireguardManager{
 		wireguardRouteTable: wireguardRouteTable,
 		dpConfig:            dpConfig,
+		ipVersion:           ipVersion,
 	}
 }
 
 func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
-	log.WithField("msg", protoBufMsg).Debug("Received message")
+	logCtx := log.WithField("ipVersion", m.ipVersion)
+	logCtx.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
-		log.WithField("msg", msg).Debug("HostMetadataUpdate update")
-		m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv4Addr))
-	case *proto.HostMetadataRemove:
-		log.WithField("msg", msg).Debug("HostMetadataRemove update")
-		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
-	case *proto.RouteUpdate:
-		log.WithField("msg", msg).Debug("RouteUpdate update")
-		cidr, err := ip.ParseCIDROrIP(msg.Dst)
-		if err != nil || cidr == nil {
-			log.Errorf("error parsing RouteUpdate CIDR: %s", msg.Dst)
+		logCtx.WithField("msg", msg).Debug("HostMetadataUpdate update")
+		if m.ipVersion != 4 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
 			return
 		}
-		if cidr.Version() == 6 {
-			log.Debugf("ignore update for IPv6 CIDR: %s", msg.Dst)
+		m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv4Addr))
+	case *proto.HostMetadataRemove:
+		logCtx.WithField("msg", msg).Debug("HostMetadataRemove update")
+		if m.ipVersion != 4 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
+		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
+	case *proto.HostMetadataV6Update:
+		logCtx.WithField("msg", msg).Debug("HostMetadataV6Update update")
+		if m.ipVersion != 6 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
+		m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv6Addr))
+	case *proto.HostMetadataV6Remove:
+		if m.ipVersion != 6 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
+		logCtx.WithField("msg", msg).Debug("HostMetadataV6Remove update")
+		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
+	case *proto.RouteUpdate:
+		logCtx.WithField("msg", msg).Debug("RouteUpdate update")
+		cidr, err := ip.ParseCIDROrIP(msg.Dst)
+		if err != nil || cidr == nil {
+			logCtx.Errorf("error parsing RouteUpdate CIDR: %s", msg.Dst)
+			return
+		}
+		if cidr.Version() != m.ipVersion {
+			logCtx.WithField("CIDR", msg.Dst).Debugf("ignore update for mismatched IP version")
 			return
 		}
 		switch msg.Type {
 		case proto.RouteType_REMOTE_HOST:
-			log.Debug("RouteUpdate is a remote host update")
+			logCtx.Debug("RouteUpdate is a remote host update")
 			// This can only be done in WorkloadIPs mode, because this breaks networking during upgrade in CalicoIPAM
 			// mode.
 			if m.dpConfig.Wireguard.EncryptHostTraffic {
@@ -82,36 +111,40 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 			}
 		case proto.RouteType_LOCAL_WORKLOAD, proto.RouteType_REMOTE_WORKLOAD:
 			// CIDR is for a workload.
-			log.Debug("RouteUpdate is a workload update")
+			logCtx.Debug("RouteUpdate is a workload update")
 			m.wireguardRouteTable.RouteUpdate(msg.DstNodeName, cidr)
 		case proto.RouteType_LOCAL_TUNNEL, proto.RouteType_REMOTE_TUNNEL:
 			// CIDR is for a tunnel address. We treat tunnel addresses like workloads (in that we route over wireguard
 			// to and from these addresses when both nodes support wireguard).
-			log.Debug("RouteUpdate is a tunnel update")
+			logCtx.Debug("RouteUpdate is a tunnel update")
 			m.wireguardRouteTable.RouteUpdate(msg.DstNodeName, cidr)
 		default:
 			// It is not a workload CIDR - treat this as a route deletion.
-			log.Debug("RouteUpdate is not a workload, remote host or tunnel update, treating as a deletion")
+			logCtx.Debug("RouteUpdate is not a workload, remote host or tunnel update, treating as a deletion")
 			m.wireguardRouteTable.RouteRemove(cidr)
 		}
 	case *proto.RouteRemove:
-		log.WithField("msg", msg).Debug("RouteRemove update")
+		logCtx.WithField("msg", msg).Debug("RouteRemove update")
 		cidr, err := ip.ParseCIDROrIP(msg.Dst)
 		if err != nil || cidr == nil {
-			log.Errorf("error parsing RouteUpdate CIDR: %s", msg.Dst)
+			logCtx.WithField("CIDR", msg.Dst).Error("error parsing RouteUpdate")
 			return
 		}
-		if cidr.Version() == 6 {
-			log.Debugf("ignore update for IPv6 CIDR: %s", msg.Dst)
+		if cidr.Version() != m.ipVersion {
+			logCtx.WithField("CIDR", msg.Dst).Debug("ignore update for mismatched IP version")
 			return
 		}
-		log.Debugf("Route removal for IPv4 CIDR: %s", cidr)
+		logCtx.Debugf("Route removal for CIDR: %s", cidr)
 		m.wireguardRouteTable.RouteRemove(cidr)
 	case *proto.WireguardEndpointUpdate:
-		log.WithField("msg", msg).Debug("WireguardEndpointUpdate update")
+		logCtx.WithField("msg", msg).Debug("WireguardEndpointUpdate update")
+		if m.ipVersion != 4 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
 		key, err := wgtypes.ParseKey(msg.PublicKey)
 		if err != nil {
-			log.WithError(err).Errorf("error parsing wireguard public key %s for node %s", msg.PublicKey, msg.Hostname)
+			logCtx.WithError(err).Errorf("error parsing wireguard public key %s for node %s", msg.PublicKey, msg.Hostname)
 		}
 		var ifaceAddr ip.Addr
 		if msg.InterfaceIpv4Addr != "" {
@@ -119,14 +152,47 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 			if addr == nil {
 				// Unable to parse the wireguard interface address. We can still enable wireguard without this, so treat as
 				// an update with no interface address.
-				log.WithError(err).Errorf("error parsing wireguard interface address %s for node %s", msg.InterfaceIpv4Addr, msg.Hostname)
-			} else if addr.Version() == 4 {
+				logCtx.WithError(err).Errorf("error parsing wireguard interface address %s for node %s", msg.InterfaceIpv4Addr, msg.Hostname)
+			} else if addr.Version() == m.ipVersion {
 				ifaceAddr = addr
 			}
 		}
 		m.wireguardRouteTable.EndpointWireguardUpdate(msg.Hostname, key, ifaceAddr)
 	case *proto.WireguardEndpointRemove:
-		log.WithField("msg", msg).Debug("WireguardEndpointRemove update")
+		logCtx.WithField("msg", msg).Debug("WireguardEndpointRemove update")
+		if m.ipVersion != 4 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
+		m.wireguardRouteTable.EndpointWireguardRemove(msg.Hostname)
+	case *proto.WireguardEndpointV6Update:
+		logCtx.WithField("msg", msg).Debug("WireguardEndpointV6Update update")
+		if m.ipVersion != 6 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
+		key, err := wgtypes.ParseKey(msg.PublicKeyV6)
+		if err != nil {
+			logCtx.WithError(err).Errorf("error parsing wireguard public key %s for node %s", msg.PublicKeyV6, msg.Hostname)
+		}
+		var ifaceAddr ip.Addr
+		if msg.InterfaceIpv6Addr != "" {
+			addr := ip.FromString(msg.InterfaceIpv6Addr)
+			if addr == nil {
+				// Unable to parse the wireguard interface address. We can still enable wireguard without this, so treat as
+				// an update with no interface address.
+				logCtx.WithError(err).Errorf("error parsing wireguard interface address %s for node %s", msg.InterfaceIpv6Addr, msg.Hostname)
+			} else if addr.Version() == m.ipVersion {
+				ifaceAddr = addr
+			}
+		}
+		m.wireguardRouteTable.EndpointWireguardUpdate(msg.Hostname, key, ifaceAddr)
+	case *proto.WireguardEndpointV6Remove:
+		logCtx.WithField("msg", msg).Debug("WireguardEndpointV6Remove update")
+		if m.ipVersion != 6 {
+			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
+			return
+		}
 		m.wireguardRouteTable.EndpointWireguardRemove(msg.Hostname)
 	}
 }

@@ -45,15 +45,16 @@ const (
 
 	// Common attributes which may be set on allocations by clients.  Moved to the model package so they can be used
 	// by the AllocationBlock code too.
-	AttributePod           = model.IPAMBlockAttributePod
-	AttributeNamespace     = model.IPAMBlockAttributeNamespace
-	AttributeNode          = model.IPAMBlockAttributeNode
-	AttributeTimestamp     = model.IPAMBlockAttributeTimestamp
-	AttributeType          = model.IPAMBlockAttributeType
-	AttributeTypeIPIP      = model.IPAMBlockAttributeTypeIPIP
-	AttributeTypeVXLAN     = model.IPAMBlockAttributeTypeVXLAN
-	AttributeTypeVXLANV6   = model.IPAMBlockAttributeTypeVXLANV6
-	AttributeTypeWireguard = model.IPAMBlockAttributeTypeWireguard
+	AttributePod             = model.IPAMBlockAttributePod
+	AttributeNamespace       = model.IPAMBlockAttributeNamespace
+	AttributeNode            = model.IPAMBlockAttributeNode
+	AttributeTimestamp       = model.IPAMBlockAttributeTimestamp
+	AttributeType            = model.IPAMBlockAttributeType
+	AttributeTypeIPIP        = model.IPAMBlockAttributeTypeIPIP
+	AttributeTypeVXLAN       = model.IPAMBlockAttributeTypeVXLAN
+	AttributeTypeVXLANV6     = model.IPAMBlockAttributeTypeVXLANV6
+	AttributeTypeWireguard   = model.IPAMBlockAttributeTypeWireguard
+	AttributeTypeWireguardV6 = model.IPAMBlockAttributeTypeWireguardV6
 )
 
 var (
