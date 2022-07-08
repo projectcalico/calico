@@ -81,9 +81,13 @@ type NodeAddress struct {
 }
 
 type NodeStatus struct {
-	// WireguardPublicKey is the Wireguard public-key for this node.
+	// WireguardPublicKey is the IPv4 Wireguard public-key for this node.
 	// wireguardPublicKey validates if the string is a valid base64 encoded key.
 	WireguardPublicKey string `json:"wireguardPublicKey,omitempty" validate:"omitempty,wireguardPublicKey"`
+
+	// WireguardPublicKeyV6 is the IPv6 Wireguard public-key for this node.
+	// wireguardPublicKey validates if the string is a valid base64 encoded key.
+	WireguardPublicKeyV6 string `json:"wireguardPublicKeyV6,omitempty" validate:"omitempty,wireguardPublicKey"`
 
 	// PodCIDR is a reflection of the Kubernetes node's spec.PodCIDRs field.
 	PodCIDRs []string `json:"podCIDRs,omitempty" validate:"omitempty"`
@@ -117,8 +121,11 @@ type NodeBGPSpec struct {
 
 // NodeWireguardSpec contains the specification for the Node wireguard configuration.
 type NodeWireguardSpec struct {
-	// InterfaceIPv4Address is the IPv4 address for the Wireguard interface.
+	// InterfaceIPv4Address is the IP address for the IPv4 Wireguard interface.
 	InterfaceIPv4Address string `json:"interfaceIPv4Address,omitempty" validate:"omitempty,ipv4"`
+
+	// InterfaceIPv6Address is the IP address for the IPv6 Wireguard interface.
+	InterfaceIPv6Address string `json:"interfaceIPv6Address,omitempty" validate:"omitempty,ipv6"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
