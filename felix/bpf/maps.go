@@ -76,6 +76,11 @@ type Map interface {
 	Delete(k []byte) error
 }
 
+type MapWithExistsCheck interface {
+	Map
+	ErrIsNotExists(error) error
+}
+
 type MapParameters struct {
 	Filename     string
 	Type         string
@@ -308,6 +313,10 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 			copy(keyToDelete, k)
 		}
 	}
+}
+
+func (b *PinnedMap) ErrIsNotExists(err error) bool {
+	return IsNotExists(err)
 }
 
 func (b *PinnedMap) Update(k, v []byte) error {
@@ -735,19 +744,19 @@ type Upgradable interface {
 }
 
 type TypedMap[K Key, V Value] struct {
-	Map
+	MapWithExistsCheck
 	kConstructor func([]byte) K
 	vConstructor func([]byte) V
 }
 
 func (m *TypedMap[K, V]) Update(k K, v V) error {
-	return m.Map.Update(k.AsBytes(), v.AsBytes())
+	return m.MapWithExistsCheck.Update(k.AsBytes(), v.AsBytes())
 }
 
 func (m *TypedMap[K, V]) Get(k K) (V, error) {
 	var res V
 
-	vb, err := m.Map.Get(k.AsBytes())
+	vb, err := m.MapWithExistsCheck.Get(k.AsBytes())
 	if err != nil {
 		goto exit
 	}
@@ -759,14 +768,14 @@ exit:
 }
 
 func (m *TypedMap[K, V]) Delete(k K) error {
-	return m.Map.Delete(k.AsBytes())
+	return m.MapWithExistsCheck.Delete(k.AsBytes())
 }
 
 func (m *TypedMap[K, V]) Load() (map[K]V, error) {
 
 	memMap := make(map[K]V)
 
-	err := m.Map.Iter(func(kb, vb []byte) IteratorAction {
+	err := m.MapWithExistsCheck.Iter(func(kb, vb []byte) IteratorAction {
 		memMap[m.kConstructor(kb)] = m.vConstructor(vb)
 		return IterNone
 	})
@@ -774,10 +783,10 @@ func (m *TypedMap[K, V]) Load() (map[K]V, error) {
 	return memMap, err
 }
 
-func NewTypedMap[K Key, V Value](m Map, kConstructor func([]byte) K, vConstructor func([]byte) V) *TypedMap[K, V] {
+func NewTypedMap[K Key, V Value](m MapWithExistsCheck, kConstructor func([]byte) K, vConstructor func([]byte) V) *TypedMap[K, V] {
 	return &TypedMap[K, V]{
-		Map:          m,
-		kConstructor: kConstructor,
-		vConstructor: vConstructor,
+		MapWithExistsCheck: m,
+		kConstructor:       kConstructor,
+		vConstructor:       vConstructor,
 	}
 }

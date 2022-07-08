@@ -29,7 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
+	"github.com/projectcalico/calico/felix/cachingmap"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/nat"
