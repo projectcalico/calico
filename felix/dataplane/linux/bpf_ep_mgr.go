@@ -273,7 +273,7 @@ func newBPFEndpointManager(
 		bpfMapContext:           bpfMapContext,
 		ifStateMap: cachingmap.New[ifstate.Key, ifstate.Value](ifstate.MapParams.Name,
 			bpf.NewTypedMap[ifstate.Key, ifstate.Value](
-				bpfMapContext.IfStateMap, ifstate.KeyFromBytes, ifstate.ValueFromBytes,
+				bpfMapContext.IfStateMap.(bpf.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
 			)),
 		ruleRenderer:        iptablesRuleRenderer,
 		iptablesFilterTable: iptablesFilterTable,
