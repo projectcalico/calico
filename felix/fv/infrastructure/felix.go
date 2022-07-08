@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
+	"strings"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -234,4 +237,40 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string) {
 		"--destination", serviceIP,
 		"-j", "DNAT", "--to-destination", targetIP,
 	)
+}
+
+type BPFIfState struct {
+	IfIndex  int
+	Workload bool
+	Ready    bool
+}
+
+var bpfIfStateRegexp = regexp.MustCompile(`.*([0-9]+) : \{flags: (.*) name: (.*)\}`)
+
+func (f *Felix) BPFIfState() map[string]BPFIfState {
+	out, err := f.ExecOutput("calico-bpf", "ifstate", "dump")
+	Expect(err).NotTo(HaveOccurred())
+
+	states := make(map[string]BPFIfState)
+
+	lines := strings.Split(out, "\n")
+	for _, line := range lines {
+		match := bpfIfStateRegexp.FindStringSubmatch(line)
+		if len(match) == 0 {
+			continue
+		}
+
+		name := match[3]
+		flags := match[2]
+		ifIndex, _ := strconv.Atoi(match[1])
+		state := BPFIfState{
+			IfIndex:  ifIndex,
+			Workload: strings.Contains(flags, "workload"),
+			Ready:    strings.Contains(flags, "ready"),
+		}
+
+		states[name] = state
+	}
+
+	return states
 }
