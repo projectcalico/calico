@@ -126,6 +126,7 @@ func (c *endpointManagerCallbacks) InvokeRemoveWorkload(old *proto.WorkloadEndpo
 type endpointManager struct {
 	// Config.
 	ipVersion              uint8
+	wlInterfacePrefixes    []string
 	wlIfacesRegexp         *regexp.Regexp
 	kubeIPVSSupportEnabled bool
 	floatingIPsEnabled     bool
@@ -173,6 +174,8 @@ type endpointManager struct {
 	// default configuration for new interfaces
 	// used to reset kernel settings when source spoofing is disabled
 	defaultRPFilter string
+	// skip applying rp filter to lists of CIDRS
+	rpFilterSkipCidrs []string
 
 	// hostIfaceToAddrs maps host interface name to the set of IPs on that interface (reported
 	// from the dataplane).
@@ -222,6 +225,7 @@ func newEndpointManager(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
+	rpFilterSkipCidrs []string,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -241,6 +245,7 @@ func newEndpointManager(
 		writeProcSys,
 		os.Stat,
 		defaultRPFilter,
+		rpFilterSkipCidrs,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -262,6 +267,7 @@ func newEndpointManagerWithShims(
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
+	rpFilterSkipCidrs []string,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -272,6 +278,7 @@ func newEndpointManagerWithShims(
 
 	return &endpointManager{
 		ipVersion:              ipVersion,
+		wlInterfacePrefixes:    wlInterfacePrefixes,
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
@@ -307,6 +314,7 @@ func newEndpointManagerWithShims(
 		sourceSpoofingConfig: map[string][]string{},
 		rpfSkipChainDirty:    true,
 		defaultRPFilter:      defaultRPFilter,
+		rpFilterSkipCidrs:    rpFilterSkipCidrs,
 
 		hostIfaceToAddrs:   map[string]set.Set[string]{},
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
@@ -782,6 +790,17 @@ func (m *endpointManager) updateRPFSkipChain() {
 		Name:  rules.ChainRpfSkip,
 		Rules: make([]iptables.Rule, 0),
 	}
+	// insert globally configured CIDRs to skip rp filter
+	for _, prefix := range m.wlInterfacePrefixes {
+		for _, ipString := range m.rpFilterSkipCidrs {
+			addr := ip.MustParseCIDROrIP(ipString)
+			chain.Rules = append(chain.Rules, iptables.Rule{
+				Match:  iptables.Match().InInterface(prefix + "+").SourceNet(addr.String()),
+				Action: iptables.AcceptAction{},
+			})
+		}
+	}
+
 	for interfaceName, addresses := range m.sourceSpoofingConfig {
 		for _, addr := range addresses {
 			chain.Rules = append(chain.Rules, iptables.Rule{

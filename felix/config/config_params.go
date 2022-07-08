@@ -338,6 +338,7 @@ type Config struct {
 	CalicoVersion                  string        `config:"string;"`
 
 	ExternalNodesCIDRList []string `config:"cidr-list;;die-on-fail"`
+	RPFilterSkipCIDRList  []string `config:"cidr-list;;die-on-fail"`
 
 	DebugMemoryProfilePath          string        `config:"file;;"`
 	DebugCPUProfilePath             string        `config:"file;/tmp/felix-cpu-<timestamp>.pprof;"`

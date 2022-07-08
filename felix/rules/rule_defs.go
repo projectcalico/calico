@@ -324,6 +324,8 @@ type Config struct {
 	BPFEnabled         bool
 
 	ServiceLoopPrevention string
+
+	RPFilterSkipCidrs []string
 }
 
 var unusedBitsInBPFMode = map[string]bool{

@@ -246,6 +246,8 @@ func StartDataplaneDriver(configParams *config.Config,
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
 				BPFEnabled:                         configParams.BPFEnabled,
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
+
+				RPFilterSkipCidrs: configParams.RPFilterSkipCIDRList,
 			},
 			Wireguard: wireguard.Config{
 				Enabled:             wireguardEnabled,
