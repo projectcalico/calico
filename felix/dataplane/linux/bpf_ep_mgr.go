@@ -760,6 +760,12 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		return nil
 	})
 	wg.Wait()
+
+	// We can hold the lock for the whole iteration below because nothing else
+	// is running now. We hold it pretty much to make race detector happy.
+	m.ifacesLock.Lock()
+	defer m.ifacesLock.Unlock()
+
 	m.dirtyIfaceNames.Iter(func(iface string) error {
 		if !m.isDataIface(iface) {
 			log.WithField("iface", iface).Debug(
@@ -767,18 +773,30 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			return nil
 		}
 		err := errs[iface]
+		isReady := true
+		ret := set.RemoveItem
 		if err == nil {
 			log.WithField("id", iface).Info("Applied program to host interface")
-			return set.RemoveItem
+		} else {
+			isReady = false
+			if isLinkNotFoundError(err) {
+				log.WithField("iface", iface).Debug(
+					"Tried to apply BPF program to interface but the interface wasn't present.  " +
+						"Will retry if it shows up.")
+				return set.RemoveItem
+			} else {
+				log.WithField("iface", iface).WithError(err).Warn("Failed to apply policy to interface, will retry")
+				ret = nil
+			}
 		}
-		if isLinkNotFoundError(err) {
-			log.WithField("iface", iface).Debug(
-				"Tried to apply BPF program to interface but the interface wasn't present.  " +
-					"Will retry if it shows up.")
-			return set.RemoveItem
-		}
-		log.WithField("iface", iface).WithError(err).Warn("Failed to apply policy to interface, will retry")
-		return nil
+
+		m.withIface(iface, func(i *bpfInterface) bool {
+			i.dpState.isReady = isReady
+			m.updateIfaceStateMap(iface, i)
+			return false // no need to enforce dirty
+		})
+
+		return ret
 	})
 }
 
