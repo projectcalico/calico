@@ -310,6 +310,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("calico-bpf", "conntrack", "dump")
 					felix.Exec("calico-bpf", "arp", "dump")
 					felix.Exec("calico-bpf", "counters", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
@@ -602,7 +603,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 
 						By("handling egress program removal")
 						felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
@@ -615,7 +617,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 
 						By("Handling qdisc removal")
@@ -628,11 +631,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
 
@@ -3259,14 +3264,41 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				fc, err = calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
+				counts := make([]int, len(felixes))
+				ifaceCnt := 4 // eth0, bpfout.cali, 2xcali*
 				// Wait for BPF to be active.
-				numTCProgramsOnEth0 := func() (total int) {
-					for _, f := range felixes {
-						total += f.NumTCBPFProgs("eth0")
+				readyIfaces := func() (total int) {
+					var wg sync.WaitGroup
+					for i, f := range felixes {
+						if counts[i] != ifaceCnt {
+							wg.Add(1)
+							go func(i int) {
+								defer wg.Done()
+								c := 0
+								for _, s := range f.BPFIfState() {
+									if s.Ready {
+										c++
+									}
+								}
+								counts[i] = c
+							}(i)
+						}
 					}
+
+					wg.Wait()
+
+					for _, c := range counts {
+						total += c
+					}
+
 					return
 				}
-				Eventually(numTCProgramsOnEth0, "10s").Should(Equal(len(felixes) * 2))
+
+				// We need to make sure that host as well as workload ifaces are
+				// ready, that is their tc programs are loaded. The test matrix
+				// checks all of these options and we do not want to get false
+				// positives.
+				Eventually(readyIfaces, "10s", "300ms").Should(Equal(len(felixes) * ifaceCnt))
 			}
 
 			expectPongs := func() {
