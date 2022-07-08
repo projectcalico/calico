@@ -14,7 +14,7 @@
 
 ARG GIT_VERSION=unknown
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.6 as base
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
 ENV TINI_VERSION v0.18.0
