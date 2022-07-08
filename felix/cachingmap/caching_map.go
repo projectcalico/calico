@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 // DataplaneMap is an interface of the underlying map that is being cached by the
@@ -28,12 +27,8 @@ type DataplaneMap[K comparable, V comparable] interface {
 	Get(K) (V, error)
 	Delete(K) error
 	Load() (map[K]V, error)
+	ErrIsNotExists(error) bool
 }
-
-const (
-	ErrNotExists = unix.ENOENT
-	ErrExists    = unix.EEXIST
-)
 
 // CachingMap provides a caching layer around a DataplaneMap, when one of the Apply methods is called, it applies
 // a minimal set of changes to the dataplane map to bring it into sync with the desired state.  Updating the
@@ -272,7 +267,7 @@ func (c *CachingMap[K, V]) ApplyDeletionsOnly() error {
 	var errs ErrSlice
 	for k := range c.pendingDeletions {
 		err := c.dpMap.Delete(k)
-		if err != nil && err != ErrNotExists {
+		if err != nil && !c.dpMap.ErrIsNotExists(err) {
 			logrus.WithError(err).Warn("Error while deleting from DP map")
 			errs = append(errs, err)
 		} else {
