@@ -349,6 +349,12 @@ type Map struct {
 	DeleteErr error
 }
 
+var errNotExists = fmt.Errorf("does not exist")
+
+func (m *Map) ErrIsNotExists(err error) bool {
+	return err == errNotExists
+}
+
 func (m *Map) Update(k, v string) error {
 	log.Debugf("Update(\"%s\", \"%s\")", k, v)
 	m.UpdateCount++
@@ -367,7 +373,7 @@ func (m *Map) Get(k string) (string, error) {
 
 	v, ok := m.Contents[k]
 	if !ok {
-		return "", ErrNotExists
+		return "", errNotExists
 	}
 	return v, nil
 }
