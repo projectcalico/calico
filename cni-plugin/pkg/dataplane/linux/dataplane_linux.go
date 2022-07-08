@@ -492,42 +492,63 @@ func writeProcSys(path, value string) error {
 
 func (d *linuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	// Only try to delete the device if a namespace was passed in.
-	if args.Netns != "" {
-		d.logger.WithFields(logrus.Fields{
-			"netns": args.Netns,
-			"iface": args.IfName,
-		}).Debug("Checking namespace & device exist.")
-		devErr := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-			_, err := netlink.LinkByName(args.IfName)
-			return err
-		})
+	logCtx := d.logger.WithFields(logrus.Fields{
+		"netns": args.Netns,
+		"iface": args.IfName,
+	})
+	if args.Netns == "" {
+		logCtx.Info("CleanUpNamespace called with no netns name, ignoring.")
+		return nil
+	}
 
-		if devErr == nil {
-			d.logger.Infof("Calico CNI deleting device in netns %s", args.Netns)
-			// Deleting the veth has been seen to hang on some kernel version. Timeout the command if it takes too long.
-			ch := make(chan error, 1)
+	logCtx.Info("Deleting workload's device in netns.")
 
-			go func() {
-				err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-					return ip.DelLinkByName(args.IfName)
-				})
+	// We've seen veth deletion hang on some very old kernels so we do it from a background goroutine.
+	startTime := time.Now()
+	done := make(chan struct{})
 
-				ch <- err
-			}()
+	var nsErr, linkErr error
 
-			select {
-			case err := <-ch:
-				if err != nil {
-					return err
-				} else {
-					d.logger.Infof("Calico CNI deleted device in netns %s", args.Netns)
-				}
-			case <-time.After(5 * time.Second):
-				return fmt.Errorf("Calico CNI timed out deleting device in netns %s", args.Netns)
+	go func() {
+		defer close(done)
+		nsErr = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+			logCtx.Info("Entered netns, deleting veth.")
+			ifName := args.IfName
+			var iface netlink.Link
+			iface, linkErr = netlink.LinkByName(ifName)
+			if linkErr == nil {
+				linkErr = netlink.LinkDel(iface)
 			}
-		} else {
-			d.logger.WithField("ifName", args.IfName).Info("veth does not exist, no need to clean up.")
+
+			// Always return nil so that we can tell the difference between an error from WithNetNSPath itself
+			// and an error deleting the link.
+			return nil
+		})
+	}()
+
+	select {
+	case <-done:
+		if nsErr != nil {
+			if _, ok := nsErr.(ns.NSPathNotExistErr); ok {
+				logCtx.Info("Workload's netns already gone.  Nothing to do.")
+				return nil
+			}
+			logCtx.WithError(nsErr).Error("Failed to enter workloads netns.")
+			return fmt.Errorf("failed to enter netns: %w", nsErr)
 		}
+
+		if linkErr != nil {
+			if _, ok := linkErr.(netlink.LinkNotFoundError); ok {
+				logCtx.Info("Workload's veth was already gone.  Nothing to do.")
+				return nil
+			}
+			logCtx.WithError(linkErr).Error("Failed to clean up workload's veth.")
+			return fmt.Errorf("failed to clean up workload's veth inside netns: %w", linkErr)
+		}
+
+		logCtx.WithField("after", time.Since(startTime)).Infof("Deleted device in netns.")
+	case <-time.After(20 * time.Second):
+		return fmt.Errorf("timed out deleting device in netns %s", args.Netns)
 	}
 
 	return nil
