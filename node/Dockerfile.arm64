@@ -105,7 +105,7 @@ RUN wget -P /tmp http://smarden.org/runit/runit-${RUNIT_VER}.tar.gz && \
     package/install
 
 ARG UBI_DIGEST
-FROM --platform=linux/arm64 registry.access.redhat.com/ubi8/ubi-minimal:8.4 as ubi
+FROM --platform=linux/arm64 registry.access.redhat.com/ubi8/ubi-minimal:8.6 as ubi
 ARG ARCH
 ARG GIT_VERSION
 ARG IPTABLES_VER

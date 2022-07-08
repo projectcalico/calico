@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.6 as base
 
 FROM scratch
 

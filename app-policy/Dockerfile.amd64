@@ -14,7 +14,7 @@
 
 ARG GIT_VERSION=unknown
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as build
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.6 as build
 RUN mkdir -p /tmp/dikastes
 RUN chmod 0777 /tmp/dikastes
 

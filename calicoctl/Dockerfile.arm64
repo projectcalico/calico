@@ -14,7 +14,8 @@
 ARG QEMU_IMAGE=calico/go-build:v0.55
 FROM ${QEMU_IMAGE} as qemu
 
-FROM --platform=linux/arm64 registry.access.redhat.com/ubi8/ubi-minimal:8.2 as ubi
+FROM --platform=linux/arm64 registry.access.redhat.com/ubi8/ubi-minimal:8.6 as ubi
+
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/

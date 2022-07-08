@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.2-301 AS base
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.6 AS base
 
 ADD flexvol/docker/clean.sh /usr/local/bin/clean.sh
 ADD flexvol/docker/flexvol.sh /usr/local/bin/flexvol.sh
