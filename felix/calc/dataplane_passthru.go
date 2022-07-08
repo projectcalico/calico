@@ -20,6 +20,8 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -33,13 +35,15 @@ import (
 type DataplanePassthru struct {
 	callbacks passthruCallbacks
 
-	hostIPs map[string]*net.IP
+	hostIPs   map[string]*net.IP
+	hostIPv6s map[string]*net.IP
 }
 
 func NewDataplanePassthru(callbacks passthruCallbacks) *DataplanePassthru {
 	return &DataplanePassthru{
 		callbacks: callbacks,
 		hostIPs:   map[string]*net.IP{},
+		hostIPv6s: map[string]*net.IP{},
 	}
 }
 
@@ -101,6 +105,31 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 				h.callbacks.OnServiceRemove(&proto.ServiceRemove{Name: key.Name, Namespace: key.Namespace})
 			} else {
 				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
+			}
+		} else if key.Kind == libv3.KindNode {
+			log.WithField("update", update).Debug("Passing through a Node")
+			hostname := key.Name
+			if update.Value == nil {
+				log.WithField("update", update).Debug("Passing-through Node IPv6 remove")
+				delete(h.hostIPv6s, hostname)
+				h.callbacks.OnHostIPv6Remove(hostname)
+			} else {
+				node, _ := update.Value.(*libv3.Node)
+				if node.Spec.BGP != nil && node.Spec.BGP.IPv6Address != "" {
+					ip, _, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
+					oldIP := h.hostIPv6s[hostname]
+					if oldIP != nil && ip.IP.Equal(oldIP.IP) {
+						log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 update")
+						return
+					}
+					log.WithField("update", update).Debug("Passing-through Node IPv6 update")
+					h.hostIPv6s[hostname] = ip
+					h.callbacks.OnHostIPv6Update(hostname, ip)
+				} else {
+					log.WithField("update", update).Debug("Passing-through Node IPv6 remove")
+					delete(h.hostIPv6s, hostname)
+					h.callbacks.OnHostIPv6Remove(hostname)
+				}
 			}
 		} else {
 			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
