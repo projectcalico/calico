@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -35,16 +36,11 @@ import (
 type ProgName string
 
 var programNames = []ProgName{
-	"calico_tc_norm_pol_tail",
-	"calico_tc_skb_accepted_entrypoint",
-	"calico_tc_skb_send_icmp_replies",
-	"calico_tc_skb_drop",
-	"calico_tc_host_ct_conflict",
-	"calico_tc_v6",
-	"calico_tc_v6_norm_pol_tail",
-	"calico_tc_v6_skb_accepted_entrypoint",
-	"calico_tc_v6_skb_send_icmp_replies",
-	"calico_tc_v6_skb_drop",
+	"calico_xdp_norm_pol_tail",
+	"calico_xdp_accepted_entrypoint",
+	"calico_xdp_v6",
+	"calico_xdp_v6_norm_pol_tail",
+	"calico_xdp_v6_accepted_entrypoint",
 }
 
 type AttachPoint struct {
@@ -177,19 +173,19 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	}
 	ap.Log().Infof("Continue with attaching BPF program %s", filename)
 
-	if err := obj.InitXDPProgram(ap.Iface); err != nil {
+	/*if err := obj.InitXDPProgram(ap.Iface); err != nil {
 		ap.Log().Warn("Failed to init XDP program")
 		return "", fmt.Errorf("error init xdp program: %w", err)
-	}
+	}*/
 
-	if err := obj.Load(); err != nil {
+	if err := obj.LoadXDP(tempBinary); err != nil {
 		ap.Log().Warn("Failed to load program")
 		return "", fmt.Errorf("error loading program: %w", err)
 	}
 	ap.Log().Infof("mahnaz5")
 
 	// TODO: Add support for IPv6
-	err = updateJumpMap(obj, false, false)
+	err = updateJumpMap(obj, true, false)
 	if err != nil {
 		ap.Log().Warn("Failed to update jump map")
 		return "", fmt.Errorf("error updating jump map %v", err)
@@ -198,7 +194,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 
 	progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface)
 	if err != nil {
-		ap.Log().Warnf("Failed to attach to XDP section %s", ap.SectionName())
+		ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s", ap.SectionName())
 		return "", err
 	}
 	ap.Log().Info("Program attached to XDP.")
@@ -410,7 +406,7 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
 		base := -1
 		if ipFamily == "IPv6" {
-			base = 5
+			base = 2
 		}
 
 		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
@@ -424,31 +420,16 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		pIndex := base + 1
 		if !isHost {
 			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
+
 			if err != nil {
-				return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
+				//return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
 			}
 		}
 		eIndex := base + 2
 		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
+		logrus.Infof("damon jump map: %v, program name: %v", bpf.JumpMapName(), string(programNames[eIndex]))
 		if err != nil {
-			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
-		}
-		iIndex := base + 3
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
-		}
-		dIndex := base + 4
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
-		}
-		if ipFamily != "IPv6" {
-			iIndex := base + 5
-			err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
-			if err != nil {
-				return fmt.Errorf("error updating %v host CT conflict program: %v", ipFamily, err)
-			}
+			//return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
 		}
 	}
 

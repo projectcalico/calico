@@ -45,6 +45,19 @@ void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
 }
 
+void bpf_obj_loadXDP(struct bpf_object *obj, const char *filename) {
+	int first_prog_fd = -1;
+	int err = 0;
+	struct bpf_prog_load_attr prog_load_attr = {
+		.prog_type = BPF_PROG_TYPE_XDP,
+		.ifindex = 0,
+		.file = filename,
+	};
+
+	set_errno(bpf_prog_load_xattr(&prog_load_attr, &obj, &first_prog_fd));
+	//set_errno(bpf_object__load(obj));
+}
+
 struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, int isIngress) {
 
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS);
@@ -105,7 +118,9 @@ int bpf_tc_update_jump_map(struct bpf_object *obj, char* mapName, char *progName
 		errno = -map_fd;
 		return map_fd;
 	}
-	return bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
+	int ret = 0;
+	ret =  bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
+	return ret;
 }
 
 int bpf_link_destroy(struct bpf_link *link) {
@@ -154,15 +169,15 @@ int bpf_program_init_xdp(struct bpf_object *obj, int ifIndex)
 	struct bpf_program *prog, *first_prog = NULL;
 	bpf_object__for_each_program(prog, obj) {
         bpf_program__set_type(prog, BPF_PROG_TYPE_XDP);
-        bpf_program__set_ifindex(prog, ifIndex);
+        //bpf_program__set_ifindex(prog, ifIndex);
         if (!first_prog)
             first_prog = prog;
-    }   
+    }
 
     bpf_object__for_each_map(map, obj) {
         if (!bpf_map__is_offload_neutral(map))
             bpf_map__set_ifindex(map, ifIndex);
-    }   
+    }
 
     if (!first_prog) {
         err = -1;

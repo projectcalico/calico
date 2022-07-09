@@ -22,6 +22,7 @@ import (
 	"unsafe"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/sirupsen/logrus"
 )
 
 // #include "libbpf_api.h"
@@ -100,6 +101,16 @@ func (o *Obj) Load() error {
 	return nil
 }
 
+func (o *Obj) LoadXDP(filename string) error {
+	cFilename := C.CString(filename)
+	defer C.free(unsafe.Pointer(cFilename))
+	_, err := C.bpf_obj_loadXDP(o.obj, cFilename)
+	if err != nil {
+		return fmt.Errorf("error loading object %w", err)
+	}
+	return nil
+}
+
 // FirstMap returns first bpf map of the object.
 // Returns error if the map is nil.
 func (o *Obj) FirstMap() (*Map, error) {
@@ -157,6 +168,7 @@ func (o *Obj) InitXDPProgram(ifName string) error {
 	if err != nil {
 		return err
 	}
+	ifIndex = 0
 	_, err = C.bpf_program_init_xdp(o.obj, C.int(ifIndex))
 	if err != nil {
 		return err
@@ -249,7 +261,8 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cMapName))
 	defer C.free(unsafe.Pointer(cProgName))
-	_, err := C.bpf_tc_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
+	ret, err := C.bpf_tc_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
+	logrus.Infof("mansour ret: %v", ret)
 	if err != nil {
 		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
 	}
