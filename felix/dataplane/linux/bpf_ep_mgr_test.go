@@ -31,7 +31,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -190,6 +192,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
 		filterTableV4        iptablesTable
+		ifStateMap           *mock.Map
 	)
 
 	BeforeEach(func() {
@@ -206,6 +209,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		bpfMapContext.IpsetsMap = bpfipsets.Map(bpfMapContext)
 		bpfMapContext.StateMap = state.Map(bpfMapContext)
 		bpfMapContext.CtMap = conntrack.Map(bpfMapContext)
+		ifStateMap = mock.NewMockMap(ifstate.MapParams)
+		bpfMapContext.IfStateMap = ifStateMap
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
@@ -266,6 +271,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bpfEpMgr.OnUpdate(&ifaceUpdate{Name: name, State: state, Index: index})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
+			if state == ifacemonitor.StateUp {
+				Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(index)).AsBytes())).To(BeTrue())
+			}
 		}
 	}
 
