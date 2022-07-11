@@ -3266,6 +3266,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				counts := make([]int, len(felixes))
 				ifaceCnt := 4 // eth0, bpfout.cali, 2xcali*
+				if testOpts.tunnel != "none" {
+					ifaceCnt++ // the tunnel device
+				}
 				// Wait for BPF to be active.
 				readyIfaces := func() (total int) {
 					var wg sync.WaitGroup
@@ -3298,7 +3301,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// ready, that is their tc programs are loaded. The test matrix
 				// checks all of these options and we do not want to get false
 				// positives.
-				Eventually(readyIfaces, "10s", "300ms").Should(Equal(len(felixes) * ifaceCnt))
+				Eventually(readyIfaces, "15s", "300ms").Should(Equal(len(felixes) * ifaceCnt))
 			}
 
 			expectPongs := func() {
