@@ -4158,6 +4158,31 @@ spec:
             mountPath: /host/driver
           securityContext:
             privileged: true
+        # This init container mounts the necessary filesystems needed by the BPF data plane
+        # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
+        # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
+        - name: "mount-bpffs"
+          image: docker.io/library/node:latest-amd64
+          imagePullPolicy: Never
+          command: ["calico-node", "-init", "-best-effort"]
+          volumeMounts:
+          - mountPath: /sys/fs
+            name: sys-fs
+            # Bidirectional is required to ensure that the new mount we make at /sys/fs/bpf propagates to the host
+            # so that it outlives the init container.
+            mountPropagation: Bidirectional
+          - mountPath: /var/run/calico
+            name: var-run-calico
+            # Bidirectional is required to ensure that the new mount we make at /run/calico/cgroup propagates to the host
+            # so that it outlives the init container.
+            mountPropagation: Bidirectional
+          # Mount /proc/ from host which usually is an init program at /nodeproc. It's needed by mountns binary,
+          # executed by calico-node, to mount root cgroup2 fs at /run/calico/cgroup to attach CTLB programs correctly.
+          - mountPath: /nodeproc
+            name: nodeproc
+            readOnly: true
+          securityContext:
+            privileged: true
       containers:
         # Runs calico-node container on each Kubernetes node. This
         # container programs network policy and routes on each
@@ -4307,10 +4332,18 @@ spec:
           hostPath:
             path: /run/xtables.lock
             type: FileOrCreate
-        - name: sysfs
+        - name: sys-fs
           hostPath:
             path: /sys/fs/
             type: DirectoryOrCreate
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
+        # mount /proc at /nodeproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
+        - name: nodeproc
+          hostPath:
+            path: /proc
         # Used to install CNI.
         - name: cni-bin-dir
           hostPath:
