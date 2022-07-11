@@ -130,8 +130,9 @@ type Syncer struct {
 	// synced is true after reconciling the first Apply
 	synced bool
 
-	expFixupWg   sync.WaitGroup
-	expFixupStop chan struct{}
+	expFixupWg       sync.WaitGroup
+	expFixupStop     chan struct{}
+	expFixupStopLock sync.RWMutex
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -993,7 +994,15 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 	if len(misses) == 0 {
 		return
 	}
+
+	s.expFixupStopLock.Lock()
 	s.expFixupStop = make(chan struct{})
+	s.expFixupStopLock.Unlock()
+	// We hold this lock for the run of the fixer. It is only to prevent
+	// race-detector from freaking out when the channel is reset _after_ the
+	// fixer exits.
+	s.expFixupStopLock.RLock()
+	defer s.expFixupStopLock.RUnlock()
 	s.expFixupWg.Add(1)
 
 	// start the fixer routine and exit
@@ -1063,11 +1072,15 @@ func (s *Syncer) SetTriggerFn(f func()) {
 
 func (s *Syncer) StopExpandNPFixup() {
 	// If there was an error before we started ExpandNPFixup, there is nothing to stop
+	s.expFixupStopLock.Lock()
 	if s.expFixupStop != nil {
+		s.expFixupStopLock.Unlock()
 		close(s.expFixupStop)
 		s.expFixupWg.Wait()
+		s.expFixupStopLock.Lock()
 		s.expFixupStop = nil
 	}
+	s.expFixupStopLock.Unlock()
 }
 
 // Stop stops the syncer
