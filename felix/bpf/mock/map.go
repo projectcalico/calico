@@ -128,6 +128,10 @@ func (m *Map) CopyDeltaFromOldMap() error {
 	return nil
 }
 
+func (*Map) ErrIsNotExists(err error) bool {
+	return bpf.IsNotExists(err)
+}
+
 func NewMockMap(params bpf.MapParameters) *Map {
 	if params.KeySize <= 0 {
 		logrus.WithField("params", params).Panic("KeySize should be >0")
@@ -194,4 +198,8 @@ func (*DummyMap) Delete(k []byte) error {
 
 func (*DummyMap) CopyDeltaFromOldMap() error {
 	return nil
+}
+
+func (*DummyMap) ErrIsNotExists(err error) bool {
+	return bpf.IsNotExists(err)
 }
