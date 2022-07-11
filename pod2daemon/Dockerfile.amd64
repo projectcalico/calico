@@ -61,6 +61,9 @@ COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
 COPY --from=ubi /etc/host.conf /etc/host.conf
 COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
 
+# Add in the script to run.
+COPY --from=ubi /usr/local/bin/flexvol.sh /usr/local/bin/flexvol.sh
+
 ADD bin/flexvol-amd64 /usr/local/bin/flexvol
 
 ENTRYPOINT ["/usr/local/bin/flexvol.sh"]
