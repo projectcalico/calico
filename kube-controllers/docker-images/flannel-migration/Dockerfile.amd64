@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG GIT_VERSION=unknown
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.6 as base
 
 # Add in top-level license file
 RUN mkdir /licenses
