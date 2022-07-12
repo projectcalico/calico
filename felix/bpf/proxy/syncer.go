@@ -993,7 +993,13 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 	if len(misses) == 0 {
 		return
 	}
-	s.expFixupStop = make(chan struct{})
+	expFixupStop := make(chan struct{})
+	if s.expFixupStop != nil {
+		log.Error("BUG: About to start node port fixup goroutine but one already seems to be running. " +
+			"Stopping the old one.")
+		close(s.expFixupStop)
+	}
+	s.expFixupStop = expFixupStop
 	s.expFixupWg.Add(1)
 
 	// start the fixer routine and exit
@@ -1012,7 +1018,7 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 			select {
 			case <-s.stop:
 				cancel()
-			case <-s.expFixupStop:
+			case <-expFixupStop:
 				cancel()
 			case <-ctx.Done():
 				// do nothing, we exited, work is done, just quit
