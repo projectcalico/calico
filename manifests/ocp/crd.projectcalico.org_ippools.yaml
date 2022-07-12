@@ -9,6 +9,7 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1

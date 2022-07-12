@@ -9,6 +9,7 @@ spec:
     listKind: BlockAffinityList
     plural: blockaffinities
     singular: blockaffinity
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1
