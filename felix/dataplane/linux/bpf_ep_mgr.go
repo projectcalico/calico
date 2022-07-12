@@ -1176,7 +1176,11 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	if m.isWorkloadIface(ifaceName) {
 		endpointType = tc.EpTypeWorkload
 	} else if ifaceName == "tunl0" {
-		endpointType = tc.EpTypeTunnel
+		if m.Features.IPIPDeviceIsL3 {
+			endpointType = tc.EpTypeL3Device
+		} else {
+			endpointType = tc.EpTypeTunnel
+		}
 	} else if ifaceName == "wireguard.cali" {
 		endpointType = tc.EpTypeL3Device
 	} else if ifaceName == bpfInDev || ifaceName == bpfOutDev {
