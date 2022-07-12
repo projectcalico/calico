@@ -111,16 +111,14 @@ int bpf_tc_update_jump_map(struct bpf_object *obj, char* mapName, char *progName
 	int prog_fd = bpf_program__fd(prog_name);
 	if (prog_fd < 0) {
 		errno = -prog_fd;
-		return prog_fd;
+		return 1000;
 	}
 	int map_fd = bpf_object__find_map_fd_by_name(obj, mapName);
 	if (map_fd < 0) {
 		errno = -map_fd;
 		return map_fd;
 	}
-	int ret = 0;
-	ret =  bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
-	return ret;
+	return  bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
 }
 
 int bpf_link_destroy(struct bpf_link *link) {

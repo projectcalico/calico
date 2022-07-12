@@ -19,7 +19,6 @@
 #include "skb.h"
 #include "routes.h"
 #include "reasons.h"
-#include "icmp.h"
 #include "parsing.h"
 #include "failsafe.h"
 #include "jump.h"

@@ -38,9 +38,6 @@ type ProgName string
 var programNames = []ProgName{
 	"calico_xdp_norm_pol_tail",
 	"calico_xdp_accepted_entrypoint",
-	"calico_xdp_v6",
-	"calico_xdp_v6_norm_pol_tail",
-	"calico_xdp_v6_accepted_entrypoint",
 }
 
 type AttachPoint struct {
@@ -74,7 +71,7 @@ func (ap *AttachPoint) FileName() string {
 }
 
 func (ap *AttachPoint) SectionName() string {
-	return "calico_entrypoint_xdp"
+	return "xdp_calico_entrypoint_xdp"
 }
 
 func (ap *AttachPoint) Log() *log.Entry {
@@ -157,6 +154,11 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 
 		// TODO: We need to set map size here like tc.
 		pinPath := path.Join(baseDir, subDir, m.Name())
+		err := os.MkdirAll(path.Join(baseDir, subDir), 700)
+		if err != nil {
+			ap.Log().Infof("Cannot create path: %v", pinPath)
+		}
+
 		ap.Log().Infof("marmar iface: %s pinpath: %v", ap.IfaceName(), pinPath)
 		if err := m.SetPinPath(pinPath); err != nil {
 			ap.Log().Infof("mahnaz3")
@@ -185,7 +187,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	ap.Log().Infof("mahnaz5")
 
 	// TODO: Add support for IPv6
-	err = updateJumpMap(obj, true, false)
+	err = updateJumpMap(obj)
 	if err != nil {
 		ap.Log().Warn("Failed to update jump map")
 		return "", fmt.Errorf("error updating jump map %v", err)
@@ -393,43 +395,21 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' out=\n%v err=%w", string(out), ErrNoXDP)
 }
 
-func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
+func updateJumpMap(obj *libbpf.Obj) error {
 	ipVersions := []string{"IPv4"}
-	if ipv6Enabled {
-		ipVersions = append(ipVersions, "IPv6")
-	}
 
 	for _, ipFamily := range ipVersions {
-		// Since in IPv4, we don't add prologue to the jump map, and hence the first
-		// program is policy, the base index should be set to -1 to properly offset the
-		// policy program (base+1) to the first entry in the jump map, i.e. 0. However,
-		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
-		base := -1
-		if ipFamily == "IPv6" {
-			base = 2
+		pIndex := 0
+		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
 		}
 
-		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
-		// of execution, and we don't need to add it into the jump map
-		if ipFamily == "IPv6" {
-			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[base]), base)
-			if err != nil {
-				return fmt.Errorf("error updating %v proglogue program: %v", ipFamily, err)
-			}
-		}
-		pIndex := base + 1
-		if !isHost {
-			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
-
-			if err != nil {
-				//return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
-			}
-		}
-		eIndex := base + 2
-		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
+		eIndex := 1
+		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
 		logrus.Infof("damon jump map: %v, program name: %v", bpf.JumpMapName(), string(programNames[eIndex]))
 		if err != nil {
-			//return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
+			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
 		}
 	}
 

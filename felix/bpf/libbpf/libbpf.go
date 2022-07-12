@@ -70,6 +70,18 @@ func (m *Map) SetPinPath(path string) error {
 	return nil
 }
 
+func (m *Map) Pin(path string) error {
+	logrus.Infof("KIR %v", path)
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errno := C.bpf_map__pin(m.bpfMap, cPath)
+	if errno != 0 {
+		err := syscall.Errno(errno)
+		return fmt.Errorf("pinning map failed %w", err)
+	}
+	return nil
+}
+
 func (m *Map) SetMapSize(size uint32) error {
 	_, err := C.bpf_map_set_max_entries(m.bpfMap, C.uint(size))
 	if err != nil {
