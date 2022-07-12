@@ -32,6 +32,7 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
@@ -137,7 +138,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	obj, err := libbpf.OpenObject(tempBinary)
+	obj, err := libbpf.OpenObject(tempBinary, unix.BPF_PROG_TYPE_SCHED_CLS)
 	if err != nil {
 		return "", err
 	}
@@ -167,10 +168,10 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	// re-attaching it if the binary and its configuration are the same.
 	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
 	if isAttached {
-		logCxt.Infof("Program already attached to TC, skip reattaching %s", ap.FileName())
+		logCxt.Infof("Program already attached to TC, skip reattaching %s", filename)
 		return progID, nil
 	}
-	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
+	logCxt.Debugf("Continue with attaching BPF program %s", filename)
 
 	if err := obj.Load(); err != nil {
 		logCxt.Warn("Failed to load program")
