@@ -21,6 +21,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
@@ -148,6 +150,42 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	return int(progId), nil
 }
 
+func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
+	cSecName := C.CString(secName)
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cSecName))
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return -1, err
+	}
+
+	_, err = C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex))
+	if err != nil {
+		return -1, fmt.Errorf("Error attaching xdp program %w", err)
+	}
+
+	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
+	if err != nil {
+		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
+	}
+	return int(progId), nil
+}
+
+func GetXDPProgramID(ifName string) (int, error) {
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return -1, err
+	}
+	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
+	if err != nil {
+		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
+	}
+	return int(progId), nil
+}
+
 type Link struct {
 	link *C.struct_bpf_link
 }
@@ -197,7 +235,8 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cMapName))
 	defer C.free(unsafe.Pointer(cProgName))
-	_, err := C.bpf_tc_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
+	ret, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
+	logrus.Infof("mansour ret: %v", ret)
 	if err != nil {
 		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
 	}
