@@ -52,11 +52,11 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
+	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -218,6 +218,7 @@ type bpfEndpointManager struct {
 	bpfPolicyDebugEnabled bool
 
 	routeTable    *routetable.RouteTable
+	routeCache    *cachingmap.CachingMap[ip.V4CIDR, struct{}]
 	services      map[serviceKey][]string
 	dirtyServices map[serviceKey][]string
 }
@@ -273,7 +274,7 @@ func newBPFEndpointManager(
 		bpfMapContext:           bpfMapContext,
 		ifStateMap: cachingmap.New[ifstate.Key, ifstate.Value](ifstate.MapParams.Name,
 			bpf.NewTypedMap[ifstate.Key, ifstate.Value](
-				bpfMapContext.IfStateMap, ifstate.KeyFromBytes, ifstate.ValueFromBytes,
+				bpfMapContext.IfStateMap.(bpf.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
 			)),
 		ruleRenderer:        iptablesRuleRenderer,
 		iptablesFilterTable: iptablesFilterTable,
@@ -331,6 +332,7 @@ func newBPFEndpointManager(
 			254,
 			opReporter,
 		)
+		m.routeCache = cachingmap.New[ip.V4CIDR, struct{}]("bpf-svc-route-cache", &svcRouteCacheMap{m.routeTable})
 		m.services = make(map[serviceKey][]string)
 		m.dirtyServices = make(map[serviceKey][]string)
 
@@ -664,6 +666,10 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID,
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
+	start := time.Now()
+	defer func() {
+		log.Infof("CompleteDeferredWork took %v", time.Since(start))
+	}()
 	// Do one-off initialisation.
 	m.dp.ensureStarted()
 
@@ -673,6 +679,8 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
+
+	_ = m.routeCache.ApplyAllChanges()
 
 	if err := m.ifStateMap.ApplyAllChanges(); err != nil {
 		log.WithError(err).Warn("Failed to write updates to ifstate BPF map.")
@@ -1572,6 +1580,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	if err != nil {
 		return fmt.Errorf("failed to create nelink: %w", err)
 	}
+	defer nl.Close()
 
 	var bpfout, bpfin netlink.Link
 
@@ -1996,11 +2005,7 @@ func (m *bpfEndpointManager) setRoute(dst string) error {
 		return err
 	}
 
-	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
-		Type: routetable.TargetTypeGlobalUnicast,
-		CIDR: cidr,
-		GW:   bpfnatGW,
-	})
+	m.routeCache.SetDesired(cidr.(ip.V4CIDR), struct{}{})
 	log.WithFields(log.Fields{
 		"cidr": dst + "/32",
 	}).Debug("setRoute")
@@ -2013,7 +2018,7 @@ func (m *bpfEndpointManager) delRoute(dst string) error {
 		return err
 	}
 
-	m.routeTable.RouteRemove(bpfInDev, cidr)
+	m.routeCache.DeleteDesired(cidr.(ip.V4CIDR))
 	log.WithFields(log.Fields{
 		"cidr": dst + "/32",
 	}).Debug("delRoute")
@@ -2028,4 +2033,57 @@ func (m *bpfEndpointManager) GetRouteTableSyncers() []routeTableSyncer {
 	tables := []routeTableSyncer{m.routeTable}
 
 	return tables
+}
+
+type svcRouteCacheMap struct {
+	routeTable *routetable.RouteTable
+}
+
+func (m *svcRouteCacheMap) Update(cidr ip.V4CIDR, _ struct{}) error {
+	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
+		Type: routetable.TargetTypeGlobalUnicast,
+		CIDR: cidr,
+		GW:   bpfnatGW,
+	})
+	return nil
+}
+
+func (m *svcRouteCacheMap) Delete(cidr ip.V4CIDR) error {
+	m.routeTable.RouteRemove(bpfInDev, cidr)
+	return nil
+}
+
+func (_ *svcRouteCacheMap) Load() (map[ip.V4CIDR]struct{}, error) {
+	nl, err := netlinkshim.NewRealNetlink()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create nelink: %w", err)
+	}
+	defer nl.Close()
+
+	bpfin, err := nl.LinkByName(bpfInDev)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s: %w", bpfInDev, err)
+	}
+
+	rts, err := nl.RouteList(bpfin, 4)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get routes on %s: %w", bpfInDev, err)
+	}
+
+	m := make(map[ip.V4CIDR]struct{})
+
+	for _, rt := range rts {
+		if rt.Scope == netlink.SCOPE_UNIVERSE /*global*/ && rt.Dst != nil {
+			cidr := ip.CIDRFromIPNet(rt.Dst)
+			m[cidr.(ip.V4CIDR)] = struct{}{}
+		}
+	}
+
+	return m, nil
+}
+
+func (m *svcRouteCacheMap) ErrIsNotExists(error) bool {
+	// Because routetable.RouteTable is inbetween us and Linux, we never get to
+	// see the actuall error.
+	return false
 }
