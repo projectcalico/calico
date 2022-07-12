@@ -24,10 +24,6 @@
 #include "jump.h"
 #include "metadata.h"
 
-#if !defined(__BPFTOOL_LOADER__) && !defined (__IPTOOL_LOADER__)
-const volatile struct cali_tc_globals __globals;
-#endif
-
 /* calico_xdp is the main function used in all of the xdp programs */
 static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 {
@@ -126,7 +122,7 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 }
 
 #ifndef CALI_ENTRYPOINT_NAME_XDP
-#define CALI_ENTRYPOINT_NAME_XDP calico_entrypoint_xdp
+#define CALI_ENTRYPOINT_NAME_XDP calico_entrypoint
 #endif
 
 // Entrypoint with definable name.  It's useful to redefine the name for each entrypoint

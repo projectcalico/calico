@@ -102,7 +102,7 @@ void bpf_tc_remove_qdisc (int ifIndex) {
         return;
 }
 
-int bpf_tc_update_jump_map(struct bpf_object *obj, char* mapName, char *progName, int progIndex) {
+int bpf_update_jump_map(struct bpf_object *obj, char* mapName, char *progName, int progIndex) {
 	struct bpf_program *prog_name = bpf_object__find_program_by_name(obj, progName);
 	if (prog_name == NULL) {
 		errno = ENOENT;
@@ -160,38 +160,13 @@ int bpf_xdp_query_iface(int ifIndex) {
 	return prog_id;
 }
 
-int bpf_program_init_xdp(struct bpf_object *obj, int ifIndex)
-{
-	int err = 0;
-	struct bpf_map *map;
-	struct bpf_program *prog, *first_prog = NULL;
-	bpf_object__for_each_program(prog, obj) {
-        bpf_program__set_type(prog, BPF_PROG_TYPE_XDP);
-        //bpf_program__set_ifindex(prog, ifIndex);
-        if (!first_prog)
-            first_prog = prog;
-    }
-
-    bpf_object__for_each_map(map, obj) {
-        if (!bpf_map__is_offload_neutral(map))
-            bpf_map__set_ifindex(map, ifIndex);
-    }
-
-    if (!first_prog) {
-        err = -1;
-    }
-
-out:
-	return err;
-}
-
 struct bpf_link *bpf_program_attach_xdp(struct bpf_object *obj, char *secName, int ifIndex)
 {
 	int err = 0;
 	struct bpf_link *link = NULL;
 	struct bpf_program *prog, *first_prog = NULL;
 
-	if (!(prog = bpf_object__find_program_by_name(obj, secName))) {
+	if (!(prog = bpf_object__find_program_by_title(obj, secName))) {
 		err = ENOENT;
 		goto out;
 	}

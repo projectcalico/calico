@@ -71,7 +71,7 @@ func (ap *AttachPoint) FileName() string {
 }
 
 func (ap *AttachPoint) SectionName() string {
-	return "xdp_calico_entrypoint_xdp"
+	return "xdp/calico_entrypoint"
 }
 
 func (ap *AttachPoint) Log() *log.Entry {
@@ -154,11 +154,6 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 
 		// TODO: We need to set map size here like tc.
 		pinPath := path.Join(baseDir, subDir, m.Name())
-		err := os.MkdirAll(path.Join(baseDir, subDir), 700)
-		if err != nil {
-			ap.Log().Infof("Cannot create path: %v", pinPath)
-		}
-
 		ap.Log().Infof("marmar iface: %s pinpath: %v", ap.IfaceName(), pinPath)
 		if err := m.SetPinPath(pinPath); err != nil {
 			ap.Log().Infof("mahnaz3")
@@ -175,12 +170,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	}
 	ap.Log().Infof("Continue with attaching BPF program %s", filename)
 
-	/*if err := obj.InitXDPProgram(ap.Iface); err != nil {
-		ap.Log().Warn("Failed to init XDP program")
-		return "", fmt.Errorf("error init xdp program: %w", err)
-	}*/
-
-	if err := obj.LoadXDP(tempBinary); err != nil {
+	if err := obj.Load(); err != nil {
 		ap.Log().Warn("Failed to load program")
 		return "", fmt.Errorf("error loading program: %w", err)
 	}
@@ -200,6 +190,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		return "", err
 	}
 	ap.Log().Info("Program attached to XDP.")
+	ap.Log().Infof("mahnaz7")
 
 	// Note that there are a few considerations here.
 	//
@@ -269,7 +260,6 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
 	}
 
-	ap.Log().Infof("nina progID: %v", progId)
 	return strconv.Itoa(progId), nil
 }
 
@@ -367,32 +357,12 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 
 var ErrNoXDP = errors.New("no XDP program attached")
 
-// TODO: we should try to not get the program ID via 'ip' binary and rather
-// we should use libbpf to obtain it.
 func (ap *AttachPoint) ProgramID() (string, error) {
-	cmd := exec.Command("ip", "link", "show", "dev", ap.Iface)
-	ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
-	out, err := cmd.CombinedOutput()
-	ap.Log().Debugf("Result: err=%v out=\n%v", err, string(out))
+	progID, err := libbpf.GetXDPProgramID(ap.Iface)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %w", ap.Iface, err)
 	}
-	s := strings.Fields(string(out))
-	for i := range s {
-		// Example of output:
-		//
-		// 196: test_A@test_B: <BROADCAST,MULTICAST> mtu 1500 xdpgeneric qdisc noop state DOWN mode DEFAULT group default qlen 1000
-		//    link/ether 1a:d0:df:a5:12:59 brd ff:ff:ff:ff:ff:ff
-		//    prog/xdp id 175 tag 5199fa060702bbff jited
-		if s[i] == "prog/xdp" && len(s) > i+2 && s[i+1] == "id" {
-			_, err := strconv.Atoi(s[i+2])
-			if err != nil {
-				return "", fmt.Errorf("Couldn't parse ID following 'prog/xdp' err=%w out=\n%v", err, string(out))
-			}
-			return s[i+2], nil
-		}
-	}
-	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' out=\n%v err=%w", string(out), ErrNoXDP)
+	return fmt.Sprintf("%d", progID), nil
 }
 
 func updateJumpMap(obj *libbpf.Obj) error {

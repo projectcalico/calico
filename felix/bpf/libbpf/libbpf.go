@@ -70,18 +70,6 @@ func (m *Map) SetPinPath(path string) error {
 	return nil
 }
 
-func (m *Map) Pin(path string) error {
-	logrus.Infof("KIR %v", path)
-	cPath := C.CString(path)
-	defer C.free(unsafe.Pointer(cPath))
-	errno := C.bpf_map__pin(m.bpfMap, cPath)
-	if errno != 0 {
-		err := syscall.Errno(errno)
-		return fmt.Errorf("pinning map failed %w", err)
-	}
-	return nil
-}
-
 func (m *Map) SetMapSize(size uint32) error {
 	_, err := C.bpf_map_set_max_entries(m.bpfMap, C.uint(size))
 	if err != nil {
@@ -107,16 +95,6 @@ func OpenObject(filename string, typ int) (*Obj, error) {
 
 func (o *Obj) Load() error {
 	_, err := C.bpf_obj_load(o.obj)
-	if err != nil {
-		return fmt.Errorf("error loading object %w", err)
-	}
-	return nil
-}
-
-func (o *Obj) LoadXDP(filename string) error {
-	cFilename := C.CString(filename)
-	defer C.free(unsafe.Pointer(cFilename))
-	_, err := C.bpf_obj_loadXDP(o.obj, cFilename)
 	if err != nil {
 		return fmt.Errorf("error loading object %w", err)
 	}
@@ -173,21 +151,6 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	return int(progId), nil
 }
 
-func (o *Obj) InitXDPProgram(ifName string) error {
-	cIfName := C.CString(ifName)
-	defer C.free(unsafe.Pointer(cIfName))
-	ifIndex, err := C.if_nametoindex(cIfName)
-	if err != nil {
-		return err
-	}
-	ifIndex = 0
-	_, err = C.bpf_program_init_xdp(o.obj, C.int(ifIndex))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
@@ -210,7 +173,7 @@ func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 	return int(progId), nil
 }
 
-func (o *Obj) GetXDPProgramID(ifName string) (int, error) {
+func GetXDPProgramID(ifName string) (int, error) {
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cIfName))
 	ifIndex, err := C.if_nametoindex(cIfName)
@@ -273,7 +236,7 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cMapName))
 	defer C.free(unsafe.Pointer(cProgName))
-	ret, err := C.bpf_tc_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
+	ret, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
 	logrus.Infof("mansour ret: %v", ret)
 	if err != nil {
 		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
