@@ -29,6 +29,7 @@ type Interface interface {
 	LinkDel(link netlink.Link) error
 	LinkSetMTU(link netlink.Link, mtu int) error
 	LinkSetUp(link netlink.Link) error
+	RouteList(link netlink.Link, family int) ([]netlink.Route, error)
 	RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error)
 	RouteAdd(route *netlink.Route) error
 	RouteDel(route *netlink.Route) error
@@ -40,6 +41,8 @@ type Interface interface {
 	RuleDel(rule *netlink.Rule) error
 	Delete()
 	NeighAdd(neigh *netlink.Neigh) error
+
+	Close()
 }
 
 func NewRealNetlink() (Interface, error) {
