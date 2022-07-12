@@ -21,8 +21,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
 // #include "libbpf_api.h"
@@ -82,11 +83,11 @@ func (m *Map) IsMapInternal() bool {
 	return bool(C.bpf_map__is_internal(m.bpfMap))
 }
 
-func OpenObject(filename string, typ int) (*Obj, error) {
+func OpenObject(filename string) (*Obj, error) {
 	bpfutils.IncreaseLockedMemoryQuota()
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
-	obj, err := C.bpf_obj_open(cFilename, C.int(typ))
+	obj, err := C.bpf_obj_open(cFilename)
 	if obj == nil || err != nil {
 		return nil, fmt.Errorf("error opening libbpf object %w", err)
 	}
@@ -166,7 +167,7 @@ func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 		return -1, fmt.Errorf("Error attaching xdp program %w", err)
 	}
 
-	progId, err := C.bpf_xdp_query_iface(C.int(ifIndex))
+	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
 	if err != nil {
 		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
 	}
@@ -180,7 +181,7 @@ func GetXDPProgramID(ifName string) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	progId, err := C.bpf_xdp_query_iface(C.int(ifIndex))
+	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
 	if err != nil {
 		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
 	}

@@ -32,7 +32,6 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
@@ -137,7 +136,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	obj, err := libbpf.OpenObject(tempBinary, unix.BPF_PROG_TYPE_SCHED_CLS)
+	obj, err := libbpf.OpenObject(tempBinary)
 	if err != nil {
 		return "", err
 	}

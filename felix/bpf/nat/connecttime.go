@@ -26,7 +26,6 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
@@ -103,7 +102,7 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 	progName := "calico_" + name + "_v" + ipver
 
 	log.WithField("filename", filename).Debug("Loading object file")
-	obj, err := libbpf.OpenObject(filename, unix.BPF_PROG_TYPE_CGROUP_SOCK)
+	obj, err := libbpf.OpenObject(filename)
 	if err != nil {
 		return fmt.Errorf("failed to load program %s from %s: %w", progName, filename, err)
 	}

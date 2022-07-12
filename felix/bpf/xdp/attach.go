@@ -27,7 +27,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
@@ -108,6 +107,12 @@ func (ap *AttachPoint) AlreadyAttached(object string) (string, bool) {
 }
 
 func (ap *AttachPoint) AttachProgram() (string, error) {
+	progID, err := ap.ProgramID()
+	if err != nil {
+		ap.Log().Debugf("Couldn't get the attached XDP program ID. err=%v", err)
+	}
+	ap.Log().Infof("marmar - progID: %v", progID)
+
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary directory: %w", err)
@@ -126,15 +131,12 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		ap.Log().WithError(err).Error("Failed to patch binary")
 		return "", err
 	}
-	ap.Log().Infof("mahnaz")
 
-	obj, err := libbpf.OpenObject(tempBinary, unix.BPF_PROG_TYPE_XDP)
+	obj, err := libbpf.OpenObject(tempBinary)
 	if err != nil {
-		ap.Log().Infof("mahnaz0 err: %v", err)
 		return "", err
 	}
 	defer obj.Close()
-	ap.Log().Infof("mahnaz1")
 
 	baseDir := "/sys/fs/bpf/tc"
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
@@ -150,17 +152,13 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 			ifName := strings.ReplaceAll(ap.Iface, ".", "")
 			subDir = ifName + "_xdp/"
 		}
-		ap.Log().Infof("mahnaz2")
 
 		// TODO: We need to set map size here like tc.
 		pinPath := path.Join(baseDir, subDir, m.Name())
-		ap.Log().Infof("marmar iface: %s pinpath: %v", ap.IfaceName(), pinPath)
 		if err := m.SetPinPath(pinPath); err != nil {
-			ap.Log().Infof("mahnaz3")
 			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
-	ap.Log().Infof("mahnaz4")
 
 	// Check if the bpf object is already attached, and we should skip re-attaching it
 	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
@@ -174,7 +172,6 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		ap.Log().Warn("Failed to load program")
 		return "", fmt.Errorf("error loading program: %w", err)
 	}
-	ap.Log().Infof("mahnaz5")
 
 	// TODO: Add support for IPv6
 	err = updateJumpMap(obj)
@@ -182,7 +179,6 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		ap.Log().Warn("Failed to update jump map")
 		return "", fmt.Errorf("error updating jump map %v", err)
 	}
-	ap.Log().Infof("mahnaz6")
 
 	progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface)
 	if err != nil {
@@ -190,7 +186,6 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		return "", err
 	}
 	ap.Log().Info("Program attached to XDP.")
-	ap.Log().Infof("mahnaz7")
 
 	// Note that there are a few considerations here.
 	//
@@ -260,6 +255,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
 	}
 
+	ap.Log().Infof("mazmaz - progID: %v", progId)
 	return strconv.Itoa(progId), nil
 }
 
@@ -273,6 +269,10 @@ func (ap AttachPoint) DetachProgram() error {
 		}
 		// Some other error: return it to trigger a retry.
 		return fmt.Errorf("Couldn't get XDP program ID for %v: %w", ap.Iface, err)
+	}
+	if progID == "0" {
+		ap.Log().Debugf("No XDP program attached.")
+		return nil
 	}
 
 	// Get the map IDs that the program is using.

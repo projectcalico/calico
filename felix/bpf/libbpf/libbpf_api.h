@@ -24,14 +24,8 @@ static void set_errno(int ret) {
 	errno = ret >= 0 ? ret : -ret;
 }
 
-struct bpf_object* bpf_obj_open(char *filename, int type) {
+struct bpf_object* bpf_obj_open(char *filename) {
 	struct bpf_object *obj;
-	/*struct bpf_object_open_attr open_attr = {
-		.file = filename,
-		.prog_type = type,
-	};
-
-	obj = bpf_object__open_xattr(&open_attr);*/
 	obj = bpf_object__open(filename);
 	int err = libbpf_get_error(obj);
 	if (err) {
@@ -43,19 +37,6 @@ struct bpf_object* bpf_obj_open(char *filename, int type) {
 
 void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
-}
-
-void bpf_obj_loadXDP(struct bpf_object *obj, const char *filename) {
-	int first_prog_fd = -1;
-	int err = 0;
-	struct bpf_prog_load_attr prog_load_attr = {
-		.prog_type = BPF_PROG_TYPE_XDP,
-		.ifindex = 0,
-		.file = filename,
-	};
-
-	set_errno(bpf_prog_load_xattr(&prog_load_attr, &obj, &first_prog_fd));
-	//set_errno(bpf_object__load(obj));
 }
 
 struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, int isIngress) {
@@ -111,14 +92,13 @@ int bpf_update_jump_map(struct bpf_object *obj, char* mapName, char *progName, i
 	int prog_fd = bpf_program__fd(prog_name);
 	if (prog_fd < 0) {
 		errno = -prog_fd;
-		return 1000;
 	}
 	int map_fd = bpf_object__find_map_fd_by_name(obj, mapName);
 	if (map_fd < 0) {
 		errno = -map_fd;
 		return map_fd;
 	}
-	return  bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
+	return bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
 }
 
 int bpf_link_destroy(struct bpf_link *link) {
@@ -151,7 +131,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
-int bpf_xdp_query_iface(int ifIndex) {
+int bpf_xdp_program_id(int ifIndex) {
 	__u32 prog_id = 0, flags = 0;
 	int err;
 
