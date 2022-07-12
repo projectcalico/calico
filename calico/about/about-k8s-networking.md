@@ -5,7 +5,7 @@ canonical_url: 'https://www.tigera.io/learn/guides/kubernetes-networking/'
 ---
 
 {% comment %}
-Do not change the canonical_url above *or the title*. Content is shared with Marketing and is used for SEO purposes. If you change the title, it will mess up Marketing metrics. 
+Do not change the canonical_url above *or the title*. Content is shared with Marketing and is used for SEO purposes. If you change the title, it will mess up Marketing metrics.
 {% endcomment %}
 
 > <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional background education, not specific to {{site.prodname}}.
@@ -14,7 +14,7 @@ Do not change the canonical_url above *or the title*. Content is shared with Mar
 Kubernetes defines a network model that helps provide simplicity and consistency across a range of networking
 environments and network implementations. The Kubernetes network model provides the foundation for understanding how
 containers, pods, and services within Kubernetes communicate with each other. This guide explains the key concepts and
-how they fit together. 
+how they fit together.
 
 In this guide you will learn:
 - The fundamental network behaviors the Kubernetes network model defines.
@@ -59,10 +59,8 @@ guide.
 
 ### Kubernetes Services
 
-Kubernetes {% include open-new-window.html text='Services'
-url='https://kubernetes.io/docs/concepts/services-networking/service/' %} provide a way of abstracting access to a group
-of pods as a network service. The group of pods is usually defined using a {% include open-new-window.html text='label
-selector' url='https://kubernetes.io/docs/concepts/overview/working-with-objects/labels' %}. Within the cluster the
+Kubernetes {% include open-new-window.html text='Services' url='https://kubernetes.io/docs/concepts/services-networking/service/' %} provide a way of abstracting access to a group
+of pods as a network service. The group of pods is usually defined using a {% include open-new-window.html text='label selector' url='https://kubernetes.io/docs/concepts/overview/working-with-objects/labels' %}. Within the cluster the
 network service is usually represented as virtual IP address, and kube-proxy load balances connections to the virtual IP
 across the group of pods backing the service. The virtual IP is discoverable through Kubernetes DNS.  The DNS name and
 virtual IP address remain constant for the life time of the service, even though the pods backing the service may be
@@ -126,7 +124,7 @@ as IPv4 or IPv6 addresses.
 ### Above and beyond
 
 - {% include open-new-window.html text='The Kubernetes Network Model'
-  url='https://kubernetes.io/docs/concepts/cluster-administration/networking/#the-kubernetes-network-model' %} 
+  url='https://kubernetes.io/docs/concepts/cluster-administration/networking/#the-kubernetes-network-model' %}
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on AWS'
   url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Azure'
