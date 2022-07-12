@@ -680,7 +680,9 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
 
-	_ = m.routeCache.ApplyAllChanges()
+	if m.ctlbWorkaroundEnabled {
+		_ = m.routeCache.ApplyAllChanges()
+	}
 
 	if err := m.ifStateMap.ApplyAllChanges(); err != nil {
 		log.WithError(err).Warn("Failed to write updates to ifstate BPF map.")
