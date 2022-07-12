@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/cachingmap"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
