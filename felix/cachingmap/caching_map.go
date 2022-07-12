@@ -18,17 +18,15 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/bpf"
 )
 
 // DataplaneMap is an interface of the underlying map that is being cached by the
 // CachingMap. It implements interaction with the dataplane.
 type DataplaneMap[K comparable, V comparable] interface {
 	Update(K, V) error
-	Get(K) (V, error)
 	Delete(K) error
 	Load() (map[K]V, error)
+	ErrIsNotExists(error) bool
 }
 
 // CachingMap provides a caching layer around a DataplaneMap, when one of the Apply methods is called, it applies
@@ -65,7 +63,7 @@ func New[K comparable, V comparable](name string, dpMap DataplaneMap[K, V]) *Cac
 	return cm
 }
 
-// LoadCacheFromDataplane loads the contents of the BPF map into the dataplane cache, allowing it to be queried with
+// LoadCacheFromDataplane loads the contents of the DP map into the dataplane cache, allowing it to be queried with
 // GetDataplaneCache and IterDataplaneCache.
 func (c *CachingMap[K, V]) LoadCacheFromDataplane() error {
 	logrus.WithField("name", c.name).Debug("Loading cache of dataplane state.")
@@ -235,7 +233,7 @@ func (c *CachingMap[K, V]) maybeLoadCache() error {
 // ApplyUpdatesOnly applies any pending adds/updates to the dataplane map.  It doesn't delete any keys that are no
 // longer wanted.
 func (c *CachingMap[K, V]) ApplyUpdatesOnly() error {
-	logrus.WithField("name", c.name).Debug("Applying updates to BPF map.")
+	logrus.WithField("name", c.name).Debug("Applying updates to DP map.")
 	err := c.maybeLoadCache()
 	if err != nil {
 		return err
@@ -244,7 +242,7 @@ func (c *CachingMap[K, V]) ApplyUpdatesOnly() error {
 	for k, v := range c.pendingUpdates {
 		err := c.dpMap.Update(k, v)
 		if err != nil {
-			logrus.WithError(err).Warn("Error while updating BPF map")
+			logrus.WithError(err).Warn("Error while updating DP map")
 			errs = append(errs, err)
 		} else {
 			delete(c.pendingUpdates, k)
@@ -260,7 +258,7 @@ func (c *CachingMap[K, V]) ApplyUpdatesOnly() error {
 // ApplyDeletionsOnly applies any pending deletions to the dataplane map.  It doesn't add or update any keys that
 // are new/changed.
 func (c *CachingMap[K, V]) ApplyDeletionsOnly() error {
-	logrus.WithField("name", c.name).Debug("Applying deletions to BPF map.")
+	logrus.WithField("name", c.name).Debug("Applying deletions to DP map.")
 	err := c.maybeLoadCache()
 	if err != nil {
 		return err
@@ -268,8 +266,8 @@ func (c *CachingMap[K, V]) ApplyDeletionsOnly() error {
 	var errs ErrSlice
 	for k := range c.pendingDeletions {
 		err := c.dpMap.Delete(k)
-		if err != nil && !bpf.IsNotExists(err) {
-			logrus.WithError(err).Warn("Error while deleting from BPF map")
+		if err != nil && !c.dpMap.ErrIsNotExists(err) {
+			logrus.WithError(err).Warn("Error while deleting from DP map")
 			errs = append(errs, err)
 		} else {
 			delete(c.pendingDeletions, k)

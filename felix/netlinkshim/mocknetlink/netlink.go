@@ -637,6 +637,14 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 	return routes, nil
 }
 
+func (d *MockNetlinkDataplane) RouteList(link netlink.Link, family int) ([]netlink.Route, error) {
+	panic("NOT IMPLEMENETED")
+}
+
+func (_ *MockNetlinkDataplane) Close() {
+	panic("NOT IMPLEMENETED")
+}
+
 func (d *MockNetlinkDataplane) AddMockRoute(route *netlink.Route) {
 	key := KeyForRoute(route)
 	r := *route
