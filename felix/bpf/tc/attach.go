@@ -167,10 +167,10 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	// re-attaching it if the binary and its configuration are the same.
 	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
 	if isAttached {
-		logCxt.Infof("Program already attached to TC, skip reattaching %s", ap.FileName())
+		logCxt.Infof("Program already attached to TC, skip reattaching %s", filename)
 		return progID, nil
 	}
-	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
+	logCxt.Debugf("Continue with attaching BPF program %s", filename)
 
 	if err := obj.Load(); err != nil {
 		logCxt.Warn("Failed to load program")

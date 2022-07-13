@@ -39,7 +39,7 @@ void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
 }
 
-struct bpf_tc_opts bpf_tc_program_attach (struct bpf_object *obj, char *secName, int ifIndex, int isIngress) {
+struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, int isIngress) {
 
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, attach);
@@ -83,7 +83,7 @@ void bpf_tc_remove_qdisc (int ifIndex) {
         return;
 }
 
-int bpf_tc_update_jump_map(struct bpf_object *obj, char* mapName, char *progName, int progIndex) {
+int bpf_update_jump_map(struct bpf_object *obj, char* mapName, char *progName, int progIndex) {
 	struct bpf_program *prog_name = bpf_object__find_program_by_name(obj, progName);
 	if (prog_name == NULL) {
 		errno = ENOENT;
@@ -132,6 +132,38 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
+int bpf_xdp_program_id(int ifIndex) {
+	__u32 prog_id = 0, flags = 0;
+	int err;
+
+	err = bpf_get_link_xdp_id(ifIndex, &prog_id, flags);
+	set_errno(err);
+	return prog_id;
+}
+
+struct bpf_link *bpf_program_attach_xdp(struct bpf_object *obj, char *secName, int ifIndex)
+{
+	int err = 0;
+	struct bpf_link *link = NULL;
+	struct bpf_program *prog, *first_prog = NULL;
+
+	if (!(prog = bpf_object__find_program_by_title(obj, secName))) {
+		err = ENOENT;
+		goto out;
+	}
+
+	link = bpf_program__attach_xdp(prog, ifIndex);
+	err = libbpf_get_error(link);
+	if (err) {
+		link = NULL;
+		goto out;
+	}
+
+out:
+	set_errno(err);
+	return link;
 }
 
 struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd, char *name)
