@@ -22,6 +22,7 @@ import (
 	"unsafe"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"golang.org/x/sys/unix"
 )
 
 // #include "libbpf_api.h"
@@ -170,7 +171,7 @@ func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 	return int(progId), nil
 }
 
-func DetachXDP(ifName string) error {
+func DetachXDP(ifName string, progID int) error {
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cIfName))
 	ifIndex, err := C.if_nametoindex(cIfName)
@@ -178,7 +179,7 @@ func DetachXDP(ifName string) error {
 		return err
 	}
 
-	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, 1)
+	_, err = C.bpf_program_update_xdp(C.int(ifIndex), -1, C.int(progID), unix.XDP_FLAGS_REPLACE|unix.XDP_FLAGS_MODES)
 	if err != nil {
 		return fmt.Errorf("Failed to detach XDP program. interface: %s err: %w", ifName, err)
 	}

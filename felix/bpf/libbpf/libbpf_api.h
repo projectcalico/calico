@@ -166,6 +166,16 @@ out:
 	return link;
 }
 
+int bpf_program_update_xdp(int ifIndex, int new_fd, int old_fd, __u32 flags)
+{
+	struct bpf_xdp_set_link_opts opts = {
+		.sz = sizeof(struct bpf_xdp_set_link_opts),
+		.old_fd = old_fd,
+	};
+
+	return bpf_set_link_xdp_fd_opts(ifIndex, new_fd, flags, &opts);
+}
+
 struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd, char *name)
 {
 	int err = 0;

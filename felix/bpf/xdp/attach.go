@@ -262,11 +262,12 @@ func (ap AttachPoint) DetachProgram() error {
 		return fmt.Errorf("XDP expected program ID does match with current one.")
 	}
 
-	err = libbpf.DetachXDP(ap.Iface)
+	err = libbpf.DetachXDP(ap.Iface, ap.progID)
 	if err != nil {
 		return fmt.Errorf("Failed to detach XDP program from interface %s. err: %w", ap.Iface, err)
 	}
-	ap.Log().Infof("XDP program detached.")
+	ap.Log().Infof("XDP program detached. ID: %v", ap.progID)
+	ap.progID = -1
 
 	// Program is detached, now remove the json file we saved for it
 	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {
