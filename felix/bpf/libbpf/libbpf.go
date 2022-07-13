@@ -21,8 +21,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
@@ -174,6 +172,22 @@ func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 	return int(progId), nil
 }
 
+func DetachXDP(ifName string) error {
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return err
+	}
+
+	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, 0)
+	if err != nil {
+		return fmt.Errorf("Failed to detach XDP program. interface: %s err: %w", ifName, err)
+	}
+
+	return nil
+}
+
 func GetXDPProgramID(ifName string) (int, error) {
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cIfName))
@@ -237,8 +251,7 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cMapName))
 	defer C.free(unsafe.Pointer(cProgName))
-	ret, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
-	logrus.Infof("mansour ret: %v", ret)
+	_, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
 	if err != nil {
 		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
 	}

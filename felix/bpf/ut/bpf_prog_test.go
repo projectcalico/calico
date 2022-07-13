@@ -507,7 +507,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 	}
 
 	if polProg {
-		polProgPath := "1_0"
+		polProgPath := "xdp_policy"
 		if !forXDP {
 			polProgPath = "classifier_tc_policy"
 		}
@@ -539,7 +539,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 			log.WithError(err).Info("failed to update jump map (deleting policy_v6 program)")
 		}
 	}
-	polProgPath := "1_1"
+	polProgPath := "xdp_accept"
 	if !forXDP {
 		polProgPath = "classifier_tc_accept"
 	}

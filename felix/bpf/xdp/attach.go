@@ -15,17 +15,13 @@
 package xdp
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -43,6 +39,7 @@ type AttachPoint struct {
 	Iface    string
 	LogLevel string
 	Modes    []bpf.XDPMode
+	progID   int
 }
 
 func (ap *AttachPoint) IfaceName() string {
@@ -107,12 +104,6 @@ func (ap *AttachPoint) AlreadyAttached(object string) (string, bool) {
 }
 
 func (ap *AttachPoint) AttachProgram() (string, error) {
-	progID, err := ap.ProgramID()
-	if err != nil {
-		ap.Log().Debugf("Couldn't get the attached XDP program ID. err=%v", err)
-	}
-	ap.Log().Infof("marmar - progID: %v", progID)
-
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary directory: %w", err)
@@ -186,6 +177,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		return "", err
 	}
 	ap.Log().Info("Program attached to XDP.")
+	ap.progID = progId
 
 	// Note that there are a few considerations here.
 	//
@@ -255,76 +247,23 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
 	}
 
-	ap.Log().Infof("mazmaz - progID: %v", progId)
 	return strconv.Itoa(progId), nil
 }
 
 func (ap AttachPoint) DetachProgram() error {
 	// Get the current XDP program ID, if any.
-	progID, err := ap.ProgramID()
+	curProgId, err := ap.ProgramID()
 	if err != nil {
-		if errors.Is(err, ErrNoXDP) {
-			// Interface has no XDP attached - that's what we want.
-			return nil
-		}
-		// Some other error: return it to trigger a retry.
-		return fmt.Errorf("Couldn't get XDP program ID for %v: %w", ap.Iface, err)
-	}
-	if progID == "0" {
-		ap.Log().Debugf("No XDP program attached.")
-		return nil
+		return fmt.Errorf("Failed to get the attached XDP program ID. err=%w", err)
 	}
 
-	// Get the map IDs that the program is using.
-	out, err := exec.Command("bpftool", "prog", "show", "id", progID, "-j").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("Couldn't query XDP prog id=%v iface=%v out=\n%v err=%w", progID, ap.Iface, string(out), err)
-	}
-	var progJSON struct {
-		Maps []int `json:"map_ids"`
-	}
-	err = json.Unmarshal(out, &progJSON)
-	if err != nil {
-		ap.Log().WithError(err).Debugf("Failed to parse bpftool output out=\n%v.  Assume not our XDP program.", string(out))
-		return nil
+	if strconv.Itoa(ap.progID) != curProgId {
+		return fmt.Errorf("XDP expected program ID does match with current one.")
 	}
 
-	ourProgram := false
-	for _, mapID := range progJSON.Maps {
-		// Check if this map is one of ours.
-		ap.Log().Debugf("Check if map id %v is one of ours", mapID)
-		out, err = exec.Command("bpftool", "map", "show", "id", fmt.Sprintf("%v", mapID), "-j").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("Couldn't query map id=%v iface=%v out=\n%v err=%w", progID, ap.Iface, string(out), err)
-		}
-		var mapJSON struct {
-			Name string `json:"name"`
-		}
-		err = json.Unmarshal(out, &mapJSON)
-		if err != nil {
-			ap.Log().WithError(err).Debugf("Failed to parse bpftool output out=\n%v.  Assume not our map.", string(out))
-		} else if strings.HasPrefix(mapJSON.Name, "cali_") {
-			ourProgram = true
-			break
-		}
-	}
-
-	if ourProgram {
-		// It's our XDP program; remove it.
-		ap.Log().Debug("Removing our XDP program")
-		removalSucceeded := false
-		for _, mode := range ap.Modes {
-			cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "off")
-			ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
-			out, err := cmd.CombinedOutput()
-			ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
-			if err == nil {
-				removalSucceeded = true
-			}
-		}
-		if !removalSucceeded {
-			return fmt.Errorf("Couldn't remove our XDP program from iface %v", ap.Iface)
-		}
+	err = libbpf.DetachXDP(ap.Iface)
+	if err != nil {
+		return fmt.Errorf("Failed to detach XDP program from interface %s. err: %w", ap.Iface, err)
 	}
 
 	// Program is detached, now remove the json file we saved for it
@@ -355,8 +294,6 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 	return err == nil, err
 }
 
-var ErrNoXDP = errors.New("no XDP program attached")
-
 func (ap *AttachPoint) ProgramID() (string, error) {
 	progID, err := libbpf.GetXDPProgramID(ap.Iface)
 	if err != nil {
@@ -377,7 +314,6 @@ func updateJumpMap(obj *libbpf.Obj) error {
 
 		eIndex := 1
 		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
-		logrus.Infof("damon jump map: %v, program name: %v", bpf.JumpMapName(), string(programNames[eIndex]))
 		if err != nil {
 			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
 		}

@@ -292,11 +292,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		})
 
 		It("should have XDP program attached", func() {
-			time.Sleep(time.Minute * 60)
 			Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeTrue())
 			id := xdpProgramID(felixes[1], "eth0")
 			Consistently(xdpProgramID_felix1_eth0(), "2s", "100ms").Should(Equal(id))
-
 		})
 
 		Context("with untracked policies deleted again", func() {
