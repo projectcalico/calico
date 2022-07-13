@@ -18,6 +18,7 @@ package failsafes
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 
 	"golang.org/x/sys/unix"
@@ -42,6 +43,16 @@ type Key struct {
 	Flags   uint8
 	IP      string
 	IPMask  int
+}
+
+func (k Key) String() string {
+	flags := "inbound"
+	if k.Flags&FlagOutbound != 0 {
+		flags = "outbound"
+	}
+
+	return fmt.Sprintf("Key{Port: %d, Proto: %d, Flags: %s, Net: %s/%d",
+		k.Port, k.IPProto, flags, k.IP, k.IPMask)
 }
 
 var MapParams = bpf.MapParameters{

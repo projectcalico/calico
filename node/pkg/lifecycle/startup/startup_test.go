@@ -943,6 +943,26 @@ var _ = Describe("UT for autodetection method k8s-internal-ip", func() {
 	)
 })
 
+var _ = Describe("UT for CIDR returned by IP address autodetection k8s-internal-ip method", func() {
+	It("Verify that CIDR value returned using autodetection method k8s-internal-ip is not masked", func() {
+		expectedV4Cidr := "192.168.1.10/24"
+		expectedV6Cidr := "2001:db8:85a3:8d3:1319:8a2e:370:7348/64"
+		mockGetInterface := func([]string, []string, int) ([]autodetection.Interface, error) {
+			return []autodetection.Interface{
+				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR(expectedV4Cidr), net.MustParseCIDR("2001:db8:85a3:8d3:1319:8a2e:370:7348/64")}},
+			}, nil
+		}
+
+		k8sNode := makeK8sNode("192.168.1.10", "2001:db8:85a3:8d3:1319:8a2e:370:7348")
+
+		checkV4IPNet := autodetection.AutoDetectCIDR(autodetection.K8S_INTERNAL_IP, 4, k8sNode, mockGetInterface)
+		checkV6IPNet := autodetection.AutoDetectCIDR(autodetection.K8S_INTERNAL_IP, 6, k8sNode, mockGetInterface)
+
+		Expect(checkV4IPNet.String()).To(Equal(expectedV4Cidr))
+		Expect(checkV6IPNet.String()).To(Equal(expectedV6Cidr))
+	})
+})
+
 var _ = Describe("FV tests against K8s API server.", func() {
 	It("should not throw an error when multiple Nodes configure the same global CRD value.", func() {
 		ctx := context.Background()
@@ -1044,7 +1064,7 @@ var _ = Describe("UT for node name determination", func() {
 
 var _ = Describe("UT for GenerateIPv6ULAPrefix", func() {
 	It("should generate a different address each time", func() {
-		seen := set.New()
+		seen := set.New[string]()
 		for i := 0; i < 100; i++ {
 			newAddr, err := GenerateIPv6ULAPrefix()
 			Expect(err).NotTo(HaveOccurred())

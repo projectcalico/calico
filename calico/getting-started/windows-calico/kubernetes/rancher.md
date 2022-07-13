@@ -36,13 +36,13 @@ The following steps will outline the installation of {{site.prodname}} networkin
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions.
 
    ```
-   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
 
 1. Download the necessary Installation custom resource.
 
    ```bash
-   wget {{ "/manifests/custom-resources.yaml" | absolute_url }}
+   wget {{site.data.versions.first.manifests_url}}/manifests/custom-resources.yaml
    ```
 
 1. Update the `calicoNetwork` options, ensuring that the correct pod CIDR is set. (Rancher uses `10.42.0.0/16` by default.)

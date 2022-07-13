@@ -55,6 +55,7 @@ type AttachPoint struct {
 	DSR                  bool
 	TunnelMTU            uint16
 	VXLANPort            uint16
+	WgPort               uint16
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
@@ -126,7 +127,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	}
 
 	// Using the RLock allows multiple attach calls to proceed in parallel unless
-	// CleanUpJumpMaps() (which takes the writer lock) is running.
+	// CleanUpMaps() (which takes the writer lock) is running.
 	logCxt.Debug("AttachProgram waiting for lock...")
 	tcLock.RLock()
 	defer tcLock.RUnlock()
@@ -142,7 +143,6 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	}
 	defer obj.Close()
 
-	baseDir := "/sys/fs/bpf/tc/"
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
 		// The values are read only for the BPF programs, but can be set to a value from
@@ -153,20 +153,11 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 			}
 			continue
 		}
-		subDir := "globals"
-		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
-			// Remove period in the interface name if any
-			ifName := strings.ReplaceAll(ap.Iface, ".", "")
-			if ap.Hook == HookIngress {
-				subDir = ifName + "_igr/"
-			} else {
-				subDir = ifName + "_egr/"
-			}
-		}
+
 		if err := ap.setMapSize(m); err != nil {
 			return "", fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
-		pinPath := path.Join(baseDir, subDir, m.Name())
+		pinPath := MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
 		if err := m.SetPinPath(pinPath); err != nil {
 			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
@@ -394,14 +385,14 @@ func (ap AttachPoint) IsAttached() (bool, error) {
 // so we can clean them up when removing maps without accidentally removing other user-created dirs..
 var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr))`)
 
-// CleanUpJumpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
+// CleanUpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
 // our BPF programs.
-func CleanUpJumpMaps() {
+func CleanUpMaps() {
 	// So that we serialise with AttachProgram()
-	log.Debug("CleanUpJumpMaps waiting for lock...")
+	log.Debug("CleanUpMaps waiting for lock...")
 	tcLock.Lock()
 	defer tcLock.Unlock()
-	log.Debug("CleanUpJumpMaps got lock, cleaning up...")
+	log.Debug("CleanUpMaps got lock, cleaning up...")
 
 	// Find the maps we care about by walking the BPF filesystem.
 	mapIDToPath := make(map[int]string)
@@ -409,7 +400,8 @@ func CleanUpJumpMaps() {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) {
+		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) ||
+			strings.HasPrefix(info.Name(), bpf.CountersMapName()) {
 			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
@@ -458,7 +450,7 @@ func CleanUpJumpMaps() {
 	if err != nil {
 		log.WithError(err).WithField("dump", string(out)).Error("Failed to parse list of attached BPF programs")
 	}
-	attachedProgs := set.New()
+	attachedProgs := set.New[int]()
 	for _, prog := range attached[0].TC {
 		log.WithField("prog", prog).Debug("Adding TC prog to attached set")
 		attachedProgs.Add(prog.ID)
@@ -506,7 +498,7 @@ func CleanUpJumpMaps() {
 	}
 
 	// Look for empty dirs.
-	emptyAutoDirs := set.New()
+	emptyAutoDirs := set.New[string]()
 	err = filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -532,8 +524,7 @@ func CleanUpJumpMaps() {
 		log.WithError(err).Error("Error while looking for maps.")
 	}
 
-	emptyAutoDirs.Iter(func(item interface{}) error {
-		p := item.(string)
+	emptyAutoDirs.Iter(func(p string) error {
 		log.WithField("path", p).Debug("Removing empty dir.")
 		err := os.Remove(p)
 		if err != nil {
@@ -639,7 +630,8 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	}
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP, flags)
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP,
+		flags, ap.WgPort)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {

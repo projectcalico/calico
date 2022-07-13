@@ -2418,10 +2418,24 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"bpfMapSizeIfState": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeIfState sets the size for ifstate map.  The ifstate map must be large enough to hold an entry for each device (host + workloads) on a host.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"bpfEnforceRPF": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnforceRPF enforce strict RPF on all interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled or Strict. [Default: Strict]",
 							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"bpfPolicyDebugEnabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFPolicyDebugEnabled when true, Felix records detailed information about the BPF policy programs, which can be examined with the calico-bpf command-line tool.",
+							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
@@ -2450,6 +2464,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "Deprecated in favor of RouteTableRanges. Calico programs additional Linux route tables for various purposes. RouteTableRange specifies the indices of the route tables that Calico should use.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange"),
+						},
+					},
+					"routeSyncDisabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RouteSyncDisabled will disable all operations performed on the route table. Set to true to run in network-policy mode only.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 					"wireguardEnabled": {

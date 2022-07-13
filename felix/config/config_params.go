@@ -186,8 +186,10 @@ type Config struct {
 	BPFMapSizeRoute                    int              `config:"int;262144;non-zero"`
 	BPFMapSizeConntrack                int              `config:"int;512000;non-zero"`
 	BPFMapSizeIPSets                   int              `config:"int;1048576;non-zero"`
+	BPFMapSizeIfState                  int              `config:"int;1000;non-zero"`
 	BPFHostConntrackBypass             bool             `config:"bool;true"`
 	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict);Strict;non-zero"`
+	BPFPolicyDebugEnabled              bool             `config:"bool;true"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
@@ -353,8 +355,9 @@ type Config struct {
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
 	// RouteTableRange is deprecated in favor of RouteTableRanges,
-	RouteTableRange  idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
-	RouteTableRanges []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
+	RouteTableRange   idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
+	RouteTableRanges  []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
+	RouteSyncDisabled bool                 `config:"bool;false"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 

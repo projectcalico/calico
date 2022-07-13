@@ -309,6 +309,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("calico-bpf", "nat", "aff")
 					felix.Exec("calico-bpf", "conntrack", "dump")
 					felix.Exec("calico-bpf", "arp", "dump")
+					felix.Exec("calico-bpf", "counters", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
@@ -601,7 +603,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 
 						By("handling egress program removal")
 						felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
@@ -614,7 +617,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 
 						By("Handling qdisc removal")
@@ -627,11 +631,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"))
+						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
 
@@ -870,7 +876,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					sort.Strings(filteredLines)
 					return strings.Join(filteredLines, "\n")
 				}
-				Eventually(dumpRoutes, "5s", "200ms").Should(Equal(expectedRoutes), dumpRoutes)
+				Eventually(dumpRoutes, "10s", "200ms").Should(Equal(expectedRoutes), dumpRoutes)
 			})
 
 			It("should only allow traffic from the local host by default", func() {
@@ -2180,6 +2186,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
+							if setAffinity {
+								// Sync with NAT tables to prevent creating extra entry when
+								// CTLB misses but regular DNAT hits, but connection fails and
+								// then CTLB succeeds.
+								natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+								Eventually(func() bool {
+									m := dumpNATMap(felixes[0])
+									v, ok := m[natFtKey]
+									if !ok || v.Count() == 0 {
+										return false
+									}
+
+									beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+									be := dumpEPMap(felixes[0])
+									_, ok = be[beKey]
+									return ok
+								}, 5*time.Second).Should(BeTrue())
+							}
+
 							cc.ExpectSome(w[0][1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 
@@ -2261,10 +2287,30 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
-						By("make connection to a service and set affinity")
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
+						By("Syncing with NAT tables", func() {
+							// Sync with NAT tables to prevent creating extra entry when
+							// CTLB misses but regular DNAT hits, but connection fails and
+							// then CTLB succeeds.
+							natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+							Eventually(func() bool {
+								m := dumpNATMap(felixes[0])
+								v, ok := m[natFtKey]
+								if !ok || v.Count() == 0 {
+									return false
+								}
+
+								beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+								be := dumpEPMap(felixes[0])
+								_, ok = be[beKey]
+								return ok
+							}, 5*time.Second).Should(BeTrue())
+						})
+
+						By("make connection to a service and set affinity")
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.CheckConnectivity()
 
@@ -3218,14 +3264,44 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				fc, err = calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
+				counts := make([]int, len(felixes))
+				ifaceCnt := 4 // eth0, bpfout.cali, 2xcali*
+				if testOpts.tunnel != "none" {
+					ifaceCnt++ // the tunnel device
+				}
 				// Wait for BPF to be active.
-				numTCProgramsOnEth0 := func() (total int) {
-					for _, f := range felixes {
-						total += f.NumTCBPFProgs("eth0")
+				readyIfaces := func() (total int) {
+					var wg sync.WaitGroup
+					for i := range felixes {
+						if counts[i] != ifaceCnt {
+							wg.Add(1)
+							go func(i int) {
+								defer wg.Done()
+								c := 0
+								for _, s := range felixes[i].BPFIfState() {
+									if s.Ready {
+										c++
+									}
+								}
+								counts[i] = c
+							}(i)
+						}
 					}
+
+					wg.Wait()
+
+					for _, c := range counts {
+						total += c
+					}
+
 					return
 				}
-				Eventually(numTCProgramsOnEth0, "10s").Should(Equal(len(felixes) * 2))
+
+				// We need to make sure that host as well as workload ifaces are
+				// ready, that is their tc programs are loaded. The test matrix
+				// checks all of these options and we do not want to get false
+				// positives.
+				Eventually(readyIfaces, "15s", "300ms").Should(Equal(len(felixes) * ifaceCnt))
 			}
 
 			expectPongs := func() {
@@ -3639,21 +3715,46 @@ func conntrackChecks(felixes []*infrastructure.Felix) []interface{} {
 }
 
 func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
+	allStr := strconv.Itoa(all)
+	mainStr := strconv.Itoa(main)
+
+	var wg sync.WaitGroup
+
 	for _, felix := range felixes {
-		// N.B. we only support environment with not so strict RPF - can be
-		// strict per iface, but not for all.
-		felix.Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+strconv.Itoa(all))
-		switch tunnel {
-		case "none":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+strconv.Itoa(main))
-		case "ipip":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+strconv.Itoa(main))
-		case "wireguard":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+strconv.Itoa(main))
-		case "vxlan":
-			felix.Exec("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+strconv.Itoa(main))
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			Eventually(func() error {
+				// N.B. we only support environment with not so strict RPF - can be
+				// strict per iface, but not for all.
+				if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.all.rp_filter="+allStr); err != nil {
+					return err
+				}
+				switch tunnel {
+				case "none":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "ipip":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.tunl0.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "wireguard":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.wireguard/cali.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				case "vxlan":
+					if err := felix.ExecMayFail("sysctl", "-w", "net.ipv4.conf.vxlan/calico.rp_filter="+mainStr); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			}, "5s", "200ms").Should(Succeed())
+		}()
 	}
+
+	wg.Wait()
 }
 
 func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {

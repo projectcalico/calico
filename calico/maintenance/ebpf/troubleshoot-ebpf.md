@@ -38,10 +38,84 @@ If pods or hosts within your cluster have trouble accessing services, check the 
     * In GCP, the "Allow forwarding" option must be enabled. As with AWS, traffic through a load balancer does not
       work correctly with DSR because the load balancer is not consulted on the return path from the backing node.
       
+## The `calico-bpf` tool
+
+Since BPF maps contain binary data, the {{site.prodname}} team wrote a tool to examine {{site.prodname}}'s BPF maps.
+The tool is embedded in the {{site.nodecontainer}} container image. To run the tool:
+
+* Find the name of the {{site.nodecontainer}} Pod on the host of interest using
+  ```bash
+  kubectl get pod -o wide -n calico-system
+  ```
+  for example, `calico-node-abcdef`
+
+* Run the tool as follows:
+  ```bash
+  kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf ...
+  ```
+  For example, to show the tool's help:
+  ```bash
+  $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf help
+
+  Usage:
+    calico-bpf [command]
+
+  Available Commands:
+    arp          Manipulates arp
+    connect-time Manipulates connect-time load balancing programs
+    conntrack    Manipulates connection tracking
+    counters     Show and reset counters
+    help         Help about any command
+    ipsets       Manipulates ipsets
+    nat          Manipulates network address translation (nat)
+    routes       Manipulates routes
+    version      Prints the version and exits
+
+  Flags:
+    --config string   config file (default is $HOME/.calico-bpf.yaml)
+    -h, --help            help for calico-bpf
+        --log-level string   Set log level (default "warn")
+    -t, --toggle          Help message for toggle
+  ```
+  (Since the tool is embedded in the main `calico-node` binary the `--help` option is not available, but running
+  `calico-node -bpf help` does work.)
+
+  To dump the BPF conntrack table:
+  ```
+  $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf conntrack dump
+  ...
+  ```
+
+  Also, it is possible to fetch various counters, like packets dropped by a policy or different errors, from BPF dataplane using the same tool.
+  For example, to dump the BPF counters of `eth0` interface:
+  ```
+  $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf counters dump --iface=eth0
+  +----------+--------------------------------+---------+--------+
+  | CATEGORY |              TYPE              | INGRESS | EGRESS |
+  +----------+--------------------------------+---------+--------+
+  | Accepted | by another program             |       0 |      0 |
+  |          | by failsafe                    |       0 |      4 |
+  |          | by policy                      |      21 |      0 |
+  | Dropped  | by policy                      |       4 |      0 |
+  |          | failed decapsulation           |       0 |      0 |
+  |          | failed encapsulation           |       0 |      0 |
+  |          | incorrect checksum             |       0 |      0 |
+  |          | malformed IP packets           |       0 |      0 |
+  |          | packets with unknown route     |       0 |      0 |
+  |          | packets with unknown source    |       0 |      0 |
+  |          | packets with unsupported IP    |       0 |      0 |
+  |          | options                        |         |        |
+  |          | too short packets              |       0 |      0 |
+  | Total    | packets                        |    1593 |   1973 |
+  +----------+--------------------------------+---------+--------+
+  dumped eth0 counters.
+  ```
+
 ### Check if a program is dropping packets
 
-To check if an eBPF program is dropping packets, you can use the `tc` command-line tool.  For example, if you
-are worried that the eBPF program attached to `eth0` is dropping packets, you can run the following command:
+To check if an eBPF program is dropping packets, you can use either the `calico-bpf` or `tc` command-line tool.  For example, if you
+are worried that the eBPF program attached to `eth0` is dropping packets, you can use `calico-bpf` to fetch BPF counters as described
+in the previous section and look for one of the `Dropped` counters or you can run the following command:
 
 ```
 tc -s qdisc show dev eth0
@@ -113,51 +187,6 @@ The parts of the log are explained below:
 * `Final result=ALLOW (-1). Program execution time: 7366ns` is the message.  In this case, logging the final result of 
   the program.  Note that the timestamp is massively distorted by the time spent logging.
 
-## The `calico-bpf` tool
-
-Since BPF maps contain binary data, the {{site.prodname}} team wrote a tool to examine {{site.prodname}}'s BPF maps.
-The tool is embedded in the {{site.nodecontainer}} container image. To run the tool:
-
-* Find the name of the {{site.nodecontainer}} Pod on the host of interest using
-  ```bash
-  kubectl get pod -o wide -n calico-system
-  ```
-  for example, `calico-node-abcdef`
-
-* Run the tool as follows:
-  ```bash
-  kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf ...
-  ```
-  For example, to show the tool's help:
-  ```bash
-  $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf help
-   
-  Usage:
-    calico-bpf [command]
-  
-  Available Commands:
-    arp          Manipulates arp
-    connect-time Manipulates connect-time load balancing programs
-    conntrack    Manipulates connection tracking
-    help         Help about any command
-    ipsets       Manipulates ipsets
-    nat          Nanipulates network address translation (nat)
-    routes       Manipulates routes
-    version      Prints the version and exits
-  
-  Flags:
-    --config string   config file (default is $HOME/.calico-bpf.yaml)
-    -h, --help            help for calico-bpf
-    -t, --toggle          Help message for toggle
-  ```
-  (Since the tool is embedded in the main `calico-node` binary the `--help` option is not available, but running
-  `calico-node -bpf help` does work.)
-
-  To dump the BPF conntrack table:
-  ```
-  $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf conntrack dump
-  ...
-  ```
 
 ### Poor performance
 

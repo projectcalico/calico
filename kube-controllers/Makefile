@@ -126,8 +126,13 @@ ut fv: $(TEST_BINARIES)
 
 # Produce test binaries for each package that needs them.
 # ginkgo doesn't let you produce a single test binary with multiple packages.
+# Only do this if there are .go files in the path.
 %/ut.test: $(SRC_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@
+	if [ $$(find ./$* -name '*.go' | wc -l) -gt 0 ]; then \
+		$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@; \
+	else \
+		echo "Skipping $* as it has no .go files in it"; \
+	fi
 
 ###############################################################################
 # CI

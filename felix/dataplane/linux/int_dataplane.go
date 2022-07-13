@@ -139,6 +139,7 @@ type Config struct {
 
 	MaxIPSetSize int
 
+	RouteSyncDisabled              bool
 	IptablesBackend                string
 	IPSetsRefreshInterval          time.Duration
 	RouteRefreshInterval           time.Duration
@@ -179,6 +180,7 @@ type Config struct {
 	ExternalNodesCidrs []string
 
 	BPFEnabled                         bool
+	BPFPolicyDebugEnabled              bool
 	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
@@ -198,6 +200,7 @@ type Config struct {
 	BPFMapSizeNATBackend               int
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
+	BPFMapSizeIfState                  int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
@@ -387,6 +390,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesOptions.HistoricChainPrefixes = append(iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...)
 	}
 
+	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
+		err := os.RemoveAll(bpf.RuntimePolDir)
+		if err != nil && !os.IsNotExist(err) {
+			log.WithError(err).Info("Policy debug disabled but failed to remove the debug directory.  Ignoring.")
+		}
+	}
+
 	// However, the NAT tables need an extra cleanup regex.
 	iptablesNATOptions := iptablesOptions
 	if iptablesNATOptions.ExtraCleanupRegexPattern == "" {
@@ -457,9 +467,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
 	if config.RulesConfig.VXLANEnabled {
-		routeTableVXLAN := routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
-			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+		var routeTableVXLAN routeTable
+		if !config.RouteSyncDisabled {
+			log.Debug("RouteSyncDisabled is false.")
+			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+		} else {
+			log.Info("RouteSyncDisabled is true, using DummyTable.")
+			routeTableVXLAN = &routetable.DummyTable{}
+		}
 
 		vxlanManager := newVXLANManager(
 			ipSetsV4,
@@ -563,9 +580,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		tc.CleanUpProgramsAndPins()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, func(neededIPSets set.Set) {
-			ipSetsV4.SetFilter(neededIPSets)
-		}))
+		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4,
+			func(neededIPSets set.Set[string]) {
+				ipSetsV4.SetFilter(neededIPSets)
+			}))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -579,8 +597,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		defaultRPFilter = []byte{'1'}
 	}
 
-	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
-		config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeRoute, config.BPFMapSizeConntrack, config.BPFMapRepin)
+	bpfMapContext := bpfmap.CreateBPFMapContext(
+		config.BPFMapSizeIPSets,
+		config.BPFMapSizeNATFrontend,
+		config.BPFMapSizeNATBackend,
+		config.BPFMapSizeNATAffinity,
+		config.BPFMapSizeRoute,
+		config.BPFMapSizeConntrack,
+		config.BPFMapSizeIfState,
+		config.BPFMapRepin,
+	)
 
 	var bpfEndpointManager *bpfEndpointManager
 
@@ -689,10 +715,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_UNSPEC,
-		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
-		routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+	var routeTableV4 routeTable
+
+	if !config.RouteSyncDisabled {
+		log.Debug("RouteSyncDisabled is false.")
+		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_UNSPEC,
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+	} else {
+		log.Info("RouteSyncDisabled is true, using DummyTable.")
+		routeTableV4 = &routetable.DummyTable{}
+	}
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -787,9 +821,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabledV6 {
-			routeTableVXLANV6 := routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
-				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+			var routeTableVXLANV6 routeTable
+			if !config.RouteSyncDisabled {
+				log.Debug("RouteSyncDisabled is false.")
+				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
+					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+					dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+			} else {
+				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
+				routeTableVXLANV6 = &routetable.DummyTable{}
+			}
 
 			vxlanManagerV6 := newVXLANManager(
 				ipSetsV6,
@@ -806,11 +847,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			go cleanUpVXLANDevice("vxlan-v6.calico")
 		}
 
-		routeTableV6 := routetable.New(
-			interfaceRegexes, 6, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
-			unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
-			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+		var routeTableV6 routeTable
+		if !config.RouteSyncDisabled {
+			log.Debug("RouteSyncDisabled is false.")
+			routeTableV6 = routetable.New(
+				interfaceRegexes, 6, false, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
+				unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+		} else {
+			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")
+			routeTableV6 = &routetable.DummyTable{}
+		}
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))
@@ -1197,7 +1245,7 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 
 // onIfaceAddrsChange is our interface address monitor callback.  It gets called
 // from the monitor's thread.
-func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) {
+func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[string]) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
@@ -1210,7 +1258,7 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) 
 
 type ifaceAddrsUpdate struct {
 	Name  string
-	Addrs set.Set
+	Addrs set.Set[string]
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {
@@ -1331,6 +1379,16 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				Action: iptables.DropAction{},
 			})
 		}
+
+		// Accept any SEEN packets that go to the host. What remains here should be from
+		// host interfaces. This should accept packets in default-DROP iptable
+		// environments.  Such packets go through BPF on host iface but must go through
+		// the INPUT of iptables too. default-DROP would block IPIP/VXLAN/WG/etc. traffic
+		// without explicit ACCEPT.
+		inputRules = append(inputRules, iptables.Rule{
+			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
+			Action: iptables.AcceptAction{},
+		})
 
 		if t.IPVersion == 6 {
 			for _, prefix := range rulesConfig.WorkloadIfacePrefixes {

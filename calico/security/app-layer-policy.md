@@ -82,7 +82,7 @@ kubectl patch installation default --type=merge -p '{"spec": {"flexVolumePath": 
 Apply the following to install the Calico CSI driver
 
 ```bash
-kubectl apply -f {{ "/manifests/csi-driver.yaml" | absolute_url }}
+kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/csi-driver.yaml
 ```
 
 #### Install Istio
@@ -124,20 +124,20 @@ The sidecar injector automatically modifies pods as they are created to work wit
 <label:Istio v1.10.x,active:true>
 <%
 ```bash
-curl {{ "/manifests/alp/istio-inject-configmap-1.10.yaml" | absolute_url }} -o istio-inject-configmap.yaml
+curl {{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.10.yaml -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
 
-[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.10.yaml" | absolute_url }}){:target="_blank"}
+[View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.10.yaml){:target="_blank"}
 %>
 <label:Istio v1.9.x>
 <%
 ```bash
-curl {{ "/manifests/alp/istio-inject-configmap-1.9.yaml" | absolute_url }} -o istio-inject-configmap.yaml
+curl {{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.9.yaml -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
 
-[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.9.yaml" | absolute_url }}){:target="_blank"}
+[View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.9.yaml){:target="_blank"}
 %>
 {% endtabs %}
 
@@ -149,9 +149,9 @@ Apply the following manifest to configure Istio to query {{site.prodname}} for a
 <label: Istio v1.10.x and v1.9.x,active:true>
 <%
 ```bash
-kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-envoy-v3.yaml" | absolute_url }}
+kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/alp/istio-app-layer-policy-envoy-v3.yaml
 ```
-[View sample manifest]({{ "/manifests/alp/istio-app-layer-policy-envoy-v3.yaml" | absolute_url }}){:target="_blank"}
+[View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-app-layer-policy-envoy-v3.yaml){:target="_blank"}
 %>
 {% endtabs %}
 

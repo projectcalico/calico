@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func init() {
 // conntrackCmd represents the conntrack command
 var natCmd = &cobra.Command{
 	Use:   "nat",
-	Short: "Nanipulates network address translation (nat)",
+	Short: "Manipulates network address translation (nat)",
 	Long: "nat manipulates network address translation (nat), " +
 		"which implements the bpf-based replacement for kube-proxy",
 }
@@ -90,7 +90,7 @@ func dumpAff(cmd *cobra.Command) (err error) {
 	}
 
 	for k, v := range affMap {
-		cmd.Printf("%-40s %s", k, v)
+		cmd.Printf("%-40s %s\n", k, v)
 	}
 
 	cmd.Printf("\n")

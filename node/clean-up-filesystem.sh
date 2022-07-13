@@ -356,6 +356,10 @@ rm -rf \
   /usr/share/gcc-8 \
   /usr/share/X11 \
   /usr/share/zsh \
+  /usr/share/python* \
+  /usr/share/**/python* \
+  /usr/lib/python* \
+  /usr/lib/**/python* \
   /in-the-container \
   /usr/bin/ldd \
   "$0"

@@ -17,10 +17,9 @@
 package libbpf
 
 import (
+	"runtime"
 	"time"
 )
-
-const MapTypeProgrArray = 3
 
 type Obj struct {
 }
@@ -92,7 +91,7 @@ const (
 	GlobalsRPFStrictEnabled uint32 = 16
 )
 
-func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16, _, _ uint32) error {
+func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16, _, _ uint32, _ uint16) error {
 	panic("LIBBPF syscall stub")
 }
 
@@ -102,4 +101,8 @@ func CTLBSetGlobals(_ *Map, _ time.Duration) error {
 
 func (m *Map) SetMapSize(size uint32) error {
 	panic("LIBBPF syscall stub")
+}
+
+func NumPossibleCPUs() (int, error) {
+	return runtime.NumCPU(), nil
 }

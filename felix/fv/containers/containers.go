@@ -50,7 +50,7 @@ type Container struct {
 	Stdin          io.WriteCloser
 
 	mutex         sync.Mutex
-	binaries      set.Set
+	binaries      set.Set[string]
 	stdoutWatches []*watch
 	stderrWatches []*watch
 	dataRaces     []string
@@ -265,7 +265,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	c.IPv6 = c.GetIPv6()
 	c.IPv6Prefix = c.GetIPv6Prefix()
 	c.Hostname = c.GetHostname()
-	c.binaries = set.New()
+	c.binaries = set.New[string]()
 	log.WithField("container", c).Info("Container now running")
 	return
 }
@@ -544,7 +544,7 @@ func (c *Container) GetSinglePID(processName string) int {
 		procs := c.GetProcInfo(processName)
 		log.WithField("procs", procs).Debug("Got ProcInfos")
 		// Collect all the pids so we can detect forked child processes by their PPID.
-		pids := set.New()
+		pids := set.New[int]()
 		for _, p := range procs {
 			pids.Add(p.PID)
 		}

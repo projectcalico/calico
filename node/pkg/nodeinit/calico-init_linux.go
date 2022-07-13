@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"syscall"
 
@@ -89,14 +88,12 @@ func ensureBPFFilesystem() error {
 // with PID 1 running on a host to allow felix running in calico-node to access the root of cgroup namespace.
 // This is needed by felix to attach CTLB programs and implement k8s services correctly.
 func ensureCgroupV2Filesystem() error {
-	cgroupRootPath := "/initproc"
-
 	// Check if the Cgroup2 filesystem is mounted at the expected location.
-	logrus.Info("Checking if Cgroup2 filesystem is mounted.")
-	mountInfoFile := path.Join(cgroupRootPath, "mountinfo")
+	logrus.Info("Checking if cgroup2 filesystem is mounted.")
+	mountInfoFile := "/nodeproc/1/mountinfo"
 	mounts, err := os.Open(mountInfoFile)
 	if err != nil {
-		return fmt.Errorf("failed to open %s: %w", mountInfoFile, err)
+		return fmt.Errorf("failed to open %s. err: %w", mountInfoFile, err)
 	}
 	scanner := bufio.NewScanner(mounts)
 	for scanner.Scan() {
@@ -122,10 +119,16 @@ func ensureCgroupV2Filesystem() error {
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
 	logrus.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
 
+	err = os.MkdirAll(bpf.CgroupV2Path, 0700)
+	if err != nil {
+		return fmt.Errorf("failed to prepare mount point: %v. err: %w.", bpf.CgroupV2Path, err)
+	}
+	logrus.Infof("Mount point %s is ready for mounting root cgroup2 fs.", bpf.CgroupV2Path)
+
 	mountCmd := exec.Command("mountns", bpf.CgroupV2Path)
 	out, err := mountCmd.Output()
+	logrus.Debugf("Executed %v. err:%v out:\n%s", mountCmd, err, out)
 	if err != nil {
-		logrus.Errorf("Mouting cgroup2 fs failed. output: %v", out)
 		return fmt.Errorf("failed to mount cgroup2 filesystem: %w", err)
 	}
 

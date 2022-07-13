@@ -38,6 +38,20 @@ const (
 	IterDelete IteratorAction = "delete"
 )
 
+type AsBytes interface {
+	AsBytes() []byte
+}
+
+type Key interface {
+	comparable
+	AsBytes
+}
+
+type Value interface {
+	comparable
+	AsBytes
+}
+
 type IterCallback func(k, v []byte) IteratorAction
 
 type Map interface {
@@ -46,6 +60,8 @@ type Map interface {
 	EnsureExists() error
 	// Open opens the map, returns error if it does not exist.
 	Open() error
+	// Close closes the map, returns error for any error.
+	Close() error
 	// MapFD gets the file descriptor of the map, only valid after calling EnsureExists().
 	MapFD() MapFD
 	// Path returns the path that the map is (to be) pinned to.
@@ -101,6 +117,7 @@ type MapContext struct {
 	CtMap            Map
 	SrMsgMap         Map
 	CtNatsMap        Map
+	IfStateMap       Map
 	MapSizes         map[string]uint32
 }
 
@@ -152,6 +169,9 @@ func (b *PinnedMap) Path() string {
 
 func (b *PinnedMap) Close() error {
 	err := b.fd.Close()
+	if b.oldfd > 0 {
+		b.oldfd.Close()
+	}
 	b.fdLoaded = false
 	b.oldfd = 0
 	b.fd = 0
@@ -294,24 +314,29 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 func (b *PinnedMap) Update(k, v []byte) error {
 	if b.perCPU {
 		// Per-CPU maps need a buffer of value-size * num-CPUs.
-		logrus.Panic("Per-CPU operations not implemented")
+		if len(v) < b.ValueSize*NumPossibleCPUs() {
+			return fmt.Errorf("Not enough data for per-cpu map entry")
+		}
 	}
 	return UpdateMapEntry(b.fd, k, v)
 }
 
 func (b *PinnedMap) Get(k []byte) ([]byte, error) {
+	valueSize := b.ValueSize
 	if b.perCPU {
-		// Per-CPU maps need a buffer of value-size * num-CPUs.
-		logrus.Panic("Per-CPU operations not implemented")
+		valueSize = b.ValueSize * NumPossibleCPUs()
+		logrus.Debugf("Set value size to %v for getting an entry from Per-CPU map", valueSize)
 	}
-	return GetMapEntry(b.fd, k, b.ValueSize)
+	return GetMapEntry(b.fd, k, valueSize)
 }
 
 func (b *PinnedMap) Delete(k []byte) error {
+	valueSize := b.ValueSize
 	if b.perCPU {
-		logrus.Panic("Per-CPU operations not implemented")
+		valueSize = b.ValueSize * NumPossibleCPUs()
+		logrus.Infof("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
 	}
-	return DeleteMapEntry(b.fd, k, b.ValueSize)
+	return DeleteMapEntry(b.fd, k, valueSize)
 }
 
 func (b *PinnedMap) updateDeltaEntries() error {
@@ -538,6 +563,9 @@ func (b *PinnedMap) EnsureExists() error {
 			// same version but of different size.
 			err := b.copyFromOldMap()
 			if err != nil {
+				b.fd.Close()
+				b.fd = 0
+				b.fdLoaded = false
 				logrus.WithError(err).Error("error copying data from old map")
 				return err
 			}
@@ -551,6 +579,12 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 		// Handle map upgrade.
 		err = b.upgrade()
+		if err != nil {
+			b.fd.Close()
+			b.fd = 0
+			b.fdLoaded = false
+			return err
+		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
@@ -685,18 +719,66 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams := b.GetMapParams(oldVersion)
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := ctx.NewPinnedMap(oldMapParams)
-	err = oldBpfMap.EnsureExists()
-	if err != nil {
-		return err
-	}
 	defer func() {
 		oldBpfMap.(*PinnedMap).Close()
 		oldBpfMap.(*PinnedMap).fd = 0
 	}()
+	err = oldBpfMap.EnsureExists()
+	if err != nil {
+		return err
+	}
 	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
 }
 
 type Upgradable interface {
 	Upgrade() Upgradable
 	AsBytes() []byte
+}
+
+type TypedMap[K Key, V Value] struct {
+	Map
+	kConstructor func([]byte) K
+	vConstructor func([]byte) V
+}
+
+func (m *TypedMap[K, V]) Update(k K, v V) error {
+	return m.Map.Update(k.AsBytes(), v.AsBytes())
+}
+
+func (m *TypedMap[K, V]) Get(k K) (V, error) {
+	var res V
+
+	vb, err := m.Map.Get(k.AsBytes())
+	if err != nil {
+		goto exit
+	}
+
+	res = m.vConstructor(vb)
+
+exit:
+	return res, err
+}
+
+func (m *TypedMap[K, V]) Delete(k K) error {
+	return m.Map.Delete(k.AsBytes())
+}
+
+func (m *TypedMap[K, V]) Load() (map[K]V, error) {
+
+	memMap := make(map[K]V)
+
+	err := m.Map.Iter(func(kb, vb []byte) IteratorAction {
+		memMap[m.kConstructor(kb)] = m.vConstructor(vb)
+		return IterNone
+	})
+
+	return memMap, err
+}
+
+func NewTypedMap[K Key, V Value](m Map, kConstructor func([]byte) K, vConstructor func([]byte) V) *TypedMap[K, V] {
+	return &TypedMap[K, V]{
+		Map:          m,
+		kConstructor: kConstructor,
+		vConstructor: vConstructor,
+	}
 }
