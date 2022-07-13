@@ -17,7 +17,6 @@
 package intdataplane
 
 import (
-	"fmt"
 	"regexp"
 	"sync"
 
@@ -38,18 +37,18 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 )
 
 type mockDataplane struct {
-	mutex     sync.Mutex
-	lastFD    uint32
-	fds       map[string]uint32
-	state     map[uint32]polprog.Rules
-	routes    map[string]struct{}
-	shouldErr bool
+	mutex  sync.Mutex
+	lastFD uint32
+	fds    map[string]uint32
+	state  map[uint32]polprog.Rules
+	routes map[ip.V4CIDR]struct{}
 }
 
 func newMockDataplane() *mockDataplane {
@@ -57,7 +56,7 @@ func newMockDataplane() *mockDataplane {
 		lastFD: 5,
 		fds:    map[string]uint32{},
 		state:  map[uint32]polprog.Rules{},
-		routes: map[string]struct{}{},
+		routes: map[ip.V4CIDR]struct{}{},
 	}
 }
 
@@ -137,43 +136,18 @@ func (m *mockDataplane) setAndReturn(vari **polprog.Rules, key string) func() *p
 	}
 }
 
-func (m *mockDataplane) setRoute(ip string) error {
+func (m *mockDataplane) setRoute(cidr ip.V4CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	defer func() { m.shouldErr = false }()
 
-	if m.shouldErr {
-		return fmt.Errorf("setRoute error")
-	}
-
-	m.routes[ip] = struct{}{}
-
-	return nil
+	m.routes[cidr] = struct{}{}
 }
 
-func (m *mockDataplane) delRoute(ip string) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	defer func() { m.shouldErr = false }()
-
-	if m.shouldErr {
-		return fmt.Errorf("delRoute error")
-	}
-
-	if _, ok := m.routes[ip]; !ok {
-		return fmt.Errorf("no route for %s", ip)
-	}
-
-	delete(m.routes, ip)
-
-	return nil
-}
-
-func (m *mockDataplane) setErr() {
+func (m *mockDataplane) delRoute(cidr ip.V4CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	m.shouldErr = true
+	delete(m.routes, cidr)
 }
 
 var _ = Describe("BPF Endpoint Manager", func() {
@@ -556,7 +530,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(1))
-			Expect(dp.routes).To(HaveKey("1.2.3.4"))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("1.2.3.4/32")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:           "service",
@@ -567,8 +541,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(2))
-			Expect(dp.routes).To(HaveKey("1.2.3.4"))
-			Expect(dp.routes).To(HaveKey("5.6.7.8"))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("1.2.3.4/32")))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("5.6.7.8/32")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:           "service",
@@ -580,10 +554,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(4))
-			Expect(dp.routes).To(HaveKey("1.2.3.4"))
-			Expect(dp.routes).To(HaveKey("5.6.7.8"))
-			Expect(dp.routes).To(HaveKey("1.0.0.1"))
-			Expect(dp.routes).To(HaveKey("1.0.0.2"))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("1.2.3.4/32")))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("5.6.7.8/32")))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("1.0.0.1/32")))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("1.0.0.2/32")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:      "service",
@@ -593,7 +567,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(1))
-			Expect(dp.routes).To(HaveKey("1.2.3.4"))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("1.2.3.4/32")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceRemove{
 				Name:      "service",
@@ -603,7 +577,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
 
-			dp.setErr()
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:           "service",
 				Namespace:      "test",
@@ -612,23 +585,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(1))
-			Expect(dp.routes).To(HaveKey("5.6.7.8"))
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(2))
-			Expect(dp.routes).To(HaveKey("1.2.3.4"))
-			Expect(dp.routes).To(HaveKey("5.6.7.8"))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("1.2.3.4/32")))
+			Expect(dp.routes).To(HaveKey(ip.CIDRFromStringMust("5.6.7.8/32")))
 
-			dp.setErr()
 			bpfEpMgr.OnUpdate(&proto.ServiceRemove{
 				Name:      "service",
 				Namespace: "test",
 			})
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(1))
-			Expect(dp.routes).To(HaveKey("1.2.3.4"))
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
