@@ -24,7 +24,6 @@ import (
 // CachingMap. It implements interaction with the dataplane.
 type DataplaneMap[K comparable, V comparable] interface {
 	Update(K, V) error
-	Get(K) (V, error)
 	Delete(K) error
 	Load() (map[K]V, error)
 	ErrIsNotExists(error) bool
