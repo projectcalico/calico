@@ -178,7 +178,7 @@ func DetachXDP(ifName string) error {
 		return err
 	}
 
-	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, 0)
+	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, 1)
 	if err != nil {
 		return fmt.Errorf("Failed to detach XDP program. interface: %s err: %w", ifName, err)
 	}

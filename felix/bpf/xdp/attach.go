@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
@@ -138,7 +139,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		// TODO: Configure the internal map, i.e. <prog_name>.rodata here, similar to tc.
 
 		subDir := "globals"
-		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
+		if m.Type() == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(m.Name(), bpf.JumpMapName()) {
 			// Remove period in the interface name if any
 			ifName := strings.ReplaceAll(ap.Iface, ".", "")
 			subDir = ifName + "_xdp/"
@@ -265,6 +266,7 @@ func (ap AttachPoint) DetachProgram() error {
 	if err != nil {
 		return fmt.Errorf("Failed to detach XDP program from interface %s. err: %w", ap.Iface, err)
 	}
+	ap.Log().Infof("XDP program detached.")
 
 	// Program is detached, now remove the json file we saved for it
 	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {
