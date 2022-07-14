@@ -334,6 +334,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			KubeClientSet: k8sClientSet,
 
 			FeatureDetectOverrides: configParams.FeatureDetectOverride,
+			FeatureSelector:        configParams.FeatureSelector,
 
 			RouteSource: configParams.RouteSource,
 
