@@ -243,6 +243,7 @@ type Config struct {
 	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"`
 	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"`
 	FeatureDetectOverride              map[string]string `config:"keyvaluelist;;"`
+	FeatureSelector                    map[string]string `config:"keyvaluelist;;"`
 	IpsetsRefreshInterval              time.Duration     `config:"seconds;10"`
 	MaxIpsetSize                       int               `config:"int;1048576;non-zero"`
 	XDPRefreshInterval                 time.Duration     `config:"seconds;90"`

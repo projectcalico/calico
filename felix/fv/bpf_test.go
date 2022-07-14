@@ -286,7 +286,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 
 			if ctlbWorkaround {
-				options.ExtraEnvVars["FELIX_FeatureDetectOverride"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
+				options.ExtraEnvVars["FELIX_FeatureSelector"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
 			}
 		})
 
