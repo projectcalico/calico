@@ -381,9 +381,9 @@ func (ap AttachPoint) IsAttached() (bool, error) {
 	return len(progs) > 0, nil
 }
 
-// tcDirRegex matches tc's auto-created directory names, directories created when using libbpf
+// tcDirRegex matches tc's and xdp's auto-created directory names, directories created when using libbpf
 // so we can clean them up when removing maps without accidentally removing other user-created dirs..
-var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr))`)
+var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr|xdp))`)
 
 // CleanUpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
 // our BPF programs.

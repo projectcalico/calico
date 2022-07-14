@@ -21,8 +21,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
 // #include "libbpf_api.h"
@@ -159,9 +160,9 @@ func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 		return -1, err
 	}
 
-	_, err = C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex))
+	ret, err := C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), unix.XDP_FLAGS_UPDATE_IF_NOEXIST|unix.XDP_FLAGS_SKB_MODE)
 	if err != nil {
-		return -1, fmt.Errorf("Error attaching xdp program %w", err)
+		return -1, fmt.Errorf("Error attaching xdp program %w - ret: %v", err, ret)
 	}
 
 	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
@@ -179,7 +180,7 @@ func DetachXDP(ifName string, progID int) error {
 		return err
 	}
 
-	_, err = C.bpf_program_update_xdp(C.int(ifIndex), -1, C.int(progID), unix.XDP_FLAGS_REPLACE|unix.XDP_FLAGS_MODES)
+	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, unix.XDP_FLAGS_SKB_MODE)
 	if err != nil {
 		return fmt.Errorf("Failed to detach XDP program. interface: %s err: %w", ifName, err)
 	}
