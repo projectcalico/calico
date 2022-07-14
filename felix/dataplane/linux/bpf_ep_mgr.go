@@ -669,10 +669,6 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID,
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
-	start := time.Now()
-	defer func() {
-		log.Infof("CompleteDeferredWork took %v", time.Since(start))
-	}()
 	// Do one-off initialisation.
 	m.dp.ensureStarted()
 
@@ -1956,7 +1952,7 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 
 	ips4 := make([]ip.V4CIDR, 0, len(ips))
 	for _, i := range ips {
-		cidr, err := ip.CIDRFromString(i + "/32")
+		cidr, err := ip.ParseCIDROrIP(i)
 		if err != nil {
 			log.WithFields(log.Fields{"service": key, "ip": i}).Warn("Not a valid CIDR.")
 		} else if cidrv4, ok := cidr.(ip.V4CIDR); !ok {
