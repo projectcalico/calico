@@ -218,7 +218,7 @@ type bpfEndpointManager struct {
 
 	routeTable    *routetable.RouteTable
 	services      map[serviceKey][]ip.V4CIDR
-	dirtyServices map[serviceKey]struct{}
+	dirtyServices set.Set[serviceKey]
 }
 
 type serviceKey struct {
@@ -337,7 +337,7 @@ func newBPFEndpointManager(
 			log.WithError(err).Warn("Failed to invalidate existing service routes, unused ones may be left over.")
 		}
 		m.services = make(map[serviceKey][]ip.V4CIDR)
-		m.dirtyServices = make(map[serviceKey]struct{})
+		m.dirtyServices = set.New[serviceKey]()
 
 		// Anything else would prevent packets being accepted from the special
 		// service veth. It does not create a security hole since BPF does the RPF
@@ -680,11 +680,12 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	if m.ctlbWorkaroundEnabled {
 		// Update all existing IPs of dirty services
-		for svc := range m.dirtyServices {
+		m.dirtyServices.Iter(func(svc serviceKey) error {
 			for _, ip := range m.services[svc] {
 				m.dp.setRoute(ip)
 			}
-		}
+			return set.RemoveItem
+		})
 	}
 
 	if err := m.ifStateMap.ApplyAllChanges(); err != nil {
@@ -1972,7 +1973,7 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 	}
 
 	m.services[key] = ips4
-	m.dirtyServices[key] = struct{}{}
+	m.dirtyServices.Add(key)
 }
 
 func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
