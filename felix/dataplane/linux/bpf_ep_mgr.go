@@ -1585,15 +1585,9 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		return nil
 	}
 
-	nl, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
-	if err != nil {
-		return fmt.Errorf("failed to create nelink: %w", err)
-	}
-	defer nl.Close()
-
 	var bpfout, bpfin netlink.Link
 
-	bpfin, err = nl.LinkByName(bpfInDev)
+	bpfin, err := netlink.LinkByName(bpfInDev)
 	if err != nil {
 		nat := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
@@ -1601,27 +1595,27 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 			},
 			PeerName: bpfOutDev,
 		}
-		if err := nl.LinkAdd(nat); err != nil {
+		if err := netlink.LinkAdd(nat); err != nil {
 			return fmt.Errorf("failed to add %s: %w", bpfInDev, err)
 		}
-		bpfin, err = nl.LinkByName(bpfInDev)
+		bpfin, err = netlink.LinkByName(bpfInDev)
 		if err != nil {
 			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
 		}
-		if err := nl.LinkSetUp(bpfin); err != nil {
+		if err := netlink.LinkSetUp(bpfin); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfInDev, err)
 		}
-		bpfout, err = nl.LinkByName(bpfOutDev)
+		bpfout, err = netlink.LinkByName(bpfOutDev)
 		if err != nil {
 			return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
 		}
-		if err := nl.LinkSetUp(bpfout); err != nil {
+		if err := netlink.LinkSetUp(bpfout); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
 		}
 	}
 
 	if bpfout == nil {
-		bpfout, err = nl.LinkByName(bpfOutDev)
+		bpfout, err = netlink.LinkByName(bpfOutDev)
 		if err != nil {
 			return fmt.Errorf("miss %s after add: %w", bpfOutDev, err)
 		}
@@ -1635,7 +1629,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		HardwareAddr: bpfout.Attrs().HardwareAddr,
 		LinkIndex:    bpfin.Attrs().Index,
 	}
-	if err := nl.NeighAdd(arp); err != nil && err != syscall.EEXIST {
+	if err := netlink.NeighAdd(arp); err != nil && err != syscall.EEXIST {
 		return fmt.Errorf("failed to update neight for %s: %w", bpfOutDev, err)
 	}
 
@@ -2031,18 +2025,12 @@ func (m *bpfEndpointManager) GetRouteTableSyncers() []routeTableSyncer {
 }
 
 func (m *bpfEndpointManager) invalidateServiceRoutes() error {
-	nl, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
-	if err != nil {
-		return fmt.Errorf("failed to create nelink to load service routes: %w", err)
-	}
-	defer nl.Close()
-
-	bpfin, err := nl.LinkByName(bpfInDev)
+	bpfin, err := netlink.LinkByName(bpfInDev)
 	if err != nil {
 		return fmt.Errorf("couldn't get %s link, device may not exist yet: %w", bpfInDev, err)
 	}
 
-	rts, err := nl.RouteList(bpfin, 4)
+	rts, err := netlink.RouteList(bpfin, 4)
 	if err != nil {
 		return fmt.Errorf("failed to get routes on %s: %w", bpfInDev, err)
 	}
