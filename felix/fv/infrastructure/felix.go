@@ -46,9 +46,12 @@ type Felix struct {
 	// ExpectedVXLANV6TunnelAddr contains the IP that the infrastructure expects to
 	// get assigned to the IPv6 VXLAN tunnel.  Filled in by AddNode().
 	ExpectedVXLANV6TunnelAddr string
-	// ExpectedWireguardTunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the Wireguard tunnel.  Filled in by AddNode().
+	// ExpectedWireguardTunnelAddr contains the IPv4 address that the infrastructure expects to
+	// get assigned to the IPv4 Wireguard tunnel.  Filled in by AddNode().
 	ExpectedWireguardTunnelAddr string
+	// ExpectedWireguardV6TunnelAddr contains the IPv6 address that the infrastructure expects to
+	// get assigned to the IPv6 Wireguard tunnel.  Filled in by AddNode().
+	ExpectedWireguardV6TunnelAddr string
 
 	// IP of the Typha that this Felix is using (if any).
 	TyphaIP string
