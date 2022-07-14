@@ -44,7 +44,7 @@ import (
 type AttachPoint struct {
 	Type                 EndpointType
 	ToOrFrom             ToOrFromEp
-	Hook                 Hook
+	Hook                 bpf.Hook
 	Iface                string
 	LogLevel             string
 	HostIP               net.IP
@@ -157,7 +157,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		if err := ap.setMapSize(m); err != nil {
 			return "", fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
-		pinPath := MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
+		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
 		if err := m.SetPinPath(pinPath); err != nil {
 			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
@@ -167,10 +167,10 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	// re-attaching it if the binary and its configuration are the same.
 	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
 	if isAttached {
-		logCxt.Infof("Program already attached to TC, skip reattaching %s", ap.FileName())
+		logCxt.Infof("Program already attached to TC, skip reattaching %s", filename)
 		return progID, nil
 	}
-	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
+	logCxt.Debugf("Continue with attaching BPF program %s", filename)
 
 	if err := obj.Load(); err != nil {
 		logCxt.Warn("Failed to load program")
@@ -381,9 +381,9 @@ func (ap AttachPoint) IsAttached() (bool, error) {
 	return len(progs) > 0, nil
 }
 
-// tcDirRegex matches tc's auto-created directory names, directories created when using libbpf
+// tcDirRegex matches tc's and xdp's auto-created directory names, directories created when using libbpf
 // so we can clean them up when removing maps without accidentally removing other user-created dirs..
-var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr))`)
+var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr|xdp))`)
 
 // CleanUpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
 // our BPF programs.
