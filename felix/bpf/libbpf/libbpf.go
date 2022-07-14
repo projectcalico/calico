@@ -172,7 +172,7 @@ func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 	return int(progId), nil
 }
 
-func DetachXDP(ifName string, progID int) error {
+func DetachXDP(ifName string, progID int, mode uint) error {
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cIfName))
 	ifIndex, err := C.if_nametoindex(cIfName)
@@ -180,7 +180,7 @@ func DetachXDP(ifName string, progID int) error {
 		return err
 	}
 
-	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, unix.XDP_FLAGS_SKB_MODE)
+	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, C.uint(mode))
 	if err != nil {
 		return fmt.Errorf("Failed to detach XDP program. interface: %s err: %w", ifName, err)
 	}

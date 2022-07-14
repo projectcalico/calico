@@ -66,7 +66,7 @@ func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 
-func DetachXDP(ifName string, progID int) error {
+func DetachXDP(ifName string, progID int, mode uint) error {
 	panic("LIBBPF syscall stub")
 }
 

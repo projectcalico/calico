@@ -36,11 +36,13 @@ var programNames = []ProgName{
 	"calico_xdp_accepted_entrypoint",
 }
 
+const DetachedID = 0
+
 type AttachPoint struct {
 	Iface    string
 	LogLevel string
 	Modes    []bpf.XDPMode
-	progID   int
+	ProgID   int
 }
 
 func (ap *AttachPoint) IfaceName() string {
@@ -178,7 +180,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		return "", err
 	}
 	ap.Log().Info("Program attached to XDP.")
-	ap.progID = progId
+	ap.ProgID = progId
 
 	// Note that there are a few considerations here.
 	//
@@ -257,17 +259,30 @@ func (ap AttachPoint) DetachProgram() error {
 	if err != nil {
 		return fmt.Errorf("Failed to get the attached XDP program ID. err=%w", err)
 	}
-
-	if strconv.Itoa(ap.progID) != curProgId {
+	if curProgId == strconv.Itoa(DetachedID) {
+		ap.Log().Debugf("No XDP program attached.")
+		return nil
+	}
+	if strconv.Itoa(ap.ProgID) != curProgId {
 		return fmt.Errorf("XDP expected program ID does match with current one.")
 	}
 
-	err = libbpf.DetachXDP(ap.Iface, ap.progID)
-	if err != nil {
-		return fmt.Errorf("Failed to detach XDP program from interface %s. err: %w", ap.Iface, err)
+	removalSucceeded := false
+	for _, mode := range ap.Modes {
+		err = libbpf.DetachXDP(ap.Iface, ap.ProgID, uint(mode))
+		if err != nil {
+			ap.Log().Debugf("Failed to detach XDP program in mode %v. err: %v", mode, err)
+			continue
+		}
+		removalSucceeded = true
+		break
 	}
-	ap.Log().Infof("XDP program detached. ID: %v", ap.progID)
-	ap.progID = -1
+	if !removalSucceeded {
+		return fmt.Errorf("Couldn't remove our XDP program.")
+	}
+
+	ap.Log().Infof("XDP program detached. ID: %v", ap.ProgID)
+	ap.ProgID = DetachedID
 
 	// Program is detached, now remove the json file we saved for it
 	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {
