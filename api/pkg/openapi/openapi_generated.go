@@ -2489,7 +2489,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"wireguardListeningPort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WireguardListeningPort controls the listening port used by Wireguard. [Default: 51820]",
+							Description: "WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"wireguardListeningPortV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WireguardListeningPortV6 controls the listening port used by IPv6 Wireguard. [Default: 51821]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

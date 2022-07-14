@@ -439,8 +439,10 @@ type FelixConfigurationSpec struct {
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`
 	// WireguardEnabledV6 controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network). [Default: false]
 	WireguardEnabledV6 *bool `json:"wireguardEnabledV6,omitempty"`
-	// WireguardListeningPort controls the listening port used by Wireguard. [Default: 51820]
+	// WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]
 	WireguardListeningPort *int `json:"wireguardListeningPort,omitempty" validate:"omitempty,gt=0,lte=65535"`
+	// WireguardListeningPortV6 controls the listening port used by IPv6 Wireguard. [Default: 51821]
+	WireguardListeningPortV6 *int `json:"wireguardListeningPortV6,omitempty" validate:"omitempty,gt=0,lte=65535"`
 	// WireguardRoutingRulePriority controls the priority value to use for the Wireguard routing rule. [Default: 99]
 	WireguardRoutingRulePriority *int `json:"wireguardRoutingRulePriority,omitempty" validate:"omitempty,gt=0,lt=32766"`
 	// WireguardInterfaceName specifies the name to use for the IPv4 Wireguard interface. [Default: wireguard.cali]

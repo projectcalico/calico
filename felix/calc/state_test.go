@@ -256,7 +256,7 @@ func (s State) withWireguardV6Endpoints(endpoints ...proto.WireguardEndpointV6Up
 	return newState
 }
 
-func (s State) Keys() set.Set {
+func (s State) Keys() set.Set[string] {
 	set := set.New[string]()
 	for _, kv := range s.DatastoreState {
 		set.Add(kvToPath(kv))

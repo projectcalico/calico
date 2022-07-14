@@ -20,6 +20,7 @@ type Config struct {
 	Enabled             bool
 	EnabledV6           bool
 	ListeningPort       int
+	ListeningPortV6     int
 	FirewallMark        int
 	RoutingRulePriority int
 	RoutingTableIndex   int

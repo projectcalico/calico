@@ -306,6 +306,7 @@ type Config struct {
 	WireguardInterfaceNameV6    string
 	WireguardIptablesMark       uint32
 	WireguardListeningPort      int
+	WireguardListeningPortV6    int
 	WireguardEncryptHostTraffic bool
 	RouteSource                 string
 
