@@ -330,12 +330,6 @@ func newBPFEndpointManager(
 			254,
 			opReporter,
 		)
-		// Since we do not know what the state of services is at the start, mark
-		// the routes to be all cleaned up. As the service update will arrive,
-		// we will update the state.
-		if err := m.invalidateServiceRoutes(); err != nil {
-			log.WithError(err).Warn("Failed to invalidate existing service routes, unused ones may be left over.")
-		}
 		m.services = make(map[serviceKey][]ip.V4CIDR)
 		m.dirtyServices = set.New[serviceKey]()
 
@@ -2023,25 +2017,4 @@ func (m *bpfEndpointManager) GetRouteTableSyncers() []routeTableSyncer {
 	tables := []routeTableSyncer{m.routeTable}
 
 	return tables
-}
-
-func (m *bpfEndpointManager) invalidateServiceRoutes() error {
-	bpfin, err := netlink.LinkByName(bpfInDev)
-	if err != nil {
-		return fmt.Errorf("couldn't get %s link, device may not exist yet: %w", bpfInDev, err)
-	}
-
-	rts, err := netlink.RouteList(bpfin, 4)
-	if err != nil {
-		return fmt.Errorf("failed to get routes on %s: %w", bpfInDev, err)
-	}
-
-	for _, rt := range rts {
-		if rt.Scope == netlink.SCOPE_UNIVERSE /*global*/ && rt.Dst != nil {
-			cidr := ip.CIDRFromIPNet(rt.Dst)
-			m.delRoute(cidr.(ip.V4CIDR))
-		}
-	}
-
-	return nil
 }
