@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
@@ -132,23 +131,9 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	}
 	defer obj.Close()
 
-	baseDir := "/sys/fs/bpf/tc"
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
-		// The values are read only for the BPF programs, but can be set to a value from
-		// userspace before the program is loaded.
-
-		// TODO: Configure the internal map, i.e. <prog_name>.rodata here, similar to tc.
-
-		subDir := "globals"
-		if m.Type() == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(m.Name(), bpf.JumpMapName()) {
-			// Remove period in the interface name if any
-			ifName := strings.ReplaceAll(ap.Iface, ".", "")
-			subDir = ifName + "_xdp/"
-		}
-
 		// TODO: We need to set map size here like tc.
-		pinPath := path.Join(baseDir, subDir, m.Name())
+		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, bpf.HookXDP)
 		if err := m.SetPinPath(pinPath); err != nil {
 			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
@@ -176,7 +161,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 
 	// Note that there are a few considerations here.
 	//
-	// Firstly, we use -force when attaching, so as to minimise any flap in the XDP program when
+	// Firstly, we force program attachment, so as to minimise any flap in the XDP program when
 	// restarting or upgrading Felix.
 	//
 	// Secondly, we need to consider any other XDP programs that might be there at start of day.
@@ -191,8 +176,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	//
 	// Hence this logic:
 	// - Loop through the modes.
-	//   - If we haven't yet successfully attached (for this loop), do the attachment (with
-	//     -force).
+	//   - If we haven't yet successfully attached (for this loop), do the attachment.
 	//   - If that failed, or we attached with an earlier mode, do `off` to remove any existing
 	//     program with this mode.
 	//   - Continue through remaining modes even if attachment already successful.

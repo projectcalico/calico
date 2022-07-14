@@ -44,7 +44,7 @@ import (
 type AttachPoint struct {
 	Type                 EndpointType
 	ToOrFrom             ToOrFromEp
-	Hook                 Hook
+	Hook                 bpf.Hook
 	Iface                string
 	LogLevel             string
 	HostIP               net.IP
@@ -157,7 +157,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		if err := ap.setMapSize(m); err != nil {
 			return "", fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
-		pinPath := MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
+		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
 		if err := m.SetPinPath(pinPath); err != nil {
 			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
