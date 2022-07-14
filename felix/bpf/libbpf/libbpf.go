@@ -158,7 +158,7 @@ func (o *Obj) AttachXDP(secName, ifName string, mode uint) (int, error) {
 		return -1, err
 	}
 
-	_, err := C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), C.uint(mode))
+	_, err = C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), C.uint(mode))
 	if err != nil {
 		return -1, fmt.Errorf("error attaching xdp program: %w", err)
 	}
