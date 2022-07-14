@@ -19,7 +19,7 @@
 
 #include "sendrecv.h"
 
-#if !defined(__BPFTOOL_LOADER__) && !defined (__IPTOOL_LOADER__)
+#if !defined(__BPFTOOL_LOADER__)
 const volatile struct cali_ctlb_globals __globals;
 #define UDP_NOT_SEEN_TIMEO __globals.udp_not_seen_timeo
 #else
