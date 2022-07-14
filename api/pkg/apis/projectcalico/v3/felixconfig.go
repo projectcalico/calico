@@ -118,12 +118,19 @@ type FelixConfigurationSpec struct {
 	// attempts to acquire the iptables lock if it is not available. Lower values make Felix more
 	// responsive when the lock is contended, but use more CPU. [Default: 50ms]
 	IptablesLockProbeInterval *metav1.Duration `json:"iptablesLockProbeInterval,omitempty" configv1timescale:"milliseconds" confignamev1:"IptablesLockProbeIntervalMillis"`
-	// FeatureDetectOverride is used to override the feature detection.
+	// FeatureDetectOverride is used to override the environment feature detection.
 	// Values are specified in a comma separated list with no spaces, example;
 	// "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".
 	// "true" or "false" will force the feature, empty or omitted values are
 	// auto-detected.
 	FeatureDetectOverride string `json:"featureDetectOverride,omitempty" validate:"omitempty,keyValueList"`
+	// FeatureSelector is used to enable or disable Calico features.
+	// Values are specified in a comma separated list with no spaces, example;
+	// "BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false". This is
+	// primarily used to enable feature that is not fully production ready or
+	// helps to fix a corner case in certain environments, but is not need most
+	// of the time.
+	FeatureSelector string `json:"featureSelector,omitempty" validate:"omitempty,keyValueList"`
 	// IpsetsRefreshInterval is the period at which Felix re-checks all iptables
 	// state to ensure that no other process has accidentally broken Calico's rules. Set to 0 to
 	// disable iptables refresh. [Default: 90s]
