@@ -53,6 +53,7 @@ type TopologyOptions struct {
 	IPIPRoutesEnabled         bool
 	VXLANMode                 api.VXLANMode
 	WireguardEnabled          bool
+	WireguardEnabledV6        bool
 	InitialFelixConfiguration *api.FelixConfiguration
 	NATOutgoingEnabled        bool
 	DelayFelixStart           bool
@@ -307,6 +308,10 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		if opts.WireguardEnabled {
 			infra.SetExpectedWireguardTunnelAddr(felix, i, bool(n > 1))
 			expectedIPs = append(expectedIPs, felix.ExpectedWireguardTunnelAddr)
+		}
+		if opts.WireguardEnabledV6 {
+			infra.SetExpectedWireguardV6TunnelAddr(felix, i, bool(n > 1))
+			expectedIPs = append(expectedIPs, felix.ExpectedWireguardV6TunnelAddr)
 		}
 
 		var w chan struct{}
