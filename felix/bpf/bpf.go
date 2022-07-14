@@ -46,12 +46,22 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex"
 )
 
+// Hook is the hook to which a BPF program should be attached. This is relative to
+// the host namespace so workload PolDirnIngress policy is attached to the HookEgress.
+type Hook string
+
+const (
+	HookIngress Hook = "ingress"
+	HookEgress  Hook = "egress"
+	HookXDP     Hook = "xdp"
+)
+
 type XDPMode int
 
 const (
-	XDPDriver XDPMode = iota
-	XDPOffload
-	XDPGeneric
+	XDPDriver  XDPMode = unix.XDP_FLAGS_DRV_MODE
+	XDPOffload XDPMode = unix.XDP_FLAGS_HW_MODE
+	XDPGeneric XDPMode = unix.XDP_FLAGS_SKB_MODE
 )
 
 type FindObjectMode uint32
@@ -2267,4 +2277,25 @@ const countersMapVersion = 1
 
 func CountersMapName() string {
 	return fmt.Sprintf("cali_counters%d", countersMapVersion)
+}
+
+func MapPinPath(typ int, name, iface string, hook Hook) string {
+	PinBaseDir := path.Join(DefaultBPFfsPath, "tc")
+	subDir := "globals"
+	if (typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, JumpMapName())) ||
+		(typ == unix.BPF_MAP_TYPE_PERCPU_ARRAY && strings.Contains(name, CountersMapName())) {
+		// Remove period in the interface name if any
+		ifName := strings.ReplaceAll(iface, ".", "")
+		switch hook {
+		case HookXDP:
+			subDir = ifName + "_xdp"
+		case HookIngress:
+			subDir = ifName + "_igr/"
+		case HookEgress:
+			subDir = ifName + "_egr"
+		default:
+			panic("Invalid hook")
+		}
+	}
+	return path.Join(PinBaseDir, subDir, name)
 }

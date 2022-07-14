@@ -40,7 +40,7 @@ func TestReattachPrograms(t *testing.T) {
 	ap1 := tc.AttachPoint{
 		Type:     tc.EpTypeWorkload,
 		ToOrFrom: tc.ToEp,
-		Hook:     tc.HookIngress,
+		Hook:     bpf.HookIngress,
 		DSR:      true,
 		LogLevel: "DEBUG",
 	}
@@ -53,7 +53,7 @@ func TestReattachPrograms(t *testing.T) {
 	ap2 := tc.AttachPoint{
 		Type:     tc.EpTypeWorkload,
 		ToOrFrom: tc.ToEp,
-		Hook:     tc.HookEgress,
+		Hook:     bpf.HookEgress,
 		DSR:      false,
 		LogLevel: "DEBUG",
 	}
