@@ -153,7 +153,7 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 				// Unable to parse the wireguard interface address. We can still enable wireguard without this, so treat as
 				// an update with no interface address.
 				logCtx.WithError(err).Errorf("error parsing wireguard interface address %s for node %s", msg.InterfaceIpv4Addr, msg.Hostname)
-			} else if addr.Version() == m.ipVersion {
+			} else {
 				ifaceAddr = addr
 			}
 		}
@@ -182,7 +182,7 @@ func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
 				// Unable to parse the wireguard interface address. We can still enable wireguard without this, so treat as
 				// an update with no interface address.
 				logCtx.WithError(err).Errorf("error parsing wireguard interface address %s for node %s", msg.InterfaceIpv6Addr, msg.Hostname)
-			} else if addr.Version() == m.ipVersion {
+			} else {
 				ifaceAddr = addr
 			}
 		}

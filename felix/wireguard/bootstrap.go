@@ -135,7 +135,7 @@ func BootstrapAndFilterTyphaAddresses(
 ) ([]discovery.Typha, error) {
 	var (
 		typhasV4, typhasV6 []discovery.Typha
-		errV4, errV6       error
+		err                error
 		errors             []error
 	)
 
@@ -157,14 +157,14 @@ func BootstrapAndFilterTyphaAddresses(
 		}
 	}
 
-	typhasV4, errV4 = bootstrapAndFilterTyphaAddressesForIPVersion(configParams, getNetlinkHandle, getWireguardHandle, calicoClient, typhasV4, 4)
-	if errV4 != nil {
-		errors = append(errors, fmt.Errorf("error bootstrapping IPv4 wireguard: %w", errV4))
+	typhasV4, err = bootstrapAndFilterTyphaAddressesForIPVersion(configParams, getNetlinkHandle, getWireguardHandle, calicoClient, typhasV4, 4)
+	if err != nil {
+		errors = append(errors, fmt.Errorf("error bootstrapping IPv4 wireguard: %w", err))
 	}
 
-	typhasV6, errV6 = bootstrapAndFilterTyphaAddressesForIPVersion(configParams, getNetlinkHandle, getWireguardHandle, calicoClient, typhasV6, 6)
-	if errV6 != nil {
-		errors = append(errors, fmt.Errorf("error bootstrapping IPv6 wireguard: %w", errV6))
+	typhasV6, err = bootstrapAndFilterTyphaAddressesForIPVersion(configParams, getNetlinkHandle, getWireguardHandle, calicoClient, typhasV6, 6)
+	if err != nil {
+		errors = append(errors, fmt.Errorf("error bootstrapping IPv6 wireguard: %w", err))
 	}
 
 	// Merge filtered v4 and v6 typhas back

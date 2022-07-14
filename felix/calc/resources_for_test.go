@@ -18,6 +18,7 @@ package calc_test
 // the model package.
 
 import (
+	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -871,7 +872,17 @@ var remoteHostVXLANV6TunnelMAC = "10:f3:27:5c:47:66"
 
 var t = true
 
-var wgPrivateKey1, _ = wgtypes.GeneratePrivateKey()
+var wgPrivateKey1 = mustGeneratePrivateKey()
 var wgPublicKey1 = wgPrivateKey1.PublicKey()
-var wgPrivateKey2, _ = wgtypes.GeneratePrivateKey()
+var wgPrivateKey2 = mustGeneratePrivateKey()
 var wgPublicKey2 = wgPrivateKey2.PublicKey()
+
+func mustGeneratePrivateKey() wgtypes.Key {
+	if k, err := wgtypes.GeneratePrivateKey(); err != nil {
+		log.WithError(err).Fatal("Error generating wireguard private key")
+	} else {
+		return k
+	}
+	// This will never run, but it's included to appease golanci-lint
+	return wgtypes.Key{}
+}

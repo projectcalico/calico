@@ -272,7 +272,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		)
 	}
 
-	if (ipVersion == 4 && r.WireguardEnabled) || (ipVersion == 6 && r.WireguardEnabledV6) {
+	if ipVersion == 4 && r.WireguardEnabled {
 		// When Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
 		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
 		// connectivity problems.
@@ -282,7 +282,24 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 					DestPorts(uint16(r.Config.WireguardListeningPort)).
 					DestAddrType(AddrTypeLocal),
 				Action:  r.filterAllowAction,
-				Comment: []string{"Allow incoming Wireguard packets"},
+				Comment: []string{"Allow incoming IPv4 Wireguard packets"},
+			},
+			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
+			// baked into the crypto routing table.
+		)
+	}
+
+	if ipVersion == 6 && r.WireguardEnabledV6 {
+		// When Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
+		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
+		// connectivity problems.
+		inputRules = append(inputRules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.WireguardListeningPortV6)).
+					DestAddrType(AddrTypeLocal),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow incoming IPv6 Wireguard packets"},
 			},
 			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
 			// baked into the crypto routing table.
@@ -750,7 +767,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		)
 	}
 
-	if (ipVersion == 4 && r.WireguardEnabled) || (ipVersion == 6 && r.WireguardEnabledV6) {
+	if ipVersion == 4 && r.WireguardEnabled {
 		// When Wireguard is enabled, auto-allow Wireguard traffic to other Calico nodes.  Without this,
 		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
 		// connectivity problems.
@@ -762,7 +779,24 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 					// programmed separately
 					SrcAddrType(AddrTypeLocal, false),
 				Action:  r.filterAllowAction,
-				Comment: []string{"Allow outgoing Wireguard packets"},
+				Comment: []string{"Allow outgoing IPv4 Wireguard packets"},
+			},
+		)
+	}
+
+	if ipVersion == 6 && r.WireguardEnabledV6 {
+		// When Wireguard is enabled, auto-allow Wireguard traffic to other Calico nodes.  Without this,
+		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
+		// connectivity problems.
+		rules = append(rules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.WireguardListeningPortV6)).
+					// Note that we do not need to limit the destination hosts to Calico nodes because allowed peers are
+					// programmed separately
+					SrcAddrType(AddrTypeLocal, false),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow outgoing IPv6 Wireguard packets"},
 			},
 		)
 	}

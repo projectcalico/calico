@@ -164,6 +164,7 @@ type Config struct {
 	WireguardEnabled               bool          `config:"bool;false"`
 	WireguardEnabledV6             bool          `config:"bool;false"`
 	WireguardListeningPort         int           `config:"int;51820"`
+	WireguardListeningPortV6       int           `config:"int;51821"`
 	WireguardRoutingRulePriority   int           `config:"int;99"`
 	WireguardInterfaceName         string        `config:"iface-param;wireguard.cali;non-zero"`
 	WireguardInterfaceNameV6       string        `config:"iface-param;wg-v6.cali;non-zero"`
