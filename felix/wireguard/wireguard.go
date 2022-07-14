@@ -1275,9 +1275,10 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 		wireguardUpdate.FirewallMark = &w.config.FirewallMark
 		wireguardUpdateRequired = true
 	}
-	if device.ListenPort != w.config.ListeningPort {
-		logCtx.WithFields(log.Fields{"existing": device.ListenPort, "required": w.config.ListeningPort}).Info("Update listening port")
-		wireguardUpdate.ListenPort = &w.config.ListeningPort
+	configListenPort := w.ListeningPort()
+	if device.ListenPort != configListenPort {
+		logCtx.WithFields(log.Fields{"existing": device.ListenPort, "required": configListenPort}).Info("Update listening port")
+		wireguardUpdate.ListenPort = &configListenPort
 		wireguardUpdateRequired = true
 	}
 
@@ -1356,7 +1357,7 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 		// If the CIDRs need replacing or the endpoint address needs updating then update the entry.
 		expectedEndpointIP := node.endpointAddr.AsNetIP()
 		replaceEndpointAddr := expectedEndpointIP != nil &&
-			(configuredAddr == nil || configuredAddr.Port != w.config.ListeningPort || !configuredAddr.IP.Equal(expectedEndpointIP))
+			(configuredAddr == nil || configuredAddr.Port != w.ListeningPort() || !configuredAddr.IP.Equal(expectedEndpointIP))
 		if replaceEndpointAddr || allowedCidrsForUpdateMsg != nil {
 			peer := wgtypes.PeerConfig{
 				PublicKey:                   key,
@@ -1747,7 +1748,7 @@ func (w *Wireguard) endpointUDPAddr(ip net.IP) *net.UDPAddr {
 	}
 	return &net.UDPAddr{
 		IP:   ip,
-		Port: w.config.ListeningPort,
+		Port: w.ListeningPort(),
 	}
 }
 
@@ -1773,8 +1774,22 @@ func (w *Wireguard) Enabled() bool {
 		return w.config.Enabled
 	case 6:
 		return w.config.EnabledV6
+	default:
+		w.logCtx.Panic("Unknown IP version")
 	}
 	return false
+}
+
+func (w *Wireguard) ListeningPort() int {
+	switch w.ipVersion {
+	case 4:
+		return w.config.ListeningPort
+	case 6:
+		return w.config.ListeningPortV6
+	default:
+		w.logCtx.Panic("Unknown IP version")
+	}
+	return 0
 }
 
 // getOnlyItemInSet returns the only item in the set, or nil if the set is nil or the set does not contain only one

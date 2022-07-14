@@ -107,10 +107,12 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
 			}
 		} else if key.Kind == libv3.KindNode {
-			log.WithField("update", update).Debug("Passing through a Node")
+			// Handle node resource to pass-through HostMetadataV6Update/HostMetadataV6Remove messages
+			// with IPv6 node address updates. IPv4 updates are handled above my model.HostIPKey updates.
+			log.WithField("update", update).Debug("Passing-through a Node IPv6 address update")
 			hostname := key.Name
 			if update.Value == nil {
-				log.WithField("update", update).Debug("Passing-through Node IPv6 remove")
+				log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
 				delete(h.hostIPv6s, hostname)
 				h.callbacks.OnHostIPv6Remove(hostname)
 			} else {
@@ -119,14 +121,14 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 					ip, _, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
 					oldIP := h.hostIPv6s[hostname]
 					if oldIP != nil && ip.IP.Equal(oldIP.IP) {
-						log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 update")
+						log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 address update")
 						return
 					}
-					log.WithField("update", update).Debug("Passing-through Node IPv6 update")
+					log.WithField("update", update).Debug("Passing-through Node IPv6 address update")
 					h.hostIPv6s[hostname] = ip
 					h.callbacks.OnHostIPv6Update(hostname, ip)
 				} else {
-					log.WithField("update", update).Debug("Passing-through Node IPv6 remove")
+					log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
 					delete(h.hostIPv6s, hostname)
 					h.callbacks.OnHostIPv6Remove(hostname)
 				}
