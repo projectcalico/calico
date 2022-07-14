@@ -255,14 +255,6 @@ func CIDRFromString(cidrStr string) (CIDR, error) {
 	return CIDRFromIPNet(cidr), nil
 }
 
-func CIDRFromStringMust(cidrStr string) CIDR {
-	cidr, err := CIDRFromString(cidrStr)
-	if err != nil {
-		panic(err)
-	}
-	return cidr
-}
-
 func CIDRFromCalicoNet(ipNet calinet.IPNet) CIDR {
 	return CIDRFromIPNet(&ipNet.IPNet)
 }
