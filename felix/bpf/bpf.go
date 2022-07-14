@@ -49,9 +49,9 @@ import (
 type XDPMode int
 
 const (
-	XDPDriver XDPMode = iota
-	XDPOffload
-	XDPGeneric
+	XDPDriver  XDPMode = unix.XDP_FLAGS_DRV_MODE
+	XDPOffload XDPMode = unix.XDP_FLAGS_HW_MODE
+	XDPGeneric XDPMode = unix.XDP_FLAGS_SKB_MODE
 )
 
 type FindObjectMode uint32

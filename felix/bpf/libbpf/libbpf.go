@@ -148,6 +148,58 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	return int(progId), nil
 }
 
+func (o *Obj) AttachXDP(secName, ifName string, mode uint) (int, error) {
+	cSecName := C.CString(secName)
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cSecName))
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return -1, err
+	}
+
+	ret, err := C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), C.uint(mode))
+	if err != nil {
+		return -1, fmt.Errorf("Error attaching xdp program %w - ret: %v", err, ret)
+	}
+
+	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
+	if err != nil {
+		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
+	}
+	return int(progId), nil
+}
+
+func DetachXDP(ifName string, progID int, mode uint) error {
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return err
+	}
+
+	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, C.uint(mode))
+	if err != nil {
+		return fmt.Errorf("Failed to detach XDP program. interface: %s err: %w", ifName, err)
+	}
+
+	return nil
+}
+
+func GetXDPProgramID(ifName string) (int, error) {
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return -1, err
+	}
+	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
+	if err != nil {
+		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
+	}
+	return int(progId), nil
+}
+
 type Link struct {
 	link *C.struct_bpf_link
 }
@@ -197,7 +249,7 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cMapName))
 	defer C.free(unsafe.Pointer(cProgName))
-	_, err := C.bpf_tc_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
+	_, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
 	if err != nil {
 		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
 	}
