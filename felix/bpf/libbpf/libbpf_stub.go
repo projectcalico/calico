@@ -62,7 +62,7 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
+func (o *Obj) AttachXDP(secName, ifName string, mode uint) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 
