@@ -213,6 +213,7 @@ type Config struct {
 	KubeClientSet *kubernetes.Clientset
 
 	FeatureDetectOverrides map[string]string
+	FeatureSelector        map[string]string
 
 	// Populated with the smallest host MTU based on auto-detection.
 	hostMTU         int
