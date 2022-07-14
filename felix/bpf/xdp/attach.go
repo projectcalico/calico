@@ -174,14 +174,6 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		return "", fmt.Errorf("error updating jump map %v", err)
 	}
 
-	progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface)
-	if err != nil {
-		ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s", ap.SectionName())
-		return "", err
-	}
-	ap.Log().Info("Program attached to XDP.")
-	ap.ProgID = progId
-
 	// Note that there are a few considerations here.
 	//
 	// Firstly, we use -force when attaching, so as to minimise any flap in the XDP program when
@@ -204,53 +196,31 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	//   - If that failed, or we attached with an earlier mode, do `off` to remove any existing
 	//     program with this mode.
 	//   - Continue through remaining modes even if attachment already successful.
-	/*var errs []error
 	attachmentSucceeded := false
 	for _, mode := range ap.Modes {
-		ap.Log().Debugf("XDP remove/attach with mode %v", mode)
-
-		// We will need to do "ip link set dev <dev> xdp off" if we've successfully attached
-		// with an earlier mode, or if we fail to attach with this mode.  So we only _don't_
-		// need "off" if we successfully attach in this iteration.
-		offNeeded := true
-
-		if !attachmentSucceeded {
-			// Try to attach our XDP program in this mode.
-			cmd := exec.Command("ip", "-force", "link", "set", "dev", ap.Iface, mode.String(), "object", tempBinary, "section", sectionName)
-			ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
-			out, err := cmd.CombinedOutput()
-			ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
-			if err == nil {
-				ap.Log().Infof("Successful XDP attachment with mode %v", mode)
-				attachmentSucceeded = true
-				offNeeded = false
-			} else {
-				errs = append(errs, err)
-			}
+		progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface, uint(mode))
+		if err != nil {
+			ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s", ap.SectionName())
+			continue
 		}
 
-		if offNeeded {
-			// Remove any existing program for this mode.
-			cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "off")
-			ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
-			out, err := cmd.CombinedOutput()
-			ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
-		}
+		attachmentSucceeded = true
+		ap.ProgID = progId
+		break
 	}
+
 	if !attachmentSucceeded {
-		return "", fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
+		return "", fmt.Errorf("failed to attach XDP program with section name %v to interface %v",
+			ap.SectionName(), ap.Iface)
 	}
-	progID, err = ap.ProgramID()
-	if err != nil {
-		return "", fmt.Errorf("couldn't get the attached XDP program ID err=%v", err)
-	}*/
+	ap.Log().Info("Program attached to XDP.")
 
 	// program is now attached. Now we should store its information to prevent unnecessary reloads in future
-	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, strconv.Itoa(progId)); err != nil {
+	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, strconv.Itoa(ap.ProgID)); err != nil {
 		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
 	}
 
-	return strconv.Itoa(progId), nil
+	return strconv.Itoa(ap.ProgID), nil
 }
 
 func (ap AttachPoint) DetachProgram() error {

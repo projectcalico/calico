@@ -21,8 +21,6 @@ import (
 	"time"
 	"unsafe"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
@@ -150,7 +148,7 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	return int(progId), nil
 }
 
-func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
+func (o *Obj) AttachXDP(secName, ifName string, mode uint) (int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
@@ -160,7 +158,7 @@ func (o *Obj) AttachXDP(secName, ifName string) (int, error) {
 		return -1, err
 	}
 
-	ret, err := C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), unix.XDP_FLAGS_UPDATE_IF_NOEXIST|unix.XDP_FLAGS_SKB_MODE)
+	ret, err := C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), c.uint(mode))
 	if err != nil {
 		return -1, fmt.Errorf("Error attaching xdp program %w - ret: %v", err, ret)
 	}
