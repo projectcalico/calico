@@ -1447,6 +1447,7 @@ var _ = Describe("Static", func() {
 						WireguardInterfaceNameV6:    "wg-v6.cali",
 						WireguardIptablesMark:       0x100000,
 						WireguardListeningPort:      51820,
+						WireguardListeningPortV6:    51821,
 						WireguardEncryptHostTraffic: true,
 						RouteSource:                 "WorkloadIPs",
 					}
@@ -1454,8 +1455,8 @@ var _ = Describe("Static", func() {
 
 				It("should include the expected input chain in the filter chains", func() {
 					rules := []Rule{}
-					if (ipVersion == 4 && enableIPv4) || (ipVersion == 6 && enableIPv6) {
-						// Wireguard rules
+					if ipVersion == 4 && enableIPv4 {
+						// IPv4 Wireguard rules
 						rules = append(rules,
 							Rule{Match: Match().
 								ProtocolNum(17).
@@ -1463,7 +1464,18 @@ var _ = Describe("Static", func() {
 								DestAddrType("LOCAL"),
 
 								Action:  AcceptAction{},
-								Comment: []string{"Allow incoming Wireguard packets"}})
+								Comment: []string{"Allow incoming IPv4 Wireguard packets"}})
+					}
+					if ipVersion == 6 && enableIPv6 {
+						// IPv6 Wireguard rules
+						rules = append(rules,
+							Rule{Match: Match().
+								ProtocolNum(17).
+								DestPorts(51821).
+								DestAddrType("LOCAL"),
+
+								Action:  AcceptAction{},
+								Comment: []string{"Allow incoming IPv6 Wireguard packets"}})
 					}
 					rules = append(rules,
 						// Per-prefix workload jump rules.  Note use of goto so that we
