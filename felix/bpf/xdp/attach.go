@@ -211,7 +211,7 @@ func (ap AttachPoint) DetachProgram() error {
 	// Get the current XDP program ID, if any.
 	curProgId, err := ap.ProgramID()
 	if err != nil {
-		return fmt.Errorf("Failed to get the attached XDP program ID. err=%w", err)
+		return fmt.Errorf("failed to get the attached XDP program ID: %w", err)
 	}
 	if curProgId == strconv.Itoa(DetachedID) {
 		ap.Log().Debugf("No XDP program attached.")
@@ -225,7 +225,7 @@ func (ap AttachPoint) DetachProgram() error {
 	for _, mode := range ap.Modes {
 		err = libbpf.DetachXDP(ap.Iface, ap.ProgID, uint(mode))
 		if err != nil {
-			ap.Log().Debugf("Failed to detach XDP program in mode %v. err: %v", mode, err)
+			ap.Log().Debugf("Failed to detach XDP program in mode %v: %v", mode, err)
 			continue
 		}
 		removalSucceeded = true
@@ -240,7 +240,7 @@ func (ap AttachPoint) DetachProgram() error {
 
 	// Program is detached, now remove the json file we saved for it
 	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {
-		return fmt.Errorf("Failed to delete hash of BPF program from disk. err=%w", err)
+		return fmt.Errorf("Failed to delete hash of BPF program from disk: %w", err)
 	}
 	return nil
 }

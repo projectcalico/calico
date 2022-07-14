@@ -138,12 +138,12 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 
 	opts, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.int(isIngress))
 	if err != nil {
-		return -1, fmt.Errorf("Error attaching tc program %w", err)
+		return -1, fmt.Errorf("error attaching tc program %w", err)
 	}
 
 	progId, err := C.bpf_tc_query_iface(C.int(ifIndex), opts, C.int(isIngress))
 	if err != nil {
-		return -1, fmt.Errorf("Error querying interface %s: %w", ifName, err)
+		return -1, fmt.Errorf("error querying interface %s: %w", ifName, err)
 	}
 	return int(progId), nil
 }
@@ -158,14 +158,14 @@ func (o *Obj) AttachXDP(secName, ifName string, mode uint) (int, error) {
 		return -1, err
 	}
 
-	ret, err := C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), C.uint(mode))
+	_, err := C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), C.uint(mode))
 	if err != nil {
-		return -1, fmt.Errorf("Error attaching xdp program %w - ret: %v", err, ret)
+		return -1, fmt.Errorf("error attaching xdp program: %w", err)
 	}
 
 	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
 	if err != nil {
-		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
+		return -1, fmt.Errorf("error querying xdp information. interface %s: %w", ifName, err)
 	}
 	return int(progId), nil
 }
@@ -180,7 +180,7 @@ func DetachXDP(ifName string, progID int, mode uint) error {
 
 	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, C.uint(mode))
 	if err != nil {
-		return fmt.Errorf("Failed to detach XDP program. interface: %s err: %w", ifName, err)
+		return fmt.Errorf("failed to detach xdp program. interface %s: %w", ifName, err)
 	}
 
 	return nil
@@ -195,7 +195,7 @@ func GetXDPProgramID(ifName string) (int, error) {
 	}
 	progId, err := C.bpf_xdp_program_id(C.int(ifIndex))
 	if err != nil {
-		return -1, fmt.Errorf("Error querying xdp information. interface: %s err: %w", ifName, err)
+		return -1, fmt.Errorf("error querying xdp information. interface %s: %w", ifName, err)
 	}
 	return int(progId), nil
 }
