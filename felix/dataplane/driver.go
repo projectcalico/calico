@@ -117,7 +117,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		markScratch0, _ = markBitsManager.NextSingleBitMark()
 		markScratch1, _ = markBitsManager.NextSingleBitMark()
 
-		if configParams.WireguardEnabled {
+		if configParams.WireguardEnabled || configParams.WireguardEnabledV6 {
 			log.Info("Wireguard enabled, allocating a mark bit")
 			markWireguard, _ = markBitsManager.NextSingleBitMark()
 			if markWireguard == 0 {
@@ -240,6 +240,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				WireguardInterfaceNameV6:    configParams.WireguardInterfaceNameV6,
 				WireguardIptablesMark:       markWireguard,
 				WireguardListeningPort:      configParams.WireguardListeningPort,
+				WireguardListeningPortV6:    configParams.WireguardListeningPortV6,
 				WireguardEncryptHostTraffic: configParams.WireguardHostEncryptionEnabled,
 				RouteSource:                 configParams.RouteSource,
 
@@ -263,6 +264,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				Enabled:             wireguardEnabled,
 				EnabledV6:           wireguardEnabledV6,
 				ListeningPort:       configParams.WireguardListeningPort,
+				ListeningPortV6:     configParams.WireguardListeningPortV6,
 				FirewallMark:        int(markWireguard),
 				RoutingRulePriority: configParams.WireguardRoutingRulePriority,
 				RoutingTableIndex:   wireguardTableIndex,
@@ -399,7 +401,7 @@ func ServePrometheusMetrics(configParams *config.Config) {
 			log.Info("Discarding process metrics")
 			prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		}
-		if !configParams.PrometheusWireGuardMetricsEnabled || !configParams.WireguardEnabled {
+		if !configParams.PrometheusWireGuardMetricsEnabled || (!configParams.WireguardEnabled && !configParams.WireguardEnabledV6) {
 			log.Info("Discarding WireGuard metrics")
 			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 		}

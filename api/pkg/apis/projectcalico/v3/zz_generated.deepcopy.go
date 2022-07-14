@@ -1176,6 +1176,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.WireguardListeningPortV6 != nil {
+		in, out := &in.WireguardListeningPortV6, &out.WireguardListeningPortV6
+		*out = new(int)
+		**out = **in
+	}
 	if in.WireguardRoutingRulePriority != nil {
 		in, out := &in.WireguardRoutingRulePriority, &out.WireguardRoutingRulePriority
 		*out = new(int)

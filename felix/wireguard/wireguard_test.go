@@ -51,6 +51,7 @@ var (
 	rulePriority       = 98
 	firewallMark       = 10
 	listeningPort      = 1000
+	listeningPortV6    = 2000
 	mtu                = 2000
 
 	ipv4_int1 = ip.FromString("192.168.0.0")
@@ -231,6 +232,7 @@ var _ = Describe("Enable wireguard", func() {
 				Enabled:             enableV4,
 				EnabledV6:           enableV6,
 				ListeningPort:       listeningPort,
+				ListeningPortV6:     listeningPortV6,
 				FirewallMark:        firewallMark,
 				RoutingRulePriority: rulePriority,
 				RoutingTableIndex:   tableIndex,
@@ -446,7 +448,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(wgDataplaneV6.WireguardOpen).To(BeTrue())
 						linkV6 := wgDataplaneV6.NameToLink[ifaceNameV6]
 						Expect(linkV6.WireguardFirewallMark).To(Equal(10))
-						Expect(linkV6.WireguardListenPort).To(Equal(listeningPort))
+						Expect(linkV6.WireguardListenPort).To(Equal(listeningPortV6))
 						Expect(linkV6.WireguardPrivateKey).NotTo(Equal(zeroKey))
 						Expect(linkV6.WireguardPrivateKey.PublicKey()).To(Equal(linkV6.WireguardPublicKey))
 						Expect(sV6.numStatusCallbacks).To(Equal(1))
@@ -553,7 +555,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(link.Addrs[0].IP).To(Equal(ipv6.AsNetIP()))
 						Expect(wgDataplaneV6.WireguardOpen).To(BeTrue())
 						Expect(link.WireguardFirewallMark).To(Equal(10))
-						Expect(link.WireguardListenPort).To(Equal(listeningPort))
+						Expect(link.WireguardListenPort).To(Equal(listeningPortV6))
 						Expect(link.WireguardPrivateKey).To(Equal(key))
 						Expect(link.WireguardPrivateKey.PublicKey()).To(Equal(link.WireguardPublicKey))
 						Expect(sV6.numStatusCallbacks).To(Equal(2))
@@ -597,7 +599,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(link.Addrs[0].IP).To(Equal(ipv6.AsNetIP()))
 						Expect(wgDataplaneV6.WireguardOpen).To(BeTrue())
 						Expect(link.WireguardFirewallMark).To(Equal(10))
-						Expect(link.WireguardListenPort).To(Equal(listeningPort))
+						Expect(link.WireguardListenPort).To(Equal(listeningPortV6))
 						Expect(link.WireguardPrivateKey).To(Equal(key))
 						Expect(link.WireguardPrivateKey.PublicKey()).To(Equal(link.WireguardPublicKey))
 						Expect(sV6.numStatusCallbacks).To(Equal(1))
@@ -644,7 +646,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(linkV6.Addrs[0].IP).To(Equal(ipv6.AsNetIP()))
 						Expect(wgDataplaneV6.WireguardOpen).To(BeTrue())
 						Expect(linkV6.WireguardFirewallMark).To(Equal(10))
-						Expect(linkV6.WireguardListenPort).To(Equal(listeningPort))
+						Expect(linkV6.WireguardListenPort).To(Equal(listeningPortV6))
 						Expect(linkV6.WireguardPrivateKey).To(Equal(key))
 						Expect(linkV6.WireguardPrivateKey.PublicKey()).To(Equal(linkV6.WireguardPublicKey))
 						Expect(sV6.numStatusCallbacks).To(Equal(1))
@@ -693,7 +695,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(linkV6.Addrs[0].IP).To(Equal(ipv6.AsNetIP()))
 						Expect(wgDataplaneV6.WireguardOpen).To(BeTrue())
 						Expect(linkV6.WireguardFirewallMark).To(Equal(10))
-						Expect(linkV6.WireguardListenPort).To(Equal(listeningPort))
+						Expect(linkV6.WireguardListenPort).To(Equal(listeningPortV6))
 						Expect(linkV6.WireguardPrivateKey).To(Equal(key))
 						Expect(linkV6.WireguardPrivateKey.PublicKey()).To(Equal(linkV6.WireguardPublicKey))
 						Expect(sV6.numStatusCallbacks).To(Equal(1))
@@ -902,14 +904,14 @@ var _ = Describe("Enable wireguard", func() {
 								PublicKey: keyV6_peer1,
 								Endpoint: &net.UDPAddr{
 									IP:   ipv6_peer1.AsNetIP(),
-									Port: 1000,
+									Port: 2000,
 								},
 							}))
 							Expect(linkV6.WireguardPeers[keyV6_peer2]).To(Equal(wgtypes.Peer{
 								PublicKey: keyV6_peer2,
 								Endpoint: &net.UDPAddr{
 									IP:   ipv6_peer2.AsNetIP(),
-									Port: 1000,
+									Port: 2000,
 								},
 							}))
 						}
@@ -1241,14 +1243,14 @@ var _ = Describe("Enable wireguard", func() {
 							}
 							if enableV6 {
 								linkV6.WireguardPeers = wgPeers
-								linkV6.WireguardListenPort = listeningPort + 1
+								linkV6.WireguardListenPort = listeningPortV6 + 1
 								linkV6.WireguardFirewallMark = firewallMark + 1
 								linkV6.LinkAttrs.MTU = mtu + 1
 								wgV6.QueueResync()
 								err := wgV6.Apply()
 								Expect(err).NotTo(HaveOccurred())
 
-								Expect(linkV6.WireguardListenPort).To(Equal(listeningPort))
+								Expect(linkV6.WireguardListenPort).To(Equal(listeningPortV6))
 								Expect(linkV6.WireguardFirewallMark).To(Equal(firewallMark))
 								Expect(linkV6.WireguardPeers).To(HaveLen(0))
 							}
@@ -1286,14 +1288,14 @@ var _ = Describe("Enable wireguard", func() {
 									PublicKey: keyV6_peer1,
 									Endpoint: &net.UDPAddr{
 										IP:   ipv6_peer1.AsNetIP(),
-										Port: 1000,
+										Port: 2000,
 									},
 								}))
 								Expect(linkV6.WireguardPeers[keyV6_peer2]).To(Equal(wgtypes.Peer{
 									PublicKey: keyV6_peer2,
 									Endpoint: &net.UDPAddr{
 										IP:   ipv6_peer2.AsNetIP(),
-										Port: 1000,
+										Port: 2000,
 									},
 								}))
 							}
@@ -1415,7 +1417,7 @@ var _ = Describe("Enable wireguard", func() {
 										PublicKey: keyV6_peer1,
 										Endpoint: &net.UDPAddr{
 											IP:   ipv6_peer1.AsNetIP(),
-											Port: 1000,
+											Port: 2000,
 										},
 										AllowedIPs: []net.IPNet{ipnetV6_1, ipnetV6_2},
 									}))
@@ -1423,7 +1425,7 @@ var _ = Describe("Enable wireguard", func() {
 										PublicKey: keyV6_peer2,
 										Endpoint: &net.UDPAddr{
 											IP:   ipv6_peer2.AsNetIP(),
-											Port: 1000,
+											Port: 2000,
 										},
 										AllowedIPs: []net.IPNet{ipnetV6_3},
 									}))
@@ -1549,7 +1551,7 @@ var _ = Describe("Enable wireguard", func() {
 										PublicKey: keyV6_peer1,
 										Endpoint: &net.UDPAddr{
 											IP:   ipv6_peer1.AsNetIP(),
-											Port: 1000,
+											Port: 2000,
 										},
 										AllowedIPs: []net.IPNet{ipnetV6_2},
 									}))
@@ -2335,7 +2337,7 @@ var _ = Describe("Enable wireguard", func() {
 											PublicKey: keyV6_peer1,
 											Endpoint: &net.UDPAddr{
 												IP:   ipv6_peer1.AsNetIP(),
-												Port: 1000,
+												Port: 2000,
 											},
 											AllowedIPs: []net.IPNet{ipnetV6_1},
 										}))
@@ -2343,7 +2345,7 @@ var _ = Describe("Enable wireguard", func() {
 											PublicKey: keyV6_peer2,
 											Endpoint: &net.UDPAddr{
 												IP:   ipv6_peer2.AsNetIP(),
-												Port: 1000,
+												Port: 2000,
 											},
 											AllowedIPs: []net.IPNet{ipnetV6_2},
 										}))
@@ -2438,7 +2440,7 @@ var _ = Describe("Enable wireguard", func() {
 											PublicKey: keyV6_peer1,
 											Endpoint: &net.UDPAddr{
 												IP:   ipv6_peer1.AsNetIP(),
-												Port: 1000,
+												Port: 2000,
 											},
 											AllowedIPs: []net.IPNet{ipnetV6_1, ipnetV6_2},
 										}))
@@ -2446,7 +2448,7 @@ var _ = Describe("Enable wireguard", func() {
 											PublicKey: keyV6_peer2,
 											Endpoint: &net.UDPAddr{
 												IP:   ipv6_peer2.AsNetIP(),
-												Port: 1000,
+												Port: 2000,
 											},
 											AllowedIPs: []net.IPNet{ipnetV6_3},
 										}))
@@ -2454,7 +2456,7 @@ var _ = Describe("Enable wireguard", func() {
 											PublicKey: keyV6_peer3,
 											Endpoint: &net.UDPAddr{
 												IP:   ipv6_peer3.AsNetIP(),
-												Port: 1000,
+												Port: 2000,
 											},
 											AllowedIPs: []net.IPNet{ipnetV6_4},
 										}))
@@ -2590,7 +2592,7 @@ var _ = Describe("Enable wireguard", func() {
 				Expect(linkV6.Addrs[0].IP).To(Equal(ipv6.AsNetIP()))
 				Expect(wgDataplaneV6.WireguardOpen).To(BeTrue())
 				Expect(linkV6.WireguardFirewallMark).To(Equal(10))
-				Expect(linkV6.WireguardListenPort).To(Equal(1000))
+				Expect(linkV6.WireguardListenPort).To(Equal(2000))
 				Expect(linkV6.WireguardPrivateKey).To(Equal(key))
 				Expect(linkV6.WireguardPrivateKey.PublicKey()).To(Equal(linkV6.WireguardPublicKey))
 				Expect(sV6.numStatusCallbacks).To(Equal(1))
@@ -3076,15 +3078,15 @@ var _ = Describe("Enable wireguard", func() {
 			})
 		}
 
-		for _, port := range []int{listeningPort, listeningPort + 1} {
-			configuredPort := port
+		if enableV4 {
+			for _, port := range []int{listeningPort, listeningPort + 1} {
+				configuredPort := port
 
-			desc := fmt.Sprintf("wireguard dataplane needs updating (port=%d)", configuredPort)
+				desc := fmt.Sprintf("IPv4 wireguard dataplane needs updating (port=%d)", configuredPort)
 
-			Describe(desc, func() {
+				Describe(desc, func() {
 
-				It("should handle a resync", func() {
-					if enableV4 {
+					It("should handle a resync", func() {
 						key_peer1 := mustGeneratePrivateKey().PublicKey()
 						key_peer2 := mustGeneratePrivateKey().PublicKey()
 						key_peer3 := mustGeneratePrivateKey().PublicKey()
@@ -3181,8 +3183,19 @@ var _ = Describe("Enable wireguard", func() {
 						// Expect peer1 to be an update and peer2 to be a full replace of CIDRs.
 						Expect(wgDataplane.LastWireguardUpdates[key_peer1].ReplaceAllowedIPs).To(BeFalse())
 						Expect(wgDataplane.LastWireguardUpdates[key_peer2].ReplaceAllowedIPs).To(BeTrue())
-					}
-					if enableV6 {
+					})
+				})
+			}
+		}
+		if enableV6 {
+			for _, port := range []int{listeningPortV6, listeningPortV6 + 1} {
+				configuredPort := port
+
+				desc := fmt.Sprintf("IPv6 wireguard dataplane needs updating (port=%d)", configuredPort)
+
+				Describe(desc, func() {
+
+					It("should handle a resync", func() {
 						keyV6_peer1 := mustGeneratePrivateKey().PublicKey()
 						keyV6_peer2 := mustGeneratePrivateKey().PublicKey()
 						keyV6_peer3 := mustGeneratePrivateKey().PublicKey()
@@ -3250,7 +3263,7 @@ var _ = Describe("Enable wireguard", func() {
 							PublicKey: keyV6_peer1,
 							Endpoint: &net.UDPAddr{
 								IP:   ipv6_peer1.AsNetIP(),
-								Port: listeningPort,
+								Port: listeningPortV6,
 							},
 							AllowedIPs: []net.IPNet{cidrV6_1.ToIPNet()},
 						}))
@@ -3258,7 +3271,7 @@ var _ = Describe("Enable wireguard", func() {
 							PublicKey: keyV6_peer2,
 							Endpoint: &net.UDPAddr{
 								IP:   ipv6_peer2.AsNetIP(),
-								Port: listeningPort,
+								Port: listeningPortV6,
 							},
 							AllowedIPs: []net.IPNet{cidrV6_2.ToIPNet()},
 						}))
@@ -3266,7 +3279,7 @@ var _ = Describe("Enable wireguard", func() {
 						// If the listening port was incorrect then we expect that to be included in the updated,
 						// otherwise we do not.
 						Expect(wgDataplaneV6.LastWireguardUpdates).To(HaveKey(keyV6_peer1))
-						if configuredPort == listeningPort {
+						if configuredPort == listeningPortV6 {
 							Expect(wgDataplaneV6.LastWireguardUpdates[keyV6_peer1].Endpoint).To(BeNil())
 						} else {
 							Expect(wgDataplaneV6.LastWireguardUpdates[keyV6_peer1].Endpoint).NotTo(BeNil())
@@ -3279,9 +3292,9 @@ var _ = Describe("Enable wireguard", func() {
 						// Expect peer1 to be an update and peer2 to be a full replace of CIDRs.
 						Expect(wgDataplaneV6.LastWireguardUpdates[keyV6_peer1].ReplaceAllowedIPs).To(BeFalse())
 						Expect(wgDataplaneV6.LastWireguardUpdates[keyV6_peer2].ReplaceAllowedIPs).To(BeTrue())
-					}
+					})
 				})
-			})
+			}
 		}
 	}
 })
@@ -3311,6 +3324,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 			Enabled:             false,
 			EnabledV6:           false,
 			ListeningPort:       1000,
+			ListeningPortV6:     2000,
 			FirewallMark:        1,
 			RoutingRulePriority: rulePriority,
 			RoutingTableIndex:   tableIndex,
@@ -3634,6 +3648,7 @@ var _ = Describe("Wireguard (with no table index)", func() {
 					Enabled:             enabled,
 					EnabledV6:           enabled,
 					ListeningPort:       1000,
+					ListeningPortV6:     2000,
 					FirewallMark:        1,
 					RoutingRulePriority: rulePriority,
 					RoutingTableIndex:   0,
