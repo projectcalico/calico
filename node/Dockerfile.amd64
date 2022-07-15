@@ -111,15 +111,15 @@ COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 # Copy in our rpms
 COPY --from=centos  /root/rpmbuild/RPMS/${ARCH}/* /tmp/rpms/
 
-# Install the necessary packages, making sure that we're also including CentOS repos.
+# Install the necessary packages, making sure that we're using only CentOS repos.
 # Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
-# we need to use CentOS repos for some packages. Using packages from a single source (CentOS) would make 
-# it less likely we'll run into package dependency version mismatches, but we include UBI sources anyway
-# since they generally are updated with CVE fixes sooner.
+# we're using CentOS repos for all our packages. Using packages from a single source (CentOS) makes
+# it less likely we'll run into package dependency version mismatches.
 #
 # NOTE: new packages need to be added to the keep-list in clean-up-filesystem.sh.
 COPY centos.repo /etc/yum.repos.d/
-RUN touch /in-the-container && \
+RUN rm /etc/yum.repos.d/ubi.repo && \
+    touch /in-the-container && \
     microdnf install \
     # Don't install copious docs.
     --setopt=tsflags=nodocs \
