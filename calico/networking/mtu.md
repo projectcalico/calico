@@ -31,7 +31,7 @@ In general, maximum performance is achieved by using the highest MTU value that 
 By default, {{site.prodname}} will auto-detect the correct MTU for your cluster based on node configuration and enabled networking modes. This guide explains how you can override auto-detection
 of MTU by providing an explicit value if needed.
 
-To ensure auto-detection of MTU works correctly, make sure that the correct encapsulation modes are set in your [felix configuration]({{site.baseurl}}/reference/resources/felixconfig). Disable any unused encapsulations (`vxlanEnabled`, `ipipEnabled`, and `wireguardEnabled`) in your felix configuration to ensure that auto-detection can pick the optimal MTU for your cluster.
+To ensure auto-detection of MTU works correctly, make sure that the correct encapsulation modes are set in your [felix configuration]({{site.baseurl}}/reference/resources/felixconfig). Disable any unused encapsulations (`vxlanEnabled`, `ipipEnabled`, `wireguardEnabled` and `wireguardEnabledV6`) in your felix configuration to ensure that auto-detection can pick the optimal MTU for your cluster.
 
 ### Before you begin...
 
@@ -51,28 +51,30 @@ The following table lists common MTU sizes for {{site.prodname}} environments. B
 
 **Common MTU sizes**
 
-| Network MTU            | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP (IPv4) | {{site.prodname}} MTU with VXLAN (IPv4) | {{site.prodname}} MTU with VXLAN (IPv6)     | {{site.prodname}} MTU with WireGuard (IPv4) |
-| ---------------------- | --------------------- | ------------------------------------------ | --------------------------------------- | ------------------------------------------- |                                             |
-| 1500                   | 1500                  | 1480                                       | 1450                                    | 1430                                        | 1440                                        |
-| 9000                   | 9000                  | 8980                                       | 8950                                    | 8930                                        | 8940                                        |
-| 1500 (AKS)             | 1500                  | 1480                                       | 1450                                    | 1430                                        | 1340                                        |
-| 1460 (GCE)             | 1460                  | 1440                                       | 1410                                    | 1390                                        | 1400                                        |
-| 9001 (AWS Jumbo)       | 9001                  | 8981                                       | 8951                                    | 8931                                        | 8941                                        |
-| 1450 (OpenStack VXLAN) | 1450                  | 1430                                       | 1400                                    | 1380                                        | 1390                                        |
+| Network MTU            | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP (IPv4) | {{site.prodname}} MTU with VXLAN (IPv4) | {{site.prodname}} MTU with VXLAN (IPv6)     | {{site.prodname}} MTU with WireGuard (IPv4) | {{site.prodname}} MTU with WireGuard (IPv6) |
+| ---------------------- | --------------------- | ------------------------------------------ | --------------------------------------- | ------------------------------------------- |                                             |                                             |
+| 1500                   | 1500                  | 1480                                       | 1450                                    | 1430                                        | 1440                                        | 1420                                        |
+| 9000                   | 9000                  | 8980                                       | 8950                                    | 8930                                        | 8940                                        | 8920                                        |
+| 1500 (AKS)             | 1500                  | 1480                                       | 1450                                    | 1430                                        | 1340                                        | 1320                                        |
+| 1460 (GCE)             | 1460                  | 1440                                       | 1410                                    | 1390                                        | 1400                                        | 1380                                        |
+| 9001 (AWS Jumbo)       | 9001                  | 8981                                       | 8951                                    | 8931                                        | 8941                                        | 8921                                        |
+| 1450 (OpenStack VXLAN) | 1450                  | 1430                                       | 1400                                    | 1380                                        | 1390                                        | 1370                                        |
 
 **Recommended MTU for overlay networking**
 
-The extra overlay header used in IP in IP, VXLAN and WireGuard protocols, reduces the minimum MTU by the size of the header. (IP in IP uses a 20-byte header, VXLAN uses a 50-byte header, and WireGuard uses a {% include open-new-window.html text='60-byte header' url='https://lists.zx2c4.com/pipermail/wireguard/2017-December/002201.html' %}).
+The extra overlay header used in IP in IP, VXLAN and WireGuard protocols, reduces the minimum MTU by the size of the header. (IP in IP uses a 20-byte header, IPv4 VXLAN uses a 50-byte header, IPv6 VXLAN uses a 70-byte header, IPv4 WireGuard uses a {% include open-new-window.html text='60-byte header' url='https://lists.zx2c4.com/pipermail/wireguard/2017-December/002201.html' %} and IPv6 WireGuard uses an 80-byte header).
 
 When using AKS, the underlying network has an {% include open-new-window.html text='MTU of 1400' url='https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning#azure-and-vm-mtu' %}, even though the network interface will have an MTU of 1500.
-WireGuard sets the Don't Fragment (DF) bit on its packets, and so the MTU for WireGuard on AKS needs to be set to 60 bytes below the 1400 MTU of the underlying network to avoid dropped packets.
+WireGuard sets the Don't Fragment (DF) bit on its packets, and so the MTU for WireGuard on AKS needs to be set to 60 bytes below (or 80 bytes for IPv6) the 1400 MTU of the underlying network to avoid dropped packets.
 
 If you have a mix of WireGuard and either IP in IP or VXLAN in your cluster, you should configure the MTU to be the smallest of the values of each encap type. The reason for this is that only WireGuard encapsulation will be used between any nodes where both have WireGuard enabled, and IP in IP or VXLAN will then be used between any nodes where both do not have WireGuard enabled. This could be the case if, for example, you are in the process of installing WireGuard on your nodes.
 
 Therefore, we recommend the following:
 
-- If you use WireGuard encryption anywhere in your pod network, configure MTU size as “physical network MTU size minus 60”.
-- If you don't use WireGuard, but use VXLAN anywhere in your pod network, configure MTU size as “physical network MTU size minus 50”.
+- If you use IPv4 WireGuard encryption anywhere in your pod network, configure MTU size as “physical network MTU size minus 60”.
+- If you use IPv6 WireGuard encryption anywhere in your pod network, configure MTU size as “physical network MTU size minus 80”.
+- If you don't use WireGuard, but use IPv4 VXLAN anywhere in your pod network, configure MTU size as “physical network MTU size minus 50”.
+- If you don't use WireGuard, but use IPv6 VXLAN anywhere in your pod network, configure MTU size as “physical network MTU size minus 70”.
 - If you don't use WireGuard, but use only IP in IP, configure MTU size as “physical network MTU size minus 20”
 - Set the workload endpoint MTU and the tunnel MTUs to the same value (so all paths have the same MTU)
 
