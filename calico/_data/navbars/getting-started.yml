@@ -1,50 +1,58 @@
-title: "Install Calico"
+title: "Install and upgrade"
 path: /getting-started/
 order: 1
 section:
-- title: Kubernetes
+- title: Install on clusters
   path: /getting-started/kubernetes/
   section:
   - title: Quickstart
-    path: /getting-started/kubernetes/quickstart
-  - title: Managed public cloud
-    path: /getting-started/kubernetes/managed-public-cloud/
-    section:
-    - title: Amazon Elastic Kubernetes Service (EKS)
-      path: /getting-started/kubernetes/managed-public-cloud/eks
-    - title: Google Kubernetes Engine (GKE)
-      path: /getting-started/kubernetes/managed-public-cloud/gke
-    - title: IBM Cloud Kubernetes Service (IKS)
-      path: /getting-started/kubernetes/managed-public-cloud/iks
-    - title: Microsoft Azure Kubernetes Service (AKS)
-      path: /getting-started/kubernetes/managed-public-cloud/aks
-  - title: Self-managed public cloud
-    path: /getting-started/kubernetes/self-managed-public-cloud/
-    section:
-    - title: Self-managed Kubernetes in AWS
-      path: /getting-started/kubernetes/self-managed-public-cloud/aws 
-    - title: Self-managed Kubernetes in GCE
-      path: /getting-started/kubernetes/self-managed-public-cloud/gce
-    - title: Self-managed Kubernetes in Azure
-      path: /getting-started/kubernetes/self-managed-public-cloud/azure        
-    - title: Self-managed Kubernetes in DigitalOcean
-      path: /getting-started/kubernetes/self-managed-public-cloud/do   
-  - title: Self-managed on-premises
+    path: /getting-started/kubernetes/quickstart   
+  - title: On-premises
     path: /getting-started/kubernetes/self-managed-onprem/
     section:
-    - title: Install Calico for on-premises deployments
+    - title: Standard install
       path: /getting-started/kubernetes/self-managed-onprem/onpremises  
-    - title: Customize Calico
+    - title: Customize install
       path: /getting-started/kubernetes/installation/config-options
-  - title: OpenShift
-    path: /getting-started/openshift/
-    section:
-    - title: System requirements
-      path: /getting-started/openshift/requirements
-    - title: Installation
-      path: /getting-started/openshift/installation
-  - title: Rancher Kubernetes Engine
-    path: /getting-started/kubernetes/rancher
+    - title: Helm install
+      path: /getting-started/kubernetes/helm
+    - title: Calico the hard way
+      path: /getting-started/kubernetes/hardway/
+      section:
+      - title: Introduction
+        path: /getting-started/kubernetes/hardway/overview
+      - title: Stand up Kubernetes
+        path: /getting-started/kubernetes/hardway/standing-up-kubernetes
+      - title: The Calico datastore
+        path: /getting-started/kubernetes/hardway/the-calico-datastore
+      - title: Configure IP pools
+        path: /getting-started/kubernetes/hardway/configure-ip-pools
+      - title: Install CNI plugin
+        path: /getting-started/kubernetes/hardway/install-cni-plugin
+      - title: Install Typha
+        path: /getting-started/kubernetes/hardway/install-typha
+      - title: Install calico/node
+        path: /getting-started/kubernetes/hardway/install-node
+      - title: Configure BGP peering
+        path: /getting-started/kubernetes/hardway/configure-bgp-peering
+      - title: Test networking
+        path: /getting-started/kubernetes/hardway/test-networking
+      - title: Test network policy
+        path: /getting-started/kubernetes/hardway/test-network-policy
+      - title: End user RBAC
+        path: /getting-started/kubernetes/hardway/end-user-rbac
+      - title: Istio integration
+        path: /getting-started/kubernetes/hardway/istio-integration  
+  - title: AKS
+    path: /getting-started/kubernetes/managed-public-cloud/aks
+  - title: AWS
+    path: /getting-started/kubernetes/self-managed-public-cloud/aws  
+  - title: Azure
+    path: /getting-started/kubernetes/self-managed-public-cloud/azure  
+  - title: Self-managed Kubernetes in DigitalOcean
+    path: /getting-started/kubernetes/self-managed-public-cloud/do 
+  - title: EKS
+    path: /getting-started/kubernetes/managed-public-cloud/eks
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:
@@ -52,107 +60,91 @@ section:
       path: /getting-started/kubernetes/flannel/flannel
     - title: Migrate a cluster from flannel networking to Calico networking
       path: /getting-started/kubernetes/flannel/migration-from-flannel
+  - title: GCE
+    path: /getting-started/kubernetes/self-managed-public-cloud/gce    
+  - title: GKE
+    path: /getting-started/kubernetes/managed-public-cloud/gke
+  - title: IKS
+    path: /getting-started/kubernetes/managed-public-cloud/iks
+  - title: K3s
+    path: /getting-started/kubernetes/k3s/
+    section:
+    - title: Quickstart
+      path: /getting-started/kubernetes/k3s/quickstart
+    - title: Multi-node install
+      path: /getting-started/kubernetes/k3s/multi-node-install
+  - title: MicroK8s
+    path: /getting-started/kubernetes/microk8s
+  - title: Minikube
+    path: /getting-started/kubernetes/minikube 
+  - title: OpenShift
+    path: /getting-started/openshift/
+    section:
+    - title: System requirements
+      path: /getting-started/openshift/requirements
+    - title: Installation
+      path: /getting-started/openshift/installation
+  - title: OpenStack
+    path: /getting-started/openstack/
+    section:
+    - title: Overview
+      path: /getting-started/openstack/overview
+    - title: System requirements
+      path: /getting-started/openstack/requirements
+    - title: Installation
+      path: /getting-started/openstack/installation/
+      section:
+      - title: Overview
+        path: /getting-started/openstack/installation/overview
+      - title: Ubuntu
+        path: /getting-started/openstack/installation/ubuntu
+      - title: Red Hat Enterprise Linux
+        path: /getting-started/openstack/installation/redhat
+      - title: DevStack
+        path: /getting-started/openstack/installation/devstack
+      - title: Verify your deployment
+        path: /getting-started/openstack/verification
+  - title: RKE
+    path: /getting-started/kubernetes/rancher 
   - title: Calico for Windows
     path: /getting-started/windows-calico/
     section:
-      - title: Limitations and known issues
-        path: /getting-started/windows-calico/limitations
-      - title: Quickstart
-        path: /getting-started/windows-calico/quickstart
-      - title: Basic policy demo
-        path: /getting-started/windows-calico/demo
-      - title: Kubernetes
-        path: /getting-started/windows-calico/kubernetes/
-        section:
-          - title: Requirements
-            path: /getting-started/windows-calico/kubernetes/requirements
-          - title: Install Calico for Windows
-            path: /getting-started/windows-calico/kubernetes/standard
-          - title: Install Calico for Windows on Rancher RKE
-            path: /getting-started/windows-calico/kubernetes/rancher
-      - title: OpenShift
-        path: /getting-started/windows-calico/openshift/
-        section:
-          - title: Install Calico for Windows on OpenShift
-            path: /getting-started/windows-calico/openshift/installation
+    - title: Limitations and known issues
+      path: /getting-started/windows-calico/limitations
+    - title: Quickstart
+      path: /getting-started/windows-calico/quickstart
+    - title: Basic policy demo
+      path: /getting-started/windows-calico/demo
+    - title: Kubernetes
+      path: /getting-started/windows-calico/kubernetes/
+      section:
+      - title: Requirements
+        path: /getting-started/windows-calico/kubernetes/requirements
+      - title: Install Calico for Windows
+        path: /getting-started/windows-calico/kubernetes/standard
+      - title: Install Calico for Windows on Rancher RKE
+        path: /getting-started/windows-calico/kubernetes/rancher
+    - title: OpenShift
+      path: /getting-started/windows-calico/openshift/
+      section:
+      - title: Install Calico for Windows on OpenShift
+        path: /getting-started/windows-calico/openshift/installation
       - title: Create kubeconfig for Windows nodes
         path: /getting-started/windows-calico/kubeconfig
       - title: Start and stop Calico for Windows services
         path: /getting-started/windows-calico/maintain
-      - title: Troubleshoot Calico for Windows
-        path: /getting-started/windows-calico/troubleshoot
-  - title: K3s
-    path: /getting-started/kubernetes/k3s/
-    section:
-      - title: Quickstart
-        path: /getting-started/kubernetes/k3s/quickstart
-      - title: Multi-node install
-        path: /getting-started/kubernetes/k3s/multi-node-install
-  - title: Install with Helm 3
-    path: /getting-started/kubernetes/helm
-  - title: MicroK8s
-    path: /getting-started/kubernetes/microk8s
-  - title: Minikube
-    path: /getting-started/kubernetes/minikube
-  - title: Calico the hard way
-    path: /getting-started/kubernetes/hardway/
-    section:
-    - title: Introduction
-      path: /getting-started/kubernetes/hardway/overview
-    - title: Stand up Kubernetes
-      path: /getting-started/kubernetes/hardway/standing-up-kubernetes
-    - title: The Calico datastore
-      path: /getting-started/kubernetes/hardway/the-calico-datastore
-    - title: Configure IP pools
-      path: /getting-started/kubernetes/hardway/configure-ip-pools
-    - title: Install CNI plugin
-      path: /getting-started/kubernetes/hardway/install-cni-plugin
-    - title: Install Typha
-      path: /getting-started/kubernetes/hardway/install-typha
-    - title: Install calico/node
-      path: /getting-started/kubernetes/hardway/install-node
-    - title: Configure BGP peering
-      path: /getting-started/kubernetes/hardway/configure-bgp-peering
-    - title: Test networking
-      path: /getting-started/kubernetes/hardway/test-networking
-    - title: Test network policy
-      path: /getting-started/kubernetes/hardway/test-network-policy
-    - title: End user RBAC
-      path: /getting-started/kubernetes/hardway/end-user-rbac
-    - title: Istio integration
-      path: /getting-started/kubernetes/hardway/istio-integration
+    - title: Troubleshoot Calico for Windows
+      path: /getting-started/windows-calico/troubleshoot
   - title: System requirements
     path: /getting-started/kubernetes/requirements
-  - title: VPP dataplane
-    path: /getting-started/kubernetes/vpp/
-    section:
-    - title: Get started with VPP networking
-      path: /getting-started/kubernetes/vpp/getting-started
-    - title: Enable IPsec encryption between nodes
-      path: /getting-started/kubernetes/vpp/ipsec
-    - title: Details of VPP implementation & known-issues
-      path: /getting-started/kubernetes/vpp/specifics
-- title: OpenStack
-  path: /getting-started/openstack/
+- title: Install using images
+  path: /maintenance/image-options/
   section:
-  - title: Overview
-    path: /getting-started/openstack/overview
-  - title: System requirements
-    path: /getting-started/openstack/requirements
-  - title: Installation
-    path: /getting-started/openstack/installation/
-    section:
-    - title: Overview
-      path: /getting-started/openstack/installation/overview
-    - title: Ubuntu
-      path: /getting-started/openstack/installation/ubuntu
-    - title: Red Hat Enterprise Linux
-      path: /getting-started/openstack/installation/redhat
-    - title: DevStack
-      path: /getting-started/openstack/installation/devstack
-    - title: Verify your deployment
-      path: /getting-started/openstack/verification
-- title: Non-cluster hosts
+  - title: Install images by registry digest
+    path: /maintenance/image-options/imageset
+  - title: Configure use of your image registry
+    path: /maintenance/image-options/alternate-registry  
+- title: Install on non-cluster hosts
   path: /getting-started/bare-metal/
   section:
   - title: About non-cluster hosts
@@ -168,3 +160,12 @@ section:
       path: /getting-started/bare-metal/installation/binary-mgr
     - title: Binary install without package manager
       path: /getting-started/bare-metal/installation/binary
+- title: Upgrade
+  path: /maintenance/upgrading
+  section:
+  - title: Kubernetes
+    path: /maintenance/kubernetes-upgrade
+  - title: OpenShift
+    path: /maintenance/openshift-upgrade
+  - title: OpenStack
+    path: /maintenance/openstack-upgrade

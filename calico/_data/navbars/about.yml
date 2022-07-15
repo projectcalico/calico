@@ -1,21 +1,34 @@
-title: "About"
+title: "Get started"
 description: /about/
 path: /about/
 order: 0
 section:
-- title: Calico
-  path: /about/about-calico
-- title: Networking
-  path: /about/about-networking
-- title: Kubernetes Networking
-  path: /about/about-k8s-networking
-- title: Network Policy
-  path: /about/about-network-policy
-- title: Kubernetes Services
-  path: /about/about-kubernetes-services
-- title: Kubernetes Ingress
-  path: /about/about-kubernetes-ingress
-- title: Kubernetes Egress
-  path: /about/about-kubernetes-egress
-- title: eBPF
-  path: /about/about-ebpf
+- title: What is Project Calico?
+  path: /about/about-project-calico
+- title: Training and resources
+  path: /about/training
+- title: Determine best Calico install options
+  path: /about/options/
+  section:
+  - title: Determine best dataplane  
+    path: /about/options/dataplanes
+  - title: Determine best networking options
+    path: /networking/determine-best-networking   
+- title: Kubernetes for cloud-native applications
+  path: /about/kubernetes/
+  section:
+  - title: Networking
+    path: /about/kubernetes/about-networking
+  - title: Kubernetes Networking
+    path: /about/kubernetes/about-k8s-networking
+  - title: Network Policy
+    path: /about/kubernetes/about-network-policy
+  - title: Kubernetes Services
+    path: /about/kubernetes/about-kubernetes-services
+  - title: Kubernetes Ingress
+    path: /about/kubernetes/about-kubernetes-ingress
+  - title: Kubernetes Egress
+    path: /about/kubernetes/about-kubernetes-egress
+  - title: eBPF
+    path: /about/kubernetes/about-ebpf
+    

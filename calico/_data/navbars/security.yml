@@ -1,11 +1,9 @@
-title: "Security"
+title: "Network policy"
 path: /security/
-order: 3
+order: 4
 section:
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust
-- title: Run Calico node as non-privileged and non-root
-  path: /security/non-privileged
 - title: Get started with policy
   path: /security/get-started
   section:
@@ -80,33 +78,3 @@ section:
     path: /security/high-connection-workloads
   - title: Defend against DoS attacks
     path: /security/defend-dos-attack
-- title: Encrypt in-cluster pod traffic
-  path: /security/encrypt-cluster-pod-traffic
-- title: Secure Calico component communications
-  path: /security/comms/
-  section:
-  - title: Configure encryption and authentication
-    path: /security/comms/crypto-auth
-  - title: Schedule Typha to well-known-nodes
-    path: /security/comms/reduce-nodes
-  - title: Secure Calico Prometheus endpoints
-    path: /security/comms/secure-metrics
-  - title: Secure BGP sessions
-    path: /security/comms/secure-bgp
-- title: Calico Enterprise
-  path: /security/calico-enterprise/
-  section:
-  - title: Network visibility
-    path: /security/calico-enterprise/network-visibility
-  - title: Advanced egress access controls
-    path: /security/calico-enterprise/egress-access-controls
-  - title: Advanced compliance controls
-    path: /security/calico-enterprise/compliance
-  - title: Federation
-    path: /security/calico-enterprise/federation
-  - title: Threat defense
-    path: /security/calico-enterprise/threat-defense
-  - title: User console
-    path: /security/calico-enterprise/user-console
-  - title: Policy workflow
-    path: /security/calico-enterprise/policy-workflow

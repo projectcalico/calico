@@ -1,7 +1,7 @@
 ---
-title: Install using images
-description: Install Calico using from a public or private registry, or by digest.
-canonical_url: '/maintenance/image-options/index'
+title: About
+description: Learn some stuff! 
+canonical_url: '/about/index'
 show_read_time: false
 show_toc: false
 ---

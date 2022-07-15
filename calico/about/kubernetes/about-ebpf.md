@@ -1,6 +1,6 @@
 ---
 title: About eBPF
-description: Learn about eBPF!
+description: Learn the basics of eBPF.
 canonical_url: 'https://www.tigera.io/learn/guides/ebpf/'
 ---
 
