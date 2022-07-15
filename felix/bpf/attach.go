@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ import (
 type AttachedProgInfo struct {
 	Object string `json:"object"`
 	Hash   string `json:"hash"`
-	ID     string `json:"id"`
+	ID     int    `json:"id"`
 	Config string `json:"config"`
 }
 
@@ -55,7 +55,7 @@ var (
 
 // AlreadyAttachedProg checks that the program we are going to attach has the
 // same parameters as what we remembered about the currently attached.
-func AlreadyAttachedProg(a AttachPointInfo, object, id string) (bool, error) {
+func AlreadyAttachedProg(a AttachPointInfo, object string, id int) (bool, error) {
 	bytesToRead, err := ioutil.ReadFile(RuntimeJSONFilename(a.IfaceName(), a.HookName()))
 	if err != nil {
 		// If file does not exist, just ignore the err code, and return false
@@ -96,7 +96,7 @@ func AlreadyAttachedProg(a AttachPointInfo, object, id string) (bool, error) {
 }
 
 // RememberAttachedProg stores the attached programs parameters in a file.
-func RememberAttachedProg(a AttachPointInfo, object, id string) error {
+func RememberAttachedProg(a AttachPointInfo, object string, id int) error {
 	hash, err := sha256OfFile(object)
 	if err != nil {
 		return err

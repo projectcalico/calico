@@ -99,7 +99,7 @@ type attachPoint interface {
 	IfaceName() string
 	JumpMapFDMapKey() string
 	IsAttached() (bool, error)
-	AttachProgram() (string, error)
+	AttachProgram() (int, error)
 	DetachProgram() error
 	Log() *log.Entry
 }
@@ -1840,10 +1840,11 @@ func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD) error {
 	return nil
 }
 
-func FindJumpMap(progIDStr, ifaceName string) (mapFD bpf.MapFD, err error) {
-	logCtx := log.WithField("progID", progIDStr).WithField("iface", ifaceName)
+func FindJumpMap(progID int, ifaceName string) (mapFD bpf.MapFD, err error) {
+	logCtx := log.WithField("progID", progID).WithField("iface", ifaceName)
 	logCtx.Debugf("Looking up jump map")
-	bpftool := exec.Command("bpftool", "prog", "show", "id", progIDStr, "--json")
+	bpftool := exec.Command("bpftool", "prog", "show", "id",
+		fmt.Sprintf("%d", progID), "--json")
 	output, err := bpftool.Output()
 	if err != nil {
 		// We can hit this case if the interface was deleted underneath us; check that it's still there.
@@ -1883,7 +1884,7 @@ func FindJumpMap(progIDStr, ifaceName string) (mapFD bpf.MapFD, err error) {
 		}
 	}
 
-	return 0, fmt.Errorf("failed to find jump map for iface=%v progID=%v", ifaceName, progIDStr)
+	return 0, fmt.Errorf("failed to find jump map for iface=%v progID=%v", ifaceName, progID)
 }
 
 func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
