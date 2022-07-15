@@ -47,12 +47,6 @@ type AttachPointInfo interface {
 	Config() string
 }
 
-var (
-	// These are possible hooks for a bpf program. "ingress" and "egress" imply TC program
-	// and each one reflects traffic direction. "xdp" implies xdp programs.
-	runtimeJSONsuffixes = []string{"ingress", "egress", "xdp"}
-)
-
 // AlreadyAttachedProg checks that the program we are going to attach has the
 // same parameters as what we remembered about the currently attached.
 func AlreadyAttachedProg(a AttachPointInfo, object string, id int) (bool, error) {
@@ -139,8 +133,8 @@ func ForgetAttachedProg(iface, hook string) error {
 // ForgetIfaceAttachedProg removes information we store about any programs
 // associated with an iface.
 func ForgetIfaceAttachedProg(iface string) error {
-	for _, hook := range runtimeJSONsuffixes {
-		err := ForgetAttachedProg(iface, hook)
+	for _, hook := range Hooks {
+		err := ForgetAttachedProg(iface, string(hook))
 		if err != nil {
 			return err
 		}
@@ -162,8 +156,8 @@ func CleanAttachedProgDir() {
 
 	expectedJSONFiles := set.New[string]()
 	for _, iface := range interfaces {
-		for _, hook := range runtimeJSONsuffixes {
-			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, hook))
+		for _, hook := range Hooks {
+			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, string(hook)))
 		}
 	}
 

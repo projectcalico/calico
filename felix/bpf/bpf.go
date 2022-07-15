@@ -56,6 +56,8 @@ const (
 	HookXDP     Hook = "xdp"
 )
 
+var Hooks = []Hook{HookIngress, HookEgress, HookXDP}
+
 type XDPMode int
 
 const (
