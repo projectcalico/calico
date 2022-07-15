@@ -123,7 +123,7 @@ While the eBPF dataplane has some features that the standard Linux dataplane lac
 | Kubernetes services       | kube-proxy iptables or IPVS mode        | BPF program and maps               |
 | IPIP                      | Supported                               | Supported (no performance advantage due to kernel limitations) |
 | VXLAN                     | Supported                               | Supported                          |
-| Wireguard                 | Supported                               | Supported                          |
+| Wireguard                 | Supported (IPv4 and IPv6)               | Supported (IPv4)                   |
 | Other routing             | Supported                               | Supported                          |
 | Supports third party CNI plugins | Yes (compatible plugins only)    | Yes (compatible plugins only)      |
 | Compatible with other iptables rules | Yes (can write rules above or below other rules) | Partial; iptables bypassed for workload traffic |
