@@ -587,8 +587,8 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 		return false
 	})
 	// Remove policy debug info if any
-	m.removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
-	m.removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
+	m.removePolicyDebugInfo(oldWEP.Name, bpf.HookIngress)
+	m.removePolicyDebugInfo(oldWEP.Name, bpf.HookEgress)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -1130,6 +1130,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		Iface:    ifaceName,
 		LogLevel: m.bpfLogLevel,
 		Modes:    m.xdpModes,
+		ProgID:   xdp.DetachedID,
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
@@ -1196,22 +1197,22 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	if endpointType == tc.EpTypeWorkload {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
 		if policyDirection == PolDirnIngress {
-			ap.Hook = tc.HookEgress
+			ap.Hook = bpf.HookEgress
 		} else {
-			ap.Hook = tc.HookIngress
+			ap.Hook = bpf.HookIngress
 		}
 	} else {
 		ap.WgPort = m.wgPort
 		// Host endpoints have the natural relationship between policy direction and hook.
 		if policyDirection == PolDirnIngress {
-			ap.Hook = tc.HookIngress
+			ap.Hook = bpf.HookIngress
 		} else {
-			ap.Hook = tc.HookEgress
+			ap.Hook = bpf.HookEgress
 		}
 	}
 
 	var toOrFrom tc.ToOrFromEp
-	if ap.Hook == tc.HookIngress {
+	if ap.Hook == bpf.HookIngress {
 		toOrFrom = tc.FromEp
 	} else {
 		toOrFrom = tc.ToEp
@@ -1746,7 +1747,7 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 	})
 }
 
-func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook bpf.Hook) {
 	if !m.bpfPolicyDebugEnabled {
 		return
 	}
@@ -1757,7 +1758,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook tc.Hoo
 	}
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook bpf.Hook, polErr error) error {
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
@@ -1769,7 +1770,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 	// is in reference with the host. Workload's ingress is host's egress and
 	// vice versa.
 	polDir := "ingress"
-	if tcHook == tc.HookIngress {
+	if tcHook == bpf.HookIngress {
 		polDir = "egress"
 	}
 
