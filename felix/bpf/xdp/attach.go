@@ -180,23 +180,25 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	//     program with this mode.
 	//   - Continue through remaining modes even if attachment already successful.
 	attachmentSucceeded := false
-	for _, mode := range ap.Modes {
-		progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface, uint(mode))
-		if err != nil {
-			ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s", ap.SectionName())
-			continue
-		}
+	for i, mode := range ap.Modes {
+		ap.Log().Debugf("Trying to attach XDP program in mode %v %v", i, mode)
+		// Force attach the program
 
-		attachmentSucceeded = true
-		ap.ProgID = progId
-		break
+		progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface, uint(mode))
+		if err != nil && progId == DetachedID {
+			ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s mode %v", ap.SectionName(), mode)
+		} else {
+			ap.Log().Debugf("Successfully attached XDP program in mode %v. ID: %v", mode, progId)
+			attachmentSucceeded = true
+			ap.ProgID = progId
+			break
+		}
 	}
 
 	if !attachmentSucceeded {
 		return -1, fmt.Errorf("failed to attach XDP program with section name %v to interface %v",
 			ap.SectionName(), ap.Iface)
 	}
-	ap.Log().Info("Program attached to XDP.")
 
 	// program is now attached. Now we should store its information to prevent unnecessary reloads in future
 	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, ap.ProgID); err != nil {
@@ -220,26 +222,36 @@ func (ap AttachPoint) DetachProgram() error {
 		return fmt.Errorf("XDP expected program ID does match with current one.")
 	}
 
+	// Try to remove our XDP program in all modes, until the program ID is 0
 	removalSucceeded := false
 	for _, mode := range ap.Modes {
 		err = libbpf.DetachXDP(ap.Iface, ap.ProgID, uint(mode))
+		ap.Log().Debugf("Trying to detach XDP program in mode %v.", mode)
 		if err != nil {
-			ap.Log().Debugf("Failed to detach XDP program in mode %v: %v", mode, err)
+			ap.Log().Debugf("Failed to detach XDP program in mode %v: %v.", mode, err)
 			continue
 		}
-		removalSucceeded = true
-		break
+		curProgId, err := ap.ProgramID()
+		if err != nil {
+			return fmt.Errorf("failed to get the attached XDP program ID: %w", err)
+		}
+
+		if curProgId == DetachedID {
+			removalSucceeded = true
+			ap.Log().Debugf("Successfully detached XDP program.")
+			break
+		}
 	}
 	if !removalSucceeded {
-		return fmt.Errorf("Couldn't remove our XDP program.")
+		return fmt.Errorf("couldn't remove our XDP program. program ID: %v", ap.ProgID)
 	}
 
-	ap.Log().Infof("XDP program detached. ID: %v", ap.ProgID)
+	ap.Log().Infof("XDP program detached. program ID: %v", ap.ProgID)
 	ap.ProgID = DetachedID
 
 	// Program is detached, now remove the json file we saved for it
 	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {
-		return fmt.Errorf("Failed to delete hash of BPF program from disk: %w", err)
+		return fmt.Errorf("failed to delete hash of BPF program from disk: %w", err)
 	}
 	return nil
 }
