@@ -254,7 +254,7 @@ $(FELIX_CONTAINER_CREATED): docker-image/calico-felix-wrapper \
                             docker-image/Dockerfile* \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild)
 	$(MAKE) register
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
+	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile docker-image --load;
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 
@@ -328,6 +328,7 @@ fv-no-prereqs:
 	  PRIVATE_KEY=`pwd`/private.key \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
+	  ARCH=$(ARCH) \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
