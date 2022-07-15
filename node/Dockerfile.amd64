@@ -122,6 +122,13 @@ COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 # Copy in our rpms
 COPY --from=centos  /root/rpmbuild/RPMS/${ARCH}/* /tmp/rpms/
 
+# Install a subset of packages from UBI prior to removing the UBI repo below.
+# We do this because the UBI repo has updated versions with CVE fixes. We can remove
+# this once the CentOS repo updates the version of these packages.
+# gzip >= 1.9-13.el8_5
+# cryptsetup-libs >= 2.3.3-4.el8_5.1
+RUN microdnf install gzip cryptsetup-libs
+
 # Install the necessary packages, making sure that we're using only CentOS repos.
 # Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
 # we're using CentOS repos for all our packages. Using packages from a single source (CentOS) makes
