@@ -185,7 +185,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		// Force attach the program
 
 		progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface, uint(mode))
-		if err != nil && progId == DetachedID {
+		if err != nil || progId == DetachedID {
 			ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s mode %v", ap.SectionName(), mode)
 		} else {
 			ap.Log().Debugf("Successfully attached XDP program in mode %v. ID: %v", mode, progId)
