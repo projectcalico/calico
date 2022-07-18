@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
@@ -158,34 +159,18 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		return -1, fmt.Errorf("error updating jump map %v", err)
 	}
 
-	// Note that there are a few considerations here.
-	//
-	// Firstly, we force program attachment, so as to minimise any flap in the XDP program when
-	// restarting or upgrading Felix.
-	//
-	// Secondly, we need to consider any other XDP programs that might be there at start of day.
-	// (Either 3rd party, or maybe some earlier version of Felix.)  We fundamentally have to
-	// clean those up, as our XDP usage cannot coexist with anyone else's.
-	//
-	// Thirdly, for a given host interface, is it possible for our best attachment mode to
-	// change, other than at start of day?  In principle it's possible if we do a patch that
-	// alters some conditionally included code.  We don't have that for XDP right now, but we
-	// conceivably could in future.  So safest to assume it's possible for the attachment mode
-	// to improve, which means needing to do `off` for subsequent modes.
-	//
-	// Hence this logic:
-	// - Loop through the modes.
-	//   - If we haven't yet successfully attached (for this loop), do the attachment.
-	//   - If that failed, or we attached with an earlier mode, do `off` to remove any existing
-	//     program with this mode.
-	//   - Continue through remaining modes even if attachment already successful.
-	attachmentSucceeded := false
-	for i, mode := range ap.Modes {
-		ap.Log().Debugf("Trying to attach XDP program in mode %v %v", i, mode)
-		// Force attach the program
+	oldID, err := ap.ProgramID()
+	if err != nil {
+		return -1, fmt.Errorf("failed to get the attached XDP program ID: %w", err)
+	}
 
-		progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface, uint(mode))
-		if err != nil || progId == DetachedID {
+	attachmentSucceeded := false
+	for _, mode := range ap.Modes {
+		ap.Log().Debugf("Trying to attach XDP program in mode %v - old id: %v", mode, oldID)
+		// Force attach the program. If there is already a program attached, the replacement only
+		// succeed in the same mode of the current program.
+		progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface, oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
+		if err != nil || progId == DetachedID || progId == oldID {
 			ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s mode %v", ap.SectionName(), mode)
 		} else {
 			ap.Log().Debugf("Successfully attached XDP program in mode %v. ID: %v", mode, progId)
@@ -225,7 +210,7 @@ func (ap AttachPoint) DetachProgram() error {
 	// Try to remove our XDP program in all modes, until the program ID is 0
 	removalSucceeded := false
 	for _, mode := range ap.Modes {
-		err = libbpf.DetachXDP(ap.Iface, ap.ProgID, uint(mode))
+		err = libbpf.DetachXDP(ap.Iface, uint(mode))
 		ap.Log().Debugf("Trying to detach XDP program in mode %v.", mode)
 		if err != nil {
 			ap.Log().Debugf("Failed to detach XDP program in mode %v: %v.", mode, err)

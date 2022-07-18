@@ -148,7 +148,7 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	return int(progId), nil
 }
 
-func (o *Obj) AttachXDP(secName, ifName string, mode uint) (int, error) {
+func (o *Obj) AttachXDP(secName, ifName string, oldID int, mode uint) (int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
@@ -158,7 +158,7 @@ func (o *Obj) AttachXDP(secName, ifName string, mode uint) (int, error) {
 		return -1, err
 	}
 
-	_, err = C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), C.uint(mode))
+	_, err = C.bpf_program_attach_xdp(o.obj, cSecName, C.int(ifIndex), C.int(oldID), C.uint(mode))
 	if err != nil {
 		return -1, fmt.Errorf("error attaching xdp program: %w", err)
 	}
@@ -170,7 +170,7 @@ func (o *Obj) AttachXDP(secName, ifName string, mode uint) (int, error) {
 	return int(progId), nil
 }
 
-func DetachXDP(ifName string, progID int, mode uint) error {
+func DetachXDP(ifName string, mode uint) error {
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cIfName))
 	ifIndex, err := C.if_nametoindex(cIfName)
