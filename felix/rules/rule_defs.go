@@ -301,9 +301,12 @@ type Config struct {
 	AllowIPIPPacketsFromWorkloads  bool
 
 	WireguardEnabled            bool
+	WireguardEnabledV6          bool
 	WireguardInterfaceName      string
+	WireguardInterfaceNameV6    string
 	WireguardIptablesMark       uint32
 	WireguardListeningPort      int
+	WireguardListeningPortV6    int
 	WireguardEncryptHostTraffic bool
 	RouteSource                 string
 
