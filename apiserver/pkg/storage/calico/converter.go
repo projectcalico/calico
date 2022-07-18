@@ -104,6 +104,11 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		aapi := &aapi.CalicoNodeStatus{}
 		CalicoNodeStatusConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
+	case *api.IPAMConfig:
+		lcg := libcalicoObject.(*api.IPAMConfig)
+		aapi := &aapi.IPAMConfig{}
+		IPAMConfigConverter{}.convertToAAPI(lcg, aapi)
+		return aapi
 	default:
 		klog.Infof("Unrecognized libcalico object (type %v)", reflect.TypeOf(libcalicoObject))
 		return nil

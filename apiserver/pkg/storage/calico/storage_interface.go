@@ -41,6 +41,8 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 		return NewClusterInformationStorage(opts)
 	case "projectcalico.org/caliconodestatuses":
 		return NewCalicoNodeStatusStorage(opts)
+	case "projectcalico.org/ipamconfigs":
+		return NewIPAMConfigStorage(opts)
 	default:
 		klog.Fatalf("Unable to create storage for resource %v", opts.RESTOptions.ResourcePrefix)
 		return registry.DryRunnableStorage{}, nil
