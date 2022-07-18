@@ -41,26 +41,25 @@ type AttachPoint struct {
 	Iface    string
 	LogLevel string
 	Modes    []bpf.XDPMode
-	ProgID   int
 }
 
-func (ap *AttachPoint) IfaceName() string {
+func (ap AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
-func (ap *AttachPoint) HookName() string {
+func (ap AttachPoint) HookName() string {
 	return "xdp"
 }
 
-func (ap *AttachPoint) Config() string {
+func (ap AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
 
-func (ap *AttachPoint) JumpMapFDMapKey() string {
+func (ap AttachPoint) JumpMapFDMapKey() string {
 	return "xdp"
 }
 
-func (ap *AttachPoint) FileName() string {
+func (ap AttachPoint) FileName() string {
 	logLevel := strings.ToLower(ap.LogLevel)
 	if logLevel == "off" {
 		logLevel = "no_log"
@@ -68,7 +67,7 @@ func (ap *AttachPoint) FileName() string {
 	return "xdp_" + logLevel + ".o"
 }
 
-func (ap *AttachPoint) SectionName() string {
+func (ap AttachPoint) SectionName() string {
 	return "xdp/calico_entrypoint"
 }
 
@@ -169,13 +168,12 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		ap.Log().Debugf("Trying to attach XDP program in mode %v - old id: %v", mode, oldID)
 		// Force attach the program. If there is already a program attached, the replacement only
 		// succeed in the same mode of the current program.
-		progId, err := obj.AttachXDP(ap.SectionName(), ap.Iface, oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
-		if err != nil || progId == DetachedID || progId == oldID {
+		progID, err = obj.AttachXDP(ap.SectionName(), ap.Iface, oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
+		if err != nil || progID == DetachedID || progID == oldID {
 			ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s mode %v", ap.SectionName(), mode)
 		} else {
-			ap.Log().Debugf("Successfully attached XDP program in mode %v. ID: %v", mode, progId)
+			ap.Log().Debugf("Successfully attached XDP program in mode %v. ID: %v", mode, progID)
 			attachmentSucceeded = true
-			ap.ProgID = progId
 			break
 		}
 	}
@@ -186,25 +184,27 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 
 	// program is now attached. Now we should store its information to prevent unnecessary reloads in future
-	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, ap.ProgID); err != nil {
+	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, progID); err != nil {
 		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
 	}
 
-	return ap.ProgID, nil
+	return progID, nil
 }
 
 func (ap AttachPoint) DetachProgram() error {
 	// Get the current XDP program ID, if any.
-	curProgId, err := ap.ProgramID()
+	progID, err := ap.ProgramID()
 	if err != nil {
 		return fmt.Errorf("failed to get the attached XDP program ID: %w", err)
 	}
-	if curProgId == DetachedID {
+	if progID == DetachedID {
 		ap.Log().Debugf("No XDP program attached.")
 		return nil
 	}
-	if ap.ProgID != curProgId {
-		return fmt.Errorf("XDP expected program ID does match with current one.")
+
+	ourProg, err := bpf.AlreadyAttachedProg(ap, path.Join(bpf.ObjectDir, ap.FileName()), progID)
+	if err != nil || !ourProg {
+		return fmt.Errorf("XDP expected program ID does match with current one: %w", err)
 	}
 
 	// Try to remove our XDP program in all modes, until the program ID is 0
@@ -228,11 +228,10 @@ func (ap AttachPoint) DetachProgram() error {
 		}
 	}
 	if !removalSucceeded {
-		return fmt.Errorf("couldn't remove our XDP program. program ID: %v", ap.ProgID)
+		return fmt.Errorf("couldn't remove our XDP program. program ID: %v", progID)
 	}
 
-	ap.Log().Infof("XDP program detached. program ID: %v", ap.ProgID)
-	ap.ProgID = DetachedID
+	ap.Log().Infof("XDP program detached. program ID: %v", progID)
 
 	// Program is detached, now remove the json file we saved for it
 	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {

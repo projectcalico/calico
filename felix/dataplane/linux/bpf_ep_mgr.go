@@ -1130,7 +1130,6 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		Iface:    ifaceName,
 		LogLevel: m.bpfLogLevel,
 		Modes:    m.xdpModes,
-		ProgID:   xdp.DetachedID,
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
