@@ -903,7 +903,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 		},
 	}
 
-	log.Infof("Ensure default IPv%d pool is created. IPIP mode: %s, VXLAN mode: %s, DisableBGPExport: %v", version, ipipMode, vxlanMode, bgpExportDisabled)
+	log.Infof("Ensure default IPv%d pool is created. IPIP mode: %s, VXLAN mode: %s, DisableBGPExport: %t", version, ipipMode, vxlanMode, bgpExportDisabled)
 
 	// Create the pool.  There is a small chance that another node may
 	// beat us to it, so handle the fact that the pool already exists.
@@ -913,7 +913,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 			utils.Terminate()
 		}
 	} else {
-		log.Infof("Created default IPv%d pool (%s) with NAT outgoing %t. IPIP mode: %s, VXLAN mode: %s, DisableBGPExport: %v",
+		log.Infof("Created default IPv%d pool (%s) with NAT outgoing %t. IPIP mode: %s, VXLAN mode: %s, DisableBGPExport: %t",
 			version, cidr, isNATOutgoingEnabled, ipipMode, vxlanMode, bgpExportDisabled)
 	}
 }
