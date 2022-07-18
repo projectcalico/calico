@@ -20,6 +20,8 @@ type GlobalNetworkSetExpansion interface{}
 
 type HostEndpointExpansion interface{}
 
+type IPAMConfigExpansion interface{}
+
 type IPPoolExpansion interface{}
 
 type IPReservationExpansion interface{}

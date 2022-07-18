@@ -46,6 +46,10 @@ func (c *FakeProjectcalicoV3) HostEndpoints() v3.HostEndpointInterface {
 	return &FakeHostEndpoints{c}
 }
 
+func (c *FakeProjectcalicoV3) IPAMConfigs() v3.IPAMConfigInterface {
+	return &FakeIPAMConfigs{c}
+}
+
 func (c *FakeProjectcalicoV3) IPPools() v3.IPPoolInterface {
 	return &FakeIPPools{c}
 }
