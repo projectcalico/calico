@@ -91,7 +91,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 								ap := tc.AttachPoint{
 									Type:       epType,
 									ToOrFrom:   toOrFrom,
-									Hook:       tc.HookIngress,
+									Hook:       bpf.HookIngress,
 									ToHostDrop: epToHostDrop,
 									FIB:        fibEnabled,
 									DSR:        dsr,
