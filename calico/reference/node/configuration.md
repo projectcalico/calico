@@ -52,6 +52,8 @@ exist in the cluster. The following options control the parameters on the create
 | CALICO_IPV6POOL_VXLAN | VXLAN Mode to use for the IPv6 Pool created at start up. [Default: `Never`] | Always, CrossSubnet, Never |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
 | CALICO_IPV6POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv6 Pool created at start up. [Default: `all()`] | [selector]({{site.baseurl}}/reference/resources/ippool#node-selector) |
+| CALICO_IPV4POOL_DISABLE_BGP_EXPORT | Disable exporting routes over BGP for the IPv4 Pool created at start up. [Default: `false`] | boolean |
+| CALICO_IPV6POOL_DISABLE_BGP_EXPORT | Disable exporting routes over BGP for the IPv6 Pool created at start up. [Default: `false`] | boolean |
 | NO_DEFAULT_POOLS | Prevents  {{site.prodname}} from creating a default pool if one does not exist. [Default: `false`] | boolean |
 
 ### Configuring BGP Networking
