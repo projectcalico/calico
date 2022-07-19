@@ -379,11 +379,11 @@ func (p RESTStorageProvider) NewV3Storage(
 			Trigger:       nil,
 		},
 		calicostorage.Options{
-			RESTOptions: caliconodestatusRESTOptions,
+			RESTOptions: ipamconfigRESTOptions,
 		},
 		p.StorageType,
 		authorizer,
-		[]string{"caliconodestatus"},
+		[]string{"ipamconfig"},
 	)
 
 	storage := map[string]rest.Storage{}
