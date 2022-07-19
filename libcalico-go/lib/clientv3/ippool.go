@@ -41,6 +41,7 @@ type IPPoolInterface interface {
 	List(ctx context.Context, opts options.ListOptions) (*apiv3.IPPoolList, error)
 	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 	UnsafeCreate(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error)
+	UnsafeDelete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.IPPool, error)
 }
 
 // ipPools implements IPPoolInterface
@@ -508,6 +509,50 @@ func (r ipPools) UnsafeCreate(ctx context.Context, res *apiv3.IPPool, opts optio
 	}
 
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindIPPool, res)
+	if out != nil {
+		return out.(*apiv3.IPPool), err
+	}
+	return nil, err
+}
+
+// UnsafeDelete deletes the IP pool similar to Delete except it does not delete the associated
+// block affinities. This should only be used to remove an old IP pool after the split IP pools
+// operations are complete.
+func (r ipPools) UnsafeDelete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.IPPool, error) {
+	// Get the pool so that we can find the CIDR associated with it.
+	pool, err := r.Get(ctx, name, options.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	logCxt := log.WithFields(log.Fields{
+		"CIDR": pool.Spec.CIDR,
+		"Name": name,
+	})
+
+	// If the pool is active, set the disabled flag to ensure we stop allocating from this pool.
+	if !pool.Spec.Disabled {
+		logCxt.Debug("Disabling pool to release affinities")
+		pool.Spec.Disabled = true
+
+		// If the Delete has been called with a ResourceVersion then use that to perform the
+		// update - that way we'll catch update conflicts (we could actually check here, but
+		// the most likely scenario is there isn't one - so just pass it through and let the
+		// Update handle any conflicts).
+		if opts.ResourceVersion != "" {
+			pool.ResourceVersion = opts.ResourceVersion
+		}
+		if _, err := r.Update(ctx, pool, options.SetOptions{}); err != nil {
+			return nil, err
+		}
+
+		// Reset the resource version before the actual delete since the version of that resource
+		// will now have been updated.
+		opts.ResourceVersion = ""
+	}
+
+	// And finally, delete the pool.
+	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindIPPool, noNamespace, name)
 	if out != nil {
 		return out.(*apiv3.IPPool), err
 	}

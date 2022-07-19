@@ -98,7 +98,7 @@ ippool_name1_rev1_split1_v4 = {
     'apiVersion': API_VERSION,
     'kind': 'IPPool',
     'metadata': {
-        'name': 'split-ippool-name1-1'
+        'name': 'split-ippool-name1-0'
     },
     'spec': {
         'cidr': "10.0.1.0/26",
@@ -114,7 +114,7 @@ ippool_name1_rev1_split2_v4 = {
     'apiVersion': API_VERSION,
     'kind': 'IPPool',
     'metadata': {
-        'name': 'split-ippool-name1-2'
+        'name': 'split-ippool-name1-1'
     },
     'spec': {
         'cidr': "10.0.1.64/26",
@@ -130,7 +130,7 @@ ippool_name1_rev1_split3_v4 = {
     'apiVersion': API_VERSION,
     'kind': 'IPPool',
     'metadata': {
-        'name': 'split-ippool-name1-3'
+        'name': 'split-ippool-name1-2'
     },
     'spec': {
         'cidr': "10.0.1.128/26",
@@ -146,7 +146,7 @@ ippool_name1_rev1_split4_v4 = {
     'apiVersion': API_VERSION,
     'kind': 'IPPool',
     'metadata': {
-        'name': 'split-ippool-name1-4'
+        'name': 'split-ippool-name1-3'
     },
     'spec': {
         'cidr': "10.0.1.192/26",
