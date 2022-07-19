@@ -1310,7 +1310,7 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 
 	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
 	if nil != err {
-		return fmt.Errorf("error creating the object '%v' (%v)", ipamconfig, err)
+		return fmt.Errorf("error creating the object '%v' (%v)", ipamConfig, err)
 	}
 	if name != ipamConfigNew.Name {
 		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
