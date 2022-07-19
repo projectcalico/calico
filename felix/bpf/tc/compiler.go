@@ -16,11 +16,23 @@ package tc
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/environment"
+)
+
+// TCHook is the hook to which a BPF program should be attached.  This is relative to the host namespace
+// so workload PolDirnIngress policy is attached to the HookEgress.
+type Hook string
+
+const (
+	HookIngress Hook = "ingress"
+	HookEgress  Hook = "egress"
 )
 
 type ToOrFromEp string
@@ -107,4 +119,23 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v%s.o",
 		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel, corePart)
 	return oFileName
+}
+
+const (
+	PinBaseDir = "/sys/fs/bpf/tc/"
+)
+
+func MapPinPath(typ int, name, iface string, hook Hook) string {
+	subDir := "globals"
+	if (typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, bpf.JumpMapName())) ||
+		(typ == unix.BPF_MAP_TYPE_PERCPU_ARRAY && strings.Contains(name, bpf.CountersMapName())) {
+		// Remove period in the interface name if any
+		ifName := strings.ReplaceAll(iface, ".", "")
+		if hook == HookIngress {
+			subDir = ifName + "_igr/"
+		} else {
+			subDir = ifName + "_egr/"
+		}
+	}
+	return path.Join(PinBaseDir, subDir, name)
 }

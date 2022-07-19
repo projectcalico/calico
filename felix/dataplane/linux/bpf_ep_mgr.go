@@ -99,7 +99,7 @@ type attachPoint interface {
 	IfaceName() string
 	JumpMapFDMapKey() string
 	IsAttached() (bool, error)
-	AttachProgram() (int, error)
+	AttachProgram() (string, error)
 	DetachProgram() error
 	Log() *log.Entry
 }
@@ -587,8 +587,8 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 		return false
 	})
 	// Remove policy debug info if any
-	m.removePolicyDebugInfo(oldWEP.Name, bpf.HookIngress)
-	m.removePolicyDebugInfo(oldWEP.Name, bpf.HookEgress)
+	m.removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
+	m.removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -1196,22 +1196,22 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	if endpointType == tc.EpTypeWorkload {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
 		if policyDirection == PolDirnIngress {
-			ap.Hook = bpf.HookEgress
+			ap.Hook = tc.HookEgress
 		} else {
-			ap.Hook = bpf.HookIngress
+			ap.Hook = tc.HookIngress
 		}
 	} else {
 		ap.WgPort = m.wgPort
 		// Host endpoints have the natural relationship between policy direction and hook.
 		if policyDirection == PolDirnIngress {
-			ap.Hook = bpf.HookIngress
+			ap.Hook = tc.HookIngress
 		} else {
-			ap.Hook = bpf.HookEgress
+			ap.Hook = tc.HookEgress
 		}
 	}
 
 	var toOrFrom tc.ToOrFromEp
-	if ap.Hook == bpf.HookIngress {
+	if ap.Hook == tc.HookIngress {
 		toOrFrom = tc.FromEp
 	} else {
 		toOrFrom = tc.ToEp
@@ -1746,7 +1746,7 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 	})
 }
 
-func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook bpf.Hook) {
+func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
 	if !m.bpfPolicyDebugEnabled {
 		return
 	}
@@ -1757,7 +1757,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook bpf.Ho
 	}
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook bpf.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook, polErr error) error {
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
@@ -1769,7 +1769,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 	// is in reference with the host. Workload's ingress is host's egress and
 	// vice versa.
 	polDir := "ingress"
-	if tcHook == bpf.HookIngress {
+	if tcHook == tc.HookIngress {
 		polDir = "egress"
 	}
 
@@ -1839,11 +1839,10 @@ func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD) error {
 	return nil
 }
 
-func FindJumpMap(progID int, ifaceName string) (mapFD bpf.MapFD, err error) {
-	logCtx := log.WithField("progID", progID).WithField("iface", ifaceName)
+func FindJumpMap(progIDStr, ifaceName string) (mapFD bpf.MapFD, err error) {
+	logCtx := log.WithField("progID", progIDStr).WithField("iface", ifaceName)
 	logCtx.Debugf("Looking up jump map")
-	bpftool := exec.Command("bpftool", "prog", "show", "id",
-		fmt.Sprintf("%d", progID), "--json")
+	bpftool := exec.Command("bpftool", "prog", "show", "id", progIDStr, "--json")
 	output, err := bpftool.Output()
 	if err != nil {
 		// We can hit this case if the interface was deleted underneath us; check that it's still there.
@@ -1883,7 +1882,7 @@ func FindJumpMap(progID int, ifaceName string) (mapFD bpf.MapFD, err error) {
 		}
 	}
 
-	return 0, fmt.Errorf("failed to find jump map for iface=%v progID=%v", ifaceName, progID)
+	return 0, fmt.Errorf("failed to find jump map for iface=%v progID=%v", ifaceName, progIDStr)
 }
 
 func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
