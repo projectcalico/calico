@@ -1166,8 +1166,18 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.WireguardEnabledV6 != nil {
+		in, out := &in.WireguardEnabledV6, &out.WireguardEnabledV6
+		*out = new(bool)
+		**out = **in
+	}
 	if in.WireguardListeningPort != nil {
 		in, out := &in.WireguardListeningPort, &out.WireguardListeningPort
+		*out = new(int)
+		**out = **in
+	}
+	if in.WireguardListeningPortV6 != nil {
+		in, out := &in.WireguardListeningPortV6, &out.WireguardListeningPortV6
 		*out = new(int)
 		**out = **in
 	}
@@ -1178,6 +1188,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.WireguardMTU != nil {
 		in, out := &in.WireguardMTU, &out.WireguardMTU
+		*out = new(int)
+		**out = **in
+	}
+	if in.WireguardMTUV6 != nil {
+		in, out := &in.WireguardMTUV6, &out.WireguardMTUV6
 		*out = new(int)
 		**out = **in
 	}

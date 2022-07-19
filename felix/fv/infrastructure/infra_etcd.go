@@ -133,6 +133,12 @@ func (eds *EtcdDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx 
 	}
 }
 
+func (eds *EtcdDatastoreInfra) SetExpectedWireguardV6TunnelAddr(felix *Felix, idx int, needWireguard bool) {
+	if needWireguard {
+		felix.ExpectedWireguardV6TunnelAddr = fmt.Sprintf("dead:beef::%d:0", idx)
+	}
+}
+
 func (eds *EtcdDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
 	node, err := eds.GetCalicoClient().Nodes().Get(utils.Ctx, felix.Hostname, options.GetOptions{})
 	if err != nil {
