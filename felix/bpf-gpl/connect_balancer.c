@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include <linux/bpf.h>
@@ -19,7 +19,7 @@
 
 #include "sendrecv.h"
 
-#if !defined(__BPFTOOL_LOADER__)
+#if !defined(__BPFTOOL_LOADER__) && !defined (__IPTOOL_LOADER__)
 const volatile struct cali_ctlb_globals __globals;
 #define UDP_NOT_SEEN_TIMEO __globals.udp_not_seen_timeo
 #else

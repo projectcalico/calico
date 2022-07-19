@@ -24,6 +24,10 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump2 = {
 	.key_size = 4,
 	.value_size = 4,
 	.max_entries = 16,
+#if !defined(__BPFTOOL_LOADER__) && defined(__IPTOOL_LOADER__)
+	.map_id = 1,
+	.pinning_strategy = 1 /* object namespace */,
+#endif
 };
 
 #define CALI_JUMP_TO(ctx, index) bpf_tail_call(ctx, &map_symbol(cali_jump, 2), index)

@@ -42,7 +42,7 @@
 #include "metadata.h"
 #include "bpf_helpers.h"
 
-#if !defined(__BPFTOOL_LOADER__)
+#if !defined(__BPFTOOL_LOADER__) && !defined (__IPTOOL_LOADER__)
 const volatile struct cali_tc_globals __globals;
 #endif
 
