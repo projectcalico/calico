@@ -4150,6 +4150,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: calico-node
 rules:
+  # Used for creating service account tokens to be used by the CNI plugin
+  - apiGroups: [""]
+    resources:
+      - serviceaccounts/token
+    resourceNames:
+      - canal
+    verbs:
+      - create
   # The CNI plugin needs to get pods, nodes, and namespaces.
   - apiGroups: [""]
     resources:
@@ -4212,14 +4220,6 @@ rules:
       - pods/status
     verbs:
       - patch
-  # Used for creating service account tokens to be used by the CNI plugin
-  - apiGroups: [""]
-    resources:
-      - serviceaccounts/token
-    resourceNames:
-      - calico-node
-    verbs:
-      - create
   # Calico monitors various CRDs for config.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
