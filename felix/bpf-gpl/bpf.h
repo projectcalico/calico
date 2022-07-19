@@ -25,13 +25,8 @@ struct bpf_map_def_extended {
 	__u32 value_size;
 	__u32 max_entries;
 	__u32 map_flags;
-#if defined(__BPFTOOL_LOADER__) || defined (__IPTOOL_LOADER__)
+#if defined(__BPFTOOL_LOADER__)
 	__u32 map_id;
-#endif
-#ifdef __IPTOOL_LOADER__
-	__u32 pinning_strategy;
-	__u32 unused1;
-	__u32 unused2;
 #endif
 };
 
@@ -245,7 +240,7 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 
 #define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->ttl <= 1)
 
-#if !defined(__BPFTOOL_LOADER__) && !defined (__IPTOOL_LOADER__)
+#if !defined(__BPFTOOL_LOADER__) && !defined(CALI_F_XDP)
 
 #if !CALI_F_CGROUP
 extern const volatile struct cali_tc_globals __globals;
@@ -322,7 +317,7 @@ static CALI_BPF_INLINE int name##_delete_elem(const void* key)	\
 	return bpf_map_delete_elem(&map_symbol(name, ver), key);	\
 }
 
-#if defined(__BPFTOOL_LOADER__) || defined (__IPTOOL_LOADER__)
+#if defined(__BPFTOOL_LOADER__)
 #define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin)		\
 struct bpf_map_def_extended __attribute__((section("maps"))) map_symbol(name, ver) = {	\
 	.type = map_type,								\
