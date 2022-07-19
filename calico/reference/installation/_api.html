@@ -1248,6 +1248,19 @@ the main IP pool CIDR.
 Default: 26 (IPv4), 122 (IPv6)</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>disableBGPExport</code><br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>DisableBGPExport specifies whether routes from this IP pool&rsquo;s CIDR are exported over BGP.
+Default: false</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.Image">Image
@@ -1694,6 +1707,21 @@ InstallationSpec
 <p>Computed is the final installation including overlaid resources.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>conditions</code><br>
+<em>
+<a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#condition-v1-meta">
+[]Kubernetes meta/v1.Condition
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Conditions represents the latest observed set of conditions for the component. A component may be one or more of
+Ready, Progressing, Degraded or other customer types.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.KubernetesAutodetectionMethod">KubernetesAutodetectionMethod
@@ -2016,7 +2044,7 @@ One of: None, Login, Consent, SelectAccount.</p>
 <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
 </p>
 <p>Provider represents a particular provider or flavor of Kubernetes. Valid options
-are: EKS, GKE, AKS, OpenShift, DockerEnterprise.</p>
+are: EKS, GKE, AKS, RKE2, OpenShift, DockerEnterprise.</p>
 <h3 id="operator.tigera.io/v1.StatusConditionType">StatusConditionType
 (<code>string</code> alias)</h3>
 <p>
@@ -2100,8 +2128,25 @@ string
 <p>Optionally, a detailed message providing additional context.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>observedGeneration</code><br>
+<em>
+int64
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>observedGeneration represents the generation that the condition was set based upon.
+For instance, if generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+with respect to the current state of the instance.</p>
+</td>
+</tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.TigeraStatusReason">TigeraStatusReason
+(<code>string</code> alias)</h3>
+<p>TigeraStatusReason represents the reason for a particular condition.</p>
 <h3 id="operator.tigera.io/v1.TigeraStatusSpec">TigeraStatusSpec
 </h3>
 <p>
