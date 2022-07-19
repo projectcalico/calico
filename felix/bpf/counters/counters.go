@@ -23,7 +23,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/tc"
 )
 
 const (
@@ -153,13 +152,13 @@ func NewCounters(iface string) *Counters {
 		maps:     make([]bpf.Map, len(HooksName)),
 	}
 
-	pinPath := tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
-		bpf.CountersMapName(), iface, tc.HookIngress)
+	pinPath := bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
+		bpf.CountersMapName(), iface, bpf.HookIngress)
 	cntr.maps[HookIngress] = Map(&bpf.MapContext{}, pinPath)
 	logrus.Debugf("ingress counter map pin path: %v", pinPath)
 
-	pinPath = tc.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
-		bpf.CountersMapName(), iface, tc.HookEgress)
+	pinPath = bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
+		bpf.CountersMapName(), iface, bpf.HookEgress)
 	cntr.maps[HookEgress] = Map(&bpf.MapContext{}, pinPath)
 	logrus.Debugf("egress counter map pin path: %v", pinPath)
 
