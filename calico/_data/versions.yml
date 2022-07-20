@@ -1,3 +1,33 @@
+- title: v3.21.6
+  chart:
+    version: 0
+  tigera-operator:
+   image: tigera/operator
+   registry: quay.io
+   version: v1.23.8
+  components:
+     typha:
+      version: v3.21.6
+     calicoctl:
+      version: v3.21.6
+     calico/node:
+      version: v3.21.6
+     calico/cni:
+      version: v3.21.6
+     calico/apiserver:
+      version: v3.21.6
+     calico/kube-controllers:
+      version: v3.21.6
+     calico/flannel-migration-controller:
+      version: v3.21.6
+     networking-calico:
+      version: v3.21.6
+     flannel:
+      version: v0.13.0
+     calico/dikastes:
+      version: v3.21.6
+     flexvol:
+      version: v3.21.6
 - title: v3.21.5
   chart:
     version: 0
