@@ -2284,6 +2284,8 @@ func CountersMapName() string {
 func MapPinPath(typ int, name, iface string, hook Hook) string {
 	PinBaseDir := path.Join(DefaultBPFfsPath, "tc")
 	subDir := "globals"
+	// We need one jump map and one counter map for each program, thus we need to pin those
+	// to a unique path, which is /sys/fs/bpf/tc/[iface]_[igr|egr|xdp]/[map_name].
 	if (typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, JumpMapName())) ||
 		(typ == unix.BPF_MAP_TYPE_PERCPU_ARRAY && strings.Contains(name, CountersMapName())) {
 		// Remove period in the interface name if any

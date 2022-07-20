@@ -1883,7 +1883,7 @@ func FindJumpMap(progID int, ifaceName string) (mapFD bpf.MapFD, err error) {
 		}
 	}
 
-	return 0, fmt.Errorf("failed to find jump map for iface=%v progID=%v", ifaceName, progID)
+	return 0, fmt.Errorf("failed to find jump map for iface=%s progID=%d", ifaceName, progID)
 }
 
 func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
