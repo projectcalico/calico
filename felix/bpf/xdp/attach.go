@@ -36,23 +36,23 @@ type AttachPoint struct {
 	Modes    []bpf.XDPMode
 }
 
-func (ap *AttachPoint) IfaceName() string {
+func (ap AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
-func (ap *AttachPoint) HookName() string {
+func (ap AttachPoint) HookName() string {
 	return "xdp"
 }
 
-func (ap *AttachPoint) Config() string {
+func (ap AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
 
-func (ap *AttachPoint) JumpMapFDMapKey() string {
+func (ap AttachPoint) JumpMapFDMapKey() string {
 	return "xdp"
 }
 
-func (ap *AttachPoint) FileName() string {
+func (ap AttachPoint) FileName() string {
 	logLevel := strings.ToLower(ap.LogLevel)
 	if logLevel == "off" {
 		logLevel = "no_log"
@@ -60,7 +60,7 @@ func (ap *AttachPoint) FileName() string {
 	return "xdp_" + logLevel + ".o"
 }
 
-func (ap *AttachPoint) SectionName() string {
+func (ap AttachPoint) SectionName() string {
 	return "calico_entrypoint_xdp"
 }
 
@@ -72,39 +72,39 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) AlreadyAttached(object string) (string, bool) {
+func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	progID, err := ap.ProgramID()
 	if err != nil {
 		ap.Log().Debugf("Couldn't get the attached XDP program ID. err=%v", err)
-		return "", false
+		return -1, false
 	}
 
 	somethingAttached, err := ap.IsAttached()
 	if err != nil {
 		ap.Log().Debugf("Failed to verify if any program is attached to interface. err=%v", err)
-		return "", false
+		return -1, false
 	}
 
 	isAttached, err := bpf.AlreadyAttachedProg(ap, object, progID)
 	if err != nil {
 		ap.Log().Debugf("Failed to check if BPF program was already attached. err=%v", err)
-		return "", false
+		return -1, false
 	}
 
 	if isAttached && somethingAttached {
 		return progID, true
 	}
-	return "", false
+	return -1, false
 }
 
-func (ap *AttachPoint) AttachProgram() (string, error) {
+func (ap *AttachPoint) AttachProgram() (int, error) {
 	preCompiledBinary := path.Join(bpf.ObjectDir, ap.FileName())
 	sectionName := ap.SectionName()
 
 	// Patch the binary so that its log prefix is like "eth0------X".
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 	defer func() {
 		_ = os.RemoveAll(tempDir)
@@ -113,7 +113,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	err = ap.patchBinary(preCompiledBinary, tempBinary)
 	if err != nil {
 		ap.Log().WithError(err).Error("Failed to patch binary")
-		return "", err
+		return -1, err
 	}
 
 	// Check if the bpf object is already attached, and we should skip re-attaching it
@@ -180,11 +180,11 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		}
 	}
 	if !attachmentSucceeded {
-		return "", fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
+		return -1, fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
 	}
 	progID, err = ap.ProgramID()
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the attached XDP program ID err=%v", err)
+		return -1, fmt.Errorf("couldn't get the attached XDP program ID err=%v", err)
 	}
 
 	// program is now attached. Now we should store its information to prevent unnecessary reloads in future
@@ -208,7 +208,7 @@ func (ap AttachPoint) DetachProgram() error {
 	}
 
 	// Get the map IDs that the program is using.
-	out, err := exec.Command("bpftool", "prog", "show", "id", progID, "-j").CombinedOutput()
+	out, err := exec.Command("bpftool", "prog", "show", "id", strconv.Itoa(progID), "-j").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Couldn't query XDP prog id=%v iface=%v out=\n%v err=%w", progID, ap.Iface, string(out), err)
 	}
@@ -291,13 +291,13 @@ var ErrNoXDP = errors.New("no XDP program attached")
 
 // TODO: we should try to not get the program ID via 'ip' binary and rather
 // we should use libbpf to obtain it.
-func (ap *AttachPoint) ProgramID() (string, error) {
+func (ap *AttachPoint) ProgramID() (int, error) {
 	cmd := exec.Command("ip", "link", "show", "dev", ap.Iface)
 	ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
 	out, err := cmd.CombinedOutput()
 	ap.Log().Debugf("Result: err=%v out=\n%v", err, string(out))
 	if err != nil {
-		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %w", ap.Iface, err)
+		return -1, fmt.Errorf("Couldn't check for XDP program on iface %v: %w", ap.Iface, err)
 	}
 	s := strings.Fields(string(out))
 	for i := range s {
@@ -307,12 +307,12 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 		//    link/ether 1a:d0:df:a5:12:59 brd ff:ff:ff:ff:ff:ff
 		//    prog/xdp id 175 tag 5199fa060702bbff jited
 		if s[i] == "prog/xdp" && len(s) > i+2 && s[i+1] == "id" {
-			_, err := strconv.Atoi(s[i+2])
+			progID, err := strconv.Atoi(s[i+2])
 			if err != nil {
-				return "", fmt.Errorf("Couldn't parse ID following 'prog/xdp' err=%w out=\n%v", err, string(out))
+				return -1, fmt.Errorf("Couldn't parse ID following 'prog/xdp' err=%w out=\n%v", err, string(out))
 			}
-			return s[i+2], nil
+			return progID, nil
 		}
 	}
-	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' out=\n%v err=%w", string(out), ErrNoXDP)
+	return -1, fmt.Errorf("Couldn't find 'prog/xdp id <ID>' out=\n%v err=%w", string(out), ErrNoXDP)
 }
