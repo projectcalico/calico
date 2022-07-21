@@ -108,6 +108,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
 	}
 	cmd.Printf("IfaceName: %s\n", policyDbg.IfaceName)
 	cmd.Printf("Hook: %s\n", policyDbg.Hook)
+	cmd.Printf("Error: %s\n", policyDbg.Error)
 	cmd.Println("Policy Info:")
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
