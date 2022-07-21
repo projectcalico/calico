@@ -165,12 +165,14 @@ Examples:
 
 		// Set the new name
 		newName := fmt.Sprintf("split-%s-%d", oldPool.GetObjectMeta().GetName(), i)
-		newGenName := ""
-		if oldPool.GetObjectMeta().GetGenerateName() != "" {
-			newGenName = fmt.Sprintf("split-%s-%d", oldPool.GetObjectMeta().GetGenerateName(), i)
+		// Max K8s resource name is 253 characters
+		// TODO: Think of a better way of naming split pools.
+		if len(newName) > 253 {
+			// The split name adds 8 additional characters, modify the old pool name to fit with those additional 8 characters.
+			newName = fmt.Sprintf("split-%s-%d", oldPool.GetObjectMeta().GetName()[:245], i)
 		}
 		splitPool.GetObjectMeta().SetName(newName)
-		splitPool.GetObjectMeta().SetGenerateName(newGenName)
+		splitPool.GetObjectMeta().SetGenerateName("")
 
 		// Set the new CIDR
 		splitPool.Spec.CIDR = cidr
