@@ -76,11 +76,15 @@ func parseArgs(args []string) (string, string, error) {
 }
 
 func printInsn(cmd *cobra.Command, insn asm.Insn) {
-	cmd.Printf("      ")
+	cmd.Printf("%-6s","")
 	for _, value := range insn.Instruction {
 		cmd.Printf("%02x", value)
 	}
-	cmd.Printf(" %v\n", insn)
+	cmd.Printf(" %-80v", insn)
+	if insn.Annotation != "" {
+		cmd.Printf("%s", insn.Annotation)
+	}
+	cmd.Println()
 }
 
 func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
@@ -106,11 +110,11 @@ func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
 	cmd.Printf("Hook: %s\n", policyDbg.Hook)
 	cmd.Println("Policy Info:")
 	for _, insn := range policyDbg.PolicyInfo {
+		for _, comment := range insn.Comments {
+			cmd.Printf("//%s\n", comment)
+		}
 		for _, label := range insn.Labels {
 			cmd.Printf("%s:\n", label)
-		}
-		for _, comment := range insn.Comments {
-			cmd.Printf("      // %s\n", comment)
 		}
 		printInsn(cmd, insn)
 	}
