@@ -76,7 +76,7 @@ func parseArgs(args []string) (string, string, error) {
 }
 
 func printInsn(cmd *cobra.Command, insn asm.Insn) {
-	cmd.Printf("%-6s","")
+	cmd.Printf("%-6s", "")
 	for _, value := range insn.Instruction {
 		cmd.Printf("%02x", value)
 	}
