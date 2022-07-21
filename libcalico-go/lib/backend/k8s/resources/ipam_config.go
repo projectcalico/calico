@@ -66,23 +66,48 @@ type ipamConfigClient struct {
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
-	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
-	return &model.KVPair{
-		Key: model.IPAMConfigKey{},
-		Value: &model.IPAMConfig{
-			StrictAffinity:     v3obj.Spec.StrictAffinity,
-			AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
-			MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
-		},
-		Revision: kvpv3.Revision,
-		UID:      &kvpv3.Value.(*libapiv3.IPAMConfig).UID,
-	}, nil
+	// v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
+	return kvpv3, nil
+
+	/*
+		return &model.KVPair{
+			Key: model.IPAMConfigKey{},
+			Value: &model.IPAMConfig{
+				StrictAffinity:     v3obj.Spec.StrictAffinity,
+				AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
+				MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
+			},
+			Revision: kvpv3.Revision,
+			UID:      &kvpv3.Value.(*libapiv3.IPAMConfig).UID,
+		}, nil
+	*/
 }
 
-// toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
+// There's two possible code path for backend ipamConfig.
+// 1. Libcalico-go IPAM passes a model.IPAMConfig directly. [libcalico-go/lib/ipam/ipam.go]
+// 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfig
+
+// For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
+//
+// Also note the name of the resource are hard coded to "default"
 func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
-	v1obj := kvpv1.Value.(*model.IPAMConfig)
+	var strictAffinity bool
+	var autoAllocateBlocks bool
+	var maxBlocksPerHost int
+	switch obj := kvpv1.Value.(type) {
+	case *model.IPAMConfig:
+		strictAffinity = obj.StrictAffinity
+		autoAllocateBlocks = obj.AutoAllocateBlocks
+		maxBlocksPerHost = obj.MaxBlocksPerHost
+	case *libapiv3.IPAMConfig:
+		strictAffinity = obj.Spec.StrictAffinity
+		autoAllocateBlocks = obj.Spec.AutoAllocateBlocks
+		maxBlocksPerHost = obj.Spec.MaxBlocksPerHost
+	default:
+		log.Panic("ipamConfigClient : wrong interface type")
+	}
+
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: model.IPAMConfigGlobalName,
@@ -98,9 +123,9 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				ResourceVersion: kvpv1.Revision,
 			},
 			Spec: libapiv3.IPAMConfigSpec{
-				StrictAffinity:     v1obj.StrictAffinity,
-				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
-				MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
+				StrictAffinity:     strictAffinity,
+				AutoAllocateBlocks: autoAllocateBlocks,
+				MaxBlocksPerHost:   maxBlocksPerHost,
 			},
 		},
 		Revision: kvpv1.Revision,
