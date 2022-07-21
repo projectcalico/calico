@@ -19,7 +19,6 @@
 #include "skb.h"
 #include "routes.h"
 #include "reasons.h"
-#include "icmp.h"
 #include "parsing.h"
 #include "failsafe.h"
 #include "jump.h"
@@ -113,14 +112,14 @@ deny:
  * which ip will load for us when we're attaching a program to a xdp hook.
  * This allows us to control the behaviour in the window before Felix replaces
  * the policy program with its generated version.*/
-__attribute__((section("1/0")))
+SEC("xdp/policy")
 int calico_xdp_norm_pol_tail(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering normal policy tail call: PASS\n");
 	return XDP_PASS;
 }
 
-__attribute__((section("1/1")))
+SEC("xdp/accept")
 int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
@@ -132,12 +131,12 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 }
 
 #ifndef CALI_ENTRYPOINT_NAME_XDP
-#define CALI_ENTRYPOINT_NAME_XDP calico_entrypoint_xdp
+#define CALI_ENTRYPOINT_NAME_XDP calico_entrypoint
 #endif
 
 // Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
 // because the name is exposed by bpftool et al.
-__attribute__((section(XSTR(CALI_ENTRYPOINT_NAME_XDP))))
+SEC("xdp/"XSTR(CALI_ENTRYPOINT_NAME_XDP))
 int xdp_calico_entry(struct xdp_md *xdp)
 {
 	return calico_xdp(xdp);
