@@ -304,7 +304,7 @@ var FrontendMapParameters = bpf.MapParameters{
 	Version:    3,
 }
 
-func FrontendMap(mc *bpf.MapContext) bpf.Map {
+func FrontendMap(mc *bpf.MapContext) bpf.MapWithExistsCheck {
 	return mc.NewPinnedMap(FrontendMapParameters)
 }
 
@@ -318,7 +318,7 @@ var BackendMapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func BackendMap(mc *bpf.MapContext) bpf.Map {
+func BackendMap(mc *bpf.MapContext) bpf.MapWithExistsCheck {
 	return mc.NewPinnedMap(BackendMapParameters)
 }
 

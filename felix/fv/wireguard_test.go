@@ -445,14 +445,32 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			Eventually(checkConn, "10s", "100ms").ShouldNot(HaveOccurred())
 		})
 
-		for _, ai := range []bool{true, false} {
-			allInterfaces := ai
-			desc := "wireguard traffic is allowed with a blocking host endpoint policy"
-			if ai {
-				desc += " (using * HostEndpoint)"
-			} else {
-				desc += " (using eth0 HostEndpoint)"
-			}
+		tests := []struct {
+			hep            string
+			iptablesPolicy string
+		}{
+			{
+				hep:            "*",
+				iptablesPolicy: "ACCEPT",
+			},
+			{
+				hep:            "*",
+				iptablesPolicy: "DROP",
+			},
+			{
+				hep:            "eth0",
+				iptablesPolicy: "ACCEPT",
+			},
+			{
+				hep:            "eth0",
+				iptablesPolicy: "DROP",
+			},
+		}
+
+		for _, xtc := range tests {
+			tc := xtc
+			desc := "wireguard traffic is allowed with a blocking host endpoint policy" +
+				" (using " + tc.hep + " HostEndpoint, " + tc.iptablesPolicy + ")"
 			It(desc, func() {
 				By("Creating policy to deny wireguard port on main felix host endpoint.")
 				policy := api.NewGlobalNetworkPolicy()
@@ -498,12 +516,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 					hep.Spec.Node = f.Hostname
 					hep.Spec.ExpectedIPs = []string{f.IP}
-					if allInterfaces {
-						hep.Spec.InterfaceName = "*"
-					} else {
-						hep.Spec.InterfaceName = "eth0"
-					}
+					hep.Spec.InterfaceName = tc.hep
 					_, err := client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Setting iptables INPUT chain policy to " + tc.iptablesPolicy)
+				for _, felix := range felixes {
+					_, err := felix.ExecOutput("iptables", "-w", "10", "-W", "100000", "-P", "INPUT", tc.iptablesPolicy)
 					Expect(err).NotTo(HaveOccurred())
 				}
 
@@ -1299,10 +1319,6 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled bool, extraEnvs ..
 	enabled := true
 	felixConfig.Spec.WireguardEnabled = &enabled
 	topologyOptions.InitialFelixConfiguration = felixConfig
-
-	// Debugging.
-	// topologyOptions.ExtraEnvVars["FELIX_DebugUseShortPollIntervals"] = "true"
-	topologyOptions.FelixLogSeverity = "debug"
 
 	return topologyOptions
 }

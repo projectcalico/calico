@@ -9,6 +9,7 @@ spec:
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1

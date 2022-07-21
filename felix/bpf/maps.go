@@ -76,6 +76,11 @@ type Map interface {
 	Delete(k []byte) error
 }
 
+type MapWithExistsCheck interface {
+	Map
+	ErrIsNotExists(error) bool
+}
+
 type MapParameters struct {
 	Filename     string
 	Type         string
@@ -117,10 +122,11 @@ type MapContext struct {
 	CtMap            Map
 	SrMsgMap         Map
 	CtNatsMap        Map
+	IfStateMap       Map
 	MapSizes         map[string]uint32
 }
 
-func (c *MapContext) NewPinnedMap(params MapParameters) Map {
+func (c *MapContext) NewPinnedMap(params MapParameters) MapWithExistsCheck {
 	if len(params.VersionedName()) >= unix.BPF_OBJ_NAME_LEN {
 		logrus.WithField("name", params.Name).Panic("Bug: BPF map name too long")
 	}
@@ -168,6 +174,9 @@ func (b *PinnedMap) Path() string {
 
 func (b *PinnedMap) Close() error {
 	err := b.fd.Close()
+	if b.oldfd > 0 {
+		b.oldfd.Close()
+	}
 	b.fdLoaded = false
 	b.oldfd = 0
 	b.fd = 0
@@ -305,6 +314,10 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 			copy(keyToDelete, k)
 		}
 	}
+}
+
+func (*PinnedMap) ErrIsNotExists(err error) bool {
+	return IsNotExists(err)
 }
 
 func (b *PinnedMap) Update(k, v []byte) error {
@@ -559,6 +572,9 @@ func (b *PinnedMap) EnsureExists() error {
 			// same version but of different size.
 			err := b.copyFromOldMap()
 			if err != nil {
+				b.fd.Close()
+				b.fd = 0
+				b.fdLoaded = false
 				logrus.WithError(err).Error("error copying data from old map")
 				return err
 			}
@@ -572,6 +588,12 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 		// Handle map upgrade.
 		err = b.upgrade()
+		if err != nil {
+			b.fd.Close()
+			b.fd = 0
+			b.fdLoaded = false
+			return err
+		}
 		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
@@ -706,14 +728,14 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams := b.GetMapParams(oldVersion)
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := ctx.NewPinnedMap(oldMapParams)
-	err = oldBpfMap.EnsureExists()
-	if err != nil {
-		return err
-	}
 	defer func() {
 		oldBpfMap.(*PinnedMap).Close()
 		oldBpfMap.(*PinnedMap).fd = 0
 	}()
+	err = oldBpfMap.EnsureExists()
+	if err != nil {
+		return err
+	}
 	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
 }
 
@@ -723,19 +745,19 @@ type Upgradable interface {
 }
 
 type TypedMap[K Key, V Value] struct {
-	Map
+	MapWithExistsCheck
 	kConstructor func([]byte) K
 	vConstructor func([]byte) V
 }
 
 func (m *TypedMap[K, V]) Update(k K, v V) error {
-	return m.Map.Update(k.AsBytes(), v.AsBytes())
+	return m.MapWithExistsCheck.Update(k.AsBytes(), v.AsBytes())
 }
 
 func (m *TypedMap[K, V]) Get(k K) (V, error) {
 	var res V
 
-	vb, err := m.Map.Get(k.AsBytes())
+	vb, err := m.MapWithExistsCheck.Get(k.AsBytes())
 	if err != nil {
 		goto exit
 	}
@@ -747,14 +769,14 @@ exit:
 }
 
 func (m *TypedMap[K, V]) Delete(k K) error {
-	return m.Map.Delete(k.AsBytes())
+	return m.MapWithExistsCheck.Delete(k.AsBytes())
 }
 
 func (m *TypedMap[K, V]) Load() (map[K]V, error) {
 
 	memMap := make(map[K]V)
 
-	err := m.Map.Iter(func(kb, vb []byte) IteratorAction {
+	err := m.MapWithExistsCheck.Iter(func(kb, vb []byte) IteratorAction {
 		memMap[m.kConstructor(kb)] = m.vConstructor(vb)
 		return IterNone
 	})
@@ -762,10 +784,10 @@ func (m *TypedMap[K, V]) Load() (map[K]V, error) {
 	return memMap, err
 }
 
-func NewTypedMap[K Key, V Value](m Map, kConstructor func([]byte) K, vConstructor func([]byte) V) *TypedMap[K, V] {
+func NewTypedMap[K Key, V Value](m MapWithExistsCheck, kConstructor func([]byte) K, vConstructor func([]byte) V) *TypedMap[K, V] {
 	return &TypedMap[K, V]{
-		Map:          m,
-		kConstructor: kConstructor,
-		vConstructor: vConstructor,
+		MapWithExistsCheck: m,
+		kConstructor:       kConstructor,
+		vConstructor:       vConstructor,
 	}
 }

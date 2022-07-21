@@ -18,8 +18,8 @@ import (
 	"net"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	. "github.com/onsi/ginkgo"

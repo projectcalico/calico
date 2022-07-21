@@ -70,12 +70,17 @@ func (d *MockNetlinkDataplane) NewMockWireguard() (netlinkshim.Wireguard, error)
 	}
 	Expect(d.WireguardOpen).To(BeFalse())
 	d.WireguardOpen = true
-	return d, nil
+
+	return &MockWireguard{d}, nil
 }
 
 // ----- Wireguard API -----
 
-func (d *MockNetlinkDataplane) Close() error {
+type MockWireguard struct {
+	*MockNetlinkDataplane
+}
+
+func (d *MockWireguard) Close() error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	defer GinkgoRecover()
@@ -89,7 +94,7 @@ func (d *MockNetlinkDataplane) Close() error {
 	return nil
 }
 
-func (d *MockNetlinkDataplane) DeviceByName(name string) (*wgtypes.Device, error) {
+func (d *MockWireguard) DeviceByName(name string) (*wgtypes.Device, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	defer GinkgoRecover()
@@ -121,7 +126,7 @@ func (d *MockNetlinkDataplane) DeviceByName(name string) (*wgtypes.Device, error
 	return device, nil
 }
 
-func (d *MockNetlinkDataplane) Devices() ([]*wgtypes.Device, error) {
+func (d *MockWireguard) Devices() ([]*wgtypes.Device, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	defer GinkgoRecover()
@@ -148,7 +153,7 @@ func (d *MockNetlinkDataplane) Devices() ([]*wgtypes.Device, error) {
 	return links, nil
 }
 
-func (d *MockNetlinkDataplane) ConfigureDevice(name string, cfg wgtypes.Config) error {
+func (d *MockWireguard) ConfigureDevice(name string, cfg wgtypes.Config) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	defer GinkgoRecover()
