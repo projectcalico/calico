@@ -49,8 +49,9 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		// We don't want to drop packets just because counters initialization fails, but
 		// failing here normally should not happen.
-		return TC_ACT_SHOT;
+		return XDP_DROP;
 	}
+	COUNTER_INC(&ctx, COUNTER_TOTAL_PACKETS);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -108,26 +109,40 @@ deny:
 	return XDP_DROP;
 }
 
+static CALI_BPF_INLINE int calico_xdp_accept(struct xdp_md *xdp)
+{
+	struct cali_tc_ctx ctx = {
+		.counters = counters_get(),
+	};
+
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return XDP_DROP;
+	}
+	// Share with TC the packet is already accepted and accept it there too.
+	if (xdp2tc_set_metadata(xdp, CALI_META_ACCEPTED_BY_XDP)) {
+		CALI_DEBUG("Failed to set metadata for TC\n");
+	}
+	COUNTER_INC(&ctx, CALI_REASON_ACCEPTED_BY_POLICY);
+	return XDP_PASS;
+}
+
 /* This program contains "default" implementations of the policy program
- * which ip will load for us when we're attaching a program to a xdp hook.
+ * which libbpf will load for us when we're attaching a program to a xdp hook.
  * This allows us to control the behaviour in the window before Felix replaces
  * the policy program with its generated version.*/
 SEC("xdp/policy")
 int calico_xdp_norm_pol_tail(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering normal policy tail call: PASS\n");
-	return XDP_PASS;
+	return calico_xdp_accept(xdp);
 }
 
 SEC("xdp/accept")
 int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
-	// Share with TC the packet is already accepted and accept it there too.
-	if (xdp2tc_set_metadata(xdp, CALI_META_ACCEPTED_BY_XDP)) {
-		CALI_DEBUG("Failed to set metadata for TC\n");
-	}
-	return XDP_PASS;
+	return calico_xdp_accept(xdp);
 }
 
 #ifndef CALI_ENTRYPOINT_NAME_XDP
