@@ -5988,9 +5988,9 @@ rules:
     verbs:
       - list
       - watch
+      - update
       - get
       - create
-      - update
       - delete
 ---
 # Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator.yaml
