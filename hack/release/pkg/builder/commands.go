@@ -34,7 +34,6 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	err := cmd.Run()
 	logrus.Debug(outb.String())
 	if err != nil {
-		logrus.Error(errb.String())
 		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
 	}
 	return strings.TrimSpace(outb.String()), err
