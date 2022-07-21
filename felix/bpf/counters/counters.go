@@ -135,9 +135,8 @@ func Descriptions() DescList {
 const (
 	HookIngress = iota
 	HookEgress
+	HookXDP
 )
-
-var HooksName = []string{"ingress", "egress"}
 
 type Counters struct {
 	iface    string
@@ -149,7 +148,7 @@ func NewCounters(iface string) *Counters {
 	cntr := Counters{
 		iface:    iface,
 		numOfCpu: bpf.NumPossibleCPUs(),
-		maps:     make([]bpf.Map, len(HooksName)),
+		maps:     make([]bpf.Map, len(bpf.Hooks)),
 	}
 
 	pinPath := bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
@@ -162,16 +161,21 @@ func NewCounters(iface string) *Counters {
 	cntr.maps[HookEgress] = Map(&bpf.MapContext{}, pinPath)
 	logrus.Debugf("egress counter map pin path: %v", pinPath)
 
+	pinPath = bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
+		bpf.CountersMapName(), iface, bpf.HookXDP)
+	cntr.maps[HookXDP] = Map(&bpf.MapContext{}, pinPath)
+	logrus.Debugf("XDP counter map pin path: %v", pinPath)
+
 	return &cntr
 }
 
 func (c Counters) Read() ([][]uint32, error) {
-	values := make([][]uint32, len(HooksName))
+	values := make([][]uint32, len(bpf.Hooks))
 	for i := range values {
 		values[i] = make([]uint32, MaxCounterNumber)
 	}
 
-	for hook, name := range HooksName {
+	for hook, name := range bpf.Hooks {
 		val, err := c.read(c.maps[hook])
 		if err != nil {
 			return values, fmt.Errorf("Failed to read bpf counters. hook=%s err=%v", name, err)
@@ -217,7 +221,7 @@ func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 }
 
 func (c *Counters) Flush() error {
-	for hook, name := range HooksName {
+	for hook, name := range bpf.Hooks {
 		err := c.flush(c.maps[hook])
 		if err != nil {
 			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%w", c.iface, name, err)
