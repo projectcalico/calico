@@ -19,7 +19,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-The following platforms using only IPv4:
+The following platforms:
 
 - Kubernetes, on-premises
 - EKS using Calico CNI
@@ -35,7 +35,7 @@ The following platforms using only IPv4:
 
 - On all nodes in the cluster that you want to participate in {{site.prodname}} encryption, verify that the operating system(s) on the nodes are {% include open-new-window.html text='installed with WireGuard' url='https://www.wireguard.com/install/' %}.
 
-  > **Note**: Some node operating systems do not support Wireguard, or do not have it installed by default. Enabling {{site.prodname}} Wireguard encryption does not require all nodes to be installed with Wireguard. However, traffic to or from a node that does not have Wireguard installed, will not be encrypted.
+  > **Note**: Some node operating systems do not support Wireguard, or do not have it installed by default. Enabling {{site.prodname}} Wireguard encryption does not require all nodes to be installed with Wireguard. However, traffic to or from a node that does not have Wireguard installed will not be encrypted.
   {: .alert .alert-info}
 
 - IP addresses for every node in the cluster. This is required to establish secure tunnels between the nodes. {{site.prodname}} can automatically do this using [IP autodetection methods]({{site.baseurl}}/networking/ip-autodetection).
@@ -132,20 +132,44 @@ To install WireGuard for OpenShift v4.8:
 <label:Operator,active:true>
 <%
 
-Enable WireGuard encryption across all the nodes using the following command.
+Enable IPv4 WireGuard encryption across all the nodes using the following command.
 
 ```bash
 kubectl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
+```
+
+Enable IPv6 WireGuard encryption across all the nodes using the following command.
+
+```bash
+kubectl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabledV6":true}}'
+```
+
+To enable both IPv4 and IPv6 WireGuard encryption across all the nodes, use the following command.
+
+```bash
+kubectl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true,"wireguardEnabledV6":true}}'
 ```
 
 %>
 <label:Manifest>
 <%
 
-Enable WireGuard encryption across all the nodes using the following command.
+Enable IPv4 WireGuard encryption across all the nodes using the following command.
 
 ```bash
 calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
+```
+
+Enable IPv6 WireGuard encryption across all the nodes using the following command.
+
+```bash
+calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabledV6":true}}'
+```
+
+To enable both IPv4 and IPv6 WireGuard encryption across all the nodes, use the following command.
+
+```bash
+calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true,"wireguardEnabledV6":true}}'
 ```
 
 **Perform the next step for EKS and AKS clusters only, and only if your cluster is using the cloud provider CNI plugin and not Calico CNI.** Enable WireGuard encryption for direct node-to-node communications using the following command.
@@ -166,7 +190,7 @@ We recommend that you review and modify the MTU used by {{site.prodname}} networ
 
 #### Disable WireGuard for an individual node
 
-To disable WireGuard on a specific node with WireGuard installed, modify the node-specific Felix configuration. e.g., to turn off encryption for pod traffic on node `my-node`, use the following command:
+To disable WireGuard on a specific node with WireGuard installed, modify the node-specific Felix configuration. e.g., to turn off encryption for pod traffic on node `my-node`, use the following command. This command disables WireGuard for both IPv4 and IPv6, modify it accordingly if disabling only either IP version:
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -178,15 +202,16 @@ spec:
   logSeverityScreen: Info
   reportingInterval: 0s
   wireguardEnabled: false
+  wireguardEnabledV6: false
 EOF
 ```
 
 With the above command, {{site.prodname}} will not encrypt any of the pod traffic to or from node `my-node`.
 
-To enable encryption for pod traffic on node `my-node` again:
+To enable encryption for IPv4 and IPv6 pod traffic on node `my-node` again, patch this node's FelixConfiguration (modify accordingly if only dealing with IPv4 or IPv6):
 
 ```bash
-calicoctl patch felixconfiguration node.my-node --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
+calicoctl patch felixconfiguration node.my-node --type='merge' -p '{"spec":{"wireguardEnabled":true,"wireguardEnabledV6":true}}'
 ```
 
 #### Verify configuration
@@ -199,6 +224,7 @@ To verify that the nodes are configured for WireGuard encryption, check the node
    status:
      ...
      wireguardPublicKey: jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=
+     wireguardPublicKeyV6: hTnWXGM4qk/Z8fQgyGFdpPd4qM9QGR2ey30s31yC6g4=
      ...
 ```
 
@@ -207,7 +233,7 @@ To verify that the nodes are configured for WireGuard encryption, check the node
 To disable WireGuard on all nodes modify the default Felix configuration. For example:
 
 ```bash
-  calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":false}}'
+  calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":false,"wireguardEnabledV6":false}}'
 ```
 
 ### Above and beyond
