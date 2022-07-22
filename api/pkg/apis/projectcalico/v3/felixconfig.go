@@ -320,6 +320,10 @@ type FelixConfigurationSpec struct {
 	// the tunneled traffic be accepted at calico nodes.
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
 
+	// RPFilterSkipCIDRList is a list of CIDR's that will be excluded from strict reverse-path filtering. This allows
+	// for a default list of addresses that can be spoofed by workloads.
+	RPFilterSkipCIDRList *[]string `json:"rpFilterSkipCIDRList,omitempty"`
+
 	DebugMemoryProfilePath          string           `json:"debugMemoryProfilePath,omitempty"`
 	DebugDisableLogDropping         *bool            `json:"debugDisableLogDropping,omitempty"`
 	DebugSimulateCalcGraphHangAfter *metav1.Duration `json:"debugSimulateCalcGraphHangAfter,omitempty" configv1timescale:"seconds"`

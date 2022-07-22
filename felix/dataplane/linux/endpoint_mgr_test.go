@@ -720,6 +720,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				mockProcSys.write,
 				mockProcSys.stat,
 				"1",
+				[]string{},
 				false,
 				hepListener,
 				common.NewCallbacks(),
