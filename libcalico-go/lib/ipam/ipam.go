@@ -21,6 +21,7 @@ import (
 	"math/bits"
 	"runtime"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
@@ -1805,24 +1806,57 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (m
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
 func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err error) {
-	obj, err := c.client.Get(ctx, model.IPAMConfigKey{}, "")
-	if err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			// IPAMConfig has not been explicitly set.  Return
-			// a default IPAM configuration.
-			config = &IPAMConfig{
-				AutoAllocateBlocks: true,
-				StrictAffinity:     false,
-				MaxBlocksPerHost:   0,
-			}
-			err = nil
-		} else {
-			log.Errorf("Error getting IPAMConfig: %v", err)
-			return nil, err
+	var obj *model.KVPair
+
+	var retries int
+	maxRetry := 5
+
+	// First, trying to get IPAM config (create if not exists) for 5 times.
+	for retries = 1; retries < maxRetry; retries++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
-	} else {
-		config = c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig))
+
+		obj, err = c.client.Get(ctx, model.IPAMConfigKey{}, "")
+		if err != nil {
+			// Create the default config if it doesn't already exist.
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				// Write to datastore.
+				new := &model.KVPair{
+					Key: model.IPAMConfigKey{},
+					Value: &model.IPAMConfig{
+						StrictAffinity:     false,
+						AutoAllocateBlocks: true,
+						MaxBlocksPerHost:   0,
+					},
+				}
+
+				obj, err = c.client.Create(ctx, new)
+				if err != nil {
+					if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+						log.Info("Failed to create global IPAM config; another node got there first.")
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					log.WithError(err).Errorf("Error creating IPAM config")
+					return nil, err
+				}
+			} else {
+				log.WithError(err).Errorf("Error getting IPAM config")
+				return nil, err
+			}
+			break
+		}
+
+		break
 	}
+
+	if retries >= maxRetry {
+		return nil, fmt.Errorf("failed to get ipam config after %d retries", retries)
+	}
+
+	config = c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig))
+
 	if detectOS(ctx) == "windows" {
 		// When a Windows node owns a block, it creates a local /26 subnet object and as far as we know, it can't
 		// do a longest-prefix-match between the subnet CIDR and a remote /32.  This means that we can't allow
