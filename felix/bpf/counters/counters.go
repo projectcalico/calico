@@ -132,12 +132,6 @@ func Descriptions() DescList {
 	return descriptions
 }
 
-const (
-	HookIngress = iota
-	HookEgress
-	HookXDP
-)
-
 type Counters struct {
 	iface    string
 	numOfCpu int
@@ -151,28 +145,20 @@ func NewCounters(iface string) *Counters {
 		maps:     make([]bpf.Map, len(bpf.Hooks)),
 	}
 
-	pinPath := bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
-		bpf.CountersMapName(), iface, bpf.HookIngress)
-	cntr.maps[HookIngress] = Map(&bpf.MapContext{}, pinPath)
-	logrus.Debugf("ingress counter map pin path: %v", pinPath)
-
-	pinPath = bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
-		bpf.CountersMapName(), iface, bpf.HookEgress)
-	cntr.maps[HookEgress] = Map(&bpf.MapContext{}, pinPath)
-	logrus.Debugf("egress counter map pin path: %v", pinPath)
-
-	pinPath = bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
-		bpf.CountersMapName(), iface, bpf.HookXDP)
-	cntr.maps[HookXDP] = Map(&bpf.MapContext{}, pinPath)
-	logrus.Debugf("XDP counter map pin path: %v", pinPath)
+	for index, hook := range bpf.Hooks {
+		pinPath := bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
+			bpf.CountersMapName(), iface, hook)
+		cntr.maps[index] = Map(&bpf.MapContext{}, pinPath)
+		logrus.Debugf("%s counter map pin path: %v", hook, pinPath)
+	}
 
 	return &cntr
 }
 
-func (c Counters) Read() ([][]uint32, error) {
-	values := make([][]uint32, len(bpf.Hooks))
+func (c Counters) Read() ([][]uint64, error) {
+	values := make([][]uint64, len(bpf.Hooks))
 	for i := range values {
-		values[i] = make([]uint32, MaxCounterNumber)
+		values[i] = make([]uint64, MaxCounterNumber)
 	}
 
 	for hook, name := range bpf.Hooks {
@@ -190,10 +176,10 @@ func (c Counters) Read() ([][]uint32, error) {
 	return values, nil
 }
 
-func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
+func (c Counters) read(cMap bpf.Map) ([]uint64, error) {
 	err := cMap.Open()
 	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to open counters map. err=%w", err)
+		return []uint64{}, fmt.Errorf("failed to open counters map. err=%w", err)
 	}
 	defer func() {
 		err := cMap.Close()
@@ -206,14 +192,14 @@ func (c Counters) read(cMap bpf.Map) ([]uint32, error) {
 	k := make([]byte, counterMapKeySize)
 	values, err := cMap.Get(k)
 	if err != nil {
-		return []uint32{}, fmt.Errorf("failed to read counters map. err=%w", err)
+		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
 	}
 
-	bpfCounters := make([]uint32, MaxCounterNumber)
+	bpfCounters := make([]uint64, MaxCounterNumber)
 	for i := range bpfCounters {
 		for cpu := 0; cpu < c.numOfCpu; cpu++ {
 			begin := i*counterMapValueSize + cpu*MaxCounterNumber*counterMapValueSize
-			data := uint32(binary.LittleEndian.Uint32(values[begin : begin+counterMapValueSize]))
+			data := uint64(binary.LittleEndian.Uint32(values[begin : begin+counterMapValueSize]))
 			bpfCounters[i] += data
 		}
 	}
