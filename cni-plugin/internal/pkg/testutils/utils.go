@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/onsi/ginkgo"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -98,7 +99,7 @@ func MustCreateNewIPPoolBlockSize(c client.Interface, cidr string, ipip, natOutg
 	pool.Spec.IPIPMode = mode
 	pool.Spec.BlockSize = blockSize
 
-	By(fmt.Sprintf("Creating IP pool %s for the test. %+v", name, pool.Spec))
+	ginkgo.By(fmt.Sprintf("Creating IP pool %s for the test. %+v", name, pool.Spec))
 	_, err := c.IPPools().Create(context.Background(), pool, options.SetOptions{})
 	if err != nil {
 		panic(err)
