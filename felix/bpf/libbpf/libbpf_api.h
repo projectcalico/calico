@@ -156,7 +156,7 @@ int bpf_program_attach_xdp(struct bpf_object *obj, char *secName, int ifIndex, i
 		goto out;
 	}
 
-	int prog_fd = bpf_program__fd(bpf_object__find_program_by_title(obj, secName));
+	int prog_fd = bpf_program__fd(prog);
 	if (prog_fd < 0) {
 		errno = -prog_fd;
 		return prog_fd;
