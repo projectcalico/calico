@@ -168,6 +168,11 @@ func (c client) CalicoNodeStatus() CalicoNodeStatusInterface {
 	return calicoNodeStatus{client: c}
 }
 
+// BlockAffinity returns an interface for viewing the IPAM block affinity resources.
+func (c client) BlockAffinities() BlockAffinityInterface {
+	return blockAffinities{client: c}
+}
+
 type poolAccessor struct {
 	client *client
 }
