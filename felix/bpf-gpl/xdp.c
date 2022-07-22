@@ -49,9 +49,8 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		// We don't want to drop packets just because counters initialization fails, but
 		// failing here normally should not happen.
-		return XDP_DROP;
+		return TC_ACT_SHOT;
 	}
-	COUNTER_INC(&ctx, COUNTER_TOTAL_PACKETS);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -110,7 +109,7 @@ deny:
 }
 
 /* This program contains "default" implementations of the policy program
- * which libbpf will load for us when we're attaching a program to a xdp hook.
+ * which ip will load for us when we're attaching a program to a xdp hook.
  * This allows us to control the behaviour in the window before Felix replaces
  * the policy program with its generated version.*/
 SEC("xdp/policy")
@@ -124,55 +123,11 @@ SEC("xdp/accept")
 int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
-	struct cali_tc_ctx ctx = {
-		.counters = counters_get(),
-	};
-
-	if (!ctx.counters) {
-		CALI_DEBUG("Counters map lookup failed: DROP\n");
-		return XDP_DROP;
-	}
 	// Share with TC the packet is already accepted and accept it there too.
 	if (xdp2tc_set_metadata(xdp, CALI_META_ACCEPTED_BY_XDP)) {
 		CALI_DEBUG("Failed to set metadata for TC\n");
 	}
-	COUNTER_INC(&ctx, CALI_REASON_ACCEPTED_BY_POLICY);
 	return XDP_PASS;
-}
-
-SEC("xdp/drop")
-int calico_xdp_drop(struct xdp_md *xdp)
-{
-	CALI_DEBUG("Entering calico_xdp_drop\n");
-	struct cali_tc_ctx ctx = {
-		.state = state_get(),
-		.counters = counters_get(),
-	};
-
-	if (!ctx.state) {
-		CALI_DEBUG("State map lookup failed: no event generated\n");
-		return XDP_DROP;
-	}
-
-	if (!ctx.counters) {
-		CALI_DEBUG("Counters map lookup failed: DROP\n");
-		return XDP_DROP;
-	}
-	DENY_REASON(&ctx, CALI_REASON_DROPPED_BY_POLICY);
-
-	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
-	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(ctx.state->ip_src),
-			bpf_ntohl(ctx.state->ip_dst));
-	CALI_DEBUG("pre_nat=%x:%d\n", bpf_ntohl(ctx.state->pre_nat_ip_dst),
-			ctx.state->pre_nat_dport);
-	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(ctx.state->post_nat_ip_dst), ctx.state->post_nat_dport);
-	CALI_DEBUG("tun_ip=%x\n", ctx.state->tun_ip);
-	CALI_DEBUG("pol_rc=%d\n", ctx.state->pol_rc);
-	CALI_DEBUG("sport=%d\n", ctx.state->sport);
-	CALI_DEBUG("flags=0x%x\n", ctx.state->flags);
-	CALI_DEBUG("ct_rc=%d\n", ctx.state->ct_result.rc);
-
-	return XDP_DROP;
 }
 
 #ifndef CALI_ENTRYPOINT_NAME_XDP
