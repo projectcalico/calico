@@ -33,6 +33,8 @@ type ProgName string
 var programNames = []ProgName{
 	"calico_xdp_norm_pol_tail",
 	"calico_xdp_accepted_entrypoint",
+	"calico_xdp_icmp", // Not used, just defined to align indexes with TC
+	"calico_xdp_drop",
 }
 
 const DetachedID = 0
@@ -283,6 +285,12 @@ func updateJumpMap(obj *libbpf.Obj) error {
 		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
 		if err != nil {
 			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
+		}
+
+		dIndex := 3
+		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
+		if err != nil {
+			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
 		}
 	}
 

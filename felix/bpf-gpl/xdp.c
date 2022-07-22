@@ -145,6 +145,41 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 	return calico_xdp_accept(xdp);
 }
 
+SEC("xdp/drop")
+int calico_xdp_drop(struct xdp_md *xdp)
+{
+	CALI_DEBUG("Entering calico_xdp_drop\n");
+	struct cali_tc_ctx ctx = {
+		.state = state_get(),
+		.counters = counters_get(),
+	};
+
+	if (!ctx.state) {
+		CALI_DEBUG("State map lookup failed: no event generated\n");
+		return XDP_DROP;
+	}
+
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return XDP_DROP;
+	}
+	COUNTER_INC(&ctx, CALI_REASON_DROPPED_BY_POLICY);
+
+	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
+	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(ctx.state->ip_src),
+			bpf_ntohl(ctx.state->ip_dst));
+	CALI_DEBUG("pre_nat=%x:%d\n", bpf_ntohl(ctx.state->pre_nat_ip_dst),
+			ctx.state->pre_nat_dport);
+	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(ctx.state->post_nat_ip_dst), ctx.state->post_nat_dport);
+	CALI_DEBUG("tun_ip=%x\n", ctx.state->tun_ip);
+	CALI_DEBUG("pol_rc=%d\n", ctx.state->pol_rc);
+	CALI_DEBUG("sport=%d\n", ctx.state->sport);
+	CALI_DEBUG("flags=0x%x\n", ctx.state->flags);
+	CALI_DEBUG("ct_rc=%d\n", ctx.state->ct_result.rc);
+
+	return XDP_DROP;
+}
+
 #ifndef CALI_ENTRYPOINT_NAME_XDP
 #define CALI_ENTRYPOINT_NAME_XDP calico_entrypoint
 #endif
