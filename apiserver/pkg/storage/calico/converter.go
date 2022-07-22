@@ -110,6 +110,10 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		lcg := libcalicoObject.(*libapi.IPAMConfig)
 		aapi := &aapi.IPAMConfiguration{}
 		IPAMConfigConverter{}.convertToAAPI(lcg, aapi)
+	case *api.BlockAffinity:
+		lcg := libcalicoObject.(*libapi.BlockAffinity)
+		aapi := &aapi.BlockAffinity{}
+		BlockAffinityConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
 	default:
 		klog.Infof("Unrecognized libcalico object (type %v)", reflect.TypeOf(libcalicoObject))
