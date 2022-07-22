@@ -49,8 +49,9 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		// We don't want to drop packets just because counters initialization fails, but
 		// failing here normally should not happen.
-		return TC_ACT_SHOT;
+		return XDP_DROP;
 	}
+	COUNTER_INC(&ctx, COUNTER_TOTAL_PACKETS);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -123,10 +124,25 @@ SEC("xdp/accept")
 int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
+	struct cali_tc_ctx ctx = {
+		.counters = counters_get(),
+		.fwd = {
+			.res = XDP_PASS,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+	};
+
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return XDP_DROP;
+	}
+
 	// Share with TC the packet is already accepted and accept it there too.
 	if (xdp2tc_set_metadata(xdp, CALI_META_ACCEPTED_BY_XDP)) {
 		CALI_DEBUG("Failed to set metadata for TC\n");
 	}
+	COUNTER_INC(&ctx, CALI_REASON_ACCEPTED_BY_POLICY);
+
 	return XDP_PASS;
 }
 

@@ -143,7 +143,7 @@ int bpf_xdp_program_id(int ifIndex) {
 	return prog_id;
 }
 
-int bpf_program_attach_xdp(struct bpf_object *obj, char *secName, int ifIndex, int old_id, __u32 flags)
+int bpf_program_attach_xdp(struct bpf_object *obj, char *name, int ifIndex, int old_id, __u32 flags)
 {
 	int err = 0;
 	struct bpf_link *link = NULL;
@@ -151,12 +151,12 @@ int bpf_program_attach_xdp(struct bpf_object *obj, char *secName, int ifIndex, i
 	DECLARE_LIBBPF_OPTS(bpf_xdp_set_link_opts, opts,
 		.old_fd = bpf_prog_get_fd_by_id(old_id));
 
-	if (!(prog = bpf_object__find_program_by_title(obj, secName))) {
+	if (!(prog = bpf_object__find_program_by_name(obj, name))) {
 		err = ENOENT;
 		goto out;
 	}
 
-	int prog_fd = bpf_program__fd(bpf_object__find_program_by_title(obj, secName));
+	int prog_fd = bpf_program__fd(prog);
 	if (prog_fd < 0) {
 		errno = -prog_fd;
 		return prog_fd;
