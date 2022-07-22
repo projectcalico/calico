@@ -168,7 +168,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		ap.Log().Debugf("Trying to attach XDP program in mode %v - old id: %v", mode, oldID)
 		// Force attach the program. If there is already a program attached, the replacement only
 		// succeed in the same mode of the current program.
-		progID, err = obj.AttachXDP(ap.ProgramName(), ap.Iface, oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
+		progID, err = obj.AttachXDP(ap.Iface, ap.ProgramName(), oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
 		if err != nil || progID == DetachedID || progID == oldID {
 			ap.Log().WithError(err).Warnf("Failed to attach to XDP program %s mode %v", ap.ProgramName(), mode)
 		} else {

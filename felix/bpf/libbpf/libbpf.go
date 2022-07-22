@@ -148,7 +148,7 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	return int(progId), nil
 }
 
-func (o *Obj) AttachXDP(progName, ifName string, oldID int, mode uint) (int, error) {
+func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, error) {
 	cProgName := C.CString(progName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cProgName))
