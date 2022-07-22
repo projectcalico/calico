@@ -1705,7 +1705,7 @@ func runTest(t *testing.T, tp testPolicy) {
 		t.Run(fmt.Sprintf("should drop %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
 			if tp.XDP() {
-				runProgram(tc, testStateMap, polProgFD, XDPDrop, state.PolicyDeny)
+				runProgram(tc, testStateMap, polProgFD, XDPDrop, state.PolicyXDPDrop)
 			} else {
 				runProgram(tc, testStateMap, polProgFD, RCDrop, state.PolicyDeny)
 			}
@@ -1764,6 +1764,7 @@ func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int,
 	stateOut := state.StateFromBytes(stateBytesOut)
 	log.Debugf("State out %#v", stateOut)
 	Expect(stateOut.PolicyRC).To(BeNumerically("==", expPolRC), "policy RC was incorrect")
+	log.Infof("mazmaz %v", result.RC)
 	Expect(result.RC).To(BeNumerically("==", expProgRC), "program RC was incorrect")
 	tc.MatchStateOut(stateOut)
 }
