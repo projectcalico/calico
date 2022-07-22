@@ -70,7 +70,7 @@ func TestReattachPrograms(t *testing.T) {
 	vethName3, veth3 := createVeth()
 	defer deleteLink(veth3)
 	ap3.Iface = vethName3
-	log.Debugf("Testing %v in %v", ap3.SectionName(), ap3.FileName())
+	log.Debugf("Testing %v in %v", ap3.ProgramName(), ap3.FileName())
 
 	// Start with a clean base state in case another test left something behind.
 	t.Log("Doing initial clean up")
