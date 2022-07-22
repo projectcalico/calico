@@ -121,18 +121,19 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// Create the client.  Initialize the cache revision to 1 so that the watcher
 	// code can handle the first iteration by always rendering.
 	c := &client{
-		client:            bc,
-		cache:             make(map[string]string),
-		peeringCache:      make(map[string]string),
-		cacheRevision:     1,
-		revisionsByPrefix: make(map[string]uint64),
-		nodeMeshEnabled:   nodeMeshEnabled,
-		nodeLabelManager:  newNodeLabelManager(),
-		bgpPeers:          make(map[string]*apiv3.BGPPeer),
-		sourceReady:       make(map[string]bool),
-		nodeListenPorts:   make(map[string]uint16),
-		globalBGPConfig:   cfg,
-		nodeIPs:           make(map[string]struct{}),
+		client:                  bc,
+		cache:                   make(map[string]string),
+		peeringCache:            make(map[string]string),
+		cacheRevision:           1,
+		revisionsByPrefix:       make(map[string]uint64),
+		nodeMeshEnabled:         nodeMeshEnabled,
+		nodeLabelManager:        newNodeLabelManager(),
+		bgpPeers:                make(map[string]*apiv3.BGPPeer),
+		sourceReady:             make(map[string]bool),
+		nodeListenPorts:         make(map[string]uint16),
+		globalBGPConfig:         cfg,
+		nodeIPs:                 make(map[string]struct{}),
+		programmedRouteRefCount: make(map[string]int),
 
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
@@ -279,6 +280,11 @@ type client struct {
 
 	// The route generator
 	rg *routeGenerator
+
+	// Keep reference counts of programmed routes. We have multiple route
+	// sources to track - k8s Services, and BGPConfiguration - and they can
+	// provide duplicate routes.
+	programmedRouteRefCount map[string]int
 
 	// Readiness signals for individual data sources.
 	sourceReady map[string]bool
@@ -800,7 +806,6 @@ func (c *client) OnUpdates(updates []api.Update) {
 }
 
 func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
-
 	// Update our cache from the updates.
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
@@ -1027,7 +1032,6 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 }
 
 func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfiguration, svcAdvertisement *bool, updatePeersV1 *bool, updateReasons *[]string) {
-
 	if resName == globalConfigName {
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
@@ -1249,7 +1253,7 @@ func (c *client) getNodeToNodeMeshKVPair(v3res *apiv3.BGPConfiguration, key inte
 
 	if v3res != nil && v3res.Spec.NodeToNodeMeshEnabled != nil {
 		enabled := *v3res.Spec.NodeToNodeMeshEnabled
-		var val = nodeToNodeMeshEnabled
+		val := nodeToNodeMeshEnabled
 		if !enabled {
 			val = nodeToNodeMeshDisabled
 		}
@@ -1638,10 +1642,12 @@ func (c *client) updateLogLevel() {
 	}
 }
 
-var routeKeyPrefix = "/calico/staticroutes/"
-var rejectKeyPrefix = "/calico/rejectcidrs/"
-var routeKeyPrefixV6 = "/calico/staticroutesv6/"
-var rejectKeyPrefixV6 = "/calico/rejectcidrsv6/"
+var (
+	routeKeyPrefix    = "/calico/staticroutes/"
+	rejectKeyPrefix   = "/calico/rejectcidrs/"
+	routeKeyPrefixV6  = "/calico/staticroutesv6/"
+	rejectKeyPrefixV6 = "/calico/rejectcidrsv6/"
+)
 
 func (c *client) addRoutesLockHeld(prefixV4, prefixV6 string, cidrs []string) {
 	for _, cidr := range cidrs {
@@ -1651,7 +1657,10 @@ func (c *client) addRoutesLockHeld(prefixV4, prefixV6 string, cidrs []string) {
 		} else {
 			k = prefixV4 + strings.Replace(cidr, "/", "-", 1)
 		}
+
+		// Update the cache and increment the reference count for this key.
 		c.cache[k] = cidr
+		c.programmedRouteRefCount[k]++
 		c.keyUpdated(k)
 	}
 }
@@ -1664,8 +1673,17 @@ func (c *client) deleteRoutesLockHeld(prefixV4, prefixV6 string, cidrs []string)
 		} else {
 			k = prefixV4 + strings.Replace(cidr, "/", "-", 1)
 		}
-		delete(c.cache, k)
-		c.keyUpdated(k)
+
+		if c.programmedRouteRefCount[k] == 1 {
+			// This is the last reference for this route. We can remove it.
+			// We only delete from the cache if there are no other users of this route.
+			delete(c.cache, k)
+			delete(c.programmedRouteRefCount, k)
+			c.keyUpdated(k)
+		} else {
+			// Just decrement the ref counter.
+			c.programmedRouteRefCount[k]--
+		}
 	}
 }
 
@@ -1691,7 +1709,6 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 }
 
 func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv3.BGPPeer) {
-
 	// Get the password, if one is configured.
 	password := c.getPassword(v3res)
 
