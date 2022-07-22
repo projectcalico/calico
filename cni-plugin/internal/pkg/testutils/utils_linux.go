@@ -54,7 +54,6 @@ func min(a, b int) int {
 
 // GetResultForCurrent takes the output with cniVersion and returns the Result in cniv1.Result format.
 func GetResultForCurrent(session *gexec.Session, cniVersion string) (*cniv1.Result, error) {
-
 	// Check if the version is older than 0.3.0.
 	// Convert it to Current standard spec version if that is the case.
 	if version.Compare(cniVersion, "0.3.0", "<") {
@@ -240,20 +239,21 @@ func RunCNIPluginWithId(
 
 	// Create a new exec implementation that captures stderr (CNI plugin logs) so we can
 	// properly emit them with ginkgo.
-	var customExec = &invoke.DefaultExec{
+	customExec := &invoke.DefaultExec{
 		RawExec: &invoke.RawExec{Stderr: ginkgo.GinkgoWriter},
 	}
 
 	// Invoke the CNI plugin, returning any errors to the calling code to handle.
-	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
+	By(fmt.Sprintf("Calling CNI plugin with the following env vars: %v", env))
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, customExec)
 	if err != nil {
-		log.Debugf("config is: %s", netconf)
 		err = je.Trace(err)
 		return
 	}
+
+	By("Parsing the CNI plugin's output and result")
 
 	// Extract the target CNI version from the provided network config.
 	var nc types.NetConf

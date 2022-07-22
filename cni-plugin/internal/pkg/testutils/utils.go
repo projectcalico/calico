@@ -15,6 +15,7 @@ package testutils
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -35,8 +36,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const K8S_TEST_NS = "test"
-const TEST_DEFAULT_NS = "default"
+const (
+	K8S_TEST_NS     = "test"
+	TEST_DEFAULT_NS = "default"
+)
 
 // Delete everything under /calico from etcd.
 func WipeDatastore() {
@@ -95,6 +98,7 @@ func MustCreateNewIPPoolBlockSize(c client.Interface, cidr string, ipip, natOutg
 	pool.Spec.IPIPMode = mode
 	pool.Spec.BlockSize = blockSize
 
+	By(fmt.Sprintf("Creating IP pool %s for the test. %+v", name, pool.Spec))
 	_, err := c.IPPools().Create(context.Background(), pool, options.SetOptions{})
 	if err != nil {
 		panic(err)
