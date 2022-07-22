@@ -67,8 +67,8 @@ func (ap AttachPoint) FileName() string {
 	return "xdp_" + logLevel + ".o"
 }
 
-func (ap AttachPoint) SectionName() string {
-	return "xdp/calico_entrypoint"
+func (ap AttachPoint) ProgramName() string {
+	return "xdp_calico_entry"
 }
 
 func (ap *AttachPoint) Log() *log.Entry {
@@ -168,9 +168,9 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		ap.Log().Debugf("Trying to attach XDP program in mode %v - old id: %v", mode, oldID)
 		// Force attach the program. If there is already a program attached, the replacement only
 		// succeed in the same mode of the current program.
-		progID, err = obj.AttachXDP(ap.SectionName(), ap.Iface, oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
+		progID, err = obj.AttachXDP(ap.ProgramName(), ap.Iface, oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
 		if err != nil || progID == DetachedID || progID == oldID {
-			ap.Log().WithError(err).Warnf("Failed to attach to XDP section %s mode %v", ap.SectionName(), mode)
+			ap.Log().WithError(err).Warnf("Failed to attach to XDP program %s mode %v", ap.ProgramName(), mode)
 		} else {
 			ap.Log().Debugf("Successfully attached XDP program in mode %v. ID: %v", mode, progID)
 			attachmentSucceeded = true
@@ -179,8 +179,8 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 
 	if !attachmentSucceeded {
-		return -1, fmt.Errorf("failed to attach XDP program with section name %v to interface %v",
-			ap.SectionName(), ap.Iface)
+		return -1, fmt.Errorf("failed to attach XDP program with program name %v to interface %v",
+			ap.ProgramName(), ap.Iface)
 	}
 
 	// program is now attached. Now we should store its information to prevent unnecessary reloads in future
