@@ -12,6 +12,14 @@ type BGPConfigurationListerExpansion interface{}
 // BGPPeerLister.
 type BGPPeerListerExpansion interface{}
 
+// BlockAffinityListerExpansion allows custom methods to be added to
+// BlockAffinityLister.
+type BlockAffinityListerExpansion interface{}
+
+// BlockAffinityNamespaceListerExpansion allows custom methods to be added to
+// BlockAffinityNamespaceLister.
+type BlockAffinityNamespaceListerExpansion interface{}
+
 // CalicoNodeStatusListerExpansion allows custom methods to be added to
 // CalicoNodeStatusLister.
 type CalicoNodeStatusListerExpansion interface{}
