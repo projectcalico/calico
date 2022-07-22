@@ -19,7 +19,6 @@
 #include "skb.h"
 #include "routes.h"
 #include "reasons.h"
-#include "icmp.h"
 #include "parsing.h"
 #include "failsafe.h"
 #include "jump.h"
@@ -50,8 +49,9 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		// We don't want to drop packets just because counters initialization fails, but
 		// failing here normally should not happen.
-		return TC_ACT_SHOT;
+		return XDP_DROP;
 	}
+	COUNTER_INC(&ctx, COUNTER_TOTAL_PACKETS);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -109,35 +109,49 @@ deny:
 	return XDP_DROP;
 }
 
-/* This program contains "default" implementations of the policy program
- * which ip will load for us when we're attaching a program to a xdp hook.
- * This allows us to control the behaviour in the window before Felix replaces
- * the policy program with its generated version.*/
-__attribute__((section("1/0")))
-int calico_xdp_norm_pol_tail(struct xdp_md *xdp)
+static CALI_BPF_INLINE int calico_xdp_accept(struct xdp_md *xdp)
 {
-	CALI_DEBUG("Entering normal policy tail call: PASS\n");
-	return XDP_PASS;
-}
+	struct cali_tc_ctx ctx = {
+		.counters = counters_get(),
+	};
 
-__attribute__((section("1/1")))
-int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
-{
-	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
+	if (!ctx.counters) {
+		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return XDP_DROP;
+	}
 	// Share with TC the packet is already accepted and accept it there too.
 	if (xdp2tc_set_metadata(xdp, CALI_META_ACCEPTED_BY_XDP)) {
 		CALI_DEBUG("Failed to set metadata for TC\n");
 	}
+	COUNTER_INC(&ctx, CALI_REASON_ACCEPTED_BY_POLICY);
 	return XDP_PASS;
 }
 
+/* This program contains "default" implementations of the policy program
+ * which libbpf will load for us when we're attaching a program to a xdp hook.
+ * This allows us to control the behaviour in the window before Felix replaces
+ * the policy program with its generated version.*/
+SEC("xdp/policy")
+int calico_xdp_norm_pol_tail(struct xdp_md *xdp)
+{
+	CALI_DEBUG("Entering normal policy tail call: PASS\n");
+	return calico_xdp_accept(xdp);
+}
+
+SEC("xdp/accept")
+int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
+{
+	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
+	return calico_xdp_accept(xdp);
+}
+
 #ifndef CALI_ENTRYPOINT_NAME_XDP
-#define CALI_ENTRYPOINT_NAME_XDP calico_entrypoint_xdp
+#define CALI_ENTRYPOINT_NAME_XDP calico_entrypoint
 #endif
 
 // Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
 // because the name is exposed by bpftool et al.
-__attribute__((section(XSTR(CALI_ENTRYPOINT_NAME_XDP))))
+SEC("xdp/"XSTR(CALI_ENTRYPOINT_NAME_XDP))
 int xdp_calico_entry(struct xdp_md *xdp)
 {
 	return calico_xdp(xdp);
