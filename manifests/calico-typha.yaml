@@ -1100,7 +1100,6 @@ spec:
                   are auto-detected.
                 type: string
               floatingIPs:
-                default: Disabled
                 description: FloatingIPs configures whether or not Felix will program
                   floating IP addresses.
                 enum:
