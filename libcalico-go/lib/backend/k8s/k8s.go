@@ -211,6 +211,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		model.KindKubernetesService,
 		resources.NewServiceClient(cs),
 	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		model.KindBlockAffinity,
+		resources.NewBlockAffinityClient(cs),
+	)
 
 	if !ca.K8sUsePodCIDR {
 		// Using Calico IPAM - use CRDs to back IPAM resources.
@@ -409,6 +415,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindIPReservation,
 		apiv3.KindHostEndpoint,
 		apiv3.KindKubeControllersConfiguration,
+		apiv3.KindBlockAffinity,
 	}
 	ctx := context.Background()
 	for _, k := range kinds {
