@@ -29,6 +29,7 @@ const (
 	PolicyAllow
 	PolicyDeny
 	PolicyTailCallFailed = 10
+	PolicyXDPDrop        = 1
 )
 
 // struct cali_tc_state {
