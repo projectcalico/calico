@@ -1266,3 +1266,68 @@ func testCalicoNodeStatusClient(client calicoclient.Interface, name string) erro
 
 	return nil
 }
+
+// TestIPAMConfigClient exercises the IPAMConfig client.
+func TestIPAMConfigClient(t *testing.T) {
+	const name = "test-ipamconfig"
+	rootTestFunc := func() func(t *testing.T) {
+		return func(t *testing.T) {
+			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+				return &v3.IPAMConfig{}
+			})
+			defer shutdownServer()
+			if err := testIPAMConfigClient(client, name); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if !t.Run(name, rootTestFunc()) {
+		t.Errorf("test-ipamconfig test failed")
+	}
+}
+
+func testIPAMConfigClient(client calicoclient.Interface, name string) error {
+	ipamConfigClient := client.ProjectcalicoV3().IPAMConfigs()
+	ipamConfig := &v3.IPAMConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+
+		Spec: v3.IPAMConfigSpec{
+			StrictAffinity:   true,
+			MaxBlocksPerHost: 2,
+		},
+	}
+	ctx := context.Background()
+
+	_, err := ipamConfigClient.List(ctx, metav1.ListOptions{})
+	if err == nil {
+		return fmt.Errorf("should not be able to list ipam config")
+	}
+
+	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	if err == nil {
+		return fmt.Errorf("should not be able to create ipam config %s ", ipamConfig.Name)
+	}
+
+	ipamConfig.Name = "default"
+	ipamConfigNew, err = ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating the object '%v' (%v)", ipamConfig, err)
+	}
+
+	if ipamConfigNew.Name != ipamConfig.Name {
+		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
+	}
+
+	ipamConfigNew, err = ipamConfigClient.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting object %s (%s)", name, err)
+	}
+
+	err = ipamConfigClient.Delete(ctx, name, metav1.DeleteOptions{})
+	if nil != err {
+		return fmt.Errorf("object should be deleted (%s)", err)
+	}
+
+	return nil
+}
