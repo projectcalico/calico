@@ -111,6 +111,13 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		aapi := &aapi.IPAMConfiguration{}
 		IPAMConfigConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
+	// BlockAffinity works off of the libapi objects since
+	// the v3 client is used for mostly internal operations.
+	case *libapi.BlockAffinity:
+		lcg := libcalicoObject.(*libapi.BlockAffinity)
+		aapi := &aapi.BlockAffinity{}
+		BlockAffinityConverter{}.convertToAAPI(lcg, aapi)
+		return aapi
 	default:
 		klog.Infof("Unrecognized libcalico object (type %v)", reflect.TypeOf(libcalicoObject))
 		return nil

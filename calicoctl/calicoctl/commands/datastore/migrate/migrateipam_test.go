@@ -277,6 +277,11 @@ func (c *MockIPAMClient) IPAMConfig() client.IPAMConfigInterface {
 	return nil
 }
 
+func (c *MockIPAMClient) BlockAffinities() client.BlockAffinityInterface {
+	// DO NOTHING
+	return nil
+}
+
 func (c *MockIPAMClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	// DO NOTHING
 	return nil
