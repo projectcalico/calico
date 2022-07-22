@@ -68,7 +68,7 @@ NetworkManager from interfering with the interfaces:
 
 ```conf
 [keyfile]
-unmanaged-devices=interface-name:cali*;interface-name:tunl*;interface-name:vxlan.calico;interface-name:wireguard.cali
+unmanaged-devices=interface-name:cali*;interface-name:tunl*;interface-name:vxlan.calico;interface-name:vxlan-v6.calico;interface-name:wireguard.cali;interface-name:wg-v6.cali
 ```
 
 ### Errors when running sudo calicoctl
