@@ -240,7 +240,7 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 
 #define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->ttl <= 1)
 
-#if !defined(__BPFTOOL_LOADER__) && !CALI_F_XDP
+#if !defined(__BPFTOOL_LOADER__) && (!CALI_F_XDP)
 
 #if !CALI_F_CGROUP
 extern const volatile struct cali_tc_globals __globals;
