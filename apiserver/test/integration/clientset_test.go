@@ -1299,15 +1299,24 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 	}
 	ctx := context.Background()
 
-	// Note operation list & watch is supported (see libcalico-go/lib/backend/k8s/resources/ipam_config.go).
+	_, err := ipamConfigClient.List(ctx, metav1.ListOptions{})
+	if err == nil {
+		return fmt.Errorf("should not be able to list ipam config")
+	}
+
 	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
-	if nil != err {
+	if err == nil {
+		return fmt.Errorf("should not be able to create ipam config %s ", ipamConfig.Name)
+	}
+
+	ipamConfig.Name = "default"
+	ipamConfigNew, err = ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	if err != nil {
 		return fmt.Errorf("error creating the object '%v' (%v)", ipamConfig, err)
 	}
 
-	if name != ipamConfigNew.Name {
-		// return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
-		fmt.Printf("new name for the resource %s", ipamConfigNew.Name)
+	if ipamConfigNew.Name != ipamConfig.Name {
+		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
 	}
 
 	ipamConfigNew, err = ipamConfigClient.Get(ctx, name, metav1.GetOptions{})

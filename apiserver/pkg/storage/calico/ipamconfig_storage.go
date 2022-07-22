@@ -3,6 +3,7 @@
 package calico
 
 import (
+	"fmt"
 	"reflect"
 
 	"golang.org/x/net/context"
@@ -27,6 +28,9 @@ func NewIPAMConfigStorage(opts Options) (registry.DryRunnableStorage, factory.De
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*libapi.IPAMConfig)
+		if res.Name != libapi.GlobalIPAMConfigName {
+			return nil, fmt.Errorf("IPAM config resource name has to be default")
+		}
 		return c.IPAMConfig().Create(ctx, res, oso)
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
