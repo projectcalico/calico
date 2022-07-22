@@ -63,11 +63,11 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 
 	// initialize empty route generator
 	rg = &routeGenerator{
-		client:                   c,
-		nodeName:                 nodename,
-		svcRouteMap:              make(map[string]map[string]bool),
-		routeAdvertisementRefCount:  make(map[string]int),
-		resyncKnownRoutesTrigger: make(chan struct{}, 1),
+		client:                     c,
+		nodeName:                   nodename,
+		svcRouteMap:                make(map[string]map[string]bool),
+		routeAdvertisementRefCount: make(map[string]int),
+		resyncKnownRoutesTrigger:   make(chan struct{}, 1),
 	}
 
 	// set up k8s client
