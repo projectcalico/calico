@@ -80,7 +80,7 @@ elif [[ "${filename}" =~ .*xdp.* ]]; then
   # XDP, so host endpoint.
   ((flags |= CALI_TC_HOST_EP))
   ((flags |= CALI_XDP_PROG))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO" "-D__IPTOOL_LOADER__")
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
   ep_type="host"
 elif [[ "${filename}" =~ .*nat.* ]]; then
   ((flags |= CALI_TC_HOST_EP))
