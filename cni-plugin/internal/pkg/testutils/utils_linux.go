@@ -244,7 +244,7 @@ func RunCNIPluginWithId(
 	}
 
 	// Invoke the CNI plugin, returning any errors to the calling code to handle.
-	By(fmt.Sprintf("Calling CNI plugin with the following env vars: %v", env))
+	ginkgo.By(fmt.Sprintf("Calling CNI plugin with the following env vars: %v", env))
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, customExec)
@@ -253,7 +253,7 @@ func RunCNIPluginWithId(
 		return
 	}
 
-	By("Parsing the CNI plugin's output and result")
+	ginkgo.By("Parsing the CNI plugin's output and result")
 
 	// Extract the target CNI version from the provided network config.
 	var nc types.NetConf
