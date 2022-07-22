@@ -66,7 +66,7 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 		client:                   c,
 		nodeName:                 nodename,
 		svcRouteMap:              make(map[string]map[string]bool),
-		routeAdvertisementCount:  make(map[string]int),
+		routeAdvertisementRefCount:  make(map[string]int),
 		resyncKnownRoutesTrigger: make(chan struct{}, 1),
 	}
 
@@ -446,11 +446,10 @@ func (rg *routeGenerator) advertiseRoute(key, route string) {
 	if rg.routeAdvertisementRefCount[route] == 0 {
 		// First time we've seend this route - advertise it.
 		rg.client.AddStaticRoutes([]string{route})
-	} else {
-		// We've already advertised this prefix. Increment the counter
-		// to mark that we have multiple users of the route.
-		rg.routeAdvertisementRefCount[route]++
 	}
+
+	// Increment the ref count.
+	rg.routeAdvertisementRefCount[route]++
 }
 
 // withdrawRoute withdraws a route associated with the given key and
@@ -472,7 +471,6 @@ func (rg *routeGenerator) withdrawRoute(key, route string) {
 
 	if rg.svcRouteMap[key] != nil {
 		delete(rg.svcRouteMap[key], route)
-
 		if len(rg.svcRouteMap[key]) == 0 {
 			delete(rg.svcRouteMap, key)
 		}
