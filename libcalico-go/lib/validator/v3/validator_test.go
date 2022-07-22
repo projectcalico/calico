@@ -2694,6 +2694,20 @@ func init() {
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"community-test", "8988:202"}}},
 		}, true),
+
+		// Block Affinities validation in BlockAffinitySpec
+		Entry("should accept non-deleted block affinities", libapiv3.BlockAffinitySpec{
+			Deleted: "false",
+			State:   "confirmed",
+			CIDR:    "10.0.0.0/24",
+			Node:    "node-1",
+		}, true),
+		Entry("should not accept delted block affinities", libapiv3.BlockAffinitySpec{
+			Deleted: "true",
+			State:   "confirmed",
+			CIDR:    "10.0.0.0/24",
+			Node:    "node-1",
+		}, false),
 	)
 }
 
