@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -175,9 +175,8 @@ func TestLoadGarbageProgram(t *testing.T) {
 }
 
 const (
-	RCDrop           = 2
 	RCAllowedReached = 123
-	XDPDrop          = 1
+	RCDropReached    = 124
 	XDPPass          = 2
 )
 
@@ -1694,6 +1693,12 @@ func runTest(t *testing.T, tp testPolicy) {
 		Expect(err).NotTo(HaveOccurred())
 	}()
 
+	dropFD := installDropProgram(tcJumpMap)
+	defer func() {
+		err := dropFD.Close()
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
 	log.Debug("Setting up state map")
 	for _, tc := range tp.AllowedPackets() {
 		t.Run(fmt.Sprintf("should allow %s", tc), func(t *testing.T) {
@@ -1704,11 +1709,7 @@ func runTest(t *testing.T, tp testPolicy) {
 	for _, tc := range tp.DroppedPackets() {
 		t.Run(fmt.Sprintf("should drop %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			if tp.XDP() {
-				runProgram(tc, testStateMap, polProgFD, XDPDrop, state.PolicyDeny)
-			} else {
-				runProgram(tc, testStateMap, polProgFD, RCDrop, state.PolicyDeny)
-			}
+			runProgram(tc, testStateMap, polProgFD, RCDropReached, state.PolicyDeny)
 		})
 	}
 	for _, tc := range tp.UnmatchedPackets() {
@@ -1740,6 +1741,29 @@ func installAllowedProgram(jumpMap bpf.Map) bpf.ProgFD {
 	Expect(err).NotTo(HaveOccurred())
 
 	return epiFD
+}
+
+// installDropProgram installs a trivial BPF program into the jump table that returns RCDropReached.
+func installDropProgram(jumpMap bpf.Map) bpf.ProgFD {
+	b := asm.NewBlock(false)
+
+	// Load the RC into the return register.
+	b.MovImm64(asm.R0, RCDropReached)
+	// Exit!
+	b.Exit()
+
+	epiInsns, err := b.Assemble()
+	Expect(err).NotTo(HaveOccurred())
+	dropFD, err := bpf.LoadBPFProgramFromInsns(epiInsns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
+	Expect(dropFD).NotTo(BeZero())
+
+	jumpValue := make([]byte, 4)
+	binary.LittleEndian.PutUint32(jumpValue, uint32(dropFD))
+	err = jumpMap.Update([]byte{3, 0, 0, 0}, jumpValue)
+	Expect(err).NotTo(HaveOccurred())
+
+	return dropFD
 }
 
 func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC state.PolicyResult) {
