@@ -1352,7 +1352,6 @@ func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
 	if err := c.updateGlobalRoutes(clusterCIDRs, c.programmedRejectRoutesCIP, c.programmedRoutesCIP); err == nil {
 		c.clusterCIDRs = clusterCIDRs
 		log.Infof("Updated with new cluster IP CIDRs: %s", clusterCIDRs)
-		c.printRefCounts()
 	} else {
 		log.WithError(err).Error("Failed to update cluster CIDR routes")
 	}
