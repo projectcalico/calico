@@ -48,8 +48,8 @@ var (
 		&NetworkSetList{},
 		&CalicoNodeStatus{},
 		&CalicoNodeStatusList{},
-		&IPAMConfig{},
-		&IPAMConfigList{},
+		&IPAMConfiguration{},
+		&IPAMConfigurationList{},
 	}
 )
 

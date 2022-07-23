@@ -22,7 +22,7 @@ type ProjectcalicoV3Interface interface {
 	GlobalNetworkPoliciesGetter
 	GlobalNetworkSetsGetter
 	HostEndpointsGetter
-	IPAMConfigsGetter
+	IPAMConfigurationsGetter
 	IPPoolsGetter
 	IPReservationsGetter
 	KubeControllersConfigurationsGetter
@@ -68,8 +68,8 @@ func (c *ProjectcalicoV3Client) HostEndpoints() HostEndpointInterface {
 	return newHostEndpoints(c)
 }
 
-func (c *ProjectcalicoV3Client) IPAMConfigs() IPAMConfigInterface {
-	return newIPAMConfigs(c)
+func (c *ProjectcalicoV3Client) IPAMConfigurations() IPAMConfigurationInterface {
+	return newIPAMConfigurations(c)
 }
 
 func (c *ProjectcalicoV3Client) IPPools() IPPoolInterface {

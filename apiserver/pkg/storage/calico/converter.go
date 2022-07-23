@@ -106,9 +106,9 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		aapi := &aapi.CalicoNodeStatus{}
 		CalicoNodeStatusConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
-	case *api.IPAMConfig:
+	case *api.IPAMConfiguration:
 		lcg := libcalicoObject.(*libapi.IPAMConfig)
-		aapi := &aapi.IPAMConfig{}
+		aapi := &aapi.IPAMConfiguration{}
 		IPAMConfigConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
 	default:

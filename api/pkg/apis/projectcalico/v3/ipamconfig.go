@@ -19,35 +19,35 @@ import (
 )
 
 const (
-	KindIPAMConfig     = "IPAMConfig"
-	KindIPAMConfigList = "IPAMConfigList"
+	KindIPAMConfiguration     = "IPAMConfiguration"
+	KindIPAMConfigurationList = "IPAMConfigurationList"
 )
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// IPAMConfigList contains a list of IPAMConfig resources.
-type IPAMConfigList struct {
+// IPAMConfigurationList contains a list of IPAMConfiguration resources.
+type IPAMConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
-	Items []IPAMConfig `json:"items" protobuf:"bytes,2,rep,name=items"`
+	Items []IPAMConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// IPAMConfig contains information about a block for IP address assignment.
-type IPAMConfig struct {
+// IPAMConfiguration contains information about a block for IP address assignment.
+type IPAMConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec IPAMConfigSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec IPAMConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
-// IPAMConfigSpec contains the specification for an IPPool resource.
-type IPAMConfigSpec struct {
+// IPAMConfigurationSpec contains the specification for an IPPool resource.
+type IPAMConfigurationSpec struct {
 	// When StrictAffinity is true, borrowing IP addresses is not allowed.
 	StrictAffinity bool `json:"strictAffinity" validate:"required"`
 
@@ -56,10 +56,10 @@ type IPAMConfigSpec struct {
 	MaxBlocksPerHost int `json:"maxBlocksPerHost,omitempty"`
 }
 
-// NewIPAMConfig creates a new (zeroed) IPAMConfig struct with the TypeMetadata initialised to the current
+// NewIPAMConfiguration creates a new (zeroed) IPAMConfiguration struct with the TypeMetadata initialised to the current
 // version.
-func NewIPAMConfig() *IPAMConfig {
-	return &IPAMConfig{
+func NewIPAMConfiguration() *IPAMConfiguration {
+	return &IPAMConfiguration{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindIPPool,
 			APIVersion: GroupVersionCurrent,

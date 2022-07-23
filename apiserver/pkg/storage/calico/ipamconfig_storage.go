@@ -22,8 +22,8 @@ import (
 	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
-// NewIPAMConfigStorage creates a new libcalico-based storage.Interface implementation for IPAMConfig
-func NewIPAMConfigStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
+// NewIPAMConfigurationStorage creates a new libcalico-based storage.Interface implementation for IPAMConfig
+func NewIPAMConfigurationStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
@@ -58,8 +58,8 @@ func NewIPAMConfigStorage(opts Options) (registry.DryRunnableStorage, factory.De
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         etcd.APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.IPAMConfig{}),
-		aapiListType:      reflect.TypeOf(aapi.IPAMConfigList{}),
+		aapiType:          reflect.TypeOf(aapi.IPAMConfiguration{}),
+		aapiListType:      reflect.TypeOf(aapi.IPAMConfigurationList{}),
 		libCalicoType:     reflect.TypeOf(libapi.IPAMConfig{}),
 		libCalicoListType: reflect.TypeOf(libapi.IPAMConfigList{}),
 		isNamespaced:      false,
@@ -69,7 +69,7 @@ func NewIPAMConfigStorage(opts Options) (registry.DryRunnableStorage, factory.De
 		delete:            deleteFn,
 		list:              listFn,
 		watch:             watchFn,
-		resourceName:      "IPAMConfig",
+		resourceName:      "IPAMConfiguration",
 		converter:         IPAMConfigConverter{},
 	}, Codec: opts.RESTOptions.StorageConfig.Codec}
 	return dryRunnableStorage, func() {}
@@ -79,7 +79,7 @@ type IPAMConfigConverter struct {
 }
 
 func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfig)
+	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
 	lcgIPAMConfig := &libapi.IPAMConfig{}
 	lcgIPAMConfig.TypeMeta = aapiIPAMConfig.TypeMeta
 	lcgIPAMConfig.ObjectMeta = aapiIPAMConfig.ObjectMeta
@@ -96,7 +96,7 @@ func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 
 func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgIPAMConfig := libcalicoObject.(*libapi.IPAMConfig)
-	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfig)
+	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
 	// Copy spec but ignore internal field AutoAllocateBlocks.
 	aapiIPAMConfig.Spec.StrictAffinity = lcgIPAMConfig.Spec.StrictAffinity
 	aapiIPAMConfig.Spec.MaxBlocksPerHost = lcgIPAMConfig.Spec.MaxBlocksPerHost
@@ -106,15 +106,15 @@ func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapi
 
 func (gc IPAMConfigConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
 	lcgIPAMConfigList := libcalicoListObject.(*libapi.IPAMConfigList)
-	aapiIPAMConfigList := aapiListObj.(*aapi.IPAMConfigList)
+	aapiIPAMConfigList := aapiListObj.(*aapi.IPAMConfigurationList)
 	if libcalicoListObject == nil {
-		aapiIPAMConfigList.Items = []aapi.IPAMConfig{}
+		aapiIPAMConfigList.Items = []aapi.IPAMConfiguration{}
 		return
 	}
 	aapiIPAMConfigList.TypeMeta = lcgIPAMConfigList.TypeMeta
 	aapiIPAMConfigList.ListMeta = lcgIPAMConfigList.ListMeta
 	for _, item := range lcgIPAMConfigList.Items {
-		aapiIPAMConfig := aapi.IPAMConfig{}
+		aapiIPAMConfig := aapi.IPAMConfiguration{}
 		gc.convertToAAPI(&item, &aapiIPAMConfig)
 		if matched, err := pred.Matches(&aapiIPAMConfig); err == nil && matched {
 			aapiIPAMConfigList.Items = append(aapiIPAMConfigList.Items, aapiIPAMConfig)

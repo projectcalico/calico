@@ -66,16 +66,16 @@ func (apiServerStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Ob
 }
 
 func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
-	apiserver, ok := obj.(*calico.IPAMConfig)
+	apiserver, ok := obj.(*calico.IPAMConfiguration)
 	if !ok {
 		return nil, nil, fmt.Errorf("given object (type %v) is not a Cluster Information", reflect.TypeOf(obj))
 	}
-	return labels.Set(apiserver.ObjectMeta.Labels), IPAMConfigToSelectableFields(apiserver), nil
+	return labels.Set(apiserver.ObjectMeta.Labels), IPAMConfigurationToSelectableFields(apiserver), nil
 }
 
-// MatchIPAMConfig is the event filter used by clients of the apiserver only interested in
+// MatchIPAMConfiguration is the event filter used by clients of the apiserver only interested in
 // specific labels/fields.
-func MatchIPAMConfig(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
+func MatchIPAMConfiguration(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
 	return storage.SelectionPredicate{
 		Label:    label,
 		Field:    field,
@@ -83,7 +83,7 @@ func MatchIPAMConfig(label labels.Selector, field fields.Selector) storage.Selec
 	}
 }
 
-// IPAMConfigToSelectableFields returns a field set that represents the object.
-func IPAMConfigToSelectableFields(obj *calico.IPAMConfig) fields.Set {
+// IPAMConfigurationToSelectableFields returns a field set that represents the object.
+func IPAMConfigurationToSelectableFields(obj *calico.IPAMConfiguration) fields.Set {
 	return generic.ObjectMetaFieldsSet(&obj.ObjectMeta, false)
 }
