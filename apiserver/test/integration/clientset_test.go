@@ -1273,7 +1273,7 @@ func TestIPAMConfigClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &v3.IPAMConfig{}
+				return &v3.IPAMConfiguration{}
 			})
 			defer shutdownServer()
 			if err := testIPAMConfigClient(client, name); err != nil {
@@ -1288,11 +1288,11 @@ func TestIPAMConfigClient(t *testing.T) {
 }
 
 func testIPAMConfigClient(client calicoclient.Interface, name string) error {
-	ipamConfigClient := client.ProjectcalicoV3().IPAMConfigs()
-	ipamConfig := &v3.IPAMConfig{
+	ipamConfigClient := client.ProjectcalicoV3().IPAMConfigurations()
+	ipamConfig := &v3.IPAMConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 
-		Spec: v3.IPAMConfigSpec{
+		Spec: v3.IPAMConfigurationSpec{
 			StrictAffinity:   true,
 			MaxBlocksPerHost: 2,
 		},

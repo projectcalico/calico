@@ -60,9 +60,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointList":                   schema_pkg_apis_projectcalico_v3_HostEndpointList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointSpec":                   schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ICMPFields":                         schema_pkg_apis_projectcalico_v3_ICMPFields(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfig":                         schema_pkg_apis_projectcalico_v3_IPAMConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigList":                     schema_pkg_apis_projectcalico_v3_IPAMConfigList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigSpec":                     schema_pkg_apis_projectcalico_v3_IPAMConfigSpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration":                  schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationList":              schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec":              schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPIPConfiguration":                  schema_pkg_apis_projectcalico_v3_IPIPConfiguration(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPool":                             schema_pkg_apis_projectcalico_v3_IPPool(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolList":                         schema_pkg_apis_projectcalico_v3_IPPoolList(ref),
@@ -3165,11 +3165,11 @@ func schema_pkg_apis_projectcalico_v3_ICMPFields(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMConfig contains information about a block for IP address assignment.",
+				Description: "IPAMConfiguration contains information about a block for IP address assignment.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -3195,22 +3195,22 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfig(ref common.ReferenceCallback) c
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigSpec"),
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMConfigList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMConfigList contains a list of IPAMConfig resources.",
+				Description: "IPAMConfigurationList contains a list of IPAMConfiguration resources.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -3240,7 +3240,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigList(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfig"),
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration"),
 									},
 								},
 							},
@@ -3251,15 +3251,15 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigList(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfig", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMConfigSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMConfigSpec contains the specification for an IPPool resource.",
+				Description: "IPAMConfigurationSpec contains the specification for an IPPool resource.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"strictAffinity": {

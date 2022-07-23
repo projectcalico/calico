@@ -28,12 +28,12 @@ func (r *REST) Categories() []string {
 
 // EmptyObject returns an empty instance
 func EmptyObject() runtime.Object {
-	return &calico.IPAMConfig{}
+	return &calico.IPAMConfiguration{}
 }
 
 // NewList returns a new shell of a binding list
 func NewList() runtime.Object {
-	return &calico.IPAMConfigList{}
+	return &calico.IPAMConfigurationList{}
 }
 
 // NewREST returns a RESTStorage object that will work against API services.
@@ -58,8 +58,8 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		prefix,
 		keyFunc,
 		strategy,
-		func() runtime.Object { return &calico.IPAMConfig{} },
-		func() runtime.Object { return &calico.IPAMConfigList{} },
+		func() runtime.Object { return &calico.IPAMConfiguration{} },
+		func() runtime.Object { return &calico.IPAMConfigurationList{} },
 		GetAttrs,
 		nil,
 		nil,
@@ -68,15 +68,15 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		return nil, err
 	}
 	store := &genericregistry.Store{
-		NewFunc:     func() runtime.Object { return &calico.IPAMConfig{} },
-		NewListFunc: func() runtime.Object { return &calico.IPAMConfigList{} },
+		NewFunc:     func() runtime.Object { return &calico.IPAMConfiguration{} },
+		NewListFunc: func() runtime.Object { return &calico.IPAMConfigurationList{} },
 		KeyRootFunc: opts.KeyRootFunc(false),
 		KeyFunc:     opts.KeyFunc(false),
 		ObjectNameFunc: func(obj runtime.Object) (string, error) {
-			return obj.(*calico.IPAMConfig).Name, nil
+			return obj.(*calico.IPAMConfiguration).Name, nil
 		},
-		PredicateFunc:            MatchIPAMConfig,
-		DefaultQualifiedResource: calico.Resource("ipamconfigs"),
+		PredicateFunc:            MatchIPAMConfiguration,
+		DefaultQualifiedResource: calico.Resource("ipamconfigurations"),
 
 		CreateStrategy:          strategy,
 		UpdateStrategy:          strategy,

@@ -364,7 +364,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"caliconodestatus"},
 	)
 
-	ipamconfigRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ipamconfigs"))
+	ipamconfigRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ipamconfigurations"))
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func (p RESTStorageProvider) NewV3Storage(
 	storage["felixconfigurations"] = rESTInPeace(calicofelixconfig.NewREST(scheme, *felixConfigOpts))
 	storage["clusterinformations"] = rESTInPeace(calicoclusterinformation.NewREST(scheme, *clusterInformationOpts))
 	storage["caliconodestatuses"] = rESTInPeace(caliconodestatus.NewREST(scheme, *caliconodestatusOpts))
-	storage["ipamconfigs"] = rESTInPeace(calicoipamconfig.NewREST(scheme, *ipamconfigOpts))
+	storage["ipamconfigurations"] = rESTInPeace(calicoipamconfig.NewREST(scheme, *ipamconfigOpts))
 
 	kubeControllersConfigsStorage, kubeControllersConfigsStatusStorage, err := calicokubecontrollersconfig.NewREST(scheme, *kubeControllersConfigsOpts)
 	if err != nil {
