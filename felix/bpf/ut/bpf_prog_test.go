@@ -552,6 +552,15 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		return errors.Wrap(err, "failed to update jump map (allowed program)")
 	}
 
+	dropProgPath := "xdp_drop"
+	if !forXDP {
+		dropProgPath = "classifier_tc_drop"
+	}
+	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "3", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, dropProgPath))
+	if err != nil {
+		return errors.Wrap(err, "failed to update jump map (drop program)")
+	}
+
 	if !forXDP {
 		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "2", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp"))
 		if err != nil {
