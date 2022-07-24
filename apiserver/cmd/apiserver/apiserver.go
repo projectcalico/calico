@@ -24,12 +24,10 @@ import (
 
 	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
-
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 )
 
 func main() {
@@ -58,5 +56,4 @@ func main() {
 
 	code := cli.Run(cmd)
 	os.Exit(code)
-
 }
