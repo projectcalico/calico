@@ -444,7 +444,7 @@ func (rg *routeGenerator) advertiseRoute(key, route string) {
 	// trigger advertisement of this prefix, however we only ever want to send
 	// a single static route advertisement as a result.
 	if rg.routeAdvertisementRefCount[route] == 0 {
-		// First time we've seend this route - advertise it.
+		// First time we've seen this route - advertise it.
 		rg.client.AddStaticRoutes([]string{route})
 	}
 
