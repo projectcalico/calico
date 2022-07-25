@@ -92,16 +92,13 @@ var _ = Describe("RouteGenerator", func() {
 			svcRouteMap:                make(map[string]map[string]bool),
 			routeAdvertisementRefCount: make(map[string]int),
 			client: &client{
-				cache:                     make(map[string]string),
-				syncedOnce:                true,
-				clusterCIDRs:              []string{"10.0.0.0/16"},
-				programmedRouteRefCount:   make(map[string]int),
-				programmedRejectRoutesExt: make(map[string]bool),
-				programmedRoutesExt:       make(map[string]bool),
-				programmedRejectRoutesLB:  make(map[string]bool),
-				programmedRoutesLB:        make(map[string]bool),
-				programmedRejectRoutesCIP: make(map[string]bool),
-				programmedRoutesCIP:       make(map[string]bool),
+				cache:                    make(map[string]string),
+				syncedOnce:               true,
+				clusterCIDRs:             []string{"10.0.0.0/16"},
+				programmedRouteRefCount:  make(map[string]int),
+				ExternalIPRouteIndex:     NewRouteIndex(),
+				ClusterIPRouteIndex:      NewRouteIndex(),
+				LoadBalancerIPRouteIndex: NewRouteIndex(),
 
 				externalIPs: []string{
 					ipNet1.String(),

@@ -80,6 +80,21 @@ type backendClientAccessor interface {
 	Backend() api.Client
 }
 
+func NewRouteIndex() *RouteIndex {
+	return &RouteIndex{
+		programmedRoutes:       make(map[string]bool),
+		programmedRejectRoutes: make(map[string]bool),
+	}
+}
+
+// RouteIndex is a helper type for tracking which routes have been programmed
+// for a given route type (ExternalIP, LoadBalancer, ClusterIP) based on what we've
+// read from the BGPConfiguration API. Used to ensure we don't send duplicate routes.
+type RouteIndex struct {
+	programmedRoutes       map[string]bool
+	programmedRejectRoutes map[string]bool
+}
+
 func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// Load the client clientCfg.  This loads from the environment if a filename
 	// has not been specified.
@@ -137,12 +152,9 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 
 		// Track which routes we have sent, and which we have not. We need maps for
 		// each of the three types of routes we track.
-		programmedRejectRoutesExt: make(map[string]bool),
-		programmedRoutesExt:       make(map[string]bool),
-		programmedRejectRoutesLB:  make(map[string]bool),
-		programmedRoutesLB:        make(map[string]bool),
-		programmedRejectRoutesCIP: make(map[string]bool),
-		programmedRoutesCIP:       make(map[string]bool),
+		ExternalIPRouteIndex:     NewRouteIndex(),
+		ClusterIPRouteIndex:      NewRouteIndex(),
+		LoadBalancerIPRouteIndex: NewRouteIndex(),
 
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
@@ -295,12 +307,10 @@ type client struct {
 	// provide duplicate routes.
 	programmedRouteRefCount map[string]int
 
-	programmedRoutesExt       map[string]bool
-	programmedRejectRoutesExt map[string]bool
-	programmedRoutesLB        map[string]bool
-	programmedRejectRoutesLB  map[string]bool
-	programmedRoutesCIP       map[string]bool
-	programmedRejectRoutesCIP map[string]bool
+	// Indexes for tracking programmed routes of each type.
+	ExternalIPRouteIndex     *RouteIndex
+	ClusterIPRouteIndex      *RouteIndex
+	LoadBalancerIPRouteIndex *RouteIndex
 
 	// Readiness signals for individual data sources.
 	sourceReady map[string]bool
@@ -1339,7 +1349,7 @@ func getCommunitiesArray(communitiesSet set.Set[string]) []string {
 }
 
 func (c *client) onExternalIPsUpdate(externalIPs []string) {
-	if err := c.updateGlobalRoutes(externalIPs, c.programmedRejectRoutesExt, c.programmedRoutesExt); err == nil {
+	if err := c.updateGlobalRoutes(externalIPs, c.ExternalIPRouteIndex); err == nil {
 		c.externalIPs = externalIPs
 		c.externalIPNets = parseIPNets(c.externalIPs)
 		log.Infof("Updated with new external IP CIDRs: %s", externalIPs)
@@ -1349,7 +1359,7 @@ func (c *client) onExternalIPsUpdate(externalIPs []string) {
 }
 
 func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
-	if err := c.updateGlobalRoutes(clusterCIDRs, c.programmedRejectRoutesCIP, c.programmedRoutesCIP); err == nil {
+	if err := c.updateGlobalRoutes(clusterCIDRs, c.ClusterIPRouteIndex); err == nil {
 		c.clusterCIDRs = clusterCIDRs
 		log.Infof("Updated with new cluster IP CIDRs: %s", clusterCIDRs)
 	} else {
@@ -1358,7 +1368,7 @@ func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
 }
 
 func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
-	if err := c.updateGlobalRoutes(lbIPs, c.programmedRejectRoutesLB, c.programmedRoutesLB); err == nil {
+	if err := c.updateGlobalRoutes(lbIPs, c.LoadBalancerIPRouteIndex); err == nil {
 		c.loadBalancerIPs = lbIPs
 		c.loadBalancerIPNets = parseIPNets(c.loadBalancerIPs)
 		log.Infof("Updated with new Loadbalancer IP CIDRs: %s", lbIPs)
@@ -1387,7 +1397,7 @@ func (c *client) GetLoadBalancerIPs() []*net.IPNet {
 
 // "Global" here means the routes for cluster IP and external IP CIDRs that are advertised from
 // every node in the cluster.
-func (c *client) updateGlobalRoutes(routes []string, programmedRejectRoutes, programmedRoutes map[string]bool) error {
+func (c *client) updateGlobalRoutes(routes []string, ri *RouteIndex) error {
 	for _, n := range routes {
 		_, _, err := net.ParseCIDR(n)
 		if err != nil {
@@ -1399,26 +1409,26 @@ func (c *client) updateGlobalRoutes(routes []string, programmedRejectRoutes, pro
 	if !c.ExcludeServiceAdvertisement() {
 		log.Info("Advertise global service ranges from this node")
 		for _, r := range routes {
-			if !programmedRejectRoutes[r] {
+			if !ri.programmedRejectRoutes[r] {
 				c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, []string{r})
-				programmedRejectRoutes[r] = true
+				ri.programmedRejectRoutes[r] = true
 			}
-			if !programmedRoutes[r] {
+			if !ri.programmedRoutes[r] {
 				c.addRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, []string{r})
-				programmedRoutes[r] = true
+				ri.programmedRoutes[r] = true
 			}
 		}
 
-		for r := range programmedRoutes {
+		for r := range ri.programmedRoutes {
 			if !contains(routes, r) {
 				c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, []string{r})
-				delete(programmedRoutes, r)
+				delete(ri.programmedRoutes, r)
 			}
 		}
-		for r := range programmedRejectRoutes {
+		for r := range ri.programmedRejectRoutes {
 			if !contains(routes, r) {
 				c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, []string{r})
-				delete(programmedRejectRoutes, r)
+				delete(ri.programmedRejectRoutes, r)
 			}
 		}
 	} else {
@@ -1429,24 +1439,24 @@ func (c *client) updateGlobalRoutes(routes []string, programmedRejectRoutes, pro
 
 		// c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, adds)
 		for _, r := range routes {
-			if !programmedRejectRoutes[r] {
+			if !ri.programmedRejectRoutes[r] {
 				c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, []string{r})
-				programmedRejectRoutes[r] = true
+				ri.programmedRejectRoutes[r] = true
 			}
 		}
 
 		// c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, withdraws)
-		for r := range programmedRejectRoutes {
+		for r := range ri.programmedRejectRoutes {
 			if !contains(routes, r) {
 				c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, []string{r})
-				delete(programmedRejectRoutes, r)
+				delete(ri.programmedRejectRoutes, r)
 			}
 		}
 
-		// Delete all programmed routes.
-		for r := range programmedRoutes {
+		// Delete all ri.programmed routes.
+		for r := range ri.programmedRoutes {
 			c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, []string{r})
-			delete(programmedRoutes, r)
+			delete(ri.programmedRoutes, r)
 		}
 	}
 
