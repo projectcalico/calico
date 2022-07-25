@@ -138,6 +138,10 @@ func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
 // toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
 func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
+	if _, ok := kvp1.Value.(*libapiv3.BlockAffinity); ok {
+		// This is already in v3 representation, skip
+		return kvpv1
+	}
 	name, cidr, host := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
 	return &model.KVPair{
@@ -165,13 +169,44 @@ func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	}
 }
 
+// isV1KVP checks if the value in the KV pair is in the v1 format.
+func isV1KVP(kvpv1 *model.KVPair) bool {
+	switch kvpv1.Value.(type) {
+	case *model.BlockAffinity:
+		return true
+	case *libapiv3.BlockAffinity:
+		return false
+	default:
+		log.Panic("blockAffinityClient : wrong value interface type")
+	}
+	return false
+}
+
+// isV1Key checks if the key is in the v1 format.
+func isV1Key(key model.Key) bool {
+	switch key.(type) {
+	case model.BlockAffinityKey:
+		return true
+	case model.ResourceKey:
+		return false
+	default:
+		log.Panic("blockAffinityClient : wrong key interface type")
+	}
+	return false
+}
+
 func (c *blockAffinityClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp := c.toV3(kvp)
-	kvp, err := c.rc.Create(ctx, nkvp)
+	nkvp, err := c.rc.Create(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
 	}
-	v1kvp, err := c.toV1(kvp)
+
+	if !isV1KVP(kvp) {
+		// Return v3 KVP if passed in KVP is in the v3 format.
+		return nkvp, nil
+	}
+
+	v1kvp, err := c.toV1(nkvp)
 	if err != nil {
 		return nil, err
 	}
@@ -179,12 +214,17 @@ func (c *blockAffinityClient) Create(ctx context.Context, kvp *model.KVPair) (*m
 }
 
 func (c *blockAffinityClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp := c.toV3(kvp)
-	kvp, err := c.rc.Update(ctx, nkvp)
+	nkvp, err := c.rc.Update(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
 	}
-	v1kvp, err := c.toV1(kvp)
+
+	if !isV1KVP(kvp) {
+		// Return v3 KVP if passed in KVP is in the v3 format.
+		return nkvp, nil
+	}
+
+	v1kvp, err := c.toV1(nkvp)
 	if err != nil {
 		return nil, err
 	}
@@ -194,20 +234,25 @@ func (c *blockAffinityClient) Update(ctx context.Context, kvp *model.KVPair) (*m
 func (c *blockAffinityClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	// We need to mark as deleted first, since the Kubernetes API doesn't support
 	// compare-and-delete. This update operation allows us to eliminate races with other clients.
-	name, _, _ := c.parseKey(kvp.Key)
-	kvp.Value.(*model.BlockAffinity).Deleted = true
-	v1kvp, err := c.Update(ctx, kvp)
+	v3kvp := c.toV3(kvp)
+	v3kvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted = fmt.Sprintf("%t", true)
+	nkvp, err := c.Update(ctx, v3kvp)
 	if err != nil {
 		return nil, err
 	}
 
 	// Now actually delete the object.
-	k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
-	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
+	dkvp, err := c.rc.Delete(ctx, nkvp.Key, nkvp.Revision, nkvp.Value.(*libapiv3.BlockAffinity).UID)
 	if err != nil {
 		return nil, err
 	}
-	return c.toV1(kvp)
+
+	if !isV1KVP(kvp) {
+		// Return v3 KVP if passed in KVP is in the v3 format.
+		return dkvp, nil
+	}
+
+	return c.toV1(dkvp)
 }
 
 func (c *blockAffinityClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
@@ -221,29 +266,38 @@ func (c *blockAffinityClient) Delete(ctx context.Context, key model.Key, revisio
 
 func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	// Get the object.
-	name, _, _ := c.parseKey(key)
-	k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
-	kvp, err := c.rc.Get(ctx, k, revision)
-	if err != nil {
-		return nil, err
+	var k model.ResourceKey
+	if isV1Key(key) {
+		// Convert a V1 key to V3 key
+		name, _, _ := c.parseKey(key)
+		k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
+	} else {
+		k = key
 	}
 
-	// Convert it to v1.
-	v1kvp, err := c.toV1(kvp)
+	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
 	}
 
 	// If this object has been marked as deleted, then we need to clean it up and
 	// return not found.
-	if v1kvp.Value.(*model.BlockAffinity).Deleted {
-		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
+	if kvp.Value.(*libapiv3.BlockAffinity).Deleted == "true" {
+		if _, err := c.DeleteKVP(ctx, kvp); err != nil {
 			return nil, err
 		}
 		return nil, cerrors.ErrorResourceDoesNotExist{Err: fmt.Errorf("Resource was deleted"), Identifier: key}
 	}
 
-	return v1kvp, nil
+	if isV1Key(key) {
+		// Convert it to v1 format if the provided key was also in the v1 format.
+		kvp, err = c.toV1(kvp)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return kvp, nil
 }
 
 func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
