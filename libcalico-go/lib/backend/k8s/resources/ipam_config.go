@@ -67,6 +67,7 @@ type ipamConfigClient struct {
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
+
 	return &model.KVPair{
 		Key: model.IPAMConfigKey{},
 		Value: &model.IPAMConfig{
@@ -79,10 +80,62 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	}, nil
 }
 
-// toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
+// There's two possible kV formats to be passed to backend ipamConfig.
+// 1. Libcalico-go IPAM passes a v1 model.IPAMConfig directly. [libcalico-go/lib/ipam/ipam.go]
+// 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfig
+
+// isV1KVP return if the KV value is in v1 format.
+func isV1KVP(kvpv1 *model.KVPair) bool {
+	switch kvpv1.Value.(type) {
+	case *model.IPAMConfig:
+		return true
+	case *libapiv3.IPAMConfig:
+		return false
+	default:
+		log.Panic("ipamConfigClient : wrong value interface type")
+	}
+	return false
+}
+
+// isV1Key return if the Key is in v1 format.
+func isV1Key(key model.Key) bool {
+	switch key.(type) {
+	case model.IPAMConfigKey: // used by Calico IPAM [libcalico-go/lib/ipam/ipam.go]
+		return true
+	case model.ResourceKey: // used by clientv3 resource API [libcalico-go/lib/clientv3/resources.go]
+		return false
+	default:
+		log.Panic("ipamConfigClient : wrong key interface type")
+	}
+	return false
+}
+
+// For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
+//
+// Also note the name of the resource are hard coded to "default".
 func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
-	v1obj := kvpv1.Value.(*model.IPAMConfig)
+	var strictAffinity bool
+	var autoAllocateBlocks bool
+	var maxBlocksPerHost int
+	var creationTimeStamp metav1.Time
+
+	switch obj := kvpv1.Value.(type) {
+	case *model.IPAMConfig:
+		strictAffinity = obj.StrictAffinity
+		autoAllocateBlocks = obj.AutoAllocateBlocks
+		maxBlocksPerHost = obj.MaxBlocksPerHost
+	case *libapiv3.IPAMConfig:
+		strictAffinity = obj.Spec.StrictAffinity
+		autoAllocateBlocks = obj.Spec.AutoAllocateBlocks
+		maxBlocksPerHost = obj.Spec.MaxBlocksPerHost
+
+		// // For V3 resource update, creationTimestamp has to be presented.
+		creationTimeStamp = obj.CreationTimestamp
+	default:
+		log.Panic("ipamConfigClient : wrong interface type")
+	}
+
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: model.IPAMConfigGlobalName,
@@ -94,13 +147,14 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:            model.IPAMConfigGlobalName,
-				ResourceVersion: kvpv1.Revision,
+				Name:              libapiv3.GlobalIPAMConfigName,
+				ResourceVersion:   kvpv1.Revision,
+				CreationTimestamp: creationTimeStamp,
 			},
 			Spec: libapiv3.IPAMConfigSpec{
-				StrictAffinity:     v1obj.StrictAffinity,
-				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
-				MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
+				StrictAffinity:     strictAffinity,
+				AutoAllocateBlocks: autoAllocateBlocks,
+				MaxBlocksPerHost:   maxBlocksPerHost,
 			},
 		},
 		Revision: kvpv1.Revision,
@@ -113,6 +167,12 @@ func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*mode
 	if err != nil {
 		return nil, err
 	}
+
+	if !isV1KVP(kvp) {
+		// Return v3 kvp if kvp passed in is in v3 format.
+		return nkvp, nil
+	}
+
 	kvp, err = c.toV1(nkvp)
 	if err != nil {
 		return nil, err
@@ -125,6 +185,11 @@ func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*mode
 	nkvp, err := c.rc.Update(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
+	}
+
+	if !isV1KVP(kvp) {
+		// Return v3 kvp if kvp passed in is in v3 format.
+		return nkvp, nil
 	}
 	kvp, err = c.toV1(nkvp)
 	if err != nil {
@@ -146,6 +211,11 @@ func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision s
 	if err != nil {
 		return nil, err
 	}
+
+	if !isV1Key(key) {
+		return kvp, nil
+	}
+
 	v1nkvp, err := c.toV1(kvp)
 	if err != nil {
 		return nil, err
@@ -163,6 +233,11 @@ func (c *ipamConfigClient) Get(ctx context.Context, key model.Key, revision stri
 	if err != nil {
 		return nil, err
 	}
+
+	if !isV1Key(key) {
+		return kvp, nil
+	}
+
 	v1kvp, err := c.toV1(kvp)
 	if err != nil {
 		return nil, err
