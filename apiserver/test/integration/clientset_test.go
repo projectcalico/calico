@@ -1294,7 +1294,7 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 
 		Spec: v3.IPAMConfigurationSpec{
 			StrictAffinity:   true,
-			MaxBlocksPerHost: 2,
+			MaxBlocksPerHost: 28,
 		},
 	}
 	ctx := context.Background()
@@ -1319,9 +1319,30 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
 	}
 
+	if ipamConfigNew.Spec.StrictAffinity != true || ipamConfig.Spec.MaxBlocksPerHost != 28 {
+		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
+	}
+
 	ipamConfigNew, err = ipamConfigClient.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting object %s (%s)", name, err)
+	}
+
+	ipamConfigNew.Spec.StrictAffinity = false
+	ipamConfigNew.Spec.MaxBlocksPerHost = 0
+
+	_, err = ipamConfigClient.Update(ctx, ipamConfigNew, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error updating object %s (%s)", name, err)
+	}
+
+	ipamConfigUpdated, err := ipamConfigClient.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting object %s (%s)", name, err)
+	}
+
+	if ipamConfigUpdated.Spec.StrictAffinity != false || ipamConfigUpdated.Spec.MaxBlocksPerHost != 0 {
+		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", ipamConfigUpdated, ipamConfigNew)
 	}
 
 	err = ipamConfigClient.Delete(ctx, name, metav1.DeleteOptions{})

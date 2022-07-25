@@ -118,6 +118,8 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	var strictAffinity bool
 	var autoAllocateBlocks bool
 	var maxBlocksPerHost int
+	var creationTimeStamp metav1.Time
+
 	switch obj := kvpv1.Value.(type) {
 	case *model.IPAMConfig:
 		strictAffinity = obj.StrictAffinity
@@ -127,6 +129,9 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		strictAffinity = obj.Spec.StrictAffinity
 		autoAllocateBlocks = obj.Spec.AutoAllocateBlocks
 		maxBlocksPerHost = obj.Spec.MaxBlocksPerHost
+
+		// // For V3 resource update, creationTimestamp has to be presented.
+		creationTimeStamp = obj.CreationTimestamp
 	default:
 		log.Panic("ipamConfigClient : wrong interface type")
 	}
@@ -142,8 +147,9 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:            libapiv3.GlobalIPAMConfigName,
-				ResourceVersion: kvpv1.Revision,
+				Name:              libapiv3.GlobalIPAMConfigName,
+				ResourceVersion:   kvpv1.Revision,
+				CreationTimestamp: creationTimeStamp,
 			},
 			Spec: libapiv3.IPAMConfigSpec{
 				StrictAffinity:     strictAffinity,
