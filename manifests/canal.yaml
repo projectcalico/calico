@@ -1,34 +1,4 @@
 ---
-# Source: calico/templates/calico-kube-controllers.yaml
-# This manifest creates a Pod Disruption Budget for Controller to allow K8s Cluster Autoscaler to evict
-
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: calico-kube-controllers
-  namespace: kube-system
-  labels:
-    k8s-app: calico-kube-controllers
-spec:
-  maxUnavailable: 1
-  selector:
-    matchLabels:
-      k8s-app: calico-kube-controllers
----
-# Source: calico/templates/calico-kube-controllers.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: calico-kube-controllers
-  namespace: kube-system
----
-# Source: calico/templates/calico-node.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: canal
-  namespace: kube-system
----
 # Source: calico/templates/calico-config.yaml
 # This ConfigMap is used to configure a self-hosted Canal installation.
 kind: ConfigMap
@@ -99,8 +69,10 @@ data:
         "Type": "vxlan"
       }
     }
+
 ---
 # Source: calico/templates/kdd-crds.yaml
+
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -280,8 +252,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -400,8 +372,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -462,8 +434,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -726,8 +698,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -791,8 +763,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1515,8 +1487,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2371,8 +2343,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2425,8 +2397,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2534,8 +2506,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2654,8 +2626,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2711,8 +2683,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2768,8 +2740,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2878,8 +2850,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2933,8 +2905,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3187,8 +3159,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -4024,8 +3996,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
-# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -4076,8 +4048,11 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
+---
 ---
 # Source: calico/templates/calico-kube-controllers-rbac.yaml
+
 # Include a clusterrole for the kube-controllers component,
 # and bind it to the calico-kube-controllers serviceaccount.
 kind: ClusterRole
@@ -4159,6 +4134,21 @@ rules:
       - update
       # watch for changes
       - watch
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-kube-controllers
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-kube-controllers
+subjects:
+- kind: ServiceAccount
+  name: calico-kube-controllers
+  namespace: kube-system
+---
+
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,
@@ -4293,8 +4283,8 @@ rules:
     verbs:
       - create
       - update
+
 ---
-# Source: calico/templates/calico-node-rbac.yaml
 # Flannel ClusterRole
 # Pulled from https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel-rbac.yml
 kind: ClusterRole
@@ -4319,21 +4309,6 @@ rules:
     verbs:
       - patch
 ---
-# Source: calico/templates/calico-kube-controllers-rbac.yaml
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: calico-kube-controllers
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: calico-kube-controllers
-subjects:
-- kind: ServiceAccount
-  name: calico-kube-controllers
-  namespace: kube-system
----
-# Source: calico/templates/calico-node-rbac.yaml
 # Bind the flannel ClusterRole to the canal ServiceAccount.
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -4348,7 +4323,6 @@ subjects:
   name: canal
   namespace: kube-system
 ---
-# Source: calico/templates/calico-node-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -4361,6 +4335,7 @@ subjects:
 - kind: ServiceAccount
   name: canal
   namespace: kube-system
+
 ---
 # Source: calico/templates/calico-node.yaml
 # This manifest installs the canal container, as well
@@ -4672,6 +4647,14 @@ spec:
             type: DirectoryOrCreate
             path: /var/run/nodeagent
 ---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: canal
+  namespace: kube-system
+
+---
 # Source: calico/templates/calico-kube-controllers.yaml
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: apps/v1
@@ -4733,3 +4716,38 @@ spec:
               - /usr/bin/check-status
               - -r
             periodSeconds: 10
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-kube-controllers
+  namespace: kube-system
+
+---
+
+# This manifest creates a Pod Disruption Budget for Controller to allow K8s Cluster Autoscaler to evict
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: calico-kube-controllers
+  namespace: kube-system
+  labels:
+    k8s-app: calico-kube-controllers
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-kube-controllers
+
+---
+# Source: calico/templates/calico-etcd-secrets.yaml
+
+---
+# Source: calico/templates/calico-typha.yaml
+
+---
+# Source: calico/templates/configure-canal.yaml
+
