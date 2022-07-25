@@ -1395,10 +1395,19 @@ func (c *client) GetLoadBalancerIPs() []*net.IPNet {
 	return c.loadBalancerIPNets
 }
 
-// "Global" here means the routes for cluster IP and external IP CIDRs that are advertised from
-// every node in the cluster.
-func (c *client) updateGlobalRoutes(routes []string, ri *RouteIndex) error {
-	for _, n := range routes {
+// updateGlobalRoutes updates programs and withdraws routes based on the given CIDRs as provided via
+// the BGPConfiguration API, and this node's service advertisement status as configured via
+// the per-node Service advertisment exclusion label.
+//
+// Each call to this function is scoped to a particular route type - ClusterIP,
+// ExternalIP, or LoadBalancerIP - based on the provided RouteIndex.
+//
+// The provided RouteIndex is used to ensure that routes for a particular CIDR are only
+// programmed once, and to ensure that any programmed routes that are no
+// longer valid are withdrawn.
+func (c *client) updateGlobalRoutes(cidrs []string, ri *RouteIndex) error {
+	// Pre-validate the given CIDRs.
+	for _, n := range cidrs {
 		_, _, err := net.ParseCIDR(n)
 		if err != nil {
 			// Shouldn't ever happen, given prior validation.
@@ -1408,25 +1417,32 @@ func (c *client) updateGlobalRoutes(routes []string, ri *RouteIndex) error {
 
 	if !c.ExcludeServiceAdvertisement() {
 		log.Info("Advertise global service ranges from this node")
-		for _, r := range routes {
+		for _, r := range cidrs {
+			// Program each of the given CIDRs as a reject route, assuming it hasn't
+			// already been added.
 			if !ri.programmedRejectRoutes[r] {
 				c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, []string{r})
 				ri.programmedRejectRoutes[r] = true
 			}
+
+			// Program each CIDR as a route, assuming it hasn't already been added.
 			if !ri.programmedRoutes[r] {
 				c.addRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, []string{r})
 				ri.programmedRoutes[r] = true
 			}
 		}
 
+		// For each programmed route, if the CIDR is no longer present, remove it.
 		for r := range ri.programmedRoutes {
-			if !contains(routes, r) {
+			if !contains(cidrs, r) {
 				c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, []string{r})
 				delete(ri.programmedRoutes, r)
 			}
 		}
+
+		// For each programmed reject route, if the CIDR is no longer present, remove it.
 		for r := range ri.programmedRejectRoutes {
-			if !contains(routes, r) {
+			if !contains(cidrs, r) {
 				c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, []string{r})
 				delete(ri.programmedRejectRoutes, r)
 			}
@@ -1437,23 +1453,24 @@ func (c *client) updateGlobalRoutes(routes []string, ri *RouteIndex) error {
 		// program any learned routes into the data plane.
 		log.Info("Do not advertise global service ranges from this node")
 
-		// c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, adds)
-		for _, r := range routes {
+		// Program each of the given CIDRs as a reject route, assuming it hasn't
+		// already been added.
+		for _, r := range cidrs {
 			if !ri.programmedRejectRoutes[r] {
 				c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, []string{r})
 				ri.programmedRejectRoutes[r] = true
 			}
 		}
 
-		// c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, withdraws)
+		// For each programmed reject route, if the CIDR is no longer present, remove it.
 		for r := range ri.programmedRejectRoutes {
-			if !contains(routes, r) {
+			if !contains(cidrs, r) {
 				c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, []string{r})
 				delete(ri.programmedRejectRoutes, r)
 			}
 		}
 
-		// Delete all ri.programmed routes.
+		// Withdraw all routes that had previously been programmed.
 		for r := range ri.programmedRoutes {
 			c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, []string{r})
 			delete(ri.programmedRoutes, r)
