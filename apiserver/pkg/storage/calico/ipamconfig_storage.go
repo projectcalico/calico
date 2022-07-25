@@ -86,7 +86,7 @@ func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 	lcgIPAMConfig.Kind = libapi.KindIPAMConfig
 	lcgIPAMConfig.APIVersion = aapi.GroupVersionCurrent
 	lcgIPAMConfig.Spec.StrictAffinity = aapiIPAMConfig.Spec.StrictAffinity
-	lcgIPAMConfig.Spec.MaxBlocksPerHost = aapiIPAMConfig.Spec.MaxBlocksPerHost
+	lcgIPAMConfig.Spec.MaxBlocksPerHost = int(aapiIPAMConfig.Spec.MaxBlocksPerHost)
 
 	// AutoAllocatBlocks is an internal field and should be set to true.
 	lcgIPAMConfig.Spec.AutoAllocateBlocks = true
@@ -99,7 +99,7 @@ func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapi
 	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
 	// Copy spec but ignore internal field AutoAllocateBlocks.
 	aapiIPAMConfig.Spec.StrictAffinity = lcgIPAMConfig.Spec.StrictAffinity
-	aapiIPAMConfig.Spec.MaxBlocksPerHost = lcgIPAMConfig.Spec.MaxBlocksPerHost
+	aapiIPAMConfig.Spec.MaxBlocksPerHost = int32(lcgIPAMConfig.Spec.MaxBlocksPerHost)
 	aapiIPAMConfig.TypeMeta = lcgIPAMConfig.TypeMeta
 	aapiIPAMConfig.ObjectMeta = lcgIPAMConfig.ObjectMeta
 }

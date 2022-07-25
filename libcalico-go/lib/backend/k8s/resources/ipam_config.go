@@ -67,7 +67,6 @@ type ipamConfigClient struct {
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
-
 	return &model.KVPair{
 		Key: model.IPAMConfigKey{},
 		Value: &model.IPAMConfig{
@@ -80,22 +79,37 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	}, nil
 }
 
+// For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
+// for writing as a CRD to the Kubernetes API.
+func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
+	v1obj := kvpv1.Value.(*model.IPAMConfig)
+	return &model.KVPair{
+		Key: model.ResourceKey{
+			Name: model.IPAMConfigGlobalName,
+			Kind: libapiv3.KindIPAMConfig,
+		},
+		Value: &libapiv3.IPAMConfig{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       libapiv3.KindIPAMConfig,
+				APIVersion: "crd.projectcalico.org/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            model.IPAMConfigGlobalName,
+				ResourceVersion: kvpv1.Revision,
+			},
+			Spec: libapiv3.IPAMConfigSpec{
+				StrictAffinity:     v1obj.StrictAffinity,
+				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
+				MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
+			},
+		},
+		Revision: kvpv1.Revision,
+	}
+}
+
 // There's two possible kV formats to be passed to backend ipamConfig.
 // 1. Libcalico-go IPAM passes a v1 model.IPAMConfig directly. [libcalico-go/lib/ipam/ipam.go]
 // 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfig
-
-// isV1KVP return if the KV value is in v1 format.
-func isV1KVP(kvpv1 *model.KVPair) bool {
-	switch kvpv1.Value.(type) {
-	case *model.IPAMConfig:
-		return true
-	case *libapiv3.IPAMConfig:
-		return false
-	default:
-		log.Panic("ipamConfigClient : wrong value interface type")
-	}
-	return false
-}
 
 // isV1Key return if the Key is in v1 format.
 func isV1Key(key model.Key) bool {
@@ -110,67 +124,42 @@ func isV1Key(key model.Key) bool {
 	return false
 }
 
-// For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
-// for writing as a CRD to the Kubernetes API.
-//
-// Also note the name of the resource are hard coded to "default".
-func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
-	var strictAffinity bool
-	var autoAllocateBlocks bool
-	var maxBlocksPerHost int
-	var creationTimeStamp metav1.Time
-
-	switch obj := kvpv1.Value.(type) {
-	case *model.IPAMConfig:
-		strictAffinity = obj.StrictAffinity
-		autoAllocateBlocks = obj.AutoAllocateBlocks
-		maxBlocksPerHost = obj.MaxBlocksPerHost
-	case *libapiv3.IPAMConfig:
-		strictAffinity = obj.Spec.StrictAffinity
-		autoAllocateBlocks = obj.Spec.AutoAllocateBlocks
-		maxBlocksPerHost = obj.Spec.MaxBlocksPerHost
-
-		// // For V3 resource update, creationTimestamp has to be presented.
-		creationTimeStamp = obj.CreationTimestamp
-	default:
-		log.Panic("ipamConfigClient : wrong interface type")
-	}
-
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name: model.IPAMConfigGlobalName,
-			Kind: libapiv3.KindIPAMConfig,
-		},
-		Value: &libapiv3.IPAMConfig{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindIPAMConfig,
-				APIVersion: "crd.projectcalico.org/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:              libapiv3.GlobalIPAMConfigName,
-				ResourceVersion:   kvpv1.Revision,
-				CreationTimestamp: creationTimeStamp,
-			},
-			Spec: libapiv3.IPAMConfigSpec{
-				StrictAffinity:     strictAffinity,
-				AutoAllocateBlocks: autoAllocateBlocks,
-				MaxBlocksPerHost:   maxBlocksPerHost,
-			},
-		},
-		Revision: kvpv1.Revision,
-	}
-}
-
-func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Debug("Received Create request on IPAMConfig type")
+func (c *ipamConfigClient) createV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	nkvp, err := c.rc.Create(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
 	}
 
-	if !isV1KVP(kvp) {
-		// Return v3 kvp if kvp passed in is in v3 format.
-		return nkvp, nil
+	kvp, err = c.toV1(nkvp)
+	if err != nil {
+		return nil, err
+	}
+	return kvp, nil
+}
+
+func (c *ipamConfigClient) createV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp, err := c.rc.Create(ctx, kvp)
+	if err != nil {
+		return nil, err
+	}
+
+	return nkvp, nil
+}
+
+func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debug("Received Create request on IPAMConfig type")
+	if isV1Key(kvp.Key) {
+		// From the IPAM code - we need to convert to CRD format.
+		return c.createV1(ctx, kvp)
+	}
+	// From the v3 client - it's already in CRD format.
+	return c.createV3(ctx, kvp)
+}
+
+func (c *ipamConfigClient) updateV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp, err := c.rc.Update(ctx, c.toV3(kvp))
+	if err != nil {
+		return nil, err
 	}
 
 	kvp, err = c.toV1(nkvp)
@@ -180,22 +169,23 @@ func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*mode
 	return kvp, nil
 }
 
-func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Debug("Received Update request on IPAMConfig type")
-	nkvp, err := c.rc.Update(ctx, c.toV3(kvp))
+func (c *ipamConfigClient) updateV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp, err := c.rc.Update(ctx, kvp)
 	if err != nil {
 		return nil, err
 	}
 
-	if !isV1KVP(kvp) {
-		// Return v3 kvp if kvp passed in is in v3 format.
-		return nkvp, nil
+	return nkvp, nil
+}
+
+func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debug("Received Update request on IPAMConfig type")
+	if isV1Key(kvp.Key) {
+		// From the IPAM code - we need to convert to CRD format.
+		return c.updateV1(ctx, kvp)
 	}
-	kvp, err = c.toV1(nkvp)
-	if err != nil {
-		return nil, err
-	}
-	return kvp, nil
+	// From the v3 client - it's already in CRD format.
+	return c.updateV3(ctx, kvp)
 }
 
 func (c *ipamConfigClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {

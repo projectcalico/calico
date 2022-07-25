@@ -53,7 +53,7 @@ type IPAMConfigurationSpec struct {
 
 	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
 	// affine to each host.
-	MaxBlocksPerHost int `json:"maxBlocksPerHost,omitempty"`
+	MaxBlocksPerHost int32 `json:"maxBlocksPerHost,omitempty"`
 }
 
 // NewIPAMConfiguration creates a new (zeroed) IPAMConfiguration struct with the TypeMetadata initialised to the current

@@ -415,7 +415,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindIPReservation,
 		apiv3.KindHostEndpoint,
 		apiv3.KindKubeControllersConfiguration,
-		apiv3.KindIPAMConfiguration,
+		libapiv3.KindIPAMConfig,
 	}
 	ctx := context.Background()
 	for _, k := range kinds {

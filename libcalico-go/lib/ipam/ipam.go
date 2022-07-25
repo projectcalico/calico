@@ -1823,7 +1823,7 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err 
 			// Create the default config if it doesn't already exist.
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 				// Write to datastore.
-				new := &model.KVPair{
+				kvp := &model.KVPair{
 					Key: model.IPAMConfigKey{},
 					Value: &model.IPAMConfig{
 						StrictAffinity:     false,
@@ -1832,7 +1832,7 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err 
 					},
 				}
 
-				obj, err = c.client.Create(ctx, new)
+				obj, err = c.client.Create(ctx, kvp)
 				if err != nil {
 					if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
 						log.Info("Failed to create global IPAM config; another node got there first.")

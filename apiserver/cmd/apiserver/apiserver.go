@@ -19,11 +19,13 @@ limitations under the License.
 package main
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
-	"k8s.io/component-base/cli"
-	"k8s.io/component-base/logs"
 	"os"
 	"runtime"
+
+	"k8s.io/component-base/cli"
+	"k8s.io/component-base/logs"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 
 	"k8s.io/klog/v2"
 
