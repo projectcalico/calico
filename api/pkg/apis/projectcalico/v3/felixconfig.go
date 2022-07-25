@@ -462,7 +462,6 @@ type FelixConfigurationSpec struct {
 
 	// FloatingIPs configures whether or not Felix will program floating IP addresses.
 	//
-	// +kubebuilder:default=Disabled
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 }
