@@ -249,7 +249,7 @@ func TestXDPPrograms(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	for _, tc := range xdpTestCases {
-		runBpfTest(t, "calico_entrypoint_xdp", tc.Rules, func(bpfrun bpfProgRunFn) {
+		runBpfTest(t, "xdp_calico_entrypoint", tc.Rules, func(bpfrun bpfProgRunFn) {
 			_, _, _, _, pktBytes, err := testPacket(nil, tc.IPv4Header, tc.NextHeader, nil)
 			Expect(err).NotTo(HaveOccurred())
 			res, err := bpfrun(pktBytes)
