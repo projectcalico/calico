@@ -16,6 +16,7 @@ package clientv3
 
 import (
 	"context"
+	"errors"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -43,6 +44,10 @@ type IPAMConfigs struct {
 func (r IPAMConfigs) Create(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
+	}
+
+	if res.ObjectMeta.GetName() != libapiv3.GlobalIPAMConfigName {
+		return nil, errors.New("Cannot create a IPAMConfiguration resource with a name other than \"default\"")
 	}
 
 	out, err := r.client.resources.Create(ctx, opts, libapiv3.KindIPAMConfig, res)
