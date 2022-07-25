@@ -55,6 +55,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().GlobalNetworkSets().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("hostendpoints"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().HostEndpoints().Informer()}, nil
+	case v3.SchemeGroupVersion.WithResource("ipamconfigurations"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPAMConfigurations().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("ippools"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPPools().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("ipreservations"):
