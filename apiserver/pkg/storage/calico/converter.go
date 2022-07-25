@@ -7,6 +7,8 @@ import (
 
 	"k8s.io/klog/v2"
 
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -103,6 +105,11 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		lcg := libcalicoObject.(*api.CalicoNodeStatus)
 		aapi := &aapi.CalicoNodeStatus{}
 		CalicoNodeStatusConverter{}.convertToAAPI(lcg, aapi)
+		return aapi
+	case *api.BlockAffinity:
+		lcg := libcalicoObject.(*libapi.BlockAffinity)
+		aapi := &aapi.BlockAffinity{}
+		BlockAffinityConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
 	default:
 		klog.Infof("Unrecognized libcalico object (type %v)", reflect.TypeOf(libcalicoObject))
