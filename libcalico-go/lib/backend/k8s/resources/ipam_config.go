@@ -79,7 +79,7 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	}, nil
 }
 
-// toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
+// For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
 func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	v1obj := kvpv1.Value.(*model.IPAMConfig)
@@ -107,12 +107,29 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	}
 }
 
-func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Debug("Received Create request on IPAMConfig type")
+// There's two possible kV formats to be passed to backend ipamConfig.
+// 1. Libcalico-go IPAM passes a v1 model.IPAMConfig directly. [libcalico-go/lib/ipam/ipam.go]
+// 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfig
+
+// isV1Key return if the Key is in v1 format.
+func isV1Key(key model.Key) bool {
+	switch key.(type) {
+	case model.IPAMConfigKey: // used by Calico IPAM [libcalico-go/lib/ipam/ipam.go]
+		return true
+	case model.ResourceKey: // used by clientv3 resource API [libcalico-go/lib/clientv3/resources.go]
+		return false
+	default:
+		log.Panic("ipamConfigClient : wrong key interface type")
+	}
+	return false
+}
+
+func (c *ipamConfigClient) createV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	nkvp, err := c.rc.Create(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
 	}
+
 	kvp, err = c.toV1(nkvp)
 	if err != nil {
 		return nil, err
@@ -120,17 +137,55 @@ func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*mode
 	return kvp, nil
 }
 
-func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Debug("Received Update request on IPAMConfig type")
+func (c *ipamConfigClient) createV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp, err := c.rc.Create(ctx, kvp)
+	if err != nil {
+		return nil, err
+	}
+
+	return nkvp, nil
+}
+
+func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debug("Received Create request on IPAMConfig type")
+	if isV1Key(kvp.Key) {
+		// From the IPAM code - we need to convert to CRD format.
+		return c.createV1(ctx, kvp)
+	}
+	// From the v3 client - it's already in CRD format.
+	return c.createV3(ctx, kvp)
+}
+
+func (c *ipamConfigClient) updateV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	nkvp, err := c.rc.Update(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
 	}
+
 	kvp, err = c.toV1(nkvp)
 	if err != nil {
 		return nil, err
 	}
 	return kvp, nil
+}
+
+func (c *ipamConfigClient) updateV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp, err := c.rc.Update(ctx, kvp)
+	if err != nil {
+		return nil, err
+	}
+
+	return nkvp, nil
+}
+
+func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debug("Received Update request on IPAMConfig type")
+	if isV1Key(kvp.Key) {
+		// From the IPAM code - we need to convert to CRD format.
+		return c.updateV1(ctx, kvp)
+	}
+	// From the v3 client - it's already in CRD format.
+	return c.updateV3(ctx, kvp)
 }
 
 func (c *ipamConfigClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -146,6 +201,11 @@ func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision s
 	if err != nil {
 		return nil, err
 	}
+
+	if !isV1Key(key) {
+		return kvp, nil
+	}
+
 	v1nkvp, err := c.toV1(kvp)
 	if err != nil {
 		return nil, err
@@ -163,6 +223,11 @@ func (c *ipamConfigClient) Get(ctx context.Context, key model.Key, revision stri
 	if err != nil {
 		return nil, err
 	}
+
+	if !isV1Key(key) {
+		return kvp, nil
+	}
+
 	v1kvp, err := c.toV1(kvp)
 	if err != nil {
 		return nil, err
