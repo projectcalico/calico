@@ -474,9 +474,6 @@ func (b *Block) AddImm64(dst Reg, imm int32) {
 }
 
 func (b *Block) Jump(label string) {
-	if label == "allow" {
-		fmt.Println("Sridhar ==== allow")
-	}
 	b.addWithOffsetFixup(JumpA, 0, 0, label, 0)
 }
 
