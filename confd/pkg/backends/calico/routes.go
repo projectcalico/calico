@@ -41,13 +41,13 @@ const (
 // valid service ips to advertise
 type routeGenerator struct {
 	sync.Mutex
-	client                   *client
-	nodeName                 string
-	svcInformer, epInformer  cache.Controller
-	svcIndexer, epIndexer    cache.Indexer
-	svcRouteMap              map[string]map[string]bool
-	routeAdvertisementCount  map[string]int
-	resyncKnownRoutesTrigger chan struct{}
+	client                     *client
+	nodeName                   string
+	svcInformer, epInformer    cache.Controller
+	svcIndexer, epIndexer      cache.Indexer
+	svcRouteMap                map[string]map[string]bool
+	routeAdvertisementRefCount map[string]int
+	resyncKnownRoutesTrigger   chan struct{}
 }
 
 // NewRouteGenerator initializes a kube-api client and the informers
@@ -63,11 +63,11 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 
 	// initialize empty route generator
 	rg = &routeGenerator{
-		client:                   c,
-		nodeName:                 nodename,
-		svcRouteMap:              make(map[string]map[string]bool),
-		routeAdvertisementCount:  make(map[string]int),
-		resyncKnownRoutesTrigger: make(chan struct{}, 1),
+		client:                     c,
+		nodeName:                   nodename,
+		svcRouteMap:                make(map[string]map[string]bool),
+		routeAdvertisementRefCount: make(map[string]int),
+		resyncKnownRoutesTrigger:   make(chan struct{}, 1),
 	}
 
 	// set up k8s client
@@ -260,7 +260,6 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 				routes = append(routes, lbIngress.IP)
 			}
 		}
-
 	}
 
 	return addFullIPLength(routes)
@@ -269,7 +268,6 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 // getAdvertisedRoutes returns the routes that are currently advertised and
 // associated with the given key.
 func (rg *routeGenerator) getAdvertisedRoutes(key string) []string {
-
 	routes := make([]string, 0)
 
 	if rg.svcRouteMap[key] != nil {
@@ -279,14 +277,12 @@ func (rg *routeGenerator) getAdvertisedRoutes(key string) []string {
 	}
 
 	return routes
-
 }
 
 // setRoutesForKey associates only the given routes with the given key,
 // and advertises the given routes. It also withdraws any routes that are no
 // longer associated with the given key.
 func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
-
 	advertisedRoutes := rg.svcRouteMap[key]
 	if advertisedRoutes == nil {
 		advertisedRoutes = make(map[string]bool)
@@ -303,20 +299,16 @@ func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
 
 	// Advertise all routes that are not already advertised.
 	for _, route := range routes {
-
-		// Advertise route if not already advertised
+		// Advertise route if not already advertised for this key.
 		if _, ok := advertisedRoutes[route]; !ok {
 			rg.advertiseRoute(key, route)
 		}
-
 	}
-
 }
 
 // isAllowedExternalIP determines if the given IP is in the list of
 // whitelisted External IP CIDRs given in the default bgpconfiguration.
 func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
-
 	ip := net.ParseIP(externalIP)
 	if ip == nil {
 		log.Errorf("Could not parse service External IP: %s", externalIP)
@@ -336,7 +328,6 @@ func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
 // isAllowedLoadBalancerIP determines if the given IP is in the list of
 // whitelisted LoadBalancer CIDRs given in the default bgpconfiguration.
 func (rg *routeGenerator) isAllowedLoadBalancerIP(loadBalancerIP string) bool {
-
 	ip := net.ParseIP(loadBalancerIP)
 	if ip == nil {
 		log.Errorf("Could not parse service LB IP: %s", loadBalancerIP)
@@ -447,11 +438,18 @@ func (rg *routeGenerator) advertiseRoute(key, route string) {
 	if _, hasKey := rg.svcRouteMap[key]; !hasKey {
 		rg.svcRouteMap[key] = make(map[string]bool)
 	}
-
-	rg.client.AddStaticRoutes([]string{route})
 	rg.svcRouteMap[key][route] = true
 
-	rg.routeAdvertisementCount[route]++
+	// We need to reference count routes. We may have multiple services that
+	// trigger advertisement of this prefix, however we only ever want to send
+	// a single static route advertisement as a result.
+	if rg.routeAdvertisementRefCount[route] == 0 {
+		// First time we've seend this route - advertise it.
+		rg.client.AddStaticRoutes([]string{route})
+	}
+
+	// Increment the ref count.
+	rg.routeAdvertisementRefCount[route]++
 }
 
 // withdrawRoute withdraws a route associated with the given key and
@@ -464,16 +462,15 @@ func (rg *routeGenerator) withdrawRoute(key, route string) {
 	// and assign the same External IP twice to a service. In all of these
 	// scenarios, you would end up in a situation where the same route is
 	// "legitimately" being advertised twice from a node.
-	if rg.routeAdvertisementCount[route] == 1 {
+	if rg.routeAdvertisementRefCount[route] == 1 {
 		rg.client.DeleteStaticRoutes([]string{route})
-		delete(rg.routeAdvertisementCount, route)
+		delete(rg.routeAdvertisementRefCount, route)
 	} else {
-		rg.routeAdvertisementCount[route]--
+		rg.routeAdvertisementRefCount[route]--
 	}
 
 	if rg.svcRouteMap[key] != nil {
 		delete(rg.svcRouteMap[key], route)
-
 		if len(rg.svcRouteMap[key]) == 0 {
 			delete(rg.svcRouteMap, key)
 		}
