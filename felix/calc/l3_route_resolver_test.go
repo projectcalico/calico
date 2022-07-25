@@ -78,5 +78,15 @@ var _ = Describe("L3RouteResolver", func() {
 			Expect(info1.Equal(info1)).To(BeTrue())
 			Expect(info1.Equal(info2)).To(BeFalse())
 		})
+		It("should consider WireguardV6Addr in Equal() method", func() {
+			info1 := l3rrNodeInfo{
+				WireguardV6Addr: ip.FromString("dead:beef::1"),
+			}
+			info2 := l3rrNodeInfo{
+				WireguardV6Addr: ip.FromString("dead:beef::2"),
+			}
+			Expect(info1.Equal(info1)).To(BeTrue())
+			Expect(info1.Equal(info2)).To(BeFalse())
+		})
 	})
 })

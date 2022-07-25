@@ -273,7 +273,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 
 	if ipVersion == 4 && r.WireguardEnabled {
-		// When IPv4 Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
+		// When Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
 		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
 		// connectivity problems.
 		inputRules = append(inputRules,
@@ -283,6 +283,23 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 					DestAddrType(AddrTypeLocal),
 				Action:  r.filterAllowAction,
 				Comment: []string{"Allow incoming IPv4 Wireguard packets"},
+			},
+			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
+			// baked into the crypto routing table.
+		)
+	}
+
+	if ipVersion == 6 && r.WireguardEnabledV6 {
+		// When Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
+		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
+		// connectivity problems.
+		inputRules = append(inputRules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.WireguardListeningPortV6)).
+					DestAddrType(AddrTypeLocal),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow incoming IPv6 Wireguard packets"},
 			},
 			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
 			// baked into the crypto routing table.
@@ -751,7 +768,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	}
 
 	if ipVersion == 4 && r.WireguardEnabled {
-		// When IPv4 Wireguard is enabled, auto-allow Wireguard traffic to other Calico nodes.  Without this,
+		// When Wireguard is enabled, auto-allow Wireguard traffic to other Calico nodes.  Without this,
 		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
 		// connectivity problems.
 		rules = append(rules,
@@ -763,6 +780,23 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 					SrcAddrType(AddrTypeLocal, false),
 				Action:  r.filterAllowAction,
 				Comment: []string{"Allow outgoing IPv4 Wireguard packets"},
+			},
+		)
+	}
+
+	if ipVersion == 6 && r.WireguardEnabledV6 {
+		// When Wireguard is enabled, auto-allow Wireguard traffic to other Calico nodes.  Without this,
+		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
+		// connectivity problems.
+		rules = append(rules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.WireguardListeningPortV6)).
+					// Note that we do not need to limit the destination hosts to Calico nodes because allowed peers are
+					// programmed separately
+					SrcAddrType(AddrTypeLocal, false),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow outgoing IPv6 Wireguard packets"},
 			},
 		)
 	}
@@ -865,6 +899,11 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Cha
 		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have
 		// wireguard enabled.
 		tunnelIfaces = append(tunnelIfaces, r.WireguardInterfaceName)
+	}
+	if ipVersion == 6 && r.WireguardEnabledV6 && len(r.WireguardInterfaceNameV6) > 0 {
+		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have
+		// wireguard enabled.
+		tunnelIfaces = append(tunnelIfaces, r.WireguardInterfaceNameV6)
 	}
 
 	for _, tunnel := range tunnelIfaces {
@@ -1071,7 +1110,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 	var rawRules []Rule
 
-	if r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && wgEncryptHost {
+	if ((r.WireguardEnabled && len(r.WireguardInterfaceName) > 0) || (r.WireguardEnabledV6 && len(r.WireguardInterfaceNameV6) > 0)) && wgEncryptHost {
 		// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
 		// check allows it.
 		log.Debug("Adding Wireguard iptables rule chain")
@@ -1184,7 +1223,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	)
 
 	// Set a mark on encapsulated packets coming from WireGuard to ensure the RPF check allows it
-	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && r.Config.WireguardEncryptHostTraffic {
+	if ((r.WireguardEnabled && len(r.WireguardInterfaceName) > 0) || (r.WireguardEnabledV6 && len(r.WireguardInterfaceNameV6) > 0)) && r.Config.WireguardEncryptHostTraffic {
 		log.Debug("Adding Wireguard iptables rule")
 		rules = append(rules, Rule{
 			Match:  nil,
@@ -1291,6 +1330,10 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *Chain {
 		},
 		{
 			Match:  Match().InInterface(r.WireguardInterfaceName),
+			Action: ReturnAction{},
+		},
+		{
+			Match:  Match().InInterface(r.WireguardInterfaceNameV6),
 			Action: ReturnAction{},
 		},
 	}

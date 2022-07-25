@@ -167,7 +167,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 			if len(wgSpec.InterfaceIPv4Address) != 0 {
 				wgIfaceIpv4Addr = cnet.ParseIP(wgSpec.InterfaceIPv4Address)
 				if wgIfaceIpv4Addr != nil {
-					log.WithField("InterfaceIPv4Addr", wgIfaceIpv4Addr).Debug("Parsed Wireguard interface address")
+					log.WithField("InterfaceIPv4Addr", wgIfaceIpv4Addr).Debug("Parsed IPv4 Wireguard interface address")
 				} else {
 					log.WithField("InterfaceIPv4Addr", wgSpec.InterfaceIPv4Address).Warn("Failed to parse InterfaceIPv4Address")
 					err = fmt.Errorf("failed to parse InterfaceIPv4Address as an IP address")
@@ -177,17 +177,45 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		if wgPubKey = node.Status.WireguardPublicKey; wgPubKey != "" {
 			_, err := wg.ParseKey(wgPubKey)
 			if err == nil {
-				log.WithField("public-key", wgPubKey).Debug("Parsed Wireguard public-key")
+				log.WithField("public-key", wgPubKey).Debug("Parsed IPv4 Wireguard public-key")
 			} else {
-				log.WithField("WireguardPublicKey", wgPubKey).Warn("Failed to parse Wireguard public-key")
-				err = fmt.Errorf("failed to parse PublicKey as Wireguard public-key")
+				log.WithField("WireguardPublicKey", wgPubKey).Warn("Failed to parse IPv4 Wireguard public-key")
+				err = fmt.Errorf("failed to parse PublicKey as IPv4 Wireguard public-key")
+			}
+		}
+
+		var wgIfaceIpv6Addr *cnet.IP
+		var wgPubKeyV6 string
+		if wgSpec := node.Spec.Wireguard; wgSpec != nil {
+			if len(wgSpec.InterfaceIPv6Address) != 0 {
+				wgIfaceIpv6Addr = cnet.ParseIP(wgSpec.InterfaceIPv6Address)
+				if wgIfaceIpv6Addr != nil {
+					log.WithField("InterfaceIPv6Addr", wgIfaceIpv6Addr).Debug("Parsed IPv6 Wireguard interface address")
+				} else {
+					log.WithField("InterfaceIPv6Addr", wgSpec.InterfaceIPv6Address).Warn("Failed to parse InterfaceIPv6Address")
+					err = fmt.Errorf("failed to parse InterfaceIPv6Address as an IP address")
+				}
+			}
+		}
+		if wgPubKeyV6 = node.Status.WireguardPublicKeyV6; wgPubKeyV6 != "" {
+			_, err := wg.ParseKey(wgPubKeyV6)
+			if err == nil {
+				log.WithField("public-key", wgPubKeyV6).Debug("Parsed IPv6 Wireguard public-key")
+			} else {
+				log.WithField("WireguardPublicKeyV6", wgPubKeyV6).Warn("Failed to parse IPv6 Wireguard public-key")
+				err = fmt.Errorf("failed to parse PublicKeyV6 as IPv6 Wireguard public-key")
 			}
 		}
 
 		// If either of interface address or public-key is set, set the WireguardKey value.
 		// If we failed to parse both the values, leave the WireguardKey value empty.
-		if wgIfaceIpv4Addr != nil || wgPubKey != "" {
-			wgConfig = &model.Wireguard{InterfaceIPv4Addr: wgIfaceIpv4Addr, PublicKey: wgPubKey}
+		if wgIfaceIpv4Addr != nil || wgPubKey != "" || wgIfaceIpv6Addr != nil || wgPubKeyV6 != "" {
+			wgConfig = &model.Wireguard{
+				InterfaceIPv4Addr: wgIfaceIpv4Addr,
+				PublicKey:         wgPubKey,
+				InterfaceIPv6Addr: wgIfaceIpv6Addr,
+				PublicKeyV6:       wgPubKeyV6,
+			}
 		}
 	}
 

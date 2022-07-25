@@ -438,9 +438,6 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 }
 
 func (w *Workload) SendPacketsTo(ip string, count int, size int) (error, string) {
-	if strings.Contains(ip, ":") {
-		ip = fmt.Sprintf("[%s]", ip)
-	}
 	c := fmt.Sprintf("%d", count)
 	s := fmt.Sprintf("%d", size)
 	_, err := w.ExecOutput("ping", "-c", c, "-W", "1", "-s", s, ip)
