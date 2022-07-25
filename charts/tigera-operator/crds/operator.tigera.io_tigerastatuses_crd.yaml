@@ -1,3 +1,5 @@
+
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -71,6 +73,14 @@ spec:
                       description: Optionally, a detailed message providing additional
                         context.
                       type: string
+                    observedGeneration:
+                      description: observedGeneration represents the generation that
+                        the condition was set based upon. For instance, if generation
+                        is currently 12, but the .status.conditions[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      type: integer
                     reason:
                       description: A brief reason explaining the condition.
                       type: string
