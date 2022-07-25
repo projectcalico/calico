@@ -272,6 +272,11 @@ func (c *MockIPAMClient) CalicoNodeStatus() client.CalicoNodeStatusInterface {
 	return nil
 }
 
+func (c *MockIPAMClient) IPAMConfig() client.IPAMConfigInterface {
+	// DO NOTHING
+	return nil
+}
+
 func (c *MockIPAMClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	// DO NOTHING
 	return nil
