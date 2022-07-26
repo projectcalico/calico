@@ -193,7 +193,7 @@ type bpfEndpointManager struct {
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
 
-	ifaceToIpMap map[string]net.IP
+	ifaceToIpMap map[string][]net.IP
 	opReporter   logutils.OpRecorder
 
 	// XDP
@@ -219,6 +219,7 @@ type bpfEndpointManager struct {
 	routeTable    *routetable.RouteTable
 	services      map[serviceKey][]ip.V4CIDR
 	dirtyServices set.Set[serviceKey]
+	localHostIPs  set.Set[string]
 }
 
 type serviceKey struct {
@@ -282,7 +283,7 @@ func newBPFEndpointManager(
 		}),
 		onStillAlive:     livenessCallback,
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
-		ifaceToIpMap:     map[string]net.IP{},
+		ifaceToIpMap:     map[string][]net.IP{},
 		opReporter:       opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
@@ -332,6 +333,7 @@ func newBPFEndpointManager(
 		)
 		m.services = make(map[serviceKey][]ip.V4CIDR)
 		m.dirtyServices = set.New[serviceKey]()
+		m.localHostIPs = set.New[string]()
 
 		// Anything else would prevent packets being accepted from the special
 		// service veth. It does not create a security hole since BPF does the RPF
@@ -448,6 +450,7 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 
 func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	var ipAddrs []net.IP
+	var ipAddrsStr []string
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
@@ -457,6 +460,7 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 			ip := net.ParseIP(item)
 			if ip.To4() != nil {
 				ipAddrs = append(ipAddrs, ip)
+				ipAddrsStr = append(ipAddrsStr, item)
 			}
 			return nil
 		})
@@ -464,9 +468,19 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 			return bytes.Compare(ipAddrs[i], ipAddrs[j]) < 0
 		})
 		if len(ipAddrs) > 0 {
-			ip, ok := m.ifaceToIpMap[update.Name]
-			if !ok || !ip.Equal(ipAddrs[0]) {
-				m.ifaceToIpMap[update.Name] = ipAddrs[0]
+			ips, ok := m.ifaceToIpMap[update.Name]
+
+			if ok {
+				for _, ip := range ips {
+					m.localHostIPs.Discard(ip.String())
+				}
+			}
+			for _, ip := range ipAddrsStr {
+				m.localHostIPs.Add(ip)
+			}
+
+			if !ok || !ips[0].Equal(ipAddrs[0]) {
+				m.ifaceToIpMap[update.Name] = ipAddrs
 				m.dirtyIfaceNames.Add(update.Name)
 			}
 
@@ -676,7 +690,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		// Update all existing IPs of dirty services
 		m.dirtyServices.Iter(func(svc serviceKey) error {
 			for _, ip := range m.services[svc] {
-				m.dp.setRoute(ip)
+				// Do not add external IPs assigned to the local node. Those
+				// will be handled as nodeports.
+				if !m.localHostIPs.Contains(ip.String()) {
+					m.dp.setRoute(ip)
+				}
 			}
 			return set.RemoveItem
 		})
@@ -1891,7 +1909,8 @@ func FindJumpMap(progID int, ifaceName string) (mapFD bpf.MapFD, err error) {
 
 func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 	var ipAddrs []net.IP
-	if ip, ok := m.ifaceToIpMap[ifaceName]; ok {
+	if ips, ok := m.ifaceToIpMap[ifaceName]; ok {
+		ip := ips[0]
 		return &ip, nil
 	}
 	intf, err := net.InterfaceByName(ifaceName)
