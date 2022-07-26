@@ -122,7 +122,6 @@ func TestNoName(t *testing.T) {
 	if !t.Run("no-name", rootTestFunc()) {
 		t.Errorf("NoName test failed")
 	}
-
 }
 
 func testNoName(client calicoclient.Interface) error {
@@ -155,7 +154,6 @@ func TestNetworkPolicyClient(t *testing.T) {
 	if !t.Run(name, rootTestFunc()) {
 		t.Errorf("test-networkpolicy test failed")
 	}
-
 }
 
 func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
@@ -248,7 +246,6 @@ func TestGlobalNetworkPolicyClient(t *testing.T) {
 	if !t.Run(name, rootTestFunc()) {
 		t.Errorf("test-globalnetworkpolicy test failed")
 	}
-
 }
 
 func testGlobalNetworkPolicyClient(client calicoclient.Interface, name string) error {
@@ -1323,9 +1320,9 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
 	}
 
-	ipamConfigNew, err = ipamConfigClient.Get(ctx, name, metav1.GetOptions{})
+	ipamConfigNew, err = ipamConfigClient.Get(ctx, ipamConfig.Name, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("error getting object %s (%s)", name, err)
+		return fmt.Errorf("error getting object %s (%s)", ipamConfig.Name, err)
 	}
 
 	ipamConfigNew.Spec.StrictAffinity = false
@@ -1336,17 +1333,17 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("error updating object %s (%s)", name, err)
 	}
 
-	ipamConfigUpdated, err := ipamConfigClient.Get(ctx, name, metav1.GetOptions{})
+	ipamConfigUpdated, err := ipamConfigClient.Get(ctx, ipamConfig.Name, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("error getting object %s (%s)", name, err)
+		return fmt.Errorf("error getting object %s (%s)", ipamConfig.Name, err)
 	}
 
 	if ipamConfigUpdated.Spec.StrictAffinity != false || ipamConfigUpdated.Spec.MaxBlocksPerHost != 0 {
 		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", ipamConfigUpdated, ipamConfigNew)
 	}
 
-	err = ipamConfigClient.Delete(ctx, name, metav1.DeleteOptions{})
-	if nil != err {
+	err = ipamConfigClient.Delete(ctx, ipamConfig.Name, metav1.DeleteOptions{})
+	if err != nil {
 		return fmt.Errorf("object should be deleted (%s)", err)
 	}
 
