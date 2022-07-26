@@ -1,4 +1,50 @@
 ---
+# Source: calico/templates/calico-kube-controllers.yaml
+# This manifest creates a Pod Disruption Budget for Controller to allow K8s Cluster Autoscaler to evict
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: calico-kube-controllers
+  namespace: kube-system
+  labels:
+    k8s-app: calico-kube-controllers
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-kube-controllers
+---
+# Source: calico/templates/calico-typha.yaml
+# This manifest creates a Pod Disruption Budget for Typha to allow K8s Cluster Autoscaler to evict
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: calico-typha
+  namespace: kube-system
+  labels:
+    k8s-app: calico-typha
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-typha
+---
+# Source: calico/templates/calico-kube-controllers.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-kube-controllers
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-node
+  namespace: kube-system
+---
 # Source: calico/templates/calico-config.yaml
 # This ConfigMap is used to configure a self-hosted Calico installation.
 kind: ConfigMap
@@ -52,10 +98,8 @@ data:
         }
       ]
     }
-
 ---
 # Source: calico/templates/kdd-crds.yaml
-
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -235,8 +279,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -355,8 +399,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -417,8 +461,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -681,8 +725,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -746,8 +790,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1470,8 +1514,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2326,8 +2370,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2380,8 +2424,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2489,8 +2533,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2609,8 +2653,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2666,8 +2710,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2723,8 +2767,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2833,8 +2877,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2888,8 +2932,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3142,8 +3186,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3979,8 +4023,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
 ---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -4031,11 +4075,8 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-
----
 ---
 # Source: calico/templates/calico-kube-controllers-rbac.yaml
-
 # Include a clusterrole for the kube-controllers component,
 # and bind it to the calico-kube-controllers serviceaccount.
 kind: ClusterRole
@@ -4117,21 +4158,6 @@ rules:
       - update
       # watch for changes
       - watch
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: calico-kube-controllers
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: calico-kube-controllers
-subjects:
-- kind: ServiceAccount
-  name: calico-kube-controllers
-  namespace: kube-system
----
-
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,
@@ -4296,8 +4322,22 @@ rules:
       - daemonsets
     verbs:
       - get
-
 ---
+# Source: calico/templates/calico-kube-controllers-rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-kube-controllers
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-kube-controllers
+subjects:
+- kind: ServiceAccount
+  name: calico-kube-controllers
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -4310,7 +4350,6 @@ subjects:
 - kind: ServiceAccount
   name: calico-node
   namespace: kube-system
-
 ---
 # Source: calico/templates/calico-typha.yaml
 # This manifest creates a Service, which will be backed by Calico's Typha daemon.
@@ -4331,122 +4370,6 @@ spec:
       name: calico-typha
   selector:
     k8s-app: calico-typha
-
----
-
-# This manifest creates a Deployment of Typha to back the above service.
-
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: calico-typha
-  namespace: kube-system
-  labels:
-    k8s-app: calico-typha
-spec:
-  # Number of Typha replicas. To enable Typha, set this to a non-zero value *and* set the
-  # typha_service_name variable in the calico-config ConfigMap above.
-  #
-  # We recommend using Typha if you have more than 50 nodes. Above 100 nodes it is essential
-  # (when using the Kubernetes datastore). Use one replica for every 100-200 nodes. In
-  # production, we recommend running at least 3 replicas to reduce the impact of rolling upgrade.
-  replicas: 1
-  revisionHistoryLimit: 2
-  selector:
-    matchLabels:
-      k8s-app: calico-typha
-  template:
-    metadata:
-      labels:
-        k8s-app: calico-typha
-      annotations:
-        cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'
-    spec:
-      nodeSelector:
-        kubernetes.io/os: linux
-      hostNetwork: true
-      tolerations:
-        # Mark the pod as a critical add-on for rescheduling.
-        - key: CriticalAddonsOnly
-          operator: Exists
-      # Since Calico can't network a pod until Typha is up, we need to run Typha itself
-      # as a host-networked pod.
-      serviceAccountName: calico-node
-      priorityClassName: system-cluster-critical
-      # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573
-      securityContext:
-        fsGroup: 65534
-      containers:
-      - image: docker.io/calico/typha:master
-        imagePullPolicy: IfNotPresent
-        name: calico-typha
-        ports:
-        - containerPort: 5473
-          name: calico-typha
-          protocol: TCP
-        envFrom:
-        - configMapRef:
-            # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-            name: kubernetes-services-endpoint
-            optional: true
-        env:
-          # Enable "info" logging by default. Can be set to "debug" to increase verbosity.
-          - name: TYPHA_LOGSEVERITYSCREEN
-            value: "info"
-          # Disable logging to file and syslog since those don't make sense in Kubernetes.
-          - name: TYPHA_LOGFILEPATH
-            value: "none"
-          - name: TYPHA_LOGSEVERITYSYS
-            value: "none"
-          # Monitor the Kubernetes API to find the number of running instances and rebalance
-          # connections.
-          - name: TYPHA_CONNECTIONREBALANCINGMODE
-            value: "kubernetes"
-          - name: TYPHA_DATASTORETYPE
-            value: "kubernetes"
-          - name: TYPHA_HEALTHENABLED
-            value: "true"
-          # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
-          # this opens a port on the host, which may need to be secured.
-          #- name: TYPHA_PROMETHEUSMETRICSENABLED
-          #  value: "true"
-          #- name: TYPHA_PROMETHEUSMETRICSPORT
-          #  value: "9093"
-        livenessProbe:
-          httpGet:
-            path: /liveness
-            port: 9098
-            host: localhost
-          periodSeconds: 30
-          initialDelaySeconds: 30
-          timeoutSeconds: 10
-        securityContext:
-          runAsNonRoot: true
-          allowPrivilegeEscalation: false
-        readinessProbe:
-          httpGet:
-            path: /readiness
-            port: 9098
-            host: localhost
-          periodSeconds: 10
-          timeoutSeconds: 10
-
----
-
-# This manifest creates a Pod Disruption Budget for Typha to allow K8s Cluster Autoscaler to evict
-
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: calico-typha
-  namespace: kube-system
-  labels:
-    k8s-app: calico-typha
-spec:
-  maxUnavailable: 1
-  selector:
-    matchLabels:
-      k8s-app: calico-typha
 ---
 # Source: calico/templates/calico-node.yaml
 # This manifest installs the calico-node container, as well
@@ -4776,14 +4699,6 @@ spec:
             type: DirectoryOrCreate
             path: /var/run/nodeagent
 ---
-
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: calico-node
-  namespace: kube-system
-
----
 # Source: calico/templates/calico-kube-controllers.yaml
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: apps/v1
@@ -4845,35 +4760,101 @@ spec:
               - /usr/bin/check-status
               - -r
             periodSeconds: 10
-
 ---
+# Source: calico/templates/calico-typha.yaml
+# This manifest creates a Deployment of Typha to back the above service.
 
-apiVersion: v1
-kind: ServiceAccount
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: calico-kube-controllers
-  namespace: kube-system
-
----
-
-# This manifest creates a Pod Disruption Budget for Controller to allow K8s Cluster Autoscaler to evict
-
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: calico-kube-controllers
+  name: calico-typha
   namespace: kube-system
   labels:
-    k8s-app: calico-kube-controllers
+    k8s-app: calico-typha
 spec:
-  maxUnavailable: 1
+  # Number of Typha replicas. To enable Typha, set this to a non-zero value *and* set the
+  # typha_service_name variable in the calico-config ConfigMap above.
+  #
+  # We recommend using Typha if you have more than 50 nodes. Above 100 nodes it is essential
+  # (when using the Kubernetes datastore). Use one replica for every 100-200 nodes. In
+  # production, we recommend running at least 3 replicas to reduce the impact of rolling upgrade.
+  replicas: 1
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
-      k8s-app: calico-kube-controllers
-
----
-# Source: calico/templates/calico-etcd-secrets.yaml
-
----
-# Source: calico/templates/configure-canal.yaml
-
+      k8s-app: calico-typha
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-typha
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      hostNetwork: true
+      tolerations:
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
+      # Since Calico can't network a pod until Typha is up, we need to run Typha itself
+      # as a host-networked pod.
+      serviceAccountName: calico-node
+      priorityClassName: system-cluster-critical
+      # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573
+      securityContext:
+        fsGroup: 65534
+      containers:
+      - image: docker.io/calico/typha:master
+        imagePullPolicy: IfNotPresent
+        name: calico-typha
+        ports:
+        - containerPort: 5473
+          name: calico-typha
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+            name: kubernetes-services-endpoint
+            optional: true
+        env:
+          # Enable "info" logging by default. Can be set to "debug" to increase verbosity.
+          - name: TYPHA_LOGSEVERITYSCREEN
+            value: "info"
+          # Disable logging to file and syslog since those don't make sense in Kubernetes.
+          - name: TYPHA_LOGFILEPATH
+            value: "none"
+          - name: TYPHA_LOGSEVERITYSYS
+            value: "none"
+          # Monitor the Kubernetes API to find the number of running instances and rebalance
+          # connections.
+          - name: TYPHA_CONNECTIONREBALANCINGMODE
+            value: "kubernetes"
+          - name: TYPHA_DATASTORETYPE
+            value: "kubernetes"
+          - name: TYPHA_HEALTHENABLED
+            value: "true"
+          # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
+          # this opens a port on the host, which may need to be secured.
+          #- name: TYPHA_PROMETHEUSMETRICSENABLED
+          #  value: "true"
+          #- name: TYPHA_PROMETHEUSMETRICSPORT
+          #  value: "9093"
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 9098
+            host: localhost
+          periodSeconds: 30
+          initialDelaySeconds: 30
+          timeoutSeconds: 10
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 9098
+            host: localhost
+          periodSeconds: 10
+          timeoutSeconds: 10
