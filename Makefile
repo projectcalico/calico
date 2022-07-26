@@ -32,6 +32,7 @@ clean:
 	$(MAKE) -C node clean
 	$(MAKE) -C pod2daemon clean
 	$(MAKE) -C typha clean
+	rm -rf ./bin
 
 generate:
 	$(MAKE) gen-semaphore-yaml
