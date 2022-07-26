@@ -175,6 +175,11 @@ const (
 	updateTypeDelta
 )
 
+// RouteTable manages calico routes for a specific table. It reconciles the
+// routes that we desire to have for calico managed devices with what is the
+// current status in the dataplane. That is, it removes any routes that we do
+// not desire and adds those that we do. It skips over devices that we do not
+// manage not to interfare with other users of the route tables.
 type RouteTable struct {
 	logCxt *log.Entry
 
