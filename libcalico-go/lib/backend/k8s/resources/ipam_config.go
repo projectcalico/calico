@@ -29,7 +29,6 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 const (
@@ -243,19 +242,15 @@ func (c *ipamConfigClient) Get(ctx context.Context, key model.Key, revision stri
 }
 
 func (c *ipamConfigClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	log.Warn("Operation List is not supported on IPAMConfig type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: list,
-		Operation:  "List",
-	}
+	// List can only ever come from the v3 client, by passing a ResourceListOptions.
+	log.Debug("Received List request on IPAMConfig type")
+	return c.rc.List(ctx, list, revision)
 }
 
 func (c *ipamConfigClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	log.Warn("Operation Watch is not supported on IPAMConfig type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: list,
-		Operation:  "Watch",
-	}
+	// List can only ever come from the v3 client, by passing a ResourceListOptions.
+	log.Debug("Received Watch request on IPAMConfig type")
+	return c.rc.Watch(ctx, list, revision)
 }
 
 // EnsureInitialized is a no-op since the CRD should be

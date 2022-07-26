@@ -1297,8 +1297,8 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 	ctx := context.Background()
 
 	_, err := ipamConfigClient.List(ctx, metav1.ListOptions{})
-	if err == nil {
-		return fmt.Errorf("should not be able to list ipam config")
+	if err != nil {
+		return fmt.Errorf("error listing IPAMConfigurations: %s", err)
 	}
 
 	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})

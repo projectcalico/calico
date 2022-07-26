@@ -34,7 +34,6 @@ import (
 )
 
 var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	name := "default"
 	spec1 := libapiv3.IPAMConfigSpec{
@@ -148,11 +147,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 
 			By("Listing IPAMConfig and expecting error")
 			_, outError = c.IPAMConfig().List(ctx, options.ListOptions{})
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				Expect(outError.Error()).To(ContainSubstring("operation List is not supported"))
-			} else {
-				Expect(outError).NotTo(HaveOccurred())
-			}
+			Expect(outError).NotTo(HaveOccurred())
 		},
 
 		// Test 1: Pass two fully populated IPAMConfigSpecs and expect the series of operations to succeed.
