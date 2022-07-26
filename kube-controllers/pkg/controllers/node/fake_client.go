@@ -134,6 +134,10 @@ func (f *FakeCalicoClient) CalicoNodeStatus() clientv3.CalicoNodeStatusInterface
 	panic("not implemented")
 }
 
+func (f *FakeCalicoClient) IPAMConfig() clientv3.IPAMConfigInterface {
+	panic("not implemented")
+}
+
 func (f *FakeCalicoClient) IPReservations() clientv3.IPReservationInterface {
 	panic("not implemented")
 }
