@@ -75,8 +75,7 @@ func NewIPAMConfigurationStorage(opts Options) (registry.DryRunnableStorage, fac
 	return dryRunnableStorage, func() {}
 }
 
-type IPAMConfigConverter struct {
-}
+type IPAMConfigConverter struct{}
 
 func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
 	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
@@ -97,6 +96,7 @@ func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgIPAMConfig := libcalicoObject.(*libapi.IPAMConfig)
 	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
+
 	// Copy spec but ignore internal field AutoAllocateBlocks.
 	aapiIPAMConfig.Spec.StrictAffinity = lcgIPAMConfig.Spec.StrictAffinity
 	aapiIPAMConfig.Spec.MaxBlocksPerHost = int32(lcgIPAMConfig.Spec.MaxBlocksPerHost)
