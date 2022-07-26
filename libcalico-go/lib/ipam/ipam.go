@@ -1806,13 +1806,14 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (m
 // GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
-func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err error) {
+func (c ipamClient) GetIPAMConfig(ctx context.Context) (*IPAMConfig, error) {
 	var obj *model.KVPair
-
+	var err error
 	var retries int
+
 	maxRetry := 5
 
-	// First, trying to get IPAM config (create if not exists) for 5 times.
+	// Try to get the IPAM Config. If it doesn't exist, we'll attempt to create it.
 	for retries = 1; retries < maxRetry; retries++ {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -1820,35 +1821,33 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err 
 
 		obj, err = c.client.Get(ctx, model.IPAMConfigKey{}, "")
 		if err != nil {
-			// Create the default config if it doesn't already exist.
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-				// Write to datastore.
-				kvp := &model.KVPair{
-					Key: model.IPAMConfigKey{},
-					Value: &model.IPAMConfig{
-						StrictAffinity:     false,
-						AutoAllocateBlocks: true,
-						MaxBlocksPerHost:   0,
-					},
-				}
-
-				obj, err = c.client.Create(ctx, kvp)
-				if err != nil {
-					if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
-						log.Info("Failed to create global IPAM config; another node got there first.")
-						time.Sleep(1 * time.Second)
-						continue
-					}
-					log.WithError(err).Errorf("Error creating IPAM config")
-					return nil, err
-				}
-			} else {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				// Unexpected error querying the IPAM config.
 				log.WithError(err).Errorf("Error getting IPAM config")
 				return nil, err
 			}
-			break
-		}
 
+			// Create the default config because it doesn't already exist.
+			kvp := &model.KVPair{
+				Key: model.IPAMConfigKey{},
+				Value: &model.IPAMConfig{
+					StrictAffinity:     false,
+					AutoAllocateBlocks: true,
+					MaxBlocksPerHost:   0,
+				},
+			}
+
+			obj, err = c.client.Create(ctx, kvp)
+			if err != nil {
+				if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+					log.Info("Failed to create global IPAM config; another node got there first.")
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				log.WithError(err).Errorf("Error creating IPAM config")
+				return nil, err
+			}
+		}
 		break
 	}
 
@@ -1856,7 +1855,7 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err 
 		return nil, fmt.Errorf("failed to get ipam config after %d retries", retries)
 	}
 
-	config = c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig))
+	config := c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig))
 
 	if detectOS(ctx) == "windows" {
 		// When a Windows node owns a block, it creates a local /26 subnet object and as far as we know, it can't
@@ -1869,7 +1868,7 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err 
 			return nil, err
 		}
 	}
-	return
+	return config, nil
 }
 
 // SetIPAMConfig sets global IPAM configuration.  This can only
