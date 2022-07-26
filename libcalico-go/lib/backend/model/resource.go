@@ -146,6 +146,11 @@ func init() {
 		reflect.TypeOf(libapiv3.WorkloadEndpoint{}),
 	)
 	registerResourceInfo(
+		libapiv3.KindIPAMConfig,
+		"ipamconfigs",
+		reflect.TypeOf(libapiv3.IPAMConfig{}),
+	)
+	registerResourceInfo(
 		apiv3.KindKubeControllersConfiguration,
 		"kubecontrollersconfigurations",
 		reflect.TypeOf(apiv3.KubeControllersConfiguration{}))

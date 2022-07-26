@@ -180,6 +180,7 @@ rules:
   - ipamblocks
   - blockaffinities
   - caliconodestatuses
+  - ipamconfigs
   verbs:
   - get
   - list
