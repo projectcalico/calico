@@ -1507,6 +1507,11 @@ func (c shimClient) CalicoNodeStatus() client.CalicoNodeStatusInterface {
 	return c.client.CalicoNodeStatus()
 }
 
+// IPAMConfig returns an interface for managing the IPAMConfig resource.
+func (c shimClient) IPAMConfig() client.IPAMConfigInterface {
+	return c.client.IPAMConfig()
+}
+
 func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	return nil
 }
