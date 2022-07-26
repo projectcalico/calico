@@ -311,11 +311,14 @@ rules:
       - create
       - update
       - delete
+  # The CNI plugin and calico/node need to be able to create a default
+  # IPAMConfiguration
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - ipamconfigs
     verbs:
       - get
+      - create
   # Block affinities must also be watchable by confd for route aggregation.
   - apiGroups: ["crd.projectcalico.org"]
     resources:

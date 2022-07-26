@@ -60,6 +60,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointList":                   schema_pkg_apis_projectcalico_v3_HostEndpointList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointSpec":                   schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ICMPFields":                         schema_pkg_apis_projectcalico_v3_ICMPFields(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration":                  schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationList":              schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec":              schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPIPConfiguration":                  schema_pkg_apis_projectcalico_v3_IPIPConfiguration(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPool":                             schema_pkg_apis_projectcalico_v3_IPPool(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolList":                         schema_pkg_apis_projectcalico_v3_IPPoolList(ref),
@@ -3157,6 +3160,125 @@ func schema_pkg_apis_projectcalico_v3_ICMPFields(ref common.ReferenceCallback) c
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPAMConfiguration contains information about a block for IP address assignment.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPAMConfigurationList contains a list of IPAMConfiguration resources.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPAMConfigurationSpec contains the specification for an IPPool resource.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"strictAffinity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "When StrictAffinity is true, borrowing IP addresses is not allowed.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"maxBlocksPerHost": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxBlocksPerHost, if non-zero, is the max number of blocks that can be affine to each host.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"strictAffinity"},
 			},
 		},
 	}
