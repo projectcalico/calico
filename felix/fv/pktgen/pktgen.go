@@ -57,106 +57,99 @@ func main() {
 
 	ipID := uint16(0)
 	if args["--ip-id"] != nil {
-		id, err := strconv.Atoi(args["--ip-id"].(string))
+		id, err := strconv.ParseUint(args["--ip-id"].(string), 10, 16)
 		if err != nil {
-			log.WithError(err).Fatal("IP id not a number")
-		}
-		if id > math.MaxUint16 || id < 0 {
-			log.Fatal("IP id should be between 0 and 65535")
+			log.WithError(err).Fatal("IP id not a number between 0 and 65535")
 		}
 		ipID = uint16(id)
 	}
 
 	sport := uint16(0)
 	if args["--port-src"] != nil {
-		p, err := strconv.Atoi(args["--port-src"].(string))
+		p, err := strconv.ParseUint(args["--port-src"].(string), 10, 16)
 		if err != nil {
 			log.WithError(err).Fatal("source port not a number")
 		}
 		if p > math.MaxUint16 || p < 0 {
 			log.Fatal("source port should be between 0 and 65535")
-		}
-		sport = uint16(p)
-	}
 
-	dport := uint16(0)
-	if args["--port-dst"] != nil {
-		p, err := strconv.Atoi(args["--port-dst"].(string))
+		}
+		dport := uint16(0)
+		if args["--port-dst"] != nil {
+			p, err := strconv.ParseUint(args["--port-dst"].(string), 10, 16)
+			if err != nil {
+				log.WithError(err).Fatal("destination port not a number between 0 and 65535")
+			}
+			dport = uint16(p)
+		}
+
+		var proto layers.IPProtocol
+
+		switch args["<proto>"] {
+		case "udp":
+			proto = layers.IPProtocolUDP
+		default:
+			log.Fatal("unsupported protocol")
+		}
+
+		payload := make([]byte, 64)
+
+		ipv4 := &layers.IPv4{
+			Version:  4,
+			Id:       ipID,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    ipsrc,
+			DstIP:    ipdst,
+			Protocol: proto,
+			Length:   5 * 4,
+		}
+
+		var l4 gopacket.SerializableLayer
+
+		switch proto {
+		case layers.IPProtocolUDP:
+			udp := &layers.UDP{
+				SrcPort: layers.UDPPort(sport),
+				DstPort: layers.UDPPort(dport),
+				Length:  uint16(8 + len(payload)),
+			}
+
+			if err := udp.SetNetworkLayerForChecksum(ipv4); err != nil {
+				log.WithError(err).Fatal("cannot checksum udp")
+			}
+
+			l4 = udp
+			ipv4.Length += udp.Length
+		}
+
+		pkt := gopacket.NewSerializeBuffer()
+		err = gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+			ipv4, l4, gopacket.Payload(payload))
+
 		if err != nil {
-			log.WithError(err).Fatal("destination port not a number")
-		}
-		if p > math.MaxUint16 || p < 0 {
-			log.Fatal("destination port should be between 0 and 65535")
-		}
-		dport = uint16(p)
-	}
-
-	var proto layers.IPProtocol
-
-	switch args["<proto>"] {
-	case "udp":
-		proto = layers.IPProtocolUDP
-	default:
-		log.Fatal("unsupported protocol")
-	}
-
-	payload := make([]byte, 64)
-
-	ipv4 := &layers.IPv4{
-		Version:  4,
-		Id:       ipID,
-		IHL:      5,
-		TTL:      64,
-		Flags:    layers.IPv4DontFragment,
-		SrcIP:    ipsrc,
-		DstIP:    ipdst,
-		Protocol: proto,
-		Length:   5 * 4,
-	}
-
-	var l4 gopacket.SerializableLayer
-
-	switch proto {
-	case layers.IPProtocolUDP:
-		udp := &layers.UDP{
-			SrcPort: layers.UDPPort(sport),
-			DstPort: layers.UDPPort(dport),
-			Length:  uint16(8 + len(payload)),
+			log.WithError(err).Fatal("failed to serialized packet")
 		}
 
-		if err := udp.SetNetworkLayerForChecksum(ipv4); err != nil {
-			log.WithError(err).Fatal("cannot checksum udp")
+		s, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_RAW)
+
+		if err != nil || s < 0 {
+			log.WithError(err).Fatal("failed to create raw socket")
 		}
 
-		l4 = udp
-		ipv4.Length += udp.Length
-	}
+		err = unix.SetsockoptInt(s, unix.IPPROTO_IP, unix.IP_HDRINCL, 1)
+		if err != nil {
+			log.WithError(err).Fatal("failed to set IP_HDRINCL")
+		}
 
-	pkt := gopacket.NewSerializeBuffer()
-	err = gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-		ipv4, l4, gopacket.Payload(payload))
+		addr := &unix.SockaddrInet4{
+			Port: int(dport),
+		}
+		copy(addr.Addr[:], ipdst.To4()[:4])
 
-	if err != nil {
-		log.WithError(err).Fatal("failed to serialized packet")
-	}
-
-	s, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_RAW)
-
-	if err != nil || s < 0 {
-		log.WithError(err).Fatal("failed to create raw socket")
-	}
-
-	err = unix.SetsockoptInt(s, unix.IPPROTO_IP, unix.IP_HDRINCL, 1)
-	if err != nil {
-		log.WithError(err).Fatal("failed to set IP_HDRINCL")
-	}
-
-	addr := &unix.SockaddrInet4{
-		Port: int(dport),
-	}
-	copy(addr.Addr[:], ipdst.To4()[:4])
-
-	if err := unix.Sendto(s, pkt.Bytes(), 0, addr); err != nil {
-		log.WithError(err).Fatal("failed to send packet")
+		if err := unix.Sendto(s, pkt.Bytes(), 0, addr); err != nil {
+			log.WithError(err).Fatal("failed to send packet")
+		}
 	}
 }
