@@ -1,5 +1,5 @@
 # The Calico version to use when generating manifests.
-version: master
+version: release-v3.24
 
 # Configure the images to use when generating manifests.
 node:

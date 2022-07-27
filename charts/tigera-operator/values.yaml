@@ -45,4 +45,4 @@ tigeraOperator:
   registry: quay.io
 calicoctl:
   image: docker.io/calico/ctl
-  tag: master
+  tag: release-v3.24
