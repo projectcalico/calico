@@ -96,6 +96,8 @@ section:
     path: /reference/resources/ippool
   - title: IP reservation
     path: /reference/resources/ipreservation
+  - title: IPAM configuration
+    path: /reference/resources/ipamconfig
   - title: Kubernetes controllers configuration
     path: /reference/resources/kubecontrollersconfig
   - title: Network policy
