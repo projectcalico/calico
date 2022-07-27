@@ -173,6 +173,11 @@ func (c client) IPAMConfig() IPAMConfigInterface {
 	return IPAMConfigs{client: c}
 }
 
+// BlockAffinity returns an interface for viewing the IPAM block affinity resources.
+func (c client) BlockAffinities() BlockAffinityInterface {
+	return blockAffinities{client: c}
+}
+
 type poolAccessor struct {
 	client *client
 }

@@ -1349,3 +1349,62 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 
 	return nil
 }
+
+// TestBlockAffinityClient exercises the BlockAffinity client.
+func TestBlockAffinityClient(t *testing.T) {
+	const name = "test-blockaffinity"
+	rootTestFunc := func() func(t *testing.T) {
+		return func(t *testing.T) {
+			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+				return &v3.BlockAffinity{}
+			})
+			defer shutdownServer()
+			if err := testBlockAffinityClient(client, name); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if !t.Run(name, rootTestFunc()) {
+		t.Errorf("test-blockaffinity test failed")
+	}
+}
+
+func testBlockAffinityClient(client calicoclient.Interface, name string) error {
+	blockAffinityClient := client.ProjectcalicoV3().BlockAffinities()
+	blockAffinity := &v3.BlockAffinity{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+
+		Spec: v3.BlockAffinitySpec{
+			CIDR:  "10.0.0.0/24",
+			Node:  "node1",
+			State: "pending",
+		},
+	}
+	ctx := context.Background()
+
+	blockAffinityNew, err := blockAffinityClient.Create(ctx, blockAffinity, metav1.CreateOptions{})
+	if err == nil {
+		return fmt.Errorf("should not be able to create block affinity %s ", blockAffinity.Name)
+	}
+
+	/*
+		// TODO: Need to figure out a way to create the block affinity for this test
+		blockAffinityNew, err = blockAffinityClient.Create(ctx, blockAffinity, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("error creating the object '%v' (%v)", blockAffinity, err)
+		}
+
+		blockAffinityNew, err = blockAffinityClient.Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting object %s (%s)", name, err)
+		}
+
+		err = blockAffinityClient.Delete(ctx, name, metav1.DeleteOptions{})
+		if nil == err {
+			return fmt.Errorf("should not be able to delete block affinity %s", blockAffinity.Name)
+		}
+	*/
+
+	return nil
+}
