@@ -70,7 +70,7 @@ defaults:
     scope:
       path: ""
     values:
-      version: master
+      version: v3.24
       layout: docwithnav
       show_title: true
       show_read_time: true
