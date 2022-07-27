@@ -43,7 +43,9 @@ spec:
 |--------|-----------------------------|-------------------|--------|------------|
 | bgp    | BGP configuration for this node.  Omit if using {{site.prodname}} for policy only. | | [BGP](#bgp) |
 | ipv4VXLANTunnelAddr | IPv4 address of the VXLAN tunnel. This is system configured and should not be updated manually. | | string |
-| vxlanTunnelMACAddr | MAC address of the VXLAN tunnel. This is system configured and should not be updated manually. | | string |
+| vxlanTunnelMACAddr | MAC address of the IPv4 VXLAN tunnel. This is system configured and should not be updated manually. | | string |
+| ipv6VXLANTunnelAddr | IPv6 address of the VXLAN tunnel. This is system configured and should not be updated manually. | | string |
+| vxlanTunnelMACAddrV6 | MAC address of the IPv6 VXLAN tunnel. This is system configured and should not be updated manually. | | string |
 | orchRefs | Correlates this node to a node in another orchestrator. | | list of [OrchRefs](#OrchRef) |
 | wireguard | WireGuard configuration for this node. This is applicable only if WireGuard is enabled in [Felix Configuration]({{ site.baseurl }}/reference/resources/felixconfig). | | [WireGuard](#wireguard) |
 
@@ -68,7 +70,8 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| interfaceIPv4Address | The IPv4 address and subnet for the WireGuard interface created by Felix on this node. | Optional | string |
+| interfaceIPv4Address | The IP address and subnet for the IPv4 WireGuard interface created by Felix on this node. | Optional | string |
+| interfaceIPv6Address | The IP address and subnet for the IPv6 WireGuard interface created by Felix on this node. | Optional | string |
 
 ### Supported operations
 
