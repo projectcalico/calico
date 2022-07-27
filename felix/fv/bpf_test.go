@@ -2356,11 +2356,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					)
 
 					testSvcName := "test-service"
+					testSvcExtIP := "10.123.0.1"
 
 					BeforeEach(func() {
 						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 						testSvc = k8sService(testSvcName, "10.101.0.10",
 							w[0][0], 80, 8055, int32(npPort), testOpts.protocol)
+						testSvc.Spec.ExternalIPs = []string{testSvcExtIP}
 						if extLocal {
 							testSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
 						}
@@ -2637,6 +2639,37 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								// N.B. it cannot work without the connect time balancer
 								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
 								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+
+								cc.CheckConnectivity()
+							})
+
+							It("should have connectivity from all host-networked workloads to workload 0 via external IP", func() {
+								node0IP := felixes[0].IP
+								node1IP := felixes[1].IP
+
+								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+								switch testOpts.tunnel {
+								case "ipip":
+									hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+								case "wireguard":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+								case "vxlan":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+								}
+
+								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
+
+								By("Assigning externalIP to felix[0]")
+								felixes[0].Exec("ip", "addr", "add", testSvcExtIP+"/32", "dev", "eth0")
+
+								// XXX Atm we cannot connect to externalIP of self, that
+								// needs nodeport support.
+								cc.Expect(None, hostW[0], TargetIP(testSvcExtIP), ports, hostW0SrcIP)
+								// XXX But we can connect from other nodes.
+								cc.Expect(Some, hostW[1], TargetIP(testSvcExtIP), ports, hostW1SrcIP)
 
 								cc.CheckConnectivity()
 							})
