@@ -138,6 +138,10 @@ func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
 // toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
 func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
+	if !isV1BlockAffinityKey(kvp1.Key) {
+		// This is already in v3 representation, skip
+		return kvpv1
+	}
 	name, cidr, host := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
 	return &model.KVPair{
@@ -165,33 +169,74 @@ func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	}
 }
 
-func (c *blockAffinityClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp := c.toV3(kvp)
-	kvp, err := c.rc.Create(ctx, nkvp)
+// isV1BlockAffinityKey checks if the key is in the v1 format.
+func isV1BlockAffinityKey(key model.Key) bool {
+	switch key.(type) {
+	case model.BlockAffinityKey:
+		return true
+	case model.ResourceKey:
+		return false
+	default:
+		log.Panic("blockAffinityClient : wrong key interface type")
+	}
+	return false
+}
+
+func (c *blockAffinityClient) createV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp, err := c.rc.Create(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
 	}
-	v1kvp, err := c.toV1(kvp)
+
+	v1kvp, err := c.toV1(nkvp)
 	if err != nil {
 		return nil, err
 	}
 	return v1kvp, nil
+}
+
+func (c *blockAffinityClient) createV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.rc.Create(ctx, kvp)
+}
+
+func (c *blockAffinityClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	if isV1BlockAffinityKey(kvp.Key) {
+		// If this is a V1 resource, then it is from the IPAM code.
+		// Convert it, but treat it as a V1 resource.
+		return c.createV1(ctx, kvp)
+	}
+	// If this is a V3 resource, then it is already in CRD format.
+	return c.createV3(ctx, kvp)
+}
+
+func (c *blockAffinityClient) updateV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp, err := c.rc.Update(ctx, c.toV3(kvp))
+	if err != nil {
+		return nil, err
+	}
+
+	v1kvp, err := c.toV1(nkvp)
+	if err != nil {
+		return nil, err
+	}
+	return v1kvp, nil
+}
+
+func (c *blockAffinityClient) updateV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.rc.Update(ctx, kvp)
 }
 
 func (c *blockAffinityClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp := c.toV3(kvp)
-	kvp, err := c.rc.Update(ctx, nkvp)
-	if err != nil {
-		return nil, err
+	if isV1BlockAffinityKey(kvp.Key) {
+		// If this is a V1 resource, then it is from the IPAM code.
+		// Convert it, but treat it as a V1 resource.
+		return c.updateV1(ctx, kvp)
 	}
-	v1kvp, err := c.toV1(kvp)
-	if err != nil {
-		return nil, err
-	}
-	return v1kvp, nil
+	// If this is a V3 resource, then it is already in CRD format.
+	return c.updateV3(ctx, kvp)
 }
 
-func (c *blockAffinityClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *blockAffinityClient) deleteKVPV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	// We need to mark as deleted first, since the Kubernetes API doesn't support
 	// compare-and-delete. This update operation allows us to eliminate races with other clients.
 	name, _, _ := c.parseKey(kvp.Key)
@@ -210,6 +255,44 @@ func (c *blockAffinityClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) 
 	return c.toV1(kvp)
 }
 
+func (c *blockAffinityClient) deleteKVPV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	// We need to mark as deleted first, since the Kubernetes API doesn't support
+	// compare-and-delete. This update operation allows us to eliminate races with other clients.
+	var err error
+	log.Debugf("This is the value: %+v: bool: %t", kvp.Key, kvp.Value == nil)
+	nkvp := kvp
+	if kvp.Value == nil {
+		// Need to check if a value is given since V3 deletes are done by key only.
+		// Look up missing values with the provided key.
+		nkvp, err = c.getV3(ctx, kvp.Key.(model.ResourceKey), "")
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				return nil, fmt.Errorf("Unable to find block affinity. Block affinity may have already been deleted.")
+			}
+			return nil, fmt.Errorf("Error retrieving block affinity for deletion: %s", err)
+		}
+	}
+
+	nkvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted = fmt.Sprintf("%t", true)
+	nkvp, err = c.Update(ctx, nkvp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now actually delete the object.
+	return c.rc.Delete(ctx, nkvp.Key, nkvp.Revision, &nkvp.Value.(*libapiv3.BlockAffinity).UID)
+}
+
+func (c *blockAffinityClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	if isV1BlockAffinityKey(kvp.Key) {
+		// If this is a V1 resource, then it is from the IPAM code.
+		// Convert it, but treat it as a V1 resource.
+		return c.deleteKVPV1(ctx, kvp)
+	}
+	// If this is a V3 resource, then it is already in CRD format.
+	return c.deleteKVPV3(ctx, kvp)
+}
+
 func (c *blockAffinityClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	// Delete should not be used for affinities, since we need the object UID for correctness.
 	log.Warn("Operation Delete is not supported on BlockAffinity type - use DeleteKVP")
@@ -219,7 +302,7 @@ func (c *blockAffinityClient) Delete(ctx context.Context, key model.Key, revisio
 	}
 }
 
-func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+func (c *blockAffinityClient) getV1(ctx context.Context, key model.BlockAffinityKey, revision string) (*model.KVPair, error) {
 	// Get the object.
 	name, _, _ := c.parseKey(key)
 	k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
@@ -246,15 +329,55 @@ func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision s
 	return v1kvp, nil
 }
 
-func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+func (c *blockAffinityClient) getV3(ctx context.Context, key model.ResourceKey, revision string) (*model.KVPair, error) {
+	kvp, err := c.rc.Get(ctx, key, revision)
+	if err != nil {
+		return nil, err
+	}
+
+	// If this object has been marked as deleted, then we need to clean it up and
+	// return not found.
+	if kvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted == "true" {
+		if _, err := c.DeleteKVP(ctx, kvp); err != nil {
+			return nil, err
+		}
+		return nil, cerrors.ErrorResourceDoesNotExist{Err: fmt.Errorf("Resource was deleted"), Identifier: key}
+	}
+
+	return kvp, nil
+}
+
+func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	if isV1BlockAffinityKey(key) {
+		// If this is a V1 resource, then it is from the IPAM code.
+		// Convert it, but treat it as a V1 resource.
+		return c.getV1(ctx, key.(model.BlockAffinityKey), revision)
+	}
+	// If this is a V3 resource, then it is already in CRD format.
+	return c.getV3(ctx, key.(model.ResourceKey), revision)
+}
+
+func isV1List(list model.ListInterface) bool {
+	switch list.(type) {
+	case model.BlockAffinityListOptions:
+		return true
+	case model.ResourceListOptions:
+		return false
+	default:
+		log.Panic("blockAffinityClient : wrong key interface type")
+	}
+	return false
+}
+
+func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffinityListOptions, revision string) (*model.KVPairList, error) {
 	l := model.ResourceListOptions{Kind: libapiv3.KindBlockAffinity}
 	v3list, err := c.rc.List(ctx, l, revision)
 	if err != nil {
 		return nil, err
 	}
 
-	host := list.(model.BlockAffinityListOptions).Host
-	requestedIPVersion := list.(model.BlockAffinityListOptions).IPVersion
+	host := list.Host
+	requestedIPVersion := list.IPVersion
 
 	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
 	for _, i := range v3list.KVPairs {
@@ -274,6 +397,32 @@ func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface
 	return kvpl, nil
 }
 
+func (c *blockAffinityClient) listV3(ctx context.Context, list model.ResourceListOptions, revision string) (*model.KVPairList, error) {
+	return c.rc.List(ctx, list, revision)
+}
+
+func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+	if isV1List(list) {
+		// If this is a V1 resource, then it is from the IPAM code.
+		// Convert it, but treat it as a V1 resource.
+		return c.listV1(ctx, list.(model.BlockAffinityListOptions), revision)
+	}
+	// If this is a V3 resource, then it is already in CRD format.
+	return c.listV3(ctx, list.(model.ResourceListOptions), revision)
+}
+
+func (c *blockAffinityClient) toKVPairV1(r Resource) (*model.KVPair, error) {
+	conv, err := c.rc.convertResourceToKVPair(r)
+	if err != nil {
+		return nil, err
+	}
+	return c.toV1(conv)
+}
+
+func (c *blockAffinityClient) toKVPairV3(r Resource) (*model.KVPair, error) {
+	return c.rc.convertResourceToKVPair(r)
+}
+
 func (c *blockAffinityClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
 	resl := model.ResourceListOptions{Kind: libapiv3.KindBlockAffinity}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
@@ -281,15 +430,13 @@ func (c *blockAffinityClient) Watch(ctx context.Context, list model.ListInterfac
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
-	toKVPair := func(r Resource) (*model.KVPair, error) {
-		conv, err := c.rc.convertResourceToKVPair(r)
-		if err != nil {
-			return nil, err
-		}
-		return c.toV1(conv)
+	if isV1List(list) {
+		// If this is a V1 resource, then it is from the IPAM code.
+		// Convert resources back to a V1 resource.
+		return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", c.toKVPairV1, k8sWatch), nil
 	}
 
-	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
+	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", c.toKVPairV3, k8sWatch), nil
 }
 
 func (c *blockAffinityClient) EnsureInitialized() error {
