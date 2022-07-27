@@ -173,6 +173,23 @@ When starting development on a new minor release, the first step is to create a 
    git commit -a -m "Add redirects for archive/vX.Y"
    ```
 
+1. Update manifests to use the new release branch instead of master.  Update versions in the following files:
+
+   - charts/calico/values.yaml
+   - charts/tigera-operator/values.yaml
+
+   Then, run manifest generation
+
+   ```
+   make gen-manifests
+   ```
+
+   Commit your changes
+
+   ```
+   Update manifests for release-vX.Y
+   ```
+
    Then, push your changes to the branch.
 
    ```
