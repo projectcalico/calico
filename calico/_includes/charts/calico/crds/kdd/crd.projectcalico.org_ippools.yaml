@@ -43,13 +43,13 @@ spec:
               cidr:
                 description: The pool CIDR.
                 type: string
-              disabled:
-                description: When disabled is true, Calico IPAM will not assign addresses
-                  from this pool.
-                type: boolean
               disableBGPExport:
                 description: 'Disable exporting routes from this IP Pool’s CIDR over
                   BGP. [Default: false]'
+                type: boolean
+              disabled:
+                description: When disabled is true, Calico IPAM will not assign addresses
+                  from this pool.
                 type: boolean
               ipip:
                 description: 'Deprecated: this field is only used for APIv1 backwards
