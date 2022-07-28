@@ -257,7 +257,7 @@ func (c *blockAffinityClient) deleteKVPV3(ctx context.Context, kvp *model.KVPair
 	var err error
 	nkvp := kvp
 	if kvp.Value == nil {
-		// Need to check if a value is given since V3 deletes are done by key only.
+		// Need to check if a value is given since V3 deletes can be made by providing a key only.
 		// Look up missing values with the provided key.
 		nkvp, err = c.getV3(ctx, kvp.Key.(model.ResourceKey), kvp.Revision)
 		if err != nil {
@@ -383,7 +383,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 		if host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
 			cidrPtr := &cidr
-			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(model.BlockAffinity).Deleted {
+			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(*model.BlockAffinity).Deleted {
 				// Matches the given host and IP version.
 				kvpl.KVPairs = append(kvpl.KVPairs, v1kvp)
 			}
