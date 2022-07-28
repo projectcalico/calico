@@ -138,10 +138,6 @@ func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
 // toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
 func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
-	if !isV1BlockAffinityKey(kvpv1.Key) {
-		// This is already in v3 representation, skip
-		return kvpv1
-	}
 	name, cidr, host := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
 	return &model.KVPair{
@@ -259,7 +255,6 @@ func (c *blockAffinityClient) deleteKVPV3(ctx context.Context, kvp *model.KVPair
 	// We need to mark as deleted first, since the Kubernetes API doesn't support
 	// compare-and-delete. This update operation allows us to eliminate races with other clients.
 	var err error
-	log.Debugf("This is the value: %+v: bool: %t", kvp.Key, kvp.Value == nil)
 	nkvp := kvp
 	if kvp.Value == nil {
 		// Need to check if a value is given since V3 deletes are done by key only.
@@ -387,8 +382,8 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 		}
 		if host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
-			cidr2 := &cidr
-			if requestedIPVersion == 0 || requestedIPVersion == cidr2.Version() {
+			cidrPtr := &cidr
+			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(model.BlockAffinity).Deleted {
 				// Matches the given host and IP version.
 				kvpl.KVPairs = append(kvpl.KVPairs, v1kvp)
 			}
@@ -398,7 +393,18 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 }
 
 func (c *blockAffinityClient) listV3(ctx context.Context, list model.ResourceListOptions, revision string) (*model.KVPairList, error) {
-	return c.rc.List(ctx, list, revision)
+	v3list, err := c.rc.List(ctx, list, revision)
+	if err != nil {
+		return nil, err
+	}
+
+	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	for _, kvp := range v3list.KVPairs {
+		if kvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted != fmt.Sprintf("%t", true) {
+			kvpl.KVPairs = append(kvpl.KVPairs, kvp)
+		}
+	}
+	return kvpl, nil
 }
 
 func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {

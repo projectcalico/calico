@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -83,19 +84,9 @@ type BlockAffinityConverter struct {
 }
 
 func (gc BlockAffinityConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	aapiBlockAffinity := aapiObj.(*aapi.BlockAffinity)
-	lcgBlockAffinity := &libapi.BlockAffinity{}
-	lcgBlockAffinity.TypeMeta = aapiBlockAffinity.TypeMeta
-	lcgBlockAffinity.ObjectMeta = aapiBlockAffinity.ObjectMeta
-	lcgBlockAffinity.Kind = libapi.KindBlockAffinity
-	lcgBlockAffinity.APIVersion = aapi.GroupVersionCurrent
-	lcgBlockAffinity.Spec.State = aapiBlockAffinity.Spec.State
-	lcgBlockAffinity.Spec.Node = aapiBlockAffinity.Spec.Node
-	lcgBlockAffinity.Spec.CIDR = aapiBlockAffinity.Spec.CIDR
-
-	// Deleted is an internal field and should be set to false for any block affinity picked up by the AAPI.
-	lcgBlockAffinity.Spec.Deleted = fmt.Sprintf("%t", false)
-
+	var lcgBlockAffinity *libapi.BlockAffinity
+	// This is should not be called since block affinities are read-only through the AAPI.
+	log.Error("Block affinity API is read-only. Should not attempt to create/update block affinities through the API.")
 	return lcgBlockAffinity
 }
 
