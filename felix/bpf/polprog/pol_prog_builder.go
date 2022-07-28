@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -306,18 +306,17 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	p.b.MovImm32(R1, int32(state.PolicyDeny))
 	p.b.Store32(R9, R1, stateOffPolResult)
 
+	// Execute the tail call to drop program
+	p.b.Mov64(R1, R6)                      // First arg is the context.
+	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
+	p.b.MovImm32(R3, jumpIdxDrop)          // Third arg is the index (rather than a pointer to the index).
+	p.b.Call(HelperTailCall)
+
+	// Fall through if tail call fails.
+	p.b.LabelNextInsn("exit")
 	if forXDP {
-		p.b.LabelNextInsn("exit")
 		p.b.MovImm64(R0, 1 /* XDP_DROP */)
 	} else {
-		// Execute the tail call to drop program
-		p.b.Mov64(R1, R6)                      // First arg is the context.
-		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-		p.b.MovImm32(R3, jumpIdxDrop)          // Third arg is the index (rather than a pointer to the index).
-		p.b.Call(HelperTailCall)
-
-		// Fall through if tail call fails.
-		p.b.LabelNextInsn("exit")
 		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
 	}
 	p.b.Exit()
@@ -342,7 +341,11 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		// Fall through if tail call fails.
 		p.b.MovImm32(R1, state.PolicyTailCallFailed)
 		p.b.Store32(R9, R1, stateOffPolResult)
-		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+		if forXDP {
+			p.b.MovImm64(R0, 1 /* XDP_DROP */)
+		} else {
+			p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+		}
 		p.b.Exit()
 	}
 }
