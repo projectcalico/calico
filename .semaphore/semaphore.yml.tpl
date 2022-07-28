@@ -94,13 +94,24 @@ blocks:
       commands:
       - cd cni-plugin
     jobs:
-    - name: "cni-plugin tests"
+    - name: "cni-plugin tests 1"
       commands:
-      - ../.semaphore/run-and-monitor ci.log make ci
-
-after_pipeline:
-  task:
-    jobs:
-    - name: Reports
+      - ../.semaphore/run-and-monitor ci1.log make ci
+    - name: "cni-plugin tests 2"
       commands:
-        - test-results gen-pipeline-report --force
+      - ../.semaphore/run-and-monitor ci2.log make ci
+    - name: "cni-plugin tests 3"
+      commands:
+      - ../.semaphore/run-and-monitor ci3.log make ci
+    - name: "cni-plugin tests 4"
+      commands:
+      - ../.semaphore/run-and-monitor ci4.log make ci
+    - name: "cni-plugin tests 5"
+      commands:
+      - ../.semaphore/run-and-monitor ci5.log make ci
+    - name: "cni-plugin tests 6"
+      commands:
+      - ../.semaphore/run-and-monitor ci6.log make ci
+    - name: "cni-plugin tests 7"
+      commands:
+      - ../.semaphore/run-and-monitor ci6.log make ci
