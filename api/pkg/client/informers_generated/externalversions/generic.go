@@ -43,6 +43,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().BGPConfigurations().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("bgppeers"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().BGPPeers().Informer()}, nil
+	case v3.SchemeGroupVersion.WithResource("blockaffinities"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().BlockAffinities().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("caliconodestatuses"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().CalicoNodeStatuses().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("clusterinformations"):
