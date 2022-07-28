@@ -16,17 +16,26 @@ package model
 
 import (
 	"reflect"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
 	IPAMConfigGlobalName = "default"
 )
 
-var (
-	typeIPAMConfig = reflect.TypeOf(IPAMConfig{})
-)
+var typeIPAMConfig = reflect.TypeOf(IPAMConfig{})
 
-type IPAMConfigKey struct{}
+type IPAMConfigKey struct {
+	// Metadata stores information that needs to be round-tripped
+	// with an IPAMConfig resource over the v1 API. It is not stored in the data store.
+	// This includes v3 metadata that we don't want to lose as part of a get / update cycle.
+	Metadata metav1.ObjectMeta `json:"-"`
+}
+
+type IPAMConfigMetadata struct {
+	CreationTimestamp metav1.Time
+}
 
 func (key IPAMConfigKey) defaultPath() (string, error) {
 	return "/calico/ipam/v2/config", nil
