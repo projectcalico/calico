@@ -37,9 +37,11 @@ blocks:
       - name: quay-robot-calico+semaphoreci
       - name: docker
       jobs:
-      - name: "apiserver"
+      # The apiserver build takes a long time due to some architectures, so we split it up.
+      # TODO: Add support for other architectures
+      - name: "Linux amd64"
         env_vars:
         - name: DEV_REGISTRIES
           value: quay.io/calico docker.io/calico
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C apiserver image-all cd CONFIRM=true; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make VALIDARCHES=amd64 -C apiserver image-all cd-common CONFIRM=true; fi
