@@ -39,15 +39,20 @@ type IPAMConfigs struct {
 	client client
 }
 
+func validateMetadata(res *libapiv3.IPAMConfig) error {
+	if res.ObjectMeta.GetName() != libapiv3.GlobalIPAMConfigName {
+		return errors.New("Cannot create a IPAMConfiguration resource with a name other than \"default\"")
+	}
+	return nil
+}
+
 // Create takes the representation of a IPAMConfig and creates it.  Returns the stored
 // representation of the IPAMConfig, and an error, if there is any.
 func (r IPAMConfigs) Create(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
-	}
-
-	if res.ObjectMeta.GetName() != libapiv3.GlobalIPAMConfigName {
-		return nil, errors.New("Cannot create a IPAMConfiguration resource with a name other than \"default\"")
+	} else if err := validateMetadata(res); err != nil {
+		return nil, err
 	}
 
 	out, err := r.client.resources.Create(ctx, opts, libapiv3.KindIPAMConfig, res)
@@ -61,6 +66,8 @@ func (r IPAMConfigs) Create(ctx context.Context, res *libapiv3.IPAMConfig, opts 
 // representation of the IPAMConfig, and an error, if there is any.
 func (r IPAMConfigs) Update(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error) {
 	if err := validator.Validate(res); err != nil {
+		return nil, err
+	} else if err := validateMetadata(res); err != nil {
 		return nil, err
 	}
 

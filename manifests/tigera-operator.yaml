@@ -2609,6 +2609,8 @@ spec:
               maxBlocksPerHost:
                 description: MaxBlocksPerHost, if non-zero, is the max number of blocks
                   that can be affine to each host.
+                maximum: 2147483647
+                minimum: 0
                 type: integer
               strictAffinity:
                 type: boolean

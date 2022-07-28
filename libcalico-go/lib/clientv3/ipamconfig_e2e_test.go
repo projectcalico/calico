@@ -153,4 +153,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 		// Test 1: Pass two fully populated IPAMConfigSpecs and expect the series of operations to succeed.
 		Entry("Two fully populated IPAMConfigSpecs", name, spec1, spec2),
 	)
+
+	It("should reject MaxBlocksPerHost less than zero", func() {
+		_, err := c.IPAMConfig().Create(ctx, &libapiv3.IPAMConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec: libapiv3.IPAMConfigSpec{
+				MaxBlocksPerHost: -1,
+			},
+		}, options.SetOptions{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("error with field MaxBlocksPerHost = '-1' (must be greater than or equal to 0)"))
+	})
 })
