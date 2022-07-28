@@ -223,6 +223,7 @@ func init() {
 	registerStructValidator(validate, validateRouteTableIDRange, api.RouteTableIDRange{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
+	registerStructValidator(validate, validateBlockAffinitySpec, libapi.BlockAffinitySpec{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -1699,6 +1700,13 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 	// Check that node mesh max restart time cannot be set if node to node mesh is disabled.
 	if spec.NodeMeshMaxRestartTime != nil && spec.NodeToNodeMeshEnabled != nil && !*spec.NodeToNodeMeshEnabled {
 		structLevel.ReportError(reflect.ValueOf(spec), "Spec.NodeMeshMaxRestartTime", "", reason("spec.NodeMeshMaxRestartTime cannot be set if spec.NodeToNodeMesh is disabled"), "")
+	}
+}
+
+func validateBlockAffinitySpec(structLevel validator.StructLevel) {
+	spec := structLevel.Current().Interface().(libapi.BlockAffinitySpec)
+	if spec.Deleted == fmt.Sprintf("%t", true) {
+		structLevel.ReportError(reflect.ValueOf(spec), "Spec.Deleted", "", reason("spec.Deleted cannot be set to \"true\""), "")
 	}
 }
 
