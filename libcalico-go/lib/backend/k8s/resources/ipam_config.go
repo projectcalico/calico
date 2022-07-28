@@ -69,14 +69,8 @@ type ipamConfigClient struct {
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
 
-	// Copy across any object metadata fields that we need to properly
-	// round-trip on the v1 API. v1 API users are expected to leave this
-	// metadata untouched.
-	m := metav1.ObjectMeta{}
-	m.SetCreationTimestamp(v3obj.GetCreationTimestamp())
-
 	return &model.KVPair{
-		Key: model.IPAMConfigKey{Metadata: m},
+		Key: model.IPAMConfigKey{},
 		Value: &model.IPAMConfig{
 			StrictAffinity:     v3obj.Spec.StrictAffinity,
 			AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
@@ -90,12 +84,9 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 // For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
 func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
-	// Build object meta, starting with the key's Metadata field,
-	// which may include round-tripped fields if this KVP is being
-	// updated rather than created.
-	m := kvpv1.Key.(model.IPAMConfigKey).Metadata
-
+	// Build object meta.
 	// We only support a singleton resource with name "default".
+	m := metav1.ObjectMeta{}
 	m.SetName(model.IPAMConfigGlobalName)
 	m.SetResourceVersion(kvpv1.Revision)
 
