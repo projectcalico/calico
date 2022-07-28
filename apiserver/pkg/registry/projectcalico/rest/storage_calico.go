@@ -406,7 +406,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		},
 		p.StorageType,
 		authorizer,
-		[]string{"blockaffinity"},
+		[]string{"blockaffinity", "affinity", "affinities"},
 	)
 
 	storage := map[string]rest.Storage{}

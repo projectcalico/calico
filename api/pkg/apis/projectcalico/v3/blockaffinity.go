@@ -38,9 +38,14 @@ type BlockAffinity struct {
 
 // BlockAffinitySpec contains the specification for a BlockAffinity resource.
 type BlockAffinitySpec struct {
+	// The state of the block affinity with regard to any referenced IPAM blocks.
 	State string `json:"state"`
-	Node  string `json:"node"`
-	CIDR  string `json:"cidr"`
+
+	// The node that this block affinity is assigned to.
+	Node string `json:"node"`
+
+	// The CIDR range this block affinity references.
+	CIDR string `json:"cidr"`
 }
 
 // +genclient:nonNamespaced
