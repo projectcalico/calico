@@ -259,7 +259,7 @@ func (c *blockAffinityClient) deleteKVPV3(ctx context.Context, kvp *model.KVPair
 	if kvp.Value == nil {
 		// Need to check if a value is given since V3 deletes are done by key only.
 		// Look up missing values with the provided key.
-		nkvp, err = c.getV3(ctx, kvp.Key.(model.ResourceKey), "")
+		nkvp, err = c.getV3(ctx, kvp.Key.(model.ResourceKey), kvp.Revision)
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 				return nil, fmt.Errorf("Unable to find block affinity. Block affinity may have already been deleted.")
