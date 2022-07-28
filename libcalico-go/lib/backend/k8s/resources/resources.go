@@ -124,7 +124,7 @@ func SetCalicoMetadataFromK8sAnnotations(calicoRes Resource, k8sRes Resource) {
 	}
 }
 
-// Store Calico Metadata in the in the k8s resource annotations for CRD backed resources.
+// Store Calico Metadata in the k8s resource annotations for CRD backed resources.
 // This should store all Metadata except for those stored in Annotations and Labels and
 // store them in annotations.
 func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {

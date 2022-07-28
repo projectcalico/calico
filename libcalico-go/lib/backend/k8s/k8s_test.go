@@ -3008,6 +3008,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "default",
+
+					// CreationTimestamp for Calico objects is generally set in clientv3.
+					CreationTimestamp: metav1.Now(),
 				},
 				Spec: libapiv3.IPAMConfigSpec{
 					StrictAffinity:     false,
@@ -3015,11 +3018,17 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				},
 			},
 		}
+
+		kvpRes, err := c.Create(ctx, ipamKVP)
 		By("Creating an IPAM Config", func() {
-			kvpRes, err := c.Create(ctx, ipamKVP)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
 		})
+
+		By("Expecting the creation timestamp to be set")
+		createdAt := kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp
+		Expect(createdAt).NotTo(Equal(metav1.Time{}))
+
 		By("Reading and updating an IPAM Config", func() {
 			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -3032,7 +3041,30 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).Spec).NotTo(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
 			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(kvpRes.Value.(*libapiv3.IPAMConfig).Spec))
+
+			// Expect the creation time stamp to be the same.
+			Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
 		})
+
+		By("Updating the IPAMConfig using the v1 client", func() {
+			kvpRes, err := c.Get(ctx, model.IPAMConfigKey{}, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			kvpRes.Value.(*model.IPAMConfig).MaxBlocksPerHost = 1000
+
+			kvpRes, err = c.Update(ctx, kvpRes)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking the update using the v3 client", func() {
+			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec.MaxBlocksPerHost).To(Equal(1000))
+
+			// Expect the creation time stamp to be the same.
+			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+		})
+
 		By("Deleting an IPAM Config", func() {
 			_, err := c.Delete(ctx, ipamKVP.Key, "")
 			Expect(err).NotTo(HaveOccurred())
