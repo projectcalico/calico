@@ -2963,7 +2963,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 	})
 
-	It("should handle a CRUD of IPAM Config (v1 format)", func() {
+	It("CASEY should handle a CRUD of IPAM Config (v1 format)", func() {
 		ipamKVP := &model.KVPair{
 			Key: model.IPAMConfigKey{},
 			Value: &model.IPAMConfig{
@@ -3020,7 +3020,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 	})
 
-	It("should handle a CRUD of IPAM config (v3 format)", func() {
+	It("CASEY should handle a CRUD of IPAM config (v3 format)", func() {
 		ipamKVP := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "default",
