@@ -4,13 +4,14 @@ source "https://rubygems.org"
 
 git_source(:github) {|repo_name| "https://github.com/#{repo_name}" }
 
-gem 'jekyll', '~>4.0.0'
+gem 'jekyll' # jekyll/jekyll:pages is currently version 3.8.5, but specifying '~>3.8.5' here results in an error
 
 group :jekyll_plugins do
   gem 'jekyll-redirect-from'
   gem 'jekyll-seo-tag'
   gem 'jekyll-sitemap'
   gem 'jekyll-include-cache'
-  gem 'webrick'
+  gem 'webrick' # needed when running on ruby3+
+  gem 'kramdown-parser-gfm' # needed when not specifying jekyll version
 end
 
