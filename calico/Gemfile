@@ -4,13 +4,14 @@ source "https://rubygems.org"
 
 git_source(:github) {|repo_name| "https://github.com/#{repo_name}" }
 
-gem 'jekyll', '~>4.0.0'
+gem 'jekyll', '~>3.8.5' # jekyll/jekyll:pages is currently version 3.8.5
+
+gem 'webrick'
 
 group :jekyll_plugins do
   gem 'jekyll-redirect-from'
   gem 'jekyll-seo-tag'
   gem 'jekyll-sitemap'
   gem 'jekyll-include-cache'
-  gem 'webrick'
 end
 
