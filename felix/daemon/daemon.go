@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -32,6 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -113,8 +114,8 @@ const (
 // main config parameters by exiting and allowing itself to be restarted by the init
 // daemon.
 func Run(configFile string, gitVersion string, buildDate string, gitRevision string) {
-	// Go's RNG is not seeded by default.  Do that now.
-	rand.Seed(time.Now().UTC().UnixNano())
+	// Go's RNG is not seeded by default.  Make sure that's done.
+	seedrng.EnsureSeeded()
 
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
@@ -976,7 +977,6 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		fc.shutDownProcess("Failed to read messages from dataplane")
 	}()
 	log.Info("Reading from dataplane driver pipe...")
-	ctx := context.Background()
 	for {
 		payload, err := fc.dataplane.RecvMessage()
 		if err != nil {
@@ -986,7 +986,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		log.WithField("payload", payload).Debug("New message from dataplane")
 		switch msg := payload.(type) {
 		case *proto.ProcessStatusUpdate:
-			fc.handleProcessStatusUpdate(ctx, msg)
+			fc.handleProcessStatusUpdate(context.TODO(), msg)
 		case *proto.WorkloadEndpointStatusUpdate:
 			if fc.statusReporter != nil {
 				fc.StatusUpdatesFromDataplane <- msg
@@ -1048,8 +1048,7 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 		log.Warningf("Failed to write status to datastore: %v", err)
 	}
 }
-
-func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string) error {
+func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVersion proto.IPVersion) error {
 	// In case of a recoverable failure (ErrorResourceUpdateConflict), retry update 3 times.
 	for iter := 0; iter < 3; iter++ {
 		// Read node resource from datastore and compare it with the publicKey from dataplane.
@@ -1076,9 +1075,18 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string) erro
 
 		// Check if the public-key needs to be updated.
 		storedPublicKey := node.Status.WireguardPublicKey
+		if ipVersion == proto.IPVersion_IPV6 {
+			storedPublicKey = node.Status.WireguardPublicKeyV6
+		} else if ipVersion != proto.IPVersion_IPV4 {
+			return fmt.Errorf("Unknown IP version: %d", ipVersion)
+		}
 		if storedPublicKey != dpPubKey {
 			updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			node.Status.WireguardPublicKey = dpPubKey
+			if ipVersion == proto.IPVersion_IPV4 {
+				node.Status.WireguardPublicKey = dpPubKey
+			} else if ipVersion == proto.IPVersion_IPV6 {
+				node.Status.WireguardPublicKeyV6 = dpPubKey
+			}
 			_, err := fc.datastorev3.Nodes().Update(updateCtx, node, options.SetOptions{})
 			cancel()
 			if err != nil {
@@ -1092,7 +1100,7 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string) erro
 				log.WithError(err).Info("Failed updating node resource")
 				return err
 			}
-			log.Debugf("Updated Wireguard public-key from %s to %s", storedPublicKey, dpPubKey)
+			log.Debugf("Updated IPv%d Wireguard public-key from %s to %s", ipVersion, storedPublicKey, dpPubKey)
 		}
 		break
 	}
@@ -1108,7 +1116,7 @@ func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane() {
 		// Block until we either get an update or it's time to retry a failed update.
 		select {
 		case current = <-fc.wireguardStatUpdateFromDataplane:
-			log.Debugf("Wireguard status update from dataplane driver: %s", current.PublicKey)
+			log.Debugf("Wireguard status update from dataplane driver: %s, IP version: %d", current.PublicKey, current.IpVersion)
 		case <-retryC:
 			log.Debug("retrying failed Wireguard status update")
 		}
@@ -1117,7 +1125,7 @@ func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane() {
 		}
 
 		// Try and reconcile the current wireguard status data.
-		err := fc.reconcileWireguardStatUpdate(current.PublicKey)
+		err := fc.reconcileWireguardStatUpdate(current.PublicKey, current.IpVersion)
 		if err == nil {
 			current = nil
 			retryC = nil

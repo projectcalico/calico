@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	KindIPAMConfig     = "IPAMConfig"
-	KindIPAMConfigList = "IPAMConfigList"
+	KindIPAMConfig       = "IPAMConfig"
+	KindIPAMConfigList   = "IPAMConfigList"
+	GlobalIPAMConfigName = "default"
 )
 
 // +genclient
@@ -46,6 +47,8 @@ type IPAMConfigSpec struct {
 
 	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
 	// affine to each host.
+	// +kubebuilder:validation:Minimum:=0
+	// +kubebuilder:validation:Maximum:=2147483647
 	// +optional
 	MaxBlocksPerHost int `json:"maxBlocksPerHost,omitempty"`
 }

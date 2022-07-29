@@ -76,6 +76,7 @@ The full list of parameters which can be set is as follows.
 | `ReportingTTLSecs`                | `FELIX_REPORTINGTTLSECS`                | Time-to-live setting for process-wide status reports. [Default: `90`] | int |
 | `RouteTableRange`                 | `FELIX_ROUTETABLERANGE`                 | *deprecated in favor of `RouteTableRanges`* Calico programs additional Linux route tables for various purposes. `RouteTableRange` specifies the indices of the route tables that Calico should use. [Default: `""`] | `<min>-<max>` |
 | `RouteTableRanges`                 | `FELIX_ROUTETABLERANGES`                 | Calico programs additional Linux route tables for various purposes. `RouteTableRanges` specifies a set of table index ranges that Calico should use. Deprecates `RouteTableRange`, overrides `RouteTableRange`. [Default: `"1-250"`] | `<min>-<max>,<min>-<max>,...` |
+| `RouteSyncDisabled`               | `FELIX_ROUTESYNCDISABLED`                 | Set to `true` to disable Calico programming routes to local workloads. [Default: `false`] | boolean |
 | `SidecarAccelerationEnabled`      | `FELIX_SIDECARACCELERATIONENABLED`      | Enable experimental acceleration between application and proxy sidecar when using [application layer policy]({{site.baseurl}}/security/app-layer-policy). [Default: `false`] | boolean |
 | `UsageReportingEnabled`           | `FELIX_USAGEREPORTINGENABLED`           | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. [Default: `true`] | boolean |
 | `UsageReportingInitialDelaySecs`  | `FELIX_USAGEREPORTINGINITIALDELAYSECS`  | Minimum delay before first usage report, in seconds. [Default: `300`] | int |
@@ -169,6 +170,7 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-ebpf) for ste
 | BPFMapSizeIPSets / <br/> FELIX_BPFMapSizeIPSets | Controls the size of the IPSets map. The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors such as "all()" can result in large numbers of entries (one entry per endpoint in that case). | int | 1048576 |
 | BPFMapSizeRoute / <br/> FELIX_BPFMapSizeRoute | Controls the size of the route map. The routes map should be large enough to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and tunnel IPs). | int | 262144 |
 | BPFHostConntrackBypass / <br/> FELIX_BPFHostConntrackBypass | Controls whether to bypass Linux conntrack in BPF mode for workloads and services. | true,false | true |
+| BPFPolicyDebugEnabled  / <br/> FELIX_BPFPOLICYDEBUGENABLED    | In eBPF dataplane mode, Felix records detailed information about the BPF policy programs, which can be examined with the calico-bpf command-line tool. | true, false |  true |
 
 #### Kubernetes-specific configuration
 
@@ -228,10 +230,14 @@ For more information on how to use and set these variables, refer to
 
 | Configuration parameter | Environment variable   | Description | Schema |
 | ----------------------- | ---------------------- | ----------- | ------ |
-| wireguardEnabled                   | Enable encryption on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | boolean | `false` |
-| wireguardInterfaceName             | Name of the WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | string | wireguard.cali |
-| wireguardListeningPort             | Port used by WireGuard tunnels. Felix sets up WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | int | 51820 |
-| wireguardMTU                       | MTU set on the WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
+| wireguardEnabled                   | Enable encryption for IPv4 on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | boolean | `false` |
+| wireguardEnabledV6                 | Enable encryption for IPv6 on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | boolean | `false` |
+| wireguardInterfaceName             | Name of the IPv4 WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | string | wireguard.cali |
+| wireguardInterfaceNameV6           | Name of the IPv6 WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | string | wg-v6.cali |
+| wireguardListeningPort             | Port used by IPv4 WireGuard tunnels. Felix sets up an IPv4 WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | int | 51820 |
+| wireguardListeningPortV6           | Port used by IPv6 WireGuard tunnels. Felix sets up an IPv6 WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | int | 51821 |
+| wireguardMTU                       | MTU set on the IPv4 WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
+| wireguardMTUV6                     | MTU set on the IPv6 WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
 | wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
 | wireguardHostEncryptionEnabled     | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | boolean | false |
 | wireguardKeepAlive                 | WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0] | int | int | 25 |

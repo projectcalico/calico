@@ -44,7 +44,7 @@ import (
 type AttachPoint struct {
 	Type                 EndpointType
 	ToOrFrom             ToOrFromEp
-	Hook                 Hook
+	Hook                 bpf.Hook
 	Iface                string
 	LogLevel             string
 	HostIP               net.IP
@@ -55,6 +55,7 @@ type AttachPoint struct {
 	DSR                  bool
 	TunnelMTU            uint16
 	VXLANPort            uint16
+	WgPort               uint16
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
@@ -77,39 +78,39 @@ func (ap AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap AttachPoint) AlreadyAttached(object string) (string, bool) {
+func (ap AttachPoint) AlreadyAttached(object string) (int, bool) {
 	logCxt := log.WithField("attachPoint", ap)
 	progID, err := ap.ProgramID()
 	if err != nil {
 		logCxt.WithError(err).Debugf("Couldn't get the attached TC program ID.")
-		return "", false
+		return -1, false
 	}
 
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
 		logCxt.WithError(err).Debugf("Couldn't get the list of already attached TC programs")
-		return "", false
+		return -1, false
 	}
 
 	isAttached, err := bpf.AlreadyAttachedProg(ap, object, progID)
 	if err != nil {
 		logCxt.WithError(err).Debugf("Failed to check if BPF program was already attached.")
-		return "", false
+		return -1, false
 	}
 
 	if isAttached && len(progsToClean) == 1 {
 		return progID, true
 	}
-	return "", false
+	return -1, false
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func (ap AttachPoint) AttachProgram() (string, error) {
+func (ap AttachPoint) AttachProgram() (int, error) {
 	logCxt := log.WithField("attachPoint", ap)
 
 	tempDir, err := ioutil.TempDir("", "calico-tc")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 	defer func() {
 		_ = os.RemoveAll(tempDir)
@@ -122,11 +123,11 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	err = ap.patchLogPrefix(logCxt, preCompiledBinary, tempBinary)
 	if err != nil {
 		logCxt.WithError(err).Error("Failed to patch binary")
-		return "", err
+		return -1, err
 	}
 
 	// Using the RLock allows multiple attach calls to proceed in parallel unless
-	// CleanUpJumpMaps() (which takes the writer lock) is running.
+	// CleanUpMaps() (which takes the writer lock) is running.
 	logCxt.Debug("AttachProgram waiting for lock...")
 	tcLock.RLock()
 	defer tcLock.RUnlock()
@@ -134,41 +135,31 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
-		return "", err
+		return -1, err
 	}
 	obj, err := libbpf.OpenObject(tempBinary)
 	if err != nil {
-		return "", err
+		return -1, err
 	}
 	defer obj.Close()
 
-	baseDir := "/sys/fs/bpf/tc/"
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
 		// The values are read only for the BPF programs, but can be set to a value from
 		// userspace before the program is loaded.
 		if m.IsMapInternal() {
 			if err := ap.ConfigureProgram(m); err != nil {
-				return "", fmt.Errorf("failed to configure %s: %w", filename, err)
+				return -1, fmt.Errorf("failed to configure %s: %w", filename, err)
 			}
 			continue
 		}
-		subDir := "globals"
-		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), bpf.JumpMapName()) {
-			// Remove period in the interface name if any
-			ifName := strings.ReplaceAll(ap.Iface, ".", "")
-			if ap.Hook == HookIngress {
-				subDir = ifName + "_igr/"
-			} else {
-				subDir = ifName + "_egr/"
-			}
-		}
+
 		if err := ap.setMapSize(m); err != nil {
-			return "", fmt.Errorf("error setting map size %s : %w", m.Name(), err)
+			return -1, fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
-		pinPath := path.Join(baseDir, subDir, m.Name())
+		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
 		if err := m.SetPinPath(pinPath); err != nil {
-			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+			return -1, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
 
@@ -176,28 +167,31 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	// re-attaching it if the binary and its configuration are the same.
 	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
 	if isAttached {
-		logCxt.Infof("Program already attached to TC, skip reattaching %s", ap.FileName())
+		logCxt.Infof("Program already attached to TC, skip reattaching %s", filename)
 		return progID, nil
 	}
-	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
+	logCxt.Debugf("Continue with attaching BPF program %s", filename)
 
 	if err := obj.Load(); err != nil {
-		return "", fmt.Errorf("error loading program: %w", err)
+		logCxt.Warn("Failed to load program")
+		return -1, fmt.Errorf("error loading program: %w", err)
 	}
 
 	isHost := false
-	if ap.Type == "host" {
+	if ap.Type == "host" || ap.Type == "nat" {
 		isHost = true
 	}
 
 	err = updateJumpMap(obj, isHost, ap.IPv6Enabled)
 	if err != nil {
-		return "", fmt.Errorf("error updating jump map %v", err)
+		logCxt.Warn("Failed to update jump map")
+		return -1, fmt.Errorf("error updating jump map %v", err)
 	}
 
 	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, string(ap.Hook))
 	if err != nil {
-		return "", err
+		logCxt.Warnf("Failed to attach to TC section %s", SectionName(ap.Type, ap.ToOrFrom))
+		return -1, err
 	}
 	logCxt.Info("Program attached to TC.")
 
@@ -224,18 +218,18 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	}
 
 	if len(progErrs) != 0 {
-		return "", fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
+		return -1, fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
 	}
 
 	// Store information of object in a json file so in future we can skip reattaching it.
 	// If the process fails, the json file with the correct name and program details
 	// is not stored on disk, and during Felix restarts the same program will be reattached
 	// which leads to an unnecessary load time
-	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, strconv.Itoa(progId)); err != nil {
+	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, progId); err != nil {
 		logCxt.WithError(err).Error("Failed to record hash of BPF program on disk; ignoring.")
 	}
 
-	return strconv.Itoa(progId), nil
+	return progId, nil
 }
 
 func (ap AttachPoint) patchLogPrefix(logCtx *log.Entry, ifile, ofile string) error {
@@ -344,10 +338,10 @@ var ErrNoTC = errors.New("no TC program attached")
 
 // TODO: we should try to not get the program ID via 'tc' binary and rather
 // we should use libbpf to obtain it.
-func (ap *AttachPoint) ProgramID() (string, error) {
+func (ap *AttachPoint) ProgramID() (int, error) {
 	out, err := ExecTC("filter", "show", "dev", ap.IfaceName(), string(ap.Hook))
 	if err != nil {
-		return "", fmt.Errorf("Failed to check interface %s program ID: %w", ap.Iface, err)
+		return -1, fmt.Errorf("Failed to check interface %s program ID: %w", ap.Iface, err)
 	}
 
 	s := strings.Fields(string(out))
@@ -357,14 +351,15 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 		// filter protocol all pref 49152 bpf chain 0
 		// filter protocol all pref 49152 bpf chain 0 handle 0x1 calico_from_hos:[61] direct-action not_in_hw id 61 tag 4add0302745d594c jited
 		if s[i] == "id" && len(s) > i+1 {
-			_, err := strconv.Atoi(s[i+1])
+			progID, err := strconv.Atoi(s[i+1])
 			if err != nil {
-				return "", fmt.Errorf("Couldn't parse ID in 'tc filter' command err=%w out=\n%v", err, string(out))
+				return -1, fmt.Errorf("Couldn't parse ID in 'tc filter' command err=%w out=\n%v", err, string(out))
 			}
-			return s[i+1], nil
+
+			return progID, nil
 		}
 	}
-	return "", fmt.Errorf("Couldn't find 'id <ID> in 'tc filter' command out=\n%v err=%w", string(out), ErrNoTC)
+	return -1, fmt.Errorf("Couldn't find 'id <ID> in 'tc filter' command out=\n%v err=%w", string(out), ErrNoTC)
 }
 
 // FileName return the file the AttachPoint will load the program from
@@ -387,18 +382,18 @@ func (ap AttachPoint) IsAttached() (bool, error) {
 	return len(progs) > 0, nil
 }
 
-// tcDirRegex matches tc's auto-created directory names, directories created when using libbpf
+// tcDirRegex matches tc's and xdp's auto-created directory names, directories created when using libbpf
 // so we can clean them up when removing maps without accidentally removing other user-created dirs..
-var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr))`)
+var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr|xdp))`)
 
-// CleanUpJumpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
+// CleanUpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
 // our BPF programs.
-func CleanUpJumpMaps() {
+func CleanUpMaps() {
 	// So that we serialise with AttachProgram()
-	log.Debug("CleanUpJumpMaps waiting for lock...")
+	log.Debug("CleanUpMaps waiting for lock...")
 	tcLock.Lock()
 	defer tcLock.Unlock()
-	log.Debug("CleanUpJumpMaps got lock, cleaning up...")
+	log.Debug("CleanUpMaps got lock, cleaning up...")
 
 	// Find the maps we care about by walking the BPF filesystem.
 	mapIDToPath := make(map[int]string)
@@ -406,7 +401,8 @@ func CleanUpJumpMaps() {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) {
+		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) ||
+			strings.HasPrefix(info.Name(), bpf.CountersMapName()) {
 			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
@@ -455,7 +451,7 @@ func CleanUpJumpMaps() {
 	if err != nil {
 		log.WithError(err).WithField("dump", string(out)).Error("Failed to parse list of attached BPF programs")
 	}
-	attachedProgs := set.New()
+	attachedProgs := set.New[int]()
 	for _, prog := range attached[0].TC {
 		log.WithField("prog", prog).Debug("Adding TC prog to attached set")
 		attachedProgs.Add(prog.ID)
@@ -503,7 +499,7 @@ func CleanUpJumpMaps() {
 	}
 
 	// Look for empty dirs.
-	emptyAutoDirs := set.New()
+	emptyAutoDirs := set.New[string]()
 	err = filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -529,8 +525,7 @@ func CleanUpJumpMaps() {
 		log.WithError(err).Error("Error while looking for maps.")
 	}
 
-	emptyAutoDirs.Iter(func(item interface{}) error {
-		p := item.(string)
+	emptyAutoDirs.Iter(func(p string) error {
 		log.WithField("path", p).Debug("Removing empty dir.")
 		err := os.Remove(p)
 		if err != nil {
@@ -636,7 +631,8 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	}
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP, flags)
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP,
+		flags, ap.WgPort)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
@@ -659,7 +655,7 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
 		base := -1
 		if ipFamily == "IPv6" {
-			base = 4
+			base = 5
 		}
 
 		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
@@ -691,6 +687,13 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
 		if err != nil {
 			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
+		}
+		if ipFamily != "IPv6" {
+			iIndex := base + 5
+			err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
+			if err != nil {
+				return fmt.Errorf("error updating %v host CT conflict program: %v", ipFamily, err)
+			}
 		}
 	}
 

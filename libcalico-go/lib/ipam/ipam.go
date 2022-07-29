@@ -21,6 +21,7 @@ import (
 	"math/bits"
 	"runtime"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
@@ -45,15 +46,16 @@ const (
 
 	// Common attributes which may be set on allocations by clients.  Moved to the model package so they can be used
 	// by the AllocationBlock code too.
-	AttributePod           = model.IPAMBlockAttributePod
-	AttributeNamespace     = model.IPAMBlockAttributeNamespace
-	AttributeNode          = model.IPAMBlockAttributeNode
-	AttributeTimestamp     = model.IPAMBlockAttributeTimestamp
-	AttributeType          = model.IPAMBlockAttributeType
-	AttributeTypeIPIP      = model.IPAMBlockAttributeTypeIPIP
-	AttributeTypeVXLAN     = model.IPAMBlockAttributeTypeVXLAN
-	AttributeTypeVXLANV6   = model.IPAMBlockAttributeTypeVXLANV6
-	AttributeTypeWireguard = model.IPAMBlockAttributeTypeWireguard
+	AttributePod             = model.IPAMBlockAttributePod
+	AttributeNamespace       = model.IPAMBlockAttributeNamespace
+	AttributeNode            = model.IPAMBlockAttributeNode
+	AttributeTimestamp       = model.IPAMBlockAttributeTimestamp
+	AttributeType            = model.IPAMBlockAttributeType
+	AttributeTypeIPIP        = model.IPAMBlockAttributeTypeIPIP
+	AttributeTypeVXLAN       = model.IPAMBlockAttributeTypeVXLAN
+	AttributeTypeVXLANV6     = model.IPAMBlockAttributeTypeVXLANV6
+	AttributeTypeWireguard   = model.IPAMBlockAttributeTypeWireguard
+	AttributeTypeWireguardV6 = model.IPAMBlockAttributeTypeWireguardV6
 )
 
 var (
@@ -1080,7 +1082,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	err = nil
 	for i := 0; i < len(ipsByBlock); i++ {
 		r := <-resultChan
-		log.Debugf("Received response #%d from release goroutine", i)
+		log.Debugf("Received response #%d from release goroutine: %v", i, r)
 		if r.Error != nil && err == nil {
 			err = r.Error
 		}
@@ -1804,25 +1806,57 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (m
 // GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
-func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err error) {
-	obj, err := c.client.Get(ctx, model.IPAMConfigKey{}, "")
-	if err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			// IPAMConfig has not been explicitly set.  Return
-			// a default IPAM configuration.
-			config = &IPAMConfig{
-				AutoAllocateBlocks: true,
-				StrictAffinity:     false,
-				MaxBlocksPerHost:   0,
-			}
-			err = nil
-		} else {
-			log.Errorf("Error getting IPAMConfig: %v", err)
-			return nil, err
+func (c ipamClient) GetIPAMConfig(ctx context.Context) (*IPAMConfig, error) {
+	var obj *model.KVPair
+	var err error
+	var retries int
+
+	maxRetry := 5
+
+	// Try to get the IPAM Config. If it doesn't exist, we'll attempt to create it.
+	for retries = 1; retries < maxRetry; retries++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
-	} else {
-		config = c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig))
+
+		obj, err = c.client.Get(ctx, model.IPAMConfigKey{}, "")
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				// Unexpected error querying the IPAM config.
+				log.WithError(err).Errorf("Error getting IPAM config")
+				return nil, err
+			}
+
+			// Create the default config because it doesn't already exist.
+			kvp := &model.KVPair{
+				Key: model.IPAMConfigKey{},
+				Value: &model.IPAMConfig{
+					StrictAffinity:     false,
+					AutoAllocateBlocks: true,
+					MaxBlocksPerHost:   0,
+				},
+			}
+
+			obj, err = c.client.Create(ctx, kvp)
+			if err != nil {
+				if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+					log.Info("Failed to create global IPAM config; another node got there first.")
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				log.WithError(err).Errorf("Error creating IPAM config")
+				return nil, err
+			}
+		}
+		break
 	}
+
+	if retries >= maxRetry {
+		return nil, fmt.Errorf("failed to get ipam config after %d retries", retries)
+	}
+
+	config := c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig))
+
 	if detectOS(ctx) == "windows" {
 		// When a Windows node owns a block, it creates a local /26 subnet object and as far as we know, it can't
 		// do a longest-prefix-match between the subnet CIDR and a remote /32.  This means that we can't allow
@@ -1834,7 +1868,7 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err 
 			return nil, err
 		}
 	}
-	return
+	return config, nil
 }
 
 // SetIPAMConfig sets global IPAM configuration.  This can only

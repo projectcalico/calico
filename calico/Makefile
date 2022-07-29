@@ -16,7 +16,6 @@ ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
 endif
 
-include ../metadata.mk
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME = github.com/projectcalico/calico/calico
@@ -43,14 +42,13 @@ CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].title')
 include ../lib.Makefile
 
 ##############################################################################
-serve: bin/helm
+serve:
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
 	# When set to 'pages', jekyll starts in safe mode which means it will not
 	# load any plugins. Since we're no longer running in github-pages, but would
 	# like to use a docker image that comes preloaded with all the github-pages plugins,
 	# its ok to override this variable.
 	docker run --rm -it \
-	  -v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
 	  -v $(CURDIR):/srv/jekyll \
 	  -v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	  -e JEKYLL_DOCKER_TAG="" \
@@ -58,12 +56,13 @@ serve: bin/helm
 	  -p 4000:4000 \
 	  jekyll/jekyll:$(JEKYLL_VERSION) jekyll serve --incremental $(CONFIG)
 
+DOCS_SOURCE=$(find . -name '*.md') $(find ../manifests -type f)
+
 .PHONY: build
-_site build: bin/helm bin/helm3
+_site build: bin/ocp.tgz $(DOCS_SOURCE)
 	docker run --rm \
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
-	-v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
 	-v $(CURDIR)/:/srv/jekyll \
 	-v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
@@ -71,10 +70,13 @@ _site build: bin/helm bin/helm3
 	# Move the manifests into the the generated site, and also update
 	# the repos manifests that the site generated, removing the templates dir.
 	cp -r ../manifests/ _site/manifests
-	rsync -a _site/manifest-templates/ ../manifests/ && rm -r _site/manifest-templates
+	# Move ocp.tgz into place in the generate site.
+	cp bin/ocp.tgz _site/manifests
 
-# Update the static manifests 
-gen-manifests: clean _site
+# Creates the tar file used for installing Calico on OpenShift.
+bin/ocp.tgz:
+	mkdir -p bin
+	tar czvf $@ -C ../manifests/ ocp
 
 ## Clean enough that a new release build will be clean
 clean:
@@ -86,7 +88,7 @@ clean:
 ###############################################################################
 # CI / test targets
 ###############################################################################
-ci: htmlproofer kubeval helm-tests gen-manifests check-dirty
+ci: htmlproofer kubeval
 
 htmlproofer: _site
 	docker run -ti -e JEKYLL_UID=`id -u` --rm \
@@ -106,12 +108,6 @@ kubeval: _site
 	-rm stderr.out
 	! grep -C3 -P "invalid|\t\*" filtered.out
 	rm filtered.out
-
-helm-tests: bin/helm values.yaml
-	$(DOCKER_RUN) \
-		-v $(CURDIR)/bin/helm3:/usr/local/bin/helm \
-		$(CALICO_BUILD) \
-		sh -c "$(GIT_CONFIG_SSH) ginkgo -cover -r ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)"
 
 ###############################################################################
 # Docs automation
@@ -142,99 +138,9 @@ endif
 	# Check the redirect_from lines and strip the .md from the URL
 	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;
 
-update_canonical_urls:
-	# Looks through all directories and replaces previous latest release version numbers in canonical URLs with new
-	python release-scripts/update-canonical-urls.py
-
-###############################################################################
-# Release targets
-###############################################################################
-release-build: .release-$(VERSION).created 
-.release-$(VERSION).created:
-	$(MAKE) clean chart _site
-	touch $@
-
-chart: clean _includes/charts/tigera-operator/values.yaml bin/helm3
-	bin/helm3 package ./_includes/charts/tigera-operator \
-	--destination ./bin/ \
-	--version $(GIT_VERSION) \
-	--app-version $(GIT_VERSION)
-ifdef CHART_RELEASE
-	mv ./bin/tigera-operator-$(GIT_VERSION).tgz ./bin/tigera-operator-$(GIT_VERSION)-$(CHART_RELEASE).tgz
-endif
-
-## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) helm-index
-	touch $@
-
-## Kicks semaphore job which syncs github released helm charts with helm index file
-.PHONY: helm-index
-helm-index:
-	@echo "Triggering semaphore workflow to update helm index."
-	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea SEMAPHORE_WORKFLOW_BRANCH=master SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml $(MAKE) semaphore-run-workflow
-
-## Generates release notes for the given version.
-.PHONY: release-notes
-release-notes: #release-prereqs
-	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
-
-update-authors:
-ifndef GITHUB_TOKEN
-	$(error GITHUB_TOKEN must be set)
-endif
-	@echo "# Calico authors" > AUTHORS.md
-	@echo "" >> AUTHORS.md
-	@echo "This file is auto-generated based on contribution records reported" >> AUTHORS.md
-	@echo "by GitHub for the core repositories within the projectcalico/ organization. It is ordered alphabetically." >> AUTHORS.md
-	@echo "" >> AUTHORS.md
-	@docker run -ti --rm -v $(CURDIR):/code -e GITHUB_TOKEN=$(GITHUB_TOKEN) python:3 \
-		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
-
 ###############################################################################
 # Utilities
 ###############################################################################
-# TODO: stop using bin/helm as an entrypoint in build scripts.
-bin/helm:
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	wget -q https://get.helm.sh/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
-	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
-	mv $(TMP)/linux-amd64/helm bin/helm
-
-bin/helm3:
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	wget -q https://get.helm.sh/helm-v3.3.1-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
-	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
-	mv $(TMP)/linux-amd64/helm bin/helm3
-
-.PHONY: values.yaml
-values.yaml: _includes/charts/calico/values.yaml _includes/charts/tigera-operator/values.yaml
-_includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
-	docker run --rm \
-	  -v $(CURDIR):/calico \
-	  -w /calico \
-	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $* > $@
-
-DOCS_TEST_CONTAINER=projectcalico/release-test
-.PHONY: release-test-image
-release-test-image:
-	cd release-scripts/tests && docker build -t $(DOCS_TEST_CONTAINER) . && cd -
-
-.PHONY: release-test
-release-test: release-test-image
-	docker run --rm \
-	-v /var/run/docker.sock:/var/run/docker.sock \
-	-v $(CURDIR):/docs \
-	-e RELEASE_STREAM=$(RELEASE_STREAM) \
-	$(DOCS_TEST_CONTAINER) sh -c \
-	"nosetests . -e "$(EXCLUDE_REGEX)" \
-	-s -v --with-xunit \
-	--xunit-file='/docs/nosetests.xml' \
-	--with-timer $(EXTRA_NOSE_ARGS)"
-
 API_GEN_REPO?=tmjd/gen-crd-api-reference-docs
 API_GEN_BRANCH?=kb_v2
 OPERATOR_VERSION?=master

@@ -26,6 +26,8 @@ import (
 	docopt "github.com/docopt/docopt-go"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -129,7 +131,8 @@ func NewIPAMChecker(k8sClient kubernetes.Interface,
 		allocationsByNode: map[string][]*Allocation{},
 		allocationsByPod:  map[string][]*Allocation{},
 
-		inUseIPs: map[string][]ownerRecord{},
+		inUseIPs:     map[string][]ownerRecord{},
+		inUseHandles: set.New[string](),
 
 		k8sClient:     k8sClient,
 		v3Client:      v3Client,
@@ -147,7 +150,9 @@ type IPAMChecker struct {
 	allocations       map[string][]*Allocation
 	allocationsByNode map[string][]*Allocation
 	allocationsByPod  map[string][]*Allocation
+	leakedHandles     []HandleInfo
 	inUseIPs          map[string][]ownerRecord
+	inUseHandles      set.Set[string]
 
 	clusterType         string
 	clusterInfoRevision string
@@ -271,6 +276,22 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 		fmt.Println()
 	}
 
+	handles := map[string]HandleInfo{}
+	{
+		fmt.Println("Loading all handles")
+		handleList, err := c.backendClient.List(ctx, model.IPAMHandleListOptions{}, "")
+		if err != nil {
+			return fmt.Errorf("failed to list handles: %w", err)
+		}
+		for _, kv := range handleList.KVPairs {
+			handleKey := kv.Key.(model.IPAMHandleKey)
+			handles[handleKey.HandleID] = HandleInfo{
+				ID:       handleKey.HandleID,
+				Revision: kv.Revision,
+			}
+		}
+	}
+
 	{
 		const numNodesToPrint = 20
 		fmt.Printf("Looking for top (up to %d) nodes by allocations...\n", numNodesToPrint)
@@ -359,6 +380,42 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 		fmt.Println()
 	}
 
+	{
+		fmt.Printf("Scanning for IPAM handles with no matching IPs...\n")
+		goodHandles := 0
+		var leakedHandles []HandleInfo
+		for handleID, handleInfo := range handles {
+			if c.inUseHandles.Contains(handleID) {
+				goodHandles++
+				continue
+			}
+			if c.showAllIPs {
+				fmt.Printf("  %s doesn't have any active IPs.\n", handleID)
+			}
+			numProblems++
+			leakedHandles = append(leakedHandles, handleInfo)
+		}
+		fmt.Printf("Found %d handles with no matching IPs (and %d handles with matches).\n",
+			len(leakedHandles), goodHandles)
+		c.leakedHandles = leakedHandles
+	}
+
+	var missingHandles []string
+	{
+		fmt.Printf("Scanning for IPs with missing handle...\n")
+		c.inUseHandles.Iter(func(handleID string) error {
+			if _, ok := handles[handleID]; ok {
+				return nil
+			}
+			if c.showProblemIPs {
+				fmt.Printf("  %s is in use in a block but doesn't exist.\n", handleID)
+			}
+			missingHandles = append(missingHandles, handleID)
+			return nil
+		})
+		fmt.Printf("Found %d handles mentioned in blocks with no matching handle resource.\n", len(missingHandles))
+	}
+
 	fmt.Printf("Check complete; found %d problems.\n", numProblems)
 
 	if c.outFile != "" {
@@ -392,7 +449,8 @@ type Report struct {
 	ClusterType         string `json:"clusterType"`
 
 	// Allocations is a map of IP address to list of allocation data.
-	Allocations map[string][]*Allocation `json:"allocations"`
+	Allocations   map[string][]*Allocation `json:"allocations"`
+	LeakedHandles []HandleInfo             `json:"leakedHandles,omitempty"`
 }
 
 func (c *IPAMChecker) printReport() {
@@ -403,6 +461,7 @@ func (c *IPAMChecker) printReport() {
 		ClusterInfoRevision: c.clusterInfoRevision,
 		DatastoreLocked:     c.datastoreLocked,
 		Allocations:         c.allocations,
+		LeakedHandles:       c.leakedHandles,
 	}
 	bytes, _ := json.MarshalIndent(r, "", "  ")
 	_ = ioutil.WriteFile(c.outFile, bytes, 0777)
@@ -431,6 +490,7 @@ func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
 			c.recordInUseIP(ip, b, "Reserved for Windows")
 		} else if attrs.AttrPrimary != nil {
 			alloc.Handle = *attrs.AttrPrimary
+			c.recordInUseHandle(alloc.Handle)
 		}
 		if n := attrs.AttrSecondary["node"]; n != "" {
 			node = n
@@ -490,6 +550,10 @@ func (c *IPAMChecker) recordInUseIP(ip string, referrer interface{}, friendlyNam
 		a.InUse = true
 		a.Owners = append(a.Owners, friendlyName)
 	}
+}
+
+func (c *IPAMChecker) recordInUseHandle(handle string) {
+	c.inUseHandles.Add(handle)
 }
 
 func getNodeIPs(n apiv3.Node) ([]string, error) {
@@ -566,6 +630,11 @@ func (a *Allocation) GetAttrString() string {
 		return formatAttrs(a.Block.Attributes[attrIdx])
 	}
 	return "<missing>"
+}
+
+type HandleInfo struct {
+	ID       string
+	Revision string
 }
 
 func formatAttrs(attribute model.AllocationAttribute) string {

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,21 +41,23 @@ type Builder struct {
 	rulePartID      int
 	ipSetIDProvider ipSetIDProvider
 
-	ipSetMapFD bpf.MapFD
-	stateMapFD bpf.MapFD
-	jumpMapFD  bpf.MapFD
+	ipSetMapFD         bpf.MapFD
+	stateMapFD         bpf.MapFD
+	jumpMapFD          bpf.MapFD
+	policyDebugEnabled bool
 }
 
 type ipSetIDProvider interface {
 	GetNoAlloc(ipSetID string) uint64
 }
 
-func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMapFD bpf.MapFD) *Builder {
+func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMapFD bpf.MapFD, policyDebugEnabled bool) *Builder {
 	b := &Builder{
-		ipSetIDProvider: ipSetIDProvider,
-		ipSetMapFD:      ipsetMapFD,
-		stateMapFD:      stateMapFD,
-		jumpMapFD:       jumpMapFD,
+		ipSetIDProvider:    ipSetIDProvider,
+		ipSetMapFD:         ipsetMapFD,
+		stateMapFD:         stateMapFD,
+		jumpMapFD:          jumpMapFD,
+		policyDebugEnabled: policyDebugEnabled,
 	}
 	return b
 }
@@ -85,21 +87,22 @@ var (
 
 	// Offsets within the cal_tc_state struct.
 	// WARNING: must be kept in sync with the definitions in bpf/include/jump.h.
-	stateOffIPSrc          int16 = stateEventHdrSize + 0
-	stateOffIPDst          int16 = stateEventHdrSize + 4
-	_                            = stateOffIPDst
-	stateOffPreNATIPDst    int16 = stateEventHdrSize + 8
-	_                            = stateOffPreNATIPDst
-	stateOffPostNATIPDst   int16 = stateEventHdrSize + 12
-	stateOffPolResult      int16 = stateEventHdrSize + 20
-	stateOffSrcPort        int16 = stateEventHdrSize + 24
-	stateOffDstPort        int16 = stateEventHdrSize + 26
-	stateOffICMPType             = stateOffDstPort
-	stateOffPreNATDstPort  int16 = stateEventHdrSize + 28
-	_                            = stateOffPreNATDstPort
-	stateOffPostNATDstPort int16 = stateEventHdrSize + 30
-	stateOffIPProto        int16 = stateEventHdrSize + 32
-	stateOffFlags          int16 = stateEventHdrSize + 33
+	stateOffIPSrc          = FieldOffset{Offset: stateEventHdrSize + 0, Field: "state->ip_src"}
+	stateOffIPDst          = FieldOffset{Offset: stateEventHdrSize + 4, Field: "state->ip_dst"}
+	_                      = stateOffIPDst
+	stateOffPreNATIPDst    = FieldOffset{Offset: stateEventHdrSize + 8, Field: "state->pre_nat_ip_dst"}
+	_                      = stateOffPreNATIPDst
+	stateOffPostNATIPDst   = FieldOffset{Offset: stateEventHdrSize + 12, Field: "state->post_nat_ip_dst"}
+	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 20, Field: "state->pol_rc"}
+	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 24, Field: "state->sport"}
+	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 26, Field: "state->dport"}
+	_                      = stateOffDstPort
+	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 26, Field: "state->icmp_type"}
+	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 28, Field: "state->pre_nat_dport"}
+	_                      = stateOffPreNATDstPort
+	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 30, Field: "state->post_nat_dport"}
+	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->ip_proto"}
+	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 33, Field: "state->flags"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -176,7 +179,7 @@ const (
 )
 
 func (p *Builder) Instructions(rules Rules) (Insns, error) {
-	p.b = NewBlock()
+	p.b = NewBlock(p.policyDebugEnabled)
 	p.writeProgramHeader()
 
 	if rules.ForXDP {
@@ -261,11 +264,13 @@ func (p *Builder) writeProgramHeader() {
 	p.b.AddImm64(R2, int32(offStateKey))
 	// Load map file descriptor into R1.
 	// clang uses a 64-bit load so copy that for now.
+	p.b.AddComment("Load packet metadata saved by previous program")
 	p.b.LoadMapFD(R1, uint32(p.stateMapFD)) // R1 = 0 (64-bit immediate)
 	p.b.Call(HelperMapLookupElem)           // Call helper
 	// Check return value for NULL.
 	p.b.JumpEqImm64(R0, 0, "exit")
 	// Save state pointer in R9.
+	p.b.AddComment("Save state pointer in register R9")
 	p.b.Mov64(R9, R0)
 	p.b.LabelNextInsn("policy")
 }
@@ -301,18 +306,17 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	p.b.MovImm32(R1, int32(state.PolicyDeny))
 	p.b.Store32(R9, R1, stateOffPolResult)
 
+	// Execute the tail call to drop program
+	p.b.Mov64(R1, R6)                      // First arg is the context.
+	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
+	p.b.MovImm32(R3, jumpIdxDrop)          // Third arg is the index (rather than a pointer to the index).
+	p.b.Call(HelperTailCall)
+
+	// Fall through if tail call fails.
+	p.b.LabelNextInsn("exit")
 	if forXDP {
-		p.b.LabelNextInsn("exit")
 		p.b.MovImm64(R0, 1 /* XDP_DROP */)
 	} else {
-		// Execute the tail call to drop program
-		p.b.Mov64(R1, R6)                      // First arg is the context.
-		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-		p.b.MovImm32(R3, jumpIdxDrop)          // Third arg is the index (rather than a pointer to the index).
-		p.b.Call(HelperTailCall)
-
-		// Fall through if tail call fails.
-		p.b.LabelNextInsn("exit")
 		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
 	}
 	p.b.Exit()
@@ -337,12 +341,16 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		// Fall through if tail call fails.
 		p.b.MovImm32(R1, state.PolicyTailCallFailed)
 		p.b.Store32(R9, R1, stateOffPolResult)
-		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+		if forXDP {
+			p.b.MovImm64(R0, 1 /* XDP_DROP */)
+		} else {
+			p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+		}
 		p.b.Exit()
 	}
 }
 
-func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset, ipOffset, portOffset int16) {
+func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset int16, ipOffset, portOffset FieldOffset) {
 	// TODO track whether we've already done an initialisation and skip the parts that don't change.
 	// Zero the padding.
 	p.b.MovImm64(R1, 0) // R1 = 0
@@ -378,6 +386,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		actionLabels["next-tier"] = endOfTierLabel
 
 		log.Debugf("Start of tier %d %q", p.tierID, tier.Name)
+		p.b.AddComment(fmt.Sprintf("Start of tier %s", tier.Name))
 		for _, pol := range tier.Policies {
 			p.writePolicy(pol, actionLabels, destLeg)
 		}
@@ -387,6 +396,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		if action == TierEndUndef {
 			action = TierEndDeny
 		}
+		p.b.AddComment(fmt.Sprintf("End of tier %s", tier.Name))
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
 			Rule: &proto.Rule{},
@@ -411,6 +421,7 @@ func (p *Builder) writeProfiles(profiles []Policy, allowLabel string) {
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
+		p.b.AddComment(fmt.Sprintf("Start of rule %s", rule))
 		action := strings.ToLower(rule.Action)
 		if action == "log" {
 			log.Debug("Skipping log rule.  Not supported in BPF mode.")
@@ -418,13 +429,16 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		}
 		p.writeRule(rule, actionLabels[action], destLeg)
 		log.Debugf("End of rule %d", ruleIdx)
+		p.b.AddComment(fmt.Sprintf("End of rule %s", rule.RuleId))
 	}
 }
 
 func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
+	p.b.AddComment(fmt.Sprintf("Start of policy %s", policy.Name))
 	log.Debugf("Start of policy %q %d", policy.Name, p.policyID)
 	p.writePolicyRules(policy, actionLabels, destLeg)
 	log.Debugf("End of policy %q %d", policy.Name, p.policyID)
+	p.b.AddComment(fmt.Sprintf("End of policy %s", policy.Name))
 	p.policyID++
 }
 
@@ -449,7 +463,7 @@ const (
 	legDestPreNAT matchLeg = "destPreNAT"
 )
 
-func (leg matchLeg) offsetToStateIPAddressField() (offset int16) {
+func (leg matchLeg) offsetToStateIPAddressField() (offset FieldOffset) {
 	if leg == legSource {
 		offset = stateOffIPSrc
 	} else if leg == legDestPreNAT {
@@ -460,7 +474,7 @@ func (leg matchLeg) offsetToStateIPAddressField() (offset int16) {
 	return
 }
 
-func (leg matchLeg) offsetToStatePortField() (portOffset int16) {
+func (leg matchLeg) offsetToStatePortField() (portOffset FieldOffset) {
 	if leg == legSource {
 		portOffset = stateOffSrcPort
 	} else if leg == legDestPreNAT {
@@ -615,6 +629,14 @@ func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 }
 
 func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
+	comment := ""
+	if negate {
+		comment = fmt.Sprintf("If protocol == %s, skip to next rule", protocolToName(protocol))
+	} else {
+		comment = fmt.Sprintf("If protocol != %s, skip to next rule", protocolToName(protocol))
+	}
+	p.b.AddComment(comment)
+
 	p.b.Load8(R1, R9, stateOffIPProto)
 	protoNum := protocolToNumber(protocol)
 	if negate {
@@ -625,6 +647,13 @@ func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
 }
 
 func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
+	comment := ""
+	if negate {
+		comment = fmt.Sprintf("If ICMP type == %d, skip to next rule", icmpType)
+	} else {
+		comment = fmt.Sprintf("If ICMP type != %d, skip to next rule", icmpType)
+	}
+	p.b.AddComment(comment)
 	p.b.Load8(R1, R9, stateOffICMPType)
 	if negate {
 		p.b.JumpEqImm64(R1, int32(icmpType), p.endOfRuleLabel())
@@ -634,6 +663,13 @@ func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
 }
 
 func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) {
+	comment := ""
+	if negate {
+		comment = fmt.Sprintf("If ICMP type == %d and code == %d, skip to next rule", icmpType, icmpCode)
+	} else {
+		comment = fmt.Sprintf("If ICMP type != %d or code != %d, skip to next rule", icmpType, icmpCode)
+	}
+	p.b.AddComment(comment)
 	p.b.Load16(R1, R9, stateOffICMPType)
 	if negate {
 		p.b.JumpEqImm64(R1, (int32(icmpCode)<<8)|int32(icmpType), p.endOfRuleLabel())
@@ -642,6 +678,26 @@ func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) 
 	}
 }
 func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
+	if p.policyDebugEnabled {
+		comment := ""
+		cidrStrings := "{"
+		if len(cidrs) == 0 {
+			cidrStrings = "{}"
+		}
+
+		for _, cidrStr := range cidrs {
+			cidrStrings = cidrStrings + fmt.Sprintf("%s,", cidrStr)
+		}
+		cidrStrings = cidrStrings[:len(cidrStrings)-1] + "}"
+
+		if negate {
+			comment = fmt.Sprintf("If %s in %s, skip to next rule", leg, cidrStrings)
+		} else {
+			comment = fmt.Sprintf("If %s not in %s, skip to next rule", leg, cidrStrings)
+		}
+
+		p.b.AddComment(comment)
+	}
 	p.b.Load32(R1, R9, leg.offsetToStateIPAddressField())
 
 	var onMatchLabel string
@@ -677,6 +733,13 @@ func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
 		if id == 0 {
 			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
 		}
+		comment := ""
+		if negate {
+			comment = fmt.Sprintf("If %s matches ipset %s, skip to next rule", leg, ipSetID)
+		} else {
+			comment = fmt.Sprintf("If %s doesn't match ipset %s, skip to next rule", leg, ipSetID)
+		}
+		p.b.AddComment(comment)
 
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
@@ -708,6 +771,14 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
 		}
 
+		comment := ""
+		if len(ipSets) == 1 {
+			comment = fmt.Sprintf("If %s doesn't match ipset %s, skip to next rule", leg, ipSetID)
+		} else {
+			comment = fmt.Sprintf("If %s doesn't match ipset %s, jump to next ipset", leg, ipSetID)
+		}
+		p.b.AddComment(comment)
+
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
 		p.b.LoadMapFD(R1, uint32(p.ipSetMapFD))
@@ -721,6 +792,10 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 	}
 
 	// If packet reaches here, it hasn't matched any of the IP sets.
+	if len(ipSets) > 1 {
+		comment := fmt.Sprintf("If %s doesn't match any of the IP sets, skip to next rule", leg)
+		p.b.AddComment(comment)
+	}
 	p.b.Jump(p.endOfRuleLabel())
 	// Label the next match so we can skip to it on success.
 	p.b.LabelNextInsn(onMatchLabel)
@@ -738,9 +813,25 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 		onMatchLabel = p.freshPerRuleLabel()
 	}
 
+	comment := ""
+	if p.policyDebugEnabled {
+		portRangeStr := "{"
+		for idx, portRange := range ports {
+			portRangeStr = portRangeStr + protoPortRangeToString(portRange)
+			if idx != len(ports)-1 {
+				portRangeStr = portRangeStr + ","
+			}
+		}
+		portRangeStr = portRangeStr + "}"
+		if negate {
+			comment = fmt.Sprintf("If %s port is within any of %s, skip to next rule", leg, portRangeStr)
+		} else {
+			comment = fmt.Sprintf("If %s port is not within any of %s, skip to next rule", leg, portRangeStr)
+		}
+		p.b.AddComment(comment)
+	}
 	// R1 = port to test against.
 	p.b.Load16(R1, R9, leg.offsetToStatePortField())
-
 	for _, portRange := range ports {
 		if portRange.First == portRange.Last {
 			// Optimisation, single port, just do a comparison.
@@ -761,12 +852,28 @@ func (p *Builder) writePortsMatch(negate bool, leg matchLeg, ports []*proto.Port
 		}
 	}
 
+	if p.policyDebugEnabled {
+		namedPortStr := "{"
+		for idx, ipSetID := range namedPorts {
+			namedPortStr = namedPortStr + ipSetID
+			if idx != len(namedPorts)-1 {
+				namedPortStr = namedPortStr + ","
+			}
+		}
+		namedPortStr = namedPortStr + "}"
+		if negate {
+			comment = fmt.Sprintf("If %s port is within any of the named ports %s, skip to next rule", leg, namedPortStr)
+		} else {
+			comment = fmt.Sprintf("If %s port is not within any of the named ports %s, skip to next rule", leg, namedPortStr)
+		}
+		p.b.AddComment(comment)
+	}
+
 	for _, ipSetID := range namedPorts {
 		id := p.ipSetIDProvider.GetNoAlloc(ipSetID)
 		if id == 0 {
 			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
 		}
-
 		keyOffset := leg.stackOffsetToIPSetKey()
 		p.setUpIPSetKey(id, keyOffset, leg.offsetToStateIPAddressField(), leg.offsetToStatePortField())
 		p.b.LoadMapFD(R1, uint32(p.ipSetMapFD))
@@ -813,4 +920,31 @@ func protocolToNumber(protocol *proto.Protocol) uint8 {
 		pcol = uint8(p.Number)
 	}
 	return pcol
+}
+
+func protocolToName(protocol *proto.Protocol) string {
+	var pcol string
+	switch p := protocol.NumberOrName.(type) {
+	case *proto.Protocol_Name:
+		return strings.ToLower(p.Name)
+	case *proto.Protocol_Number:
+		switch p.Number {
+		case 6:
+			pcol = "tcp"
+		case 11:
+			pcol = "udp"
+		case 1:
+			pcol = "icmp"
+		case 132:
+			pcol = "sctp"
+		}
+	}
+	return pcol
+}
+
+func protoPortRangeToString(portRange *proto.PortRange) string {
+	if portRange.First == portRange.Last {
+		return fmt.Sprintf("%d", portRange.First)
+	}
+	return fmt.Sprintf("%d-%d", portRange.First, portRange.Last)
 }

@@ -17,10 +17,9 @@
 package libbpf
 
 import (
+	"runtime"
 	"time"
 )
-
-const MapTypeProgrArray = 3
 
 type Obj struct {
 }
@@ -63,6 +62,18 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) AttachXDP(ifName, progName string, oldFD int, mode uint) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func DetachXDP(ifName string, mode uint) error {
+	panic("LIBBPF syscall stub")
+}
+
+func GetXDPProgramID(ifName string) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }
@@ -92,7 +103,7 @@ const (
 	GlobalsRPFStrictEnabled uint32 = 16
 )
 
-func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16, _, _ uint32) error {
+func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16, _, _ uint32, _ uint16) error {
 	panic("LIBBPF syscall stub")
 }
 
@@ -102,4 +113,8 @@ func CTLBSetGlobals(_ *Map, _ time.Duration) error {
 
 func (m *Map) SetMapSize(size uint32) error {
 	panic("LIBBPF syscall stub")
+}
+
+func NumPossibleCPUs() (int, error) {
+	return runtime.NumCPU(), nil
 }

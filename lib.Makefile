@@ -223,13 +223,16 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
-# Set the platform correctly for building docker images so that 
+# Set the platform correctly for building docker images so that
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
 TARGET_PLATFORM=--platform=linux/arm64/v8
 endif
 ifeq ($(ARCH),armv7)
 TARGET_PLATFORM=--platform=linux/arm/v7
+endif
+ifeq ($(ARCH),ppc64le)
+TARGET_PLATFORM=--platform=linux/ppc64le
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
@@ -1225,8 +1228,15 @@ kind $(KIND):
 
 kubectl $(KUBECTL):
 	mkdir -p $(KIND_DIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
+	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
+
+bin/helm:
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	wget -q https://get.helm.sh/helm-v3.3.1-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
+	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
+	mv $(TMP)/linux-amd64/helm bin/helm
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

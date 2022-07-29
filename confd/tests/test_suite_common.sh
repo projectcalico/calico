@@ -176,7 +176,7 @@ EOF
     test_confd_templates password/step2
 
     # Update my-secrets-1 secret with the other required key.
-    kubectl apply -f - <<EOF
+    kubectl replace -f - <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -189,7 +189,7 @@ stringData:
 EOF
 
     # Also create my-secrets-2 secret.
-    kubectl apply -f - <<EOF
+    kubectl create -f - <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -210,7 +210,7 @@ EOF
     test_confd_templates password/step4
 
     # Change the passwords in the other secret.
-    kubectl apply -f - <<EOF
+    kubectl replace -f - <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -226,7 +226,7 @@ EOF
     test_confd_templates password/step5
 
     # Delete one of the keys from that secret.
-    kubectl apply -f - <<EOF
+    kubectl replace -f - <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -1031,7 +1031,7 @@ EOF
     test_confd_templates mesh/password/step2
 
     # Change the passwords in the other secret.
-    kubectl apply -f - <<EOF
+    kubectl replace -f - <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -1046,7 +1046,7 @@ EOF
     test_confd_templates mesh/password/step3
 
     # Change the password to an unreferenced key.
-    kubectl apply -f - <<EOF
+    kubectl replace -f - <<EOF
 apiVersion: v1
 kind: Secret
 metadata:

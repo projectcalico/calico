@@ -1,0 +1,78 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.3.0
+  name: imagesets.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: ImageSet
+    listKind: ImageSetList
+    plural: imagesets
+    singular: imageset
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: ImageSet is used to specify image digests for the images that
+          the operator deploys. The name of the ImageSet is expected to be in the
+          format `<variang>-<release>`. The `variant` used is `enterprise` if the
+          InstallationSpec Variant is `TigeraSecureEnterprise` otherwise it is `calico`.
+          The `release` must match the version of the variant that the operator is
+          built to deploy, this version can be obtained by passing the `--version`
+          flag to the operator binary.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ImageSetSpec defines the desired state of ImageSet.
+            properties:
+              images:
+                description: Images is the list of images to use digests. All images
+                  that the operator will deploy must be specified.
+                items:
+                  properties:
+                    digest:
+                      description: Digest is the image identifier that will be used
+                        for the Image. The field should not include a leading `@`
+                        and must be prefixed with `sha256:`.
+                      type: string
+                    image:
+                      description: Image is an image that the operator deploys and
+                        instead of using the built in tag the operator will use the
+                        Digest for the image identifier. The value should be the image
+                        name without registry or tag or digest. For the image `docker.io/calico/node:v3.17.1`
+                        it should be represented as `calico/node`
+                      type: string
+                  required:
+                  - digest
+                  - image
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+

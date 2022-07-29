@@ -22,7 +22,7 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 
 include ../lib.Makefile
 
-SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
+SRC_FILES=$(shell find cmd -name '*.go') $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
 
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
@@ -114,6 +114,7 @@ endif
 TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 
 ## Run the unit tests in a container.
+test: ut
 ut fv: $(TEST_BINARIES)
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
@@ -125,8 +126,13 @@ ut fv: $(TEST_BINARIES)
 
 # Produce test binaries for each package that needs them.
 # ginkgo doesn't let you produce a single test binary with multiple packages.
+# Only do this if there are .go files in the path.
 %/ut.test: $(SRC_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@
+	if [ $$(find ./$* -name '*.go' | wc -l) -gt 0 ]; then \
+		$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@; \
+	else \
+		echo "Skipping $* as it has no .go files in it"; \
+	fi
 
 ###############################################################################
 # CI

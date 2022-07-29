@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 type action int
@@ -161,7 +162,6 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 			resources = append(resources, converted...)
 			return nil
 		})
-
 		if err != nil {
 			_, ok := err.(fileError)
 			return CommandResults{Err: err, FileInvalid: ok}
@@ -281,7 +281,6 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 				rom.SetCreationTimestamp(v1.Time{})
 				rom.SetDeletionTimestamp(nil)
 				rom.SetDeletionGracePeriodSeconds(nil)
-				rom.SetClusterName("")
 			}
 		}
 
@@ -379,4 +378,17 @@ func handleNamespace(resource resourcemgr.ResourceObject, rm resourcemgr.Resourc
 	}
 
 	return nil
+}
+
+// CheckLocked checks if the datastore is locked. This is important for
+// datastore migrations and splitting up IP pools so that the underlying
+// data is not changed while the operations are being carried out.
+func CheckLocked(ctx context.Context, c client.Interface) (bool, error) {
+	// Get the cluster information resource
+	clusterinfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err != nil {
+		return false, fmt.Errorf("Error retrieving ClusterInformation: %s", err)
+	}
+
+	return !*clusterinfo.Spec.DatastoreReady, nil
 }

@@ -490,6 +490,11 @@ var baseTests = []StateList{
 		vxlanV4V6WithV6MAC,
 		vxlanV4V6WithBlock,
 	},
+	{
+		wireguardV4,
+		wireguardV6,
+		wireguardV4V6,
+	},
 }
 
 var logOnce sync.Once
@@ -668,6 +673,12 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
 		"Active VTEPs were incorrect after moving to state: %v",
 		state.Name)
+	Expect(mockDataplane.ActiveWireguardEndpoints()).To(Equal(state.ExpectedWireguardEndpoints),
+		"Active IPv4 Wireguard Endpoints were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveWireguardV6Endpoints()).To(Equal(state.ExpectedWireguardV6Endpoints),
+		"Active IPv6 Wireguard Endpoints were incorrect after moving to state: %v",
+		state.Name)
 	// Comparing stringified versions of the routes here so that, on failure, we get much more readable output.
 	Expect(stringifyRoutes(mockDataplane.ActiveRoutes())).To(Equal(stringifyRoutes(state.ExpectedRoutes)),
 		"Active routes were incorrect after moving to state: %v",
@@ -692,9 +703,9 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 		state.Name)
 }
 
-func stringifyRoutes(routes set.Set) []string {
+func stringifyRoutes(routes set.Set[proto.RouteUpdate]) []string {
 	out := make([]string, 0, routes.Len())
-	routes.Iter(func(item interface{}) error {
+	routes.Iter(func(item proto.RouteUpdate) error {
 		out = append(out, fmt.Sprintf("%+v", item))
 		return nil
 	})

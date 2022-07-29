@@ -122,7 +122,6 @@ func TestNoName(t *testing.T) {
 	if !t.Run("no-name", rootTestFunc()) {
 		t.Errorf("NoName test failed")
 	}
-
 }
 
 func testNoName(client calicoclient.Interface) error {
@@ -155,7 +154,6 @@ func TestNetworkPolicyClient(t *testing.T) {
 	if !t.Run(name, rootTestFunc()) {
 		t.Errorf("test-networkpolicy test failed")
 	}
-
 }
 
 func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
@@ -248,7 +246,6 @@ func TestGlobalNetworkPolicyClient(t *testing.T) {
 	if !t.Run(name, rootTestFunc()) {
 		t.Errorf("test-globalnetworkpolicy test failed")
 	}
-
 }
 
 func testGlobalNetworkPolicyClient(client calicoclient.Interface, name string) error {
@@ -1261,6 +1258,92 @@ func testCalicoNodeStatusClient(client calicoclient.Interface, name string) erro
 
 	err = caliconodestatusClient.Delete(ctx, name, metav1.DeleteOptions{})
 	if nil != err {
+		return fmt.Errorf("object should be deleted (%s)", err)
+	}
+
+	return nil
+}
+
+// TestIPAMConfigClient exercises the IPAMConfig client.
+func TestIPAMConfigClient(t *testing.T) {
+	const name = "test-ipamconfig"
+	rootTestFunc := func() func(t *testing.T) {
+		return func(t *testing.T) {
+			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+				return &v3.IPAMConfiguration{}
+			})
+			defer shutdownServer()
+			if err := testIPAMConfigClient(client, name); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if !t.Run(name, rootTestFunc()) {
+		t.Errorf("test-ipamconfig test failed")
+	}
+}
+
+func testIPAMConfigClient(client calicoclient.Interface, name string) error {
+	ipamConfigClient := client.ProjectcalicoV3().IPAMConfigurations()
+	ipamConfig := &v3.IPAMConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+
+		Spec: v3.IPAMConfigurationSpec{
+			StrictAffinity:   true,
+			MaxBlocksPerHost: 28,
+		},
+	}
+	ctx := context.Background()
+
+	_, err := ipamConfigClient.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error listing IPAMConfigurations: %s", err)
+	}
+
+	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	if err == nil {
+		return fmt.Errorf("should not be able to create ipam config %s ", ipamConfig.Name)
+	}
+
+	ipamConfig.Name = "default"
+	ipamConfigNew, err = ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating the object '%v' (%v)", ipamConfig, err)
+	}
+
+	if ipamConfigNew.Name != ipamConfig.Name {
+		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
+	}
+
+	if ipamConfigNew.Spec.StrictAffinity != true || ipamConfig.Spec.MaxBlocksPerHost != 28 {
+		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", ipamConfig, ipamConfigNew)
+	}
+
+	ipamConfigNew, err = ipamConfigClient.Get(ctx, ipamConfig.Name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting object %s (%s)", ipamConfig.Name, err)
+	}
+
+	ipamConfigNew.Spec.StrictAffinity = false
+	ipamConfigNew.Spec.MaxBlocksPerHost = 0
+
+	_, err = ipamConfigClient.Update(ctx, ipamConfigNew, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error updating object %s (%s)", name, err)
+	}
+
+	ipamConfigUpdated, err := ipamConfigClient.Get(ctx, ipamConfig.Name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting object %s (%s)", ipamConfig.Name, err)
+	}
+
+	if ipamConfigUpdated.Spec.StrictAffinity != false || ipamConfigUpdated.Spec.MaxBlocksPerHost != 0 {
+		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", ipamConfigUpdated, ipamConfigNew)
+	}
+
+	err = ipamConfigClient.Delete(ctx, ipamConfig.Name, metav1.DeleteOptions{})
+	if err != nil {
 		return fmt.Errorf("object should be deleted (%s)", err)
 	}
 

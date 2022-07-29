@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_BPF_TYPES_H__
@@ -18,6 +18,7 @@
 #include "conntrack_types.h"
 #include "nat_types.h"
 #include "reasons.h"
+#include "counters.h"
 
 // struct cali_tc_state holds state that is passed between the BPF programs.
 // WARNING: must be kept in sync with
@@ -92,6 +93,8 @@ enum cali_state_flags {
 	CALI_ST_SUPPRESS_CT_STATE = 0x10,
 	/* CALI_ST_SKIP_POLICY is set when the policy program is skipped. */
 	CALI_ST_SKIP_POLICY = 0x20,
+	/* CALI_ST_HOST_PSNAT is set when we are resolving host source port collision. */
+	CALI_ST_HOST_PSNAT = 0x40,
 };
 
 struct fwd {
@@ -118,6 +121,7 @@ struct cali_tc_ctx {
   struct calico_nat_dest *nat_dest;
   struct arp_key arpk;
   struct fwd fwd;
+  counters_t *counters;
 };
 
 static CALI_BPF_INLINE struct ethhdr* tc_ethhdr(struct cali_tc_ctx *ctx)

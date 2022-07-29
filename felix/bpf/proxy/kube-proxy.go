@@ -24,9 +24,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/cachingmap"
 )
 
 func init() {
@@ -48,8 +48,8 @@ type KubeProxy struct {
 
 	k8s         kubernetes.Interface
 	hostname    string
-	frontendMap bpf.Map
-	backendMap  bpf.Map
+	frontendMap bpf.MapWithExistsCheck
+	backendMap  bpf.MapWithExistsCheck
 	affinityMap bpf.Map
 	ctMap       bpf.Map
 	rt          *RTCache
@@ -65,8 +65,8 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	kp := &KubeProxy{
 		k8s:         k8s,
 		hostname:    hostname,
-		frontendMap: bpfMapContext.FrontendMap,
-		backendMap:  bpfMapContext.BackendMap,
+		frontendMap: bpfMapContext.FrontendMap.(bpf.MapWithExistsCheck),
+		backendMap:  bpfMapContext.BackendMap.(bpf.MapWithExistsCheck),
 		affinityMap: bpfMapContext.AffinityMap,
 		ctMap:       bpfMapContext.CtMap,
 		opts:        opts,
@@ -114,8 +114,14 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	copy(withLocalNP, hostIPs)
 	withLocalNP = append(withLocalNP, podNPIP)
 
-	feCache := cachingmap.New(nat.FrontendMapParameters, kp.frontendMap)
-	beCache := cachingmap.New(nat.BackendMapParameters, kp.backendMap)
+	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+			kp.frontendMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes,
+		))
+	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+			kp.backendMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes,
+		))
 
 	syncer, err := NewSyncer(withLocalNP, feCache, beCache, kp.affinityMap, kp.rt)
 	if err != nil {

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ import (
 type AttachedProgInfo struct {
 	Object string `json:"object"`
 	Hash   string `json:"hash"`
-	ID     string `json:"id"`
+	ID     int    `json:"id"`
 	Config string `json:"config"`
 }
 
@@ -47,15 +47,9 @@ type AttachPointInfo interface {
 	Config() string
 }
 
-var (
-	// These are possible hooks for a bpf program. "ingress" and "egress" imply TC program
-	// and each one reflects traffic direction. "xdp" implies xdp programs.
-	runtimeJSONsuffixes = []string{"ingress", "egress", "xdp"}
-)
-
 // AlreadyAttachedProg checks that the program we are going to attach has the
 // same parameters as what we remembered about the currently attached.
-func AlreadyAttachedProg(a AttachPointInfo, object, id string) (bool, error) {
+func AlreadyAttachedProg(a AttachPointInfo, object string, id int) (bool, error) {
 	bytesToRead, err := ioutil.ReadFile(RuntimeJSONFilename(a.IfaceName(), a.HookName()))
 	if err != nil {
 		// If file does not exist, just ignore the err code, and return false
@@ -96,7 +90,7 @@ func AlreadyAttachedProg(a AttachPointInfo, object, id string) (bool, error) {
 }
 
 // RememberAttachedProg stores the attached programs parameters in a file.
-func RememberAttachedProg(a AttachPointInfo, object, id string) error {
+func RememberAttachedProg(a AttachPointInfo, object string, id int) error {
 	hash, err := sha256OfFile(object)
 	if err != nil {
 		return err
@@ -139,8 +133,8 @@ func ForgetAttachedProg(iface, hook string) error {
 // ForgetIfaceAttachedProg removes information we store about any programs
 // associated with an iface.
 func ForgetIfaceAttachedProg(iface string) error {
-	for _, hook := range runtimeJSONsuffixes {
-		err := ForgetAttachedProg(iface, hook)
+	for _, hook := range Hooks {
+		err := ForgetAttachedProg(iface, string(hook))
 		if err != nil {
 			return err
 		}
@@ -160,10 +154,10 @@ func CleanAttachedProgDir() {
 		log.Errorf("Failed to get list of interfaces. err=%v", err)
 	}
 
-	expectedJSONFiles := set.New()
+	expectedJSONFiles := set.New[string]()
 	for _, iface := range interfaces {
-		for _, hook := range runtimeJSONsuffixes {
-			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, hook))
+		for _, hook := range Hooks {
+			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, string(hook)))
 		}
 	}
 

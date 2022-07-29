@@ -29,6 +29,11 @@ import (
 type OpCode uint8
 type Reg int
 
+type FieldOffset struct {
+	Offset int16
+	Field  string
+}
+
 //noinspection GoUnusedConst
 const (
 	// Registers.
@@ -276,22 +281,28 @@ const (
 
 const insnSize = 8
 
-type Insn [insnSize]uint8
+type Insn struct {
+	Instruction [insnSize]uint8 `json:"inst"`
+	Labels      []string        `json:"labels,omitempty"`
+	Comments    []string        `json:"comments,omitempty"`
+	Annotation  string          `json:"annotation,omitempty"`
+}
 
 type Insns []Insn
 
 func (ns Insns) AsBytes() []byte {
 	bs := make([]byte, 0, len(ns)*insnSize)
 	for _, n := range ns {
-		bs = append(bs, n[:]...)
+		bs = append(bs, n.Instruction[:]...)
 	}
 	return bs
 }
 
 func MakeInsn(opcode OpCode, dst, src Reg, offset int16, imm int32) Insn {
-	insn := [8]uint8{uint8(opcode), uint8(src<<4 | dst), 0, 0, 0, 0, 0, 0}
-	binary.LittleEndian.PutUint16(insn[2:4], uint16(offset))
-	binary.LittleEndian.PutUint32(insn[4:], uint32(imm))
+	insn := Insn{}
+	insn.Instruction = [8]uint8{uint8(opcode), uint8(src<<4 | dst), 0, 0, 0, 0, 0, 0}
+	binary.LittleEndian.PutUint16(insn.Instruction[2:4], uint16(offset))
+	binary.LittleEndian.PutUint32(insn.Instruction[4:], uint32(imm))
 	return insn
 }
 
@@ -300,38 +311,42 @@ func (n Insn) String() string {
 }
 
 func (n Insn) OpCode() OpCode {
-	return OpCode(n[0])
+	return OpCode(n.Instruction[0])
 }
 
 func (n Insn) Dst() Reg {
-	return Reg(n[1] & 0xf)
+	return Reg(n.Instruction[1] & 0xf)
 }
 
 func (n Insn) Src() Reg {
-	return Reg((n[1] >> 4) & 0xf)
+	return Reg((n.Instruction[1] >> 4) & 0xf)
 }
 
 func (n Insn) Off() int16 {
-	return int16(binary.LittleEndian.Uint16(n[2:4]))
+	return int16(binary.LittleEndian.Uint16(n.Instruction[2:4]))
 }
 
 func (n Insn) Imm() int32 {
-	return int32(binary.LittleEndian.Uint32(n[4:8]))
+	return int32(binary.LittleEndian.Uint32(n.Instruction[4:8]))
 }
 
 type Block struct {
-	insns            Insns
-	fixUps           []fixUp
-	labelToInsnIdx   map[string]int
-	insnIdxToLabels  map[int][]string
-	inUseJumpTargets set.Set
+	insns              Insns
+	fixUps             []fixUp
+	labelToInsnIdx     map[string]int
+	insnIdxToLabels    map[int][]string
+	insnIdxToComments  map[int][]string
+	inUseJumpTargets   set.Set[string]
+	policyDebugEnabled bool
 }
 
-func NewBlock() *Block {
+func NewBlock(policyDebugEnabled bool) *Block {
 	return &Block{
-		labelToInsnIdx:   map[string]int{},
-		insnIdxToLabels:  map[int][]string{},
-		inUseJumpTargets: set.New(),
+		labelToInsnIdx:     map[string]int{},
+		insnIdxToLabels:    map[int][]string{},
+		inUseJumpTargets:   set.New[string](),
+		insnIdxToComments:  map[int][]string{},
+		policyDebugEnabled: policyDebugEnabled,
 	}
 }
 
@@ -341,113 +356,121 @@ type fixUp struct {
 }
 
 func (b *Block) And32(dst, src Reg) {
-	b.add(And32, dst, src, 0, 0)
+	b.add(And32, dst, src, 0, 0, "")
 }
 
 func (b *Block) AndImm32(dst Reg, imm int32) {
-	b.add(AndImm32, dst, 0, 0, imm)
+	b.add(AndImm32, dst, 0, 0, imm, "")
 }
 
 func (b *Block) AndImm64(dst Reg, imm int32) {
-	b.add(AndImm64, dst, 0, 0, imm)
+	b.add(AndImm64, dst, 0, 0, imm, "")
 }
 
 func (b *Block) ShiftRImm64(dst Reg, imm int32) {
-	b.add(ShiftRImm64, dst, 0, 0, imm)
+	b.add(ShiftRImm64, dst, 0, 0, imm, "")
 }
 
 // LoadImm64 loads a 64-bit immediate into a register.  Double-length instruction.
 func (b *Block) LoadImm64(dst Reg, imm int64) {
 	// LoadImm64 is the only double-length instruction.
-	b.add(LoadImm64, dst, 0, 0, int32(imm))
-	b.add(LoadImm64Pt2, 0, 0, 0, int32(imm>>32))
+	b.add(LoadImm64, dst, 0, 0, int32(imm), "")
+	b.add(LoadImm64Pt2, 0, 0, 0, int32(imm>>32), "")
 }
 
 // LoadMapFD special variant of LoadImm64 for loading map FDs.
 func (b *Block) LoadMapFD(dst Reg, fd uint32) {
 	// Have to use LoadImm64 with the special pseudo-register even though FDs are only 32 bits.
-	b.add(LoadImm64, dst, RPseudoMapFD, 0, int32(fd))
-	b.add(LoadImm64Pt2, 0, 0, 0, 0)
+	b.add(LoadImm64, dst, RPseudoMapFD, 0, int32(fd), "")
+	b.add(LoadImm64Pt2, 0, 0, 0, 0, "")
 }
 
-func (b *Block) Load8(dst Reg, ptrReg Reg, offset int16) {
-	b.add(LoadReg8, dst, ptrReg, offset, 0)
+func (b *Block) Load8(dst Reg, ptrReg Reg, fo FieldOffset) {
+	annotation := b.buildAnnotation(LoadReg8, ptrReg, dst, fo, 0)
+	b.add(LoadReg8, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
-func (b *Block) Load16(dst Reg, ptrReg Reg, offset int16) {
-	b.add(LoadReg16, dst, ptrReg, offset, 0)
+func (b *Block) Load16(dst Reg, ptrReg Reg, fo FieldOffset) {
+	annotation := b.buildAnnotation(LoadReg16, ptrReg, dst, fo, 0)
+	b.add(LoadReg16, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
-func (b *Block) Load32(dst Reg, ptrReg Reg, offset int16) {
-	b.add(LoadReg32, dst, ptrReg, offset, 0)
+func (b *Block) Load32(dst Reg, ptrReg Reg, fo FieldOffset) {
+	annotation := b.buildAnnotation(LoadReg16, ptrReg, dst, fo, 0)
+	b.add(LoadReg32, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
-func (b *Block) Load64(dst Reg, ptrReg Reg, offset int16) {
-	b.add(LoadReg64, dst, ptrReg, offset, 0)
+func (b *Block) Load64(dst Reg, ptrReg Reg, fo FieldOffset) {
+	annotation := b.buildAnnotation(LoadReg16, ptrReg, dst, fo, 0)
+	b.add(LoadReg64, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
-func (b *Block) Store8(dst Reg, ptrReg Reg, offset int16) {
-	b.add(StoreReg8, dst, ptrReg, offset, 0)
+func (b *Block) Store8(dst Reg, ptrReg Reg, fo FieldOffset) {
+	annotation := b.buildAnnotation(StoreReg8, ptrReg, dst, fo, 0)
+	b.add(StoreReg8, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
-func (b *Block) Store16(dst Reg, ptrReg Reg, offset int16) {
-	b.add(StoreReg16, dst, ptrReg, offset, 0)
+func (b *Block) Store16(dst Reg, ptrReg Reg, fo FieldOffset) {
+	annotation := b.buildAnnotation(StoreReg16, ptrReg, dst, fo, 0)
+	b.add(StoreReg16, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
-func (b *Block) Store32(dst Reg, ptrReg Reg, offset int16) {
-	b.add(StoreReg32, dst, ptrReg, offset, 0)
+func (b *Block) Store32(dst Reg, ptrReg Reg, fo FieldOffset) {
+	annotation := b.buildAnnotation(StoreReg32, ptrReg, dst, fo, 0)
+	b.add(StoreReg32, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
-func (b *Block) Store64(dst Reg, ptrReg Reg, offset int16) {
-	b.add(StoreReg64, dst, ptrReg, offset, 0)
+func (b *Block) Store64(dst Reg, ptrReg Reg, fo FieldOffset) {
+	annotation := b.buildAnnotation(StoreReg64, ptrReg, dst, fo, 0)
+	b.add(StoreReg64, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
-func (b *Block) LoadStack8(dst Reg, offset int16) {
-	b.Load8(dst, R10, offset)
+func (b *Block) LoadStack8(dst Reg, fo FieldOffset) {
+	b.Load8(dst, R10, fo)
 }
 
-func (b *Block) LoadStack16(dst Reg, offset int16) {
-	b.Load16(dst, R10, offset)
+func (b *Block) LoadStack16(dst Reg, fo FieldOffset) {
+	b.Load16(dst, R10, fo)
 }
 
-func (b *Block) LoadStack32(dst Reg, offset int16) {
-	b.Load32(dst, R10, offset)
+func (b *Block) LoadStack32(dst Reg, fo FieldOffset) {
+	b.Load32(dst, R10, fo)
 }
 
-func (b *Block) LoadStack64(dst Reg, offset int16) {
-	b.Load64(dst, R10, offset)
+func (b *Block) LoadStack64(dst Reg, fo FieldOffset) {
+	b.Load64(dst, R10, fo)
 }
 
 func (b *Block) StoreStack8(src Reg, offset int16) {
-	b.add(StoreReg8, R10, src, offset, 0)
+	b.add(StoreReg8, R10, src, offset, 0, "")
 }
 
 func (b *Block) StoreStack16(src Reg, offset int16) {
-	b.add(StoreReg16, R10, src, offset, 0)
+	b.add(StoreReg16, R10, src, offset, 0, "")
 }
 
 func (b *Block) StoreStack32(src Reg, offset int16) {
-	b.add(StoreReg32, R10, src, offset, 0)
+	b.add(StoreReg32, R10, src, offset, 0, "")
 }
 
 func (b *Block) StoreStack64(src Reg, offset int16) {
-	b.add(StoreReg64, R10, src, offset, 0)
+	b.add(StoreReg64, R10, src, offset, 0, "")
 }
 
 func (b *Block) Mov64(dst, src Reg) {
-	b.add(Mov64, dst, src, 0, 0)
+	b.add(Mov64, dst, src, 0, 0, "")
 }
 
 func (b *Block) MovImm64(dst Reg, imm int32) {
-	b.add(MovImm64, dst, 0, 0, imm)
+	b.add(MovImm64, dst, 0, 0, imm, "")
 }
 
 func (b *Block) MovImm32(dst Reg, imm int32) {
-	b.add(MovImm32, dst, 0, 0, imm)
+	b.add(MovImm32, dst, 0, 0, imm, "")
 }
 
 func (b *Block) AddImm64(dst Reg, imm int32) {
-	b.add(AddImm64, dst, 0, 0, imm)
+	b.add(AddImm64, dst, 0, 0, imm, "")
 }
 
 func (b *Block) Jump(label string) {
@@ -519,15 +542,16 @@ func (b *Block) JumpGT32(ra, rb Reg, label string) {
 }
 
 func (b *Block) Call(helperID Helper) {
-	b.add(Call, 0, 0, 0, int32(helperID))
+	b.add(Call, 0, 0, 0, int32(helperID), b.buildAnnotation(Call, 0, 0, FieldOffset{}, int32(helperID)))
 }
 
 func (b *Block) Exit() {
-	b.add(Exit, 0, 0, 0, 0)
+	b.add(Exit, 0, 0, 0, 0, "")
 }
 
-func (b *Block) add(opcode OpCode, dst, src Reg, offset int16, imm int32) Insn {
+func (b *Block) add(opcode OpCode, dst, src Reg, offset int16, imm int32, annotation string) Insn {
 	insn := MakeInsn(opcode, dst, src, offset, imm)
+	insn.Annotation = annotation
 	b.addInsn(insn)
 	return insn
 }
@@ -542,11 +566,45 @@ func (b *Block) addInsn(insn Insn) {
 	b.addInsnWithOffsetFixup(insn, "")
 }
 
+func (b *Block) buildAnnotation(opcode OpCode, src, dst Reg, fo FieldOffset, imm int32) string {
+	if !b.policyDebugEnabled {
+		return ""
+	}
+	cast := ""
+	switch opcode {
+	case StoreReg8, LoadReg8, StoreImm8:
+		cast = "u8"
+	case StoreReg16, LoadReg16, StoreImm16:
+		cast = "u16"
+	case StoreReg32, LoadReg32, StoreImm32:
+		cast = "u32"
+	case StoreReg64, LoadReg64, StoreImm64, LoadImm64:
+		cast = "u64"
+	}
+
+	regStr := ""
+	switch opcode {
+	case StoreReg8, StoreReg16, StoreReg32, StoreReg64:
+		regStr = fmt.Sprintf("*(%s *) (%s + %d) /* %s */ = %s", cast, dst, fo.Offset, fo.Field, src)
+	case LoadReg8, LoadReg16, LoadReg32, LoadReg64:
+		regStr = fmt.Sprintf("%s = *(%s *)(%s + %d) /* %s */", dst, cast, src, fo.Offset, fo.Field)
+	case StoreImm8, StoreImm16, StoreImm32, StoreImm64:
+		regStr = fmt.Sprintf("*(%s *) (%s + %d) /* %s */ = %d", cast, dst, fo.Offset, fo.Field, imm)
+	case Call:
+		regStr = fmt.Sprintf("call %s", HelperString[imm])
+	}
+	return regStr
+}
+
 type OffsetFixer func(origInsn Insn) Insn
 
 func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
 	insnLabel := strings.Join(b.insnIdxToLabels[len(b.insns)], ",")
 	if !b.nextInsnReachble() {
+		if targetLabel == "allow" {
+			log.Infof("Asm: %v UU:    %v [UNREACHABLE]", insnLabel, insn)
+		}
+
 		log.Debugf("Asm: %v UU:    %v [UNREACHABLE]", insnLabel, insn)
 		for _, l := range b.insnIdxToLabels[len(b.insns)] {
 			delete(b.labelToInsnIdx, l)
@@ -561,6 +619,9 @@ func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
 	log.Debugf("Asm: %v %d:    %v%s", insnLabel, len(b.insns), insn, comment)
 	b.insns = append(b.insns, insn)
 	if targetLabel != "" {
+		if b.policyDebugEnabled {
+			b.insns[len(b.insns)-1].Annotation = fmt.Sprintf("goto %s", targetLabel)
+		}
 		b.inUseJumpTargets.Add(targetLabel)
 		b.fixUps = append(b.fixUps, fixUp{label: targetLabel, origInsnIdx: len(b.insns) - 1})
 	}
@@ -578,14 +639,32 @@ func (b *Block) Assemble() (Insns, error) {
 		}
 		// Offset is relative to the next instruction since the PC is auto-incremented.
 		offset := labelIdx - f.origInsnIdx - 1
-		binary.LittleEndian.PutUint16(b.insns[f.origInsnIdx][2:4], uint16(offset))
+		binary.LittleEndian.PutUint16(b.insns[f.origInsnIdx].Instruction[2:4], uint16(offset))
 	}
+
+	if b.policyDebugEnabled {
+		for idx := range b.insns {
+			if labels, ok := b.insnIdxToLabels[idx]; ok {
+				b.insns[idx].Labels = append(b.insns[idx].Labels, labels...)
+			}
+			if comments, ok := b.insnIdxToComments[idx]; ok {
+				b.insns[idx].Comments = append(b.insns[idx].Comments, comments...)
+			}
+		}
+	}
+
 	return b.insns, nil
 }
 
 func (b *Block) LabelNextInsn(label string) {
 	b.labelToInsnIdx[label] = len(b.insns)
 	b.insnIdxToLabels[len(b.insns)] = append(b.insnIdxToLabels[len(b.insns)], label)
+}
+
+func (b *Block) AddComment(comment string) {
+	if b.policyDebugEnabled {
+		b.insnIdxToComments[len(b.insns)] = append(b.insnIdxToComments[len(b.insns)], comment)
+	}
 }
 
 func (b *Block) nextInsnReachble() bool {

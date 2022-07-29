@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_NAT_H__
@@ -19,26 +19,33 @@
 #define CALI_VXLAN_VNI 0xca11c0
 #endif
 
-#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV)
-#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV)
-#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV)
+#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
+#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
+#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
 
 /* Number of bytes we add to a packet when we do encap. */
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
 static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t off,
-						__be32 ip_from, __be32 ip_to,
+						__be32 ip_src_from, __be32 ip_src_to,
+						__be32 ip_dst_from, __be32 ip_dst_to,
 						__u16 dport_from, __u16 dport_to,
 						__u16 sport_from, __u16 sport_to,
 						__u64 flags)
 {
 	int ret = 0;
 
-	if (ip_from != ip_to) {
-		CALI_DEBUG("L4 checksum update (csum is at %d) IP from %x to %x\n", off,
-				bpf_ntohl(ip_from), bpf_ntohl(ip_to));
-		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, flags | BPF_F_PSEUDO_HDR | 4);
+	if (ip_src_from != ip_src_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) src IP from %x to %x\n", off,
+				bpf_ntohl(ip_src_from), bpf_ntohl(ip_src_to));
+		ret = bpf_l4_csum_replace(skb, off, ip_src_from, ip_src_to, flags | BPF_F_PSEUDO_HDR | 4);
+		CALI_DEBUG("bpf_l4_csum_replace(IP): %d\n", ret);
+	}
+	if (ip_dst_from != ip_dst_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) dst IP from %x to %x\n", off,
+				bpf_ntohl(ip_dst_from), bpf_ntohl(ip_dst_to));
+		ret = bpf_l4_csum_replace(skb, off, ip_dst_from, ip_dst_to, flags | BPF_F_PSEUDO_HDR | 4);
 		CALI_DEBUG("bpf_l4_csum_replace(IP): %d\n", ret);
 	}
 	if (sport_from != sport_to) {
@@ -79,7 +86,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	ret = -1;
 
 	if (skb_refresh_validate_ptrs(ctx, new_hdrsz)) {
-		ctx->fwd.reason = CALI_REASON_SHORT;
+		DENY_REASON(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short VXLAN encap\n");
 		goto out;
 	}
@@ -205,6 +212,8 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 	if (!vxlan_size_ok(ctx)) {
 		/* UDP header said VXLAN but packet wasn't long enough. */
+		DENY_REASON(ctx, CALI_REASON_SHORT);
+		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
 	if (!vxlan_vni_is_valid(ctx) ) {
@@ -220,13 +229,13 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 	if (!rt_addr_is_remote_host(ctx->ip_header->saddr)) {
 		CALI_DEBUG("VXLAN with our VNI from unexpected source.\n");
-		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+		DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
 	if (!vxlan_udp_csum_ok(tc_udphdr(ctx))) {
 		/* Our VNI but checksum is incorrect (we always use check=0). */
 		CALI_DEBUG("VXLAN with our VNI but incorrect checksum.\n");
-		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+		DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
 
@@ -243,13 +252,13 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	ctx->state->tun_ip = ctx->ip_header->saddr;
 	CALI_DEBUG("vxlan decap\n");
 	if (vxlan_v4_decap(ctx->skb)) {
-		ctx->fwd.reason = CALI_REASON_DECAP_FAIL;
+		DENY_REASON(ctx, CALI_REASON_DECAP_FAIL);
 		goto deny;
 	}
 
 	/* Revalidate the packet after the decap. */
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-		ctx->fwd.reason = CALI_REASON_SHORT;
+		DENY_REASON(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}

@@ -353,21 +353,21 @@ Use the YAML that matches your datastore type to deploy the `calicoctl` containe
 - **etcd**
 
   ```bash
-  kubectl apply -f {{ "/manifests/calicoctl-etcd.yaml" | absolute_url }}
+  kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/calicoctl-etcd.yaml
   ```
 
   > **Note**: You can also
-  > [view the YAML in a new tab]({{ "/manifests/calicoctl-etcd.yaml" | absolute_url }}){:target="_blank"}.
+  > [view the YAML in a new tab]({{site.data.versions.first.manifests_url}}/manifests/calicoctl-etcd.yaml){:target="_blank"}.
   {: .alert .alert-info}
 
 - **Kubernetes API datastore**
 
   ```bash
-  kubectl apply -f {{ "/manifests/calicoctl.yaml" | absolute_url }}
+  kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/calicoctl.yaml
   ```
 
   > **Note**: You can also
-  > [view the YAML in a new tab]({{ "/manifests/calicoctl.yaml" | absolute_url }}){:target="_blank"}.
+  > [view the YAML in a new tab]({{site.data.versions.first.manifests_url}}/manifests/calicoctl.yaml){:target="_blank"}.
   {: .alert .alert-info}
 
 You can then run commands using kubectl as shown below.

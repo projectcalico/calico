@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_FIB_H__
@@ -7,6 +7,7 @@
 
 #include "types.h"
 #include "skb.h"
+#include "ifstate.h"
 
 #if CALI_FIB_ENABLED
 #define fwd_fib(fwd)			((fwd)->fib)
@@ -17,6 +18,33 @@
 #define fwd_fib_set(fwd, v)
 #define fwd_fib_set_flags(fwd, flags)
 #endif
+
+static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
+{
+	struct cali_tc_state *state = ctx->state;
+
+	/* To avoid forwarding packets to workloads that are not yet ready, i.e
+	 * their tc programs are not attached yet, send unconfirmed packets via
+	 * iptables that will filter out packets to non-ready workloads.
+	 */
+	if (!ct_result_is_confirmed(state->ct_result.rc)) {
+		struct ifstate_val *val;
+
+		if (!(val = (struct ifstate_val *)cali_iface_lookup_elem(&ifindex))) {
+			CALI_DEBUG("FIB not approved - connection to unknown ep %d not confirmed.\n", ifindex);
+			return false;
+		}
+
+		if (iface_is_workload(val->flags) && !iface_is_ready(val->flags)) {
+			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_FIB;
+			CALI_DEBUG("FIB not approved - connection to unready 0x%x ep %s (%d) not confirmed.\n",
+					val->flags, val->name, ifindex);
+			return false;
+		}
+	}
+
+	return true;
+}
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
@@ -36,7 +64,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
+			DENY_REASON(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -74,7 +102,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
+			DENY_REASON(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -99,15 +127,9 @@ skip_redir_ifindex:
 #if CALI_FIB_ENABLED
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(&ctx->fwd)) {
-		/* XXX we might include the tot_len in the fwd, set it once when
-		 * we get the ip_header the first time and only adjust the value
-		 * when we modify the packet - to avoid getting the header here
-		 * again - it is simpler though.
-		 */
-
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
+			DENY_REASON(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -151,6 +173,10 @@ skip_redir_ifindex:
 		switch (rc) {
 		case 0:
 			CALI_DEBUG("FIB lookup succeeded - with neigh\n");
+			if (!fib_approve(ctx, fib_params.ifindex)) {
+				reason = CALI_REASON_WEP_NOT_READY;
+				goto deny;
+			}
 
 			// Update the MACs.
 			struct ethhdr *eth_hdr = ctx->data_start;
@@ -167,6 +193,12 @@ skip_redir_ifindex:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
 				CALI_DEBUG("FIB lookup succeeded - not neigh - gw %x\n", bpf_ntohl(fib_params.ipv4_dst));
+
+				if (!fib_approve(ctx, fib_params.ifindex)) {
+					reason = CALI_REASON_WEP_NOT_READY;
+					goto deny;
+				}
+
 				struct bpf_redir_neigh nh_params = {};
 
 				nh_params.nh_family = fib_params.family;
@@ -212,7 +244,18 @@ skip_fib:
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL\n");
 			ctx->fwd.mark |= EXT_TO_SVC_MARK;
 		}
-		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", ctx->fwd.mark);
+
+		if (CALI_F_NAT_IF) {
+			/* We mark the packet so that next iface knows, it went through
+			 * bpfnatout - if it gets (S)NATed, a new connection is created
+			 * and we know that returning packets must go via bpfnatout again.
+			 */
+			ctx->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
+			CALI_DEBUG("marking CALI_SKB_MARK_FROM_NAT_IFACE_OUT\n");
+		}
+
+		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.\n", ctx->fwd.mark);
+
 		/* FIXME: this ignores the mask that we should be using.
 		 * However, if we mask off the bits, then clang spots that it
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,

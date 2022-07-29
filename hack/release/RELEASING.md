@@ -173,6 +173,23 @@ When starting development on a new minor release, the first step is to create a 
    git commit -a -m "Add redirects for archive/vX.Y"
    ```
 
+1. Update manifests to use the new release branch instead of master.  Update versions in the following files:
+
+   - charts/calico/values.yaml
+   - charts/tigera-operator/values.yaml
+
+   Then, run manifest generation
+
+   ```
+   make gen-manifests
+   ```
+
+   Commit your changes
+
+   ```
+   Update manifests for release-vX.Y
+   ```
+
    Then, push your changes to the branch.
 
    ```
@@ -213,6 +230,12 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
    ```
 
 1. Add the new version to the top of `calico/_data/versions.yml`
+
+1. Update version information in the following files:
+
+   - `calico/_data/versions.yml`: Versions displayed in the documentation.
+   - `charts/calico/values.yaml`: Calico version used in manifest generation.
+   - `charts/tigera-operator/values.yaml`: Versions of operator and calicoctl used in the helm chart and manifests.
 
 1. Update manifests (and other auto-generated code) by running the following command in the repository root.
 
@@ -286,7 +309,7 @@ releases, the following steps can be skipped.
 1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
 
    ```
-   make -C calico update-authors
+   make update-authors
    ```
 
 1. Commit your changes. For example:
@@ -317,15 +340,22 @@ releases, the following steps can be skipped.
 Verify the release is working as expected. This is important, so please don't skip it.
 
 1. Ensure that the site is accessible by visiting `projectcalico.docs.tigera.io/archive/<version>/`.
+
 1. Checkout the relevant docs branch (i.e. the release-vX.Y branch)
-1. Run `make release-test`.  The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
-1. check the output of the tests - if any test failed, dig in and understand why.
+
+1. Run the post-release checks. The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
+   
+   ```
+   make VERSION=... FLANNEL_VERSION=... OPERATOR_VERSION=... postrelease-checks
+   ```   
+
+1. Check the output of the tests - if any test failed, dig in and understand why.
+
 1. Kick off some e2e tests to test the contents of the release.
 
 # Release notes
 
-Release notes for a Calico release contain notable changes across Calico repositories. To write
-release notes for a given version, perform the following steps.
+Release notes for a Calico release contain notable changes across Calico repositories. To write release notes for a given version, perform the following steps.
 
 1. Check the merged pull requests in the milestone and make sure each has a release note if it needs one.
 
@@ -344,10 +374,10 @@ release notes for a given version, perform the following steps.
 1. Run the following command to collect all release notes for the given version.
 
    ```
-   make -C calico release-notes
+   make release-notes
    ```
 
-   A file called `<VERSION>-release-notes.md` will be created with the raw release note content.
+   A file called `release-notes/<VERSION>-release-notes.md` will be created with the raw release note content.
 
    > **NOTE**: If you receive a ratelimit error, you can specify a `GITHUB_TOKEN` in the above command to
    > increase the number of allowed API calls. [See here for details](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/).
@@ -361,3 +391,9 @@ release notes for a given version, perform the following steps.
 
    - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.1.0/_includes/v3.1/release-notes/v3.1.0-release-notes.md)
    - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/7d5594dbca14cb1b765b65eb11bdd8239d23dfb3/_includes/v3.0/release-notes/v3.0.5-release-notes.md)
+
+1. Add the generated file to git.
+
+   ```
+   git add release-notes/
+   ```

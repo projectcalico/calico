@@ -66,6 +66,7 @@ NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
 NODE_CONTAINER_BIN_DIR=./dist/bin/
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
+TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 
@@ -196,7 +197,7 @@ clean-windows:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(NODE_CONTAINER_BINARY)
+build: $(NODE_CONTAINER_BINARY) $(TOOLS_MOUNTNS_BINARY)
 
 # Pull in config from confd.
 filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
@@ -252,6 +253,9 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -o $@ $(LDFLAGS) ./cmd/calico-ipam'
 
+$(TOOLS_MOUNTNS_BINARY):
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/mountns'
+
 ###############################################################################
 # Building the image
 ###############################################################################
@@ -261,7 +265,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES)
+$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
 	$(DOCKER_BUILD) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
@@ -337,11 +341,11 @@ test_image: .calico_test.created
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
 
-calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go')
+calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../apiserver image
 	docker save --output $@ calico/apiserver:latest-$(ARCH)
 
-calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go')
+calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../cni-plugin image
 	docker save --output $@ calico/cni:latest-$(ARCH)
 
@@ -349,11 +353,11 @@ pod2daemon.tar: ../go.mod $(shell find ../pod2daemon -name '*.go')
 	make -C ../pod2daemon image
 	docker save --output $@ calico/pod2daemon-flexvol:latest-$(ARCH)
 
-calicoctl.tar: ../go.mod $(shell find ../calicoctl -name '*.go')
+calicoctl.tar: ../go.mod $(shell find ../calicoctl -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../calicoctl image
 	docker save --output $@ calico/ctl:latest-$(ARCH)
 
-kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go')
+kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../kube-controllers image
 	docker save --output $@ calico/kube-controllers:latest-$(ARCH)
 
@@ -384,7 +388,7 @@ k8s-test:
 
 .PHONY: kind-k8st-setup
 kind-k8st-setup: $(K8ST_IMAGE_TARS) kind-cluster-create
-	KUBECONFIG=$(KIND_KUBECONFIG) ./tests/k8st/deploy_resources_on_kind_cluster.sh
+	KUBECONFIG=$(KIND_KUBECONFIG) ARCH=$(ARCH) ./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)

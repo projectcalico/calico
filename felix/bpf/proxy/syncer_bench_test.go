@@ -24,7 +24,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
+	"github.com/projectcalico/calico/felix/cachingmap"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -75,7 +75,10 @@ func makeState(svcCnt, epCnt int, opts ...K8sServicePortOption) DPSyncerState {
 	return state
 }
 
-func stateToBPFMaps(state DPSyncerState) (*cachingmap.CachingMap, *cachingmap.CachingMap) {
+func stateToBPFMaps(state DPSyncerState) (
+	*cachingmap.CachingMap[nat.FrontendKey, nat.FrontendValue],
+	*cachingmap.CachingMap[nat.BackendKey, nat.BackendValue],
+) {
 	fe := mock.NewMockMap(nat.FrontendMapParameters)
 	be := mock.NewMockMap(nat.BackendMapParameters)
 
@@ -100,8 +103,10 @@ func stateToBPFMaps(state DPSyncerState) (*cachingmap.CachingMap, *cachingmap.Ca
 		id++
 	}
 
-	feCache := cachingmap.New(nat.FrontendMapParameters, fe)
-	beCache := cachingmap.New(nat.BackendMapParameters, be)
+	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](fe, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](be, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 	return feCache, beCache
 }
@@ -159,8 +164,12 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 
 	if mockMaps {
 
-		feCache := cachingmap.New(nat.FrontendMapParameters, &mock.DummyMap{})
-		beCache := cachingmap.New(nat.BackendMapParameters, &mock.DummyMap{})
+		feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+			bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+				&mock.DummyMap{}, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+		beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+			bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+				&mock.DummyMap{}, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 		syncer, err = NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
@@ -178,8 +187,12 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 		err = beMap.EnsureExists()
 		Expect(err).ShouldNot(HaveOccurred())
 
-		feCache := cachingmap.New(nat.FrontendMapParameters, feMap)
-		beCache := cachingmap.New(nat.BackendMapParameters, beMap)
+		feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+			bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+				feMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+		beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+			bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+				beMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 		syncer, err = NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},

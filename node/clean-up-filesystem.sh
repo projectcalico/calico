@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -115,6 +115,9 @@ bin_allow_list_patterns=(
   zcat
   zless
   zmore
+
+  # Needed for eBPF mode to mount the cgroupv2 filesystem on the host.
+  mountns
 
   # Used by this script.
   '/find$'
@@ -353,6 +356,10 @@ rm -rf \
   /usr/share/gcc-8 \
   /usr/share/X11 \
   /usr/share/zsh \
+  /usr/share/python* \
+  /usr/share/**/python* \
+  /usr/lib/python* \
+  /usr/lib/**/python* \
   /in-the-container \
   /usr/bin/ldd \
   "$0"

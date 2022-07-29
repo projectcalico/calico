@@ -35,21 +35,35 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex"
 )
 
+// Hook is the hook to which a BPF program should be attached. This is relative to
+// the host namespace so workload PolDirnIngress policy is attached to the HookEgress.
+type Hook string
+
+const (
+	HookIngress Hook = "ingress"
+	HookEgress  Hook = "egress"
+	HookXDP     Hook = "xdp"
+)
+
+var Hooks = []Hook{HookIngress, HookEgress, HookXDP}
+
 type XDPMode int
 
 const (
-	XDPDriver XDPMode = iota
-	XDPOffload
-	XDPGeneric
+	XDPDriver  XDPMode = unix.XDP_FLAGS_DRV_MODE
+	XDPOffload XDPMode = unix.XDP_FLAGS_HW_MODE
+	XDPGeneric XDPMode = unix.XDP_FLAGS_SKB_MODE
 )
 
 type FindObjectMode uint32
@@ -77,7 +91,8 @@ const (
 	sockmapEndpointsMapVersion = "v1"
 	sockmapEndpointsMapName    = "calico_sk_endpoints_" + sockmapEndpointsMapVersion
 
-	defaultBPFfsPath = "/sys/fs/bpf"
+	DefaultBPFfsPath = "/sys/fs/bpf"
+	CgroupV2Path     = "/run/calico/cgroup"
 )
 
 var (
@@ -195,20 +210,20 @@ func NewBPFLib(binDir string) (*BPFLib, error) {
 
 func MaybeMountBPFfs() (string, error) {
 	var err error
-	bpffsPath := defaultBPFfsPath
+	bpffsPath := DefaultBPFfsPath
 
-	mnt, err := isMount(defaultBPFfsPath)
+	mnt, err := isMount(DefaultBPFfsPath)
 	if err != nil {
 		return "", err
 	}
 
-	fsBPF, err := isBPF(defaultBPFfsPath)
+	fsBPF, err := isBPF(DefaultBPFfsPath)
 	if err != nil {
 		return "", err
 	}
 
 	if !mnt {
-		err = mountBPFfs(defaultBPFfsPath)
+		err = mountBPFfs(DefaultBPFfsPath)
 	} else if !fsBPF {
 		var runfsBPF bool
 
@@ -233,29 +248,27 @@ func MaybeMountBPFfs() (string, error) {
 
 func MaybeMountCgroupV2() (string, error) {
 	var err error
-	cgroupV2Path := "/run/calico/cgroup"
-
-	if err := os.MkdirAll(cgroupV2Path, 0700); err != nil {
+	if err := os.MkdirAll(CgroupV2Path, 0700); err != nil {
 		return "", err
 	}
 
-	mnt, err := isMount(cgroupV2Path)
+	mnt, err := isMount(CgroupV2Path)
 	if err != nil {
-		return "", fmt.Errorf("error checking if %s is a mount: %v", cgroupV2Path, err)
+		return "", fmt.Errorf("error checking if %s is a mount: %v", CgroupV2Path, err)
 	}
 
-	fsCgroup, err := isCgroupV2(cgroupV2Path)
+	fsCgroup, err := isCgroupV2(CgroupV2Path)
 	if err != nil {
-		return "", fmt.Errorf("error checking if %s is CgroupV2: %v", cgroupV2Path, err)
+		return "", fmt.Errorf("error checking if %s is CgroupV2: %v", CgroupV2Path, err)
 	}
 
 	if !mnt {
-		err = mountCgroupV2(cgroupV2Path)
+		err = mountCgroupV2(CgroupV2Path)
 	} else if !fsCgroup {
-		err = fmt.Errorf("something that's not cgroup v2 is already mounted in %s", cgroupV2Path)
+		err = fmt.Errorf("something that's not cgroup v2 is already mounted in %s", CgroupV2Path)
 	}
 
-	return cgroupV2Path, err
+	return CgroupV2Path, err
 }
 
 func mountCgroupV2(path string) error {
@@ -290,25 +303,21 @@ func isMount(path string) (bool, error) {
 }
 
 func isBPF(path string) (bool, error) {
-	bpffsMagicNumber := uint32(0xCAFE4A11)
-
 	var fsdata unix.Statfs_t
 	if err := unix.Statfs(path, &fsdata); err != nil {
 		return false, fmt.Errorf("%s is not mounted", path)
 	}
 
-	return uint32(fsdata.Type) == bpffsMagicNumber, nil
+	return uint32(fsdata.Type) == uint32(unix.BPF_FS_MAGIC), nil
 }
 
 func isCgroupV2(path string) (bool, error) {
-	cgroup2MagicNumber := uint32(0x63677270)
-
 	var fsdata unix.Statfs_t
 	if err := unix.Statfs(path, &fsdata); err != nil {
 		return false, fmt.Errorf("%s is not mounted", path)
 	}
 
-	return uint32(fsdata.Type) == cgroup2MagicNumber, nil
+	return uint32(fsdata.Type) == uint32(unix.CGROUP2_SUPER_MAGIC), nil
 }
 
 func mountBPFfs(path string) error {
@@ -2240,8 +2249,57 @@ func KTimeNanos() int64 {
 	return ts.Nano()
 }
 
+var (
+	cachedNumPossibleCPUs     int
+	cachedNumPossibleCPUsOnce sync.Once
+)
+
+func NumPossibleCPUs() int {
+	cachedNumPossibleCPUsOnce.Do(func() {
+		var err error
+		cachedNumPossibleCPUs, err = libbpf.NumPossibleCPUs()
+		if err != nil {
+			log.WithError(err).Panic("Failed to read the number of possible CPUs from libbpf.")
+		}
+	})
+	return cachedNumPossibleCPUs
+}
+
 const jumpMapVersion = 2
 
 func JumpMapName() string {
 	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
+}
+
+func PolicyDebugJSONFileName(iface, dir string) string {
+	return (RuntimePolDir + "/" + iface + "_" + dir + ".json")
+}
+
+const countersMapVersion = 1
+
+func CountersMapName() string {
+	return fmt.Sprintf("cali_counters%d", countersMapVersion)
+}
+
+func MapPinPath(typ int, name, iface string, hook Hook) string {
+	PinBaseDir := path.Join(DefaultBPFfsPath, "tc")
+	subDir := "globals"
+	// We need one jump map and one counter map for each program, thus we need to pin those
+	// to a unique path, which is /sys/fs/bpf/tc/[iface]_[igr|egr|xdp]/[map_name].
+	if (typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, JumpMapName())) ||
+		(typ == unix.BPF_MAP_TYPE_PERCPU_ARRAY && strings.Contains(name, CountersMapName())) {
+		// Remove period in the interface name if any
+		ifName := strings.ReplaceAll(iface, ".", "")
+		switch hook {
+		case HookXDP:
+			subDir = ifName + "_xdp"
+		case HookIngress:
+			subDir = ifName + "_igr/"
+		case HookEgress:
+			subDir = ifName + "_egr"
+		default:
+			panic("Invalid hook")
+		}
+	}
+	return path.Join(PinBaseDir, subDir, name)
 }
