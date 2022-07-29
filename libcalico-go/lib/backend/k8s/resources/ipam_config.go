@@ -68,6 +68,7 @@ type ipamConfigClient struct {
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
+
 	return &model.KVPair{
 		Key: model.IPAMConfigKey{},
 		Value: &model.IPAMConfig{
@@ -83,6 +84,12 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 // For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
 func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
+	// Build object meta.
+	// We only support a singleton resource with name "default".
+	m := metav1.ObjectMeta{}
+	m.SetName(model.IPAMConfigGlobalName)
+	m.SetResourceVersion(kvpv1.Revision)
+
 	v1obj := kvpv1.Value.(*model.IPAMConfig)
 	return &model.KVPair{
 		Key: model.ResourceKey{
@@ -94,10 +101,7 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				Kind:       libapiv3.KindIPAMConfig,
 				APIVersion: "crd.projectcalico.org/v1",
 			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            model.IPAMConfigGlobalName,
-				ResourceVersion: kvpv1.Revision,
-			},
+			ObjectMeta: m,
 			Spec: libapiv3.IPAMConfigSpec{
 				StrictAffinity:     v1obj.StrictAffinity,
 				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
