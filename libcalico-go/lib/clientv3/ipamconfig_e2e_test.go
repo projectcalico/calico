@@ -99,7 +99,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec1))
-			Expect(res1.GroupVersionKind).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfiguration"}))
+			Expect(res1.GroupVersionKind()).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfig"}))
 
 			By("Attempting to create the same IPAMConfig but with spec2")
 			_, outError = c.IPAMConfig().Create(ctx, &libapiv3.IPAMConfig{
@@ -114,7 +114,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res).To(MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
-			Expect(res.GroupVersionKind).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfiguration"}))
+			Expect(res.GroupVersionKind()).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfig"}))
 
 			By("Updating IPAMConfig with spec2")
 			res1.Spec = spec2
@@ -149,7 +149,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			l, outError := c.IPAMConfig().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			for _, res := range l.Items {
-				Expect(res.GroupVersionKind).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfiguration"}))
+				Expect(res.GroupVersionKind()).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfig"}))
 			}
 		},
 
