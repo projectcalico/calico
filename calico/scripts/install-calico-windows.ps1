@@ -33,6 +33,8 @@ Param(
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $StartCalico="yes",
+    # As of Kubernetes version v1.24.0, service account token secrets are no longer automatically created. But this installation script uses that secret
+    # to generate a kubeconfig so default to creating the calico-node token secret if it doesn't exist.
     [parameter(Mandatory = $false)] $AutoCreateServiceAccountTokenSecret="yes",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
     [parameter(Mandatory = $false)] $EtcdEndpoints="",
@@ -272,7 +274,7 @@ function GetCalicoKubeConfig()
             } else {
                 # Otherwise create the serviceaccount token secret.
                 $secretName = "calico-node-token"
-                CreateTokenAccountSecret -Name $secretName -Namespace $CalicoNamespace
+                CreateTokenAccountSecret -Name $secretName -Namespace $CalicoNamespace -KubeConfigPath $KubeConfigPath
             }
         }
         # CA from the k8s secret is already base64-encoded.
