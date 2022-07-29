@@ -52,14 +52,12 @@ func (rw blockReaderWriter) getAffineBlocks(
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver}
 	datastoreObjs, err := rw.client.List(ctx, opts, "")
 	if err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			// The block path does not exist yet.  This is OK - it means
 			// there are no affine blocks.
-			return
-		} else {
 			log.Errorf("Error getting affine blocks: %v", err)
-			return
 		}
+		return
 	}
 
 	// Iterate through and extract the block CIDRs.
@@ -67,6 +65,7 @@ func (rw blockReaderWriter) getAffineBlocks(
 		k := o.Key.(model.BlockAffinityKey)
 		blocks = append(blocks, k.CIDR)
 	}
+
 	return
 }
 

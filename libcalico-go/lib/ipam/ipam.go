@@ -414,18 +414,21 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 
 		// Release the block affinity, requiring it to be empty.
 		for i := 0; i < datastoreRetries; i++ {
-			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, host, block, true); err != nil {
-				if _, ok := err.(errBlockClaimConflict); ok {
-					// Not claimed by this host - ignore.
-				} else if _, ok := err.(errBlockNotEmpty); ok {
-					// Block isn't empty - ignore.
-				} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-					// Block does not exist - ignore.
-				} else {
-					logCtx.WithError(err).WithField("block", block).Warn("Error occurred releasing block, trying again")
-					continue
-				}
+			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, host, block, true); err == nil {
+				continue
 			}
+
+			if _, ok := err.(errBlockClaimConflict); ok {
+				// Not claimed by this host - ignore.
+			} else if _, ok := err.(errBlockNotEmpty); ok {
+				// Block isn't empty - ignore.
+			} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				// Block does not exist - ignore.
+			} else {
+				logCtx.WithError(err).WithField("block", block).Warn("Error occurred releasing block, trying again")
+				continue
+			}
+
 			logCtx.WithField("block", block).Info("Released affine block that no longer selects this host")
 			break
 		}
