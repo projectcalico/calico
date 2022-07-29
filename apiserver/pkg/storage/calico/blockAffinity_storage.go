@@ -104,6 +104,9 @@ func (gc BlockAffinityConverter) convertToAAPI(libcalicoObject resourceObject, a
 	}
 	aapiBlockAffinity.TypeMeta = lcgBlockAffinity.TypeMeta
 	aapiBlockAffinity.ObjectMeta = lcgBlockAffinity.ObjectMeta
+
+	// Make sure that the API version is correct.
+	aapiBlockAffinity.TypeMeta.APIVersion = aapi.GroupVersionCurrent
 }
 
 func (gc BlockAffinityConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
