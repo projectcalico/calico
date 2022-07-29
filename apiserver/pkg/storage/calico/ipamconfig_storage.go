@@ -102,6 +102,10 @@ func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapi
 	aapiIPAMConfig.Spec.MaxBlocksPerHost = int32(lcgIPAMConfig.Spec.MaxBlocksPerHost)
 	aapiIPAMConfig.TypeMeta = lcgIPAMConfig.TypeMeta
 	aapiIPAMConfig.ObjectMeta = lcgIPAMConfig.ObjectMeta
+
+	// libcalico uses a different Kind for these resources - IPAMConfig.
+	aapiIPAMConfig.TypeMeta.APIVersion = aapi.GroupVersionCurrent
+	aapiIPAMConfig.Kind = aapi.KindIPAMConfiguration
 }
 
 func (gc IPAMConfigConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
@@ -112,6 +116,7 @@ func (gc IPAMConfigConverter) convertToAAPIList(libcalicoListObject resourceList
 		return
 	}
 	aapiIPAMConfigList.TypeMeta = lcgIPAMConfigList.TypeMeta
+	aapiIPAMConfigList.TypeMeta.Kind = aapi.KindIPAMConfigurationList
 	aapiIPAMConfigList.ListMeta = lcgIPAMConfigList.ListMeta
 	for _, item := range lcgIPAMConfigList.Items {
 		aapiIPAMConfig := aapi.IPAMConfiguration{}
