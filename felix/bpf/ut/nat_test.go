@@ -2301,13 +2301,13 @@ func TestNATHostRemoteNPLocalPod(t *testing.T) {
 		Expect(udpR.DstPort).To(Equal(layers.UDPPort(natPort)))
 
 		recvPkt = res.dataOut
-	})
+	}, withHostNetworked())
 
 	dumpCTMap(ctMap)
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	skbMark = tcdefs.MarkSeen // CALI_SKB_MARK_SEEN
+	expectMark(tcdefs.MarkSeen)
 
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
