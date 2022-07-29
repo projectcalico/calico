@@ -39,17 +39,38 @@ import (
 // mechanism for a 1:1 mapping between a Calico Resource and an equivalent Kubernetes
 // custom resource type.
 type customK8sResourceClient struct {
-	clientSet           *kubernetes.Clientset
-	restClient          *rest.RESTClient
-	name                string
-	resource            string
-	description         string
-	k8sResourceType     reflect.Type
+	clientSet  *kubernetes.Clientset
+	restClient *rest.RESTClient
+
+	// Name of the CRD. Not used.
+	name string
+
+	// resource is the kind of the CRD managed by this client, used as part of the
+	// endpoint generated for Kubernetes API calls.
+	resource string
+
+	// CRD description. Not used.
+	description string
+
+	// Types used to generate the returned structs.
+	k8sResourceType reflect.Type
+	k8sListType     reflect.Type
+
+	// k8sResourceTypeMeta is the TypeMeta to set for all resources
+	// returned by this client. It is used to set the GroupVersion.
 	k8sResourceTypeMeta metav1.TypeMeta
-	k8sListType         reflect.Type
-	namespaced          bool
-	resourceKind        string
-	versionconverter    VersionConverter
+
+	// Whether or not the CRD managed by this is namespaced. Used for generating
+	// Kubernetes API call endpoints.
+	namespaced bool
+
+	// resourceKind is the kind to set for TypeMeta.Kind for all resources
+	// returned by this client.
+	resourceKind string
+
+	// versionConverter is an optional hook to convert the returned data from the CRD
+	// from one format to another before returning it to the caller.
+	versionconverter VersionConverter
 }
 
 // VersionConverter converts v1 or v3 k8s resources into v3 resources.
@@ -371,7 +392,9 @@ func (c *customK8sResourceClient) convertResourceToKVPair(r Resource) (*model.KV
 		}
 	}
 
-	r.GetObjectKind().SetGroupVersionKind(c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind())
+	gvk := c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind()
+	gvk.Kind = c.resourceKind
+	r.GetObjectKind().SetGroupVersionKind(gvk)
 	kvp := &model.KVPair{
 		Key: model.ResourceKey{
 			Name:      r.GetObjectMeta().GetName(),

@@ -16,12 +16,12 @@ package clientv3_test
 
 import (
 	"context"
-	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 
@@ -99,7 +99,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec1))
-			fmt.Printf("Created res1 %v", res1)
+			Expect(res1.GroupVersionKind).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfiguration"}))
 
 			By("Attempting to create the same IPAMConfig but with spec2")
 			_, outError = c.IPAMConfig().Create(ctx, &libapiv3.IPAMConfig{
@@ -114,7 +114,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res).To(MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
-			fmt.Printf("Getting res %v", res)
+			Expect(res.GroupVersionKind).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfiguration"}))
 
 			By("Updating IPAMConfig with spec2")
 			res1.Spec = spec2
@@ -146,8 +146,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			Expect(dres).To(testutils.MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec2))
 
 			By("Listing IPAMConfig and expecting error")
-			_, outError = c.IPAMConfig().List(ctx, options.ListOptions{})
+			l, outError := c.IPAMConfig().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			for _, res := range l.Items {
+				Expect(res.GroupVersionKind).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfiguration"}))
+			}
 		},
 
 		// Test 1: Pass two fully populated IPAMConfigSpecs and expect the series of operations to succeed.
