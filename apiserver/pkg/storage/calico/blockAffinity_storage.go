@@ -93,10 +93,15 @@ func (gc BlockAffinityConverter) convertToLibcalico(aapiObj runtime.Object) reso
 func (gc BlockAffinityConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgBlockAffinity := libcalicoObject.(*libapi.BlockAffinity)
 	aapiBlockAffinity := aapiObj.(*aapi.BlockAffinity)
-	// Copy spec but ignore internal field Deleted.
 	aapiBlockAffinity.Spec.State = lcgBlockAffinity.Spec.State
 	aapiBlockAffinity.Spec.Node = lcgBlockAffinity.Spec.Node
 	aapiBlockAffinity.Spec.CIDR = lcgBlockAffinity.Spec.CIDR
+	// Treat the Deleted field specially. Since it is a string for backwards compatibility reasons,
+	// ignore the value if it is "false" so that the field will be omitted when displayed by the API.
+	// This is fine because the block affinity API is read-only.
+	if lcgBlockAffinity.Spec.Deleted == fmt.Sprintf("%t", true) {
+		aapiBlockAffinity.Spec.Deleted = lcgBlockAffinity.Spec.Deleted
+	}
 	aapiBlockAffinity.TypeMeta = lcgBlockAffinity.TypeMeta
 	aapiBlockAffinity.ObjectMeta = lcgBlockAffinity.ObjectMeta
 }

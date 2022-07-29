@@ -383,9 +383,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 		if host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
 			cidrPtr := &cidr
-			// TODO: If we fix this inconsistency between Get and List, we break Watch in that it will not pick up Deleted events anymore.
-			//if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(*model.BlockAffinity).Deleted {
-			if requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version() {
+			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(*model.BlockAffinity).Deleted {
 				// Matches the given host and IP version.
 				kvpl.KVPairs = append(kvpl.KVPairs, v1kvp)
 			}
@@ -400,17 +398,15 @@ func (c *blockAffinityClient) listV3(ctx context.Context, list model.ResourceLis
 		return nil, err
 	}
 
-	/*
-		// TODO: If we fix this inconsistency between Get and List, we break Watch in that it will not pick up Deleted events anymore.
-		kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
-		for _, kvp := range v3list.KVPairs {
-			if kvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted != fmt.Sprintf("%t", true) {
-				kvpl.KVPairs = append(kvpl.KVPairs, kvp)
-			}
+	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	kvpl.Revision = v3list.Revision
+	for _, kvp := range v3list.KVPairs {
+		if kvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted != fmt.Sprintf("%t", true) {
+			kvpl.KVPairs = append(kvpl.KVPairs, kvp)
 		}
-		return kvpl, nil
-	*/
-	return v3list, err
+	}
+
+	return kvpl, nil
 }
 
 func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {

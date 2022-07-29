@@ -998,6 +998,13 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinitySpec(ref common.ReferenceCall
 							Format:      "",
 						},
 					},
+					"deleted": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Deleted indicates that this block affinity is deleted.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"state", "node", "cidr"},
 			},

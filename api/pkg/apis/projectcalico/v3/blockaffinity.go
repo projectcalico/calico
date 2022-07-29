@@ -46,6 +46,9 @@ type BlockAffinitySpec struct {
 
 	// The CIDR range this block affinity references.
 	CIDR string `json:"cidr"`
+
+	// Deleted indicates that this block affinity is deleted.
+	Deleted string `json:"deleted,omitempty"`
 }
 
 // +genclient:nonNamespaced
