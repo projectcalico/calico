@@ -67,7 +67,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		CALI_INFO("Final result=ALLOW (%d). Bypass mark set.\n", CALI_REASON_BYPASS);
 		return TC_ACT_UNSPEC;
 	}
-	
+
 	if (CALI_F_NAT_IF) {
 		switch (skb->mark) {
 		case CALI_SKB_MARK_BYPASS:
@@ -282,8 +282,8 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
-	if (CALI_F_TO_HEP && ctx.state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
-		ctx.state->flags |= CALI_ST_CT_NP_LOOP;
+	if (CALI_F_TO_HEP && ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
+		ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 	}
 
 	if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
@@ -495,15 +495,6 @@ syn_force_policy:
 		}
 	}
 
-	if (rt_addr_is_local_host(ctx->state->post_nat_ip_dst)) {
-		CALI_DEBUG("Post-NAT dest IP is local host.\n");
-		if (CALI_F_FROM_HEP && is_failsafe_in(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->ip_src)) {
-			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
-			COUNTER_INC(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
-			goto skip_policy;
-		}
-		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
-	}
 	if (rt_addr_is_local_host(ctx->state->ip_src)) {
 		CALI_DEBUG("Source IP is local host.\n");
 		if (CALI_F_TO_HEP && is_failsafe_out(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->post_nat_ip_dst)) {
@@ -513,33 +504,37 @@ syn_force_policy:
 		}
 		ctx->state->flags |= CALI_ST_SRC_IS_HOST;
 	}
-	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
+
+	struct cali_rt *dest_rt = cali_rt_lookup(ctx->state->post_nat_ip_dst);
+
+	if (!dest_rt) {
+		goto do_policy;
+	}
+
+	if (cali_rt_flags_local_host(dest_rt->flags)) {
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
-		if (CALI_F_FROM_HEP && is_failsafe_in(ctx.state->ip_proto, ctx.state->post_nat_dport, ctx.state->ip_src)) {
-			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
-			ctx.state->pol_rc = CALI_POL_ALLOW;
+		if (CALI_F_FROM_HEP && is_failsafe_in(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->ip_src)) {
+			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
+			COUNTER_INC(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 			goto skip_policy;
 		}
-		ctx.state->flags |= CALI_ST_DEST_IS_HOST;
-	} else 	if (CALI_F_TO_HEP && !skb_seen(skb)) {
-		/* XXX avoid rt lookup 2x */
-		struct cali_rt *r = cali_rt_lookup(ctx.state->post_nat_ip_dst);
-
-		if (r) {
-			if (cali_rt_flags_local_workload(r->flags)) {
-				CALI_DEBUG("NP redir on HEP - skip policy\n");
-				ctx.state->flags |= CALI_ST_CT_NP_LOOP;
-				ctx.state->pol_rc = CALI_POL_ALLOW;
-				goto skip_policy;
-			} else if (CALI_F_LO && cali_rt_flags_remote_workload(r->flags)) {
-				CALI_DEBUG("NP redir remote on LO\n");
-				ctx.state->flags |= CALI_ST_CT_NP_LOOP | CALI_ST_CT_NP_LOOP_REMOTE;
-				ctx.state->pol_rc = CALI_POL_ALLOW;
-				/* We need to do HEP policy here, where we do NAT. */
-			}
+		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
+	}
+	if (CALI_F_TO_HEP && !skb_seen(ctx->skb)) {
+		if (cali_rt_flags_local_workload(dest_rt->flags)) {
+			CALI_DEBUG("NP redir on HEP - skip policy\n");
+			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
+			ctx->state->pol_rc = CALI_POL_ALLOW;
+			goto skip_policy;
+		} else if (CALI_F_LO && cali_rt_flags_remote_workload(dest_rt->flags)) {
+			CALI_DEBUG("NP redir remote on LO\n");
+			ctx->state->flags |= CALI_ST_CT_NP_LOOP | CALI_ST_CT_NP_LOOP_REMOTE;
+			ctx->state->pol_rc = CALI_POL_ALLOW;
+			/* XXX We need to do HEP policy here, where we do NAT. */
 		}
 	}
 
+do_policy:
 	CALI_DEBUG("About to jump to policy program.\n");
 	CALI_JUMP_TO(ctx->skb, PROG_INDEX_POLICY);
 	if (CALI_F_HEP) {

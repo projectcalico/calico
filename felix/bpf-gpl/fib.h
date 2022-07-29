@@ -21,6 +21,13 @@
 
 static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 {
+	/* If we are turnign packets around on lo to a remote pod, approve the
+	 * fib as it does not concern apossibly  not ready local WEP.
+	 */
+	if (CALI_F_TO_HEP && ctx->state->flags & CALI_ST_CT_NP_LOOP_REMOTE) {
+		return true;
+	}
+
 	struct cali_tc_state *state = ctx->state;
 
 	/* To avoid forwarding packets to workloads that are not yet ready, i.e
@@ -126,6 +133,11 @@ skip_redir_ifindex:
 	}
 
 #if CALI_FIB_ENABLED
+	/* Only do FIB for packets to be turned around at a HEP on HEP egress. */
+	if (CALI_F_TO_HEP && !(ctx->state->flags & CALI_ST_CT_NP_LOOP)) {
+		goto skip_fib;
+	}
+
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(&ctx->fwd)) {
 		/* Revalidate the access to the packet */

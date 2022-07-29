@@ -102,7 +102,7 @@ var (
 	_                      = stateOffPreNATDstPort
 	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 30, Field: "state->post_nat_dport"}
 	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->ip_proto"}
-	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 33, Field: "state->flags"}
+	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 80, Field: "state->flags"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -288,10 +288,10 @@ const (
 
 func (p *Builder) writeJumpIfToOrFromHost(label string) {
 	// Load state flags.
-	p.b.Load8(R1, R9, stateOffFlags)
+	p.b.Load64(R1, R9, stateOffFlags)
 
 	// Mask against host bits.
-	p.b.AndImm32(R1, int32(FlagDestIsHost|FlagSrcIsHost))
+	p.b.AndImm64(R1, int32(FlagDestIsHost|FlagSrcIsHost))
 
 	// If non-zero, jump to specified label.
 	p.b.JumpNEImm64(R1, 0, label)
