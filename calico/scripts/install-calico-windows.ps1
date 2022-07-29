@@ -214,7 +214,9 @@ function GetCalicoNamespace() {
         return $ns
     }
 
+    $ErrorActionPreference = 'Continue'
     $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get ns calico-system
+    $ErrorActionPreference = 'Stop'
     if ([string]::IsNullOrEmpty($name)) {
         write-host "Calico running in kube-system namespace"
         return ("kube-system")
@@ -264,7 +266,9 @@ function GetCalicoKubeConfig()
             exit 1
         }
     } else {
+        $ErrorActionPreference = 'Continue'
         $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
+        $ErrorActionPreference = 'Stop'
         if ([string]::IsNullOrEmpty($name)) {
             throw "$SecretName service account does not exist."
         }
@@ -312,7 +316,9 @@ function SetupEtcdTlsFiles()
 
     $path = "$RootDir\etcd-tls"
 
+    $ErrorActionPreference = 'Continue'
     $found=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -n $CalicoNamespace
+    $ErrorActionPreference = 'Stop'
     if ([string]::IsNullOrEmpty($found)) {
         throw "$SecretName does not exist."
     }
@@ -367,6 +373,7 @@ function InstallCalico()
     Write-Host "`nCalico for Windows installed`n"
 }
 
+# kubectl errors are expected, so there are places where this is reset to "Continue" temporarily
 $ErrorActionPreference = "Stop"
 
 $BaseDir="c:\k"
