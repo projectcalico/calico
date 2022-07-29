@@ -54,7 +54,7 @@ serve:
 	  -e JEKYLL_DOCKER_TAG="" \
 	  -e JEKYLL_UID=`id -u` \
 	  -p 4000:4000 \
-	  jekyll/jekyll:$(JEKYLL_VERSION) jekyll serve --incremental $(CONFIG)
+	  jekyll/jekyll:$(JEKYLL_VERSION) /bin/sh -c "bundle exec jekyll serve --incremental $(CONFIG)"
 
 DOCS_SOURCE=$(find . -name '*.md') $(find ../manifests -type f)
 
@@ -66,7 +66,7 @@ _site build: bin/ocp.tgz $(DOCS_SOURCE)
 	-v $(CURDIR)/:/srv/jekyll \
 	-v $(CURDIR)/../libcalico-go:/srv/libcalico-go \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
-	jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
+	jekyll/jekyll:$(JEKYLL_VERSION) /bin/sh -c "bundle exec jekyll build --incremental $(CONFIG)"
 	# Move the manifests into the the generated site, and also update
 	# the repos manifests that the site generated, removing the templates dir.
 	cp -r ../manifests/ _site/manifests
@@ -83,7 +83,7 @@ clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
+	rm -rf _output _site .jekyll-metadata .jekyll-cache pinned_versions.yaml _includes/charts/*/values.yaml Gemfile.lock
 
 ###############################################################################
 # CI / test targets
