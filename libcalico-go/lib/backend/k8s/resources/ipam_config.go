@@ -50,7 +50,7 @@ func NewIPAMConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourc
 				APIVersion: apiv3.GroupVersionCurrent,
 			},
 			k8sListType:  reflect.TypeOf(libapiv3.IPAMConfigList{}),
-			resourceKind: apiv3.KindIPAMConfiguration,
+			resourceKind: libapiv3.KindIPAMConfig,
 		},
 	}
 }
