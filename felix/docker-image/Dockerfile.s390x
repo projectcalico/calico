@@ -1,14 +1,6 @@
-FROM alpine:3.11 as qemu
+ARG QEMU_IMAGE
 
-ARG QEMU_VERSION=6.1.0-8
-ARG QEMU_ARCHS="s390x"
-
-RUN apk --update add curl
-
-# Enable non-native runs on amd64 architecture hosts
-RUN curl -L https://github.com/multiarch/qemu-user-static/releases/download/v${QEMU_VERSION}/qemu-${QEMU_ARCHS}-static.tar.gz | tar zxvf - -C /usr/bin &&\
-    chmod +x /usr/bin/qemu-s390x-static
-
+FROM ${QEMU_IMAGE} as qemu
 FROM s390x/ubuntu:focal as wgtool
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!

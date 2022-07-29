@@ -1,6 +1,10 @@
+ARG QEMU_IMAGE
 ARG UBI_IMAGE
 
+FROM ${QEMU_IMAGE} as qemu
+
 FROM --platform=linux/s390x ${UBI_IMAGE} as ubi
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 RUN microdnf update
 
