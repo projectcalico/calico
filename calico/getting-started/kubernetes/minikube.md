@@ -56,6 +56,9 @@ Install the Tigera {{site.prodname}} operator and custom resource definitions.
 kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
 ```
 
+> **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. In stead, use `kubectl create` or `kubectl replace`.
+{: .alert .alert-info}
+
 Install {{site.prodname}} by creating the necessary custom resource. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
 > **Note**: Before creating this manifest, read its contents and make sure its settings are correct for your environment. For example,

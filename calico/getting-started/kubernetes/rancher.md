@@ -42,6 +42,9 @@ The geeky details of what you get:
    ```
    kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
    ```
+   
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. In stead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 1. Install {{site.prodname}} by creating the necessary custom resource. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 

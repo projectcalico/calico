@@ -55,6 +55,9 @@ and calculate how to take ownership of them. The operator will maintain existing
    ```
    kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
    ```
+   
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. In stead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 1. Trigger the operator to start a migration by creating an `Installation` resource. The operator will auto-detect your existing {{site.prodname}} settings and fill out the spec section.
 
