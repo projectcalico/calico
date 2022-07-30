@@ -269,9 +269,6 @@ function GetCalicoKubeConfig()
             exit 1
         }
     } else {
-        $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
-        if ([string]::IsNullOrEmpty($name)) {
-            throw "$SecretName service account does not exist."
         $ErrorActionPreference = 'Continue'
         $secretName=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretNamePrefix | select -first 1
         $ErrorActionPreference = 'Stop'
