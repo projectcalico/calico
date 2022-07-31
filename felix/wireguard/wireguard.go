@@ -156,7 +156,7 @@ type Wireguard struct {
 	publicKeyToNodeNames map[wgtypes.Key]set.Set[string]
 
 	// Wireguard routing table and rule managers
-	routetable routeTable
+	routetable routetable.RouteTableInterface
 	routerule  *routerule.RouteRules
 
 	// Callback function used to notify of public key updates for the local nodeData
@@ -221,7 +221,7 @@ func NewWithShims(
 	}
 
 	// Create routetable. We provide dummy callbacks for ARP and conntrack processing.
-	var rt routeTable
+	var rt routetable.RouteTableInterface
 	if !config.RouteSyncDisabled {
 		logCtx.Debug("RouteSyncDisabled is false.")
 		rt = routetable.NewWithShims(

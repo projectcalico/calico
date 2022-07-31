@@ -20,6 +20,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/wireguard"
 )
 
@@ -202,6 +203,6 @@ func (m *wireguardManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *wireguardManager) GetRouteTableSyncers() []routeTableSyncer {
-	return []routeTableSyncer{m.wireguardRouteTable}
+func (m *wireguardManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
+	return []routetable.RouteTableSyncer{m.wireguardRouteTable}
 }
