@@ -45,6 +45,14 @@ rules:
       # Used to discover Typhas.
       - get
 {{- end }}
+  # This permission is needed to get bgp password for BGPPeer resource.
+  - apiGroups: [""]
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
   # Pod CIDR auto-detection on kubeadm needs access to config maps.
   - apiGroups: [""]
     resources:
