@@ -1374,9 +1374,7 @@ func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
 			if !strings.HasSuffix(lbIP, "/128") {
 				globalLbIPs = append(globalLbIPs, lbIP)
 			}
-			continue
-		}
-		if !strings.HasSuffix(lbIP, "/32") {
+		} else if !strings.HasSuffix(lbIP, "/32") {
 			globalLbIPs = append(globalLbIPs, lbIP)
 		}
 	}
@@ -1790,21 +1788,6 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 	c.incrementCacheRevision()
 	c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, cidrs)
 	c.onNewUpdates()
-}
-
-// StaticRouteExists check if static route exists
-func (c *client) StaticRouteExists(cidr string) bool {
-	var k string
-	c.cacheLock.Lock()
-	defer c.cacheLock.Unlock()
-
-	if strings.Contains(cidr, ":") {
-		k = routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
-	} else {
-		k = routeKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
-	}
-	_, exists := c.cache[k]
-	return exists
 }
 
 func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv3.BGPPeer) {
