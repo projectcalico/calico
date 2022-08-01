@@ -47,7 +47,9 @@ type BlockAffinitySpec struct {
 	// The CIDR range this block affinity references.
 	CIDR string `json:"cidr"`
 
-	// Deleted indicates that this block affinity is deleted.
+	// Deleted indicates whether or not this block affinity is disabled and is
+	// used as part of race-condition prevention. When set to true, clients
+	// should treat this block as if it does not exist.
 	Deleted string `json:"deleted,omitempty"`
 }
 

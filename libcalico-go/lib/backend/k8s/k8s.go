@@ -422,7 +422,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindHostEndpoint,
 		apiv3.KindKubeControllersConfiguration,
 		libapiv3.KindIPAMConfig,
-		apiv3.KindBlockAffinity,
+		libapiv3.KindBlockAffinity,
 	}
 	ctx := context.Background()
 	for _, k := range kinds {
