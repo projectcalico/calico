@@ -607,7 +607,7 @@ func (t *mockRouteTable) SetL2Routes(ifaceName string, targets []routetable.L2Ta
 func (t *mockRouteTable) RouteRemove(_ string, _ ip.CIDR) {
 }
 
-func (t *mockRouteTable) RouteUpdate(_ string, _ Target) {
+func (t *mockRouteTable) RouteUpdate(_ string, _ routetable.Target) {
 }
 
 func (t *mockRouteTable) OnIfaceStateChanged(string, ifacemonitor.State) {}
