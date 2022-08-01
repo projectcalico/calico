@@ -268,6 +268,12 @@ func (c *blockAffinityClient) deleteKVPV3(ctx context.Context, kvp *model.KVPair
 		}
 	}
 
+	// Pass in the revision for the key-value pair to ensure that deletion occurs for the specified revision,
+	// not the revision that is retrieved by the above Get (which should be the most recent).
+	if kvp.Revision == "" {
+		return nil, fmt.Errorf("Unable to delete block affinity without a resource version")
+	}
+	nkvp.Revision = kvp.Revision
 	nkvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted = fmt.Sprintf("%t", true)
 	nkvp, err = c.Update(ctx, nkvp)
 	if err != nil {

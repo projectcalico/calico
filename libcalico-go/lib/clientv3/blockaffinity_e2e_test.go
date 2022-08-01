@@ -226,13 +226,13 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			res1.ObjectMeta.ResourceVersion = rv1_2
 			spec2.Deleted = "true"
 			res1.Spec = spec2
-			res1, outError = c.BlockAffinities().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.BlockAffinities().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Spec.Deleted = '{confirmed node-2 10.1.0.0/24 true}' (spec.Deleted cannot be set to \"true\")"))
 
 			By("Deleting BlockAffinity (name1)")
 			spec2.Deleted = "false"
-			_, outError = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{})
+			_, outError = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: res1.ResourceVersion})
 			Expect(outError).NotTo(HaveOccurred())
 
 			By("Listing BlockAffinities again and noticing BlockAffinity (name1) is deleted")
@@ -243,7 +243,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			))
 
 			By("Deleting BlockAffinity (name2)")
-			_, outError = c.BlockAffinities().Delete(ctx, name2, options.DeleteOptions{})
+			_, outError = c.BlockAffinities().Delete(ctx, name2, options.DeleteOptions{ResourceVersion: res2.ResourceVersion})
 			Expect(outError).NotTo(HaveOccurred())
 
 			By("Listing BlockAffinities and expecting no resources")
@@ -312,12 +312,12 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			defer testWatcher1.Stop()
 
 			By("Deleting res1")
-			_, err = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{})
+			_, err = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rev1})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Kubernetes does not have version control on delete so need an extra update is called per delete.
 			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
-				By("Checking for two events, create res2 and delete re1")
+				By("Checking for two events, create res2 and delete res1")
 				testWatcher1.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
 					{
 						Type:   watch.Added,
@@ -492,9 +492,9 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			} else {
 				// Clean calls the backend API client's Delete method which does not work for the Kubernetes datastore.
 				// Call Delete manually for Kubernetes datastore tests.
-				_, err = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{})
+				_, err = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: outRes1.ResourceVersion})
 				Expect(err).NotTo(HaveOccurred())
-				_, err = c.BlockAffinities().Delete(ctx, name2, options.DeleteOptions{})
+				_, err = c.BlockAffinities().Delete(ctx, name2, options.DeleteOptions{ResourceVersion: outRes3.ResourceVersion})
 				Expect(err).NotTo(HaveOccurred())
 				testWatcher4.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
 					{
