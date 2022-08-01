@@ -1512,6 +1512,11 @@ func (c shimClient) IPAMConfig() client.IPAMConfigInterface {
 	return c.client.IPAMConfig()
 }
 
+// BlockAffinities returns an interface for managing the block affinity resources.
+func (c shimClient) BlockAffinities() client.BlockAffinityInterface {
+	return c.client.BlockAffinities()
+}
+
 func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	return nil
 }
