@@ -50,7 +50,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: calico-csi
-        image: calico/csi:master
+        image: calico/csi:release-v3.24
         imagePullPolicy: Always
         args:
         - --nodeid=$(KUBE_NODE_NAME)
