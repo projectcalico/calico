@@ -1001,7 +1001,7 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinitySpec(ref common.ReferenceCall
 					"deleted": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Deleted indicates whether or not this block affinity is disabled and is used as part of race-condition prevention. When set to true, clients should treat this block as if it does not exist.",
-							Type:        []string{"string"},
+							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
