@@ -107,7 +107,7 @@ spec:
       serviceAccountName: calico-apiserver
       tolerations:
       - effect: NoSchedule
-        key: node-role.kubernetes.io/master
+        key: node-role.kubernetes.io/control-plane
       volumes:
       - name: calico-apiserver-certs
         secret:

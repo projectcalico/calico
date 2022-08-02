@@ -8,7 +8,7 @@ metadata:
     beta.kubernetes.io/arch: amd64
     beta.kubernetes.io/os: linux
     kubernetes.io/hostname: kube-master
-    node-role.kubernetes.io/master: ""
+    node-role.kubernetes.io/control-plane: ""
   name: kube-master
   namespace: ""
 spec:

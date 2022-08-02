@@ -143,7 +143,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: ingress-k8s-masters
 spec:
-  selector: has(node-role.kubernetes.io/master)
+  selector: has(node-role.kubernetes.io/control-plane)
   # This rule allows ingress to the Kubernetes API server.
   ingress:
   - action: Allow
@@ -163,7 +163,7 @@ spec:
   - action: Allow
     protocol: TCP
     source:
-      selector: has(node-role.kubernetes.io/master)
+      selector: has(node-role.kubernetes.io/control-plane)
     destination:
       ports:
       - 2380
@@ -171,14 +171,14 @@ spec:
 EOF
 ```
 
-Note that the above policy selects the standard **node-role.kubernetes.io/master** label that kubeadm sets on master nodes.
+Note that the above policy selects the standard **node-role.kubernetes.io/control-plane** label that kubeadm sets on master nodes.
 
 Next, we need to apply policy to restrict ingress to the Kubernetes workers.
 Before adding the policy we will add a label to all of our worker nodes, which then gets added to its automatic host endpoint.
 For this tutorial we will use **kubernetes-worker**. An example command to add the label to worker nodes:
 
 ```bash
-kubectl get node -l '!node-role.kubernetes.io/master' -o custom-columns=NAME:.metadata.name | tail -n +2 | xargs -I{} kubectl label node {} kubernetes-worker=
+kubectl get node -l '!node-role.kubernetes.io/control-plane' -o custom-columns=NAME:.metadata.name | tail -n +2 | xargs -I{} kubectl label node {} kubernetes-worker=
 ```
 
 The workers' ingress policy consists of two rules. The first rule allows all traffic to localhost. As with the masters,
@@ -203,7 +203,7 @@ spec:
   - action: Allow
     protocol: TCP
     source:
-      selector: has(node-role.kubernetes.io/master)
+      selector: has(node-role.kubernetes.io/control-plane)
     destination:
       ports:
       - 10250

@@ -43,11 +43,6 @@ spec:
       - key: node-role.kubernetes.io/control-plane
         operator: Exists
         effect: NoSchedule
-      # Same as the above toleration except looks at the outdated node label since
-      # some installers may not have been updated to use the new terminology.
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
       containers:
       - name: calico-csi
         image: calico/csi:master

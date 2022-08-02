@@ -242,16 +242,16 @@ def node_info():
     ips = []
     ip6s = []
 
-    master_node = kubectl("get node --selector='node-role.kubernetes.io/master' -o jsonpath='{.items[0].metadata.name}'")
+    master_node = kubectl("get node --selector='node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}'")
     nodes.append(master_node)
     ip6s.append(ipv6_map[master_node])
-    master_ip = kubectl("get node --selector='node-role.kubernetes.io/master' -o jsonpath='{.items[0].status.addresses[0].address}'")
+    master_ip = kubectl("get node --selector='node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].status.addresses[0].address}'")
     ips.append(master_ip)
 
     for i in range(3):
-        node = kubectl("get node --selector='!node-role.kubernetes.io/master' -o jsonpath='{.items[%d].metadata.name}'" % i)
+        node = kubectl("get node --selector='!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[%d].metadata.name}'" % i)
         nodes.append(node)
         ip6s.append(ipv6_map[node])
-        node_ip = kubectl("get node --selector='!node-role.kubernetes.io/master' -o jsonpath='{.items[%d].status.addresses[0].address}'" % i)
+        node_ip = kubectl("get node --selector='!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[%d].status.addresses[0].address}'" % i)
         ips.append(node_ip)
     return nodes, ips, ip6s

@@ -38,16 +38,16 @@ spec:
         - key: node.cloudprovider.kubernetes.io/uninitialized
           value: "true"
           effect: NoSchedule
-        # Allow this pod to run on the master.
-        - key: node-role.kubernetes.io/master
+        # Allow this pod to run on the control plane node.
+        - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
         # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
         # This, along with the annotation above marks this pod as a critical add-on.
         - key: CriticalAddonsOnly
           operator: Exists
-      # Only run this pod on the master.
+      # Only run this pod on the control-plane.
       nodeSelector:
-        node-role.kubernetes.io/master: ""
+        node-role.kubernetes.io/control-plane: ""
       hostNetwork: true
       containers:
         - args:
