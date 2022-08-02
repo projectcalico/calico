@@ -110,7 +110,7 @@ func (f *FlannelCluster) Reset() {
 func (f *FlannelCluster) AddFlannelNode(nodeName, podCidr, backend, mac, ip string, labels map[string]string, isMaster bool) *v1.Node {
 	defaultLabels := map[string]string{"beta.kubernetes.io/os": "linux"}
 	if isMaster {
-		defaultLabels["node-role.kubernetes.io/master"] = ""
+		defaultLabels["node-role.kubernetes.io/control-plane"] = ""
 	}
 	for k, v := range labels {
 		defaultLabels[k] = v
