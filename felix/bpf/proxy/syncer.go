@@ -1141,9 +1141,7 @@ func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 	backendIP net.IP, backendPort uint16, proto uint8) (ret bool) {
 
 	if log.GetLevel() >= log.DebugLevel {
-		defer func() {
-			log.WithField("ret", ret).Debug("ConntrackFrontendHasBackend")
-		}()
+		defer log.WithField("ret", ret).Debug("ConntrackFrontendHasBackend")
 	}
 
 	id, ok := s.activeSvcsMap[ipPortProto{ipPort{ip.String(), int(port)}, proto}]

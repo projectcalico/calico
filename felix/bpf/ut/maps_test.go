@@ -262,9 +262,7 @@ func TestDeleteDuringIter(t *testing.T) {
 	RegisterTestingT(t)
 	defer cleanUpMaps()
 	logLevel := logrus.GetLevel()
-	defer func() {
-		logrus.SetLevel(logLevel)
-	}()
+	defer logrus.SetLevel(logLevel)
 	logrus.SetLevel(logrus.InfoLevel)
 
 	testDelDuringIterN(10)
