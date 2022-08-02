@@ -138,14 +138,16 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             except n_exc.PortNotFound:
                 raise ResourceGone()
         port = self.add_extra_port_information(context, port)
+        network = self.db.get_network(context, port['network_id'])
         return (endpoint_spec(port),
                 endpoint_labels(port, self.namespace),
-                endpoint_annotations(port))
+                endpoint_annotations(network, port))
 
     def write_endpoint(self, port, context, must_update=False):
         # Reread the current port. This protects against concurrent writes
         # breaking our state.
         port = self.db.get_port(context, port['id'])
+        network = self.db.get_network(context, port['network_id'])
 
         # Fill out other information we need on the port.
         port = self.add_extra_port_information(context, port)
@@ -164,7 +166,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                          endpoint_name(port),
                          endpoint_spec(port),
                          labels=endpoint_labels(port, self.namespace),
-                         annotations=endpoint_annotations(port),
+                         annotations=endpoint_annotations(network, port),
                          mod_revision=mod_revision)
 
     def delete_endpoint(self, port):
@@ -410,8 +412,11 @@ def endpoint_spec(port):
     return data
 
 
-def endpoint_annotations(port):
-    annotations = {datamodel_v3.ANN_KEY_NETWORK_ID: port['network_id']}
+def endpoint_annotations(network, port):
+    annotations = {
+        datamodel_v3.ANN_KEY_NETWORK_ID: port['network_id'],
+        datamodel_v3.ANN_KEY_NETWORK_MTU: str(network['mtu']),
+    }
 
     # If the port has a DNS assignment, represent that as an FQDN annotation.
     dns_assignment = port.get('dns_assignment')
