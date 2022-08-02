@@ -21,6 +21,10 @@
 
 static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 {
+#ifdef UNITTEST
+	/* Let's assume that unittest is setup so that WEP's are ready - for UT simplicity */
+	return true;
+#else
 	/* If we are turnign packets around on lo to a remote pod, approve the
 	 * fib as it does not concern apossibly  not ready local WEP.
 	 */
@@ -51,6 +55,7 @@ static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 	}
 
 	return true;
+#endif
 }
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
@@ -245,48 +250,52 @@ skip_redir_ifindex:
 
 cancel_fib:
 #endif /* CALI_FIB_ENABLED */
-	if (ctx->state->flags & CALI_ST_CT_NP_LOOP && rc != TC_ACT_REDIRECT /* no FIB or failed */ ) {
-		CALI_DEBUG("No FIB or failed, redirect to NATIF.\n");
-		__u32 iface = NATIN_IFACE;
+	if (ctx->state->flags & CALI_ST_CT_NP_LOOP) {
+		__u32 mark = CALI_SKB_MARK_SEEN;
 
-		struct arp_key arpk = {
-			.ip = 0 /* 0.0.0.0 */,
-			.ifindex = iface,
-		};
+		if (rc != TC_ACT_REDIRECT /* no FIB or failed */ ) {
+			CALI_DEBUG("No FIB or failed, redirect to NATIF.\n");
+			__u32 iface = NATIN_IFACE;
 
-		struct arp_value *arpv = cali_v4_arp_lookup_elem(&arpk);
-		if (!arpv) {
-			ctx->fwd.reason = CALI_REASON_NATIFACE;
-			CALI_DEBUG("ARP lookup failed for %x dev %d\n",
-					bpf_ntohl(state->ip_dst), iface);
-			goto deny;
-		}
+			struct arp_key arpk = {
+				.ip = 0 /* 0.0.0.0 */,
+				.ifindex = iface,
+			};
 
-		/* Revalidate the access to the packet */
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
-			CALI_DEBUG("Too short\n");
-			goto deny;
-		}
+			struct arp_value *arpv = cali_v4_arp_lookup_elem(&arpk);
+			if (!arpv) {
+				ctx->fwd.reason = CALI_REASON_NATIFACE;
+				CALI_DEBUG("ARP lookup failed for %x dev %d\n",
+						bpf_ntohl(state->ip_dst), iface);
+				goto deny;
+			}
 
-		/* Patch in the MAC addresses that should be set on the next hop. */
-		struct ethhdr *eth_hdr = ctx->data_start;
-		__builtin_memcpy(&eth_hdr->h_dest, arpv->mac_dst, ETH_ALEN);
-		__builtin_memcpy(&eth_hdr->h_source, arpv->mac_src, ETH_ALEN);
+			/* Revalidate the access to the packet */
+			if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+				ctx->fwd.reason = CALI_REASON_SHORT;
+				CALI_DEBUG("Too short\n");
+				goto deny;
+			}
 
-		rc = bpf_redirect(iface, 0);
-		if (rc != TC_ACT_REDIRECT) {
-			ctx->fwd.reason = CALI_REASON_NATIFACE;
-			CALI_DEBUG("Redirect directly to bpfnatin failed.\n");
-			goto deny;
-		}
+			/* Patch in the MAC addresses that should be set on the next hop. */
+			struct ethhdr *eth_hdr = ctx->data_start;
+			__builtin_memcpy(&eth_hdr->h_dest, arpv->mac_dst, ETH_ALEN);
+			__builtin_memcpy(&eth_hdr->h_source, arpv->mac_src, ETH_ALEN);
 
-		CALI_DEBUG("Redirect directly to interface bpfnatin succeeded.\n");
+			rc = bpf_redirect(iface, 0);
+			if (rc != TC_ACT_REDIRECT) {
+				ctx->fwd.reason = CALI_REASON_NATIFACE;
+				CALI_DEBUG("Redirect directly to bpfnatin failed.\n");
+				goto deny;
+			}
 
-		__u32 mark = CALI_SKB_MARK_BYPASS;
-		
-		if (ctx->state->flags & CALI_ST_CT_NP_LOOP_REMOTE) {
-			mark = CALI_SKB_MARK_BYPASS_FWD;
+			CALI_DEBUG("Redirect directly to interface bpfnatin succeeded.\n");
+
+			mark = CALI_SKB_MARK_BYPASS;
+
+			if (ctx->state->flags & CALI_ST_CT_NP_LOOP_REMOTE) {
+				mark = CALI_SKB_MARK_BYPASS_FWD;
+			}
 		}
 
 		CALI_DEBUG("Setting mark to 0x%x\n", mark);
