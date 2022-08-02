@@ -992,16 +992,13 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 		switch ip.Version() {
 		case 4:
 			pool, err = c.blockReaderWriter.getPoolForIP(*ip, v4Pools)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to get pool for IP")
-				return nil, err
-			}
 		case 6:
 			pool, err = c.blockReaderWriter.getPoolForIP(*ip, v6Pools)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to get pool for IP")
-				return nil, err
-			}
+		}
+
+		if err != nil {
+			log.WithError(err).Warnf("Failed to get pool for IP")
+			return nil, err
 		}
 
 		if pool == nil {

@@ -308,7 +308,7 @@ outer:
 			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 		}
 		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
-		defer func() { _ = polProgFD.Close() }()
+		defer polProgFD.Close()
 		progFDBytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
 		err = jumpMap.Update([]byte{0, 0, 0, 0}, progFDBytes)
