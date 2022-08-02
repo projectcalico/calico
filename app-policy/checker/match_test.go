@@ -151,9 +151,7 @@ func TestMatchHTTPNil(t *testing.T) {
 func TestPanicHTTPPaths(t *testing.T) {
 	RegisterTestingT(t)
 
-	defer func() {
-		Expect(recover()).To(BeAssignableToTypeOf(&InvalidDataFromDataPlane{}))
-	}()
+	defer Expect(recover()).To(BeAssignableToTypeOf(&InvalidDataFromDataPlane{}))
 	paths := []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}
 	matchHTTPPaths(paths, "foo")
 }

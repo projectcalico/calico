@@ -48,9 +48,7 @@ func TestLoadAllowAllProgram(t *testing.T) {
 	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
-	defer func() {
-		Expect(fd.Close()).NotTo(HaveOccurred())
-	}()
+	defer Expect(fd.Close()).NotTo(HaveOccurred())
 
 	rc, err := bpf.RunBPFProgram(fd, make([]byte, 500), 1)
 	Expect(err).NotTo(HaveOccurred())
@@ -82,9 +80,7 @@ func TestLoadProgramWithMapAccess(t *testing.T) {
 	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
-	defer func() {
-		Expect(fd.Close()).NotTo(HaveOccurred())
-	}()
+	defer Expect(fd.Close()).NotTo(HaveOccurred())
 
 	rc, err := bpf.RunBPFProgram(fd, make([]byte, 500), 1)
 	Expect(err).NotTo(HaveOccurred())

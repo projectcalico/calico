@@ -346,9 +346,7 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 		tc.sendErrorResp(err)
 		log.WithError(err).Fatal("Failed to create TestConn")
 	}
-	defer func() {
-		_ = tc.Close()
-	}()
+	defer tc.Close()
 
 	if remotePort == "6443" {
 		// Testing for connectivity to the Kubernetes API server.  If we reach here, we're
