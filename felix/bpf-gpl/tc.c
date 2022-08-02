@@ -386,8 +386,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	/* No conntrack entry, check if we should do NAT */
 	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
 
-	/* Skip NAT lookup for traffic leaving the host namespace */
-	if (CALI_F_TO_HOST) {
+	if (CALI_F_TO_HOST || (CALI_F_FROM_HOST && !skb_seen(ctx->skb) && !ctx->nat_dest /* no sport conflcit */)) {
 		ctx->nat_dest = calico_v4_nat_lookup2(ctx->state->ip_src, ctx->state->ip_dst,
 						      ctx->state->ip_proto, ctx->state->dport,
 						      ctx->state->tun_ip != 0, &nat_res);
@@ -616,8 +615,8 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 	struct calico_nat_dest *nat_dest = NULL;
 	struct calico_nat_dest nat_dest_2 = {
-		.addr=ctx.state->nat_dest.addr,
-		.port=ctx.state->nat_dest.port,
+		.addr = ctx.state->nat_dest.addr,
+		.port = ctx.state->nat_dest.port,
 	};
 	if (ctx.state->nat_dest.addr != 0) {
 		nat_dest = &nat_dest_2;
@@ -1461,12 +1460,12 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		.state = state_get(),
 		.counters = counters_get(),
 	};
-	
+
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: no event generated\n");
 		return TC_ACT_SHOT;
 	}
-	
+
 	if (!ctx.counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
