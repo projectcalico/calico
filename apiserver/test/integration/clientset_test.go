@@ -1459,32 +1459,26 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	if err != nil {
 		return fmt.Errorf("error watching block affinities (%s)", err)
 	}
-	var events []watch.Event
-	done := sync.WaitGroup{}
-	done.Add(1)
-	timeout := time.After(500 * time.Millisecond)
-	var timeoutErr error
-	// watch for 2 events
-	go func() {
-		defer done.Done()
-		for i := 0; i < 2; i++ {
-			select {
-			case e := <-w.ResultChan():
-				events = append(events, e)
-			case <-timeout:
-				timeoutErr = fmt.Errorf("timed out waiting for events")
-				return
-			}
-		}
-		return
-	}()
 
 	_, err = apiClient.BlockAffinities().Delete(ctx, name, options.DeleteOptions{ResourceVersion: blockAffinityNew.ResourceVersion})
 	if err != nil {
 		return fmt.Errorf("error deleting the object through the Calico v3 API '%v' (%v)", name, err)
 	}
 
-	done.Wait()
+	// Verify watch
+	var events []watch.Event
+	timeout := time.After(500 * time.Millisecond)
+	var timeoutErr error
+	// watch for 2 events
+	for i := 0; i < 2; i++ {
+		select {
+		case e := <-w.ResultChan():
+			events = append(events, e)
+		case <-timeout:
+			timeoutErr = fmt.Errorf("timed out waiting for events")
+			break
+		}
+	}
 	if timeoutErr != nil {
 		return timeoutErr
 	}

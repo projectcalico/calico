@@ -23,6 +23,14 @@ const (
 	KindBlockAffinityList = "BlockAffinityList"
 )
 
+type BlockAffinityState string
+
+const (
+	StateConfirmed       BlockAffinityState = "confirmed"
+	StatePending         BlockAffinityState = "pending"
+	StatePendingDeletion BlockAffinityState = "pendingDeletion"
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -39,7 +47,7 @@ type BlockAffinity struct {
 // BlockAffinitySpec contains the specification for a BlockAffinity resource.
 type BlockAffinitySpec struct {
 	// The state of the block affinity with regard to any referenced IPAM blocks.
-	State string `json:"state"`
+	State BlockAffinityState `json:"state"`
 
 	// The node that this block affinity is assigned to.
 	Node string `json:"node"`

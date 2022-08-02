@@ -93,7 +93,7 @@ func (gc BlockAffinityConverter) convertToLibcalico(aapiObj runtime.Object) reso
 func (gc BlockAffinityConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgBlockAffinity := libcalicoObject.(*libapi.BlockAffinity)
 	aapiBlockAffinity := aapiObj.(*aapi.BlockAffinity)
-	aapiBlockAffinity.Spec.State = lcgBlockAffinity.Spec.State
+	aapiBlockAffinity.Spec.State = aapi.BlockAffinityState(lcgBlockAffinity.Spec.State)
 	aapiBlockAffinity.Spec.Node = lcgBlockAffinity.Spec.Node
 	aapiBlockAffinity.Spec.CIDR = lcgBlockAffinity.Spec.CIDR
 	if lcgBlockAffinity.Spec.Deleted == fmt.Sprintf("%t", true) {
