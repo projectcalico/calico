@@ -331,21 +331,7 @@ func (c *blockAffinityClient) getV1(ctx context.Context, key model.BlockAffinity
 }
 
 func (c *blockAffinityClient) getV3(ctx context.Context, key model.ResourceKey, revision string) (*model.KVPair, error) {
-	kvp, err := c.rc.Get(ctx, key, revision)
-	if err != nil {
-		return nil, err
-	}
-
-	// If this object has been marked as deleted, then we need to clean it up and
-	// return not found.
-	if kvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted == "true" {
-		if _, err := c.DeleteKVP(ctx, kvp); err != nil {
-			return nil, err
-		}
-		return nil, cerrors.ErrorResourceDoesNotExist{Err: fmt.Errorf("Resource was deleted"), Identifier: key}
-	}
-
-	return kvp, nil
+	return c.rc.Get(ctx, key, revision)
 }
 
 func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
@@ -399,20 +385,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 }
 
 func (c *blockAffinityClient) listV3(ctx context.Context, list model.ResourceListOptions, revision string) (*model.KVPairList, error) {
-	v3list, err := c.rc.List(ctx, list, revision)
-	if err != nil {
-		return nil, err
-	}
-
-	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
-	kvpl.Revision = v3list.Revision
-	for _, kvp := range v3list.KVPairs {
-		if kvp.Value.(*libapiv3.BlockAffinity).Spec.Deleted != fmt.Sprintf("%t", true) {
-			kvpl.KVPairs = append(kvpl.KVPairs, kvp)
-		}
-	}
-
-	return kvpl, nil
+	return c.rc.List(ctx, list, revision)
 }
 
 func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
