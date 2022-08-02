@@ -1382,7 +1382,7 @@ func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
 			globalLbIPs = append(globalLbIPs, lbIP)
 		}
 	}
-	if err := c.updateGlobalRoutes(c.loadBalancerIPs, globalLbIPs); err == nil {
+	if err := c.updateGlobalRoutes(globalLbIPs, c.LoadBalancerIPRouteIndex); err == nil {
 		c.loadBalancerIPs = lbIPs
 		c.loadBalancerIPNets = parseIPNets(c.loadBalancerIPs)
 		log.Infof("Updated with new Loadbalancer IP CIDRs: %s", lbIPs)
