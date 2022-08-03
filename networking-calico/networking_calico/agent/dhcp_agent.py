@@ -15,7 +15,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from collections import defaultdict
 import logging
 import netaddr
 import os
@@ -29,10 +28,6 @@ from neutron.agent.dhcp.agent import DhcpAgent
 from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
-try:
-    from neutron.common import constants as neutron_constants
-except ImportError:
-    from neutron_lib import constants as neutron_constants
 try:
     from neutron.conf.agent import common as config
 except ImportError:
@@ -116,7 +111,7 @@ class FakePlugin(object):
 
 
 def empty_network(network_id=NETWORK_ID,
-                  network_mtu=neutron_constants.DEFAULT_NETWORK_MTU):
+                  network_mtu=constants.DEFAULT_NETWORK_MTU):
     """Construct and return an empty network model."""
     return make_net_model({"id": network_id,
                            "subnets": [],
@@ -189,8 +184,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Cache of the ports that we've asked Dnsmasq to handle, for each
         # network ID.
         self._last_dnsmasq_ports = {}
-        mtu_dict = defaultdict(lambda: neutron_constants.DEFAULT_NETWORK_MTU)
-        self._last_dnsmasq_mtu = mtu_dict
+        self._last_dnsmasq_mtu = {}
 
         # Cache of current local endpoint IDs.
         self.local_endpoint_ids = set()
@@ -290,7 +284,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # spec existed. To ensure that we do not break users who have endpoints
         # in etcd without the MTU annotation, fallback to the previous default.
         network_mtu = int(annotations.get(datamodel_v3.ANN_KEY_NETWORK_MTU,
-                          neutron_constants.DEFAULT_NETWORK_MTU))
+                                          constants.DEFAULT_NETWORK_MTU))
         allowedIps = [e.split('/')[0] for e in endpoint.get('allowedIps', [])]
         for addrm in endpoint['ipNetworks']:
             ip_addr = addrm.split('/')[0]
@@ -472,7 +466,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
         # Compare that against what we've last asked Dnsmasq to handle.
         last_ports = self._last_dnsmasq_ports.get(network_id)
-        mtu_changing = self._last_dnsmasq_mtu.get(network_id) != net.mtu
+        last_mtu = self._last_dnsmasq_mtu.get(network_id,
+                                              constants.DEFAULT_NETWORK_MTU)
+        mtu_changing = last_mtu != net.mtu
         if ports_needed != last_ports or mtu_changing:
             # Requirements have changed, so start, restart or stop Dnsmasq for
             # that network ID.
@@ -519,10 +515,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # information.
         LOG.debug("Reset cache for new snapshot")
         for network_id in list(self.agent.cache.get_network_ids()):
-            network = self.agent.cache.get_network_by_id(network_id)
             self.dirty_networks.add(network_id)
             self._fix_network_cache_port_lookup(network_id)
-            self.agent.cache.put(empty_network(network_id, network.mtu))
+            self.agent.cache.put(empty_network(network_id))
 
         # Suppress Dnsmasq updates until we've processed the whole snapshot.
         self.suppress_dnsmasq_updates = True

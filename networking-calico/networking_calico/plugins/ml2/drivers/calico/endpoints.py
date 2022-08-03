@@ -22,6 +22,7 @@ except ImportError:
 
 from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
+from networking_calico.compat import constants
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
 from networking_calico import datamodel_v3
@@ -138,16 +139,14 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             except n_exc.PortNotFound:
                 raise ResourceGone()
         port = self.add_extra_port_information(context, port)
-        network = self.db.get_network(context, port['network_id'])
         return (endpoint_spec(port),
                 endpoint_labels(port, self.namespace),
-                endpoint_annotations(network, port))
+                endpoint_annotations(port))
 
     def write_endpoint(self, port, context, must_update=False):
         # Reread the current port. This protects against concurrent writes
         # breaking our state.
         port = self.db.get_port(context, port['id'])
-        network = self.db.get_network(context, port['network_id'])
 
         # Fill out other information we need on the port.
         port = self.add_extra_port_information(context, port)
@@ -166,7 +165,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                          endpoint_name(port),
                          endpoint_spec(port),
                          labels=endpoint_labels(port, self.namespace),
-                         annotations=endpoint_annotations(network, port),
+                         annotations=endpoint_annotations(port),
                          mod_revision=mod_revision)
 
     def delete_endpoint(self, port):
@@ -225,6 +224,8 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         Gets extra information for a port that is needed before sending it to
         etcd.
         """
+        network = self.db.get_network(context, port['network_id'])
+        port['mtu'] = network.get('mtu', constants.DEFAULT_NETWORK_MTU)
         port['fixed_ips'] = self.get_fixed_ips_for_port(
             context, port
         )
@@ -412,10 +413,10 @@ def endpoint_spec(port):
     return data
 
 
-def endpoint_annotations(network, port):
+def endpoint_annotations(port):
     annotations = {
         datamodel_v3.ANN_KEY_NETWORK_ID: port['network_id'],
-        datamodel_v3.ANN_KEY_NETWORK_MTU: str(network['mtu']),
+        datamodel_v3.ANN_KEY_NETWORK_MTU: str(port['mtu']),
     }
 
     # If the port has a DNS assignment, represent that as an FQDN annotation.
