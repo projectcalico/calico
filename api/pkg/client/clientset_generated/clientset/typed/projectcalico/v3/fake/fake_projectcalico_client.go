@@ -22,6 +22,10 @@ func (c *FakeProjectcalicoV3) BGPPeers() v3.BGPPeerInterface {
 	return &FakeBGPPeers{c}
 }
 
+func (c *FakeProjectcalicoV3) BlockAffinities() v3.BlockAffinityInterface {
+	return &FakeBlockAffinities{c}
+}
+
 func (c *FakeProjectcalicoV3) CalicoNodeStatuses() v3.CalicoNodeStatusInterface {
 	return &FakeCalicoNodeStatuses{c}
 }
