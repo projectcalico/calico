@@ -15,6 +15,7 @@ We test {{site.prodname}} {{page.version}} against the following Kubernetes vers
 - v1.21
 - v1.22
 - v1.23
+- v1.24
 
 Due to changes in the Kubernetes API, {{site.prodname}} {{page.version}} will not work
 on Kubernetes v1.15 or below.  v1.16-v1.18 may work, but they are no longer tested. 
