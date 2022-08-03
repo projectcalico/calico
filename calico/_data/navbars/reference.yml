@@ -82,6 +82,8 @@ section:
     path: /reference/resources/bgpconfig
   - title: BGP peer
     path: /reference/resources/bgppeer
+  - title: Block affinity
+    path: /reference/resources/blockaffinity
   - title: Calico node status
     path: /reference/resources/caliconodestatus
   - title: Felix configuration
