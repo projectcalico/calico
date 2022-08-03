@@ -112,9 +112,8 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
-	defer func() {
-		_ = os.RemoveAll(tempDir)
-	}()
+
+	defer os.RemoveAll(tempDir)
 
 	filename := ap.FileName()
 	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
