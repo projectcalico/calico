@@ -198,7 +198,7 @@ func (c *EncapsulationCalculator) handleAPIPool(p model.KVPair) error {
 	}
 
 	poolKey := pool.Spec.CIDR
-	c.updatePool(poolKey, pool.Spec.IPIPMode != apiv3.IPIPModeNever, pool.Spec.VXLANMode != apiv3.VXLANModeNever)
+	c.updatePool(poolKey, pool.Spec.IPIPMode != "" && pool.Spec.IPIPMode != apiv3.IPIPModeNever, pool.Spec.VXLANMode != "" && pool.Spec.VXLANMode != apiv3.VXLANModeNever)
 
 	return nil
 }
