@@ -2512,15 +2512,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									tcpdump.SetLogEnabled(true)
 									tcpdump.Start("-vvvnle", "tcp", "port", "8055")
 									defer tcpdump.Stop()
-									// node0IP := felixes[0].IP
+									node0IP := felixes[0].IP
 									node1IP := felixes[1].IP
 
-									// hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+									hostW0SrcIP := ExpectWithSrcIPs(node0IP)
 									hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
 									switch testOpts.tunnel {
 									case "ipip":
-										// hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
 									case "wireguard":
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
@@ -2532,12 +2532,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 									// Also try host networked pods, both on a local and remote node.
 									// N.B. it cannot work without the connect time balancer
+									cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
 									if false {
-										cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
 										cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
-										cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW1SrcIP)
+										cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
+										cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
 									}
-									cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW0SrcIP)
 
 									cc.CheckConnectivity()
 								})
