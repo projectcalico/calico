@@ -189,6 +189,8 @@ const (
 	FlagExtLocal  uint16 = (1 << 6)
 	FlagViaNATIf  uint16 = (1 << 7)
 	FlagSrcDstBA  uint16 = (1 << 8)
+	FlagHostPSNAT uint16 = (1 << 9)
+	FlagSvcSelf   uint16 = (1 << 10)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -444,6 +446,14 @@ func (e Value) String() string {
 
 		if flags&FlagSrcDstBA != 0 {
 			flagsStr += " B-A"
+		}
+
+		if flags&FlagHostPSNAT != 0 {
+			flagsStr += " host-psnat"
+		}
+
+		if flags&FlagSvcSelf != 0 {
+			flagsStr += " svc-self"
 		}
 	}
 
