@@ -215,6 +215,13 @@ var _ = Describe("EncapsulationCalculator", func() {
 				false, false),
 		)
 	})
+	Describe("Invalid IPIPMode and/or VXLANMode", func() {
+		err := encapsulationCalculator.handlePool(*getAPIPool("192.168.11.0/24", "", ""))
+		Expect(err.Error()).To(Equal("invalid IPIPMode \"\" for 192.168.11.0/24"))
+
+		err = encapsulationCalculator.handlePool(*getAPIPool("192.168.12.0/24", apiv3.IPIPModeNever, ""))
+		Expect(err.Error()).To(Equal("invalid VXLANMode \"\" for 192.168.12.0/24"))
+	})
 })
 
 var _ = Describe("EncapsulationResolver", func() {

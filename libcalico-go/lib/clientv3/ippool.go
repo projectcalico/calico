@@ -270,6 +270,17 @@ func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 	if pool.Spec.NodeSelector == "" {
 		pool.Spec.NodeSelector = "all()"
 	}
+
+	// Default IPIPMode to "Never" if not set.
+	if len(pool.Spec.IPIPMode) == 0 {
+		pool.Spec.IPIPMode = apiv3.IPIPModeNever
+	}
+
+	// Default VXLANMode to "Never" if not set.
+	if len(pool.Spec.VXLANMode) == 0 {
+		pool.Spec.VXLANMode = apiv3.VXLANModeNever
+	}
+
 	return nil
 }
 
