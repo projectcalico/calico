@@ -22,6 +22,7 @@ except ImportError:
 
 from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
+from networking_calico.compat import constants
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
 from networking_calico import datamodel_v3
@@ -223,6 +224,8 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         Gets extra information for a port that is needed before sending it to
         etcd.
         """
+        network = self.db.get_network(context, port['network_id'])
+        port['mtu'] = network.get('mtu', constants.DEFAULT_NETWORK_MTU)
         port['fixed_ips'] = self.get_fixed_ips_for_port(
             context, port
         )
@@ -411,7 +414,10 @@ def endpoint_spec(port):
 
 
 def endpoint_annotations(port):
-    annotations = {datamodel_v3.ANN_KEY_NETWORK_ID: port['network_id']}
+    annotations = {
+        datamodel_v3.ANN_KEY_NETWORK_ID: port['network_id'],
+        datamodel_v3.ANN_KEY_NETWORK_MTU: str(port['mtu']),
+    }
 
     # If the port has a DNS assignment, represent that as an FQDN annotation.
     dns_assignment = port.get('dns_assignment')

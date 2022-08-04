@@ -33,6 +33,7 @@ INTERFACE_PREFIX = 'interfacePrefix'
 ANN_KEY_PREFIX = 'openstack.projectcalico.org/'
 ANN_KEY_FQDN = ANN_KEY_PREFIX + 'fqdn'
 ANN_KEY_NETWORK_ID = ANN_KEY_PREFIX + 'network-id'
+ANN_KEY_NETWORK_MTU = ANN_KEY_PREFIX + 'network-mtu'
 
 # Namespace constants.
 NO_REGION_NAMESPACE = 'openstack'
