@@ -910,6 +910,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				}
 			}
 
+			if (CALI_F_FROM_WEP && state->ip_src == state->post_nat_ip_dst) {
+				CALI_DEBUG("New loopback SNAT\n");
+				ct_ctx_nat.flags |= CALI_CT_FLAG_SVC_SELF;
+				ctx->state->ct_result.flags |= CALI_CT_FLAG_SVC_SELF;
+			}
+
 			ct_ctx_nat.type = CALI_CT_TYPE_NAT_REV;
 			int err;
 			if ((err = conntrack_create(ctx, &ct_ctx_nat))) {
@@ -1215,7 +1221,7 @@ nat_encap:
 	}
 
 allow:
-	if (CALI_F_FROM_WEP && state->ip_src == state->ip_dst) {
+	if (state->ct_result.flags & CALI_CT_FLAG_SVC_SELF) {
 		CALI_DEBUG("Loopback SNAT\n");
 		seen_mark |=  CALI_SKB_MARK_MASQ;
 		CALI_DEBUG("marking CALI_SKB_MARK_MASQ\n");
