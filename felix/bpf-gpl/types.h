@@ -101,7 +101,7 @@ enum cali_state_flags {
 	CALI_ST_CT_NP_LOOP	  = 0x80,
 	/* CALI_ST_CT_NP_LOOP_REMOTE is set in addition to CALI_ST_CT_NP_LOOP to signal
 	 * that the destination is on a remote node. */
-	CALI_ST_CT_NP_LOOP_REMOTE = 0x40,
+	CALI_ST_CT_NP_LOOP_REMOTE = 0x100,
 };
 
 struct fwd {

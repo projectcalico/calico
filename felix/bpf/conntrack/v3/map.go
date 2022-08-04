@@ -191,6 +191,7 @@ const (
 	FlagSrcDstBA  uint16 = (1 << 8)
 	FlagHostPSNAT uint16 = (1 << 9)
 	FlagSvcSelf   uint16 = (1 << 10)
+	FlagNPLoop    uint16 = (1 << 11)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -454,6 +455,10 @@ func (e Value) String() string {
 
 		if flags&FlagSvcSelf != 0 {
 			flagsStr += " svc-self"
+		}
+
+		if flags&FlagNPLoop != 0 {
+			flagsStr += " np-loop"
 		}
 	}
 
