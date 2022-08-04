@@ -40,6 +40,8 @@ section:
       path: /reference/calicoctl/ipam/show
     - title: configure
       path: /reference/calicoctl/ipam/configure
+    - title: split
+      path: /reference/calicoctl/ipam/split
   - title: node
     path: /reference/calicoctl/node/
     section:
