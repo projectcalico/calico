@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -92,6 +93,32 @@ func runServer(arguments map[string]interface{}) {
 			}).Fatal("File exists and unable to remove.")
 		}
 	}
+	var clientType proto.SyncRequest_ClientType
+
+	clientTypesString := func() string {
+		s := []string{}
+		for k, v := range proto.SyncRequest_ClientType_name {
+			s = append(s, fmt.Sprintf("%d for %s", k, v))
+		}
+		return strings.Join(s, ", ")
+	}
+
+	var clientTypeValueError = fmt.Sprintf(
+		"Invalid DIKASTES_CLIENT_TYPE value. Valid values: %v.",
+		clientTypesString(),
+	)
+
+	s, exists := os.LookupEnv("DIKASTES_CLIENT_TYPE")
+	if ct, err := strconv.Atoi(s); exists && err != nil {
+		log.Fatal(clientTypeValueError)
+	} else {
+		if _, ok := proto.SyncRequest_ClientType_name[int32(ct)]; !ok {
+			log.Fatal(clientTypeValueError)
+		}
+		clientType = proto.SyncRequest_ClientType(ct)
+	}
+	log.Infof("Starting app-policy with mode '%s'", clientType)
+
 	lis, err := net.Listen("unix", filePath)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -118,8 +145,11 @@ func runServer(arguments map[string]interface{}) {
 	authz_v2.RegisterAuthorizationServer(gs, checkServerV2)
 
 	// Synchronize the policy store
-	opts := uds.GetDialOptions()
-	syncClient := syncher.NewClient(dial, opts)
+	opts := []syncher.SyncClientOption{
+		syncher.WithDialOption(uds.GetDialOptions()),
+		syncher.WithClientType(clientType),
+	}
+	syncClient := syncher.NewClient(dial, opts...)
 
 	// Register the health check service, which reports the syncClient's inSync status.
 	proto.RegisterHealthzServer(gs, health.NewHealthCheckService(syncClient))
