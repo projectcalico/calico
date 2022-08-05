@@ -21,7 +21,8 @@ from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
     API_VERSION, name, namespace, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
     SET_DEFAULT, NOT_SUPPORTED, KUBERNETES_NP, NOT_LOCKED_SPLIT, \
-    POOL_NOT_EXIST_CIDR, NOT_KUBERNETES, NO_IPAM, writeyaml
+    POOL_NOT_EXIST_CIDR, INVALID_SPLIT_NUM, POOL_TOO_SMALL, \
+    NOT_KUBERNETES, NO_IPAM, writeyaml
 from tests.st.utils.data import *
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -67,6 +68,14 @@ class TestCalicoctlIPAMSplit(TestBase):
         # Attempt to split a non-existent IP pool
         rc = calicoctl("ipam split --cidr=10.0.2.0/24 4")
         rc.assert_error(text=POOL_NOT_EXIST_CIDR)
+
+        # Attempt to split an IP pool into an invalid number of child pools
+        rc = calicoctl("ipam split --cidr=10.0.1.0/24 3")
+        rc.assert_error(text=INVALID_SPLIT_NUM)
+
+        # Attempt to split an IP pool into more pools than possible given the size
+        rc = calicoctl("ipam split --cidr=10.0.1.0/24 512")
+        rc.assert_error(text=POOL_TOO_SMALL)
 
         # Split the IP pool
         rc = calicoctl("ipam split --cidr=10.0.1.0/24 4")
@@ -142,6 +151,14 @@ class TestCalicoctlIPAMSplit(TestBase):
         # Attempt to split a non-existent IP pool
         rc = calicoctl("ipam split --name=%s 4" % name(ippool_name2_rev1_v6))
         rc.assert_error(text=POOL_NOT_EXIST_CIDR)
+
+        # Attempt to split an IP pool into an invalid number of child pools
+        rc = calicoctl("ipam split --name=%s 3" % name(ippool_name1_rev1_v4))
+        rc.assert_error(text=INVALID_SPLIT_NUM)
+
+        # Attempt to split an IP pool into more pools than possible given the size
+        rc = calicoctl("ipam split --name=%s 512" % name(ippool_name1_rev1_v4))
+        rc.assert_error(text=POOL_TOO_SMALL)
 
         # Split the IP pool
         rc = calicoctl("ipam split --name=%s 4" % name(ippool_name1_rev1_v4))
