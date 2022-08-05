@@ -3002,6 +3002,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	Context("using bogus readiness_gates", func() {
+		logFile := fmt.Sprintf("/home/semaphore/calico/artifacts/bogus_plugin-%s-%s.log", os.Getenv("NUM"), os.Getenv("DATASTORE_TYPE"))
 		netconf := fmt.Sprintf(`
 				{
 				  "cniVersion": "%s",
@@ -3010,7 +3011,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
            			  "nodename_file_optional": true,
-				  "log_level": "info",
+				  "log_level": "debug",
+				  "log_file_path": "%s",
 				  "readiness_gates": "http://localhost:9099/invalid_x12vx",
 			 	  "ipam": {
 				    "type": "calico-ipam"
@@ -3019,7 +3021,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				    "kubeconfig": "/home/user/certs/kubeconfig"
 				  },
 				  "policy": {"type": "k8s"}
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), logFile)
 
 		It("should fail container creation", func() {
 			// Create a new ipPool.
@@ -3062,6 +3064,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				_, err := w.Write([]byte("Ok"))
 				Expect(err).NotTo(HaveOccurred())
 			}))
+			logFile := fmt.Sprintf("/home/semaphore/calico/artifacts/valid_plugin-%s-%s.log", os.Getenv("NUM"), os.Getenv("DATASTORE_TYPE"))
 			testEndpoint := server.URL
 			netconf = fmt.Sprintf(`
 				{
@@ -3071,7 +3074,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
            			  "nodename_file_optional": true,
-				  "log_level": "info",
+				  "log_level": "debug",
+				  "log_file_path": "%s",
 				  "readiness_gates": ["%s"],
 			 	  "ipam": {
 				    "type": "calico-ipam"
@@ -3080,7 +3084,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				    "kubeconfig": "/home/user/certs/kubeconfig"
 				  },
 				  "policy": {"type": "k8s"}
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testEndpoint)
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), logFile, testEndpoint)
 		})
 
 		AfterEach(func() {

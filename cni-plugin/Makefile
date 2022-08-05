@@ -174,11 +174,15 @@ ut-datastore:
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
+	docker logs $(APISERVER_NAME) > /home/semaphore/calico/artifacts/apiserver-$(NUM)-etcd.log
+	docker logs $(CONTROLLER_MANAGER_NAME) > /home/semaphore/calico/artifacts/controller-man-$(NUM)-etcd.log
 	make stop-etcd
 	make stop-k8s-controller
 
 ut-kdd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
+	docker logs $(APISERVER_NAME) > /home/semaphore/calico/artifacts/apiserver-$(NUM)-kdd.log
+	docker logs $(CONTROLLER_MANAGER_NAME) > /home/semaphore/calico/artifacts/controller-man-$(NUM)-kdd.log
 	make stop-etcd
 	make stop-k8s-controller
 
