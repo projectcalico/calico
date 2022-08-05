@@ -208,7 +208,7 @@ Examples:
 func splitCIDR(oldCIDR string, parts int) ([]string, error) {
 	// Validate that we are trying to split the CIDR into a valid number of child CIDRs.
 	power := math.Log2(float64(parts))
-	if math.IsNaN(power) || power == 0 {
+	if math.IsNaN(power) || power == 0 || math.Trunc(power) != power {
 		return nil, fmt.Errorf("Number to split CIDR into is not a valid power of 2: %d", parts)
 	}
 
