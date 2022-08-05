@@ -103,26 +103,26 @@ bin/healthz-%: protobuf $(SRC_FILES)
 # Envoy's validation library.
 # When importing, we must use gogo versions of google/protobuf and
 # google/rpc (aka googleapis).
-PROTOC_IMPORTS =  -I proto\
-		  -I ./
+PROTOC_IMPORTS =  -I proto -I ./
 
-protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
+PROTOS := $(wildcard proto/*.proto)
+.PHONY: $(PROTOS)
+$(PROTOS):
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw 					\
+	--user $(LOCAL_USER_ID):$(LOCAL_USER_ID) 			\
+	$(PROTOC_CONTAINER) 								\
+	$(PROTOC_IMPORTS) 									\
+	$@ 													\
+	--gogofast_out=\
+	Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,\
+	plugins=grpc:proto
 
-proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
-		      $(PROTOC_CONTAINER) \
-		      $(PROTOC_IMPORTS) \
-		      proto/*.proto \
-		      --gogofast_out=plugins=grpc:proto
-	$(MAKE) fix
+protobuf: $(PROTOS) fix
 
-proto/healthz.pb.go: proto/healthz.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
-		      $(PROTOC_CONTAINER) \
-		      $(PROTOC_IMPORTS) \
-		      proto/*.proto \
-		      --gogofast_out=plugins=grpc:proto
-	$(MAKE) fix
 
 
 # Building the image
