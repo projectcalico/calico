@@ -93,29 +93,9 @@ func runServer(arguments map[string]interface{}) {
 			}).Fatal("File exists and unable to remove.")
 		}
 	}
-	var clientType proto.SyncRequest_ClientType
-
-	clientTypesString := func() string {
-		s := []string{}
-		for k, v := range proto.SyncRequest_ClientType_name {
-			s = append(s, fmt.Sprintf("%d for %s", k, v))
-		}
-		return strings.Join(s, ", ")
-	}
-
-	var clientTypeValueError = fmt.Sprintf(
-		"Invalid DIKASTES_CLIENT_TYPE value. Valid values: %v.",
-		clientTypesString(),
-	)
-
-	s, exists := os.LookupEnv("DIKASTES_CLIENT_TYPE")
-	if ct, err := strconv.Atoi(s); exists && err != nil {
-		log.Fatal(clientTypeValueError)
-	} else {
-		if _, ok := proto.SyncRequest_ClientType_name[int32(ct)]; !ok {
-			log.Fatal(clientTypeValueError)
-		}
-		clientType = proto.SyncRequest_ClientType(ct)
+	clientType, err := getClientType()
+	if err != nil {
+		log.Fatal(err)
 	}
 	log.Infof("Starting app-policy with mode '%s'", clientType)
 
@@ -273,4 +253,33 @@ func (h *httpTerminationHandler) RunHTTPServer(addr string, port string) (*http.
 		}
 	}()
 	return httpServer, httpServerWg, nil
+}
+
+func clientTypesString() string {
+	s := []string{}
+	for k, v := range proto.SyncRequest_ClientType_name {
+		s = append(s, fmt.Sprintf("%d for %s", k, v))
+	}
+	return strings.Join(s, ", ")
+}
+
+func getClientType() (proto.SyncRequest_ClientType, error) {
+	var clientType proto.SyncRequest_ClientType
+
+	var clientTypeValueError = fmt.Errorf(
+		"invalid DIKASTES_CLIENT_TYPE value. Valid values: %s.",
+		clientTypesString(),
+	)
+
+	s, exists := os.LookupEnv("DIKASTES_CLIENT_TYPE")
+	if ct, err := strconv.Atoi(s); exists && err != nil {
+		return 0, clientTypeValueError
+	} else {
+		if _, ok := proto.SyncRequest_ClientType_name[int32(ct)]; !ok {
+			return 0, clientTypeValueError
+		}
+		clientType = proto.SyncRequest_ClientType(ct)
+	}
+
+	return clientType, nil
 }
