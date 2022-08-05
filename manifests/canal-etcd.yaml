@@ -786,6 +786,8 @@ spec:
               - /usr/bin/check-status
               - -r
             periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
       volumes:
         # Mount in the etcd TLS secrets with mode 400.
         # See https://kubernetes.io/docs/concepts/configuration/secret/

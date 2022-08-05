@@ -4660,6 +4660,8 @@ spec:
               - /usr/bin/check-status
               - -r
             periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
 ---
 # Source: calico/templates/calico-typha.yaml
 # This manifest creates a Deployment of Typha to back the above service.
