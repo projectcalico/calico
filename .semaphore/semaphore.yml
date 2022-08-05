@@ -98,22 +98,43 @@ blocks:
     jobs:
     - name: "cni-plugin tests 1"
       commands:
-      - ../.semaphore/run-and-monitor ci1.log NUM=1 make ci
+      - ../.semaphore/run-and-monitor ci1.log make ci
+      env_vars:
+      - name: NUM  
+        value: "1"
     - name: "cni-plugin tests 2"
       commands:
-      - ../.semaphore/run-and-monitor ci2.log NUM=2 make ci
+      - ../.semaphore/run-and-monitor ci2.log make ci
+      env_vars:
+      - name: NUM  
+        value: "2"
     - name: "cni-plugin tests 3"
       commands:
-      - ../.semaphore/run-and-monitor ci3.log NUM=3 make ci
+      - ../.semaphore/run-and-monitor ci3.log make ci
+      env_vars:
+      - name: NUM  
+        value: "3"
     - name: "cni-plugin tests 4"
       commands:
-      - ../.semaphore/run-and-monitor ci4.log NUM=4 make ci
+      - ../.semaphore/run-and-monitor ci4.log make ci
+      env_vars:
+      - name: NUM  
+        value: "4"
     - name: "cni-plugin tests 5"
       commands:
-      - ../.semaphore/run-and-monitor ci5.log NUM=5 make ci
+      - ../.semaphore/run-and-monitor ci5.log make ci
+      env_vars:
+      - name: NUM  
+        value: "5"
     - name: "cni-plugin tests 6"
       commands:
-      - ../.semaphore/run-and-monitor ci6.log NUM=6 make ci
+      - ../.semaphore/run-and-monitor ci6.log make ci
+      env_vars:
+      - name: NUM  
+        value: "6"
     - name: "cni-plugin tests 7"
       commands:
-      - ../.semaphore/run-and-monitor ci7.log NUM=7 make ci
+      - ../.semaphore/run-and-monitor ci7.log make ci
+      env_vars:
+      - name: NUM  
+        value: "7"
