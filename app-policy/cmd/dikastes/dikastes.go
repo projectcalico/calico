@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -92,6 +93,12 @@ func runServer(arguments map[string]interface{}) {
 			}).Fatal("File exists and unable to remove.")
 		}
 	}
+	clientType, err := getClientType()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Infof("Starting app-policy with mode '%s'", clientType)
+
 	lis, err := net.Listen("unix", filePath)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -118,8 +125,11 @@ func runServer(arguments map[string]interface{}) {
 	authz_v2.RegisterAuthorizationServer(gs, checkServerV2)
 
 	// Synchronize the policy store
-	opts := uds.GetDialOptions()
-	syncClient := syncher.NewClient(dial, opts)
+	opts := []syncher.SyncClientOption{
+		syncher.WithDialOption(uds.GetDialOptions()),
+		syncher.WithClientType(clientType),
+	}
+	syncClient := syncher.NewClient(dial, opts...)
 
 	// Register the health check service, which reports the syncClient's inSync status.
 	proto.RegisterHealthzServer(gs, health.NewHealthCheckService(syncClient))
@@ -243,4 +253,33 @@ func (h *httpTerminationHandler) RunHTTPServer(addr string, port string) (*http.
 		}
 	}()
 	return httpServer, httpServerWg, nil
+}
+
+func clientTypesString() string {
+	s := []string{}
+	for k, v := range proto.SyncRequest_ClientType_name {
+		s = append(s, fmt.Sprintf("%d for %s", k, v))
+	}
+	return strings.Join(s, ", ")
+}
+
+func getClientType() (proto.SyncRequest_ClientType, error) {
+	var clientType proto.SyncRequest_ClientType
+
+	var clientTypeValueError = fmt.Errorf(
+		"invalid DIKASTES_CLIENT_TYPE value. Valid values: %s.",
+		clientTypesString(),
+	)
+
+	s, exists := os.LookupEnv("DIKASTES_CLIENT_TYPE")
+	if ct, err := strconv.Atoi(s); exists && err != nil {
+		return 0, clientTypeValueError
+	} else {
+		if _, ok := proto.SyncRequest_ClientType_name[int32(ct)]; !ok {
+			return 0, clientTypeValueError
+		}
+		clientType = proto.SyncRequest_ClientType(ct)
+	}
+
+	return clientType, nil
 }
