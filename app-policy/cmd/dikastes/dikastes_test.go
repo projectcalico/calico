@@ -19,6 +19,8 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+
+	"github.com/projectcalico/calico/app-policy/proto"
 )
 
 func TestTerminationHandler_ServeHTTP(t *testing.T) {
@@ -93,6 +95,68 @@ func TestHttpTerminationHandler_RunHTTPServer(t *testing.T) {
 		}
 		if !reflect.DeepEqual(tc.want, got) {
 			t.Fatalf("%s: expected: %v got: %v", tc.name, tc.want, got)
+		}
+	}
+}
+
+func TestGetClientTypeFromEnv(t *testing.T) {
+	type casesForGetClientTypeResult struct {
+		value   proto.SyncRequest_ClientType
+		isError bool
+	}
+	type casesForGetClientType struct {
+		comment  string
+		setup    func(t *testing.T)
+		expected casesForGetClientTypeResult
+	}
+
+	for _, testCase := range []casesForGetClientType{
+		{
+			"no env vars specified",
+			func(t *testing.T) {},
+			casesForGetClientTypeResult{0, false},
+		},
+		{
+			"bad value for env var specified",
+			func(t *testing.T) {
+				t.Setenv("DIKASTES_CLIENT_TYPE", "asdf")
+			},
+			casesForGetClientTypeResult{0, true},
+		},
+		{
+			"value for env var out of range",
+			func(t *testing.T) {
+				t.Setenv("DIKASTES_CLIENT_TYPE", "3")
+			},
+			casesForGetClientTypeResult{0, true},
+		},
+		{
+			"correct env var value 0 PER_POD_APP_POLICY",
+			func(t *testing.T) {
+				t.Setenv("DIKASTES_CLIENT_TYPE", "0")
+			},
+			casesForGetClientTypeResult{0, false},
+		},
+		{
+			"correct env var value 1 PER_HOST_APP_POLICY",
+			func(t *testing.T) {
+				t.Setenv("DIKASTES_CLIENT_TYPE", "1")
+			},
+			casesForGetClientTypeResult{1, false},
+		},
+	} {
+		testCase.setup(t)
+		actual, err := getClientType()
+		if err != nil && !testCase.expected.isError {
+			t.Errorf("assertion failed on test case %s: %v", testCase.comment, err)
+		}
+		if actual != testCase.expected.value {
+			t.Errorf(
+				"assertion failed on test case: %s. expected %v, got %v",
+				testCase.comment,
+				testCase.expected.value,
+				actual,
+			)
 		}
 	}
 }
