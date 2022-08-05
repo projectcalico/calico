@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -657,7 +657,9 @@ func TestSyncRestart(t *testing.T) {
 
 	server := newTestSyncServer(sCtx)
 
-	uut := NewClient(server.GetTarget(), uds.GetDialOptions())
+	uut := NewClient(server.GetTarget(), []SyncClientOption{
+		WithDialOption(uds.GetDialOptions()),
+	}...)
 	stores := make(chan *policystore.PolicyStore)
 
 	cCtx, cCancel := context.WithCancel(context.Background())
@@ -705,7 +707,9 @@ func TestSyncCancelBeforeInSync(t *testing.T) {
 
 	server := newTestSyncServer(sCtx)
 
-	uut := NewClient(server.GetTarget(), uds.GetDialOptions())
+	uut := NewClient(server.GetTarget(), []SyncClientOption{
+		WithDialOption(uds.GetDialOptions()),
+	}...)
 	stores := make(chan *policystore.PolicyStore)
 
 	cCtx, cCancel := context.WithCancel(context.Background())
@@ -728,7 +732,9 @@ func TestSyncCancelAfterInSync(t *testing.T) {
 
 	server := newTestSyncServer(sCtx)
 
-	uut := NewClient(server.GetTarget(), uds.GetDialOptions())
+	uut := NewClient(server.GetTarget(), []SyncClientOption{
+		WithDialOption(uds.GetDialOptions()),
+	}...)
 	stores := make(chan *policystore.PolicyStore)
 
 	cCtx, cCancel := context.WithCancel(context.Background())
@@ -756,7 +762,9 @@ func TestSyncServerCancelBeforeInSync(t *testing.T) {
 
 	server := newTestSyncServer(sCtx)
 
-	uut := NewClient(server.GetTarget(), uds.GetDialOptions())
+	uut := NewClient(server.GetTarget(), []SyncClientOption{
+		WithDialOption(uds.GetDialOptions()),
+	}...)
 	stores := make(chan *policystore.PolicyStore)
 
 	cCtx, cCancel := context.WithCancel(context.Background())
