@@ -30,9 +30,10 @@ import (
 const PolicySyncRetryTime = 500 * time.Millisecond
 
 type syncClient struct {
-	target   string
-	dialOpts []grpc.DialOption
-	inSync   bool
+	target     string
+	dialOpts   []grpc.DialOption
+	inSync     bool
+	clientType proto.SyncRequest_ClientType
 }
 
 type SyncClient interface {
@@ -46,9 +47,27 @@ type SyncClient interface {
 	health.ReadinessReporter
 }
 
+type SyncClientOption func(*syncClient)
+
+func WithDialOption(o []grpc.DialOption) SyncClientOption {
+	return func(sc *syncClient) {
+		sc.dialOpts = o
+	}
+}
+
+func WithClientType(ct proto.SyncRequest_ClientType) SyncClientOption {
+	return func(sc *syncClient) {
+		sc.clientType = ct
+	}
+}
+
 // NewClient creates a new syncClient.
-func NewClient(target string, opts []grpc.DialOption) SyncClient {
-	return &syncClient{target: target, dialOpts: opts}
+func NewClient(target string, opts ...SyncClientOption) SyncClient {
+	res := &syncClient{target: target}
+	for _, opt := range opts {
+		opt(res)
+	}
+	return res
 }
 
 func (s *syncClient) Sync(cxt context.Context, stores chan<- *policystore.PolicyStore) {
@@ -97,7 +116,9 @@ func (s *syncClient) syncStore(cxt context.Context, store *policystore.PolicySto
 	log.Info("Successfully connected to Policy Sync server")
 	defer conn.Close()
 	client := proto.NewPolicySyncClient(conn)
-	stream, err := client.Sync(cxt, &proto.SyncRequest{})
+	stream, err := client.Sync(cxt, &proto.SyncRequest{
+		ClientType: s.clientType,
+	})
 	if err != nil {
 		log.Warnf("failed to synchronize with Policy Sync server: %v", err)
 		s.inSync = false

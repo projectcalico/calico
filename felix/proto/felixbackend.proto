@@ -26,6 +26,11 @@ service PolicySync {
 }
 
 message SyncRequest {
+  enum ClientType {
+    PER_POD_APP_POLICY = 0;
+    PER_HOST_APP_POLICY = 1;
+  }
+  ClientType clientType = 100;
 }
 
 // Rationale for having explicit Remove messages rather than sending and update
