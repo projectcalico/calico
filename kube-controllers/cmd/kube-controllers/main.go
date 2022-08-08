@@ -268,10 +268,14 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 				)
 			}
 		}(k8sCheckDone)
-		k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do(ctx).StatusCode(&healthStatus)
+
+		// Call the /healthz endpoint using the same clientset as our main controllers. This allows us to share a connection
+		// and gives us a good idea of whether or not the other controllers are currently experiencing issues accessing the apiserver.
+		result := k8sClientset.Discovery().RESTClient().Get().Timeout(20 * time.Second).AbsPath("/healthz").Do(ctx).StatusCode(&healthStatus)
 		k8sCheckDone <- nil
+
 		if healthStatus != http.StatusOK {
-			log.WithError(err).Errorf("Failed to reach apiserver")
+			log.WithError(result.Error()).WithField("status", healthStatus).Errorf("Received bad status code from apiserver")
 			s.SetReady(
 				"KubeAPIServer",
 				false,
