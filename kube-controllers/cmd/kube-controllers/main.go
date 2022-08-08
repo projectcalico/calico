@@ -272,10 +272,17 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 				)
 			}
 		}(k8sCheckDone)
-		k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do(ctx).StatusCode(&healthStatus)
+
+		// Build a new context for the status call, so we can time it out if needed and retry.
+		statusCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		result := k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do(statusCtx).StatusCode(&healthStatus)
+		cancel()
 		k8sCheckDone <- nil
+
+		// Check the result of the healthz call.
+		err = result.Error()
 		if healthStatus != http.StatusOK {
-			log.WithError(err).Errorf("Failed to reach apiserver")
+			log.WithError(err).WithField("status", healthStatus).Errorf("Received bad status code from apiserver")
 			s.SetReady(
 				"KubeAPIServer",
 				false,
