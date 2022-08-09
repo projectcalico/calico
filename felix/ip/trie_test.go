@@ -251,6 +251,35 @@ var _ = Describe("CIDRTrie tests", func() {
 			Expect(func() { remove("10.0.0.1/8") }).To(Panic())
 			Expect(func() { lookup("10.0.0.1/8") }).To(Panic())
 		})
+
+		It("should correctly Get() a CIDR that involves a /63 prefix NthBit() (see CORE-7905)", func() {
+			cidr := "2600:1f13:f7f:1a00:33e1:24c:f32a:297f/128"
+
+			update("2001::/64")
+			update("2001::243a:420b:abbf:e340/122")
+			update("2001::7c7d:84ff:962c:bf40/128")
+			update("2001::b82f:7977:6300:6f00/128")
+			update("2001::bd26:db96:b0ef:d240/122")
+			update("2001::bd26:db96:b0ef:d240/128")
+			update("2600:1f13:f7f:1a01::3d92/128")
+			update(cidr)
+			update("2600:1f13:f7f:1a02:d19a:acde:2127:dd89/128")
+
+			Expect(contents()).To(ConsistOf(
+				"2001::/64",
+				"2001::243a:420b:abbf:e340/122",
+				"2001::7c7d:84ff:962c:bf40/128",
+				"2001::b82f:7977:6300:6f00/128",
+				"2001::bd26:db96:b0ef:d240/122",
+				"2001::bd26:db96:b0ef:d240/128",
+				"2600:1f13:f7f:1a01::3d92/128",
+				cidr,
+				"2600:1f13:f7f:1a02:d19a:acde:2127:dd89/128",
+			))
+
+			parsedCIDR := ip.MustParseCIDROrIP(cidr)
+			Expect(trie.Get(parsedCIDR)).To(Not(BeNil()))
+		})
 	})
 
 	Context("LPM", func() {
@@ -366,7 +395,6 @@ var _ = Describe("CIDRTrie tests", func() {
 				})
 
 				It("should find root prefix", func() {
-					// Expect(trie).To(BeNil()) //TODO
 					Expect(lpm("fc00:fe11::/32", "fc00:fe11::1/104")).NotTo(BeNil())
 				})
 
