@@ -337,12 +337,12 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name2 + ") with error:"))
 
 			By("Adding an IPPool with empty string for IPIPMode and VXLANMode and expecting it to be defaulted to 'Never'")
-			res, outError = c.IPPools().Create(ctx, &apiv3.IPPool{
+			res, outError = c.IPPools().DebugUnsafeCreateNoDefaults(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: name3},
 				Spec:       spec3,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3_1))
+			Expect(res).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3))
 
 			res, outError = c.IPPools().Get(ctx, name3, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())

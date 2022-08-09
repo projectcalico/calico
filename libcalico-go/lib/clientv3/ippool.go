@@ -42,6 +42,7 @@ type IPPoolInterface interface {
 	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 	UnsafeCreate(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error)
 	UnsafeDelete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.IPPool, error)
+	DebugUnsafeCreateNoDefaults(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error)
 }
 
 // ipPools implements IPPoolInterface
@@ -513,6 +514,25 @@ func (r ipPools) UnsafeCreate(ctx context.Context, res *apiv3.IPPool, opts optio
 	// Validate the IPPool before creating the resource.
 	if err := r.validateAndSetDefaults(ctx, res, nil, true); err != nil {
 		return nil, err
+	}
+
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
+	out, err := r.client.resources.Create(ctx, opts, apiv3.KindIPPool, res)
+	if out != nil {
+		return out.(*apiv3.IPPool), err
+	}
+	return nil, err
+}
+
+func (r ipPools) DebugUnsafeCreateNoDefaults(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
 	}
 
 	if err := validator.Validate(res); err != nil {
