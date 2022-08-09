@@ -518,8 +518,7 @@ if ($platform -EQ "ec2") {
 if ($platform -EQ "gce") {
     $gceNodeName = Invoke-RestMethod -UseBasicParsing -Headers @{"Metadata-Flavor"="Google"} "http://metadata.google.internal/computeMetadata/v1/instance/hostname" -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for GCE, node name $gceNodeName ..."
-    $gceNodeNameQuote = """$gceNodeName"""
-    Set-ConfigParameters -var 'NODENAME' -value $gceNodeNameQuote
+    Set-ConfigParameters -var 'NODENAME' -value $gceNodeName
 
     $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
