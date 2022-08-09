@@ -253,6 +253,14 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		AllowSpoofedSourcePrefixes: requestedSourcePrefixes,
 	}
 
+	for key := range pod.Annotations {
+		if strings.HasPrefix(key, "k8s.v1.cni.cncf.io/network-status") {
+			if wep.Annotations == nil {
+				wep.Annotations = make(map[string]string)
+			}
+			wep.Annotations[key] = pod.Annotations[key]
+		}
+	}
 	// Embed the workload endpoint into a KVPair.
 	kvp := model.KVPair{
 		Key: model.ResourceKey{
