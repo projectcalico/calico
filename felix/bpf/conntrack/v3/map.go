@@ -192,6 +192,7 @@ const (
 	FlagHostPSNAT uint16 = (1 << 9)
 	FlagSvcSelf   uint16 = (1 << 10)
 	FlagNPLoop    uint16 = (1 << 11)
+	FlagNPRemote  uint16 = (1 << 12)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -459,6 +460,10 @@ func (e Value) String() string {
 
 		if flags&FlagNPLoop != 0 {
 			flagsStr += " np-loop"
+		}
+
+		if flags&FlagNPRemote != 0 {
+			flagsStr += " np-remote"
 		}
 	}
 

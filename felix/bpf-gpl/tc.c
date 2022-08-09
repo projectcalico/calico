@@ -285,12 +285,6 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
-/*
-	if (CALI_F_TO_HEP && ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
-		ctx->state->flags |= CALI_ST_CT_NP_LOOP;
-	}
-
-*/
 
 	if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
 			(ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED ||
@@ -525,15 +519,21 @@ syn_force_policy:
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
 	}
+
 	if (CALI_F_TO_HEP && !skb_seen(ctx->skb)) {
+		CALI_DEBUG("Host accesses nodeport backend %x:%d\n",
+			   bpf_htonl(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
 		if (cali_rt_flags_local_workload(dest_rt->flags)) {
 			CALI_DEBUG("NP redir on HEP - skip policy\n");
 			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 			ctx->state->pol_rc = CALI_POL_ALLOW;
 			goto skip_policy;
-		} else if (CALI_F_LO && cali_rt_flags_remote_workload(dest_rt->flags)) {
-			CALI_DEBUG("NP redir remote on LO\n");
-			ctx->state->flags |= CALI_ST_CT_NP_LOOP | CALI_ST_CT_NP_LOOP_REMOTE;
+		} else if (cali_rt_flags_remote_workload(dest_rt->flags)) {
+			if (CALI_F_LO) {
+				CALI_DEBUG("NP redir remote on LO\n");
+				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
+			}
+			ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
 			ctx->state->pol_rc = CALI_POL_ALLOW;
 			/* XXX We need to do HEP policy here, where we do NAT. */
 		}
@@ -832,6 +832,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 		if (CALI_F_TO_HEP && !CALI_F_NAT_IF && state->flags & CALI_ST_CT_NP_LOOP) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_NP_LOOP;
+		}
+		if (CALI_F_TO_HEP && !CALI_F_NAT_IF && state->flags & CALI_ST_CT_NP_REMOTE) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_NP_REMOTE;
 		}
 		if (state->flags & CALI_ST_HOST_PSNAT) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_HOST_PSNAT;
@@ -1286,6 +1289,9 @@ allow:
 	}
 
 	if (CALI_F_TO_HEP && !skb_seen(skb)) {
+		CALI_DEBUG("Host accesses nodeport backend %x:%d\n",
+			   bpf_htonl(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
+
 		struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
 
 		if (r) {
@@ -1294,12 +1300,17 @@ allow:
 				CALI_DEBUG("NP local WL on HEP\n");
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 				fib = true; /* Enforce FIB since we want to redirect */
-			} else if (CALI_F_LO && cali_rt_flags_remote_workload(r->flags)) {
-				state->ct_result.ifindex_fwd = NATIN_IFACE  ;
-				CALI_DEBUG("NP remote WL on LO\n");
-				ctx->state->flags |= CALI_ST_CT_NP_LOOP | CALI_ST_CT_NP_LOOP_REMOTE;
+			} else if (cali_rt_flags_remote_workload(r->flags)) {
+				if (CALI_F_LO) {
+					state->ct_result.ifindex_fwd = NATIN_IFACE  ;
+					CALI_DEBUG("NP remote WL on LO\n");
+					ctx->state->flags |= CALI_ST_CT_NP_LOOP;
+				}
+				ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
 				fib = true; /* Enforce FIB since we want to redirect */
 			}
+		} else {
+			/* might go outside the cluster */
 		}
 	}
 

@@ -26,9 +26,9 @@ static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 	return true;
 #else
 	/* If we are turnign packets around on lo to a remote pod, approve the
-	 * fib as it does not concern apossibly  not ready local WEP.
+	 * fib as it does not concern a possibly not ready local WEP.
 	 */
-	if (CALI_F_TO_HEP && ctx->state->flags & CALI_ST_CT_NP_LOOP_REMOTE) {
+	if (CALI_F_TO_HEP && ctx->state->flags & CALI_ST_CT_NP_REMOTE) {
 		return true;
 	}
 
@@ -293,7 +293,7 @@ cancel_fib:
 
 			mark = CALI_SKB_MARK_BYPASS;
 
-			if (ctx->state->flags & CALI_ST_CT_NP_LOOP_REMOTE) {
+			if (ctx->state->flags & CALI_ST_CT_NP_REMOTE) {
 				mark = CALI_SKB_MARK_BYPASS_FWD;
 			}
 		}
