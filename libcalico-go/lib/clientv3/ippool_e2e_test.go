@@ -18,16 +18,20 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	backendapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -337,17 +341,40 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name2 + ") with error:"))
 
 			By("Adding an IPPool with empty string for IPIPMode and VXLANMode and expecting it to be defaulted to 'Never'")
-			res, outError = c.IPPools().Create(ctx, &apiv3.IPPool{
-				ObjectMeta: metav1.ObjectMeta{Name: name3},
-				Spec:       spec3,
-			}, options.SetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3_1))
 
+			// Get the Calico backend client.
+			type accessor interface {
+				Backend() backendapi.Client
+			}
+			bc := c.(accessor).Backend()
+
+			// Add the IPPool through the backend so it skips setting default values
+			kvp := &model.KVPair{
+				Key: model.ResourceKey{
+					Name: name3,
+					Kind: apiv3.KindIPPool,
+				},
+				Value: &apiv3.IPPool{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              name3,
+						CreationTimestamp: metav1.Now(),
+						ResourceVersion:   "1",
+						UID:               types.UID(uuid.NewString()),
+					},
+					TypeMeta: metav1.TypeMeta{Kind: apiv3.KindIPPool, APIVersion: apiv3.GroupVersionCurrent},
+					Spec:     spec3,
+				},
+			}
+			outKVP, outError := bc.Create(ctx, kvp)
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(outKVP.Value).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3))
+
+			// Verify Get() on the IPPool sets the encapsulations to "Never"
 			res, outError = c.IPPools().Get(ctx, name3, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3_1))
 
+			// Verify List() on the IPPool sets the encapsulations to "Never"
 			outList, outError = c.IPPools().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
