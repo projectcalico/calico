@@ -15,6 +15,7 @@
 package rules_test
 
 import (
+	"fmt"
 	"strings"
 
 	. "github.com/projectcalico/calico/felix/rules"
@@ -36,6 +37,15 @@ var _ = Describe("Endpoints", func() {
 
 	for _, trueOrFalse := range []bool{true, false} {
 		kubeIPVSEnabled := trueOrFalse
+		var dropAction Action
+		dropAction = DropAction{}
+		dropActionCommand := "DROP"
+		dropActionString := "Drop"
+		if trueOrFalse {
+			dropAction = RejectAction{}
+			dropActionCommand = "REJECT"
+			dropActionString = "Reject"
+		}
 		var rrConfigNormalMangleReturn = Config{
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
@@ -49,6 +59,7 @@ var _ = Describe("Endpoints", func() {
 			IptablesMarkNonCaliEndpoint: 0x0100,
 			KubeIPVSSupportEnabled:      kubeIPVSEnabled,
 			IptablesMangleAllowAction:   "RETURN",
+			DropActionOverride:          dropActionCommand,
 			VXLANPort:                   4789,
 			VXLANVNI:                    4096,
 		}
@@ -67,6 +78,7 @@ var _ = Describe("Endpoints", func() {
 			KubeIPVSSupportEnabled:      kubeIPVSEnabled,
 			DisableConntrackInvalid:     true,
 			IptablesFilterAllowAction:   "RETURN",
+			DropActionOverride:          dropActionCommand,
 			VXLANPort:                   4789,
 			VXLANVNI:                    4096,
 		}
@@ -77,13 +89,13 @@ var _ = Describe("Endpoints", func() {
 		dropVXLANRule := Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(VXLANPort)),
-			Action:  DropAction{},
-			Comment: []string{"Drop VXLAN encapped packets originating in workloads"},
+			Action:  dropAction,
+			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", dropActionString)},
 		}
 		dropIPIPRule := Rule{
 			Match:   Match().ProtocolNum(ProtoIPIP),
-			Action:  DropAction{},
-			Comment: []string{"Drop IPinIP encapped packets originating in workloads"},
+			Action:  dropAction,
+			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", dropActionString)},
 		}
 
 		Context("with normal config", func() {
@@ -107,11 +119,11 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
-							{Action: DropAction{},
-								Comment: []string{"Drop if no profiles matched"}},
+							{Action: dropAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 						},
 					},
 					{
@@ -121,13 +133,13 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 							dropVXLANRule,
 							dropIPIPRule,
-							{Action: DropAction{},
-								Comment: []string{"Drop if no profiles matched"}},
+							{Action: dropAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 						},
 					},
 					{
@@ -150,14 +162,14 @@ var _ = Describe("Endpoints", func() {
 					{
 						Name: "cali-tw-cali1234",
 						Rules: []Rule{
-							{Action: DropAction{},
+							{Action: dropAction,
 								Comment: []string{"Endpoint admin disabled"}},
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
 						Rules: []Rule{
-							{Action: DropAction{},
+							{Action: dropAction,
 								Comment: []string{"Endpoint admin disabled"}},
 						},
 					},
@@ -186,7 +198,7 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
@@ -203,8 +215,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
-								Action:  DropAction{},
-								Comment: []string{"Drop if no policies passed packet"}},
+								Action:  dropAction,
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", dropActionString)}},
 
 							{Action: JumpAction{Target: "cali-pri-prof1"}},
 							{Match: Match().MarkSingleBitSet(0x8),
@@ -215,8 +227,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"}},
 
-							{Action: DropAction{},
-								Comment: []string{"Drop if no profiles matched"}},
+							{Action: dropAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 						},
 					},
 					{
@@ -226,7 +238,7 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 							dropVXLANRule,
@@ -245,8 +257,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
-								Action:  DropAction{},
-								Comment: []string{"Drop if no policies passed packet"}},
+								Action:  dropAction,
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", dropActionString)}},
 
 							{Action: JumpAction{Target: "cali-pro-prof1"}},
 							{Match: Match().MarkSingleBitSet(0x8),
@@ -257,8 +269,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"}},
 
-							{Action: DropAction{},
-								Comment: []string{"Drop if no profiles matched"}},
+							{Action: dropAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 						},
 					},
 					{
@@ -283,7 +295,7 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							// Host endpoints get extra failsafe rules.
 							{Action: JumpAction{Target: "cali-failsafe-out"}},
@@ -303,8 +315,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
-								Action:  DropAction{},
-								Comment: []string{"Drop if no policies passed packet"}},
+								Action:  dropAction,
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", dropActionString)}},
 
 							{Action: JumpAction{Target: "cali-pro-prof1"}},
 							{Match: Match().MarkSingleBitSet(0x8),
@@ -315,8 +327,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"}},
 
-							{Action: DropAction{},
-								Comment: []string{"Drop if no profiles matched"}},
+							{Action: dropAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 						},
 					},
 					{
@@ -326,7 +338,7 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							// Host endpoints get extra failsafe rules.
 							{Action: JumpAction{Target: "cali-failsafe-in"}},
@@ -346,8 +358,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
-								Action:  DropAction{},
-								Comment: []string{"Drop if no policies passed packet"}},
+								Action:  dropAction,
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", dropActionString)}},
 
 							{Action: JumpAction{Target: "cali-pri-prof1"}},
 							{Match: Match().MarkSingleBitSet(0x8),
@@ -358,8 +370,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"}},
 
-							{Action: DropAction{},
-								Comment: []string{"Drop if no profiles matched"}},
+							{Action: dropAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 						},
 					},
 					{
@@ -369,7 +381,7 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
@@ -386,8 +398,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
-								Action:  DropAction{},
-								Comment: []string{"Drop if no policies passed packet"}},
+								Action:  dropAction,
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", dropActionString)}},
 						},
 					},
 					{
@@ -397,7 +409,7 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
@@ -414,8 +426,8 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
-								Action:  DropAction{},
-								Comment: []string{"Drop if no policies passed packet"}},
+								Action:  dropAction,
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", dropActionString)}},
 						},
 					},
 					{
@@ -490,7 +502,7 @@ var _ = Describe("Endpoints", func() {
 							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: ReturnAction{}},
 							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
+								Action: dropAction},
 
 							// Host endpoints get extra failsafe rules.
 							{Action: JumpAction{Target: "cali-failsafe-in"}},
@@ -539,8 +551,8 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Action: DropAction{},
-								Comment: []string{"Drop if no profiles matched"}},
+							{Action: dropAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 						},
 					},
 					{
@@ -556,8 +568,8 @@ var _ = Describe("Endpoints", func() {
 							dropVXLANRule,
 							dropIPIPRule,
 
-							{Action: DropAction{},
-								Comment: []string{"Drop if no profiles matched"}},
+							{Action: dropAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 						},
 					},
 					{
@@ -621,11 +633,11 @@ var _ = Describe("Endpoints", func() {
 								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 									Action: AcceptAction{}},
 								{Match: Match().ConntrackState("INVALID"),
-									Action: DropAction{}},
+									Action: dropAction},
 
 								{Action: ClearMarkAction{Mark: 0x8}},
-								{Action: DropAction{},
-									Comment: []string{"Drop if no profiles matched"}},
+								{Action: dropAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 							},
 						},
 						{
@@ -635,12 +647,12 @@ var _ = Describe("Endpoints", func() {
 								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 									Action: AcceptAction{}},
 								{Match: Match().ConntrackState("INVALID"),
-									Action: DropAction{}},
+									Action: dropAction},
 
 								{Action: ClearMarkAction{Mark: 0x8}},
 								dropIPIPRule,
-								{Action: DropAction{},
-									Comment: []string{"Drop if no profiles matched"}},
+								{Action: dropAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 							},
 						},
 						{
@@ -672,11 +684,11 @@ var _ = Describe("Endpoints", func() {
 								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 									Action: AcceptAction{}},
 								{Match: Match().ConntrackState("INVALID"),
-									Action: DropAction{}},
+									Action: dropAction},
 
 								{Action: ClearMarkAction{Mark: 0x8}},
-								{Action: DropAction{},
-									Comment: []string{"Drop if no profiles matched"}},
+								{Action: dropAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 							},
 						},
 						{
@@ -686,12 +698,12 @@ var _ = Describe("Endpoints", func() {
 								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 									Action: AcceptAction{}},
 								{Match: Match().ConntrackState("INVALID"),
-									Action: DropAction{}},
+									Action: dropAction},
 
 								{Action: ClearMarkAction{Mark: 0x8}},
 								dropVXLANRule,
-								{Action: DropAction{},
-									Comment: []string{"Drop if no profiles matched"}},
+								{Action: dropAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 							},
 						},
 						{
@@ -724,11 +736,11 @@ var _ = Describe("Endpoints", func() {
 								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 									Action: AcceptAction{}},
 								{Match: Match().ConntrackState("INVALID"),
-									Action: DropAction{}},
+									Action: dropAction},
 
 								{Action: ClearMarkAction{Mark: 0x8}},
-								{Action: DropAction{},
-									Comment: []string{"Drop if no profiles matched"}},
+								{Action: dropAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 							},
 						},
 						{
@@ -738,11 +750,11 @@ var _ = Describe("Endpoints", func() {
 								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 									Action: AcceptAction{}},
 								{Match: Match().ConntrackState("INVALID"),
-									Action: DropAction{}},
+									Action: dropAction},
 
 								{Action: ClearMarkAction{Mark: 0x8}},
-								{Action: DropAction{},
-									Comment: []string{"Drop if no profiles matched"}},
+								{Action: dropAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", dropActionString)}},
 							},
 						},
 						{
