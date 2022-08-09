@@ -239,7 +239,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		c.syncer.Start()
 	}
 
-	if len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 {
+	if len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 || len(lbCIDRs) != 0 {
 		// Create and start route generator, if configured to do so. This can either be through
 		// environment variable, or the data store via BGPConfiguration.
 		// We only turn it on if configured to do so, to avoid needing to watch services / endpoints.
@@ -1368,7 +1368,21 @@ func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
 }
 
 func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
-	if err := c.updateGlobalRoutes(lbIPs, c.LoadBalancerIPRouteIndex); err == nil {
+	//	We advertise the given LB IP ranges from every node in order to satisfy services with external traffic policy of "cluster".
+	//	However, we don't want to advertise single IPs in this way because it breaks any "local" type services the user creates,
+	//	which should instead be advertised from only a subset of nodes.
+	//	So, we handle advertisement of any single-addresses found in the config on a per-service basis from within the routeGenerator.
+	var globalLbIPs []string
+	for _, lbIP := range lbIPs {
+		if strings.Contains(lbIP, ":") {
+			if !strings.HasSuffix(lbIP, "/128") {
+				globalLbIPs = append(globalLbIPs, lbIP)
+			}
+		} else if !strings.HasSuffix(lbIP, "/32") {
+			globalLbIPs = append(globalLbIPs, lbIP)
+		}
+	}
+	if err := c.updateGlobalRoutes(globalLbIPs, c.LoadBalancerIPRouteIndex); err == nil {
 		c.loadBalancerIPs = lbIPs
 		c.loadBalancerIPNets = parseIPNets(c.loadBalancerIPs)
 		log.Infof("Updated with new Loadbalancer IP CIDRs: %s", lbIPs)
@@ -1781,6 +1795,7 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 }
 
 func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv3.BGPPeer) {
+
 	// Get the password, if one is configured.
 	password := c.getPassword(v3res)
 
