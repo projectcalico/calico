@@ -57,8 +57,10 @@ type localNetworking struct {
 	namespace ns.NetNS
 }
 
-var localNetworkingMap = map[string]*localNetworking{}
-var localNetworkingMutex = sync.Mutex{}
+var (
+	localNetworkingMap   = map[string]*localNetworking{}
+	localNetworkingMutex = sync.Mutex{}
+)
 
 func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spec podSpec) *v1.Pod {
 	// Create a handle for our operations in this function, this ensures that they all go through the
@@ -68,7 +70,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 	// that load causes the issue and we put less load on the kernel.
 	handle, err := netlink.NewHandle()
 	panicIfError(err)
-	defer handle.Delete()
+	defer handle.Close()
 
 	name := spec.name
 	if name == "" {
@@ -81,10 +83,11 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 	}
 	pod_in := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: v1.PodSpec{Containers: []v1.Container{{
-			Name:  fmt.Sprintf("container-%s", name),
-			Image: "ignore",
-		}},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name:  fmt.Sprintf("container-%s", name),
+				Image: "ignore",
+			}},
 			NodeName: host.name,
 		},
 		Status: v1.PodStatus{
