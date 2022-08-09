@@ -647,7 +647,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
 			result.nat_ip = tracking_v->orig_ip;
 		} else if (CALI_F_TO_HOST ||
-				(CALI_F_TO_HEP && result.flags & (CALI_CT_FLAG_VIA_NAT_IF | CALI_CT_FLAG_NP_LOOP))) {
+				(CALI_F_TO_HEP && result.flags & (CALI_CT_FLAG_VIA_NAT_IF |
+								  CALI_CT_FLAG_NP_LOOP |
+								  CALI_CT_FLAG_NP_REMOTE))) {
 			// Since we found a forward NAT entry, we know that it's the destination
 			// that needs to be NATted.
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -714,6 +716,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		snat |= result.flags & CALI_CT_FLAG_VIA_NAT_IF;
 		snat |= result.flags & CALI_CT_FLAG_HOST_PSNAT;
 		snat |= result.flags & CALI_CT_FLAG_NP_LOOP;
+		snat |= result.flags & CALI_CT_FLAG_NP_REMOTE;
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {

@@ -843,6 +843,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			defer wg.Done()
 			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
+			if err == nil {
+				err = m.dp.setAcceptLocal(ifaceName, true)
+			}
 			mutex.Lock()
 			errs[ifaceName] = err
 			mutex.Unlock()

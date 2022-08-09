@@ -99,9 +99,8 @@ enum cali_state_flags {
 	/* CALI_ST_CT_NP_LOOP tells CT when creating an entry that we are
 	 * turnign this packet around from a nodeport to a local pod. */
 	CALI_ST_CT_NP_LOOP	  = 0x80,
-	/* CALI_ST_CT_NP_LOOP_REMOTE is set in addition to CALI_ST_CT_NP_LOOP to signal
-	 * that the destination is on a remote node. */
-	CALI_ST_CT_NP_LOOP_REMOTE = 0x100,
+	/* CALI_ST_CT_NP_REMOTE is set when host is accessing a remote nodeport. */
+	CALI_ST_CT_NP_REMOTE	  = 0x100,
 };
 
 struct fwd {
