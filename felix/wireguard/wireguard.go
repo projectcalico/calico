@@ -284,7 +284,7 @@ func NewWithShims(
 		writeProcSys:         writeProcSys,
 		opRecorder:           opRecorder,
 		logCtx:               logCtx,
-		rateLimitedLogger:    lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(4 * time.Hour)),
+		rateLimitedLogger:    lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(4 * time.Hour)).WithFields(logCtx.Data),
 	}
 }
 
@@ -664,7 +664,7 @@ func (w *Wireguard) Apply() (err error) {
 	}
 
 	if w.wireguardNotSupported {
-		w.rateLimitedLogger.WithFields(w.logCtx.Data).Info("Wireguard is not supported")
+		w.rateLimitedLogger.Info("Wireguard is not supported")
 		return
 	}
 
