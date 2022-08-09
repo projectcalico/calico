@@ -7,7 +7,8 @@
   known to work well with {{site.prodname}} and {{include.orch}}.
   - RedHat Linux 7{% if include.orch == "Kubernetes" or include.orch == "host protection" %}
   - CentOS 7
-  - CoreOS Container Linux stable
+  - Flatcar Container Linux
+  - Fedora CoreOS
   - Ubuntu 16.04
   - Debian 8
   {% endif %}{% if include.orch == "OpenShift" %}
