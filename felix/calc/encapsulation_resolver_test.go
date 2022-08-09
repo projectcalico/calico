@@ -179,19 +179,6 @@ var _ = Describe("EncapsulationCalculator", func() {
 				[]model.KVPair{*getAPIPool("fe80::0/122", apiv3.IPIPModeNever, apiv3.VXLANModeCrossSubnet)},
 				nil, nil, nil, nil,
 				false, false, true),
-			Entry("Initialize with initPools with empty string for encaps",
-				nil, nil, nil, nil,
-				&model.KVPairList{
-					KVPairs: []*model.KVPair{
-						getAPIPool("192.168.1.0/24", "", ""),
-						getAPIPool("192.168.2.0/24", "", ""),
-					},
-				},
-				false, false, false),
-			Entry("API pool with empty string for encaps",
-				[]model.KVPair{*getAPIPool("192.168.1.0/24", "", "")},
-				nil, nil, nil, nil,
-				false, false, false),
 		)
 	})
 	Context("FelixConfig set", func() {
@@ -227,6 +214,13 @@ var _ = Describe("EncapsulationCalculator", func() {
 				[]model.KVPair{*getModelPool("192.168.3.0/24", encap.Undefined, encap.Always), *getModelPool("192.168.4.0/24", encap.CrossSubnet, encap.Undefined)},
 				false, false),
 		)
+	})
+	Describe("Invalid IPIPMode and/or VXLANMode", func() {
+		err := encapsulationCalculator.handlePool(*getAPIPool("192.168.11.0/24", "", ""))
+		Expect(err.Error()).To(Equal("invalid IPIPMode \"\" for 192.168.11.0/24"))
+
+		err = encapsulationCalculator.handlePool(*getAPIPool("192.168.12.0/24", apiv3.IPIPModeNever, ""))
+		Expect(err.Error()).To(Equal("invalid VXLANMode \"\" for 192.168.12.0/24"))
 	})
 })
 
