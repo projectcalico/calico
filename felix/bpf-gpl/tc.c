@@ -6,6 +6,7 @@
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/tcp.h>
 #include <linux/icmp.h>
 #include <linux/in.h>
@@ -34,10 +35,11 @@
 #include "sendrecv.h"
 #include "fib.h"
 #include "rpf.h"
+#include "parsing.h"
+#include "ipv6.h"
 #include "tc.h"
 #include "tcv6.h"
 #include "policy_program.h"
-#include "parsing.h"
 #include "failsafe.h"
 #include "metadata.h"
 #include "bpf_helpers.h"
@@ -86,6 +88,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.ipheader_len = IP_SIZE,
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");
@@ -129,7 +132,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				goto deny;
 			}
 
-			__be32 ip_src = ctx.ip_header->saddr;
+			__be32 ip_src = ip_hdr(&ctx)->saddr;
 			if (ip_src == HOST_IP) {
 				CALI_DEBUG("src ip fixup not needed %x\n", bpf_ntohl(ip_src));
 				goto allow;
@@ -138,8 +141,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 
 			/* XXX do a proper CT lookup to find this */
-			ctx.ip_header->saddr = HOST_IP;
-			int l3_csum_off = skb_iphdr_offset() + offsetof(struct iphdr, check);
+			ip_hdr(&ctx)->saddr = HOST_IP;
+			int l3_csum_off = skb_iphdr_offset(&ctx) + offsetof(struct iphdr, check);
 
 			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
 			if (res) {
@@ -159,16 +162,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	case PARSING_OK_V6:
 		// An IPv6 packet, so we should jump to the relevant IPv6 programs
-		// TODO: Replace this logic with the proper implementation, and finally a
-		// tail call to the IPv6 prologue program
-		if (CALI_F_WEP) {
-			CALI_DEBUG("IPv6 from workload: drop\n");
-			goto deny;
-		}
-		CALI_DEBUG("IPv6 on host interface: allow\n");
-		fwd_fib_set(&ctx.fwd, false);
-		ctx.fwd.res = TC_ACT_UNSPEC;
-		goto finalize;
+		CALI_DEBUG("About to jump to IPv6 prologue program\n");
+		CALI_JUMP_TO(ctx.skb, PROG_INDEX_V6_PROLOGUE);
+		CALI_DEBUG("Jump to IPv6 prologue failed.\n");
+		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		// A packet that we automatically let through
 		fwd_fib_set(&ctx.fwd, false);
@@ -197,7 +194,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	/* Now we've got as far as the UDP header, check if this is one of our VXLAN packets, which we
 	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
-			is_vxlan_tunnel(ctx->ip_header) /* Is this a VXLAN packet? */ ) {
+			is_vxlan_tunnel(ip_hdr(ctx)) /* Is this a VXLAN packet? */ ) {
 		/* Decap it; vxlan_attempt_decap will revalidate the packet if needed. */
 		switch (vxlan_attempt_decap(ctx)) {
 		case -1:
@@ -533,6 +530,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			.reason = CALI_REASON_UNKNOWN,
 			.mark = CALI_SKB_MARK_SEEN,
 		},
+		.ipheader_len = IP_SIZE,
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");
@@ -629,8 +627,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	/* We check the ttl here to avoid needing complicated handling of
 	 * related traffic back from the host if we let the host to handle it.
 	 */
-	CALI_DEBUG("ip->ttl %d\n", ctx->ip_header->ttl);
-	if (ip_ttl_exceeded(ctx->ip_header)) {
+	CALI_DEBUG("ip->ttl %d\n", ip_hdr(ctx)->ttl);
+	if (ip_ttl_exceeded(ip_hdr(ctx))) {
 		switch (ct_rc){
 		case CALI_CT_NEW:
 			if (nat_dest) {
@@ -643,10 +641,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	l3_csum_off = skb_iphdr_offset() +  offsetof(struct iphdr, check);
+	l3_csum_off = skb_iphdr_offset(ctx) +  offsetof(struct iphdr, check);
 
 	if (ct_related) {
-		if (ctx->ip_header->protocol == IPPROTO_ICMP) {
+		if (ip_hdr(ctx)->protocol == IPPROTO_ICMP) {
 			bool outer_ip_snat;
 
 			/* if we do SNAT ... */
@@ -662,7 +660,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 			/* ... then fix the outer header IP first */
 			if (outer_ip_snat) {
-				ctx->ip_header->saddr = state->ct_result.nat_ip;
+				ip_hdr(ctx)->saddr = state->ct_result.nat_ip;
 				int res = bpf_l3_csum_replace(skb, l3_csum_off,
 						state->ip_src, state->ct_result.nat_ip, 4);
 				if (res) {
@@ -684,15 +682,15 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			/* Skip past the ICMP header and check the inner IP header.
 			 * WARNING: this modifies the ip_header pointer in the main context; need to
 			 * be careful in later code to avoid overwriting that. */
-			l3_csum_off += sizeof(*ctx->ip_header) + sizeof(struct icmphdr);
-			ctx->ip_header = (struct iphdr *)(tc_icmphdr(ctx) + 1); /* skip to inner ip */
-			if (ctx->ip_header->ihl != 5) {
+			l3_csum_off += sizeof(struct iphdr) + sizeof(struct icmphdr);
+			ctx->ip_header = (void *)(icmp_hdr(ctx) + 1); /* skip to inner ip */
+			if (ip_hdr(ctx)->ihl != 5) {
 				CALI_INFO("ICMP inner IP header has options; unsupported\n");
 				DENY_REASON(ctx, CALI_REASON_IP_OPTIONS);
 				ctx->fwd.res = TC_ACT_SHOT;
 				goto deny;
 			}
-			ctx->nh = (void*)(ctx->ip_header+1);
+			ctx->nh = (ctx->ip_header + ctx->ipheader_len);
 
 			/* Flip the direction, we need to reverse the original packet. */
 			switch (ct_rc) {
@@ -720,7 +718,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	__u8 ihl = ctx->ip_header->ihl * 4;
+	//__u8 ihl = ctx->ip_header->ihl * 4;
 
 	int res = 0;
 	bool encap_needed = false;
@@ -728,12 +726,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	if (state->ip_proto == IPPROTO_ICMP && ct_related) {
 		/* do not fix up embedded L4 checksum for related ICMP */
 	} else {
-		switch (ctx->ip_header->protocol) {
+		switch (ip_hdr(ctx)->protocol) {
 		case IPPROTO_TCP:
-			l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
+			l4_csum_off = skb_l4hdr_offset(ctx) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
-			l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
+			l4_csum_off = skb_l4hdr_offset(ctx) + offsetof(struct udphdr, check);
 			break;
 		}
 	}
@@ -797,7 +795,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
-			ct_ctx_nat.tcp = tc_tcphdr(ctx);
+			ct_ctx_nat.tcp = tcp_hdr(ctx);
 		}
 
 		// If we get here, we've passed policy.
@@ -934,7 +932,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 		if (encap_needed) {
 			if (!(state->ip_proto == IPPROTO_TCP && skb_is_gso(skb)) &&
-					ip_is_dnf(ctx->ip_header) && vxlan_v4_encap_too_big(ctx)) {
+					ip_is_dnf(ip_hdr(ctx)) && vxlan_v4_encap_too_big(ctx)) {
 				CALI_DEBUG("Request packet with DNF set is too big\n");
 				goto icmp_too_big;
 			}
@@ -945,25 +943,25 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto nat_encap;
 		}
 
-		ctx->ip_header->saddr = state->ct_result.nat_sip;
-		ctx->ip_header->daddr = state->post_nat_ip_dst;
+		ip_hdr(ctx)->saddr = state->ct_result.nat_sip;
+		ip_hdr(ctx)->daddr = state->post_nat_ip_dst;
 
-		switch (ctx->ip_header->protocol) {
+		switch (ip_hdr(ctx)->protocol) {
 		case IPPROTO_TCP:
 			if (state->ct_result.nat_sport) {
 				CALI_DEBUG("Fixing TCP source port from %d to %d\n",
-						bpf_ntohs(tc_tcphdr(ctx)->source), state->ct_result.nat_sport);
-				tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+						bpf_ntohs(tcp_hdr(ctx)->source), state->ct_result.nat_sport);
+				tcp_hdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
 			}
-			tc_tcphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
+			tcp_hdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		case IPPROTO_UDP:
 			if (state->ct_result.nat_sport) {
 				CALI_DEBUG("Fixing UDP source port from %d to %d\n",
-						bpf_ntohs(tc_udphdr(ctx)->source), state->ct_result.nat_sport);
-				tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+						bpf_ntohs(udp_hdr(ctx)->source), state->ct_result.nat_sport);
+				udp_hdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
 			}
-			tc_udphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
+			udp_hdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		}
 
@@ -979,7 +977,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					bpf_htons(state->post_nat_dport),
 					bpf_htons(state->sport),
 					bpf_htons(state->ct_result.nat_sport ? : state->sport),
-					ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
+					ip_hdr(ctx)->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_src, state->ct_result.nat_sip, 4);
@@ -1043,31 +1041,31 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			}
 
 			if (!(state->ip_proto == IPPROTO_TCP && skb_is_gso(skb)) &&
-					ip_is_dnf(ctx->ip_header) && vxlan_v4_encap_too_big(ctx)) {
+					ip_is_dnf(ip_hdr(ctx)) && vxlan_v4_encap_too_big(ctx)) {
 				CALI_DEBUG("Return ICMP mtu is too big\n");
 				goto icmp_too_big;
 			}
 		}
 
 		// Actually do the NAT.
-		ctx->ip_header->saddr = state->ct_result.nat_ip;
-		ctx->ip_header->daddr = state->ct_result.nat_sip;
+		ip_hdr(ctx)->saddr = state->ct_result.nat_ip;
+		ip_hdr(ctx)->daddr = state->ct_result.nat_sip;
 
-		switch (ctx->ip_header->protocol) {
+		switch (ip_hdr(ctx)->protocol) {
 		case IPPROTO_TCP:
-			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			tcp_hdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
 			if (state->ct_result.nat_sport) {
 				CALI_DEBUG("Fixing TCP dest port from %d to %d\n",
-						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
-				tc_tcphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
+						bpf_ntohs(tcp_hdr(ctx)->dest), state->ct_result.nat_sport);
+				tcp_hdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
 			}
 			break;
 		case IPPROTO_UDP:
-			tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			udp_hdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
 			if (state->ct_result.nat_sport) {
 				CALI_DEBUG("Fixing UDP dest port from %d to %d\n",
-						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
-				tc_udphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
+						bpf_ntohs(tcp_hdr(ctx)->dest), state->ct_result.nat_sport);
+				udp_hdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
 			}
 			break;
 		}
@@ -1080,7 +1078,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				state->ip_dst, state->ct_result.nat_sip,
 				bpf_htons(state->dport), bpf_htons(state->ct_result.nat_sport ? : state->dport),
 				bpf_htons(state->sport), bpf_htons(state->ct_result.nat_port),
-				ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
+				ip_hdr(ctx)->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
@@ -1146,7 +1144,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	goto deny;
 
 icmp_ttl_exceeded:
-	if (ip_frag_no(ctx->ip_header)) {
+	if (ip_frag_no(ip_hdr(ctx))) {
 		goto deny;
 	}
 	state->icmp_type = ICMP_TIME_EXCEEDED;
@@ -1196,7 +1194,7 @@ nat_encap:
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
-			__builtin_memcpy(&tc_ethhdr(ctx)->h_dest, arpv->mac_dst, ETH_ALEN);
+			__builtin_memcpy(&eth_hdr(ctx)->h_dest, arpv->mac_dst, ETH_ALEN);
 			if (state->ct_result.ifindex_fwd == skb->ifindex) {
 				/* No need to change src MAC, if we are at the right device */
 			} else {
@@ -1264,6 +1262,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.ipheader_len = IP_SIZE,
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");
@@ -1323,6 +1322,7 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.ipheader_len = IP_SIZE,
 	};
 
 	struct calico_nat_dest nat_dest_ident;
@@ -1389,6 +1389,7 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
 		.counters = counters_get(),
+		.ipheader_len = IP_SIZE,
 	};
 	
 	if (!ctx.state) {
