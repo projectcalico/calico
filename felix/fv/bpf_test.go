@@ -189,7 +189,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		return true
 	}
 
-	ifaces := []string{"eth0"}
 	testOpts := bpfTestOptions{
 		bpfLogLevel: "debug",
 		tunnel:      "none",
@@ -289,10 +288,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if ctlbWorkaround {
 				options.ExtraEnvVars["FELIX_FeatureDetectOverride"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
-			}
-			tunIf := getTunIfName(testOpts.tunnel)
-			if tunIf != "" {
-				ifaces = append(ifaces, tunIf)
 			}
 		})
 
@@ -397,8 +392,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				err := infra.AddDefaultDeny()
 				Expect(err).NotTo(HaveOccurred())
 
-				expectedIfaces := append(ifaces, w[0].InterfaceName)
+				expectedIfaces := []string{"eth0"}
+				expectedIfaces = append(expectedIfaces, w[0].InterfaceName)
 				expectedIfaces = append(expectedIfaces, w[1].InterfaceName)
+				tunIf := getTunIfName(testOpts.tunnel)
+				if tunIf != "" {
+					expectedIfaces = append(expectedIfaces, tunIf)
+				}
 				ensureProgramAttached(felixes[0], expectedIfaces)
 
 				pol := api.NewGlobalNetworkPolicy()
@@ -775,7 +775,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			Expect(err).NotTo(HaveOccurred())
 			if !options.TestManagesBPF {
 				for ii, felix := range felixes {
-					expectedIfaces := append(ifaces, w[ii][0].InterfaceName)
+					expectedIfaces := []string{"eth0"}
+					tunIf := getTunIfName(testOpts.tunnel)
+					if tunIf != "" {
+						expectedIfaces = append(expectedIfaces, tunIf)
+					}
+					expectedIfaces = append(expectedIfaces, w[ii][0].InterfaceName)
 					expectedIfaces = append(expectedIfaces, w[ii][1].InterfaceName)
 					ensureProgramAttached(felix, expectedIfaces)
 				}
