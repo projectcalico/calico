@@ -1368,10 +1368,10 @@ func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
 }
 
 func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
-	//	We advertise the given LB IP ranges from every node in order to satisfy services with external traffic policy of "cluster".
-	//	However, we don't want to advertise single IPs in this way because it breaks any "local" type services the user creates,
-	//	which should instead be advertised from only a subset of nodes.
-	//	So, we handle advertisement of any single-addresses found in the config on a per-service basis from within the routeGenerator.
+	// We advertise the given LB IP ranges from every node in order to satisfy services with external traffic policy of "cluster".
+	// However, we don't want to advertise single IPs in this way because it breaks any "local" type services the user creates,
+	// which should instead be advertised from only a subset of nodes.
+	// So, we handle advertisement of any single-addresses found in the config on a per-service basis from within the routeGenerator.
 	var globalLbIPs []string
 	for _, lbIP := range lbIPs {
 		if strings.Contains(lbIP, ":") {
