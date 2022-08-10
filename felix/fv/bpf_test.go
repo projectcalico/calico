@@ -52,6 +52,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -390,6 +391,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				err := infra.AddDefaultDeny()
 				Expect(err).NotTo(HaveOccurred())
+
+				expectedIfaces := []string{"eth0"}
+				expectedIfaces = append(expectedIfaces, w[0].InterfaceName)
+				expectedIfaces = append(expectedIfaces, w[1].InterfaceName)
+				tunIf := getTunIfName(testOpts.tunnel)
+				if tunIf != "" {
+					expectedIfaces = append(expectedIfaces, tunIf)
+				}
+				ensureProgramAttached(felixes[0], expectedIfaces)
 
 				pol := api.NewGlobalNetworkPolicy()
 				pol.Namespace = "fv"
@@ -763,6 +773,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			err := infra.AddDefaultDeny()
 			Expect(err).NotTo(HaveOccurred())
+			if !options.TestManagesBPF {
+				for ii, felix := range felixes {
+					expectedIfaces := []string{"eth0"}
+					tunIf := getTunIfName(testOpts.tunnel)
+					if tunIf != "" {
+						expectedIfaces = append(expectedIfaces, tunIf)
+					}
+					expectedIfaces = append(expectedIfaces, w[ii][0].InterfaceName)
+					expectedIfaces = append(expectedIfaces, w[ii][1].InterfaceName)
+					ensureProgramAttached(felix, expectedIfaces)
+				}
+			}
 		}
 
 		Describe(fmt.Sprintf("with a %d node cluster", numNodes), func() {
@@ -3497,6 +3519,26 @@ func dumpSendRecvMap(felix *infrastructure.Felix) nat.SendRecvMsgMapMem {
 	return m
 }
 
+func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
+	im := ifstate.Map(&bpf.MapContext{})
+	m := make(ifstate.MapMem)
+	dumpBPFMap(felix, im, ifstate.MapMemIter(m))
+	return m
+}
+
+func ensureProgramAttached(felix *infrastructure.Felix, ifaces []string) {
+	Eventually(func() []string {
+		prog := []string{}
+		m := dumpIfStateMap(felix)
+		for _, v := range m {
+			if (v.Flags() | ifstate.FlgReady) > 0 {
+				prog = append(prog, v.IfName())
+			}
+		}
+		return prog
+	}, "20s", "200ms").Should(ContainElements(ifaces))
+}
+
 func k8sService(name, clusterIP string, w *workload.Workload, port,
 	tgtPort int, nodePort int32, protocol string) *v1.Service {
 	k8sProto := v1.ProtocolTCP
@@ -3771,4 +3813,18 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	}
 
 	return false
+}
+
+func getTunIfName(tunnel string) string {
+	switch tunnel {
+	case "none":
+	case "ipip":
+		return "tunl0"
+	case "vxlan":
+		return "vxlan.calico"
+	case "wireguard":
+		return "wireguard.cali"
+
+	}
+	return ""
 }
