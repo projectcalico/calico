@@ -337,6 +337,9 @@ spec:
         - effect: NoExecute
           operator: Exists
       serviceAccountName: canal-node
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
@@ -731,6 +734,9 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       priorityClassName: system-cluster-critical
       # The controllers must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.

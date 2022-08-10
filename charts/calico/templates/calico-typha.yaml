@@ -62,6 +62,8 @@ spec:
       # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573
       securityContext:
         fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - image: {{ .Values.typha.image }}:{{.Values.version }}
         imagePullPolicy: {{.Values.imagePullPolicy}}

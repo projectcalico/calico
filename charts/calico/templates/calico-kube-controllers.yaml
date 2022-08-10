@@ -32,6 +32,9 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       priorityClassName: system-cluster-critical
 {{- if eq .Values.datastore "etcd" }}
       # The controllers must run in the host network namespace so that
