@@ -63,6 +63,8 @@ type AttachPoint struct {
 	MapSizes             map[string]uint32
 	Features             environment.Features
 	RPFStrictEnabled     bool
+	NATin                uint32
+	NATout               uint32
 }
 
 var tcLock sync.RWMutex
@@ -178,7 +180,7 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 	}
 
 	isHost := false
-	if ap.Type == "host" || ap.Type == "nat" {
+	if ap.Type == "host" || ap.Type == "nat" || ap.Type == "lo" {
 		isHost = true
 	}
 
@@ -632,7 +634,8 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
 		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP,
-		flags, ap.WgPort)
+		flags, ap.WgPort, ap.NATin, ap.NATout,
+	)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {

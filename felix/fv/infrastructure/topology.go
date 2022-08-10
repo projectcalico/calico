@@ -265,7 +265,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		// we get unpredictable behaviour if more than one Felix enables it on the same
 		// host.  So, disable CTLB handling for subsequent Felixes.
 		if i > 0 {
-			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
+			//			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
 			optsPerFelix[i].ExtraEnvVars["FELIX_DebugSkipCTLBCleanup"] = "true"
 		}
 	}
