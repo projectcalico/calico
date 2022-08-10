@@ -125,3 +125,21 @@ func ValueFromBytes(b []byte) Value {
 	copy(v[:], b)
 	return v
 }
+
+type MapMem map[Key]Value
+
+func MapMemIter(m MapMem) bpf.IterCallback {
+	ks := len(Key{})
+	vs := len(Value{})
+
+	return func(k, v []byte) bpf.IteratorAction {
+		var key Key
+		copy(key[:ks], k[:ks])
+
+		var val Value
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+		return bpf.IterNone
+	}
+}
