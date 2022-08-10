@@ -2500,42 +2500,40 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								pol = createPolicy(pol)
 							})
 
-							if true || testOpts.connTimeEnabled {
-								It("should have connectivity from all host-networked workloads to workload 0 via nodeport", func() {
-									tcpdump := w[0][0].AttachTCPDump()
-									tcpdump.SetLogEnabled(true)
-									tcpdump.Start("-vvvnle", "tcp", "port", "8055")
-									defer tcpdump.Stop()
-									node0IP := felixes[0].IP
-									node1IP := felixes[1].IP
+							It("should have connectivity from all host-networked workloads to workload 0 via nodeport", func() {
+								tcpdump := w[0][0].AttachTCPDump()
+								tcpdump.SetLogEnabled(true)
+								tcpdump.Start("-vvvnle", "tcp", "port", "8055")
+								defer tcpdump.Stop()
+								node0IP := felixes[0].IP
+								node1IP := felixes[1].IP
 
-									hostW0SrcIP := ExpectWithSrcIPs(node0IP)
-									hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
-									switch testOpts.tunnel {
-									case "ipip":
+								switch testOpts.tunnel {
+								case "ipip":
+									if testOpts.connTimeEnabled {
 										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
-										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
-									case "wireguard":
-										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
-									case "vxlan":
-										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
 									}
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+								case "wireguard":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+								case "vxlan":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+								}
 
-									ports := ExpectWithPorts(npPort)
+								ports := ExpectWithPorts(npPort)
 
-									// Also try host networked pods, both on a local and remote node.
-									// N.B. it cannot work without the connect time balancer
-									cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
-									if false {
-										cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
-										cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
-										cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
-									}
+								// Also try host networked pods, both on a local and remote node.
+								// N.B. it cannot work without the connect time balancer
+								cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
+								cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
 
-									cc.CheckConnectivity()
-								})
-							}
+								cc.CheckConnectivity()
+							})
 
 							_ = testIfNotUDPUConnected && // two app with two sockets cannot conflict
 								Context("with conflict from host-networked workloads via clusterIP and directly", func() {
