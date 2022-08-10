@@ -4,6 +4,7 @@
 
 #include <linux/if_ether.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/in.h>
 #include <linux/icmp.h>
 #include <linux/tcp.h>
@@ -37,6 +38,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 			.res = XDP_PASS, // TODO: Adjust based on the design
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.ipheader_len = IP_SIZE,
 	};
 
 	if (!ctx.state) {
@@ -130,6 +132,7 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 			.res = XDP_PASS,
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.ipheader_len = IP_SIZE,
 	};
 
 	if (!ctx.counters) {
@@ -153,6 +156,7 @@ int calico_xdp_drop(struct xdp_md *xdp)
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
 		.counters = counters_get(),
+		.ipheader_len = IP_SIZE,
 	};
 
 	if (!ctx.state) {
