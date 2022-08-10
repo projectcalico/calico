@@ -532,6 +532,9 @@ syn_force_policy:
 			if (CALI_F_LO) {
 				CALI_DEBUG("NP redir remote on LO\n");
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
+			} else if (CALI_F_MAIN && cali_rt_is_tunneled(dest_rt)) {
+				CALI_DEBUG("NP redir remote on HEP to tunnel\n");
+				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 			}
 			ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
 			ctx->state->pol_rc = CALI_POL_ALLOW;
@@ -882,10 +885,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		state->ct_result.nat_sport = ct_ctx_nat.sport;
 		/* fall through as DNAT is now established */
 
-		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
+		if ((CALI_F_TO_HOST && CALI_F_NAT_IF) || (CALI_F_TO_HEP && (CALI_F_LO || CALI_F_MAIN))) {
 			struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
-			if (r && cali_rt_flags_remote_workload(r->flags) && r->flags & CALI_RT_TUNNELED) {
-				CALI_DEBUG("remote wl %x tunneled\n", bpf_htonl(state->post_nat_ip_dst));
+			if (r && cali_rt_flags_remote_workload(r->flags) && cali_rt_is_tunneled(r)) {
+				CALI_DEBUG("remote wl %x tunneled via %x\n",
+						bpf_htonl(state->post_nat_ip_dst), bpf_htonl(HOST_TUNNEL_IP));
 				ct_ctx_nat.src = HOST_TUNNEL_IP;
 				/* This would be the place to set a new source port if we
 				 * had a way how to allocate it. Instead we rely on source
@@ -1301,9 +1305,9 @@ allow:
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 				fib = true; /* Enforce FIB since we want to redirect */
 			} else if (cali_rt_flags_remote_workload(r->flags)) {
-				if (CALI_F_LO) {
+				if (CALI_F_LO || CALI_F_MAIN) {
 					state->ct_result.ifindex_fwd = NATIN_IFACE  ;
-					CALI_DEBUG("NP remote WL on LO\n");
+					CALI_DEBUG("NP remote WL on LO or main HEP\n");
 					ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 				}
 				ctx->state->flags |= CALI_ST_CT_NP_REMOTE;

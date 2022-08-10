@@ -1197,6 +1197,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tc.EpTypeWorkload
 	} else if ifaceName == "lo" {
 		endpointType = tc.EpTypeLO
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if ifaceName == "tunl0" {
 		if m.Features.IPIPDeviceIsL3 {
 			endpointType = tc.EpTypeL3Device
@@ -1211,6 +1213,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else {
 		log.Panicf("Unsupported ifaceName %v", ifaceName)
 	}
