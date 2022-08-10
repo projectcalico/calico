@@ -300,7 +300,7 @@ static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct 
 	}
 
 	struct iphdr *ip_inner;
-	ip_inner = (struct iphdr *)(tc_icmphdr(ctx) + 1); /* skip to inner ip */
+	ip_inner = (struct iphdr *)(icmp_hdr(ctx) + 1); /* skip to inner ip */
 	CALI_DEBUG("CT-ICMP: proto %d\n", ip_inner->protocol);
 
 	ct_ctx->proto = ip_inner->protocol;
@@ -438,7 +438,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_DEBUG("Too short\n");
 			bpf_exit(TC_ACT_SHOT);
 		}
-		ct_lookup_ctx.tcp = tc_tcphdr(tc_ctx);
+		ct_lookup_ctx.tcp = tcp_hdr(tc_ctx);
 		break;
 	case IPPROTO_ICMP:
 		// There are no port in ICMP and the fields in state are overloaded
@@ -510,10 +510,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			goto out_lookup_fail;
 		}
 
-		if (!icmp_type_is_err(tc_icmphdr(tc_ctx)->type)) {
+		if (!icmp_type_is_err(icmp_hdr(tc_ctx)->type)) {
 			// ICMP but not an error response packet.
 			CALI_DEBUG("CT-ICMP: type %d not an error\n",
-					tc_icmphdr(tc_ctx)->type);
+					icmp_hdr(tc_ctx)->type);
 			goto out_lookup_fail;
 		}
 
