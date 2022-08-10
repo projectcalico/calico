@@ -15,6 +15,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
+		.ipheader_len = IP_SIZE,
 	};
 	if (!ctx.counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
