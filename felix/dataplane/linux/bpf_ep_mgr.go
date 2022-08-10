@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -219,6 +220,11 @@ type bpfEndpointManager struct {
 	routeTable    routetable.RouteTableInterface
 	services      map[serviceKey][]ip.V4CIDR
 	dirtyServices set.Set[serviceKey]
+
+	natInIdx  int
+	natOutIdx int
+
+	arpMap bpf.Map
 }
 
 type serviceKey struct {
@@ -290,6 +296,7 @@ func newBPFEndpointManager(
 		ipv6Enabled:           config.BPFIpv6Enabled,
 		rpfStrictModeEnabled:  config.BPFEnforceRPF,
 		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
+		arpMap:                bpfMapContext.ArpMap,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -836,6 +843,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			defer wg.Done()
 			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
+			if err == nil {
+				err = m.dp.setAcceptLocal(ifaceName, true)
+			}
 			mutex.Lock()
 			errs[ifaceName] = err
 			mutex.Unlock()
@@ -1106,6 +1116,8 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	} else {
 		ap.IntfIP = *ip
 	}
+	ap.NATin = uint32(m.natInIdx)
+	ap.NATout = uint32(m.natOutIdx)
 
 	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
 	if err != nil {
@@ -1183,6 +1195,10 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	// Determine endpoint type.
 	if m.isWorkloadIface(ifaceName) {
 		endpointType = tc.EpTypeWorkload
+	} else if ifaceName == "lo" {
+		endpointType = tc.EpTypeLO
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if ifaceName == "tunl0" {
 		if m.Features.IPIPDeviceIsL3 {
 			endpointType = tc.EpTypeL3Device
@@ -1197,6 +1213,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else {
 		log.Panicf("Unsupported ifaceName %v", ifaceName)
 	}
@@ -1344,7 +1362,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
-	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev
+	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev || iface == "lo"
 }
 
 func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
@@ -1597,24 +1615,32 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		if err != nil {
 			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
 		}
+	}
+	if state := bpfin.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(bpfInDev)
 		if err := netlink.LinkSetUp(bpfin); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfInDev, err)
 		}
-		bpfout, err = netlink.LinkByName(bpfOutDev)
-		if err != nil {
-			return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
-		}
+	}
+	bpfout, err = netlink.LinkByName(bpfOutDev)
+	if err != nil {
+		return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
+	}
+	if state := bpfout.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(bpfOutDev)
 		if err := netlink.LinkSetUp(bpfout); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
 		}
 	}
 
-	if bpfout == nil {
-		bpfout, err = netlink.LinkByName(bpfOutDev)
-		if err != nil {
-			return fmt.Errorf("miss %s after add: %w", bpfOutDev, err)
-		}
-	}
+	m.natInIdx = bpfin.Attrs().Index
+	m.natOutIdx = bpfout.Attrs().Index
+
+	anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
+	_ = m.arpMap.Update(
+		bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
+		bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
+	)
 
 	// Add a permanent ARP entry to point to the other side of the veth to avoid
 	// ARP requests that would not be proxied if .all.rp_filter == 1
@@ -1638,6 +1664,11 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	err = m.ensureQdisc(bpfInDev)
 	if err != nil {
 		return fmt.Errorf("failed to set qdisc on %s: %w", bpfOutDev, err)
+	}
+
+	err = m.ensureQdisc("lo")
+	if err != nil {
+		log.WithError(err).Fatalf("Failed to set qdisc on lo.")
 	}
 
 	// Setup a link local route to a non-existent link local address that would
