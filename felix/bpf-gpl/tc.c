@@ -520,9 +520,10 @@ syn_force_policy:
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
 	}
 
-	if (CALI_F_TO_HEP && !skb_seen(ctx->skb)) {
-		CALI_DEBUG("Host accesses nodeport backend %x:%d\n",
-			   bpf_htonl(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
+	if (CALI_F_TO_HEP && !skb_seen(ctx->skb) && !(ctx->state->flags & CALI_ST_HOST_PSNAT)) {
+		CALI_DEBUG("Host accesses nodeport backend %x:%d state->flags 0x%x\n",
+			   bpf_htonl(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport,
+			   ctx->state->flags);
 		if (cali_rt_flags_local_workload(dest_rt->flags)) {
 			CALI_DEBUG("NP redir on HEP - skip policy\n");
 			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
@@ -1442,9 +1443,9 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 
 	switch (ct_result_rc(ctx.state->ct_result.rc)) {
 	case CALI_CT_ESTABLISHED:
-		/* Because we are on the "from host" path, conntrack gives us
-		 * CALI_CT_ESTABLISHED only. Better to fix the corner case here than on
-		 * the generic path.
+		/* Because we are on the "from host" path, conntrack may give us
+		 * CALI_CT_ESTABLISHED only if traffic targets pod without DNAT. Better to
+		 * fix the corner case here than on the generic path.
 		 */
 		ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_ESTABLISHED_DNAT);
 		/* fallthrough */
