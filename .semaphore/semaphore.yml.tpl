@@ -308,7 +308,7 @@ blocks:
     - name: K8S_VERSION
       value: 1.22.1
     - name: WINDOWS_VERSION
-      value: "20H2"
+      value: "1809"
     jobs:
     - name: VXLAN - Windows FV
       commands:
