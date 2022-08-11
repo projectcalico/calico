@@ -53,7 +53,7 @@ int calico_tc_v6(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	ipv6_log_addr(ipv6_hdr(&ctx));
+	CALI_LOG_IPV6(ipv6_hdr(&ctx));
 	CALI_DEBUG("l4 protocol: %d", ctx.state->ip_proto);
 
 	if (CALI_F_WEP) {
