@@ -4,9 +4,10 @@ PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
-FLEXVOL_IMAGE  ?=pod2daemon-flexvol
-CSI_IMAGE ?=csi
-BUILD_IMAGES ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE)
+FLEXVOL_IMAGE   ?=pod2daemon-flexvol
+CSI_IMAGE       ?=csi
+REGISTRAR_IMAGE ?=node-driver-registrar
+BUILD_IMAGES    ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE) $(REGISTRAR_IMAGE)
 
 ###############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -49,6 +50,13 @@ build-all: $(addprefix bin/flexvol-,$(VALIDARCHES))
 ## Build the binary for the current architecture and platform
 build: bin/flexvol-$(ARCH) bin/csi-driver-$(ARCH)
 
+# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
+ifeq ($(ARCH), $(filter $(ARCH),amd64))
+CGO_ENABLED=1
+else
+CGO_ENABLED=0
+endif
+
 bin/flexvol-amd64: ARCH=amd64
 bin/flexvol-arm64: ARCH=arm64
 bin/flexvol-armv7: ARCH=armv7
@@ -65,13 +73,37 @@ bin/csi-driver-s390x: ARCH=s390x
 bin/csi-driver-%: $(SRC_FILES)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/csi-driver-$(ARCH) csidriver/main.go
 
+UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
+UPSTREAM_REGISTRAR_TAG     ?= v2.5.1
+
+bin/node-driver-registrar-amd64: ARCH=amd64
+bin/node-driver-registrar-arm64: ARCH=arm64
+bin/node-driver-registrar-armv7: ARCH=armv7
+bin/node-driver-registrar-ppc64le: ARCH=ppc64le
+bin/node-driver-registrar-s390x: ARCH=s390x
+bin/$(REGISTRAR_IMAGE)-%: $(SRC_FILES) clone-registrar-upstream
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) \
+    -v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
+    $(CALICO_BUILD) \
+	/bin/bash -c "cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
+	go build -v -o /go/src/$(PACKAGE_NAME)/bin/$(REGISTRAR_IMAGE)-$(ARCH) cmd/csi-node-driver-registrar/*.go"
+
+clone-registrar-upstream:
+ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
+	@echo "Directory does not exist."
+	git clone --depth 1 --branch $(UPSTREAM_REGISTRAR_TAG) --single-branch git@github.com:$(UPSTREAM_REGISTRAR_PROJECT).git
+else
+	@echo "Upstream repo already cloned."
+endif
+
 ###############################################################################
 # Building the image
 ###############################################################################
 FLEXVOL_CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
 CSI_CONTAINER_CREATED=.calico-csi.created-$(ARCH)
+REGISTRAR_CONTAINER_CREATED=.csi-registrar.created-$(ARCH)
 .PHONY: image calico/pod2daemon-flexvol
-image: $(FLEXVOL_IMAGE) $(CSI_IMAGE)
+image: $(FLEXVOL_IMAGE) $(CSI_IMAGE) $(REGISTRAR_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
@@ -86,6 +118,12 @@ $(CSI_IMAGE): $(CSI_CONTAINER_CREATED)
 $(CSI_CONTAINER_CREATED): csidriver/Dockerfile.$(ARCH) bin/csi-driver-$(ARCH)
 	$(DOCKER_BUILD) -t $(CSI_IMAGE):latest-$(ARCH) -f csidriver/Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(CSI_IMAGE)
+	touch $@
+
+$(REGISTRAR_IMAGE): $(REGISTRAR_CONTAINER_CREATED)
+$(REGISTRAR_CONTAINER_CREATED): node-driver-registrar-docker/Dockerfile.$(ARCH) bin/node-driver-registrar-$(ARCH)
+	$(DOCKER_BUILD) -t $(REGISTRAR_IMAGE):latest-$(ARCH) -f node-driver-registrar-docker/Dockerfile.$(ARCH) . --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(REGISTRAR_IMAGE)
 	touch $@
 
 ###############################################################################
