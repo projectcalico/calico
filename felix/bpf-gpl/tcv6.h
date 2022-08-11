@@ -9,7 +9,6 @@ SEC("classifier/tc/prologue_v6")
 int calico_tc_v6(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 prologue program\n");
-
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
 		.counters = counters_get(),
