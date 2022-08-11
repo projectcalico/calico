@@ -60,7 +60,7 @@ allow:
 SEC("classifier/tc/policy")
 int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 {
-	CALI_DEBUG("Entering normal policy tail call\n");
+	CALI_DEBUG("Entering normal policy program\n");
 
 	struct cali_tc_state *state = state_get();
 	if (!state) {
@@ -81,7 +81,7 @@ deny:
 SEC("classifier/tc/policy_v6")
 int calico_tc_v6_norm_pol_tail(struct __sk_buff *skb)
 {
-	CALI_DEBUG("Entering IPv6 normal policy tail call\n");
+	CALI_DEBUG("Entering IPv6 normal policy program\n");
 	CALI_JUMP_TO(skb, PROG_INDEX_V6_ALLOWED);
 	CALI_DEBUG("Tail call to IPv6 post-policy program failed: DROP\n");
 	return TC_ACT_SHOT;

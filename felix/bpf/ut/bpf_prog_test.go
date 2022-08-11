@@ -566,7 +566,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (prologue_v6)")
 		}
