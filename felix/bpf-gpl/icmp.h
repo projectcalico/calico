@@ -26,9 +26,9 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 		return -1;
 	}
 
-	struct iphdr ip_orig = *ctx->ip_header;
-	CALI_DEBUG("ip->ihl: %d\n", ctx->ip_header->ihl);
-	if (ctx->ip_header->ihl > 5) {
+	struct iphdr ip_orig = *ip_hdr(ctx);
+	CALI_DEBUG("ip->ihl: %d\n", ip_hdr(ctx)->ihl);
+	if (ip_hdr(ctx)->ihl > 5) {
 		CALI_DEBUG("ICMP v4 reply: IP options\n");
 		return -1;
 	}
@@ -36,8 +36,8 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	 * payload but the SKB implementation gets upset if we try to trim
 	 * part-way through the UDP/TCP header.
 	 */
-	__u32 len = skb_iphdr_offset() + sizeof(struct iphdr) + 64;
-	switch (ctx->ip_header->protocol) {
+	__u32 len = skb_iphdr_offset(ctx) + sizeof(struct iphdr) + 64;
+	switch (ip_hdr(ctx)->protocol) {
 	case IPPROTO_TCP:
 		len += sizeof(struct tcphdr);
 		break;
@@ -69,7 +69,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	CALI_DEBUG("Len after insert %d\n", len);
 
 	/* ICMP reply carries the IP header + at least 8 bytes of data. */
-	if (skb_refresh_validate_ptrs(ctx, len - skb_iphdr_offset() - IP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, len - skb_iphdr_offset(ctx) - IP_SIZE)) {
 		DENY_REASON(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
 		return -1;
@@ -78,13 +78,13 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	/* we do not touch ethhdr, we rely on linux to rewrite it after routing
 	 * XXX we might want to swap MACs and bounce it back from the same device
 	 */
-	ctx->ip_header->version = 4;
-	ctx->ip_header->ihl = 5;
-	ctx->ip_header->tos = 0;
-	ctx->ip_header->ttl = 64; /* good default */
-	ctx->ip_header->protocol = IPPROTO_ICMP;
-	ctx->ip_header->check = 0;
-	ctx->ip_header->tot_len = bpf_htons(len - sizeof(struct ethhdr));
+	ip_hdr(ctx)->version = 4;
+	ip_hdr(ctx)->ihl = 5;
+	ip_hdr(ctx)->tos = 0;
+	ip_hdr(ctx)->ttl = 64; /* good default */
+	ip_hdr(ctx)->protocol = IPPROTO_ICMP;
+	ip_hdr(ctx)->check = 0;
+	ip_hdr(ctx)->tot_len = bpf_htons(len - sizeof(struct ethhdr));
 
 #ifdef CALI_PARANOID
 	/* XXX verify that ip_orig.daddr is always the node's IP
@@ -97,20 +97,20 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 #endif
 
 	/* use the host IP of the program that handles the packet */
-	ctx->ip_header->saddr = INTF_IP;
-	ctx->ip_header->daddr = ip_orig.saddr;
+	ip_hdr(ctx)->saddr = INTF_IP;
+	ip_hdr(ctx)->daddr = ip_orig.saddr;
 
-	tc_icmphdr(ctx)->type = type;
-	tc_icmphdr(ctx)->code = code;
-	*((__be32 *)&tc_icmphdr(ctx)->un) = un;
-	tc_icmphdr(ctx)->checksum = 0;
+	icmp_hdr(ctx)->type = type;
+	icmp_hdr(ctx)->code = code;
+	*((__be32 *)&icmp_hdr(ctx)->un) = un;
+	icmp_hdr(ctx)->checksum = 0;
 
-	__wsum ip_csum = bpf_csum_diff(0, 0, (void *)ctx->ip_header, sizeof(*ctx->ip_header), 0);
+	__wsum ip_csum = bpf_csum_diff(0, 0, ctx->ip_header, sizeof(struct iphdr), 0);
 	__wsum icmp_csum = bpf_csum_diff(0, 0, ctx->nh,
-		len - sizeof(struct iphdr) - skb_iphdr_offset(), 0);
+		len - sizeof(struct iphdr) - skb_iphdr_offset(ctx), 0);
 
 	ret = bpf_l3_csum_replace(ctx->skb,
-			skb_iphdr_offset() + offsetof(struct iphdr, check), 0, ip_csum, 0);
+			skb_iphdr_offset(ctx) + offsetof(struct iphdr, check), 0, ip_csum, 0);
 	if (ret) {
 		CALI_DEBUG("ICMP v4 reply: set ip csum failed\n");
 		return -1;
