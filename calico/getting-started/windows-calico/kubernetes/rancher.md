@@ -96,11 +96,9 @@ The following steps will outline the installation of {{site.prodname}} networkin
    kubectl create -f custom-resources.yaml
    ```
 
-1. [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
-
 1. Configure strict affinity:
    ```bash
-   calicoctl ipam configure --strictaffinity=true
+   kubectl patch ipamconfigurations default --type merge --patch='{"spec": {"strictAffinity": true}}'
    ```
 
 1. Finally, follow the {{site.prodnameWindows}} [quickstart guide for Kubernetes]({{site.baseurl}}/getting-started/windows-calico/quickstart#install-calico-for-windows-manually)
