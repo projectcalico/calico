@@ -197,7 +197,7 @@ adjust other kube-proxy parameters.
 1. For Linux control nodes using {{site.prodname}} networking, strict affinity must be set to `true`.
 This is required to prevent Linux nodes from borrowing IP addresses from Windows nodes:
    ```bash
-   calicoctl ipam configure --strictaffinity=true
+   kubectl patch ipamconfigurations default --type merge --patch='{"spec": {"strictAffinity": true}}'
    ```
 
 #### Install Calico and Kubernetes on Windows nodes
