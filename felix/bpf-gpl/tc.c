@@ -517,7 +517,7 @@ syn_force_policy:
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
 	}
 
-	if (CALI_F_TO_HEP && !skb_seen(ctx->skb) && !(ctx->state->flags & CALI_ST_HOST_PSNAT)) {
+	if (CALI_F_TO_HEP && ctx->nat_dest && !skb_seen(ctx->skb) && !(ctx->state->flags & CALI_ST_HOST_PSNAT)) {
 		CALI_DEBUG("Host accesses nodeport backend %x:%d state->flags 0x%x\n",
 			   bpf_htonl(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport,
 			   ctx->state->flags);
