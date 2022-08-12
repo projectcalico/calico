@@ -31,9 +31,12 @@ clean:
 	find . -name '.*.published*' -type f -delete
 	rm -rf report/
 	rm -rf bin/flexvol-$(ARCH)
+	rm -rf bin/$(CSI_IMAGE)-$(ARCH)
+	rm -rf bin/$(REGISTRAR_IMAGE)-$(ARCH)
 
 	docker rmi $(FLEXVOL_IMAGE):latest-$(ARCH) || true
 	docker rmi $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) || true
+	$(MAKE) clean-registrar
 ifeq ($(ARCH),amd64)
 	docker rmi $(FLEXVOL_IMAGE):latest || true
 	docker rmi $(FLEXVOL_IMAGE):$(VERSION) || true
@@ -70,16 +73,21 @@ UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
 UPSTREAM_REGISTRAR_TAG     ?= v2.5.1
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-                    			GOARCH=$(ARCH) go build -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
+                    			  go build -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
 REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-                              			make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
+							      make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 CGO_ENABLED=1
+
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0
+REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
+else ifeq ($(ARCH), $(filter $(ARCH),armv7))
+CGO_ENABLED=0
+GOARCH=arm -e GOARM=7
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
 BUILD_PLATFORMS="linux ppc64le -ppc64le"
@@ -106,6 +114,9 @@ ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 else
 	@echo "Upstream repo already cloned."
 endif
+
+clean-registrar:
+	rm -rf node-driver-registrar
 
 ###############################################################################
 # Building the image
@@ -137,6 +148,8 @@ $(REGISTRAR_CONTAINER_CREATED): node-driver-registrar-docker/Dockerfile.$(ARCH) 
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(REGISTRAR_IMAGE)
 	touch $@
 
+node-driver-registrar/release-tools/filter-junit.go:
+
 ###############################################################################
 # UTs
 ###############################################################################
@@ -153,7 +166,7 @@ fv st:
 # CI
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download build-all static-checks ut
+ci: clean mod-download build-all clean-registrar static-checks ut
 
 ###############################################################################
 # CD
