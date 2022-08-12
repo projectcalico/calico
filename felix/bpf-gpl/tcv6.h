@@ -54,7 +54,7 @@ int calico_tc_v6(struct __sk_buff *skb)
 	}
 
 	CALI_LOG_IPV6(ipv6_hdr(&ctx));
-	CALI_DEBUG("proto=%d\n", ipv6_hdr(&ctx)->nexthdr);
+	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
 	CALI_DEBUG("sport=%d\n", ctx.state->sport);
 	CALI_DEBUG("dport=%d\n", ctx.state->dport);
 
