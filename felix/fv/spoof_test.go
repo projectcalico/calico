@@ -111,6 +111,10 @@ var _ = Describe("Spoof tests", func() {
 				w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
 				w[ii].ConfigureInInfra(infra)
 			}
+
+			if BPFMode() {
+				ensureAllNodesBPFProgramsAttached(felixes)
+			}
 		})
 
 		AfterEach(func() {
@@ -121,6 +125,10 @@ var _ = Describe("Spoof tests", func() {
 	})
 
 	Context("IPv6", func() {
+		if BPFMode() {
+			return
+		}
+
 		BeforeEach(func() {
 			var err error
 			infra, err = infrastructure.GetEtcdDatastoreInfra()

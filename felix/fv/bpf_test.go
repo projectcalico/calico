@@ -183,8 +183,12 @@ FELIX_2/32: remote host`
 
 const extIP = "10.1.2.3"
 
+func BPFMode() bool {
+	return os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+}
+
 func describeBPFTests(opts ...bpfTestOpt) bool {
-	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+	if !BPFMode() {
 		// Non-BPF run.
 		return true
 	}
@@ -3512,7 +3516,17 @@ func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
 	return m
 }
 
+func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix) {
+	for _, felix := range felixes {
+		ensureBPFProgramsAttachedOffset(2, felix)
+	}
+}
+
 func ensureBPFProgramsAttached(felix *infrastructure.Felix, ifacesExtra ...string) {
+	ensureBPFProgramsAttachedOffset(2, felix, ifacesExtra...)
+}
+
+func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, ifacesExtra ...string) {
 	expectedIfaces := []string{"eth0"}
 	if felix.ExpectedIPIPTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "tunl0")
@@ -3537,7 +3551,7 @@ func ensureBPFProgramsAttached(felix *infrastructure.Felix, ifacesExtra ...strin
 
 	expectedIfaces = append(expectedIfaces, ifacesExtra...)
 
-	EventuallyWithOffset(1, func() []string {
+	EventuallyWithOffset(offset, func() []string {
 		prog := []string{}
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
