@@ -50,13 +50,6 @@ build-all: $(addprefix bin/flexvol-,$(VALIDARCHES))
 ## Build the binary for the current architecture and platform
 build: bin/flexvol-$(ARCH) bin/csi-driver-$(ARCH)
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
-CGO_ENABLED=0
-endif
-
 bin/flexvol-amd64: ARCH=amd64
 bin/flexvol-arm64: ARCH=arm64
 bin/flexvol-armv7: ARCH=armv7
@@ -76,17 +69,24 @@ bin/csi-driver-%: $(SRC_FILES)
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
 UPSTREAM_REGISTRAR_TAG     ?= v2.5.1
 
-bin/node-driver-registrar-amd64: ARCH=amd64
-bin/node-driver-registrar-arm64: ARCH=arm64
-bin/node-driver-registrar-armv7: ARCH=armv7
-bin/node-driver-registrar-ppc64le: ARCH=ppc64le
-bin/node-driver-registrar-s390x: ARCH=s390x
-bin/$(REGISTRAR_IMAGE)-%: $(SRC_FILES) clone-registrar-upstream
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) \
-    -v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
-    $(CALICO_BUILD) \
-	/bin/bash -c "cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-	go build -v -o /go/src/$(PACKAGE_NAME)/bin/$(REGISTRAR_IMAGE)-$(ARCH) cmd/csi-node-driver-registrar/*.go"
+# For the amd64 build we leverage boringSSL and therefore, CGO is enabled.
+bin/node-driver-registrar-amd64: clone-registrar-upstream
+	$(DOCKER_RUN) -e CGO_ENABLED=1 \
+			-v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
+			$(CALICO_BUILD) \
+			/bin/bash -c "cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
+			go build -v -o /go/src/$(PACKAGE_NAME)/$@ cmd/csi-node-driver-registrar/*.go"
+
+bin/node-driver-registrar-ppc64le: BUILD_PLATFORMS=linux ppc64le -ppc64le
+bin/node-driver-registrar-s390x: BUILD_PLATFORMS=linux s390x -s390x
+bin/node-driver-registrar-win64: BUILD_PLATFORMS=windows amd64 .exe
+bin/node-driver-registrar-%:
+		$(DOCKER_RUN) \
+    			-v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
+    			$(CALICO_BUILD) \
+    			/bin/bash -c "cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
+    			BUILD_PLATFORMS=\"$(BUILD_PLATFORMS)\" make build  && \
+                mv /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT)/bin/csi-node-driver-registrar /go/src/$(PACKAGE_NAME)/$@ "
 
 clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
