@@ -88,21 +88,33 @@ var (
 	// Offsets within the cal_tc_state struct.
 	// WARNING: must be kept in sync with the definitions in bpf/include/jump.h.
 	stateOffIPSrc          = FieldOffset{Offset: stateEventHdrSize + 0, Field: "state->ip_src"}
-	stateOffIPDst          = FieldOffset{Offset: stateEventHdrSize + 4, Field: "state->ip_dst"}
+	stateOffIPSrc1         = FieldOffset{Offset: stateEventHdrSize + 4, Field: "state->ip_src"}
+	stateOffIPSrc2         = FieldOffset{Offset: stateEventHdrSize + 8, Field: "state->ip_src"}
+	stateOffIPSrc3         = FieldOffset{Offset: stateEventHdrSize + 12, Field: "state->ip_src"}
+	stateOffIPDst          = FieldOffset{Offset: stateEventHdrSize + 16, Field: "state->ip_dst"}
+	stateOffIPDst1         = FieldOffset{Offset: stateEventHdrSize + 20, Field: "state->ip_dst"}
+	stateOffIPDst2         = FieldOffset{Offset: stateEventHdrSize + 24, Field: "state->ip_dst"}
+	stateOffIPDst3         = FieldOffset{Offset: stateEventHdrSize + 28, Field: "state->ip_dst"}
 	_                      = stateOffIPDst
-	stateOffPreNATIPDst    = FieldOffset{Offset: stateEventHdrSize + 8, Field: "state->pre_nat_ip_dst"}
+	stateOffPreNATIPDst    = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->pre_nat_ip_dst"}
+	stateOffPreNATIPDst1   = FieldOffset{Offset: stateEventHdrSize + 36, Field: "state->pre_nat_ip_dst"}
+	stateOffPreNATIPDst2   = FieldOffset{Offset: stateEventHdrSize + 40, Field: "state->pre_nat_ip_dst"}
+	stateOffPreNATIPDst3   = FieldOffset{Offset: stateEventHdrSize + 44, Field: "state->pre_nat_ip_dst"}
 	_                      = stateOffPreNATIPDst
-	stateOffPostNATIPDst   = FieldOffset{Offset: stateEventHdrSize + 12, Field: "state->post_nat_ip_dst"}
-	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 20, Field: "state->pol_rc"}
-	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 24, Field: "state->sport"}
-	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 26, Field: "state->dport"}
+	stateOffPostNATIPDst   = FieldOffset{Offset: stateEventHdrSize + 48, Field: "state->post_nat_ip_dst"}
+	stateOffPostNATIPDst1  = FieldOffset{Offset: stateEventHdrSize + 52, Field: "state->post_nat_ip_dst"}
+	stateOffPostNATIPDst2  = FieldOffset{Offset: stateEventHdrSize + 56, Field: "state->post_nat_ip_dst"}
+	stateOffPostNATIPDst3  = FieldOffset{Offset: stateEventHdrSize + 60, Field: "state->post_nat_ip_dst"}
+	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 80, Field: "state->pol_rc"}
+	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 84, Field: "state->sport"}
+	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 86, Field: "state->dport"}
 	_                      = stateOffDstPort
-	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 26, Field: "state->icmp_type"}
-	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 28, Field: "state->pre_nat_dport"}
+	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 86, Field: "state->icmp_type"}
+	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 88, Field: "state->pre_nat_dport"}
 	_                      = stateOffPreNATDstPort
-	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 30, Field: "state->post_nat_dport"}
-	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->ip_proto"}
-	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 33, Field: "state->flags"}
+	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->post_nat_dport"}
+	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 92, Field: "state->ip_proto"}
+	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 93, Field: "state->flags"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]

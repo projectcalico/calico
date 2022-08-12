@@ -51,10 +51,25 @@ const (
 // };
 type State struct {
 	SrcAddr             uint32
+	SrcAddr1            uint32
+	SrcAddr2            uint32
+	SrcAddr3            uint32
 	DstAddr             uint32
+	DstAddr1            uint32
+	DstAddr2            uint32
+	DstAddr3            uint32
 	PreNATDstAddr       uint32
+	PreNATDstAddr1      uint32
+	PreNATDstAddr2      uint32
+	PreNATDstAddr3      uint32
 	PostNATDstAddr      uint32
+	PostNATDstAddr1     uint32
+	PostNATDstAddr2     uint32
+	PostNATDstAddr3     uint32
 	TunIP               uint32
+	TunIP1              uint32
+	TunIP2              uint32
+	TunIP3              uint32
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16
