@@ -58,10 +58,27 @@ type Workload struct {
 	SpoofName             string
 	SpoofWorkloadEndpoint *api.WorkloadEndpoint
 	MTU                   int
+	isRunning             bool
+	isSpoofing            bool
 }
 
 func (w *Workload) GetIP() string {
 	return w.IP
+}
+
+func (w *Workload) GetInterfaceName() string {
+	return w.InterfaceName
+}
+
+func (w *Workload) GetSpoofInterfaceName() string {
+	if w.isSpoofing {
+		return w.SpoofInterfaceName
+	}
+	return ""
+}
+
+func (w *Workload) Runs() bool {
+	return w.isRunning
 }
 
 var workloadIdx = 0
@@ -85,6 +102,7 @@ func (w *Workload) Stop() {
 			log.WithField("workload", w).Error("failed to wait for process")
 		}
 		log.WithField("workload", w).Info("Workload now stopped")
+		w.isRunning = false
 	}
 }
 
@@ -234,6 +252,7 @@ func (w *Workload) Start() error {
 		}
 	}()
 
+	w.isRunning = true
 	log.WithField("workload", w).Info("Workload now running")
 
 	return nil
@@ -263,6 +282,8 @@ func (w *Workload) AddSpoofInterface() {
 	w.Exec("ip", "route", "add", "default", "via", "169.254.169.254")
 	// Add static ARP entry, otherwise connections fail at the ARP stage because the host won't respond.
 	w.Exec("arp", "-i", "spoof0", "-s", "169.254.169.254", "ee:ee:ee:ee:ee:ee")
+
+	w.isSpoofing = true
 }
 
 func (w *Workload) UseSpoofInterface(spoof bool) {
