@@ -141,6 +141,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
 				}
 
+				if BPFMode() {
+					ensureAllNodesBPFProgramsAttached(felixes)
+				}
+
 				cc = &connectivity.Checker{}
 			})
 
