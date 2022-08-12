@@ -65,7 +65,10 @@ type Felix struct {
 }
 
 type workload interface {
+	Runs() bool
 	GetIP() string
+	GetInterfaceName() string
+	GetSpoofInterfaceName() string
 }
 
 func (f *Felix) GetFelixPID() int {

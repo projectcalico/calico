@@ -183,8 +183,16 @@ FELIX_2/32: remote host`
 
 const extIP = "10.1.2.3"
 
+func BPFMode() bool {
+	return os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+}
+
+func BPFIPv6Support() bool {
+	return false
+}
+
 func describeBPFTests(opts ...bpfTestOpt) bool {
-	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+	if !BPFMode() {
 		// Non-BPF run.
 		return true
 	}
@@ -392,14 +400,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				err := infra.AddDefaultDeny()
 				Expect(err).NotTo(HaveOccurred())
 
-				expectedIfaces := []string{"eth0"}
-				expectedIfaces = append(expectedIfaces, w[0].InterfaceName)
-				expectedIfaces = append(expectedIfaces, w[1].InterfaceName)
-				tunIf := getTunIfName(testOpts.tunnel)
-				if tunIf != "" {
-					expectedIfaces = append(expectedIfaces, tunIf)
-				}
-				ensureProgramAttached(felixes[0], expectedIfaces)
+				ensureBPFProgramsAttached(felixes[0])
 
 				pol := api.NewGlobalNetworkPolicy()
 				pol.Namespace = "fv"
@@ -774,15 +775,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			err := infra.AddDefaultDeny()
 			Expect(err).NotTo(HaveOccurred())
 			if !options.TestManagesBPF {
-				for ii, felix := range felixes {
-					expectedIfaces := []string{"eth0"}
-					tunIf := getTunIfName(testOpts.tunnel)
-					if tunIf != "" {
-						expectedIfaces = append(expectedIfaces, tunIf)
-					}
-					expectedIfaces = append(expectedIfaces, w[ii][0].InterfaceName)
-					expectedIfaces = append(expectedIfaces, w[ii][1].InterfaceName)
-					ensureProgramAttached(felix, expectedIfaces)
+				for _, felix := range felixes {
+					ensureBPFProgramsAttached(felix)
 				}
 			}
 		}
@@ -3526,8 +3520,42 @@ func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
 	return m
 }
 
-func ensureProgramAttached(felix *infrastructure.Felix, ifaces []string) {
-	Eventually(func() []string {
+func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix) {
+	for _, felix := range felixes {
+		ensureBPFProgramsAttachedOffset(2, felix)
+	}
+}
+
+func ensureBPFProgramsAttached(felix *infrastructure.Felix, ifacesExtra ...string) {
+	ensureBPFProgramsAttachedOffset(2, felix, ifacesExtra...)
+}
+
+func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, ifacesExtra ...string) {
+	expectedIfaces := []string{"eth0"}
+	if felix.ExpectedIPIPTunnelAddr != "" {
+		expectedIfaces = append(expectedIfaces, "tunl0")
+	}
+	if felix.ExpectedVXLANTunnelAddr != "" {
+		expectedIfaces = append(expectedIfaces, "vxlan.calico")
+	}
+	if felix.ExpectedWireguardTunnelAddr != "" {
+		expectedIfaces = append(expectedIfaces, "wireguard.cali")
+	}
+
+	for _, w := range felix.Workloads {
+		if w.Runs() {
+			if iface := w.GetInterfaceName(); iface != "" {
+				expectedIfaces = append(expectedIfaces, iface)
+			}
+			if iface := w.GetSpoofInterfaceName(); iface != "" {
+				expectedIfaces = append(expectedIfaces, iface)
+			}
+		}
+	}
+
+	expectedIfaces = append(expectedIfaces, ifacesExtra...)
+
+	EventuallyWithOffset(offset, func() []string {
 		prog := []string{}
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
@@ -3536,7 +3564,7 @@ func ensureProgramAttached(felix *infrastructure.Felix, ifaces []string) {
 			}
 		}
 		return prog
-	}, "20s", "200ms").Should(ContainElements(ifaces))
+	}, "20s", "200ms").Should(ContainElements(expectedIfaces))
 }
 
 func k8sService(name, clusterIP string, w *workload.Workload, port,
@@ -3813,18 +3841,4 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	}
 
 	return false
-}
-
-func getTunIfName(tunnel string) string {
-	switch tunnel {
-	case "none":
-	case "ipip":
-		return "tunl0"
-	case "vxlan":
-		return "vxlan.calico"
-	case "wireguard":
-		return "wireguard.cali"
-
-	}
-	return ""
 }
