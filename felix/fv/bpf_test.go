@@ -3291,7 +3291,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Expect(err).NotTo(HaveOccurred())
 
 				counts := make([]int, len(felixes))
-				ifaceCnt := 4 // eth0, bpfout.cali, 2xcali*
+				ifaceCnt := 5 // eth0, bpfout.cali, 2xcali, lo*
 				if testOpts.tunnel != "none" {
 					ifaceCnt++ // the tunnel device
 				}
