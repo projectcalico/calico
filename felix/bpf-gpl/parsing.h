@@ -10,66 +10,6 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
-#define MAX_EXTENSIONS 2
-
-static CALI_BPF_INLINE int parse_packet_ipv6(struct cali_tc_ctx *ctx, int iterations) {
-	__u8 next_header = ipv6_hdr(ctx)->nexthdr;
-
-	for (int i = 0; i < iterations; i++) {
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
-			CALI_DEBUG("Too short\n");
-			goto deny;
-		}
-		switch (next_header) {
-			case IPPROTO_TCP:
-			case IPPROTO_UDP:
-			case IPPROTO_ICMPV6:
-				// Next header is either tcp, udp, or icmpv6. Thus pointers are correct
-				goto parsing_ok;
-			case IPPROTO_HOPOPTS:
-				// Must be the first option, but at the moment, we only want to find
-				// transport layer, so we don't care about ordering.
-			case IPPROTO_ROUTING:
-			case IPPROTO_DSTOPTS:
-				// Header len is in 8-octet units, excluding the first 8 octets
-				// Refer to rfc8200 for more information.
-				ctx->ipheader_len += ipv6ext_hdr(ctx)->hdrlen * 8 + 8;
-				break;
-			case IPPROTO_FRAGMENT:
-				// Fragment header has a fixed length size of 8 octets.
-				ctx->ipheader_len += 8;
-				break;
-			case IPPROTO_AH:
-				// AH header length is in 4-octet units, excluding the first 8 octets
-				// Refer to rfc4302 for more information.
-				ctx->ipheader_len += (ipv6ext_hdr(ctx)->hdrlen + 2) * 4;
-				break;
-			case IPPROTO_NONE:
-				// There is no next header! refer to RFC8200.
-				goto allow_no_fib;
-			default:
-				// Any other packet that we don't expect to reach here.
-				goto deny;
-		}
-
-		next_header = ipv6ext_hdr(ctx)->nexthdr;
-	}
-	CALI_DEBUG("Too many IPv6 extension headers\n");
-	// TODO: Jump to the parser program to extract more headers
-
-deny:
-	CALI_DEBUG("Failed to parse IPv6 header\n");
-	return PARSING_ERROR;
-
-allow_no_fib:
-	return PARSING_ALLOW_WITHOUT_ENFORCING_POLICY;
-
-parsing_ok:
-	ctx->state->ip_proto = next_header;
-	return PARSING_OK_V6;
-}
-
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
 
@@ -173,6 +113,13 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
 	ctx->state->pre_nat_ip_dst = ip_hdr(ctx)->daddr;
 	ctx->state->ip_proto = ip_hdr(ctx)->protocol;
 	ctx->state->ip_size = ip_hdr(ctx)->tot_len;
+}
+
+static CALI_BPF_INLINE void tc_state_fill_from_ipv6hdr(struct cali_tc_ctx *ctx)
+{
+	// TODO: Store IPv6 address in the state map
+	ctx->state->ip_proto = ipv6_hdr(ctx)->nexthdr;
+	ctx->state->ip_size = ipv6_hdr(ctx)->payload_len;
 }
 
 /* Continue parsing packet based on the IP protocol and fill in relevant fields

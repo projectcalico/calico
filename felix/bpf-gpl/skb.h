@@ -130,8 +130,6 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	// Success, refresh the ip_header/nh fields in the context.
 	ctx->ip_header =  ctx->data_start + skb_iphdr_offset(ctx);
 	ctx->nh = ctx->ip_header + ctx->ipheader_len;
-	CALI_DEBUG("IP id=%d s=%x d=%x\n",
-			bpf_ntohs(ip_hdr(ctx)->id), bpf_ntohl(ip_hdr(ctx)->saddr), bpf_ntohl(ip_hdr(ctx)->daddr));
 	return 0;
 }
 

@@ -43,18 +43,20 @@ int calico_tc_v6(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	switch (parse_packet_ipv6(&ctx, 1)) {
-	case PARSING_OK_V6:
-		break;
-	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
-		goto allow_no_fib;
+	tc_state_fill_from_ipv6hdr(&ctx);
+
+	/* Parse out the source/dest ports (or type/code for ICMP). */
+	switch (tc_state_fill_from_nexthdr(&ctx)) {
 	case PARSING_ERROR:
-	default:
 		goto deny;
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+		goto allow;
 	}
 
 	CALI_LOG_IPV6(ipv6_hdr(&ctx));
-	CALI_DEBUG("l4 protocol: %d", ctx.state->ip_proto);
+	CALI_DEBUG("proto=%d\n", ipv6_hdr(&ctx)->nexthdr);
+	CALI_DEBUG("sport=%d\n", ctx.state->sport);
+	CALI_DEBUG("dport=%d\n", ctx.state->dport);
 
 	if (CALI_F_WEP) {
 		CALI_DEBUG("IPv6 from workload: drop\n");
@@ -65,7 +67,7 @@ int calico_tc_v6(struct __sk_buff *skb)
 	CALI_JUMP_TO(skb, PROG_INDEX_V6_POLICY);
 	CALI_DEBUG("Tail call to normal policy program failed: DROP\n");
 
-allow_no_fib:
+allow:
 	return TC_ACT_UNSPEC;
 
 deny:
