@@ -125,7 +125,7 @@ var _ = Describe("Spoof tests", func() {
 	})
 
 	Context("IPv6", func() {
-		if BPFMode() {
+		if BPFMode() && !BPFIPv6Support() {
 			return
 		}
 

@@ -187,6 +187,10 @@ func BPFMode() bool {
 	return os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 }
 
+func BPFIPv6Support() bool {
+	return false
+}
+
 func describeBPFTests(opts ...bpfTestOpt) bool {
 	if !BPFMode() {
 		// Non-BPF run.
