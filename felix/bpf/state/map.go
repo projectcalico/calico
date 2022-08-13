@@ -29,6 +29,7 @@ const (
 	PolicyAllow
 	PolicyDeny
 	PolicyTailCallFailed = 10
+	MaxRuleIDs           = 32
 )
 
 // struct cali_tc_state {
@@ -45,6 +46,8 @@ const (
 //    __u8 ip_proto;
 //    __u8 flags;
 //    __be16 ip_size;
+//    __u32 rules_hit;
+//    __u64 rule_ids[MAX_RULE_IDS];
 //    struct calico_ct_result ct_result;
 //    struct calico_nat_dest nat_dest;
 //    __u64 prog_start_time;
@@ -63,6 +66,8 @@ type State struct {
 	IPProto             uint8
 	Flags               uint8
 	IPSize              uint16
+	RulesHit            uint32
+	RuleIDs             [MaxRuleIDs]uint64
 	ConntrackRCFlags    uint32
 	ConntrackNATIPPort  uint64
 	ConntrackTunIP      uint32
@@ -72,7 +77,7 @@ type State struct {
 	ProgStartTime       uint64
 }
 
-const expectedSize = 80
+const expectedSize = 344
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})
@@ -99,7 +104,7 @@ var MapParameters = bpf.MapParameters{
 	ValueSize:  expectedSize,
 	MaxEntries: 1,
 	Name:       "cali_v4_state",
-	Version:    3,
+	Version:    4,
 }
 
 func Map(mc *bpf.MapContext) bpf.Map {
