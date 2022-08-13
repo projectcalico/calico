@@ -21,3 +21,5 @@ hack/release/ghr
 hack/test/kind/kind
 hack/test/kind/kubectl
 hack/test/kind/*kubeconfig.yaml
+pod2daemon/node-driver-registrar/
+
