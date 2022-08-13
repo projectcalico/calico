@@ -19,14 +19,6 @@ SHELL ["/bin/sh", "-c"]
 
 ARG GIT_VERSION=unknown
 
-LABEL name="Calico CSI Driver" \
-      vendor="Project Calico" \
-      version=$GIT_VERSION \
-      release="1" \
-      summary="Calico CSI driver to setup secure connections from Kubernetes pods to local daemons" \
-      description="Calico CSI driver to setup secure connections from Kubernetes pods to local daemons" \
-      maintainer="Matt Leung <matt.leung@tigera.io>"
-
 # Because we build our binary with CGO, we need to add the necessary *.so files for dynamic linking.
 # If *.so files are missing, you will see an error saying that your entrypoint cannot be found.
 # The necessary files can be found using the ldd command on the binary.
@@ -34,10 +26,6 @@ COPY --from=ubi /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 
-# Copy hostname configuration files from the UBI image so glibc hostname lookups work.
-COPY --from=ubi /etc/host.conf /etc/host.conf
-COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
+ADD bin/node-driver-registrar-amd64 /usr/local/bin/node-driver-registrar
 
-ADD bin/csi-driver-amd64 /usr/local/bin/csi-driver
-
-ENTRYPOINT ["/usr/local/bin/csi-driver"]
+ENTRYPOINT ["/usr/local/bin/node-driver-registrar"]
