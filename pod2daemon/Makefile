@@ -4,9 +4,10 @@ PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
-FLEXVOL_IMAGE  ?=pod2daemon-flexvol
-CSI_IMAGE ?=csi
-BUILD_IMAGES ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE)
+FLEXVOL_IMAGE   ?=pod2daemon-flexvol
+CSI_IMAGE       ?=csi
+REGISTRAR_IMAGE ?=node-driver-registrar
+BUILD_IMAGES    ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE) $(REGISTRAR_IMAGE)
 
 ###############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -30,9 +31,12 @@ clean:
 	find . -name '.*.published*' -type f -delete
 	rm -rf report/
 	rm -rf bin/flexvol-$(ARCH)
+	rm -rf bin/$(CSI_IMAGE)-$(ARCH)
+	rm -rf bin/$(REGISTRAR_IMAGE)-$(ARCH)
 
 	docker rmi $(FLEXVOL_IMAGE):latest-$(ARCH) || true
 	docker rmi $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) || true
+	$(MAKE) clean-registrar
 ifeq ($(ARCH),amd64)
 	docker rmi $(FLEXVOL_IMAGE):latest || true
 	docker rmi $(FLEXVOL_IMAGE):$(VERSION) || true
@@ -43,11 +47,11 @@ endif
 ###############################################################################
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix bin/flexvol-,$(VALIDARCHES))
+build-all: $(addprefix bin/flexvol-,$(VALIDARCHES)) $(addprefix bin/csi-driver-,$(VALIDARCHES)) $(addprefix bin/node-driver-registrar-,$(VALIDARCHES))
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
-build: bin/flexvol-$(ARCH) bin/csi-driver-$(ARCH)
+build: bin/node-driver-registrar-$(ARCH) bin/flexvol-$(ARCH) bin/csi-driver-$(ARCH)
 
 bin/flexvol-amd64: ARCH=amd64
 bin/flexvol-arm64: ARCH=arm64
@@ -65,13 +69,63 @@ bin/csi-driver-s390x: ARCH=s390x
 bin/csi-driver-%: $(SRC_FILES)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/csi-driver-$(ARCH) csidriver/main.go
 
+UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
+UPSTREAM_REGISTRAR_TAG     ?= v2.5.1
+
+REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
+                    			  go build -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
+REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
+							      make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
+
+ifeq ($(ARCH), $(filter $(ARCH),amd64))
+# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
+CGO_ENABLED=1
+
+REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
+else ifeq ($(ARCH), $(filter $(ARCH),arm64))
+CGO_ENABLED=0
+REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
+else ifeq ($(ARCH), $(filter $(ARCH),armv7))
+CGO_ENABLED=0
+GOARCH=arm -e GOARM=7
+REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
+else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
+BUILD_PLATFORMS="linux ppc64le -ppc64le"
+REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
+else ifeq ($(ARCH), $(filter $(ARCH),s390x))
+BUILD_PLATFORMS="linux s390x -s390x"
+REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
+else ifeq ($(ARCH), $(filter $(ARCH),win64))
+BUILD_PLATFORMS="windows amd64 .exe"
+REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
+endif
+
+bin/node-driver-registrar-%: clone-registrar-upstream
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) \
+			-v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
+			$(CALICO_BUILD) \
+			/bin/bash -c $(REGISTRAR_BUILD_CMD)
+			mv $(REGISTRAR_IMAGE)/bin/csi-node-driver-registrar $@
+
+clone-registrar-upstream:
+ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
+	@echo "Directory does not exist."
+	git clone --depth 1 --branch $(UPSTREAM_REGISTRAR_TAG) --single-branch git@github.com:$(UPSTREAM_REGISTRAR_PROJECT).git
+else
+	@echo "Upstream repo already cloned."
+endif
+
+clean-registrar:
+	rm -rf node-driver-registrar
+
 ###############################################################################
 # Building the image
 ###############################################################################
 FLEXVOL_CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
 CSI_CONTAINER_CREATED=.calico-csi.created-$(ARCH)
+REGISTRAR_CONTAINER_CREATED=.csi-registrar.created-$(ARCH)
 .PHONY: image calico/pod2daemon-flexvol
-image: $(FLEXVOL_IMAGE) $(CSI_IMAGE)
+image: $(FLEXVOL_IMAGE) $(CSI_IMAGE) $(REGISTRAR_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
@@ -87,6 +141,14 @@ $(CSI_CONTAINER_CREATED): csidriver/Dockerfile.$(ARCH) bin/csi-driver-$(ARCH)
 	$(DOCKER_BUILD) -t $(CSI_IMAGE):latest-$(ARCH) -f csidriver/Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(CSI_IMAGE)
 	touch $@
+
+$(REGISTRAR_IMAGE): $(REGISTRAR_CONTAINER_CREATED)
+$(REGISTRAR_CONTAINER_CREATED): node-driver-registrar-docker/Dockerfile.$(ARCH) bin/node-driver-registrar-$(ARCH)
+	$(DOCKER_BUILD) -t $(REGISTRAR_IMAGE):latest-$(ARCH) -f node-driver-registrar-docker/Dockerfile.$(ARCH) . --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(REGISTRAR_IMAGE)
+	touch $@
+
+node-driver-registrar/release-tools/filter-junit.go:
 
 ###############################################################################
 # UTs
@@ -104,7 +166,7 @@ fv st:
 # CI
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download build-all static-checks ut
+ci: clean mod-download build-all clean-registrar static-checks ut
 
 ###############################################################################
 # CD
