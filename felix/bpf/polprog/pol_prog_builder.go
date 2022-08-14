@@ -103,6 +103,11 @@ var (
 	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 30, Field: "state->post_nat_dport"}
 	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->ip_proto"}
 	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 33, Field: "state->flags"}
+	stateOffIPSize         = FieldOffset{Offset: stateEventHdrSize + 34, Field: "state->ip_size"}
+	_                      = stateOffIPSize
+
+	stateOffRulesHit = FieldOffset{Offset: stateEventHdrSize + 36, Field: "state->rules_hit"}
+	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 40, Field: "state->rule_ids"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -124,6 +129,7 @@ var (
 
 type Rule struct {
 	*proto.Rule
+	MatchID RuleMatchID
 }
 
 type Policy struct {
@@ -167,6 +173,8 @@ type Rules struct {
 	// traffic is allowed to continue if not explicitly allowed or denied.
 	ForXDP bool
 }
+
+type RuleMatchID = uint64
 
 type Profile = Policy
 
@@ -348,6 +356,33 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		}
 		p.b.Exit()
 	}
+}
+
+func (p *Builder) writeRecordRuleID(id RuleMatchID, skipLabel string) {
+	// Load the hit count
+	p.b.Load8(R1, R9, stateOffRulesHit)
+
+	// Make sure we do not hit too many rules, if so skip to action without
+	// recording the rule ID
+	p.b.JumpGEImm64(R1, state.MaxRuleIDs, skipLabel)
+
+	// Increment the hit count
+	p.b.Mov64(R2, R1)
+	p.b.AddImm64(R2, 1)
+	// Store the new count
+	p.b.Store8(R9, R2, stateOffRulesHit)
+
+	// Store the rule ID in the rule ids array
+	p.b.ShiftLImm64(R1, 3) // x8
+	p.b.AddImm64(R1, int32(stateOffRuleIDs.Offset))
+	p.b.LoadImm64(R2, int64(id))
+	p.b.Add64(R1, R9)
+	p.b.Store64(R1, R2, FieldOffset{Offset: 0, Field: ""})
+}
+
+func (p *Builder) writeRecordRuleHit(r Rule, skipLabel string) {
+	log.Debugf("Hit rule ID 0x%x", r.MatchID)
+	p.writeRecordRuleID(r.MatchID, skipLabel)
 }
 
 func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset int16, ipOffset, portOffset FieldOffset) {
@@ -623,6 +658,10 @@ func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 	// If all the match criteria are met, we fall through to the end of the rule
 	// so all that's left to do is to jump to the relevant action.
 	// TODO log and log-and-xxx actions
+	if p.policyDebugEnabled {
+		p.writeRecordRuleHit(rule, actionLabel)
+	}
+
 	p.b.Jump(actionLabel)
 
 	p.b.LabelNextInsn(p.endOfRuleLabel())
