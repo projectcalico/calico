@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io/ioutil"
 	"net"
 	"os"
@@ -1164,6 +1165,13 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 // On a workload endpoint, ingress is towards the workload.
 type PolDirection int
 
+func (polDirection PolDirection) RuleDir() string {
+	if polDirection == PolDirnIngress {
+		return "Ingress"
+	}
+	return "Egress"
+}
+
 const (
 	PolDirnIngress PolDirection = iota
 	PolDirnEgress
@@ -1250,6 +1258,7 @@ const EndTierDrop = true
 const NoEndTierDrop = false
 
 func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDirection, endTierDrop bool) (rTiers []polprog.Tier) {
+	dir := direction.RuleDir()
 	if tier == nil {
 		return
 	}
@@ -1280,7 +1289,8 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 
 			for ri, r := range prules {
 				policy.Rules[ri] = polprog.Rule{
-					Rule: r,
+					Rule:    r,
+					MatchID: m.ruleMatchID(dir, r.Action, "Policy", ri, polName),
 				}
 			}
 
@@ -1299,6 +1309,7 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 }
 
 func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction PolDirection) (rProfiles []polprog.Profile) {
+	dir := direction.RuleDir()
 	if count := len(profileNames); count > 0 {
 		rProfiles = make([]polprog.Profile, count)
 
@@ -1317,7 +1328,8 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 
 			for ri, r := range prules {
 				profile.Rules[ri] = polprog.Rule{
-					Rule: r,
+					Rule:    r,
+					MatchID: m.ruleMatchID(dir, r.Action, "Profile", ri, profName),
 				}
 			}
 
@@ -2017,4 +2029,37 @@ func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSynce
 	tables := []routetable.RouteTableSyncer{m.routeTable}
 
 	return tables
+}
+
+func (m *bpfEndpointManager) ruleMatchID(
+	dir string,
+	action string,
+	owner string,
+	idx int,
+	name string) polprog.RuleMatchID {
+
+	a := ""
+	switch action {
+	case "", "allow":
+		a = "Allow"
+	case "next-tier", "pass":
+		a = "Pass"
+	case "deny":
+		a = "Deny"
+	case "log":
+		// If we get it here, we dont know what to do about that, 0 means
+		// invalid, but does not break anything.
+		return 0
+	default:
+		log.WithField("action", action).Panic("Unknown rule action")
+	}
+
+	str := a + owner + dir + strconv.Itoa(idx) + name
+	return hash(str)
+}
+
+func hash(s string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return h.Sum64()
 }
