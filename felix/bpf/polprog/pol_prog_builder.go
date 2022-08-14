@@ -104,6 +104,7 @@ var (
 	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->ip_proto"}
 	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 33, Field: "state->flags"}
 	stateOffIPSize         = FieldOffset{Offset: stateEventHdrSize + 34, Field: "state->ip_size"}
+	_                      = stateOffIPSize
 
 	stateOffRulesHit = FieldOffset{Offset: stateEventHdrSize + 36, Field: "state->rules_hit"}
 	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 40, Field: "state->rule_ids"}
