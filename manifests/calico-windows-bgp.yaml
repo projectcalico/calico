@@ -60,7 +60,7 @@ spec:
           operator: Exists
       initContainers:
       - name: install
-        image: calico/windows:release-v3.24
+        image: calico/windows:v3.24.0
         args:
           - ".\\host-process-install.ps1"
         imagePullPolicy: Always
@@ -76,7 +76,7 @@ spec:
               fieldPath: spec.nodeName
       containers:
       - name: node
-        image: calico/windows:release-v3.24
+        image: calico/windows:v3.24.0
         imagePullPolicy: Always
         args:
           - ".\\node\\node-service.ps1"
@@ -94,7 +94,7 @@ spec:
               apiVersion: v1
               fieldPath: spec.nodeName
       - name: felix
-        image: calico/windows:release-v3.24
+        image: calico/windows:v3.24.0
         imagePullPolicy: Always
         args:
         - ".\\felix\\felix-service.ps1"
@@ -128,7 +128,7 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 10
       - name: confd
-        image: calico/windows:release-v3.24
+        image: calico/windows:v3.24.0
         imagePullPolicy: Always
         args:
           - ".\\confd\\confd-service.ps1"
