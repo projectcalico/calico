@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM arm32v7/alpine:3.9
+FROM arm32v7/alpine:3.16
 
 ADD flexvol/docker/flexvol.sh /usr/local/bin/
 ADD bin/flexvol-armv7 /usr/local/bin/flexvol
