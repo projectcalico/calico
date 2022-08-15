@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/timeshim"
+	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const (
@@ -163,6 +164,8 @@ type Wireguard struct {
 
 	// The write proc sys function.
 	writeProcSys func(path, value string) error
+
+	rateLimitedLogger *lclogutils.RateLimitedLogger
 }
 
 func New(
@@ -254,6 +257,7 @@ func NewWithShims(
 		localCIDRs:           set.New(),
 		writeProcSys:         writeProcSys,
 		opRecorder:           opRecorder,
+		rateLimitedLogger:    lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(4 * time.Hour)),
 	}
 }
 
@@ -634,7 +638,7 @@ func (w *Wireguard) Apply() (err error) {
 	}
 
 	if w.wireguardNotSupported {
-		log.Info("Wireguard is not supported")
+		w.rateLimitedLogger.Info("Wireguard is not supported")
 		return
 	}
 
