@@ -1,4 +1,4 @@
-- title: v3.24.0-pre
+- title: v3.24.0
   note: ""
   manifests_url: https://raw.githubusercontent.com/projectcalico/calico/master
   chart:
@@ -6,31 +6,31 @@
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: master
+   version: v1.28.0
   components:
      typha:
-      version: release-v3.24
+      version: v3.24.0
      calicoctl:
-      version: release-v3.24
+      version: v3.24.0
      calico/node:
-      version: release-v3.24
+      version: v3.24.0
      calico/cni:
-      version: release-v3.24
+      version: v3.24.0
      calico/apiserver:
-      version: release-v3.24
+      version: v3.24.0
      calico/kube-controllers:
-      version: release-v3.24
+      version: v3.24.0
      calico/flannel-migration-controller:
-      version: release-v3.24
+      version: v3.24.0
      calico/windows:
-      version: release-v3.24
+      version: v3.24.0
      networking-calico:
-      version: release-v3.24
+      version: v3.24.0
      flannel:
       version: v0.15.1
      calico/dikastes:
-      version: release-v3.24
+      version: v3.24.0
      flexvol:
-      version: release-v3.24
+      version: v3.24.0
      csi-driver:
-      version: release-v3.24
+      version: v3.24.0
