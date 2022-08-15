@@ -28,35 +28,35 @@ struct cali_tc_state {
 	/* Initial IP read from the packet, updated to host's IP when doing NAT encap/ICMP error.
 	 * updated when doing CALI_CT_ESTABLISHED_SNAT handling. Used for FIB lookup. */
 	__be32 ip_src;
-	__be32 ip_src1;
-	__be32 ip_src2;
-	__be32 ip_src3;
+	//__be32 ip_src1;
+	//__be32 ip_src2;
+	//__be32 ip_src3;
 	/* Initial IP read from packet. Updated when doing encap and ICMP errors or CALI_CT_ESTABLISHED_DNAT.
 	 * If connect-time load balancing is enabled, this will be the post-NAT IP because the connect-time
 	 * load balancer gets in before TC. */
 	__be32 ip_dst;
-	__be32 ip_dst1;
-	__be32 ip_dst2;
-	__be32 ip_dst3;
+	//__be32 ip_dst1;
+	//__be32 ip_dst2;
+	//__be32 ip_dst3;
 	/* Set when invoking the policy program; if no NAT, ip_dst; otherwise, the pre-DNAT IP.  If the connect
 	 * time load balancer is enabled, this may be different from ip_dst. */
 	__be32 pre_nat_ip_dst;
-	__be32 pre_nat_ip_dst1;
-	__be32 pre_nat_ip_dst2;
-	__be32 pre_nat_ip_dst3;
+	//__be32 pre_nat_ip_dst1;
+	//__be32 pre_nat_ip_dst2;
+	//__be32 pre_nat_ip_dst3;
 	/* If no NAT, ip_dst.  Otherwise the NAT dest that we look up from the NAT maps or the conntrack entry
 	 * for CALI_CT_ESTABLISHED_DNAT. */
 	__be32 post_nat_ip_dst;
-	__be32 post_nat_ip_dst1;
-	__be32 post_nat_ip_dst2;
-	__be32 post_nat_ip_dst3;
+	//__be32 post_nat_ip_dst1;
+	//__be32 post_nat_ip_dst2;
+	//__be32 post_nat_ip_dst3;
 	/* For packets that arrived over our VXLAN tunnel, the source IP of the tunnel packet.
 	 * Zeroed out when we decide to respond with an ICMP error.
 	 * Also used to stash the ICMP MTU when calling the ICMP response program. */
 	__be32 tun_ip;
-	__be32 tun_ip1;
-	__be32 tun_ip2;
-	__be32 tun_ip3;
+	//__be32 tun_ip1;
+	//__be32 tun_ip2;
+	//__be32 tun_ip3;
 	/* Return code from the policy program CALI_POL_DENY/ALLOW etc. */
 	__s32 pol_rc;
 	/* Source port of the packet; updated on the CALI_CT_ESTABLISHED_SNAT path or when doing encap.
@@ -89,6 +89,7 @@ struct cali_tc_state {
 	/* Result of the NAT calculation.  Zeroed if there is no DNAT. */
 	struct calico_nat_dest nat_dest;
 	__u64 prog_start_time;
+	__be32 ip_src1;
 };
 
 enum cali_state_flags {

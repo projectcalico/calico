@@ -105,16 +105,16 @@ var (
 	stateOffPostNATIPDst1  = FieldOffset{Offset: stateEventHdrSize + 52, Field: "state->post_nat_ip_dst"}
 	stateOffPostNATIPDst2  = FieldOffset{Offset: stateEventHdrSize + 56, Field: "state->post_nat_ip_dst"}
 	stateOffPostNATIPDst3  = FieldOffset{Offset: stateEventHdrSize + 60, Field: "state->post_nat_ip_dst"}
-	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 80, Field: "state->pol_rc"}
-	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 84, Field: "state->sport"}
-	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 86, Field: "state->dport"}
+	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 68, Field: "state->pol_rc"}
+	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 72, Field: "state->sport"}
+	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 74, Field: "state->dport"}
 	_                      = stateOffDstPort
-	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 86, Field: "state->icmp_type"}
-	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 88, Field: "state->pre_nat_dport"}
+	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 74, Field: "state->icmp_type"}
+	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 76, Field: "state->pre_nat_dport"}
 	_                      = stateOffPreNATDstPort
-	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->post_nat_dport"}
-	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 92, Field: "state->ip_proto"}
-	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 93, Field: "state->flags"}
+	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 80, Field: "state->post_nat_dport"}
+	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 80, Field: "state->ip_proto"}
+	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 81, Field: "state->flags"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]

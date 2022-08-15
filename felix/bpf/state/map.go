@@ -33,6 +33,7 @@ const (
 
 // struct cali_tc_state {
 //    __be32 ip_src;
+//    __be32 ip_src1;
 //    __be32 ip_dst;
 //    __be32 pre_nat_ip_dst;
 //    __be32 post_nat_ip_dst;
@@ -50,26 +51,23 @@ const (
 //    __u64 prog_start_time;
 // };
 type State struct {
-	SrcAddr             uint32
-	SrcAddr1            uint32
-	SrcAddr2            uint32
-	SrcAddr3            uint32
-	DstAddr             uint32
-	DstAddr1            uint32
-	DstAddr2            uint32
-	DstAddr3            uint32
-	PreNATDstAddr       uint32
-	PreNATDstAddr1      uint32
-	PreNATDstAddr2      uint32
-	PreNATDstAddr3      uint32
-	PostNATDstAddr      uint32
-	PostNATDstAddr1     uint32
-	PostNATDstAddr2     uint32
-	PostNATDstAddr3     uint32
+	SrcAddr  uint32
+	SrcAddr1 uint32
+	//SrcAddr2            uint32
+	//SrcAddr3            uint32
+	DstAddr uint32
+	//DstAddr1            uint32
+	//DstAddr2            uint32
+	//DstAddr3            uint32
+	PreNATDstAddr uint32
+	//PreNATDstAddr1      uint32
+	//PreNATDstAddr2      uint32
+	//PreNATDstAddr3      uint32
+	PostNATDstAddr uint32
+	//PostNATDstAddr1     uint32
+	//PostNATDstAddr2     uint32
+	//PostNATDstAddr3     uint32
 	TunIP               uint32
-	TunIP1              uint32
-	TunIP2              uint32
-	TunIP3              uint32
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16
@@ -87,7 +85,7 @@ type State struct {
 	ProgStartTime       uint64
 }
 
-const expectedSize = 80
+const expectedSize = 84
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})
@@ -108,13 +106,13 @@ func StateFromBytes(bytes []byte) State {
 }
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_state",
+	Filename:   "/sys/fs/bpf/tc/globals/cali_v5_state",
 	Type:       "percpu_array",
 	KeySize:    4,
 	ValueSize:  expectedSize,
 	MaxEntries: 1,
-	Name:       "cali_v4_state",
-	Version:    3,
+	Name:       "cali_v5_state",
+	Version:    4,
 }
 
 func Map(mc *bpf.MapContext) bpf.Map {
@@ -123,11 +121,11 @@ func Map(mc *bpf.MapContext) bpf.Map {
 
 func MapForTest(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/test_v4_state",
+		Filename:   "/sys/fs/bpf/tc/globals/test_v5_state",
 		Type:       "array",
 		KeySize:    4,
 		ValueSize:  expectedSize,
 		MaxEntries: 1,
-		Name:       "test_v4_state",
+		Name:       "test_v5_state",
 	})
 }
