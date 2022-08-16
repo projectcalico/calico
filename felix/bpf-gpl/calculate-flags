@@ -52,6 +52,7 @@ flags=0
 ((CALI_TC_L3_DEV = 1 << 5))
 ((CALI_XDP_PROG = 1 << 6))
 ((CALI_TC_NAT_IF = 1 << 7))
+((CALI_TC_LO = 1 << 8))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
@@ -87,6 +88,12 @@ elif [[ "${filename}" =~ .*nat.* ]]; then
   ((flags |= CALI_TC_NAT_IF))
   args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
   ep_type="nat"
+elif [[ "${filename}" =~ .*lo.* ]]; then
+  # XDP, so host endpoint.
+  ((flags |= CALI_TC_HOST_EP))
+  ((flags |= CALI_TC_LO))
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
+  ep_type="lo"
 else
   echo "Can't recognise endpoint type"
   exit 2
