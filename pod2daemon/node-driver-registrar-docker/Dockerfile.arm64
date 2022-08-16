@@ -14,6 +14,6 @@
 
 FROM arm64v8/alpine:3.16
 
-ADD bin/csi-driver-arm64 /usr/local/bin/csi-driver
+ADD bin/node-driver-registrar-arm64 /usr/local/bin/node-driver-registrar
 
-ENTRYPOINT ["/usr/local/bin/csi-driver"]
+ENTRYPOINT ["/usr/local/bin/node-driver-registrar"]

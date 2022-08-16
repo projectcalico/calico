@@ -139,7 +139,7 @@ skip_redir_ifindex:
 		 * IP stack handle it. It was approved by policy, so it
 		 * is safe.
 		 */
-		if ip_ttl_exceeded(ctx->ip_header) {
+		if ip_ttl_exceeded(ip_hdr(ctx)) {
 			rc = TC_ACT_UNSPEC;
 			goto cancel_fib;
 		}
@@ -226,7 +226,7 @@ skip_redir_ifindex:
 
 		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 		if (rc == TC_ACT_REDIRECT) {
-			ip_dec_ttl(ctx->ip_header);
+			ip_dec_ttl(ip_hdr(ctx));
 		}
 	}
 

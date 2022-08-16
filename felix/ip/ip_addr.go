@@ -110,7 +110,7 @@ func (a V6Addr) AsUint64Pair() (uint64, uint64) {
 
 func (a V6Addr) NthBit(n uint) int {
 	h, l := a.AsUint64Pair()
-	if n < 64 {
+	if n <= 64 {
 		return int(h >> (64 - n) & 1)
 	}
 
