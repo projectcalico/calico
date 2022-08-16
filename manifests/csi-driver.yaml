@@ -75,7 +75,7 @@ spec:
           mountPath: /var/lib/kubelet/
           mountPropagation: "Bidirectional"
       - name: csi-node-driver-registrar
-        image: calico/node-driver-registrar:release-v3.24
+        image: calico/node-driver-registrar:v3.24.0
         imagePullPolicy: IfNotPresent
         args:
         - --v=5

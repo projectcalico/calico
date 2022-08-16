@@ -1,6 +1,5 @@
 - title: v3.24.0
-  note: ""
-  manifests_url: https://raw.githubusercontent.com/projectcalico/calico/master
+  manifests_url: https://raw.githubusercontent.com/projectcalico/calico/v3.24.0
   chart:
     version: 0
   tigera-operator:
