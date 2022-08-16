@@ -1362,7 +1362,8 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
-	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev || iface == "lo"
+	return m.dataIfaceRegex.MatchString(iface) ||
+		(m.ctlbWorkaroundEnabled && (iface == bpfOutDev || iface == "lo"))
 }
 
 func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {

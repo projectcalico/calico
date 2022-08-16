@@ -556,7 +556,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						numHostIfaces := 1
 						specialIfaces := 0
 						if ctlbWorkaround {
-							specialIfaces = 1
+							specialIfaces = 2 /* nat + lo */
 						}
 						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
 						return expectedNumMaps
