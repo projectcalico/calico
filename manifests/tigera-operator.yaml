@@ -1014,9 +1014,7 @@ spec:
                 description: FeatureGate is used to enable or disable Calico features.
                   Values are specified in a comma separated list with no spaces, example;
                   "BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false". This
-                  is primarily used to enable feature that is not fully production
-                  ready or helps to fix a corner case in certain environments, but
-                  is not need most of the time.
+                  is used to enable feature that is not fully production ready.
                 type: string
               floatingIPs:
                 default: Disabled

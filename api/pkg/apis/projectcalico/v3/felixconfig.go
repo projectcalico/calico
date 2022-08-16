@@ -127,9 +127,7 @@ type FelixConfigurationSpec struct {
 	// FeatureGate is used to enable or disable Calico features.
 	// Values are specified in a comma separated list with no spaces, example;
 	// "BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false". This is
-	// primarily used to enable feature that is not fully production ready or
-	// helps to fix a corner case in certain environments, but is not need most
-	// of the time.
+	// used to enable feature that is not fully production ready.
 	FeatureGate string `json:"featureGate,omitempty" validate:"omitempty,keyValueList"`
 	// IpsetsRefreshInterval is the period at which Felix re-checks all iptables
 	// state to ensure that no other process has accidentally broken Calico's rules. Set to 0 to

@@ -1840,7 +1840,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"featureGate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FeatureGate is used to enable or disable Calico features. Values are specified in a comma separated list with no spaces, example; \"BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false\". This is primarily used to enable feature that is not fully production ready or helps to fix a corner case in certain environments, but is not need most of the time.",
+							Description: "FeatureGate is used to enable or disable Calico features. Values are specified in a comma separated list with no spaces, example; \"BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false\". This is used to enable feature that is not fully production ready.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
