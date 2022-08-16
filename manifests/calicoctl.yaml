@@ -1,7 +1,7 @@
 # Calico Version master
 # https://projectcalico.docs.tigera.io/releases#master
 # This manifest includes the following component versions:
-#   calico/ctl:release-v3.24
+#   calico/ctl:v3.24.0
 
 apiVersion: v1
 kind: ServiceAccount
@@ -23,7 +23,7 @@ spec:
   serviceAccountName: calicoctl
   containers:
   - name: calicoctl
-    image: calico/ctl:release-v3.24
+    image: calico/ctl:v3.24.0
     command:
       - /calicoctl
     args:
