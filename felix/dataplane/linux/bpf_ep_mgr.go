@@ -1290,7 +1290,7 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 			for ri, r := range prules {
 				policy.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: m.ruleMatchID(dir, r.Action, "Policy", ri, polName),
+					MatchID: ruleMatchID(dir, r.Action, "Policy", ri, polName),
 				}
 			}
 
@@ -1329,7 +1329,7 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 			for ri, r := range prules {
 				profile.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: m.ruleMatchID(dir, r.Action, "Profile", ri, profName),
+					MatchID: ruleMatchID(dir, r.Action, "Profile", ri, profName),
 				}
 			}
 
@@ -2031,35 +2031,14 @@ func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSynce
 	return tables
 }
 
-func (m *bpfEndpointManager) ruleMatchID(
+func ruleMatchID(
 	dir string,
 	action string,
 	owner string,
 	idx int,
 	name string) polprog.RuleMatchID {
 
-	a := ""
-	switch action {
-	case "", "allow":
-		a = "Allow"
-	case "next-tier", "pass":
-		a = "Pass"
-	case "deny":
-		a = "Deny"
-	case "log":
-		// If we get it here, we dont know what to do about that, 0 means
-		// invalid, but does not break anything.
-		return 0
-	default:
-		log.WithField("action", action).Panic("Unknown rule action")
-	}
-
-	str := a + owner + dir + strconv.Itoa(idx) + name
-	return hash(str)
-}
-
-func hash(s string) uint64 {
 	h := fnv.New64a()
-	h.Write([]byte(s))
+	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
 	return h.Sum64()
 }
