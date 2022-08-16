@@ -39,7 +39,7 @@ The following steps will outline the installation of {{site.prodname}} networkin
    kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
    ```
    
-   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. In stead, use `kubectl create` or `kubectl replace`.
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
    {: .alert .alert-info}
 
 1. Download the necessary Installation custom resource.
