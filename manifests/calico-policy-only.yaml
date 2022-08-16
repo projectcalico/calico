@@ -4378,6 +4378,9 @@ spec:
         - effect: NoExecute
           operator: Exists
       serviceAccountName: calico-node
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
@@ -4634,6 +4637,9 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
@@ -4704,6 +4710,8 @@ spec:
       # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573
       securityContext:
         fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - image: docker.io/calico/typha:master
         imagePullPolicy: IfNotPresent
