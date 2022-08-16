@@ -393,6 +393,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 		Ipv4Nat:                    natsToProtoNatInfo(ep.IPv4NAT),
 		Ipv6Nat:                    natsToProtoNatInfo(ep.IPv6NAT),
 		AllowSpoofedSourcePrefixes: netsToStrings(ep.AllowSpoofedSourcePrefixes),
+		Annotations:                ep.Annotations,
 	}
 }
 
