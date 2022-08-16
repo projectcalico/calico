@@ -64,7 +64,7 @@ struct cali_tc_state {
 	/* Packet IP proto; updated to UDP when we encap. */
 	__u8 ip_proto;
 	/* Flags from enum cali_state_flags. */
-	__u8 flags;
+	__u8 __pad;
 	/* Packet size filled from iphdr->tot_len in tc_state_fill_from_iphdr(). */
 	__be16 ip_size;
 
@@ -74,6 +74,7 @@ struct cali_tc_state {
 	/* Result of the NAT calculation.  Zeroed if there is no DNAT. */
 	struct calico_nat_dest nat_dest;
 	__u64 prog_start_time;
+	__u64 flags;
 };
 
 enum cali_state_flags {
@@ -92,9 +93,14 @@ enum cali_state_flags {
 	/* CALI_ST_SUPPRESS_CT_STATE prevents the creation of any new CT state. */
 	CALI_ST_SUPPRESS_CT_STATE = 0x10,
 	/* CALI_ST_SKIP_POLICY is set when the policy program is skipped. */
-	CALI_ST_SKIP_POLICY = 0x20,
+	CALI_ST_SKIP_POLICY	  = 0x20,
 	/* CALI_ST_HOST_PSNAT is set when we are resolving host source port collision. */
-	CALI_ST_HOST_PSNAT = 0x40,
+	CALI_ST_HOST_PSNAT	  = 0x40,
+	/* CALI_ST_CT_NP_LOOP tells CT when creating an entry that we are
+	 * turnign this packet around from a nodeport to a local pod. */
+	CALI_ST_CT_NP_LOOP	  = 0x80,
+	/* CALI_ST_CT_NP_REMOTE is set when host is accessing a remote nodeport. */
+	CALI_ST_CT_NP_REMOTE	  = 0x100,
 };
 
 struct fwd {
