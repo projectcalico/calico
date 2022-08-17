@@ -108,6 +108,9 @@ func (r *ReleaseBuilder) BuildRelease() error {
 		return err
 	}
 
+	// Build the helm charts
+	r.runner.Run("make", []string{"chart"})
+
 	// TODO: Assert the produced images are OK. e.g., have correct
 	// commit and version information compiled in.
 
