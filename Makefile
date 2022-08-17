@@ -92,7 +92,7 @@ hack/release/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@v0.14.0
 
 # Build a release.
-release: hack/release/release 
+release: hack/release/release chart
 	@hack/release/release -create
 
 # Test the release code
