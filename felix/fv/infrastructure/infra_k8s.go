@@ -588,6 +588,12 @@ func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx i
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedWireguardTunnelAddr)
 }
 
+func (kds *K8sDatastoreInfra) SetExpectedWireguardV6TunnelAddr(felix *Felix, idx int, needWg bool) {
+	// Set to be the same as IPIP tunnel address.
+	felix.ExpectedWireguardV6TunnelAddr = fmt.Sprintf("dead:beef::%d:0", idx)
+	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedWireguardV6TunnelAddr)
+}
+
 func (kds *K8sDatastoreInfra) SetExternalIP(felix *Felix, idx int) {
 	felix.ExternalIP = fmt.Sprintf("111.222.%d.1", idx)
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExternalIP)

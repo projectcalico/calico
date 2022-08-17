@@ -40,6 +40,8 @@ section:
       path: /reference/calicoctl/ipam/show
     - title: configure
       path: /reference/calicoctl/ipam/configure
+    - title: split
+      path: /reference/calicoctl/ipam/split
   - title: node
     path: /reference/calicoctl/node/
     section:
@@ -82,6 +84,8 @@ section:
     path: /reference/resources/bgpconfig
   - title: BGP peer
     path: /reference/resources/bgppeer
+  - title: Block affinity
+    path: /reference/resources/blockaffinity
   - title: Calico node status
     path: /reference/resources/caliconodestatus
   - title: Felix configuration
@@ -96,6 +100,8 @@ section:
     path: /reference/resources/ippool
   - title: IP reservation
     path: /reference/resources/ipreservation
+  - title: IPAM configuration
+    path: /reference/resources/ipamconfig
   - title: Kubernetes controllers configuration
     path: /reference/resources/kubecontrollersconfig
   - title: Network policy

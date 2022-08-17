@@ -11,6 +11,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 	struct cali_tc_ctx ctx = {
 		.counters = counters_get(),
 		.skb = skb,
+		.ipheader_len = IP_SIZE,
 	};
 	if (!ctx.counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
@@ -23,7 +24,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		return -1;
 	}
 
-	ip_dec_ttl(ctx.ip_header);
+	ip_dec_ttl(ip_hdr(&ctx));
 
 	return 0;
 }

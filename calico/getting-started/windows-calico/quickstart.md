@@ -31,8 +31,11 @@ For Linux control nodes using {{site.prodname}} networking, strict affinity must
 This is required to prevent Linux nodes from borrowing IP addresses from Windows nodes:
 
 ```bash
-calicoctl ipam configure --strictaffinity=true
+kubectl patch ipamconfigurations default --type merge --patch='{"spec": {"strictAffinity": true}}'
 ```
+
+> **Note**: If the above command failed to find ipamconfigurations resource, you need to install Calico API server. Please refer to [installing the Calico API server]({{site.baseurl}}/maintenance/install-apiserver).
+{: .alert .alert-info}
 
 #### Install {{site.prodnameWindows}} manually
 
@@ -57,23 +60,6 @@ The following steps install a Kubernetes cluster on a single Windows node with a
 
   The geeky details of what you get by default:
   {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
-
-
->**Note**: If your Kubernetes version is v1.24.0 or higher, service account token secrets are no longer automatically created. Before continuing with the install, {% include open-new-window.html text='manually create' url='https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#manually-create-a-service-account-api-token' %} the calico-node service account token:
-```bash
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: calico-node-token
-  namespace: calico-system
-  annotations:
-    kubernetes.io/service-account.name: calico-node
-type: kubernetes.io/service-account-token
-EOF
-```
-Note: if {{site.prodname}} is installed in kube-system, update the `namespace` in the above command.
-{: .alert .alert-info}
 
 {% tabs %}
   <label:Kubernetes VXLAN,active:true>

@@ -14,6 +14,8 @@ CALICO_VERSION=${CALICO_VERSION:-$defaultCalicoVersion}
 defaultOperatorVersion=$(cat ../charts/tigera-operator/values.yaml | grep version: | cut -d" " -f4)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
+NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi calico/node-driver-registrar"
+
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
 ##########################################################################
@@ -93,3 +95,14 @@ echo "Generating manifest from charts/values/$FILE"
 ${HELM} -n kube-system template \
 	../charts/calico \
 	-f ../node/tests/k8st/infra/values.yaml > ../node/tests/k8st/infra/calico-kdd.yaml
+
+##########################################################################
+# Replace image versions for "static" Calico manifests.
+##########################################################################
+if [[ $CALICO_VERSION != master ]]; then
+echo "Replacing image versions for static manifests"
+	for img in $NON_HELM_MANIFEST_IMAGES; do
+		echo $img
+		find . -type f -exec sed -i "s|$img:[A-Xa-z0-9_.-]*|$img:$CALICO_VERSION|g" {} \;
+	done
+fi

@@ -29,7 +29,6 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 const (
@@ -51,7 +50,9 @@ func NewIPAMConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourc
 				APIVersion: apiv3.GroupVersionCurrent,
 			},
 			k8sListType:  reflect.TypeOf(libapiv3.IPAMConfigList{}),
-			resourceKind: libapiv3.KindIPAMConfig}}
+			resourceKind: libapiv3.KindIPAMConfig,
+		},
+	}
 }
 
 // ipamConfigClient implements the api.Client interface for IPAMConfig objects. It
@@ -67,6 +68,7 @@ type ipamConfigClient struct {
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
+
 	return &model.KVPair{
 		Key: model.IPAMConfigKey{},
 		Value: &model.IPAMConfig{
@@ -79,9 +81,15 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	}, nil
 }
 
-// toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
+// For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
 func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
+	// Build object meta.
+	// We only support a singleton resource with name "default".
+	m := metav1.ObjectMeta{}
+	m.SetName(model.IPAMConfigGlobalName)
+	m.SetResourceVersion(kvpv1.Revision)
+
 	v1obj := kvpv1.Value.(*model.IPAMConfig)
 	return &model.KVPair{
 		Key: model.ResourceKey{
@@ -93,10 +101,7 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				Kind:       libapiv3.KindIPAMConfig,
 				APIVersion: "crd.projectcalico.org/v1",
 			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            model.IPAMConfigGlobalName,
-				ResourceVersion: kvpv1.Revision,
-			},
+			ObjectMeta: m,
 			Spec: libapiv3.IPAMConfigSpec{
 				StrictAffinity:     v1obj.StrictAffinity,
 				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
@@ -107,8 +112,24 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	}
 }
 
-func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Debug("Received Create request on IPAMConfig type")
+// There's two possible kV formats to be passed to backend ipamConfig.
+// 1. Libcalico-go IPAM passes a v1 model.IPAMConfig directly. [libcalico-go/lib/ipam/ipam.go]
+// 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfig
+
+// isV1Key return if the Key is in v1 format.
+func isV1Key(key model.Key) bool {
+	switch key.(type) {
+	case model.IPAMConfigKey: // used by Calico IPAM [libcalico-go/lib/ipam/ipam.go]
+		return true
+	case model.ResourceKey: // used by clientv3 resource API [libcalico-go/lib/clientv3/resources.go]
+		return false
+	default:
+		log.Panic("ipamConfigClient : wrong key interface type")
+	}
+	return false
+}
+
+func (c *ipamConfigClient) createV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	nkvp, err := c.rc.Create(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
@@ -120,8 +141,21 @@ func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*mode
 	return kvp, nil
 }
 
-func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Debug("Received Update request on IPAMConfig type")
+func (c *ipamConfigClient) createV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.rc.Create(ctx, kvp)
+}
+
+func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debug("Received Create request on IPAMConfig type")
+	if isV1Key(kvp.Key) {
+		// From the IPAM code - we need to convert to CRD format.
+		return c.createV1(ctx, kvp)
+	}
+	// From the v3 client - it's already in CRD format.
+	return c.createV3(ctx, kvp)
+}
+
+func (c *ipamConfigClient) updateV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	nkvp, err := c.rc.Update(ctx, c.toV3(kvp))
 	if err != nil {
 		return nil, err
@@ -133,11 +167,25 @@ func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*mode
 	return kvp, nil
 }
 
+func (c *ipamConfigClient) updateV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.rc.Update(ctx, kvp)
+}
+
+func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debug("Received Update request on IPAMConfig type")
+	if isV1Key(kvp.Key) {
+		// From the IPAM code - we need to convert to CRD format.
+		return c.updateV1(ctx, kvp)
+	}
+	// From the v3 client - it's already in CRD format.
+	return c.updateV3(ctx, kvp)
+}
+
 func (c *ipamConfigClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
 }
 
-func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+func (c *ipamConfigClient) deleteV1(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
 		Kind: libapiv3.KindIPAMConfig,
@@ -153,8 +201,21 @@ func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision s
 	return v1nkvp, nil
 }
 
-func (c *ipamConfigClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-	log.Debug("Received Get request on IPAMConfig type")
+func (c *ipamConfigClient) deleteV3(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	return c.rc.Delete(ctx, key, revision, uid)
+}
+
+func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	log.Debug("Received Delete request on IPAMConfig type")
+	if isV1Key(key) {
+		// From the IPAM code - we need to convert to CRD format.
+		return c.deleteV1(ctx, key, revision, uid)
+	}
+	// From the v3 client - it's already in CRD format.
+	return c.deleteV3(ctx, key, revision, uid)
+}
+
+func (c *ipamConfigClient) getV1(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
 		Kind: libapiv3.KindIPAMConfig,
@@ -168,23 +229,32 @@ func (c *ipamConfigClient) Get(ctx context.Context, key model.Key, revision stri
 		return nil, err
 	}
 	return v1kvp, nil
+}
 
+func (c *ipamConfigClient) getV3(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	return c.rc.Get(ctx, key, revision)
+}
+
+func (c *ipamConfigClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	log.Debug("Received Get request on IPAMConfig type")
+	if isV1Key(key) {
+		// From the IPAM code - we need to convert to CRD format.
+		return c.getV1(ctx, key, revision)
+	}
+	// From the v3 client - it's already in CRD format.
+	return c.getV3(ctx, key, revision)
 }
 
 func (c *ipamConfigClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	log.Warn("Operation List is not supported on IPAMConfig type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: list,
-		Operation:  "List",
-	}
+	// List can only ever come from the v3 client, by passing a ResourceListOptions.
+	log.Debug("Received List request on IPAMConfig type")
+	return c.rc.List(ctx, list, revision)
 }
 
 func (c *ipamConfigClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	log.Warn("Operation Watch is not supported on IPAMConfig type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: list,
-		Operation:  "Watch",
-	}
+	// List can only ever come from the v3 client, by passing a ResourceListOptions.
+	log.Debug("Received Watch request on IPAMConfig type")
+	return c.rc.Watch(ctx, list, revision)
 }
 
 // EnsureInitialized is a no-op since the CRD should be

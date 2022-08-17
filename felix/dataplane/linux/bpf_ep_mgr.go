@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io/ioutil"
 	"net"
 	"os"
@@ -61,7 +62,6 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/ratelimited"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -99,7 +99,7 @@ type attachPoint interface {
 	IfaceName() string
 	JumpMapFDMapKey() string
 	IsAttached() (bool, error)
-	AttachProgram() (string, error)
+	AttachProgram() (int, error)
 	DetachProgram() error
 	Log() *log.Entry
 }
@@ -114,8 +114,8 @@ type bpfDataplane interface {
 	removePolicyProgram(jumpMapFD bpf.MapFD) error
 	setAcceptLocal(iface string, val bool) error
 	setRPFilter(iface string, val int) error
-	setRoute(ip string) error
-	delRoute(ip string) error
+	setRoute(ip.V4CIDR)
+	delRoute(ip.V4CIDR)
 }
 
 type bpfInterface struct {
@@ -217,9 +217,9 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled bool
 
-	routeTable    *routetable.RouteTable
-	services      map[serviceKey][]string
-	dirtyServices map[serviceKey][]string
+	routeTable    routetable.RouteTableInterface
+	services      map[serviceKey][]ip.V4CIDR
+	dirtyServices set.Set[serviceKey]
 }
 
 type serviceKey struct {
@@ -331,8 +331,8 @@ func newBPFEndpointManager(
 			254,
 			opReporter,
 		)
-		m.services = make(map[serviceKey][]string)
-		m.dirtyServices = make(map[serviceKey][]string)
+		m.services = make(map[serviceKey][]ip.V4CIDR)
+		m.dirtyServices = set.New[serviceKey]()
 
 		// Anything else would prevent packets being accepted from the special
 		// service veth. It does not create a security hole since BPF does the RPF
@@ -587,8 +587,8 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 		return false
 	})
 	// Remove policy debug info if any
-	m.removePolicyDebugInfo(oldWEP.Name, tc.HookIngress)
-	m.removePolicyDebugInfo(oldWEP.Name, tc.HookEgress)
+	m.removePolicyDebugInfo(oldWEP.Name, bpf.HookIngress)
+	m.removePolicyDebugInfo(oldWEP.Name, bpf.HookEgress)
 }
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
@@ -669,10 +669,19 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
-	m.reconcileServices()
 
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
+
+	if m.ctlbWorkaroundEnabled {
+		// Update all existing IPs of dirty services
+		m.dirtyServices.Iter(func(svc serviceKey) error {
+			for _, ip := range m.services[svc] {
+				m.dp.setRoute(ip)
+			}
+			return set.RemoveItem
+		})
+	}
 
 	if err := m.ifStateMap.ApplyAllChanges(); err != nil {
 		log.WithError(err).Warn("Failed to write updates to ifstate BPF map.")
@@ -1156,6 +1165,13 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 // On a workload endpoint, ingress is towards the workload.
 type PolDirection int
 
+func (polDirection PolDirection) RuleDir() string {
+	if polDirection == PolDirnIngress {
+		return "Ingress"
+	}
+	return "Egress"
+}
+
 const (
 	PolDirnIngress PolDirection = iota
 	PolDirnEgress
@@ -1196,22 +1212,22 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	if endpointType == tc.EpTypeWorkload {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
 		if policyDirection == PolDirnIngress {
-			ap.Hook = tc.HookEgress
+			ap.Hook = bpf.HookEgress
 		} else {
-			ap.Hook = tc.HookIngress
+			ap.Hook = bpf.HookIngress
 		}
 	} else {
 		ap.WgPort = m.wgPort
 		// Host endpoints have the natural relationship between policy direction and hook.
 		if policyDirection == PolDirnIngress {
-			ap.Hook = tc.HookIngress
+			ap.Hook = bpf.HookIngress
 		} else {
-			ap.Hook = tc.HookEgress
+			ap.Hook = bpf.HookEgress
 		}
 	}
 
 	var toOrFrom tc.ToOrFromEp
-	if ap.Hook == tc.HookIngress {
+	if ap.Hook == bpf.HookIngress {
 		toOrFrom = tc.FromEp
 	} else {
 		toOrFrom = tc.ToEp
@@ -1242,6 +1258,7 @@ const EndTierDrop = true
 const NoEndTierDrop = false
 
 func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDirection, endTierDrop bool) (rTiers []polprog.Tier) {
+	dir := direction.RuleDir()
 	if tier == nil {
 		return
 	}
@@ -1272,7 +1289,8 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 
 			for ri, r := range prules {
 				policy.Rules[ri] = polprog.Rule{
-					Rule: r,
+					Rule:    r,
+					MatchID: ruleMatchID(dir, r.Action, "Policy", ri, polName),
 				}
 			}
 
@@ -1291,6 +1309,7 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 }
 
 func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction PolDirection) (rProfiles []polprog.Profile) {
+	dir := direction.RuleDir()
 	if count := len(profileNames); count > 0 {
 		rProfiles = make([]polprog.Profile, count)
 
@@ -1309,7 +1328,8 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 
 			for ri, r := range prules {
 				profile.Rules[ri] = polprog.Rule{
-					Rule: r,
+					Rule:    r,
+					MatchID: ruleMatchID(dir, r.Action, "Profile", ri, profName),
 				}
 			}
 
@@ -1572,14 +1592,9 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		return nil
 	}
 
-	nl, err := netlinkshim.NewRealNetlink()
-	if err != nil {
-		return fmt.Errorf("failed to create nelink: %w", err)
-	}
-
 	var bpfout, bpfin netlink.Link
 
-	bpfin, err = nl.LinkByName(bpfInDev)
+	bpfin, err := netlink.LinkByName(bpfInDev)
 	if err != nil {
 		nat := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
@@ -1587,27 +1602,27 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 			},
 			PeerName: bpfOutDev,
 		}
-		if err := nl.LinkAdd(nat); err != nil {
+		if err := netlink.LinkAdd(nat); err != nil {
 			return fmt.Errorf("failed to add %s: %w", bpfInDev, err)
 		}
-		bpfin, err = nl.LinkByName(bpfInDev)
+		bpfin, err = netlink.LinkByName(bpfInDev)
 		if err != nil {
 			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
 		}
-		if err := nl.LinkSetUp(bpfin); err != nil {
+		if err := netlink.LinkSetUp(bpfin); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfInDev, err)
 		}
-		bpfout, err = nl.LinkByName(bpfOutDev)
+		bpfout, err = netlink.LinkByName(bpfOutDev)
 		if err != nil {
 			return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
 		}
-		if err := nl.LinkSetUp(bpfout); err != nil {
+		if err := netlink.LinkSetUp(bpfout); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
 		}
 	}
 
 	if bpfout == nil {
-		bpfout, err = nl.LinkByName(bpfOutDev)
+		bpfout, err = netlink.LinkByName(bpfOutDev)
 		if err != nil {
 			return fmt.Errorf("miss %s after add: %w", bpfOutDev, err)
 		}
@@ -1621,7 +1636,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		HardwareAddr: bpfout.Attrs().HardwareAddr,
 		LinkIndex:    bpfin.Attrs().Index,
 	}
-	if err := nl.NeighAdd(arp); err != nil && err != syscall.EEXIST {
+	if err := netlink.NeighAdd(arp); err != nil && err != syscall.EEXIST {
 		return fmt.Errorf("failed to update neight for %s: %w", bpfOutDev, err)
 	}
 
@@ -1746,7 +1761,7 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 	})
 }
 
-func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook tc.Hook) {
+func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook bpf.Hook) {
 	if !m.bpfPolicyDebugEnabled {
 		return
 	}
@@ -1757,7 +1772,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook tc.Hoo
 	}
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook tc.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook bpf.Hook, polErr error) error {
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
@@ -1769,7 +1784,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 	// is in reference with the host. Workload's ingress is host's egress and
 	// vice versa.
 	polDir := "ingress"
-	if tcHook == tc.HookIngress {
+	if tcHook == bpf.HookIngress {
 		polDir = "egress"
 	}
 
@@ -1839,10 +1854,11 @@ func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD) error {
 	return nil
 }
 
-func FindJumpMap(progIDStr, ifaceName string) (mapFD bpf.MapFD, err error) {
-	logCtx := log.WithField("progID", progIDStr).WithField("iface", ifaceName)
+func FindJumpMap(progID int, ifaceName string) (mapFD bpf.MapFD, err error) {
+	logCtx := log.WithField("progID", progID).WithField("iface", ifaceName)
 	logCtx.Debugf("Looking up jump map")
-	bpftool := exec.Command("bpftool", "prog", "show", "id", progIDStr, "--json")
+	bpftool := exec.Command("bpftool", "prog", "show", "id",
+		fmt.Sprintf("%d", progID), "--json")
 	output, err := bpftool.Output()
 	if err != nil {
 		// We can hit this case if the interface was deleted underneath us; check that it's still there.
@@ -1882,7 +1898,7 @@ func FindJumpMap(progIDStr, ifaceName string) (mapFD bpf.MapFD, err error) {
 		}
 	}
 
-	return 0, fmt.Errorf("failed to find jump map for iface=%v progID=%v", ifaceName, progIDStr)
+	return 0, fmt.Errorf("failed to find jump map for iface=%s progID=%d", ifaceName, progID)
 }
 
 func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
@@ -1935,7 +1951,35 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 	ips = append(ips, update.ExternalIps...)
 
 	key := serviceKey{name: update.Name, namespace: update.Namespace}
-	m.dirtyServices[key] = ips
+
+	ips4 := make([]ip.V4CIDR, 0, len(ips))
+	for _, i := range ips {
+		cidr, err := ip.ParseCIDROrIP(i)
+		if err != nil {
+			log.WithFields(log.Fields{"service": key, "ip": i}).Warn("Not a valid CIDR.")
+		} else if cidrv4, ok := cidr.(ip.V4CIDR); !ok {
+			log.WithFields(log.Fields{"service": key, "ip": i}).Debug("Not a valid V4 CIDR.")
+		} else {
+			ips4 = append(ips4, cidrv4)
+		}
+	}
+
+	// Check which IPs have been removed (no-op if we haven't seen it yet)
+	for _, old := range m.services[key] {
+		exists := false
+		for _, svcIP := range ips4 {
+			if old == svcIP {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			m.dp.delRoute(old)
+		}
+	}
+
+	m.services[key] = ips4
+	m.dirtyServices.Add(key)
 }
 
 func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
@@ -1949,87 +1993,52 @@ func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
 	}).Info("Service Remove")
 
 	key := serviceKey{name: update.Name, namespace: update.Namespace}
-	m.dirtyServices[key] = nil
-}
 
-func (m *bpfEndpointManager) reconcileServices() {
-	for svc, ips := range m.dirtyServices {
-		errored := false
-		for _, ip := range ips {
-			if err := m.dp.setRoute(ip); err != nil {
-				log.WithError(err).Errorf("Failed to set route to %s via bpfnatin.", ip)
-				errored = true
-			}
-		}
-
-		known := m.services[svc]
-
-		for _, old := range known {
-			exist := false
-			for _, ip := range ips {
-				if ip == old {
-					exist = true
-					break
-				}
-			}
-
-			if !exist {
-				if err := m.dp.delRoute(old); err != nil {
-					log.WithError(err).Errorf("Failed to delete route to %s via bpfnatin.", old)
-					errored = true
-				}
-			}
-		}
-
-		if !errored {
-			if len(ips) > 0 {
-				m.services[svc] = ips
-			} else {
-				delete(m.services, svc)
-			}
-			delete(m.dirtyServices, svc)
-		}
+	for _, svcIP := range m.services[key] {
+		m.dp.delRoute(svcIP)
 	}
+
+	delete(m.services, key)
 }
 
 var bpfnatGW = ip.FromNetIP(net.IPv4(169, 254, 1, 1))
 
-func (m *bpfEndpointManager) setRoute(dst string) error {
-	cidr, err := ip.CIDRFromString(dst + "/32")
-	if err != nil {
-		return err
-	}
-
+func (m *bpfEndpointManager) setRoute(cidr ip.V4CIDR) {
 	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeGlobalUnicast,
 		CIDR: cidr,
 		GW:   bpfnatGW,
 	})
 	log.WithFields(log.Fields{
-		"cidr": dst + "/32",
+		"cidr": cidr,
 	}).Debug("setRoute")
-	return nil
 }
 
-func (m *bpfEndpointManager) delRoute(dst string) error {
-	cidr, err := ip.CIDRFromString(dst + "/32")
-	if err != nil {
-		return err
-	}
-
+func (m *bpfEndpointManager) delRoute(cidr ip.V4CIDR) {
 	m.routeTable.RouteRemove(bpfInDev, cidr)
 	log.WithFields(log.Fields{
-		"cidr": dst + "/32",
+		"cidr": cidr,
 	}).Debug("delRoute")
-	return nil
 }
 
-func (m *bpfEndpointManager) GetRouteTableSyncers() []routeTableSyncer {
+func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
 	if !m.ctlbWorkaroundEnabled {
 		return nil
 	}
 
-	tables := []routeTableSyncer{m.routeTable}
+	tables := []routetable.RouteTableSyncer{m.routeTable}
 
 	return tables
+}
+
+func ruleMatchID(
+	dir string,
+	action string,
+	owner string,
+	idx int,
+	name string) polprog.RuleMatchID {
+
+	h := fnv.New64a()
+	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
+	return h.Sum64()
 }

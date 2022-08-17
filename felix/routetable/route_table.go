@@ -175,6 +175,11 @@ const (
 	updateTypeDelta
 )
 
+// RouteTable manages calico routes for a specific table. It reconciles the
+// routes that we desire to have for calico managed devices with what is the
+// current status in the dataplane. That is, it removes any routes that we do
+// not desire and adds those that we do. It skips over devices that we do not
+// manage not to interfare with other users of the route tables.
 type RouteTable struct {
 	logCxt *log.Entry
 
@@ -834,9 +839,9 @@ func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) 
 		Table:     r.tableIndex,
 	}
 
-	// If this is an IPv6 blackhole route, set the dev to lo. This matches
+	// If this is an IPv6 blackhole or throw route, set the dev to lo. This matches
 	// what the kernel does, and ensures we properly query programmed routes.
-	if r.ipVersion == 6 && target.RouteType() == syscall.RTN_BLACKHOLE {
+	if r.ipVersion == 6 && (target.RouteType() == syscall.RTN_BLACKHOLE || target.RouteType() == syscall.RTN_THROW) {
 		route.LinkIndex = 1
 	}
 

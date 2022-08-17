@@ -33,6 +33,9 @@ Param(
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $StartCalico="yes",
+    # As of Kubernetes version v1.24.0, service account token secrets are no longer automatically created. But this installation script uses that secret
+    # to generate a kubeconfig so default to creating the calico-node token secret if it doesn't exist.
+    [parameter(Mandatory = $false)] $AutoCreateServiceAccountTokenSecret="yes",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
     [parameter(Mandatory = $false)] $EtcdEndpoints="",
     [parameter(Mandatory = $false)] $EtcdTlsSecretName="",
@@ -214,7 +217,9 @@ function GetCalicoNamespace() {
         return $ns
     }
 
+    $ErrorActionPreference = 'Continue'
     $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get ns calico-system
+    $ErrorActionPreference = 'Stop'
     if ([string]::IsNullOrEmpty($name)) {
         write-host "Calico running in kube-system namespace"
         return ("kube-system")
@@ -227,7 +232,7 @@ function GetCalicoKubeConfig()
 {
     param(
       [parameter(Mandatory=$true)] $CalicoNamespace,
-      [parameter(Mandatory=$false)] $SecretName = "calico-node",
+      [parameter(Mandatory=$false)] $SecretNamePrefix = "calico-node",
       [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 
@@ -264,20 +269,53 @@ function GetCalicoKubeConfig()
             exit 1
         }
     } else {
-        $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
-        if ([string]::IsNullOrEmpty($name)) {
-            throw "$SecretName service account does not exist."
+        $ErrorActionPreference = 'Continue'
+        $secretName=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretNamePrefix | select -first 1
+        $ErrorActionPreference = 'Stop'
+        if ([string]::IsNullOrEmpty($secretName)) {
+            if (-Not $AutoCreateServiceAccountTokenSecret) {
+                throw "$SecretName service account token secret does not exist."
+            } else {
+                # Otherwise create the serviceaccount token secret.
+                $secretName = "calico-node-token"
+                CreateTokenAccountSecret -Name $secretName -Namespace $CalicoNamespace -KubeConfigPath $KubeConfigPath
+            }
         }
         # CA from the k8s secret is already base64-encoded.
-        $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
+        $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$secretName -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
         # Token from the k8s secret is base64-encoded but we need the jwt token.
-        $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n $CalicoNamespace
+        $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$secretName -o jsonpath='{.data.token}' -n $CalicoNamespace
         $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
 
         $server=findstr https:// $KubeConfigPath
     }
 
     (Get-Content $RootDir\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content $RootDir\calico-kube-config -Force
+}
+
+function CreateTokenAccountSecret()
+{
+    param(
+      [parameter(Mandatory=$true)] $Name,
+      [parameter(Mandatory=$true)] $Namespace,
+      [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
+    )
+
+    $tempFile = New-TemporaryFile
+    Write-Host "Created temp file ${tempFile}"
+
+    $yaml=@"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $Name
+  namespace: $Namespace
+  annotations:
+    kubernetes.io/service-account.name: calico-node
+type: kubernetes.io/service-account-token
+"@
+    Set-Content -Path $tempFile.FullName -value $yaml
+    c:\k\kubectl --kubeconfig $KubeConfigPath apply -f $tempFile.FullName
 }
 
 function EnableWinDsrForEKS()
@@ -312,7 +350,9 @@ function SetupEtcdTlsFiles()
 
     $path = "$RootDir\etcd-tls"
 
+    $ErrorActionPreference = 'Continue'
     $found=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -n $CalicoNamespace
+    $ErrorActionPreference = 'Stop'
     if ([string]::IsNullOrEmpty($found)) {
         throw "$SecretName does not exist."
     }
@@ -367,6 +407,7 @@ function InstallCalico()
     Write-Host "`nCalico for Windows installed`n"
 }
 
+# kubectl errors are expected, so there are places where this is reset to "Continue" temporarily
 $ErrorActionPreference = "Stop"
 
 $BaseDir="c:\k"
@@ -477,8 +518,7 @@ if ($platform -EQ "ec2") {
 if ($platform -EQ "gce") {
     $gceNodeName = Invoke-RestMethod -UseBasicParsing -Headers @{"Metadata-Flavor"="Google"} "http://metadata.google.internal/computeMetadata/v1/instance/hostname" -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for GCE, node name $gceNodeName ..."
-    $gceNodeNameQuote = """$gceNodeName"""
-    Set-ConfigParameters -var 'NODENAME' -value $gceNodeNameQuote
+    Set-ConfigParameters -var 'NODENAME' -value $gceNodeName
 
     $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -CalicoNamespace $calicoNs

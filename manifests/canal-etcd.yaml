@@ -153,6 +153,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: calico-node
 rules:
+  # Used for creating service account tokens to be used by the CNI plugin
+  - apiGroups: [""]
+    resources:
+      - serviceaccounts/token
+    resourceNames:
+      - canal
+    verbs:
+      - create
   # The CNI plugin needs to get pods, nodes, and namespaces.
   - apiGroups: [""]
     resources:
@@ -719,6 +727,8 @@ spec:
         - key: CriticalAddonsOnly
           operator: Exists
         - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
       priorityClassName: system-cluster-critical

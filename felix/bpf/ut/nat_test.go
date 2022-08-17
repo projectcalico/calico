@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -431,7 +432,7 @@ func TestNATNodePort(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack.FlagNATNPFwd))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd))
 
 	expectMark(tcdefs.MarkSeenBypassForwardSourceFixup)
 	// Leaving node 1
@@ -544,7 +545,7 @@ func TestNATNodePort(t *testing.T) {
 	v, ok = ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack.FlagExtLocal))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal))
 
 	dumpARPMap(arpMap)
 
@@ -1008,7 +1009,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack.FlagExtLocal))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal))
 
 	// Arriving at workload
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -1899,7 +1900,7 @@ func TestNATNodePortIngressDSR(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack.FlagNATFwdDsr | conntrack.FlagNATNPFwd))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagNATFwdDsr | conntrack3.FlagNATNPFwd))
 }
 
 func TestNATSourceCollision(t *testing.T) {

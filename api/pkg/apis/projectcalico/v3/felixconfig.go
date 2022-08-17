@@ -440,16 +440,24 @@ type FelixConfigurationSpec struct {
 	// run in network-policy mode only.
 	RouteSyncDisabled *bool `json:"routeSyncDisabled,omitempty"`
 
-	// WireguardEnabled controls whether Wireguard is enabled. [Default: false]
+	// WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`
-	// WireguardListeningPort controls the listening port used by Wireguard. [Default: 51820]
+	// WireguardEnabledV6 controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network). [Default: false]
+	WireguardEnabledV6 *bool `json:"wireguardEnabledV6,omitempty"`
+	// WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]
 	WireguardListeningPort *int `json:"wireguardListeningPort,omitempty" validate:"omitempty,gt=0,lte=65535"`
+	// WireguardListeningPortV6 controls the listening port used by IPv6 Wireguard. [Default: 51821]
+	WireguardListeningPortV6 *int `json:"wireguardListeningPortV6,omitempty" validate:"omitempty,gt=0,lte=65535"`
 	// WireguardRoutingRulePriority controls the priority value to use for the Wireguard routing rule. [Default: 99]
 	WireguardRoutingRulePriority *int `json:"wireguardRoutingRulePriority,omitempty" validate:"omitempty,gt=0,lt=32766"`
-	// WireguardInterfaceName specifies the name to use for the Wireguard interface. [Default: wg.calico]
+	// WireguardInterfaceName specifies the name to use for the IPv4 Wireguard interface. [Default: wireguard.cali]
 	WireguardInterfaceName string `json:"wireguardInterfaceName,omitempty" validate:"omitempty,interface"`
-	// WireguardMTU controls the MTU on the Wireguard interface. See Configuring MTU [Default: 1420]
+	// WireguardInterfaceNameV6 specifies the name to use for the IPv6 Wireguard interface. [Default: wg-v6.cali]
+	WireguardInterfaceNameV6 string `json:"wireguardInterfaceNameV6,omitempty" validate:"omitempty,interface"`
+	// WireguardMTU controls the MTU on the IPv4 Wireguard interface. See Configuring MTU [Default: 1440]
 	WireguardMTU *int `json:"wireguardMTU,omitempty"`
+	// WireguardMTUV6 controls the MTU on the IPv6 Wireguard interface. See Configuring MTU [Default: 1420]
+	WireguardMTUV6 *int `json:"wireguardMTUV6,omitempty"`
 	// WireguardHostEncryptionEnabled controls whether Wireguard host-to-host encryption is enabled. [Default: false]
 	WireguardHostEncryptionEnabled *bool `json:"wireguardHostEncryptionEnabled,omitempty"`
 	// WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]
@@ -467,7 +475,7 @@ type FelixConfigurationSpec struct {
 
 	// WorkloadSourceSpoofing controls whether pods can use the allowedSourcePrefixes annotation to send traffic with a source IP
 	// address that is not theirs. This is disabled by default. When set to "Any", pods can request any prefix.
-	WorkloadSourceSpoofing string `json:"workloadSourceSpoofing,omitempty" validate:"omitempty,oneof=Disabled Any)"`
+	WorkloadSourceSpoofing string `json:"workloadSourceSpoofing,omitempty" validate:"omitempty,oneof=Disabled Any"`
 
 	// MTUIfacePattern is a regular expression that controls which interfaces Felix should scan in order
 	// to calculate the host's MTU.
@@ -477,7 +485,6 @@ type FelixConfigurationSpec struct {
 
 	// FloatingIPs configures whether or not Felix will program floating IP addresses.
 	//
-	// +kubebuilder:default=Disabled
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 }

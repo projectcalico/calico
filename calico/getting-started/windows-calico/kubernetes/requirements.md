@@ -55,7 +55,7 @@ calicoctl patch felixconfiguration default -p '{"spec":{"ipipEnabled":false}}'
 ```
 - If using {{site.prodname}} IPAM, strict affinity of IPAM configuration must be set to `true`.
 ```bash
-calicoctl ipam configure --strictaffinity=true
+kubectl patch ipamconfigurations default --type merge --patch='{"spec": {"strictAffinity": true}}'
 ```
 
 >**Note**: For operator-managed Linux {{site.prodname}} clusters, three Linux worker nodes are required in order to meet high-availability requirements for Typha.

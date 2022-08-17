@@ -197,6 +197,24 @@ func (c *EncapsulationCalculator) handleAPIPool(p model.KVPair) error {
 		return fmt.Errorf("failed to convert %+v to *model.IPPool", p.Value)
 	}
 
+	// Validate pool's IPIPMode
+	switch pool.Spec.IPIPMode {
+	case apiv3.IPIPModeNever:
+	case apiv3.IPIPModeAlways:
+	case apiv3.IPIPModeCrossSubnet:
+	default:
+		return fmt.Errorf("invalid IPIPMode \"%v\" for %v", pool.Spec.IPIPMode, pool.Spec.CIDR)
+	}
+
+	// Validate pool's VXLANMode
+	switch pool.Spec.VXLANMode {
+	case apiv3.VXLANModeNever:
+	case apiv3.VXLANModeAlways:
+	case apiv3.VXLANModeCrossSubnet:
+	default:
+		return fmt.Errorf("invalid VXLANMode \"%v\" for %v", pool.Spec.VXLANMode, pool.Spec.CIDR)
+	}
+
 	poolKey := pool.Spec.CIDR
 	c.updatePool(poolKey, pool.Spec.IPIPMode != apiv3.IPIPModeNever, pool.Spec.VXLANMode != apiv3.VXLANModeNever)
 

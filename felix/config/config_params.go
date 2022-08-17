@@ -162,17 +162,21 @@ type Config struct {
 
 	// Wireguard configuration
 	WireguardEnabled               bool          `config:"bool;false"`
+	WireguardEnabledV6             bool          `config:"bool;false"`
 	WireguardListeningPort         int           `config:"int;51820"`
+	WireguardListeningPortV6       int           `config:"int;51821"`
 	WireguardRoutingRulePriority   int           `config:"int;99"`
 	WireguardInterfaceName         string        `config:"iface-param;wireguard.cali;non-zero"`
+	WireguardInterfaceNameV6       string        `config:"iface-param;wg-v6.cali;non-zero"`
 	WireguardMTU                   int           `config:"int;0"`
+	WireguardMTUV6                 int           `config:"int;0"`
 	WireguardHostEncryptionEnabled bool          `config:"bool;false"`
 	WireguardPersistentKeepAlive   time.Duration `config:"seconds;0"`
 
 	BPFEnabled                         bool             `config:"bool;false"`
 	BPFDisableUnprivileged             bool             `config:"bool;true"`
 	BPFLogLevel                        string           `config:"oneof(off,info,debug);off;non-zero"`
-	BPFDataIfacePattern                *regexp.Regexp   `config:"regexp;^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$)"`
+	BPFDataIfacePattern                *regexp.Regexp   `config:"regexp;^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$|wg-v6.cali$)"`
 	BPFConnectTimeLoadBalancingEnabled bool             `config:"bool;true"`
 	BPFExternalServiceMode             string           `config:"oneof(tunnel,dsr);tunnel;non-zero"`
 	BPFKubeProxyIptablesCleanupEnabled bool             `config:"bool;true"`

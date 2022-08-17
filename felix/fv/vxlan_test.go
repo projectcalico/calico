@@ -57,6 +57,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		routeSource := testConfig.RouteSource
 		brokenXSum := testConfig.BrokenXSum
 		enableIPv6 := testConfig.EnableIPv6
+
+		if BPFMode() && enableIPv6 && !BPFIPv6Support() {
+			return
+		}
+
 		Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", vxlanMode, routeSource, brokenXSum, enableIPv6), func() {
 			var (
 				infra           infrastructure.DatastoreInfra
@@ -134,6 +139,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					w[ii].ConfigureInInfra(infra)
 
 					hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
+				}
+
+				if BPFMode() {
+					ensureAllNodesBPFProgramsAttached(felixes)
 				}
 
 				cc = &connectivity.Checker{}

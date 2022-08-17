@@ -366,6 +366,16 @@ func (b *mockDatastore) CalicoNodeStatus() clientv3.CalicoNodeStatusInterface {
 	panic("not implemented")
 }
 
+// IPAMConfig returns an interface for managing the IPAMConfig resources.
+func (b *mockDatastore) IPAMConfig() clientv3.IPAMConfigInterface {
+	panic("not implemented")
+}
+
+// BlockAffinities returns an interface for managing the block affinity resources.
+func (b *mockDatastore) BlockAffinities() clientv3.BlockAffinityInterface {
+	panic("not implemented")
+}
+
 func (b *mockDatastore) Backend() bapi.Client {
 	panic("not implemented")
 }

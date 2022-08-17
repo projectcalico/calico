@@ -112,7 +112,7 @@ oc get tigerastatus
 Next, [install calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install) and ensure strict affinity is true:
 
 ```bash
-calicoctl ipam configure --strictaffinity=true
+kubectl patch ipamconfigurations default --type merge --patch='{"spec": {"strictAffinity": true}}'
 ```
 
 #### Add Windows nodes to the cluster

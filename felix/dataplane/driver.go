@@ -117,7 +117,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		markScratch0, _ = markBitsManager.NextSingleBitMark()
 		markScratch1, _ = markBitsManager.NextSingleBitMark()
 
-		if configParams.WireguardEnabled {
+		if configParams.WireguardEnabled || configParams.WireguardEnabledV6 {
 			log.Info("Wireguard enabled, allocating a mark bit")
 			markWireguard, _ = markBitsManager.NextSingleBitMark()
 			if markWireguard == 0 {
@@ -166,11 +166,21 @@ func StartDataplaneDriver(configParams *config.Config,
 		var wireguardEnabled bool
 		var wireguardTableIndex int
 		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
-			log.Debugf("Assigned wireguard table index: %d", idx)
+			log.Debugf("Assigned IPv4 wireguard table index: %d", idx)
 			wireguardEnabled = configParams.WireguardEnabled
 			wireguardTableIndex = idx
 		} else {
-			log.WithError(err).Warning("Unable to assign table index for wireguard")
+			log.WithError(err).Warning("Unable to assign table index for IPv4 wireguard")
+		}
+
+		var wireguardEnabledV6 bool
+		var wireguardTableIndexV6 int
+		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
+			log.Debugf("Assigned IPv6 wireguard table index: %d", idx)
+			wireguardEnabledV6 = configParams.WireguardEnabledV6
+			wireguardTableIndexV6 = idx
+		} else {
+			log.WithError(err).Warning("Unable to assign table index for IPv6 wireguard")
 		}
 
 		dpConfig := intdataplane.Config{
@@ -225,9 +235,12 @@ func StartDataplaneDriver(configParams *config.Config,
 				AllowIPIPPacketsFromWorkloads:  configParams.AllowIPIPPacketsFromWorkloads,
 
 				WireguardEnabled:            configParams.WireguardEnabled,
+				WireguardEnabledV6:          configParams.WireguardEnabledV6,
 				WireguardInterfaceName:      configParams.WireguardInterfaceName,
+				WireguardInterfaceNameV6:    configParams.WireguardInterfaceNameV6,
 				WireguardIptablesMark:       markWireguard,
 				WireguardListeningPort:      configParams.WireguardListeningPort,
+				WireguardListeningPortV6:    configParams.WireguardListeningPortV6,
 				WireguardEncryptHostTraffic: configParams.WireguardHostEncryptionEnabled,
 				RouteSource:                 configParams.RouteSource,
 
@@ -249,12 +262,17 @@ func StartDataplaneDriver(configParams *config.Config,
 			},
 			Wireguard: wireguard.Config{
 				Enabled:             wireguardEnabled,
+				EnabledV6:           wireguardEnabledV6,
 				ListeningPort:       configParams.WireguardListeningPort,
+				ListeningPortV6:     configParams.WireguardListeningPortV6,
 				FirewallMark:        int(markWireguard),
 				RoutingRulePriority: configParams.WireguardRoutingRulePriority,
 				RoutingTableIndex:   wireguardTableIndex,
+				RoutingTableIndexV6: wireguardTableIndexV6,
 				InterfaceName:       configParams.WireguardInterfaceName,
+				InterfaceNameV6:     configParams.WireguardInterfaceNameV6,
 				MTU:                 configParams.WireguardMTU,
+				MTUV6:               configParams.WireguardMTUV6,
 				RouteSource:         configParams.RouteSource,
 				EncryptHostTraffic:  configParams.WireguardHostEncryptionEnabled,
 				PersistentKeepAlive: configParams.WireguardPersistentKeepAlive,
@@ -384,7 +402,7 @@ func ServePrometheusMetrics(configParams *config.Config) {
 			log.Info("Discarding process metrics")
 			prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		}
-		if !configParams.PrometheusWireGuardMetricsEnabled || !configParams.WireguardEnabled {
+		if !configParams.PrometheusWireGuardMetricsEnabled || (!configParams.WireguardEnabled && !configParams.WireguardEnabledV6) {
 			log.Info("Discarding WireGuard metrics")
 			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 		}

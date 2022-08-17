@@ -12,6 +12,10 @@ type BGPConfigurationListerExpansion interface{}
 // BGPPeerLister.
 type BGPPeerListerExpansion interface{}
 
+// BlockAffinityListerExpansion allows custom methods to be added to
+// BlockAffinityLister.
+type BlockAffinityListerExpansion interface{}
+
 // CalicoNodeStatusListerExpansion allows custom methods to be added to
 // CalicoNodeStatusLister.
 type CalicoNodeStatusListerExpansion interface{}
@@ -35,6 +39,10 @@ type GlobalNetworkSetListerExpansion interface{}
 // HostEndpointListerExpansion allows custom methods to be added to
 // HostEndpointLister.
 type HostEndpointListerExpansion interface{}
+
+// IPAMConfigurationListerExpansion allows custom methods to be added to
+// IPAMConfigurationLister.
+type IPAMConfigurationListerExpansion interface{}
 
 // IPPoolListerExpansion allows custom methods to be added to
 // IPPoolLister.

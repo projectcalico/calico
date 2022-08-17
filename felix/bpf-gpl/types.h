@@ -20,6 +20,8 @@
 #include "reasons.h"
 #include "counters.h"
 
+#define MAX_RULE_IDS    32
+
 // struct cali_tc_state holds state that is passed between the BPF programs.
 // WARNING: must be kept in sync with
 // - the definitions in bpf/polprog/pol_prog_builder.go.
@@ -67,6 +69,10 @@ struct cali_tc_state {
 	__u8 flags;
 	/* Packet size filled from iphdr->tot_len in tc_state_fill_from_iphdr(). */
 	__be16 ip_size;
+	/* Count of rules that were hit while processing policy. */
+	__u32 rules_hit;
+	/* Record of the rule IDs of the rules that were hit. */
+	__u64 rule_ids[MAX_RULE_IDS];
 
 	/* Result of the conntrack lookup. */
 	struct calico_ct_result ct_result;
@@ -114,8 +120,9 @@ struct cali_tc_ctx {
   /* Our single copies of the data start/end pointers loaded from the skb. */
   void *data_start;
   void *data_end;
-  struct iphdr *ip_header;
+  void *ip_header;
   void *nh;
+  long ipheader_len;
 
   struct cali_tc_state *state;
   struct calico_nat_dest *nat_dest;
@@ -124,24 +131,39 @@ struct cali_tc_ctx {
   counters_t *counters;
 };
 
-static CALI_BPF_INLINE struct ethhdr* tc_ethhdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct iphdr *)ctx->ip_header;
+}
+
+static CALI_BPF_INLINE struct ipv6hdr* ipv6_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct ipv6hdr *)ctx->ip_header;
+}
+
+static CALI_BPF_INLINE struct ethhdr* eth_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct ethhdr *)ctx->data_start;
 }
 
-static CALI_BPF_INLINE struct tcphdr* tc_tcphdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct tcphdr* tcp_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct tcphdr *)ctx->nh;
 }
 
-static CALI_BPF_INLINE struct udphdr* tc_udphdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct udphdr* udp_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct udphdr *)ctx->nh;
 }
 
-static CALI_BPF_INLINE struct icmphdr* tc_icmphdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct icmphdr *)ctx->nh;
+}
+
+static CALI_BPF_INLINE struct ipv6_opt_hdr* ipv6ext_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct ipv6_opt_hdr *)ctx->nh;
 }
 
 #endif /* __CALI_BPF_TYPES_H__ */

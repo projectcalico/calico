@@ -52,6 +52,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -182,8 +183,16 @@ FELIX_2/32: remote host`
 
 const extIP = "10.1.2.3"
 
+func BPFMode() bool {
+	return os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+}
+
+func BPFIPv6Support() bool {
+	return false
+}
+
 func describeBPFTests(opts ...bpfTestOpt) bool {
-	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+	if !BPFMode() {
 		// Non-BPF run.
 		return true
 	}
@@ -390,6 +399,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				err := infra.AddDefaultDeny()
 				Expect(err).NotTo(HaveOccurred())
+
+				ensureBPFProgramsAttached(felixes[0])
 
 				pol := api.NewGlobalNetworkPolicy()
 				pol.Namespace = "fv"
@@ -763,6 +774,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			err := infra.AddDefaultDeny()
 			Expect(err).NotTo(HaveOccurred())
+			if !options.TestManagesBPF {
+				for _, felix := range felixes {
+					ensureBPFProgramsAttached(felix)
+				}
+			}
 		}
 
 		Describe(fmt.Sprintf("with a %d node cluster", numNodes), func() {
@@ -3495,6 +3511,60 @@ func dumpSendRecvMap(felix *infrastructure.Felix) nat.SendRecvMsgMapMem {
 	m := make(nat.SendRecvMsgMapMem)
 	dumpBPFMap(felix, bm, nat.SendRecvMsgMapMemIter(m))
 	return m
+}
+
+func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
+	im := ifstate.Map(&bpf.MapContext{})
+	m := make(ifstate.MapMem)
+	dumpBPFMap(felix, im, ifstate.MapMemIter(m))
+	return m
+}
+
+func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix) {
+	for _, felix := range felixes {
+		ensureBPFProgramsAttachedOffset(2, felix)
+	}
+}
+
+func ensureBPFProgramsAttached(felix *infrastructure.Felix, ifacesExtra ...string) {
+	ensureBPFProgramsAttachedOffset(2, felix, ifacesExtra...)
+}
+
+func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, ifacesExtra ...string) {
+	expectedIfaces := []string{"eth0"}
+	if felix.ExpectedIPIPTunnelAddr != "" {
+		expectedIfaces = append(expectedIfaces, "tunl0")
+	}
+	if felix.ExpectedVXLANTunnelAddr != "" {
+		expectedIfaces = append(expectedIfaces, "vxlan.calico")
+	}
+	if felix.ExpectedWireguardTunnelAddr != "" {
+		expectedIfaces = append(expectedIfaces, "wireguard.cali")
+	}
+
+	for _, w := range felix.Workloads {
+		if w.Runs() {
+			if iface := w.GetInterfaceName(); iface != "" {
+				expectedIfaces = append(expectedIfaces, iface)
+			}
+			if iface := w.GetSpoofInterfaceName(); iface != "" {
+				expectedIfaces = append(expectedIfaces, iface)
+			}
+		}
+	}
+
+	expectedIfaces = append(expectedIfaces, ifacesExtra...)
+
+	EventuallyWithOffset(offset, func() []string {
+		prog := []string{}
+		m := dumpIfStateMap(felix)
+		for _, v := range m {
+			if (v.Flags() | ifstate.FlgReady) > 0 {
+				prog = append(prog, v.IfName())
+			}
+		}
+		return prog
+	}, "20s", "200ms").Should(ContainElements(expectedIfaces))
 }
 
 func k8sService(name, clusterIP string, w *workload.Workload, port,

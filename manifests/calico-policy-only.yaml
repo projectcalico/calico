@@ -1105,7 +1105,6 @@ spec:
                   is used to enable feature that is not fully production ready.
                 type: string
               floatingIPs:
-                default: Disabled
                 description: FloatingIPs configures whether or not Felix will program
                   floating IP addresses.
                 enum:
@@ -1448,7 +1447,13 @@ spec:
               vxlanVNI:
                 type: integer
               wireguardEnabled:
-                description: 'WireguardEnabled controls whether Wireguard is enabled.
+                description: 'WireguardEnabled controls whether Wireguard is enabled
+                  for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network).
+                  [Default: false]'
+                type: boolean
+              wireguardEnabledV6:
+                description: 'WireguardEnabledV6 controls whether Wireguard is enabled
+                  for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network).
                   [Default: false]'
                 type: boolean
               wireguardHostEncryptionEnabled:
@@ -1457,7 +1462,11 @@ spec:
                 type: boolean
               wireguardInterfaceName:
                 description: 'WireguardInterfaceName specifies the name to use for
-                  the Wireguard interface. [Default: wg.calico]'
+                  the IPv4 Wireguard interface. [Default: wireguard.cali]'
+                type: string
+              wireguardInterfaceNameV6:
+                description: 'WireguardInterfaceNameV6 specifies the name to use for
+                  the IPv6 Wireguard interface. [Default: wg-v6.cali]'
                 type: string
               wireguardKeepAlive:
                 description: 'WireguardKeepAlive controls Wireguard PersistentKeepalive
@@ -1465,11 +1474,19 @@ spec:
                 type: string
               wireguardListeningPort:
                 description: 'WireguardListeningPort controls the listening port used
-                  by Wireguard. [Default: 51820]'
+                  by IPv4 Wireguard. [Default: 51820]'
+                type: integer
+              wireguardListeningPortV6:
+                description: 'WireguardListeningPortV6 controls the listening port
+                  used by IPv6 Wireguard. [Default: 51821]'
                 type: integer
               wireguardMTU:
-                description: 'WireguardMTU controls the MTU on the Wireguard interface.
-                  See Configuring MTU [Default: 1420]'
+                description: 'WireguardMTU controls the MTU on the IPv4 Wireguard
+                  interface. See Configuring MTU [Default: 1440]'
+                type: integer
+              wireguardMTUV6:
+                description: 'WireguardMTUV6 controls the MTU on the IPv6 Wireguard
+                  interface. See Configuring MTU [Default: 1420]'
                 type: integer
               wireguardRoutingRulePriority:
                 description: 'WireguardRoutingRulePriority controls the priority value
@@ -2681,6 +2698,8 @@ spec:
               maxBlocksPerHost:
                 description: MaxBlocksPerHost, if non-zero, is the max number of blocks
                   that can be affine to each host.
+                maximum: 2147483647
+                minimum: 0
                 type: integer
               strictAffinity:
                 type: boolean
@@ -4154,6 +4173,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: calico-node
 rules:
+  # Used for creating service account tokens to be used by the CNI plugin
+  - apiGroups: [""]
+    resources:
+      - serviceaccounts/token
+    resourceNames:
+      - calico-node
+    verbs:
+      - create
   # The CNI plugin needs to get pods, nodes, and namespaces.
   - apiGroups: [""]
     resources:
@@ -4216,14 +4243,6 @@ rules:
       - pods/status
     verbs:
       - patch
-  # Used for creating service account tokens to be used by the CNI plugin
-  - apiGroups: [""]
-    resources:
-      - serviceaccounts/token
-    resourceNames:
-      - calico-node
-    verbs:
-      - create
   # Calico monitors various CRDs for config.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
@@ -4617,6 +4636,8 @@ spec:
         - key: CriticalAddonsOnly
           operator: Exists
         - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
       priorityClassName: system-cluster-critical
