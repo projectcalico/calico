@@ -1094,11 +1094,17 @@ spec:
                   type: object
                 type: array
               featureDetectOverride:
-                description: FeatureDetectOverride is used to override the feature
-                  detection. Values are specified in a comma separated list with no
-                  spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".
+                description: FeatureDetectOverride is used to override the environment
+                  feature detection. Values are specified in a comma separated list
+                  with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".
                   "true" or "false" will force the feature, empty or omitted values
                   are auto-detected.
+                type: string
+              featureGate:
+                description: FeatureGate is used to enable or disable Calico features.
+                  Values are specified in a comma separated list with no spaces, example;
+                  "BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false". This
+                  is used to enable feature that is not fully production ready.
                 type: string
               floatingIPs:
                 description: FloatingIPs configures whether or not Felix will program
