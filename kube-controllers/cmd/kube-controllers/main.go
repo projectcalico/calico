@@ -125,32 +125,33 @@ func main() {
 	s := status.New(statusFile)
 
 	log.Info("Ensuring Calico datastore is initialized")
-	if err != nil {
-		log.WithError(err).Fatal("Failed to initialize Calico datastore")
-	}
-
-	s.SetReady("StartupCalicoDatastoreInitialization", false, "initialized to false")
+	s.SetReady("Startup", false, "initialized to false")
 	initCtx, cancelInit := context.WithTimeout(ctx, 60*time.Second)
 	// Loop until context expires or calicoClient is initialized.
 	for {
+		err := calicoClient.EnsureInitialized(initCtx, "", "k8s")
+		if err != nil {
+			log.WithError(err).Info("Failed to initialize datastore")
+			s.SetReady(
+				"Startup",
+				false,
+				fmt.Sprintf("Error initializing datastore: %v", err),
+			)
+		} else {
+			// Exit loop
+			break
+		}
+
 		select {
 		case <-initCtx.Done():
 			log.Fatal("Failed to initialize Calico datastore")
 			break
-		default:
-			// Try to initialize
+		case <-time.After(5 * time.Second):
+			// Try to initialize again
 		}
-
-		err := calicoClient.EnsureInitialized(initCtx, "", "k8s")
-		if err != nil {
-			log.WithError(err).Errorf("Failed to initialize datastore")
-		} else {
-			s.SetReady("StartupCalicoDatastoreInitialization", true, "")
-			break
-		}
-
-		time.Sleep(5 * time.Second)
 	}
+	log.Info("Calico datastore is initialized")
+	s.SetReady("Startup", true, "")
 	cancelInit()
 
 	controllerCtrl := &controllerControl{
