@@ -366,7 +366,6 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 		"app-policy",
 		"typha",
 		"felix",
-		"calico", // Technically not a container image, but a helm chart.
 	}
 
 	// Build env.
