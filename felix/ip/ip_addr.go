@@ -33,6 +33,11 @@ import (
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
+const (
+	IPv4SizeDword = 1
+	IPv6SizeDword = 4
+)
+
 var ErrInvalidIP = errors.New("Failed to parse IP address")
 
 // Addr represents either an IPv4 or IPv6 IP address.

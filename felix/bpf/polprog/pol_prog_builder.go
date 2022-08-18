@@ -45,6 +45,7 @@ type Builder struct {
 	stateMapFD         bpf.MapFD
 	jumpMapFD          bpf.MapFD
 	policyDebugEnabled bool
+	forIPv6            bool
 }
 
 type ipSetIDProvider interface {
@@ -58,6 +59,7 @@ func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMap
 		stateMapFD:         stateMapFD,
 		jumpMapFD:          jumpMapFD,
 		policyDebugEnabled: policyDebugEnabled,
+		forIPv6:            false,
 	}
 	return b
 }
@@ -86,35 +88,23 @@ var (
 	offDstIPSetKey = nextOffset(ipsets.IPSetEntrySize, 8)
 
 	// Offsets within the cal_tc_state struct.
-	// WARNING: must be kept in sync with the definitions in bpf/include/jump.h.
+	// WARNING: must be kept in sync with the definitions in bpf-gpl/types.h.
 	stateOffIPSrc          = FieldOffset{Offset: stateEventHdrSize + 0, Field: "state->ip_src"}
-	stateOffIPSrc1         = FieldOffset{Offset: stateEventHdrSize + 4, Field: "state->ip_src"}
-	stateOffIPSrc2         = FieldOffset{Offset: stateEventHdrSize + 8, Field: "state->ip_src"}
-	stateOffIPSrc3         = FieldOffset{Offset: stateEventHdrSize + 12, Field: "state->ip_src"}
 	stateOffIPDst          = FieldOffset{Offset: stateEventHdrSize + 16, Field: "state->ip_dst"}
-	stateOffIPDst1         = FieldOffset{Offset: stateEventHdrSize + 20, Field: "state->ip_dst"}
-	stateOffIPDst2         = FieldOffset{Offset: stateEventHdrSize + 24, Field: "state->ip_dst"}
-	stateOffIPDst3         = FieldOffset{Offset: stateEventHdrSize + 28, Field: "state->ip_dst"}
 	_                      = stateOffIPDst
 	stateOffPreNATIPDst    = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->pre_nat_ip_dst"}
-	stateOffPreNATIPDst1   = FieldOffset{Offset: stateEventHdrSize + 36, Field: "state->pre_nat_ip_dst"}
-	stateOffPreNATIPDst2   = FieldOffset{Offset: stateEventHdrSize + 40, Field: "state->pre_nat_ip_dst"}
-	stateOffPreNATIPDst3   = FieldOffset{Offset: stateEventHdrSize + 44, Field: "state->pre_nat_ip_dst"}
 	_                      = stateOffPreNATIPDst
 	stateOffPostNATIPDst   = FieldOffset{Offset: stateEventHdrSize + 48, Field: "state->post_nat_ip_dst"}
-	stateOffPostNATIPDst1  = FieldOffset{Offset: stateEventHdrSize + 52, Field: "state->post_nat_ip_dst"}
-	stateOffPostNATIPDst2  = FieldOffset{Offset: stateEventHdrSize + 56, Field: "state->post_nat_ip_dst"}
-	stateOffPostNATIPDst3  = FieldOffset{Offset: stateEventHdrSize + 60, Field: "state->post_nat_ip_dst"}
-	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 68, Field: "state->pol_rc"}
-	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 72, Field: "state->sport"}
-	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 74, Field: "state->dport"}
+	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 84, Field: "state->pol_rc"}
+	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 88, Field: "state->sport"}
+	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->dport"}
 	_                      = stateOffDstPort
-	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 74, Field: "state->icmp_type"}
-	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 76, Field: "state->pre_nat_dport"}
+	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->icmp_type"}
+	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 92, Field: "state->pre_nat_dport"}
 	_                      = stateOffPreNATDstPort
-	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 80, Field: "state->post_nat_dport"}
-	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 80, Field: "state->ip_proto"}
-	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 81, Field: "state->flags"}
+	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 94, Field: "state->post_nat_dport"}
+	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 96, Field: "state->ip_proto"}
+	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 97, Field: "state->flags"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -189,6 +179,10 @@ const (
 	TierEndDeny  TierEndAction = "deny"
 	TierEndPass  TierEndAction = "pass"
 )
+
+func (p *Builder) EnableIPv6Mode() {
+	p.forIPv6 = true
+}
 
 func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	p.b = NewBlock(p.policyDebugEnabled)
@@ -511,7 +505,12 @@ func (p *Builder) writeRule(r Rule, actionLabel string, destLeg matchLeg) {
 		log.Panic("empty action label")
 	}
 
-	rule := rules.FilterRuleToIPVersion(4, r.Rule)
+	var ipVersion uint8 = 4
+	if p.forIPv6 {
+		ipVersion = 6
+	}
+
+	rule := rules.FilterRuleToIPVersion(ipVersion, r.Rule)
 	if rule == nil {
 		log.Debugf("Version mismatch, skipping rule")
 		return
@@ -712,22 +711,57 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 	}
 	p.b.Load32(R1, R9, leg.offsetToStateIPAddressField())
 
-	var onMatchLabel string
+	var onMatchLabel, onNotMatchLabel string
 	if negate {
 		// Match negated, if we match any CIDR then we jump to the next rule.
 		onMatchLabel = p.endOfRuleLabel()
+		onNotMatchLabel = p.freshPerRuleLabel()
 	} else {
-		// Match is non-negated, if we match, got to the next match criteria.
+		// Match is non-negated, if we match, go to the next match criteria.
 		onMatchLabel = p.freshPerRuleLabel()
+		onNotMatchLabel = p.endOfRuleLabel()
 	}
+
+	size := ip.IPv4SizeDword
+	if p.forIPv6 {
+		size = ip.IPv6SizeDword
+	}
+
+	addrU32 := make([]uint32, size)
+	maskU32 := make([]uint32, size)
 	for _, cidrStr := range cidrs {
 		cidr := ip.MustParseCIDROrIP(cidrStr)
-		addrU32 := bits.ReverseBytes32(cidr.Addr().(ip.V4Addr).AsUint32()) // TODO IPv6
-		maskU32 := bits.ReverseBytes32(math.MaxUint32 << (32 - cidr.Prefix()) & math.MaxUint32)
+		if p.forIPv6 {
+			addrU64P1, addrU64P2 := cidr.Addr().(ip.V6Addr).AsUint64Pair()
+			addrU32[0] = bits.ReverseBytes32(uint32(addrU64P1 >> 32))
+			addrU32[1] = bits.ReverseBytes32(uint32(addrU64P1))
+			addrU32[2] = bits.ReverseBytes32(uint32(addrU64P2 >> 32))
+			addrU32[3] = bits.ReverseBytes32(uint32(addrU64P2))
 
-		p.b.MovImm32(R2, int32(maskU32))
-		p.b.And32(R2, R1)
-		p.b.JumpEqImm32(R2, int32(addrU32), onMatchLabel)
+			var maskU64P1 uint64 = uint64((math.MaxInt64 << (128 - cidr.Prefix())) & math.MaxUint64)
+			var maskU64P2 uint64 = 0
+			if cidr.Prefix() > 64 {
+				maskU64P1 = math.MaxUint64
+				maskU64P2 = uint64((math.MaxInt64 << (128 - cidr.Prefix())) & math.MaxUint64)
+			}
+			maskU32[0] = bits.ReverseBytes32(uint32(maskU64P1 >> 32))
+			maskU32[1] = bits.ReverseBytes32(uint32(maskU64P1))
+			maskU32[2] = bits.ReverseBytes32(uint32(maskU64P2 >> 32))
+			maskU32[3] = bits.ReverseBytes32(uint32(maskU64P2))
+		} else { // IPv4
+			addrU32[0] = bits.ReverseBytes32(cidr.Addr().(ip.V4Addr).AsUint32())
+			maskU32[0] = bits.ReverseBytes32(math.MaxUint32 << (32 - cidr.Prefix()) & math.MaxUint32)
+		}
+
+		for index, addr := range addrU32 {
+			p.b.MovImm32(R2, int32(maskU32[index]))
+			p.b.And32(R2, R1)
+			if index == len(addrU32)-1 {
+				p.b.JumpEqImm32(R2, int32(addr), onMatchLabel)
+			} else {
+				p.b.JumpNEImm32(R2, int32(addr), onNotMatchLabel)
+			}
+		}
 	}
 	if !negate {
 		// If we fall through then none of the CIDRs matched so the rule doesn't match.
