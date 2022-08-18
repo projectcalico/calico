@@ -519,6 +519,14 @@ type mapEntry struct {
 	Err   string   `json:"error"`
 }
 
+type perCpuMapEntry []struct {
+	Key    []string `json:"key"`
+	Values []struct {
+		CPU   int      `json:"cpu"`
+		Value []string `json:"value"`
+	} `json:"values"`
+}
+
 type progInfo struct {
 	Id     int    `json:"id"`
 	Type   string `json:"type"`
