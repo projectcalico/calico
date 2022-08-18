@@ -108,7 +108,7 @@ var (
 	stateOffRulesHit = FieldOffset{Offset: stateEventHdrSize + 36, Field: "state->rules_hit"}
 	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 40, Field: "state->rule_ids"}
 
-	stateOffFlags = FieldOffset{Offset: stateEventHdrSize + 340, Field: "state->flags"}
+	stateOffFlags = FieldOffset{Offset: stateEventHdrSize + 344, Field: "state->flags"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
