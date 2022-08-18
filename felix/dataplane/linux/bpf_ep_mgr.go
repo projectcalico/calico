@@ -1973,14 +1973,13 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 		"Namespace": update.Namespace,
 	}).Info("Service Update")
 
-	ips := make([]string, 0, 2+len(update.ExternalIps))
+	ips := make([]string, 0, 2)
 	if update.ClusterIp != "" {
 		ips = append(ips, update.ClusterIp)
 	}
 	if update.LoadbalancerIp != "" {
 		ips = append(ips, update.LoadbalancerIp)
 	}
-	ips = append(ips, update.ExternalIps...)
 
 	key := serviceKey{name: update.Name, namespace: update.Namespace}
 

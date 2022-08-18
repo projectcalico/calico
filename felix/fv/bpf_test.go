@@ -2372,11 +2372,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					)
 
 					testSvcName := "test-service"
+					testSvcExtIP0 := "10.123.0.0"
+					testSvcExtIP1 := "10.123.0.1"
 
 					BeforeEach(func() {
 						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 						testSvc = k8sService(testSvcName, "10.101.0.10",
 							w[0][0], 80, 8055, int32(npPort), testOpts.protocol)
+						testSvc.Spec.ExternalIPs = []string{testSvcExtIP0, testSvcExtIP1}
 						if extLocal {
 							testSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
 						}
@@ -2493,6 +2496,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											Selector: "ep-type=='host'",
 										},
 									},
+									{
+										Action: "Allow",
+										Source: api.EntityRule{
+											Nets: []string{testSvcExtIP0 + "/32", testSvcExtIP1 + "/32"},
+										},
+									},
 								}
 								w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
 								pol.Spec.Selector = w00Slector
@@ -2501,10 +2510,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							})
 
 							It("should have connectivity from all host-networked workloads to workload 0 via nodeport", func() {
-								tcpdump := w[0][0].AttachTCPDump()
-								tcpdump.SetLogEnabled(true)
-								tcpdump.Start("-vvvnle", "tcp", "port", "8055")
-								defer tcpdump.Stop()
 								node0IP := felixes[0].IP
 								node1IP := felixes[1].IP
 
@@ -2531,6 +2536,70 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
 								cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
 								cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
+
+								cc.CheckConnectivity()
+							})
+
+							It("should have connectivity from all host-networked workloads to workload 0 via ExternalIP", func() {
+								// This test is primarily to make sure that the external
+								// IPs do not interfere with the workaround and vise
+								// versa.
+								By("Setting ExternalIPs")
+								felixes[0].Exec("ip", "addr", "add", testSvcExtIP0+"/32", "dev", "eth0")
+								felixes[1].Exec("ip", "addr", "add", testSvcExtIP1+"/32", "dev", "eth0")
+
+								// The external IPs must be routable
+								By("Setting routes for the ExternalIPs")
+								felixes[0].Exec("ip", "route", "add", testSvcExtIP1+"/32", "via", felixes[1].IP)
+								felixes[1].Exec("ip", "route", "add", testSvcExtIP0+"/32", "via", felixes[0].IP)
+								externalClient.Exec("ip", "route", "add", testSvcExtIP1+"/32", "via", felixes[1].IP)
+								externalClient.Exec("ip", "route", "add", testSvcExtIP0+"/32", "via", felixes[0].IP)
+
+								By("Allow ingress from external client", func() {
+									pol = api.NewGlobalNetworkPolicy()
+									pol.Namespace = "fv"
+									pol.Name = "policy-ext-client"
+									pol.Spec.Ingress = []api.Rule{
+										{
+											Action: "Allow",
+											Source: api.EntityRule{
+												Nets: []string{externalClient.IP + "/32"},
+											},
+										},
+									}
+									w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
+									pol.Spec.Selector = w00Slector
+
+									pol = createPolicy(pol)
+								})
+
+								node0IP := felixes[0].IP
+								node1IP := felixes[1].IP
+
+								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+								switch testOpts.tunnel {
+								case "ipip":
+									if testOpts.connTimeEnabled {
+										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+									}
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+								case "wireguard":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+								case "vxlan":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+								}
+
+								ports := ExpectWithPorts(80)
+
+								cc.Expect(Some, hostW[0], TargetIP(testSvcExtIP0), ports, ExpectWithSrcIPs(testSvcExtIP0))
+								cc.Expect(Some, hostW[1], TargetIP(testSvcExtIP0), ports, hostW1SrcIP)
+								cc.Expect(Some, hostW[0], TargetIP(testSvcExtIP1), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(testSvcExtIP1), ports, ExpectWithSrcIPs(testSvcExtIP1))
+
+								cc.Expect(Some, externalClient, TargetIP(testSvcExtIP0), ports)
+								cc.Expect(Some, externalClient, TargetIP(testSvcExtIP1), ports)
 
 								cc.CheckConnectivity()
 							})
