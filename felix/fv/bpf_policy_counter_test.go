@@ -103,19 +103,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy count
 		pol = createPolicy(pol)
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "deny")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "deny")
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "deny")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "deny")
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "deny")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "deny")
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "deny")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "deny")
 		}, "2s", "200ms").Should(BeTrue())
 
 		for i := 0; i < 10; i++ {
@@ -133,19 +133,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy count
 
 		pol = updatePolicy(pol)
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow")
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow")
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow")
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow")
 		}, "2s", "200ms").Should(BeTrue())
 
 		for i := 0; i < 10; i++ {
@@ -165,19 +165,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy count
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow")
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow")
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow")
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return checkIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow")
+			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow")
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() int {
@@ -187,9 +187,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy count
 	})
 })
 
-func dumpRuleCounterMap(felix *infrastructure.Felix) polprog.RuleCounterMapMem {
+func dumpRuleCounterMap(felix *infrastructure.Felix) polprog.RuleCountersMapMem {
 	rcMap := polprog.RuleCountersMap(&bpf.MapContext{})
-	m := make(polprog.RuleCounterMapMem)
-	dumpBPFMap(felix, rcMap, polprog.MapMemIter(m))
+	m := make(polprog.RuleCountersMapMem)
+	dumpBPFMap(felix, rcMap, polprog.RuleCountersMapMemIter(m))
 	return m
 }

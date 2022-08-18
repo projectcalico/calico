@@ -3847,7 +3847,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	return false
 }
 
-func checkIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string) bool {
+func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string) bool {
 	startStr := fmt.Sprintf("Start of policy %s", polName)
 	endStr := fmt.Sprintf("End of policy %s", polName)
 	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
