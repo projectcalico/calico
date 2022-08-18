@@ -123,6 +123,7 @@ type MapContext struct {
 	SrMsgMap         Map
 	CtNatsMap        Map
 	IfStateMap       Map
+	RuleCountersMap  Map
 	MapSizes         map[string]uint32
 }
 
@@ -248,6 +249,32 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 	return nil, errors.Errorf("unrecognized map type %T", m)
 }
 
+//IterPerCpuMapCmdOutput iterates over the output of the dump of per-cpu map
+func IterPerCpuMapCmdOutput(output []byte, f IterCallback) error {
+	var mp perCpuMapEntry
+	var v []byte
+	err := json.Unmarshal(output, &mp)
+	if err != nil {
+		return errors.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+
+	for _, me := range mp {
+		k, err := hexStringsToBytes(me.Key)
+		if err != nil {
+			return errors.Errorf("failed parsing entry %v key: %e", me, err)
+		}
+		for _, value := range me.Values {
+			perCpuVal, err := hexStringsToBytes(value.Value)
+			if err != nil {
+				return errors.Errorf("failed parsing entry %v val: %e", me, err)
+			}
+			v = append(v, perCpuVal...)
+		}
+		f(k, v)
+	}
+	return nil
+}
+
 // IterMapCmdOutput iterates over the output of a command obtained by DumpMapCmd
 func IterMapCmdOutput(output []byte, f IterCallback) error {
 	var mp []mapEntry
@@ -275,7 +302,11 @@ func IterMapCmdOutput(output []byte, f IterCallback) error {
 // The key and value are owned by the iterator and will be clobbered by the next iteration so they must not be
 // retained or modified.
 func (b *PinnedMap) Iter(f IterCallback) error {
-	it, err := NewMapIterator(b.MapFD(), b.KeySize, b.ValueSize, b.MaxEntries)
+	valueSize := b.ValueSize
+	if b.perCPU {
+		valueSize = b.ValueSize * NumPossibleCPUs()
+	}
+	it, err := NewMapIterator(b.MapFD(), b.KeySize, valueSize, b.MaxEntries)
 	if err != nil {
 		return fmt.Errorf("failed to create BPF map iterator: %w", err)
 	}
