@@ -142,6 +142,11 @@ type bpfInterfaceState struct {
 	isReady    bool
 }
 
+type bpfRuleInfo struct {
+	ruleId string
+	dirty  bool
+}
+
 type bpfEndpointManager struct {
 	// Main store of information about interfaces; indexed on interface name.
 	ifacesLock  sync.Mutex
@@ -220,6 +225,10 @@ type bpfEndpointManager struct {
 	routeTable    routetable.RouteTableInterface
 	services      map[serviceKey][]ip.V4CIDR
 	dirtyServices set.Set[serviceKey]
+
+	// Maps for policy rule counters
+	polNameToRuleIDs map[string]set.Set[bpfRuleInfo]
+	ruleIdToMatchID  map[string]polprog.RuleMatchID
 }
 
 type serviceKey struct {
@@ -291,6 +300,8 @@ func newBPFEndpointManager(
 		ipv6Enabled:           config.BPFIpv6Enabled,
 		rpfStrictModeEnabled:  config.BPFEnforceRPF,
 		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
+		polNameToRuleIDs:      map[string]set.Set[bpfRuleInfo]{},
+		ruleIdToMatchID:       map[string]polprog.RuleMatchID{},
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -597,6 +608,9 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 	log.WithField("id", polID).Debug("Policy update")
 	m.policies[polID] = msg.Policy
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
+	if m.bpfPolicyDebugEnabled {
+		m.updatePolicyCache(polID.Name, "Policy", m.policies[polID].InboundRules, m.policies[polID].OutboundRules)
+	}
 }
 
 // onPolicyRemove removes the policy from the cache and marks any endpoints using it dirty.
@@ -607,6 +621,9 @@ func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	delete(m.policies, polID)
 	delete(m.policiesToWorkloads, polID)
+	if m.bpfPolicyDebugEnabled {
+		m.polNameToRuleIDs[polID.Name] = markAllRuleIdsDirty(m.polNameToRuleIDs[polID.Name])
+	}
 }
 
 // onProfileUpdate stores the profile in the cache and marks any endpoints that use it as dirty.
@@ -615,6 +632,9 @@ func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 	log.WithField("id", profID).Debug("Profile update")
 	m.profiles[profID] = msg.Profile
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
+	if m.bpfPolicyDebugEnabled {
+		m.updatePolicyCache(profID.Name, "Profile", m.profiles[profID].InboundRules, m.profiles[profID].OutboundRules)
+	}
 }
 
 // onProfileRemove removes the profile from the cache and marks any endpoints that were using it as dirty.
@@ -625,6 +645,35 @@ func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	delete(m.profiles, profID)
 	delete(m.profilesToWorkloads, profID)
+	if m.bpfPolicyDebugEnabled {
+		m.polNameToRuleIDs[profID.Name] = markAllRuleIdsDirty(m.polNameToRuleIDs[profID.Name])
+	}
+}
+
+func (m *bpfEndpointManager) removeDirtyPolicies() {
+	for k, v := range m.polNameToRuleIDs {
+		v.Iter(func(item bpfRuleInfo) error {
+			if item.dirty {
+				if val, ok := m.ruleIdToMatchID[item.ruleId]; ok {
+					b := make([]byte, 8)
+					binary.LittleEndian.PutUint64(b, val)
+					log.WithField("ruleId", val).Debug("deleting entry")
+					err := m.bpfMapContext.RuleCountersMap.Delete(b)
+					if err != nil && !bpf.IsNotExists(err) {
+						log.WithField("ruleId", val).Info("error deleting entry")
+					}
+					delete(m.ruleIdToMatchID, item.ruleId)
+				} else {
+					log.Debugf("Unknown ruleId %s", item.ruleId)
+				}
+				return set.RemoveItem
+			}
+			return nil
+		})
+		if m.polNameToRuleIDs[k].Len() == 0 {
+			delete(m.polNameToRuleIDs, k)
+		}
+	}
 }
 
 func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
@@ -669,6 +718,9 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
+	if m.bpfPolicyDebugEnabled {
+		m.removeDirtyPolicies()
+	}
 
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
@@ -2031,6 +2083,39 @@ func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSynce
 	return tables
 }
 
+// updatePolicyCache modifies entries in the cache, adding new entries and marking old entries dirty.
+func (m *bpfEndpointManager) updatePolicyCache(name string, owner string, inboundRules, outboundRules []*proto.Rule) {
+	var ruleIds set.Set[bpfRuleInfo]
+	if val, ok := m.polNameToRuleIDs[name]; ok {
+		// If the policy name exists, it means the policy is updated. There are cases where both inbound,
+		// outbound rules are updated or any one.
+		// Mark all the entries as dirty.
+		ruleIds = markAllRuleIdsDirty(val)
+	} else {
+		ruleIds = set.New[bpfRuleInfo]()
+	}
+	// Now iterate through all the rules and if the ruleIds are already in the cache, it means the rule has not
+	// changed as part of the update. Remove the dirty flag and add this entry back as non-dirty.
+	for idx, rule := range inboundRules {
+		ruleIds = m.addRuleInfo(rule, idx, owner, PolDirnIngress, ruleIds, name)
+	}
+	for idx, rule := range outboundRules {
+		ruleIds = m.addRuleInfo(rule, idx, owner, PolDirnEgress, ruleIds, name)
+	}
+	m.polNameToRuleIDs[name] = ruleIds
+}
+
+func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int, owner string, direction PolDirection, ruleIds set.Set[bpfRuleInfo], polName string) set.Set[bpfRuleInfo] {
+	item := bpfRuleInfo{ruleId: rule.RuleId, dirty: true}
+	if ruleIds.Contains(item) {
+		ruleIds.Discard(item)
+	}
+	item.dirty = false
+	m.ruleIdToMatchID[rule.RuleId] = ruleMatchID(direction.RuleDir(), rule.Action, owner, idx, polName)
+	ruleIds.Add(item)
+	return ruleIds
+}
+
 func ruleMatchID(
 	dir string,
 	action string,
@@ -2041,4 +2126,15 @@ func ruleMatchID(
 	h := fnv.New64a()
 	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
 	return h.Sum64()
+}
+
+func markAllRuleIdsDirty(ruleSet set.Set[bpfRuleInfo]) set.Set[bpfRuleInfo] {
+	cpy := set.New[bpfRuleInfo]()
+	ruleSet.Iter(func(item bpfRuleInfo) error {
+		i := item
+		i.dirty = true
+		cpy.Add(i)
+		return set.RemoveItem
+	})
+	return cpy
 }
