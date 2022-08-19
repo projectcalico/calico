@@ -2539,6 +2539,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							})
 
 							It("should have connectivity from all host-networked workloads to workload 0 via ExternalIP", func() {
+								if testOpts.connTimeEnabled {
+									// not valid for CTLB as it is just and approx.
+									return
+								}
 								// This test is primarily to make sure that the external
 								// IPs do not interfere with the workaround and vise
 								// versa.
@@ -2576,17 +2580,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
 								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+								hostW11SrcIP := ExpectWithSrcIPs(testSvcExtIP1)
 
 								switch testOpts.tunnel {
 								case "ipip":
-									if testOpts.connTimeEnabled {
-										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
-									}
 									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+									hostW11SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
 								case "wireguard":
 									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+									hostW11SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
 								case "vxlan":
 									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
+									hostW11SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedVXLANTunnelAddr)
 								}
 
 								ports := ExpectWithPorts(80)
@@ -2594,7 +2599,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.Expect(Some, hostW[0], TargetIP(testSvcExtIP0), ports, ExpectWithSrcIPs(testSvcExtIP0))
 								cc.Expect(Some, hostW[1], TargetIP(testSvcExtIP0), ports, hostW1SrcIP)
 								cc.Expect(Some, hostW[0], TargetIP(testSvcExtIP1), ports, hostW0SrcIP)
-								cc.Expect(Some, hostW[1], TargetIP(testSvcExtIP1), ports, ExpectWithSrcIPs(testSvcExtIP1))
+								cc.Expect(Some, hostW[1], TargetIP(testSvcExtIP1), ports, hostW11SrcIP)
 
 								cc.Expect(Some, externalClient, TargetIP(testSvcExtIP0), ports)
 								cc.Expect(Some, externalClient, TargetIP(testSvcExtIP1), ports)
