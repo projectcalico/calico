@@ -281,17 +281,6 @@ func (p *Builder) writeProgramHeader() {
 	p.b.LabelNextInsn("policy")
 }
 
-const (
-	jumpIdxPolicy = iota
-	jumpIdxAllowed
-	jumpIdxICMP
-	jumpIdxDrop
-
-	_ = jumpIdxPolicy
-	_ = jumpIdxICMP
-	_ = jumpIdxDrop
-)
-
 func (p *Builder) writeJumpIfToOrFromHost(label string) {
 	// Load state flags.
 	p.b.Load8(R1, R9, stateOffFlags)
@@ -315,7 +304,11 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Execute the tail call to drop program
 	p.b.Mov64(R1, R6)                      // First arg is the context.
 	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-	p.b.MovImm32(R3, jumpIdxDrop)          // Third arg is the index (rather than a pointer to the index).
+	jumpDropIndex := bpf.ProgIndexDrop
+	if p.forIPv6 {
+		jumpDropIndex = bpf.ProgIndexV6Drop
+	}
+	p.b.MovImm32(R3, int32(jumpDropIndex)) // Third arg is the index (rather than a pointer to the index).
 	p.b.Call(HelperTailCall)
 
 	// Fall through if tail call fails.
@@ -341,7 +334,11 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		// Execute the tail call.
 		p.b.Mov64(R1, R6)                      // First arg is the context.
 		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-		p.b.MovImm32(R3, jumpIdxAllowed)       // Third arg is the index (rather than a pointer to the index).
+		jumpAllowedIndex := bpf.ProgIndexAllowed
+		if p.forIPv6 {
+			jumpAllowedIndex = bpf.ProgIndexV6Allowed
+		}
+		p.b.MovImm32(R3, int32(jumpAllowedIndex)) // Third arg is the index (rather than a pointer to the index).
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.

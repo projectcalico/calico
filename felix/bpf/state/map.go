@@ -53,7 +53,7 @@ const (
 type State struct {
 	SrcAddr             uint32
 	SrcAddr1            uint32
-	srcaddr2            uint32
+	SrcAddr2            uint32
 	SrcAddr3            uint32
 	DstAddr             uint32
 	DstAddr1            uint32
