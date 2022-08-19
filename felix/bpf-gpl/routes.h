@@ -66,6 +66,7 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(__be32 addr)
 #define cali_rt_is_local(rt)	((rt)->flags & CALI_RT_LOCAL)
 #define cali_rt_is_host(rt)	((rt)->flags & CALI_RT_HOST)
 #define cali_rt_is_workload(rt)	((rt)->flags & CALI_RT_WORKLOAD)
+#define cali_rt_is_tunneled(rt)	((rt)->flags & CALI_RT_TUNNELED)
 
 #define cali_rt_flags_local_host(t) (((t) & (CALI_RT_LOCAL | CALI_RT_HOST)) == (CALI_RT_LOCAL | CALI_RT_HOST))
 #define cali_rt_flags_local_workload(t) (((t) & CALI_RT_LOCAL) && ((t) & CALI_RT_WORKLOAD))
