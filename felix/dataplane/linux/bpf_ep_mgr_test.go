@@ -18,7 +18,9 @@ package intdataplane
 
 import (
 	"encoding/binary"
+	"hash/fnv"
 	"regexp"
+	"strconv"
 	"sync"
 
 	. "github.com/onsi/ginkgo"
@@ -152,6 +154,12 @@ func (m *mockDataplane) delRoute(cidr ip.V4CIDR) {
 	delete(m.routes, cidr)
 }
 
+func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID {
+	h := fnv.New64a()
+	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
+	return h.Sum64()
+}
+
 var _ = Describe("BPF Endpoint Manager", func() {
 
 	var (
@@ -208,8 +216,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		filterTableV4 = newMockTable("filter")
 	})
 
-	JustBeforeEach(func() {
-		dp = newMockDataplane()
+	newBpfEpMgr := func() {
 		bpfEpMgr, _ = newBPFEndpointManager(
 			dp,
 			&Config{
@@ -238,11 +245,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logutils.NewSummarizer("test"),
 		)
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
-	})
-
-	It("exists", func() {
-		Expect(bpfEpMgr).NotTo(BeNil())
-	})
+	}
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
 		return func() {
@@ -279,20 +282,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
-
-	/*
-			genPolicyWithRules := func(tier, policy, inAction, outAction, iRuleId, eRuleId string) func() {
-				ingRule := &proto.Rule{Action: inAction, RuleId: iRuleId}
-				egrRule := &proto.Rule{Action: outAction, RuleId: eRuleId}
-		                return func() {
-		                        bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
-		                                Id:     &proto.PolicyID{Tier: tier, Name: policy},
-		                                Policy: &proto.Policy{InboundRules:[]*proto.Rule{ingRule}, OutboundRules: []*proto.Rule{egrRule}},
-		                        })
-		                        err := bpfEpMgr.CompleteDeferredWork()
-		                        Expect(err).NotTo(HaveOccurred())
-		                }
-		        }*/
 
 	genUntracked := func(tier, policy string) func() {
 		return func() {
@@ -340,6 +329,15 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			},
 		},
 	}
+
+	JustBeforeEach(func() {
+		dp = newMockDataplane()
+		newBpfEpMgr()
+	})
+
+	It("exists", func() {
+		Expect(bpfEpMgr).NotTo(BeNil())
+	})
 
 	It("does not have HEP in initial state", func() {
 		Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).NotTo(Equal(hostEp))
@@ -542,8 +540,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should update the maps with ruleIds", func() {
 			ingRule := &proto.Rule{Action: "Allow", RuleId: "INGRESSALLOW1234"}
 			egrRule := &proto.Rule{Action: "Allow", RuleId: "EGRESSALLOW12345"}
-			ingRuleMatchId := ruleMatchID("Ingress", "Allow", "Policy", 0, "allowPol")
-			egrRuleMatchId := ruleMatchID("Egress", "Allow", "Policy", 0, "allowPol")
+			ingRuleMatchId := bpfEpMgr.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
+			egrRuleMatchId := bpfEpMgr.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.bpfMapContext.RuleCountersMap
@@ -570,7 +568,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			// update the ingress rule of the policy
 			ingDenyRule := &proto.Rule{Action: "Deny", RuleId: "INGRESSDENY12345"}
-			ingDenyRuleMatchId := ruleMatchID("Ingress", "Deny", "Policy", 0, "allowPol")
+			ingDenyRuleMatchId := bpfEpMgr.ruleMatchID("Ingress", "Deny", "Policy", "allowPol", 0)
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
 				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingDenyRule}, OutboundRules: []*proto.Rule{egrRule}},
@@ -614,6 +612,32 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			_, err = rcMap.Get(k)
 			Expect(err).To(HaveOccurred())
 
+		})
+
+		It("should cleanup the bpf map after restart", func() {
+			ingRuleMatchId := bpfEpMgr.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
+			egrRuleMatchId := bpfEpMgr.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			k := make([]byte, 8)
+			v := make([]byte, 8)
+			rcMap := bpfEpMgr.bpfMapContext.RuleCountersMap
+
+			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
+			binary.LittleEndian.PutUint64(v, uint64(10))
+			err := rcMap.Update(k[:], v[:])
+			Expect(err).NotTo(HaveOccurred())
+
+			binary.LittleEndian.PutUint64(k, egrRuleMatchId)
+			binary.LittleEndian.PutUint64(v, uint64(10))
+			err = rcMap.Update(k[:], v[:])
+			Expect(err).NotTo(HaveOccurred())
+
+			newBpfEpMgr()
+			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
+			_, err = rcMap.Get(k[:])
+			Expect(err).To(HaveOccurred())
+			binary.LittleEndian.PutUint64(k, egrRuleMatchId)
+			_, err = rcMap.Get(k[:])
+			Expect(err).To(HaveOccurred())
 		})
 	})
 

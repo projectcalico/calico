@@ -33,6 +33,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -53,6 +54,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -116,6 +118,7 @@ type bpfDataplane interface {
 	setRPFilter(iface string, val int) error
 	setRoute(ip.V4CIDR)
 	delRoute(ip.V4CIDR)
+	ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID
 }
 
 type bpfInterface struct {
@@ -354,6 +357,10 @@ func newBPFEndpointManager(
 		} else {
 			log.Infof("Created %s:%s veth pair.", bpfInDev, bpfOutDev)
 		}
+	}
+
+	if m.bpfPolicyDebugEnabled {
+		counters.DeleteAllPolicyCounters(m.bpfMapContext)
 	}
 
 	return m, nil
@@ -1099,7 +1106,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	}
 
 	insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
-	perr := m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+	perr := m.writePolicyDebugInfo(insns, ap.Iface, polDirection.RuleDir(), ap.Hook, err)
 	if perr != nil {
 		log.WithError(perr).Warn("error writing policy debug information")
 	}
@@ -1162,7 +1169,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
 		insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
-		perr := m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+		perr := m.writePolicyDebugInfo(insns, ap.Iface, polDirection.RuleDir(), ap.Hook, err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
 		}
@@ -1333,7 +1340,7 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 			for ri, r := range prules {
 				policy.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: ruleMatchID(dir, r.Action, "Policy", ri, polName),
+					MatchID: m.dp.ruleMatchID(dir, r.Action, "Policy", polName, ri),
 				}
 			}
 
@@ -1372,7 +1379,7 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 			for ri, r := range prules {
 				profile.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: ruleMatchID(dir, r.Action, "Profile", ri, profName),
+					MatchID: m.dp.ruleMatchID(dir, r.Action, "Profile", profName, ri),
 				}
 			}
 
@@ -1815,7 +1822,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook bpf.Ho
 	}
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook bpf.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName, polDir string, tcHook bpf.Hook, polErr error) error {
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
@@ -1823,14 +1830,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 		return err
 	}
 
-	// policy programs are attached to interfaces from the host. The direction
-	// is in reference with the host. Workload's ingress is host's egress and
-	// vice versa.
-	polDir := "ingress"
-	if tcHook == bpf.HookIngress {
-		polDir = "egress"
-	}
-
+	polDir = strings.ToLower(polDir)
 	errStr := ""
 	if polErr != nil {
 		errStr = polErr.Error()
@@ -2098,17 +2098,11 @@ func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int, owner string
 	if m.dirtyRules.Contains(rule.RuleId) {
 		m.dirtyRules.Discard(rule.RuleId)
 	}
-	m.ruleIdToMatchID[rule.RuleId] = ruleMatchID(direction.RuleDir(), rule.Action, owner, idx, polName)
+	m.ruleIdToMatchID[rule.RuleId] = m.dp.ruleMatchID(direction.RuleDir(), rule.Action, owner, polName, idx)
 	return rule.RuleId
 }
 
-func ruleMatchID(
-	dir string,
-	action string,
-	owner string,
-	idx int,
-	name string) polprog.RuleMatchID {
-
+func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID {
 	h := fnv.New64a()
 	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
 	return h.Sum64()

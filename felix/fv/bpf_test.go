@@ -3847,7 +3847,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	return false
 }
 
-func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string) bool {
+func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
 	startStr := fmt.Sprintf("Start of policy %s", polName)
 	endStr := fmt.Sprintf("End of policy %s", polName)
 	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
@@ -3863,8 +3863,14 @@ func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNam
 	}
 
 	hookStr := "tc ingress"
-	if hook == "ingress" {
-		hookStr = "tc egress"
+	if isWorkload {
+		if hook == "ingress" {
+			hookStr = "tc egress"
+		}
+	} else {
+		if hook == "egress" {
+			hookStr = "tc egress"
+		}
 	}
 	if policyDbg.IfaceName != iface || policyDbg.Hook != hookStr || policyDbg.Error != "" {
 		return false

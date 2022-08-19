@@ -17,6 +17,8 @@ package counters
 import (
 	"encoding/binary"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
@@ -84,5 +86,14 @@ func PolicyMapMemIter(m PolicyMapMem) bpf.IterCallback {
 		}
 		m[key] = value
 		return bpf.IterNone
+	}
+}
+
+func DeleteAllPolicyCounters(mc *bpf.MapContext) {
+	err := mc.RuleCountersMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		return bpf.IterDelete
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to iterate over policy counters map")
 	}
 }
