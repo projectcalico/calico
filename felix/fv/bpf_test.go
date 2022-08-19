@@ -2428,7 +2428,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								By("checking correct NAT entries for remote nodeports")
 
 								ipOK := []string{"255.255.255.255", "10.101.0.1", /* API server */
-									testSvc.Spec.ClusterIP,
+									testSvc.Spec.ClusterIP, testSvcExtIP0, testSvcExtIP1,
 									felixes[0].IP, felixes[1].IP, felixes[2].IP}
 
 								if testOpts.tunnel == "ipip" {
