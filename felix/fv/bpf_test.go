@@ -775,9 +775,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			err := infra.AddDefaultDeny()
 			Expect(err).NotTo(HaveOccurred())
 			if !options.TestManagesBPF {
-				for _, felix := range felixes {
-					ensureBPFProgramsAttached(felix)
-				}
+				ensureAllNodesBPFProgramsAttached(felixes)
 			}
 		}
 
@@ -3412,7 +3410,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					By("having initial connectivity", expectPongs)
 					By("enabling BPF mode", enableBPF) // Waits for BPF programs to be installed
-					time.Sleep(2 * time.Second)        // pongs time out after 1s, make sure we look for fresh pongs.
+					ensureAllNodesBPFProgramsAttached(felixes)
 					By("still having connectivity on the existing connection", expectPongs)
 				}
 
@@ -3544,7 +3542,7 @@ func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.IterCallback) {
 	// might fail a test that was retrying this dump anyway.
 	Eventually(func() bool {
 		return felix.FileExists(m.Path())
-	}).Should(BeTrue(), fmt.Sprintf("dumpBPFMap: map %s didn't show up inside container", m.Path()))
+	}, "10s", "300ms").Should(BeTrue(), fmt.Sprintf("dumpBPFMap: map %s didn't show up inside container", m.Path()))
 	cmd, err := bpf.DumpMapCmd(m)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map dump command: "+m.Path())
 	log.WithField("cmd", cmd).Debug("dumpBPFMap")
