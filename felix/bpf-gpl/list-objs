@@ -30,11 +30,13 @@ for core_support in co-re legacy;do
 	# The workload-to-host drop setting only applies to the from-workload hook.
 	ep_types="wep"
       else
-	ep_types="wep hep tnl l3 nat"
+	ep_types="wep hep tnl l3 nat lo"
       fi
       for fib in "" "fib_"; do
 	for ep_type in $ep_types; do
-	  if [ "${host_drop}" = "host_drop_" ] || [ "${fib}" = "fib_" ]; then
+	  if [ "${fib}" = "fib_" ] && [ ${ep_type} = "hep" ]; then
+            directions="from to"
+          elif [ "${host_drop}" = "host_drop_" ] || [ "${fib}" = "fib_" ]; then
 	    # The workload-to-host drop setting only applies to the from-workload hook.
 	    # The FIB only applies in the from-endpoint hooks.
 	    directions="from"
