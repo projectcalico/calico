@@ -2530,11 +2530,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								ports := ExpectWithPorts(npPort)
 
-								// Also try host networked pods, both on a local and remote node.
-								// N.B. it cannot work without the connect time balancer
-								cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
 								cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
 								cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
 								cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
 
 								cc.CheckConnectivity()
@@ -2723,7 +2721,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
 
 								// Also try host networked pods, both on a local and remote node.
-								// N.B. it cannot work without the connect time balancer
 								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
 								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
 

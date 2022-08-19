@@ -504,6 +504,7 @@ syn_force_policy:
 	struct cali_rt *dest_rt = cali_rt_lookup(ctx->state->post_nat_ip_dst);
 
 	if (!dest_rt) {
+		CALI_DEBUG("No route for post DNAT dest %x\n", ctx->state->post_nat_ip_dst);
 		goto do_policy;
 	}
 
