@@ -390,7 +390,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 
 func (r *ReleaseBuilder) publishGithubRelease(ver string) error {
 	releaseNoteTemplate := `
-Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/calico/release-notes/{version}-release-notes.md)
+Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/calico/_includes/release-notes/{version}-release-notes.md)
 
 Attached to this release are the following artifacts:
 
