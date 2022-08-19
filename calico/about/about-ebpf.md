@@ -73,7 +73,7 @@ eBPF program depend hugely on the hook to which it is attached:
 * There are various security-related hooks that allow for program behaviour to be policed in various ways. For
   example, the **seccomp** hooks allow for syscalls to be policed in fine-grained ways.
 
-* And... probably a few more hooks by the time you ready this; eBPF is under heavy development in the kernel.
+* And... probably a few more hooks by the time you read this; eBPF is under heavy development in the kernel.
 
 The kernel exposes the capabilities of each hook via "helper functions". For example, the `tc` hook has a helper
 function to resize the packet, but that helper would not be available in a tracing hook. One of the challenges of
