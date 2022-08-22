@@ -87,6 +87,7 @@ type bpfRouteManager struct {
 
 func newBPFRouteManager(config *Config, mc *bpf.MapContext,
 	opReporter logutils.OpRecorder) *bpfRouteManager {
+
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New[ip.V4CIDR]()
