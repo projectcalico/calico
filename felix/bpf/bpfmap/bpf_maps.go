@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
@@ -119,6 +120,9 @@ func CreateBPFMaps(mc *bpf.MapContext) error {
 
 	mc.IfStateMap = ifstate.Map(mc)
 	maps = append(maps, mc.IfStateMap)
+
+	mc.RuleCountersMap = counters.PolicyMap(mc)
+	maps = append(maps, mc.RuleCountersMap)
 
 	for _, bpfMap := range maps {
 		err := bpfMap.EnsureExists()

@@ -3474,7 +3474,11 @@ func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.IterCallback) {
 	log.WithField("cmd", cmd).Debug("dumpBPFMap")
 	out, err := felix.ExecOutput(cmd...)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get dump BPF map: "+m.Path())
-	err = bpf.IterMapCmdOutput([]byte(out), iter)
+	if strings.Contains(m.(*bpf.PinnedMap).Type, "percpu") {
+		err = bpf.IterPerCpuMapCmdOutput([]byte(out), iter)
+	} else {
+		err = bpf.IterMapCmdOutput([]byte(out), iter)
+	}
 	Expect(err).NotTo(HaveOccurred(), "Failed to parse BPF map dump: "+m.Path())
 }
 
@@ -3841,4 +3845,53 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	}
 
 	return false
+}
+
+func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
+	startStr := fmt.Sprintf("Start of policy %s", polName)
+	endStr := fmt.Sprintf("End of policy %s", polName)
+	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
+	var policyDbg bpf.PolicyDebugInfo
+	out, err := felix.ExecOutput("cat", bpf.PolicyDebugJSONFileName(iface, hook))
+	if err != nil {
+		return false
+	}
+	dec := json.NewDecoder(strings.NewReader(string(out)))
+	err = dec.Decode(&policyDbg)
+	if err != nil {
+		return false
+	}
+
+	hookStr := "tc ingress"
+	if isWorkload {
+		if hook == "ingress" {
+			hookStr = "tc egress"
+		}
+	} else {
+		if hook == "egress" {
+			hookStr = "tc egress"
+		}
+	}
+	if policyDbg.IfaceName != iface || policyDbg.Hook != hookStr || policyDbg.Error != "" {
+		return false
+	}
+
+	startOfPolicy := false
+	endOfPolicy := false
+	actionMatch := false
+	for _, insn := range policyDbg.PolicyInfo {
+		for _, comment := range insn.Comments {
+			if strings.Contains(comment, startStr) {
+				startOfPolicy = true
+			}
+			if strings.Contains(comment, actionStr) && startOfPolicy && !endOfPolicy {
+				actionMatch = true
+			}
+			if startOfPolicy && strings.Contains(comment, endStr) {
+				endOfPolicy = true
+			}
+		}
+	}
+
+	return (startOfPolicy && endOfPolicy && actionMatch)
 }
