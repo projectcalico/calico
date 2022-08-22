@@ -551,13 +551,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingRule}, OutboundRules: []*proto.Rule{egrRule}},
 			})
-			Expect(bpfEpMgr.polNameToRuleIDs).To(HaveLen(1))
-			val := bpfEpMgr.polNameToRuleIDs["allowPol"]
-			Expect(val.Contains(ingRule.RuleId)).To(BeTrue())
-			Expect(val.Contains(egrRule.RuleId)).To(BeTrue())
-			Expect(bpfEpMgr.ruleIdToMatchID).To(HaveLen(2))
-			Expect(bpfEpMgr.ruleIdToMatchID[ingRule.RuleId]).To(Equal(ingRuleMatchId))
-			Expect(bpfEpMgr.ruleIdToMatchID[egrRule.RuleId]).To(Equal(egrRuleMatchId))
+			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(1))
+			val := bpfEpMgr.polNameToMatchIDs["allowPol"]
+			Expect(val.Contains(ingRuleMatchId)).To(BeTrue())
+			Expect(val.Contains(egrRuleMatchId)).To(BeTrue())
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
 			binary.LittleEndian.PutUint64(v, uint64(10))
 			err := rcMap.Update(k[:], v[:])
@@ -573,15 +570,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingDenyRule}, OutboundRules: []*proto.Rule{egrRule}},
 			})
-			Expect(bpfEpMgr.polNameToRuleIDs).To(HaveLen(1))
-			val = bpfEpMgr.polNameToRuleIDs["allowPol"]
-			Expect(val.Contains(ingDenyRule.RuleId)).To(BeTrue())
-			Expect(val.Contains(egrRule.RuleId)).To(BeTrue())
-			Expect(bpfEpMgr.dirtyRules.Contains(ingRule.RuleId)).To(BeTrue())
-			Expect(bpfEpMgr.ruleIdToMatchID).To(HaveLen(3))
+			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(1))
+			val = bpfEpMgr.polNameToMatchIDs["allowPol"]
+			Expect(val.Contains(ingDenyRuleMatchId)).To(BeTrue())
+			Expect(val.Contains(egrRuleMatchId)).To(BeTrue())
+			Expect(bpfEpMgr.dirtyRules.Contains(ingRuleMatchId)).To(BeTrue())
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(bpfEpMgr.dirtyRules.Contains(ingRule.RuleId)).NotTo(BeTrue())
+			Expect(bpfEpMgr.dirtyRules.Contains(ingRuleMatchId)).NotTo(BeTrue())
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
 			_, err = rcMap.Get(k)
 			Expect(err).To(HaveOccurred())
@@ -589,19 +585,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			v, err = rcMap.Get(k)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(binary.LittleEndian.Uint64(v)).To(Equal(uint64(10)))
-			Expect(bpfEpMgr.ruleIdToMatchID).To(HaveLen(2))
-			Expect(bpfEpMgr.ruleIdToMatchID[ingDenyRule.RuleId]).To(Equal(ingDenyRuleMatchId))
-			Expect(bpfEpMgr.ruleIdToMatchID[egrRule.RuleId]).To(Equal(egrRuleMatchId))
 
 			// delete the policy
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyRemove{Id: &proto.PolicyID{Tier: "default", Name: "allowPol"}})
-			Expect(bpfEpMgr.dirtyRules.Contains(egrRule.RuleId)).To(BeTrue())
-			Expect(bpfEpMgr.dirtyRules.Contains(ingDenyRule.RuleId)).To(BeTrue())
-			Expect(bpfEpMgr.polNameToRuleIDs).To(HaveLen(0))
-			Expect(bpfEpMgr.ruleIdToMatchID).To(HaveLen(2))
+			Expect(bpfEpMgr.dirtyRules.Contains(egrRuleMatchId)).To(BeTrue())
+			Expect(bpfEpMgr.dirtyRules.Contains(ingDenyRuleMatchId)).To(BeTrue())
+			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(0))
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(bpfEpMgr.ruleIdToMatchID).To(HaveLen(0))
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
 			_, err = rcMap.Get(k)
 			Expect(err).To(HaveOccurred())
