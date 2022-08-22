@@ -94,7 +94,11 @@ require (
 	sigs.k8s.io/kind v0.11.1
 )
 
-require gopkg.in/yaml.v2 v2.4.0 // indirect
+require (
+	github.com/mdlayher/ethernet v0.0.0-20190313224307-5b5fc417d966 // indirect
+	github.com/mdlayher/raw v0.0.0-20190313224157-43dbcdd7739d // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
+)
 
 require (
 	cloud.google.com/go/compute v1.6.1 // indirect
@@ -191,6 +195,7 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
+	github.com/mdlayher/arp v0.0.0-20191213142603-f72070a231fc
 	github.com/mdlayher/genetlink v1.0.0 // indirect
 	github.com/mdlayher/netlink v1.1.0 // indirect
 	github.com/mindprince/gonvml v0.0.0-20190828220739-9ebdce4bb989 // indirect
