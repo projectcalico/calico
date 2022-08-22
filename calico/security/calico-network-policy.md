@@ -212,7 +212,7 @@ spec:
   types:
     - Egress
   egress:    
-    - action: Deny
+    - action: Allow
       destination:
         nets:
         - 1.2.3.0/24
