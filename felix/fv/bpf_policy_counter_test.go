@@ -40,9 +40,8 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy counters", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 
-	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
-		// Non-BPF run.
-		return
+	if !bpfMode() {
+	    return
 	}
 
 	var (
