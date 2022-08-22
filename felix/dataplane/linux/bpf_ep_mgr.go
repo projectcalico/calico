@@ -33,6 +33,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -53,6 +54,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -116,6 +118,7 @@ type bpfDataplane interface {
 	setRPFilter(iface string, val int) error
 	setRoute(ip.V4CIDR)
 	delRoute(ip.V4CIDR)
+	ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID
 }
 
 type bpfInterface struct {
@@ -220,6 +223,10 @@ type bpfEndpointManager struct {
 	routeTable    routetable.RouteTableInterface
 	services      map[serviceKey][]ip.V4CIDR
 	dirtyServices set.Set[serviceKey]
+
+	// Maps for policy rule counters
+	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
+	dirtyRules        set.Set[polprog.RuleMatchID]
 }
 
 type serviceKey struct {
@@ -291,6 +298,8 @@ func newBPFEndpointManager(
 		ipv6Enabled:           config.BPFIpv6Enabled,
 		rpfStrictModeEnabled:  config.BPFEnforceRPF,
 		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
+		polNameToMatchIDs:     map[string]set.Set[polprog.RuleMatchID]{},
+		dirtyRules:            set.New[polprog.RuleMatchID](),
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -346,6 +355,10 @@ func newBPFEndpointManager(
 		} else {
 			log.Infof("Created %s:%s veth pair.", bpfInDev, bpfOutDev)
 		}
+	}
+
+	if m.bpfPolicyDebugEnabled {
+		counters.DeleteAllPolicyCounters(m.bpfMapContext)
 	}
 
 	return m, nil
@@ -597,6 +610,9 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 	log.WithField("id", polID).Debug("Policy update")
 	m.policies[polID] = msg.Policy
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
+	if m.bpfPolicyDebugEnabled {
+		m.updatePolicyCache(polID.Name, "Policy", m.policies[polID].InboundRules, m.policies[polID].OutboundRules)
+	}
 }
 
 // onPolicyRemove removes the policy from the cache and marks any endpoints using it dirty.
@@ -607,6 +623,10 @@ func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	delete(m.policies, polID)
 	delete(m.policiesToWorkloads, polID)
+	if m.bpfPolicyDebugEnabled {
+		m.dirtyRules.AddSet(m.polNameToMatchIDs[polID.Name])
+		delete(m.polNameToMatchIDs, polID.Name)
+	}
 }
 
 // onProfileUpdate stores the profile in the cache and marks any endpoints that use it as dirty.
@@ -615,6 +635,9 @@ func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 	log.WithField("id", profID).Debug("Profile update")
 	m.profiles[profID] = msg.Profile
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
+	if m.bpfPolicyDebugEnabled {
+		m.updatePolicyCache(profID.Name, "Profile", m.profiles[profID].InboundRules, m.profiles[profID].OutboundRules)
+	}
 }
 
 // onProfileRemove removes the profile from the cache and marks any endpoints that were using it as dirty.
@@ -625,6 +648,24 @@ func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	delete(m.profiles, profID)
 	delete(m.profilesToWorkloads, profID)
+	if m.bpfPolicyDebugEnabled {
+		m.dirtyRules.AddSet(m.polNameToMatchIDs[profID.Name])
+		delete(m.polNameToMatchIDs, profID.Name)
+	}
+}
+
+func (m *bpfEndpointManager) removeDirtyPolicies() {
+	b := make([]byte, 8)
+	m.dirtyRules.Iter(func(item polprog.RuleMatchID) error {
+		binary.LittleEndian.PutUint64(b, item)
+		log.WithField("ruleId", item).Debug("deleting entry")
+		err := m.bpfMapContext.RuleCountersMap.Delete(b)
+		if err != nil && !bpf.IsNotExists(err) {
+			log.WithField("ruleId", item).Info("error deleting entry")
+		}
+
+		return set.RemoveItem
+	})
 }
 
 func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
@@ -669,6 +710,9 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
+	if m.bpfPolicyDebugEnabled {
+		m.removeDirtyPolicies()
+	}
 
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
@@ -1056,7 +1100,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	}
 
 	insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
-	perr := m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+	perr := m.writePolicyDebugInfo(insns, ap.Iface, polDirection.RuleDir(), ap.Hook, err)
 	if perr != nil {
 		log.WithError(perr).Warn("error writing policy debug information")
 	}
@@ -1119,7 +1163,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
 		insns, err := m.dp.updatePolicyProgram(jumpMapFD, rules)
-		perr := m.writePolicyDebugInfo(insns, ap.Iface, ap.Hook, err)
+		perr := m.writePolicyDebugInfo(insns, ap.Iface, polDirection.RuleDir(), ap.Hook, err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
 		}
@@ -1290,7 +1334,7 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 			for ri, r := range prules {
 				policy.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: ruleMatchID(dir, r.Action, "Policy", ri, polName),
+					MatchID: m.dp.ruleMatchID(dir, r.Action, "Policy", polName, ri),
 				}
 			}
 
@@ -1329,7 +1373,7 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 			for ri, r := range prules {
 				profile.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: ruleMatchID(dir, r.Action, "Profile", ri, profName),
+					MatchID: m.dp.ruleMatchID(dir, r.Action, "Profile", profName, ri),
 				}
 			}
 
@@ -1772,7 +1816,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, hook bpf.Ho
 	}
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, tcHook bpf.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName, polDir string, tcHook bpf.Hook, polErr error) error {
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
@@ -1780,14 +1824,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 		return err
 	}
 
-	// policy programs are attached to interfaces from the host. The direction
-	// is in reference with the host. Workload's ingress is host's egress and
-	// vice versa.
-	polDir := "ingress"
-	if tcHook == bpf.HookIngress {
-		polDir = "egress"
-	}
-
+	polDir = strings.ToLower(polDir)
 	errStr := ""
 	if polErr != nil {
 		errStr = polErr.Error()
@@ -2031,13 +2068,36 @@ func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSynce
 	return tables
 }
 
-func ruleMatchID(
-	dir string,
-	action string,
-	owner string,
-	idx int,
-	name string) polprog.RuleMatchID {
+// updatePolicyCache modifies entries in the cache, adding new entries and marking old entries dirty.
+func (m *bpfEndpointManager) updatePolicyCache(name string, owner string, inboundRules, outboundRules []*proto.Rule) {
+	ruleIds := set.New[polprog.RuleMatchID]()
+	if val, ok := m.polNameToMatchIDs[name]; ok {
+		// If the policy name exists, it means the policy is updated. There are cases where both inbound,
+		// outbound rules are updated or any one.
+		// Mark all the entries as dirty.
+		m.dirtyRules.AddSet(val)
+	}
+	// Now iterate through all the rules and if the ruleIds are already in the cache, it means the rule has not
+	// changed as part of the update. Remove the dirty flag and add this entry back as non-dirty.
+	for idx, rule := range inboundRules {
+		ruleIds.Add(m.addRuleInfo(rule, idx, owner, PolDirnIngress, name))
+	}
+	for idx, rule := range outboundRules {
+		ruleIds.Add(m.addRuleInfo(rule, idx, owner, PolDirnEgress, name))
+	}
+	m.polNameToMatchIDs[name] = ruleIds
+}
 
+func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int,
+	owner string, direction PolDirection, polName string) polprog.RuleMatchID {
+
+	matchID := m.dp.ruleMatchID(direction.RuleDir(), rule.Action, owner, polName, idx)
+	m.dirtyRules.Discard(matchID)
+
+	return matchID
+}
+
+func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID {
 	h := fnv.New64a()
 	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
 	return h.Sum64()
