@@ -469,7 +469,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
 	if config.RulesConfig.VXLANEnabled {
-		var routeTableVXLAN routeTable
+		var routeTableVXLAN routetable.RouteTableInterface
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
@@ -717,7 +717,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	var routeTableV4 routeTable
+	var routeTableV4 routetable.RouteTableInterface
 
 	if !config.RouteSyncDisabled {
 		log.Debug("RouteSyncDisabled is false.")
@@ -823,7 +823,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabledV6 {
-			var routeTableVXLANV6 routeTable
+			var routeTableVXLANV6 routetable.RouteTableInterface
 			if !config.RouteSyncDisabled {
 				log.Debug("RouteSyncDisabled is false.")
 				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
@@ -849,7 +849,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			go cleanUpVXLANDevice("vxlan-v6.calico")
 		}
 
-		var routeTableV6 routeTable
+		var routeTableV6 routetable.RouteTableInterface
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableV6 = routetable.New(
@@ -1171,20 +1171,12 @@ type Manager interface {
 
 type ManagerWithRouteTables interface {
 	Manager
-	GetRouteTableSyncers() []routeTableSyncer
+	GetRouteTableSyncers() []routetable.RouteTableSyncer
 }
 
 type ManagerWithRouteRules interface {
 	Manager
 	GetRouteRules() []routeRules
-}
-
-// routeTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
-// interface state changes, hooks to queue a full resync and apply routing updates.
-type routeTableSyncer interface {
-	OnIfaceStateChanged(string, ifacemonitor.State)
-	QueueResync()
-	Apply() error
 }
 
 type routeRules interface {
@@ -1194,8 +1186,8 @@ type routeRules interface {
 	Apply() error
 }
 
-func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
-	var rts []routeTableSyncer
+func (d *InternalDataplane) routeTableSyncers() []routetable.RouteTableSyncer {
+	var rts []routetable.RouteTableSyncer
 	for _, mrts := range d.managersWithRouteTables {
 		rts = append(rts, mrts.GetRouteTableSyncers()...)
 	}
@@ -2002,7 +1994,7 @@ func (d *InternalDataplane) apply() {
 	var routesWG sync.WaitGroup
 	for _, r := range d.routeTableSyncers() {
 		routesWG.Add(1)
-		go func(r routeTableSyncer) {
+		go func(r routetable.RouteTableSyncer) {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing table, will retry...")
