@@ -502,12 +502,12 @@ func (p *Builder) writeRule(r Rule, actionLabel string, destLeg matchLeg) {
 		log.Panic("empty action label")
 	}
 
-	var ipVersion uint8 = 4
+	ipVersion := proto.IPVersion_IPV4
 	if p.forIPv6 {
-		ipVersion = 6
+		ipVersion = proto.IPVersion_IPV6
 	}
 
-	rule := rules.FilterRuleToIPVersion(ipVersion, r.Rule)
+	rule := rules.FilterRuleToIPVersion(uint8(ipVersion), r.Rule)
 	if rule == nil {
 		log.Debugf("Version mismatch, skipping rule")
 		return
@@ -706,17 +706,16 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 
 		p.b.AddComment(comment)
 	}
-	p.b.Load32(R1, R9, leg.offsetToStateIPAddressField())
 
-	var onMatchLabel, onNotMatchLabel string
+	var onMatchLabel string //, onNotMatchLabel string
 	if negate {
 		// Match negated, if we match any CIDR then we jump to the next rule.
 		onMatchLabel = p.endOfRuleLabel()
-		onNotMatchLabel = p.freshPerRuleLabel()
+		//onNotMatchLabel = p.freshPerRuleLabel()
 	} else {
 		// Match is non-negated, if we match, go to the next match criteria.
 		onMatchLabel = p.freshPerRuleLabel()
-		onNotMatchLabel = p.endOfRuleLabel()
+		//onNotMatchLabel = p.endOfRuleLabel()
 	}
 
 	size := ip.IPv4SizeDword
@@ -726,7 +725,7 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 
 	addrU32 := make([]uint32, size)
 	maskU32 := make([]uint32, size)
-	for _, cidrStr := range cidrs {
+	for cidrIndex, cidrStr := range cidrs {
 		cidr := ip.MustParseCIDROrIP(cidrStr)
 		if p.forIPv6 {
 			addrU64P1, addrU64P2 := cidr.Addr().(ip.V6Addr).AsUint64Pair()
@@ -735,11 +734,13 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 			addrU32[2] = bits.ReverseBytes32(uint32(addrU64P2 >> 32))
 			addrU32[3] = bits.ReverseBytes32(uint32(addrU64P2))
 
-			var maskU64P1 uint64 = uint64((math.MaxInt64 << (128 - cidr.Prefix())) & math.MaxUint64)
-			var maskU64P2 uint64 = 0
+			var maskU64P1, maskU64P2 uint64
 			if cidr.Prefix() > 64 {
 				maskU64P1 = math.MaxUint64
-				maskU64P2 = uint64((math.MaxInt64 << (128 - cidr.Prefix())) & math.MaxUint64)
+				maskU64P2 = uint64(math.MaxUint64 << (128 - cidr.Prefix()) & math.MaxUint64)
+			} else {
+				maskU64P1 = uint64(math.MaxUint64 << (64 - cidr.Prefix()) & math.MaxUint64)
+				maskU64P2 = 0
 			}
 			maskU32[0] = bits.ReverseBytes32(uint32(maskU64P1 >> 32))
 			maskU32[1] = bits.ReverseBytes32(uint32(maskU64P1))
@@ -751,13 +752,21 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 		}
 
 		for index, addr := range addrU32 {
+			offset := leg.offsetToStateIPAddressField()
+			offset.Offset += int16(index * 4)
+			p.b.Load32(R1, R9, offset)
+
 			p.b.MovImm32(R2, int32(maskU32[index]))
 			p.b.And32(R2, R1)
 			if index == len(addrU32)-1 {
 				p.b.JumpEqImm32(R2, int32(addr), onMatchLabel)
 			} else {
-				p.b.JumpNEImm32(R2, int32(addr), onNotMatchLabel)
+				p.b.JumpNEImm32(R2, int32(addr), p.endOfcidrV6Match(cidrIndex))
 			}
+		}
+
+		if p.forIPv6 {
+			p.b.LabelNextInsn(p.endOfcidrV6Match(cidrIndex))
 		}
 	}
 	if !negate {
@@ -943,6 +952,10 @@ func (p *Builder) freshPerRuleLabel() string {
 
 func (p *Builder) endOfRuleLabel() string {
 	return fmt.Sprintf("rule_%d_no_match", p.ruleID)
+}
+
+func (p *Builder) endOfcidrV6Match(cidrIndex int) string {
+	return fmt.Sprintf("rule_%d_cidr_%d_end", p.ruleID, cidrIndex)
 }
 
 func protocolToNumber(protocol *proto.Protocol) uint8 {

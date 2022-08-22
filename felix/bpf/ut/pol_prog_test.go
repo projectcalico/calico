@@ -734,7 +734,7 @@ var polProgramTests = []polProgramTest{
 		ForIPv6:    true,
 		Policy: makeRulesSingleTier([]*proto.Rule{{
 			Action: "Allow",
-			SrcNet: []string{"ff01::1/128"},
+			SrcNet: []string{"ff02::1/128"},
 		}}),
 		AllowedPackets: []packet{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
@@ -764,10 +764,25 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			packetNoPorts(253, "11.0.0.1", "10.0.0.2"),
 			icmpPkt("11.0.0.1", "10.0.0.2"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
+		},
+	},
+	{
+		PolicyName: "allow ffe2::1/16",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action: "Allow",
+			SrcNet: []string{"ffe2::1/16"},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ffe2::1]:31245", "[ffe2::2]:80"),
+			udpPkt("[ffe2::1]:80", "[ffe2::2]:31245"),
+			icmpPkt("[ffe2::1]", "[ffe2::2]"),
+			packetNoPorts(253, "ffe2::1", "ffe2::2")},
+		DroppedPackets: []packet{
+			tcpPkt("[ffe1::3]:31245", "[ffe2::2]:80"),
+			udpPkt("[ffe1::3]:80", "[ffe2::2]:31245"),
+			icmpPkt("[ffe1::3]", "[ffe2::2]"),
+			packetNoPorts(253, "ffe1::3", "ffe2::2"),
 		},
 	},
 	{
@@ -783,10 +798,25 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.2"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
+		},
+	},
+	{
+		PolicyName: "allow from CIDRs-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action: "Allow",
+			SrcNet: []string{"ffee::1/16", "ffe2:0000:1111::1/64", "ffe2:0000:2222::1/80", "ffe2::f/128"},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "ffee::1", "ffee::2"),
+			icmpPkt("[ffe2:0000:1111::1]", "[ffff::2]"),
+			udpPkt("[ffe2:0000:2222::1]:1024", "[ffe2::1]:80"),
+			tcpPkt("[ffe2::f]:31245", "[::2]:80")},
+		DroppedPackets: []packet{
+			tcpPkt("[ffe0::2]:31245", "[ff01::2]:80"),
+			udpPkt("[ffe2:0000:1112::1]:80", "[ff02::2]:31245"),
+			icmpPkt("[ffe2:0000:2222:0010::1]", "[ff02::2]"),
+			packetNoPorts(253, "ffe2::e", "ff02::2"),
 		},
 	},
 	{
@@ -2071,6 +2101,7 @@ type testCase interface {
 }
 
 func runTest(t *testing.T, tp testPolicy) {
+	log.Infof("nina")
 	RegisterTestingT(t)
 
 	// The prog builder refuses to allocate IDs as a precaution, give it an allocator that forces allocations.
