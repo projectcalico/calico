@@ -38,7 +38,7 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy counters", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 
-	if !bpfMode() {
+	if !BPFMode() {
 		return
 	}
 
