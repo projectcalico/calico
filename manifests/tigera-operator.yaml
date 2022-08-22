@@ -17798,6 +17798,8 @@ kind: ServiceAccount
 metadata:
   name: tigera-operator
   namespace: tigera-operator
+imagePullSecrets:
+  []
 ---
 # Source: tigera-operator/templates/tigera-operator/02-role-tigera-operator.yaml
 # Permissions required when running the operator for a Calico cluster.
