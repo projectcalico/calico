@@ -1224,7 +1224,7 @@ kind-cluster-destroy: $(KIND) $(KUBECTL)
 
 kind $(KIND):
 	mkdir -p $(KIND_DIR)
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.11.1"
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.14.0"
 
 kubectl $(KUBECTL):
 	mkdir -p $(KIND_DIR)
