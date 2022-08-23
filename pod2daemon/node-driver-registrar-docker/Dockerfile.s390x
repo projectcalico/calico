@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM arm64v8/alpine:3.16
+FROM s390x/alpine:3.16
 
-ADD bin/csi-driver-arm64 /usr/local/bin/csi-driver
+ADD bin/node-driver-registrar-s390x /usr/local/bin/node-driver-registrar
 
-ENTRYPOINT ["/usr/local/bin/csi-driver"]
+ENTRYPOINT ["/usr/local/bin/node-driver-registrar"]

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ppc64le/alpine:3.8
+FROM ppc64le/alpine:3.16
 
 ADD bin/csi-driver-ppc64le /usr/local/bin/csi-driver
 

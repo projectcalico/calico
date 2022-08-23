@@ -45,7 +45,7 @@ func (t *CIDRTrie) Delete(cidr CIDR) {
 
 func deleteInternal(n *CIDRNode, cidr CIDR) *CIDRNode {
 	if n.cidr.Version() != cidr.Version() {
-		logrus.WithField("n.cidr", n.cidr).WithField("cidr", cidr).Panic("Mismatched CIDR IP versions")
+		logrus.WithFields(logrus.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -153,7 +153,7 @@ func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 	}
 
 	if n.cidr.Version() != cidr.Version() {
-		logrus.WithField("n.cidr", n.cidr).WithField("cidr", cidr).Panic("Mismatched CIDR IP versions")
+		logrus.WithFields(logrus.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -186,7 +186,7 @@ func (n *CIDRNode) get(cidr CIDR) interface{} {
 	}
 
 	if n.cidr.Version() != cidr.Version() {
-		logrus.WithField("n.cidr", n.cidr).WithField("cidr", cidr).Panic("Mismatched CIDR IP versions")
+		logrus.WithFields(logrus.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -378,7 +378,7 @@ func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {
 
 func CommonPrefix(a, b CIDR) CIDR {
 	if a.Version() != b.Version() {
-		logrus.WithField("a", a).WithField("b", b).Panic("Mismatched CIDR IP versions")
+		logrus.WithFields(logrus.Fields{"a": a, "b": b}).Panic("Mismatched CIDR IP versions")
 	}
 
 	var cidr CIDR

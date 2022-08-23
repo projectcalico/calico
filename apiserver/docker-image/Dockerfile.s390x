@@ -1,0 +1,28 @@
+ARG QEMU_IMAGE
+ARG UBI_IMAGE
+
+FROM ${QEMU_IMAGE} as qemu
+
+FROM --platform=linux/s390x ${UBI_IMAGE} as ubi
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
+
+RUN microdnf update
+
+# At runtime, apiserver generate certificates in /code directory
+# hence, provide RW permission for user 1001
+RUN mkdir /code
+RUN rm -rf /tmp
+RUN mkdir /tmp
+
+FROM scratch
+COPY  --from=ubi /code /code
+COPY  --from=ubi /tmp /tmp
+COPY  --from=ubi /lib /lib
+COPY  --from=ubi /lib64 /lib64
+
+ADD  bin/apiserver-s390x /code/apiserver
+ADD  bin/filecheck-s390x /code/filecheck
+
+WORKDIR /code
+
+ENTRYPOINT ["./apiserver"]

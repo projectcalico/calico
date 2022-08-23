@@ -51,7 +51,7 @@ spec:
       containers:
       - name: calico-csi
         image: calico/csi:master
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         args:
         - --nodeid=$(KUBE_NODE_NAME)
         - --loglevel=$(LOG_LEVEL)
@@ -75,8 +75,8 @@ spec:
           mountPath: /var/lib/kubelet/
           mountPropagation: "Bidirectional"
       - name: csi-node-driver-registrar
-        image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
-        imagePullPolicy: Always
+        image: calico/node-driver-registrar:master
+        imagePullPolicy: IfNotPresent
         args:
         - --v=5
         - --csi-address=$(ADDRESS)

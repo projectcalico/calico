@@ -1074,6 +1074,42 @@ var _ = Describe("Test Pod conversion", func() {
 		// Make sure the GenerateName information is correct.
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).GenerateName).To(Equal(gname))
 	})
+
+	It("should pass network-status annotations from pod to workloadendpoint", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"k8s.v1.cni.cncf.io/network-status": `
+					[{
+						"name": "k8s-pod-network",
+						"ips": [
+							"172.16.166.191"
+						],
+						"default": true,
+						"dns": {}
+					}]`,
+				},
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName: "nodeA",
+			},
+			Status: kapiv1.PodStatus{},
+		}
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Annotations).Should(HaveKeyWithValue("k8s.v1.cni.cncf.io/network-status", `
+					[{
+						"name": "k8s-pod-network",
+						"ips": [
+							"172.16.166.191"
+						],
+						"default": true,
+						"dns": {}
+					}]`))
+	})
 })
 
 var _ = Describe("Test NetworkPolicy conversion", func() {
