@@ -17,9 +17,6 @@ include ../lib.Makefile
 
 ###############################################################################
 
-# We need CGO to leverage Boring SSL.  However, pod2daemon doesn't perform any crypto,
-# so we can disable it across the board.
-CGO_ENABLED=0
 
 SRC_FILES=$(shell find -name '*.go')
 
@@ -53,13 +50,15 @@ build-all: $(addprefix bin/flexvol-,$(VALIDARCHES)) $(addprefix bin/csi-driver-,
 ## Build the binary for the current architecture and platform
 build: bin/node-driver-registrar-$(ARCH) bin/flexvol-$(ARCH) bin/csi-driver-$(ARCH)
 
+# We need CGO to leverage Boring SSL.  However, pod2daemon doesn't perform any crypto,
+# so we can disable it across the board.
 bin/flexvol-amd64: ARCH=amd64
 bin/flexvol-arm64: ARCH=arm64
 bin/flexvol-armv7: ARCH=armv7
 bin/flexvol-ppc64le: ARCH=ppc64le
 bin/flexvol-s390x: ARCH=s390x
 bin/flexvol-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
+	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
 
 bin/csi-driver-amd64: ARCH=amd64
 bin/csi-driver-arm64: ARCH=arm64
