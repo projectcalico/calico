@@ -1976,14 +1976,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"featureDetectOverride": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FeatureDetectOverride is used to override the environment feature detection. Values are specified in a comma separated list with no spaces, example; \"SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=\". \"true\" or \"false\" will force the feature, empty or omitted values are auto-detected.",
+							Description: "FeatureDetectOverride is used to override feature detection based on auto-detected platform capabilities.  Values are specified in a comma separated list with no spaces, example; \"SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=\".  \"true\" or \"false\" will force the feature, empty or omitted values are auto-detected.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"featureGate": {
+					"featureGates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FeatureGate is used to enable or disable Calico features. Values are specified in a comma separated list with no spaces, example; \"BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false\". This is used to enable feature that is not fully production ready.",
+							Description: "FeatureGate is used to enable or disable tech-preview Calico features. Values are specified in a comma separated list with no spaces, example; \"BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false\". This is used to enable featureis that are not fully production ready.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
