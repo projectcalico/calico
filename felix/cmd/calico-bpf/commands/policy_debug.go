@@ -58,8 +58,15 @@ var policyDumpCmd = &cobra.Command{
 			hooks = append(hooks, hook)
 		}
 
+		rmap := counters.PolicyMap(&bpf.MapContext{})
+		m, err := counters.LoadPolicyMap(rmap)
+		if err != nil {
+			log.WithError(err).Error("error loading rule counters map.")
+			return
+		}
+
 		for _, dir := range hooks {
-			err := dumpPolicyInfo(cmd, iface, dir)
+			err := dumpPolicyInfo(cmd, iface, dir, m)
 			if err != nil {
 				log.WithError(err).Error("Failed to dump policy info.")
 			}
@@ -99,24 +106,9 @@ func getRuleMatchID(comment string) (uint64, error) {
 	return id, nil
 }
 
-func getRuleCounter(comment string) (uint64, error) {
-	matchId, err := getRuleMatchID(comment)
-	if err != nil {
-		return 0, err
-	}
-	rmap := counters.PolicyMap(&bpf.MapContext{})
-	m, err := counters.LoadPolicyMap(rmap)
-	if err != nil {
-		return 0, err
-	}
-	if val, ok := m[matchId]; ok {
-		return val, nil
-	}
-	return 0, err
-}
-
-func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
+func dumpPolicyInfo(cmd *cobra.Command, iface, hook string, m counters.PolicyMapMem) error {
 	var policyDbg bpf.PolicyDebugInfo
+	var count uint64
 	filename := bpf.PolicyDebugJSONFileName(iface, hook)
 	_, err := os.Stat(filename)
 	if err != nil {
@@ -134,6 +126,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
 	if err != nil {
 		return err
 	}
+
 	cmd.Printf("IfaceName: %s\n", policyDbg.IfaceName)
 	cmd.Printf("Hook: %s\n", policyDbg.Hook)
 	cmd.Printf("Error: %s\n", policyDbg.Error)
@@ -141,10 +134,14 @@ func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
 			if strings.Contains(comment, "Rule MatchID") {
-				count, err := getRuleCounter(comment)
+				count = 0
+				matchId, err := getRuleMatchID(comment)
 				if err == nil {
-					cmd.Printf("// count = %d\n", count)
+					if val, ok := m[matchId]; ok {
+						count = val
+					}
 				}
+				cmd.Printf("// count = %d\n", count)
 			} else {
 				cmd.Printf("// %s\n", comment)
 			}
