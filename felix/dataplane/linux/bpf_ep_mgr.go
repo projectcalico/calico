@@ -156,6 +156,14 @@ type bpfInterfaceState struct {
 	isReady    bool
 }
 
+type ctlbWorkaroundState int
+
+const (
+	ctlbWorkaroundDisabled = iota
+	ctlbWorkaroundEnabled
+	ctlbWorkaroundUDPOnly
+)
+
 type bpfEndpointManager struct {
 	// Main store of information about interfaces; indexed on interface name.
 	ifacesLock  sync.Mutex
@@ -228,7 +236,7 @@ type bpfEndpointManager struct {
 	rpfStrictModeEnabled string
 
 	// Service routes
-	ctlbWorkaroundEnabled bool
+	ctlbWorkaroundEnabled ctlbWorkaroundState
 
 	bpfPolicyDebugEnabled bool
 
@@ -343,11 +351,16 @@ func newBPFEndpointManager(
 	}
 
 	if config.FeatureGates != nil {
-		m.ctlbWorkaroundEnabled = config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] == "enabled"
+		switch config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] {
+		case "enabled":
+			m.ctlbWorkaroundEnabled = ctlbWorkaroundEnabled
+		case "udp":
+			m.ctlbWorkaroundEnabled = ctlbWorkaroundUDPOnly
+		}
 	}
 
-	if m.ctlbWorkaroundEnabled {
-		log.Info("BPFConnectTimeLoadBalancingWorkaround is enabled")
+	if m.ctlbWorkaroundEnabled != ctlbWorkaroundDisabled {
+		log.Infof("BPFConnectTimeLoadBalancingWorkaround is %d", m.ctlbWorkaroundEnabled)
 		m.routeTable = routetable.New(
 			[]string{bpfInDev},
 			4,
@@ -735,7 +748,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
 
-	if m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundEnabled != ctlbWorkaroundDisabled {
 		// Update all existing IPs of dirty services
 		m.dirtyServices.Iter(func(svc serviceKey) error {
 			for _, ip := range m.services[svc] {
@@ -1417,7 +1430,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	return m.dataIfaceRegex.MatchString(iface) ||
-		(m.ctlbWorkaroundEnabled && (iface == bpfOutDev || iface == "lo"))
+		(m.ctlbWorkaroundEnabled != ctlbWorkaroundDisabled && (iface == bpfOutDev || iface == "lo"))
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
@@ -1656,7 +1669,7 @@ func (m *bpfEndpointManager) ensureStarted() {
 }
 
 func (m *bpfEndpointManager) ensureBPFDevices() error {
-	if !m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundEnabled == ctlbWorkaroundDisabled {
 		return nil
 	}
 
@@ -2067,9 +2080,13 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 }
 
 func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
-	if !m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundEnabled == ctlbWorkaroundDisabled {
 		return
 	}
+
+	// XXX It would be great to exclude other than UDP services if
+	// m.ctlbWorkaroundEnabled == ctlbWorkaroundUDPOnly but ServiceUpdate does
+	// not carry the protocol :(
 
 	log.WithFields(log.Fields{
 		"Name":      update.Name,
@@ -2117,7 +2134,7 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 }
 
 func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
-	if !m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundEnabled == ctlbWorkaroundDisabled {
 		return
 	}
 
@@ -2156,7 +2173,7 @@ func (m *bpfEndpointManager) delRoute(cidr ip.V4CIDR) {
 }
 
 func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	if !m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundEnabled == ctlbWorkaroundDisabled {
 		return nil
 	}
 
