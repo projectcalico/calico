@@ -327,9 +327,9 @@ func TcSetGlobals(
 	return err
 }
 
-func CTLBSetGlobals(m *Map, udpNotSeen time.Duration) error {
+func CTLBSetGlobals(m *Map, udpNotSeen time.Duration, excludeUDP bool) error {
 	udpNotSeen /= time.Second // Convert to seconds
-	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen))
+	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(excludeUDP))
 
 	return err
 }
