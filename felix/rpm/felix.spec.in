@@ -90,7 +90,7 @@ fi
 %install
 rm -rf $RPM_BUILD_ROOT
 install -d $RPM_BUILD_ROOT/usr/bin/
-install -m 755 bin/* $RPM_BUILD_ROOT/usr/bin/
+install -m 755 bin/calico-felix $RPM_BUILD_ROOT/usr/bin/
 install -d $RPM_BUILD_ROOT/usr/lib/calico/bpf/
 install -m 644 bpf-gpl/bin/* $RPM_BUILD_ROOT/usr/lib/calico/bpf/
 install -m 644 bpf-apache/bin/* $RPM_BUILD_ROOT/usr/lib/calico/bpf/
