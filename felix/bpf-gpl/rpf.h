@@ -59,6 +59,9 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx, bool relax)
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (!relax) {
 				ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
+				CALI_DEBUG("Host RPF check src=%x skb iface=%d strict if %d\n",
+						bpf_ntohl(ctx->state->ip_src), ctx->skb->ifindex,
+						fib_params.ifindex);
 			} else {
 				ret = fib_params.ifindex != CT_INVALID_IFINDEX;
 				CALI_DEBUG("Host RPF check src=%x skb iface=%d loose if %d\n",
