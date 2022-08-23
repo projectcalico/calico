@@ -707,15 +707,13 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 		p.b.AddComment(comment)
 	}
 
-	var onMatchLabel string //, onNotMatchLabel string
+	var onMatchLabel string
 	if negate {
 		// Match negated, if we match any CIDR then we jump to the next rule.
 		onMatchLabel = p.endOfRuleLabel()
-		//onNotMatchLabel = p.freshPerRuleLabel()
 	} else {
 		// Match is non-negated, if we match, go to the next match criteria.
 		onMatchLabel = p.freshPerRuleLabel()
-		//onNotMatchLabel = p.endOfRuleLabel()
 	}
 
 	size := ip.IPv4SizeDword
@@ -751,20 +749,29 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 			maskU32[0] = bits.ReverseBytes32(math.MaxUint32 << (32 - cidr.Prefix()) & math.MaxUint32)
 		}
 
-		for index, addr := range addrU32 {
+		lastAddr := addrU32[0]
+		for section, addr := range addrU32 {
+			// Optimisation: If mask for this section, i.e. this match, is 0,
+			//then we can skip the match since the result of AND operation is
+			// irrelevent of packet address
+			if maskU32[section] == 0 {
+				continue
+			}
 			offset := leg.offsetToStateIPAddressField()
-			offset.Offset += int16(index * 4)
+			offset.Offset += int16(section * 4)
 			p.b.Load32(R1, R9, offset)
 
-			p.b.MovImm32(R2, int32(maskU32[index]))
+			p.b.MovImm32(R2, int32(maskU32[section]))
 			p.b.And32(R2, R1)
-			if index == len(addrU32)-1 {
-				p.b.JumpEqImm32(R2, int32(addr), onMatchLabel)
-			} else {
+
+			lastAddr = addr
+			if section != len(addrU32)-1 {
 				p.b.JumpNEImm32(R2, int32(addr), p.endOfcidrV6Match(cidrIndex))
 			}
+
 		}
 
+		p.b.JumpEqImm32(R2, int32(lastAddr), onMatchLabel)
 		if p.forIPv6 {
 			p.b.LabelNextInsn(p.endOfcidrV6Match(cidrIndex))
 		}
