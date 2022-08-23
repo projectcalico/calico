@@ -33,6 +33,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -112,7 +113,7 @@ type bpfDataplane interface {
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) error
 	ensureBPFDevices() error
-	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules, ap attachPoint) error
+	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules, polDir string, ap attachPoint) error
 	removePolicyProgram(jumpMapFD bpf.MapFD, ap attachPoint) error
 	setAcceptLocal(iface string, val bool) error
 	setRPFilter(iface string, val int) error
@@ -1098,7 +1099,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return m.dp.updatePolicyProgram(jumpMapFD, rules, &ap)
+	return m.dp.updatePolicyProgram(jumpMapFD, rules, polDirection.RuleDir(), &ap)
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -1156,7 +1157,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 			ForHostInterface: true,
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules, ap)
+		return m.dp.updatePolicyProgram(jumpMapFD, rules, polDirection.RuleDir(), ap)
 	}
 
 	err = m.dp.removePolicyProgram(jumpMapFD, ap)
@@ -1186,7 +1187,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules, ap)
+		return m.dp.updatePolicyProgram(jumpMapFD, rules, string(bpf.HookXDP), ap)
 	} else {
 		return m.dp.ensureNoProgram(&ap)
 	}
@@ -1816,7 +1817,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, ipFamily pr
 	}
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, ipFamily proto.IPVersion, hook bpf.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, ipFamily proto.IPVersion, polDir string, hook bpf.Hook, polErr error) error {
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
@@ -1836,7 +1837,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 		Error:      errStr,
 	}
 
-	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook), ipFamily)
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, strings.ToLower(polDir), ipFamily)
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 	err := encoder.Encode(policyDebugInfo)
@@ -1850,7 +1851,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 	return nil
 }
 
-func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules, ap attachPoint) error {
+func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules, polDir string, ap attachPoint) error {
 	ipVersions := []proto.IPVersion{proto.IPVersion_IPV4}
 	if m.ipv6Enabled {
 		ipVersions = append(ipVersions, proto.IPVersion_IPV6)
@@ -1894,7 +1895,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 			return fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
 		}
 
-		perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, ap.HookName(), err)
+		perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
 		}
