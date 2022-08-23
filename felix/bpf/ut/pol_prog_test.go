@@ -827,16 +827,30 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.2"),
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2")},
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			icmpPkt("11.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 		},
+	},
+	{
+		PolicyName: "allow from !CIDRs-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:    "Allow",
+			NotSrcNet: []string{"ffee::1/16", "ffe2:0000:1111::1/64", "ffe2:0000:2222::1/80", "ffe2::f/128"},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ffe0::2]:31245", "[ff01::2]:80"),
+			udpPkt("[ffe2:0000:1112::1]:80", "[ff02::2]:31245"),
+			icmpPkt("[ffe2:0000:2222:0010::1]", "[ff02::2]"),
+			packetNoPorts(253, "ffe2::e", "ff02::2")},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "ffee::1", "ffee::2"),
+			icmpPkt("[ffe2:0000:1111::1]", "[ffff::2]"),
+			udpPkt("[ffe2:0000:2222::1]:1024", "[ffe2::1]:80"),
+			tcpPkt("[ffe2::f]:31245", "[::2]:80")},
 	},
 	{
 		PolicyName: "allow to CIDRs",
@@ -850,11 +864,25 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
 		},
+	},
+	{
+		PolicyName: "allow to CIDRs-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action: "Allow",
+			DstNet: []string{"ffee::1/16", "ffe2:0000:1111::1/64", "ffe2:0000:2222::1/80", "ffe2::f/128"},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "ffee::2", "ffee::1"),
+			icmpPkt("[ffff::2]", "[ffe2:0000:1111::1]"),
+			udpPkt("[ffe2::1]:80", "[ffe2:0000:2222::1]:1024"),
+			tcpPkt("[::2]:80", "[ffe2::f]:31245")},
+		DroppedPackets: []packet{
+			tcpPkt("[ff01::2]:80", "[ffe0::2]:31245"),
+			udpPkt("[ff02::2]:31245", "[ffe2:0000:1112::1]:80"),
+			icmpPkt("[ff02::2]", "[ffe2:0000:2222:0010::1]"),
+			packetNoPorts(253, "ff02::2", "ffe2::e")},
 	},
 	{
 		PolicyName: "allow to !CIDRs",
@@ -875,6 +903,24 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 	},
 	{
+		PolicyName: "allow to !CIDRs-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:    "Allow",
+			NotDstNet: []string{"ffee::1/16", "ffe2:0000:1111::1/64", "ffe2:0000:2222::1/80", "ffe2::f/128"},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff01::2]:80", "[ffe0::2]:31245"),
+			udpPkt("[ff02::2]:31245", "[ffe2:0000:1112::1]:80"),
+			icmpPkt("[ff02::2]", "[ffe2:0000:2222:0010::1]"),
+			packetNoPorts(253, "ff02::2", "ffe2::e")},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "ffee::2", "ffee::1"),
+			icmpPkt("[ffff::2]", "[ffe2:0000:1111::1]"),
+			udpPkt("[ffe2::1]:80", "[ffe2:0000:2222::1]:1024"),
+			tcpPkt("[::2]:80", "[ffe2::f]:31245")},
+	},
+	{
 		PolicyName: "allow from !10.0.0.0/8",
 		Policy: makeRulesSingleTier([]*proto.Rule{{
 			Action:    "Allow",
@@ -883,10 +929,6 @@ var polProgramTests = []polProgramTest{
 		AllowedPackets: []packet{
 			packetNoPorts(253, "11.0.0.2", "10.0.0.1"),
 			icmpPkt("11.0.0.1", "10.0.0.2"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
 		},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
@@ -911,12 +953,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2"),
-			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 	},
 	{
 		PolicyName: "allow to 10.0.0.0/8",
@@ -934,12 +971,7 @@ var polProgramTests = []polProgramTest{
 			icmpPkt("11.0.0.1", "10.0.0.2")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "123.0.0.2"),
-			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 	},
 	{
 		PolicyName: "allow to !10.0.0.0/8",
@@ -949,12 +981,7 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "123.0.0.2"),
-			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
@@ -962,6 +989,110 @@ var polProgramTests = []polProgramTest{
 			icmpPkt("10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245")},
+	},
+	{
+		PolicyName: "allow from !ffe2::1/8",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:    "Allow",
+			NotSrcNet: []string{"ffe2::/8"},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "2::1", "::1"),
+			icmpPkt("[ee00:2345::2]", "[::2]"),
+			tcpPkt("[f002::1]:31245", "[ff02::2]:80"),
+			udpPkt("[fa02::1]:80", "[ff02::2]:31245"),
+			icmpPkt("[::1]", "[ff01::2]"),
+			packetNoPorts(253, "f002::1", "ff02::2")},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "ff02::1", "::1"),
+			icmpPkt("[ff00:2345::2]", "[::2]"),
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
+			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
+			icmpPkt("[ff01::1]", "[ff01::2]"),
+			packetNoPorts(253, "ff02::1", "ff02::2")},
+	},
+	{
+		PolicyName: "allow from !ffe2::/112",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:    "Allow",
+			NotSrcNet: []string{"ffe2::1:0/112"},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "2::1", "::1"),
+			icmpPkt("[ee00:2345::2]", "[::2]"),
+			tcpPkt("[f002::2:1]:31245", "[ff02::2]:80"),
+			udpPkt("[fa02::1]:80", "[ff02::2]:31245"),
+			icmpPkt("[::1]", "[ff01::2]"),
+			packetNoPorts(253, "ffe2::2:1", "ff02::2")},
+		DroppedPackets: []packet{
+			tcpPkt("[ffe2::1:1]:31245", "[ff02::2]:80"),
+			packetNoPorts(253, "ffe2::1:1", "ff02::2")},
+	},
+	{
+		PolicyName: "allow to ff00::1/128",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action: "Allow",
+			DstNet: []string{"ff00::1/128"},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[f002::2:1]:31245", "[ff00::1]:80"),
+			udpPkt("[fa02::1]:80", "[ff00::1]:31245"),
+			icmpPkt("[::1]", "[ff00::1]"),
+			packetNoPorts(253, "ffe2::2:1", "ff00::1")},
+		DroppedPackets: []packet{
+			tcpPkt("[ffe2::1:1]:31245", "[ff02::2]:80"),
+			packetNoPorts(253, "ffe2::1:1", "ff00::2")},
+	},
+	{
+		PolicyName: "allow to ff00::/64",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action: "Allow",
+			DstNet: []string{"ff00::/64"},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[f002::2:1]:31245", "[ff00::1]:80"),
+			udpPkt("[fa02::1]:80", "[ff00::2]:31245"),
+			icmpPkt("[::1]", "[ff00::ffff:1]"),
+			packetNoPorts(253, "ffe2::2:1", "ff00:0:0:0:f::1:2")},
+		DroppedPackets: []packet{
+			tcpPkt("[ffe2::1:1]:31245", "[ff00:0:0:1:f::1:2]:80"),
+			packetNoPorts(253, "ffe2::1:1", "ff01::2")},
+	},
+	{
+		PolicyName: "allow to !ff00::1/64",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:    "Allow",
+			NotDstNet: []string{"ff00::/64"},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ffe2::1:1]:31245", "[ff00:0:0:1:f::1:2]:80"),
+			packetNoPorts(253, "ffe2::1:1", "ff01::2")},
+		DroppedPackets: []packet{
+			tcpPkt("[f002::2:1]:31245", "[ff00::1]:80"),
+			udpPkt("[fa02::1]:80", "[ff00::2]:31245"),
+			icmpPkt("[::1]", "[ff00::ffff:1]"),
+			packetNoPorts(253, "ffe2::2:1", "ff00:0:0:0:f::1:2")},
+	},
+	{
+		PolicyName: "allow to !ff00::1/16",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:    "Allow",
+			NotDstNet: []string{"ff00::/16"},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ffe2::1:1]:31245", "[ff10::1:2]:80"),
+			packetNoPorts(253, "ffe2::1:1", "ff01::2")},
+		DroppedPackets: []packet{
+			tcpPkt("[f002::2:1]:31245", "[ff00::1]:80"),
+			udpPkt("[fa02::1]:80", "[ff00::2]:31245"),
+			icmpPkt("[::1]", "[ff00::ffff:1]"),
+			packetNoPorts(253, "ffe2::2:1", "ff00:0:0:0:f::1:2")},
 	},
 
 	// Port tests.
@@ -976,14 +1107,28 @@ var polProgramTests = []polProgramTest{
 			}},
 		}}),
 		AllowedPackets: []packet{
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			tcpPkt("[ff02::1]:80", "[ff02::2]:31245")},
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
+			icmpPkt("10.0.0.1", "10.0.0.2")},
+	},
+	{
+		PolicyName: "allow from tcp:80-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			SrcPorts: []*proto.PortRange{{
+				First: 80,
+				Last:  80,
+			}},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:80", "[ff02::2]:31245")},
+		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
@@ -1001,15 +1146,29 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			tcpPkt("10.0.0.2:81", "10.0.0.1:31245"),
-			tcpPkt("[ff02::1]:80", "[ff02::2]:12345"),
-			tcpPkt("[ff02::1]:81", "[ff02::2]:23456")},
+			tcpPkt("10.0.0.2:81", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:79", "10.0.0.1:31245"),
 			tcpPkt("10.0.0.2:82", "10.0.0.1:31245"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
+			udpPkt("10.0.0.2:80", "10.0.0.1:31245")},
+	},
+	{
+		PolicyName: "allow from tcp:80-81-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			SrcPorts: []*proto.PortRange{{
+				First: 80,
+				Last:  81,
+			}},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:80", "[ff02::2]:12345"),
+			tcpPkt("[ff02::1]:81", "[ff02::2]:23456")},
+		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
@@ -1027,13 +1186,27 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.2:0", "10.0.0.1:31245"),
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
+			tcpPkt("10.0.0.2:81", "10.0.0.1:31245")},
+	},
+	{
+		PolicyName: "allow from tcp:0-80-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			SrcPorts: []*proto.PortRange{{
+				First: 0,
+				Last:  80,
+			}},
+		}}),
+		AllowedPackets: []packet{
 			tcpPkt("[ff02::1]:0", "[ff02::2]:12345"),
 			tcpPkt("[ff02::1]:30", "[ff02::2]:12345"),
 			tcpPkt("[ff02::1]:80", "[ff02::2]:23456")},
 		DroppedPackets: []packet{
-			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
-			tcpPkt("10.0.0.2:81", "10.0.0.1:31245"),
 			tcpPkt("[ff02::1]:81", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
@@ -1051,12 +1224,26 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:65535"),
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:65535")},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:79")},
+	},
+	{
+		PolicyName: "allow to tcp:80-65535-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			DstPorts: []*proto.PortRange{{
+				First: 80,
+				Last:  65535,
+			}},
+		}}),
+		AllowedPackets: []packet{
 			tcpPkt("[ff02::1]:81", "[ff02::2]:80"),
 			tcpPkt("[ff02::1]:81", "[ff02::2]:65535")},
 		DroppedPackets: []packet{
-			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:79"),
 			tcpPkt("[ff02::1]:81", "[ff02::2]:79"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
@@ -1075,17 +1262,31 @@ var polProgramTests = []polProgramTest{
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:81"),
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:90"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:81"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:90")},
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:90")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:79"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:82"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:89"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:91"),
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
+	},
+	{
+		PolicyName: "allow to tcp:ranges-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			DstPorts: []*proto.PortRange{
+				{First: 80, Last: 81},
+				{First: 90, Last: 90},
+			},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:81"),
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:90")},
+		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:1001", "[ff02::2]:79"),
 			tcpPkt("[ff02::1]:1001", "[ff02::2]:82"),
 			tcpPkt("[ff02::1]:1001", "[ff02::2]:89"),
@@ -1108,17 +1309,31 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:79"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:82"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:89"),
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:91"),
-			tcpPkt("[ff02::1]:1001", "[ff02::2]:79"),
-			tcpPkt("[ff02::1]:1001", "[ff02::2]:82"),
-			tcpPkt("[ff02::1]:1001", "[ff02::2]:89"),
-			tcpPkt("[ff02::1]:1001", "[ff02::2]:91")},
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:91")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:81"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:90"),
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
+	},
+	{
+		PolicyName: "allow to tcp:!ranges-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			NotDstPorts: []*proto.PortRange{
+				{First: 80, Last: 81},
+				{First: 90, Last: 90},
+			},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:1001", "[ff02::2]:79"),
+			tcpPkt("[ff02::1]:1001", "[ff02::2]:82"),
+			tcpPkt("[ff02::1]:1001", "[ff02::2]:89"),
+			tcpPkt("[ff02::1]:1001", "[ff02::2]:91")},
+		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:1001", "[ff02::2]:80"),
 			tcpPkt("[ff02::1]:1001", "[ff02::2]:81"),
 			tcpPkt("[ff02::1]:1001", "[ff02::2]:90"),
@@ -1137,14 +1352,28 @@ var polProgramTests = []polProgramTest{
 			}},
 		}}),
 		AllowedPackets: []packet{
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80")},
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
+			icmpPkt("10.0.0.1", "10.0.0.2")},
+	},
+	{
+		PolicyName: "allow from tcp:!80-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			NotSrcPorts: []*proto.PortRange{{
+				First: 80,
+				Last:  80,
+			}},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:80")},
+		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:80", "[ff02::2]:90"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:90"),
 			udpPkt("[ff02::1]:31245", "[ff02::2]:90"),
@@ -1162,14 +1391,28 @@ var polProgramTests = []polProgramTest{
 			}},
 		}}),
 		AllowedPackets: []packet{
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:80")},
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
+			icmpPkt("10.0.0.1", "10.0.0.2")},
+	},
+	{
+		PolicyName: "allow to tcp:80-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			DstPorts: []*proto.PortRange{{
+				First: 80,
+				Last:  80,
+			}},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:80")},
+		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:80", "[ff02::2]:90"),
 			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:90"),
@@ -1188,11 +1431,26 @@ var polProgramTests = []polProgramTest{
 			}},
 		}}),
 		AllowedPackets: []packet{
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:65535"),
-			tcpPkt("[ff02::1]:31245", "[ff02::2]:65535")},
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:65535")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
+	},
+	{
+		// BPF immediate values are signed, check that we don't get tripped up by a sign extension.
+		PolicyName: "allow to tcp:65535-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			DstPorts: []*proto.PortRange{{
+				First: 65535,
+				Last:  65535,
+			}},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:65535")},
+		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
@@ -1209,14 +1467,28 @@ var polProgramTests = []polProgramTest{
 			}},
 		}}),
 		AllowedPackets: []packet{
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			tcpPkt("[ff02::1]:80", "[ff02::2]:31245")},
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
+			icmpPkt("10.0.0.1", "10.0.0.2")},
+	},
+	{
+		PolicyName: "allow to tcp:!80-v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			NotDstPorts: []*proto.PortRange{{
+				First: 80,
+				Last:  80,
+			}},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:80", "[ff02::2]:31245")},
+		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:80", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
