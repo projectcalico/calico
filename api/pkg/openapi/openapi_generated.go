@@ -2473,6 +2473,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfDataIfacePattern": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFL3IfacePattern is same as BPFDataIfacePattern but in addition it means that the device is a L3 tunnel device like wireguard.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfConnectTimeLoadBalancingEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging purposes.  [Default: true]",
