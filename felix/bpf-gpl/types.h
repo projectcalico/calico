@@ -59,7 +59,7 @@ struct cali_tc_state {
 	__be32 tun_ip1;
 	__be32 tun_ip2;
 	__be32 tun_ip3;
-	__be32 __unused;
+	__be32 __unused1;
 	/* Return code from the policy program CALI_POL_DENY/ALLOW etc. */
 	__s32 pol_rc;
 	/* Source port of the packet; updated on the CALI_CT_ESTABLISHED_SNAT path or when doing encap.

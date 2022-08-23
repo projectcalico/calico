@@ -74,7 +74,7 @@ type State struct {
 	TunIP1              uint32
 	TunIP2              uint32
 	TunIP3              uint32
-	unused              uint32
+	unused1             uint32
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16
@@ -86,15 +86,17 @@ type State struct {
 	RulesHit            uint32
 	RuleIDs             [MaxRuleIDs]uint64
 	ConntrackRCFlags    uint32
+	unused2             uint32
 	ConntrackNATIPPort  uint64
 	ConntrackTunIP      uint32
 	ConntrackIfIndexFwd uint32
 	ConntrackIfIndexCtd uint32
+	unused3             uint32
 	NATData             uint64
 	ProgStartTime       uint64
 }
 
-const expectedSize = 404
+const expectedSize = 408
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})

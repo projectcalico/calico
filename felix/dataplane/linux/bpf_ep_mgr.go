@@ -33,7 +33,6 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -1837,7 +1836,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 		Error:      errStr,
 	}
 
-	filename := bpf.PolicyDebugJSONFileName(ifaceName, strings.ToLower(hook), ipFamily)
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook), ipFamily)
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 	err := encoder.Encode(policyDebugInfo)
