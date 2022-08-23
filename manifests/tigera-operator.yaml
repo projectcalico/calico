@@ -17980,7 +17980,7 @@ rules:
     verbs:
       - list
       - watch
-      - create 
+      - create
       - update
   # Needed for operator lock
   - apiGroups:
