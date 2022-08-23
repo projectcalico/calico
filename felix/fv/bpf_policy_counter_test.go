@@ -22,6 +22,7 @@ import (
 
 	"context"
 	"fmt"
+	"strings"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -125,6 +126,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy count
 			Expect(v).To(Equal(uint64(10)))
 		}
 
+		checkRuleCounters(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", 10)
+
 		pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
 		pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 
@@ -158,6 +161,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy count
 			Expect(v).To(Equal(uint64(1)))
 		}
 
+		checkRuleCounters(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", 1)
+		checkRuleCounters(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", 1)
+
 		_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-test", options2.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -189,4 +195,21 @@ func dumpRuleCounterMap(felix *infrastructure.Felix) counters.PolicyMapMem {
 	m := make(counters.PolicyMapMem)
 	dumpBPFMap(felix, rcMap, counters.PolicyMapMemIter(m))
 	return m
+}
+
+func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string, count int) {
+	out, err := felix.ExecOutput("calico-bpf", "policy", "dump", ifName, hook)
+	Expect(err).NotTo(HaveOccurred())
+	strOut := strings.Split(out, "\n")
+
+	startOfPol := -1
+	for idx, str := range strOut {
+		if strings.Contains(str, fmt.Sprintf("Start of policy %s", polName)) {
+			startOfPol = idx
+			break
+		}
+	}
+	Expect(startOfPol).NotTo(Equal(-1))
+	Expect(strings.Contains(strOut[startOfPol+2], fmt.Sprintf("count = %d", count))).To(BeTrue())
+
 }
