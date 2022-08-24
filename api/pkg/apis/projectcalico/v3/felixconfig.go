@@ -356,7 +356,7 @@ type FelixConfigurationSpec struct {
 	BPFDataIfacePattern string `json:"bpfDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 	// BPFL3IfacePattern is same as BPFDataIfacePattern but in addition it means that the device is a L3 tunnel device
 	// like wireguard.
-	BPFL3IfacePattern string `json:"bpfDataIfacePattern,omitempty" validate:"omitempty,regexp"`
+	BPFL3IfacePattern string `json:"bpfL3IfacePattern,omitempty" validate:"omitempty,regexp"`
 	// BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load
 	// balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services
 	// and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging

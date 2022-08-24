@@ -2473,7 +2473,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"bpfDataIfacePattern": {
+					"bpfL3IfacePattern": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFL3IfacePattern is same as BPFDataIfacePattern but in addition it means that the device is a L3 tunnel device like wireguard.",
 							Type:        []string{"string"},
