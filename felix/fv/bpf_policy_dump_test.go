@@ -119,7 +119,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
 		Expect(string(out)).To(ContainSubstring(ifaceStr))
-		Expect(string(out)).To(ContainSubstring("Hook: tc egress"))
+		Expect(string(out)).To(ContainSubstring("Hook: egress"))
 		Expect(string(out)).To(ContainSubstring("Start of policy default.policy-tcp"))
 		Expect(string(out)).To(ContainSubstring("Load packet metadata saved by previous program"))
 		Expect(string(out)).To(ContainSubstring("Save state pointer in register R9"))
@@ -137,7 +137,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
 		Expect(string(out)).To(ContainSubstring(ifaceStr))
-		Expect(string(out)).To(ContainSubstring("Hook: tc ingress"))
+		Expect(string(out)).To(ContainSubstring("Hook: ingress"))
 		Expect(string(out)).To(ContainSubstring("Start of policy default.policy-tcp"))
 		Expect(string(out)).To(ContainSubstring("Load packet metadata saved by previous program"))
 		Expect(string(out)).To(ContainSubstring("Save state pointer in register R9"))
@@ -154,8 +154,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
-		Expect(string(out)).To(ContainSubstring("Hook: tc ingress"))
-		Expect(string(out)).To(ContainSubstring("Hook: tc egress"))
+		Expect(string(out)).To(ContainSubstring("Hook: ingress"))
+		Expect(string(out)).To(ContainSubstring("Hook: egress"))
 		Expect(string(out)).To(ContainSubstring("If protocol == tcp, skip to next rule"))
 		Expect(string(out)).To(ContainSubstring("If protocol != tcp, skip to next rule"))
 		Expect(string(out)).To(ContainSubstring("If source in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
@@ -196,7 +196,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
 		Expect(string(out)).To(ContainSubstring(ifaceStr))
-		Expect(string(out)).To(ContainSubstring("Hook: tc egress"))
+		Expect(string(out)).To(ContainSubstring("Hook: egress"))
 		Expect(string(out)).To(ContainSubstring("Start of policy default.policy-icmp"))
 		Expect(string(out)).To(ContainSubstring("Load packet metadata saved by previous program"))
 		Expect(string(out)).To(ContainSubstring("Save state pointer in register R9"))
@@ -213,7 +213,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
 		Expect(string(out)).To(ContainSubstring(ifaceStr))
-		Expect(string(out)).To(ContainSubstring("Hook: tc ingress"))
+		Expect(string(out)).To(ContainSubstring("Hook: ingress"))
 		Expect(string(out)).To(ContainSubstring("Start of policy default.policy-icmp"))
 		Expect(string(out)).To(ContainSubstring("Load packet metadata saved by previous program"))
 		Expect(string(out)).To(ContainSubstring("Save state pointer in register R9"))
