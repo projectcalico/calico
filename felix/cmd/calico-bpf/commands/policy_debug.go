@@ -96,19 +96,18 @@ func printInsn(cmd *cobra.Command, insn asm.Insn) {
 	cmd.Println()
 }
 
-func getRuleMatchID(comment string) (uint64, error) {
+func getRuleMatchID(comment string) uint64 {
 	matchID := strings.Split(comment, "Rule MatchID:")[1]
 	matchID = strings.Trim(matchID, " ")
 	id, err := strconv.ParseUint(matchID, 0, 64)
 	if err != nil {
-		return 0, err
+		return 0
 	}
-	return id, nil
+	return id
 }
 
 func dumpPolicyInfo(cmd *cobra.Command, iface, hook string, m counters.PolicyMapMem) error {
 	var policyDbg bpf.PolicyDebugInfo
-	var count uint64
 	filename := bpf.PolicyDebugJSONFileName(iface, hook)
 	_, err := os.Stat(filename)
 	if err != nil {
@@ -134,14 +133,8 @@ func dumpPolicyInfo(cmd *cobra.Command, iface, hook string, m counters.PolicyMap
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
 			if strings.Contains(comment, "Rule MatchID") {
-				count = 0
-				matchId, err := getRuleMatchID(comment)
-				if err == nil {
-					if val, ok := m[matchId]; ok {
-						count = val
-					}
-				}
-				cmd.Printf("// count = %d\n", count)
+				matchId := getRuleMatchID(comment)
+				cmd.Printf("// count = %d\n", m[matchId])
 			} else {
 				cmd.Printf("// %s\n", comment)
 			}
