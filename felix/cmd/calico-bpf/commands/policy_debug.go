@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/proto"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -69,7 +70,7 @@ func parseArgs(args []string) (string, string, error) {
 	if len(args) != 2 {
 		return "", "", fmt.Errorf("Insufficient arguments")
 	}
-	if (args[1] != "ingress" && args[1] != "egress" && args[1] != "all") || args[0] == "" {
+	if (args[1] != "ingress" && args[1] != "egress" && args[1] != "xdp" && args[1] != "all") || args[0] == "" {
 		return "", "", fmt.Errorf("Invalid argument")
 	}
 	return args[0], args[1], nil
@@ -89,7 +90,7 @@ func printInsn(cmd *cobra.Command, insn asm.Insn) {
 
 func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
 	var policyDbg bpf.PolicyDebugInfo
-	filename := bpf.PolicyDebugJSONFileName(iface, hook)
+	filename := bpf.PolicyDebugJSONFileName(iface, hook, proto.IPVersion_IPV4)
 	_, err := os.Stat(filename)
 	if err != nil {
 		return err
