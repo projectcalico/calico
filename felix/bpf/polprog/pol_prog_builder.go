@@ -791,8 +791,8 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 		lastAddr := addrU32[0]
 		for section, addr := range addrU32 {
 			// Optimisation: If mask for this section, i.e. this match, is 0,
-			//then we can skip the match since the result of AND operation is
-			// irrelevent of packet address
+			// then we can skip the match since the result of AND operation is
+			// irrelevent of packet address. However, we need to check at least one 32bit section.
 			if section > 0 && maskU32[section] == 0 {
 				continue
 			}
@@ -800,11 +800,12 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 			offset := leg.offsetToStateIPAddressField()
 			offset.Offset += int16(section * 4)
 			p.b.Load32(R1, R9, offset)
-
 			p.b.MovImm32(R2, int32(maskU32[section]))
 			p.b.And32(R2, R1)
 
 			lastAddr = addr
+			// If a 32bits section of an IPv6 does not match, we can skip the rest and jump to the
+			// next CIDR, rather than checking all 4 32bits sections.
 			if section != len(addrU32)-1 {
 				p.b.JumpNEImm32(R2, int32(addr), p.endOfcidrV6Match(cidrIndex))
 			}
