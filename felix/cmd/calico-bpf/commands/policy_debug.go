@@ -19,10 +19,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -56,8 +58,15 @@ var policyDumpCmd = &cobra.Command{
 			hooks = append(hooks, hook)
 		}
 
+		rmap := counters.PolicyMap(&bpf.MapContext{})
+		m, err := counters.LoadPolicyMap(rmap)
+		if err != nil {
+			log.WithError(err).Error("error loading rule counters map.")
+			return
+		}
+
 		for _, dir := range hooks {
-			err := dumpPolicyInfo(cmd, iface, dir)
+			err := dumpPolicyInfo(cmd, iface, dir, m)
 			if err != nil {
 				log.WithError(err).Error("Failed to dump policy info.")
 			}
@@ -87,7 +96,17 @@ func printInsn(cmd *cobra.Command, insn asm.Insn) {
 	cmd.Println()
 }
 
-func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
+func getRuleMatchID(comment string) uint64 {
+	matchID := strings.Split(comment, "Rule MatchID:")[1]
+	matchID = strings.Trim(matchID, " ")
+	id, err := strconv.ParseUint(matchID, 0, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
+func dumpPolicyInfo(cmd *cobra.Command, iface, hook string, m counters.PolicyMapMem) error {
 	var policyDbg bpf.PolicyDebugInfo
 	filename := bpf.PolicyDebugJSONFileName(iface, hook)
 	_, err := os.Stat(filename)
@@ -106,13 +125,19 @@ func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
 	if err != nil {
 		return err
 	}
+
 	cmd.Printf("IfaceName: %s\n", policyDbg.IfaceName)
 	cmd.Printf("Hook: %s\n", policyDbg.Hook)
 	cmd.Printf("Error: %s\n", policyDbg.Error)
 	cmd.Println("Policy Info:")
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
-			cmd.Printf("// %s\n", comment)
+			if strings.Contains(comment, "Rule MatchID") {
+				matchId := getRuleMatchID(comment)
+				cmd.Printf("// count = %d\n", m[matchId])
+			} else {
+				cmd.Printf("// %s\n", comment)
+			}
 		}
 		for _, label := range insn.Labels {
 			cmd.Printf("%s:\n", label)
