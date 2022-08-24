@@ -838,9 +838,13 @@ spec:
                   true]'
                 type: boolean
               bpfDataIfacePattern:
-                description: BPFL3IfacePattern is same as BPFDataIfacePattern but
-                  in addition it means that the device is a L3 tunnel device like
-                  wireguard.
+                description: BPFDataIfacePattern is a regular expression that controls
+                  which interfaces Felix should attach BPF programs to in order to
+                  catch traffic to/from the network.  This needs to match the interfaces
+                  that Calico workload traffic flows over as well as any interfaces
+                  that handle incoming traffic to nodeports and services from outside
+                  the cluster.  It should not match the workload interfaces (usually
+                  named cali...).
                 type: string
               bpfDisableUnprivileged:
                 description: 'BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled
@@ -889,6 +893,11 @@ spec:
                   minimum time between updates to the dataplane for Felix''s embedded
                   kube-proxy.  Lower values give reduced set-up latency.  Higher values
                   reduce Felix CPU usage by batching up more work.  [Default: 1s]'
+                type: string
+              bpfL3IfacePattern:
+                description: BPFL3IfacePattern is same as BPFDataIfacePattern but
+                  in addition it means that the device is a L3 tunnel device like
+                  wireguard.
                 type: string
               bpfLogLevel:
                 description: 'BPFLogLevel controls the log level of the BPF programs
