@@ -2280,8 +2280,8 @@ func JumpMapName() string {
 	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
 }
 
-func PolicyDebugJSONFileName(iface, hook string, ipFamily proto.IPVersion) string {
-	return path.Join(RuntimePolDir, fmt.Sprintf("%s_%s_v%d.json", iface, hook, ipFamily))
+func PolicyDebugJSONFileName(iface, polDir string, ipFamily proto.IPVersion) string {
+	return path.Join(RuntimePolDir, fmt.Sprintf("%s_%s_v%d.json", iface, polDir, ipFamily))
 }
 
 const countersMapVersion = 1

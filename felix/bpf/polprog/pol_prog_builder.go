@@ -793,9 +793,10 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 			// Optimisation: If mask for this section, i.e. this match, is 0,
 			//then we can skip the match since the result of AND operation is
 			// irrelevent of packet address
-			if maskU32[section] == 0 {
+			if section > 0 && maskU32[section] == 0 {
 				continue
 			}
+
 			offset := leg.offsetToStateIPAddressField()
 			offset.Offset += int16(section * 4)
 			p.b.Load32(R1, R9, offset)
@@ -807,7 +808,6 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 			if section != len(addrU32)-1 {
 				p.b.JumpNEImm32(R2, int32(addr), p.endOfcidrV6Match(cidrIndex))
 			}
-
 		}
 
 		p.b.JumpEqImm32(R2, int32(lastAddr), onMatchLabel)
@@ -815,6 +815,7 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 			p.b.LabelNextInsn(p.endOfcidrV6Match(cidrIndex))
 		}
 	}
+
 	if !negate {
 		// If we fall through then none of the CIDRs matched so the rule doesn't match.
 		p.b.Jump(p.endOfRuleLabel())

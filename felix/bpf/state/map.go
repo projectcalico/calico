@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,10 +35,25 @@ const (
 // struct cali_tc_state {
 //    __be32 ip_src;
 //    __be32 ip_src1;
+//    __be32 ip_src2;
+//    __be32 ip_src3;
 //    __be32 ip_dst;
+//    __be32 ip_dst1;
+//    __be32 ip_dst2;
+//    __be32 ip_dst3;
 //    __be32 pre_nat_ip_dst;
+//    __be32 pre_nat_ip_dst1;
+//    __be32 pre_nat_ip_dst2;
+//    __be32 pre_nat_ip_dst3;
 //    __be32 post_nat_ip_dst;
+//    __be32 post_nat_ip_dst1;
+//    __be32 post_nat_ip_dst2;
+//    __be32 post_nat_ip_dst3;
 //    __be32 tun_ip;
+//    __be32 tun_ip1;
+//    __be32 tun_ip2;
+//    __be32 tun_ip3;
+//    __u32 unused;
 //    __s32 pol_rc;
 //    __u16 sport;
 //    __u16 dport;
@@ -74,7 +89,7 @@ type State struct {
 	TunIP1              uint32
 	TunIP2              uint32
 	TunIP3              uint32
-	unused1             uint32
+	_                   uint32
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16
@@ -86,12 +101,12 @@ type State struct {
 	RulesHit            uint32
 	RuleIDs             [MaxRuleIDs]uint64
 	ConntrackRCFlags    uint32
-	unused2             uint32
+	_                   uint32
 	ConntrackNATIPPort  uint64
 	ConntrackTunIP      uint32
 	ConntrackIfIndexFwd uint32
 	ConntrackIfIndexCtd uint32
-	unused3             uint32
+	_                   uint32
 	NATData             uint64
 	ProgStartTime       uint64
 }

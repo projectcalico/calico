@@ -246,8 +246,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("10.0.0.1", "10.0.0.2"),
-			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
-		},
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "no tiers-v6",
@@ -256,8 +255,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[1001::1]:31245", "[1001::2]:80"),
 			tcpPkt("[1001::1]:80", "[1001::2]:31245"),
 			icmpPkt("[1001::1]", "[1001::2]"),
-			packetNoPorts(253, "1001::1", "1002::2"),
-		},
+			packetNoPorts(253, "1001::1", "1002::2")},
 	},
 	{
 		PolicyName: "empty tier has no impact",
@@ -282,8 +280,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("10.0.0.1", "10.0.0.2"),
-			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
-		},
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "empty tier has no impact-v6",
@@ -309,8 +306,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[ffff::abcd:2]:31245", "[eeee::abcd:1]:80"),
 			tcpPkt("[ffff::abcd:2]:80", "[eeee::abcd:1]:31245"),
 			icmpPkt("[ffff::abcd:2]", "[eeee::abcd:1]"),
-			packetNoPorts(253, "ffff::abcd:2", "eeee::abcd:1"),
-		},
+			packetNoPorts(253, "ffff::abcd:2", "eeee::abcd:1")},
 	},
 	{
 		PolicyName: "unreachable tier",
@@ -340,8 +336,7 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "unreachable tier-v6",
@@ -372,8 +367,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[1001::1]:31245", "[1001::2]:80"),
 			tcpPkt("[1001::1]:80", "[1001::2]:31245"),
 			icmpPkt("[1001::1]", "[1001::2]"),
-			packetNoPorts(253, "1001::1", "1002::2"),
-		},
+			packetNoPorts(253, "1001::1", "1002::2")},
 	},
 	{
 		PolicyName: "pass to nowhere",
@@ -392,8 +386,7 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "pass to nowhere-v6",
@@ -413,8 +406,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			tcpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 	},
 	{
 		PolicyName: "pass to allow",
@@ -445,8 +437,7 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "pass to allow-v6",
@@ -478,8 +469,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			tcpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 	},
 	{
 		PolicyName: "pass to deny",
@@ -510,8 +500,7 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "pass to deny-v6",
@@ -543,8 +532,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			tcpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 	},
 	{
 		PolicyName: "explicit allow",
@@ -557,8 +545,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "explicit allow-v6",
@@ -572,8 +559,7 @@ var polProgramTests = []polProgramTest{
 			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 	},
 	{
 		PolicyName: "explicit deny",
@@ -585,8 +571,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "explicit deny-v6",
@@ -600,8 +585,7 @@ var polProgramTests = []polProgramTest{
 			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 	},
 
 	// Protocol match tests.
@@ -613,14 +597,12 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-		},
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "allow tcp - v6",
@@ -631,14 +613,12 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			tcpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-		},
+			tcpPkt("[ff02::1]:80", "[ff02::2]:31245")},
 		DroppedPackets: []packet{
 			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 	},
 	{
 		PolicyName: "allow !tcp",
@@ -650,15 +630,13 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 		DroppedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-		},
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 	},
 	{
-		PolicyName: "allow !tcp - v6",
+		PolicyName: "allow !tcp-v6",
 		ForIPv6:    true,
 		Policy: makeRulesSingleTier([]*proto.Rule{{
 			Action:      "Allow",
@@ -668,12 +646,10 @@ var polProgramTests = []polProgramTest{
 			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			tcpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-		},
+			tcpPkt("[ff02::1]:80", "[ff02::2]:31245")},
 	},
 	{
 		PolicyName: "allow udp",
@@ -683,17 +659,15 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-		},
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			icmpPkt("10.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
-		PolicyName: "allow udp - v6",
+		PolicyName: "allow udp-v6",
 		ForIPv6:    true,
 		Policy: makeRulesSingleTier([]*proto.Rule{{
 			Action:   "Allow",
@@ -701,14 +675,12 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
-			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
-		},
+			udpPkt("[ff02::1]:80", "[ff02::2]:31245")},
 		DroppedPackets: []packet{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			tcpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 	},
 
 	// CIDR tests.
@@ -726,8 +698,7 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.2"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-		},
+			udpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 	},
 	{
 		PolicyName: "allow ff01::1/128",
@@ -745,8 +716,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[ff02::3]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::3]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::3]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::3", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::3", "ff02::2")},
 	},
 	{
 		PolicyName: "allow from 10.0.0.0/8",
@@ -763,8 +733,7 @@ var polProgramTests = []polProgramTest{
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "11.0.0.1", "10.0.0.2"),
-			icmpPkt("11.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("11.0.0.1", "10.0.0.2")},
 	},
 	{
 		PolicyName: "allow ffe2::1/16",
@@ -782,8 +751,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[ffe1::3]:31245", "[ffe2::2]:80"),
 			udpPkt("[ffe1::3]:80", "[ffe2::2]:31245"),
 			icmpPkt("[ffe1::3]", "[ffe2::2]"),
-			packetNoPorts(253, "ffe1::3", "ffe2::2"),
-		},
+			packetNoPorts(253, "ffe1::3", "ffe2::2")},
 	},
 	{
 		PolicyName: "allow from CIDRs",
@@ -797,8 +765,7 @@ var polProgramTests = []polProgramTest{
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.2"),
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-		},
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 	},
 	{
 		PolicyName: "allow from CIDRs-v6",
@@ -816,8 +783,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[ffe0::2]:31245", "[ff01::2]:80"),
 			udpPkt("[ffe2:0000:1112::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ffe2:0000:2222:0010::1]", "[ff02::2]"),
-			packetNoPorts(253, "ffe2::e", "ff02::2"),
-		},
+			packetNoPorts(253, "ffe2::e", "ff02::2")},
 	},
 	{
 		PolicyName: "allow from !CIDRs",
@@ -831,8 +797,7 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			icmpPkt("11.0.0.1", "10.0.0.2"),
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-		},
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 	},
 	{
 		PolicyName: "allow from !CIDRs-v6",
@@ -863,8 +828,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
-			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
-		},
+			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 	},
 	{
 		PolicyName: "allow to CIDRs-v6",
@@ -896,8 +860,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
 			udpPkt("[ff02::1]:80", "[ff02::2]:31245"),
 			icmpPkt("[ff02::1]", "[ff02::2]"),
-			packetNoPorts(253, "ff02::1", "ff02::2"),
-		},
+			packetNoPorts(253, "ff02::1", "ff02::2")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
@@ -928,8 +891,7 @@ var polProgramTests = []polProgramTest{
 		}}),
 		AllowedPackets: []packet{
 			packetNoPorts(253, "11.0.0.2", "10.0.0.1"),
-			icmpPkt("11.0.0.1", "10.0.0.2"),
-		},
+			icmpPkt("11.0.0.1", "10.0.0.2")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
@@ -989,6 +951,32 @@ var polProgramTests = []polProgramTest{
 			icmpPkt("10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245")},
+	},
+	{
+		PolicyName: "allow to 0.0.0.0/0",
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action: "Allow",
+			DstNet: []string{"0.0.0.0/0"},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "192.168.0.1", "123.0.0.2"),
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+			udpPkt("1.1.1.1:31245", "2.2.2.2:80"),
+			icmpPkt("172.16.1.1", "172.17.2.2")},
+		DroppedPackets: []packet{},
+	},
+	{
+		PolicyName: "allow to !0.0.0.0/0",
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:    "Allow",
+			NotDstNet: []string{"0.0.0.0/0"},
+		}}),
+		AllowedPackets: []packet{},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "192.168.0.1", "123.0.0.2"),
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+			udpPkt("1.1.1.1:31245", "2.2.2.2:80"),
+			icmpPkt("172.16.1.1", "172.17.2.2")},
 	},
 	{
 		PolicyName: "allow from !ffe2::1/8",
@@ -1093,6 +1081,34 @@ var polProgramTests = []polProgramTest{
 			udpPkt("[fa02::1]:80", "[ff00::2]:31245"),
 			icmpPkt("[::1]", "[ff00::ffff:1]"),
 			packetNoPorts(253, "ffe2::2:1", "ff00:0:0:0:f::1:2")},
+	},
+	{
+		PolicyName: "allow to ::/0",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action: "Allow",
+			DstNet: []string{"::/0"},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ffe2::1:1]:31245", "[ff10::1:2]:80"),
+			udpPkt("[fa02::1]:80", "[ff00::2]:31245"),
+			icmpPkt("[::1]", "[ff00::ffff:1]"),
+			packetNoPorts(253, "ffe2::1:1", "ff01::2")},
+		DroppedPackets: []packet{},
+	},
+	{
+		PolicyName: "allow to !::/0",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:    "Allow",
+			NotDstNet: []string{"::/0"},
+		}}),
+		AllowedPackets: []packet{},
+		DroppedPackets: []packet{
+			tcpPkt("[ffe2::1:1]:31245", "[ff10::1:2]:80"),
+			udpPkt("[fa02::1]:80", "[ff00::2]:31245"),
+			icmpPkt("[::1]", "[ff00::ffff:1]"),
+			packetNoPorts(253, "ffe2::1:1", "ff01::2")},
 	},
 
 	// Port tests.
