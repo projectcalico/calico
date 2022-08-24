@@ -186,6 +186,7 @@ type Config struct {
 	BPFLogLevel                        string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
+	BPFL3IfacePattern                  *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
 	BPFConntrackTimeouts               conntrack.Timeouts
