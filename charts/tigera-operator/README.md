@@ -88,7 +88,7 @@ The default values.yaml should be suitable for most basic deployments.
 
 ```
 # Image pull secrets to provision for pulling images from private registries.
-# If provided, references to the secrets must also be provided in the installation section.
+# This field is a map of desired Secret name to .dockerconfigjson formatted data to use for the secret.
 imagePullSecrets: {}
 
 # Configures general installation parameters for Calico. Schema is based
