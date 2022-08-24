@@ -168,6 +168,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
+		l3IfacePattern       string
 		workloadIfaceRegex   string
 		ipSetIDAllocator     *idalloc.IDAllocator
 		vxlanMTU             int
@@ -183,6 +184,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		fibLookupEnabled = true
 		endpointToHostAction = "DROP"
 		dataIfacePattern = "^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|wireguard.cali$)"
+		l3IfacePattern = "^(wireguard.cali$)"
 		workloadIfaceRegex = "cali"
 		ipSetIDAllocator = idalloc.New()
 		vxlanMTU = 0
@@ -223,6 +225,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
 				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),
+				BPFL3IfacePattern:     regexp.MustCompile(l3IfacePattern),
 				VXLANMTU:              vxlanMTU,
 				VXLANPort:             rrConfigNormal.VXLANPort,
 				BPFNodePortDSREnabled: nodePortDSR,
