@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -247,7 +247,7 @@ const (
 	AShiftR32 OpCode = OpClassALU32 | ALUSrcReg | ALUOpAShiftR
 	Endian32  OpCode = OpClassALU32 | ALUSrcReg | ALUOpEndian
 
-	// 64-bit ALU operations between a register and immediate value.  Note: immediate is only
+	// 64-bit ALU operations between a register and immediate value. Note: immediate is only
 	// 32-bit.
 	AddImm64     OpCode = OpClassALU64 | ALUSrcImm | ALUOpAdd
 	SubImm64     OpCode = OpClassALU64 | ALUSrcImm | ALUOpSub
@@ -531,6 +531,10 @@ func (b *Block) JumpEq32(ra, rb Reg, label string) {
 
 func (b *Block) JumpEqImm32(ra Reg, imm int32, label string) {
 	b.addWithOffsetFixup(JumpEqImm32, ra, 0, label, imm)
+}
+
+func (b *Block) JumpNEImm32(ra Reg, imm int32, label string) {
+	b.addWithOffsetFixup(JumpNEImm32, ra, 0, label, imm)
 }
 
 func (b *Block) JumpLE32(ra, rb Reg, label string) {
