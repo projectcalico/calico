@@ -59,6 +59,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/timeshim"
 )
 
@@ -3852,7 +3853,7 @@ func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNam
 	endStr := fmt.Sprintf("End of policy %s", polName)
 	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
 	var policyDbg bpf.PolicyDebugInfo
-	out, err := felix.ExecOutput("cat", bpf.PolicyDebugJSONFileName(iface, hook))
+	out, err := felix.ExecOutput("cat", bpf.PolicyDebugJSONFileName(iface, hook, proto.IPVersion_IPV4))
 	if err != nil {
 		return false
 	}
@@ -3862,16 +3863,17 @@ func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNam
 		return false
 	}
 
-	hookStr := "tc ingress"
+	hookStr := "ingress"
 	if isWorkload {
 		if hook == "ingress" {
-			hookStr = "tc egress"
+			hookStr = "egress"
 		}
 	} else {
 		if hook == "egress" {
-			hookStr = "tc egress"
+			hookStr = "egress"
 		}
 	}
+
 	if policyDbg.IfaceName != iface || policyDbg.Hook != hookStr || policyDbg.Error != "" {
 		return false
 	}
