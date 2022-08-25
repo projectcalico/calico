@@ -180,6 +180,17 @@ rules:
       - update
       - delete
       - watch
+  - apiGroups:
+      - storage.k8s.io
+    resources:
+      - csidrivers
+    verbs:
+      - list
+      - watch
+      - update
+      - get
+      - create
+      - delete
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
       - config.openshift.io
