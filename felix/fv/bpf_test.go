@@ -3863,17 +3863,16 @@ func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNam
 		return false
 	}
 
-	hookStr := "ingress"
+	hookStr := "tc ingress"
 	if isWorkload {
 		if hook == "ingress" {
-			hookStr = "egress"
+			hookStr = "tc egress"
 		}
 	} else {
 		if hook == "egress" {
-			hookStr = "egress"
+			hookStr = "tc egress"
 		}
 	}
-
 	if policyDbg.IfaceName != iface || policyDbg.Hook != hookStr || policyDbg.Error != "" {
 		return false
 	}
