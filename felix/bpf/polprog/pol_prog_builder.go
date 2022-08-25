@@ -457,6 +457,7 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
 		p.b.AddComment(fmt.Sprintf("Start of rule %s", rule))
+		p.b.AddComment(fmt.Sprintf("Rule MatchID: %d", rule.MatchID))
 		action := strings.ToLower(rule.Action)
 		if action == "log" {
 			log.Debug("Skipping log rule.  Not supported in BPF mode.")
