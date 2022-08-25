@@ -561,6 +561,20 @@ kubernetesProvider.</p>
 </tr>
 <tr>
 <td>
+<code>kubeletVolumePluginPath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KubeletVolumePluginPath optionally specifies enablement of Calico CSI plugin. If not specified,
+CSI will be enabled by default. If set to &lsquo;None&rsquo;, CSI will be disabled.
+Default: /var/lib/kubelet</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>nodeUpdateStrategy</code><br>
 <em>
 <a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#daemonsetupdatestrategy-v1-apps">
@@ -673,6 +687,21 @@ CalicoWindowsUpgradeDaemonSet
 </td>
 <td>
 <p>CalicoWindowsUpgradeDaemonSet configures the calico-windows-upgrade DaemonSet.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>fipsMode</code><br>
+<em>
+<a href="#operator.tigera.io/v1.FIPSMode">
+FIPSMode
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FIPSMode uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
+Default: Disabled</p>
 </td>
 </tr>
 </table>
@@ -1299,6 +1328,10 @@ string
 </p>
 <p>BGPOption describes the mode of BGP to use.</p>
 <p>One of: Enabled, Disabled</p>
+<h3 id="operator.tigera.io/v1.CAType">CAType
+(<code>string</code> alias)</h3>
+<p>CAType specifies which verification method the tunnel client should use to verify the tunnel server&rsquo;s identity.</p>
+<p>One of: Tigera, Public</p>
 <h3 id="operator.tigera.io/v1.CNIPluginType">CNIPluginType
 (<code>string</code> alias)</h3>
 <p>
@@ -2539,6 +2572,12 @@ Kubernetes core/v1.ResourceRequirements
 </p>
 <p>EncapsulationType is the type of encapsulation to use on an IP pool.</p>
 <p>One of: IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None</p>
+<h3 id="operator.tigera.io/v1.FIPSMode">FIPSMode
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
 <h3 id="operator.tigera.io/v1.HostPortsType">HostPortsType
 (<code>string</code> alias)</h3>
 <p>
@@ -3007,6 +3046,20 @@ kubernetesProvider.</p>
 </tr>
 <tr>
 <td>
+<code>kubeletVolumePluginPath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KubeletVolumePluginPath optionally specifies enablement of Calico CSI plugin. If not specified,
+CSI will be enabled by default. If set to &lsquo;None&rsquo;, CSI will be disabled.
+Default: /var/lib/kubelet</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>nodeUpdateStrategy</code><br>
 <em>
 <a href="https://v1-21.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#daemonsetupdatestrategy-v1-apps">
@@ -3119,6 +3172,21 @@ CalicoWindowsUpgradeDaemonSet
 </td>
 <td>
 <p>CalicoWindowsUpgradeDaemonSet configures the calico-windows-upgrade DaemonSet.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>fipsMode</code><br>
+<em>
+<a href="#operator.tigera.io/v1.FIPSMode">
+FIPSMode
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FIPSMode uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
+Default: Disabled</p>
 </td>
 </tr>
 </tbody>
@@ -3589,6 +3657,39 @@ are: EKS, GKE, AKS, RKE2, OpenShift, DockerEnterprise.</p>
 <a href="#operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition</a>)
 </p>
 <p>StatusConditionType is a type of condition that may apply to a particular component.</p>
+<h3 id="operator.tigera.io/v1.TLS">TLS
+</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>secretName</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>SecretName indicates the name of the secret in the tigera-operator namespace that contains the private key and certificate that the management cluster uses when it listens for incoming connections.</p>
+<p>When set to tigera-management-cluster-connection voltron will use the same cert bundle which Guardian client certs are signed with.</p>
+<p>When set to manager-tls, voltron will use the same cert bundle which Manager UI is served with.
+This cert bundle must be a publicly signed cert created by the user.
+Note that Tigera Operator will generate a self-signed manager-tls cert if one does not exist,
+and use of that cert will result in Guardian being unable to verify Voltron&rsquo;s identity.</p>
+<p>If changed on a running cluster with connected managed clusters, all managed clusters will disconnect as they will no longer be able to verify Voltron&rsquo;s identity.
+To reconnect existing managed clusters, change the tls.ca of the  managed clusters&rsquo; ManagementClusterConnection resource.</p>
+<p>One of: tigera-management-cluster-connection, manager-tls</p>
+<p>Default: tigera-management-cluster-connection</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition
 </h3>
 <p>
