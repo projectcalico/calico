@@ -180,6 +180,17 @@ rules:
       - update
       - delete
       - watch
+  - apiGroups:
+      - storage.k8s.io
+    resources:
+      - csidrivers
+    verbs:
+      - list
+      - watch
+      - update
+      - get
+      - create
+      - delete
 {{- if eq .Values.installation.kubernetesProvider "openshift" }}
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
@@ -293,15 +304,4 @@ rules:
     verbs:
       - list
       - watch
-  - apiGroups:
-      - storage.k8s.io
-    resources:
-      - csidrivers
-    verbs:
-      - list
-      - watch
-      - update
-      - get
-      - create
-      - delete
 {{- end }}
