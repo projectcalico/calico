@@ -167,20 +167,6 @@ ApplicationLayerSpec
 <table>
 <tr>
 <td>
-<code>webApplicationFirewall</code><br>
-<em>
-<a href="#operator.tigera.io/v1.WAFStatusType">
-WAFStatusType
-</a>
-</em>
-</td>
-<td>
-<p>WebApplicationFirewall controls whether or not ModSecurity enforcement is enabled for the cluster.
-When enabled, Services may opt-in to having ingress traffic examed by ModSecurity.</p>
-</td>
-</tr>
-<tr>
-<td>
 <code>logCollection</code><br>
 <em>
 <a href="#operator.tigera.io/v1.LogCollectionSpec">
@@ -1291,20 +1277,6 @@ string
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>
-<code>webApplicationFirewall</code><br>
-<em>
-<a href="#operator.tigera.io/v1.WAFStatusType">
-WAFStatusType
-</a>
-</em>
-</td>
-<td>
-<p>WebApplicationFirewall controls whether or not ModSecurity enforcement is enabled for the cluster.
-When enabled, Services may opt-in to having ingress traffic examed by ModSecurity.</p>
-</td>
-</tr>
 <tr>
 <td>
 <code>logCollection</code><br>
@@ -4217,10 +4189,4 @@ TyphaDeploymentPodTemplateSpec
 </tr>
 </tbody>
 </table>
-<h3 id="operator.tigera.io/v1.WAFStatusType">WAFStatusType
-(<code>string</code> alias)</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.ApplicationLayerSpec">ApplicationLayerSpec</a>)
-</p>
 <hr/>
