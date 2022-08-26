@@ -92,8 +92,6 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 					}
 				}
 			}
-		default:
-			logrus.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
 		}
 	} else {
 		switch update.KVPair.Key.(type) {
@@ -109,8 +107,6 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 						logrus.WithError(err).Fatal()
 					}
 				}
-			default:
-				logrus.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
 			}
 		}
 	}
