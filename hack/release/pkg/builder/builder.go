@@ -279,7 +279,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(fmt.Sprintf("%s/SHA256SUMS", uploadDir), []byte(output), 0644)
+	err = os.WriteFile(fmt.Sprintf("%s/SHA256SUMS", uploadDir), []byte(output), 0o644)
 	if err != nil {
 		return err
 	}
@@ -390,7 +390,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 
 func (r *ReleaseBuilder) publishGithubRelease(ver string) error {
 	releaseNoteTemplate := `
-Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/calico/_includes/release-notes/{version}-release-notes.md)
+Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{version}/calico/_includes/release-notes/{version}-release-notes.md)
 
 Attached to this release are the following artifacts:
 
