@@ -900,9 +900,12 @@ spec:
                   reduce Felix CPU usage by batching up more work.  [Default: 1s]'
                 type: string
               bpfL3IfacePattern:
-                description: BPFL3IfacePattern is same as BPFDataIfacePattern but
-                  in addition it means that the device is a L3 tunnel device like
-                  wireguard.
+                description: BPFL3IfacePattern is a regular expression that allows
+                  to list tunnel devices like wireguard or vxlan (i.e., L3 devices)
+                  in addition to BPFDataIfacePattern. That is, tunnel interfaces not
+                  created by Calico, that Calico workload traffic flows over as well
+                  as any interfaces that handle incoming traffic to nodeports and
+                  services from outside the cluster.
                 type: string
               bpfLogLevel:
                 description: 'BPFLogLevel controls the log level of the BPF programs

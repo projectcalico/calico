@@ -1243,7 +1243,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		} else {
 			endpointType = tc.EpTypeTunnel
 		}
-	} else if m.isL3Iface(ifaceName) {
+	} else if ifaceName == "wireguard.cali" || m.isL3Iface(ifaceName) {
 		endpointType = tc.EpTypeL3Device
 	} else if ifaceName == bpfInDev || ifaceName == bpfOutDev {
 		endpointType = tc.EpTypeNAT
@@ -1406,6 +1406,9 @@ func (m *bpfEndpointManager) isDataIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
+	if m.l3IfaceRegex == nil {
+		return false
+	}
 	return m.l3IfaceRegex.MatchString(iface)
 }
 
@@ -1557,8 +1560,8 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 
 	// Now anything remaining in hostIfaceToEpMap must be a new host endpoint.
 	for ifaceName, newEp := range hostIfaceToEpMap {
-		if !m.isDataIface(ifaceName) {
-			log.Warningf("Host endpoint configured for ifaceName=%v, but that doesn't match BPFDataIfacePattern; ignoring", ifaceName)
+		if !m.isDataIface(ifaceName) && !m.isL3Iface(ifaceName) {
+			log.Warningf("Host endpoint configured for ifaceName=%v, but that doesn't match BPFDataIfacePattern/BPFL3IfacePattern; ignoring", ifaceName)
 			continue
 		}
 		log.Infof("Host endpoint added for ifaceName=%v", ifaceName)

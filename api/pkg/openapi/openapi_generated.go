@@ -2475,7 +2475,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfL3IfacePattern": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFL3IfacePattern is same as BPFDataIfacePattern but in addition it means that the device is a L3 tunnel device like wireguard.",
+							Description: "BPFL3IfacePattern is a regular expression that allows to list tunnel devices like wireguard or vxlan (i.e., L3 devices) in addition to BPFDataIfacePattern. That is, tunnel interfaces not created by Calico, that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
