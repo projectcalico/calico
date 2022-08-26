@@ -65,12 +65,12 @@ static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
  * For example, in programs attached to L3 tunnel devices, the IP header is at location 0.
  * Whereas, in L2 programs, it's past the ethernet header.
  */
-static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE long skb_iphdr_offset()
 {
 	if (CALI_F_IPIP_ENCAPPED) {
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
 		// TODO: we need to consider different types of IPIP tunnels like 4in6 or 6in4
-		return sizeof(struct ethhdr) + ctx->ipheader_len;
+		return sizeof(struct ethhdr);
 	} else if (CALI_F_L3) {
 		// Egress on an IPIP tunnel, or any other l3 devices (wireguard) both directions:
 		// skb is [inner IP|payload]
@@ -102,7 +102,7 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
  * - ctx->nh/tcp_header/udp_header/icmp_header.
  */
 static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
-	int min_size = skb_iphdr_offset(ctx) + ctx->ipheader_len;
+	int min_size = skb_iphdr_offset() + ctx->ipheader_len;
 	skb_refresh_start_end(ctx);
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 		// This is an XDP program and there is not enough data for next header.
@@ -128,7 +128,19 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 		}
 	}
 	// Success, refresh the ip_header/nh fields in the context.
-	ctx->ip_header =  ctx->data_start + skb_iphdr_offset(ctx);
+	ctx->ip_header =  ctx->data_start + skb_iphdr_offset();
+	ctx->nh = ctx->ip_header + ctx->ipheader_len;
+	return 0;
+}
+
+static CALI_BPF_INLINE int validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
+	if (ctx->data_start + skb_iphdr_offset() + ctx->ipheader_len + nh_len > ctx->data_end) {
+			CALI_DEBUG("Too short to have %d bytes for next header\n",
+							skb_iphdr_offset() + ctx->ipheader_len + nh_len);
+			return -2;
+	}
+	// Success, refresh the ip_header/nh fields in the context.
+	ctx->ip_header = ctx->data_start + skb_iphdr_offset();
 	ctx->nh = ctx->ip_header + ctx->ipheader_len;
 	return 0;
 }
@@ -140,7 +152,7 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 
 static CALI_BPF_INLINE long skb_l4hdr_offset(struct cali_tc_ctx *ctx)
 {
-	return skb_iphdr_offset(ctx) + ctx->ipheader_len;
+	return skb_iphdr_offset() + ctx->ipheader_len;
 }
 
 static CALI_BPF_INLINE __u32 skb_ingress_ifindex(struct __sk_buff *skb)
