@@ -325,8 +325,8 @@ func newBPFEndpointManager(
 		m.dp = m
 	}
 
-	if config.FeatureDetectOverrides != nil {
-		m.ctlbWorkaroundEnabled = config.FeatureDetectOverrides["BPFConnectTimeLoadBalancingWorkaround"] == "enabled"
+	if config.FeatureGates != nil {
+		m.ctlbWorkaroundEnabled = config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] == "enabled"
 	}
 
 	if m.ctlbWorkaroundEnabled {
