@@ -59,7 +59,6 @@ func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMap
 		stateMapFD:         stateMapFD,
 		jumpMapFD:          jumpMapFD,
 		policyDebugEnabled: policyDebugEnabled,
-		forIPv6:            false,
 	}
 	return b
 }
@@ -300,6 +299,22 @@ func (p *Builder) writeJumpIfToOrFromHost(label string) {
 	p.b.JumpNEImm64(R1, 0, label)
 }
 
+func (p *Builder) indexOfDropProgram() int32 {
+	if p.forIPv6 {
+		return int32(bpf.ProgIndexV6Drop)
+	} else {
+		return int32(bpf.ProgIndexDrop)
+	}
+}
+
+func (p *Builder) indexOfAllowesProgram() int32 {
+	if p.forIPv6 {
+		return int32(bpf.ProgIndexV6Allowed)
+	} else {
+		return int32(bpf.ProgIndexAllowed)
+	}
+}
+
 // writeProgramFooter emits the program exit jump targets.
 func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Fall through here if there's no match.  Also used when we hit an error or if policy rejects packet.
@@ -310,13 +325,9 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	p.b.Store32(R9, R1, stateOffPolResult)
 
 	// Execute the tail call to drop program
-	p.b.Mov64(R1, R6)                      // First arg is the context.
-	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-	jumpDropIndex := bpf.ProgIndexDrop
-	if p.forIPv6 {
-		jumpDropIndex = bpf.ProgIndexV6Drop
-	}
-	p.b.MovImm32(R3, int32(jumpDropIndex)) // Third arg is the index (rather than a pointer to the index).
+	p.b.Mov64(R1, R6)                        // First arg is the context.
+	p.b.LoadMapFD(R2, uint32(p.jumpMapFD))   // Second arg is the map.
+	p.b.MovImm32(R3, p.indexOfDropProgram()) // Third arg is the index (rather than a pointer to the index).
 	p.b.Call(HelperTailCall)
 
 	// Fall through if tail call fails.
@@ -340,13 +351,9 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		p.b.MovImm32(R1, int32(state.PolicyAllow))
 		p.b.Store32(R9, R1, stateOffPolResult)
 		// Execute the tail call.
-		p.b.Mov64(R1, R6)                      // First arg is the context.
-		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-		jumpAllowedIndex := bpf.ProgIndexAllowed
-		if p.forIPv6 {
-			jumpAllowedIndex = bpf.ProgIndexV6Allowed
-		}
-		p.b.MovImm32(R3, int32(jumpAllowedIndex)) // Third arg is the index (rather than a pointer to the index).
+		p.b.Mov64(R1, R6)                           // First arg is the context.
+		p.b.LoadMapFD(R2, uint32(p.jumpMapFD))      // Second arg is the map.
+		p.b.MovImm32(R3, p.indexOfAllowesProgram()) // Third arg is the index (rather than a pointer to the index).
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.
@@ -533,17 +540,20 @@ func (leg matchLeg) stackOffsetToIPSetKey() (keyOffset int16) {
 	return
 }
 
+func (p Builder) ipVersion() uint8 {
+	if p.forIPv6 {
+		return uint8(proto.IPVersion_IPV6)
+	} else {
+		return uint8(proto.IPVersion_IPV4)
+	}
+}
+
 func (p *Builder) writeRule(r Rule, actionLabel string, destLeg matchLeg) {
 	if actionLabel == "" {
 		log.Panic("empty action label")
 	}
 
-	ipVersion := proto.IPVersion_IPV4
-	if p.forIPv6 {
-		ipVersion = proto.IPVersion_IPV6
-	}
-
-	rule := rules.FilterRuleToIPVersion(uint8(ipVersion), r.Rule)
+	rule := rules.FilterRuleToIPVersion(p.ipVersion(), r.Rule)
 	if rule == nil {
 		log.Debugf("Version mismatch, skipping rule")
 		return
@@ -793,7 +803,7 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 		for section, addr := range addrU32 {
 			// Optimisation: If mask for this section, i.e. this match, is 0,
 			// then we can skip the match since the result of AND operation is
-			// irrelevent of packet address. However, we need to check at least one 32bit section.
+			// irrelevant of packet address. However, we need to check at least one 32bit section.
 			if section > 0 && maskU32[section] == 0 {
 				continue
 			}

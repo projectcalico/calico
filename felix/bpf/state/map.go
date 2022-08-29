@@ -132,13 +132,13 @@ func StateFromBytes(bytes []byte) State {
 }
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v5_state",
+	Filename:   "/sys/fs/bpf/tc/globals/cali_state",
 	Type:       "percpu_array",
 	KeySize:    4,
 	ValueSize:  expectedSize,
 	MaxEntries: 1,
-	Name:       "cali_v5_state",
-	Version:    5,
+	Name:       "cali_state",
+	Version:    2,
 }
 
 func Map(mc *bpf.MapContext) bpf.Map {
@@ -147,11 +147,11 @@ func Map(mc *bpf.MapContext) bpf.Map {
 
 func MapForTest(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/test_v5_state",
+		Filename:   "/sys/fs/bpf/tc/globals/test_state",
 		Type:       "array",
 		KeySize:    4,
 		ValueSize:  expectedSize,
 		MaxEntries: 1,
-		Name:       "test_v5_state",
+		Name:       "test_state",
 	})
 }

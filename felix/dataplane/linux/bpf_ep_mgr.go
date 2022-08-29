@@ -1858,49 +1858,61 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	}
 
 	for _, ipFamily := range ipVersions {
-		pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
-		if ipFamily == proto.IPVersion_IPV6 {
-			pg.EnableIPv6Mode()
-		}
-		insns, err := pg.Instructions(rules)
-		if err != nil {
-			return fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
-		}
-		progType := unix.BPF_PROG_TYPE_SCHED_CLS
-		if rules.ForXDP {
-			progType = unix.BPF_PROG_TYPE_XDP
-		}
-		progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", uint32(progType))
-		if err != nil {
-			return fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
-		}
-		defer func() {
-			// Once we've put the program in the map, we don't need its FD any more.
-			err := progFD.Close()
-			if err != nil {
-				log.WithError(err).Panic("Failed to close program FD.")
-			}
-		}()
-
-		pIndex := bpf.ProgIndexPolicy
-		if ipFamily == proto.IPVersion_IPV6 {
-			pIndex = bpf.ProgIndexV6Policy
-		}
-		k := make([]byte, 4)
-		binary.LittleEndian.PutUint32(k, uint32(pIndex))
-		v := make([]byte, 4)
-		binary.LittleEndian.PutUint32(v, uint32(progFD))
-		err = bpf.UpdateMapEntry(jumpMapFD, k, v)
-		if err != nil {
-			return fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
-		}
-
+		insns, err := m.doUpdatePolicyProgram(jumpMapFD, rules, ipFamily)
 		perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
 		}
+		if err != nil {
+			return fmt.Errorf("failed to update policy program v%d: %w", ipFamily, err)
+		}
 	}
 	return nil
+}
+
+func indexOfPolicyProgram(ipFamily proto.IPVersion) uint32 {
+	if ipFamily == proto.IPVersion_IPV6 {
+		return bpf.ProgIndexV6Policy
+	} else {
+		return bpf.ProgIndexPolicy
+	}
+}
+
+func (m *bpfEndpointManager) doUpdatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules, ipFamily proto.IPVersion) (asm.Insns, error) {
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
+	if ipFamily == proto.IPVersion_IPV6 {
+		pg.EnableIPv6Mode()
+	}
+	insns, err := pg.Instructions(rules)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
+	}
+	progType := unix.BPF_PROG_TYPE_SCHED_CLS
+	if rules.ForXDP {
+		progType = unix.BPF_PROG_TYPE_XDP
+	}
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", uint32(progType))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
+	}
+	defer func() {
+		// Once we've put the program in the map, we don't need its FD any more.
+		err := progFD.Close()
+		if err != nil {
+			log.WithError(err).Panic("Failed to close program FD.")
+		}
+	}()
+
+	k := make([]byte, 4)
+	binary.LittleEndian.PutUint32(k, indexOfPolicyProgram(ipFamily))
+	v := make([]byte, 4)
+	binary.LittleEndian.PutUint32(v, uint32(progFD))
+	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
+	}
+
+	return insns, nil
 }
 
 func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD, ap attachPoint) error {
@@ -1910,12 +1922,21 @@ func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD, ap attachP
 	}
 
 	for _, ipFamily := range ipVersions {
-		k := make([]byte, 4)
-		err := bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+		err := m.doRemovePolicyProgram(jumpMapFD, ipFamily)
 		if err != nil {
-			return fmt.Errorf("failed to update jump map: %w", err)
+			return fmt.Errorf("failed to remove policy program v%d: %w", ipFamily, err)
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), ipFamily, ap.HookName())
+	}
+	return nil
+}
+
+func (m *bpfEndpointManager) doRemovePolicyProgram(jumpMapFD bpf.MapFD, ipFamily proto.IPVersion) error {
+	k := make([]byte, 4)
+	binary.LittleEndian.PutUint32(k, indexOfPolicyProgram(ipFamily))
+	err := bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	if err != nil {
+		return fmt.Errorf("failed to update jump map: %w", err)
 	}
 	return nil
 }
