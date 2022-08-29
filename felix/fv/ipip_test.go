@@ -44,6 +44,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v1 "k8s.io/api/core/v1"
+
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -320,7 +322,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				port := 8055
 				tgtPort := 8055
 
-				createK8sService(infra, felixes[0], w[1], serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
+				createK8sService(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
 				// Expect to connect to the service IP.
 				cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
 				cc.CheckConnectivity()
@@ -475,16 +477,17 @@ func getIPSetCounts(c *containers.Container) map[string]int {
 	return numMembers
 }
 
-func createK8sService(infra infrastructure.DatastoreInfra, felix *infrastructure.Felix, w *workload.Workload, serviceIP, targetIP string, port, tgtPort int, chain string) {
+func createK8sService(infra infrastructure.DatastoreInfra, felix *infrastructure.Felix, w *workload.Workload, svcName, serviceIP, targetIP string, port, tgtPort int, chain string) *v1.Service {
 	if BPFMode() {
 		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-		testSvc := k8sService("test-svc", serviceIP, w, port, tgtPort, 0, "tcp")
+		testSvc := k8sService(svcName, serviceIP, w, port, tgtPort, 0, "tcp")
 		testSvcNamespace := testSvc.ObjectMeta.Namespace
 		_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 			"Service endpoints didn't get created? Is controller-manager happy?")
-	} else {
-		felix.ProgramIptablesDNAT(serviceIP, targetIP, chain)
+		return testSvc
 	}
+	felix.ProgramIptablesDNAT(serviceIP, targetIP, chain)
+	return nil
 }

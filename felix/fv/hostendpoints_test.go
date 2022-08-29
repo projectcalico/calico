@@ -132,45 +132,51 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		// host to own pod always allowed, even via a service IP
 		for i := range felixes {
 			// Allocate a service IP.
-			serviceIP := fmt.Sprintf("10.101.0.%v", i+10)
+			serviceIP := fmt.Sprintf("10.101.0.%v", i+20)
+			svcName := fmt.Sprintf("test-svc-%v", i+20)
 
-			createK8sService(infra, felixes[i], w[i], serviceIP, w[i].IP, port, tgtPort, "OUTPUT")
+			createK8sService(infra, felixes[i], w[i], svcName, serviceIP, w[i].IP, port, tgtPort, "OUTPUT")
 
 			// Expect connectivity to the service IP.
 			cc.ExpectSome(felixes[i], connectivity.TargetIP(serviceIP), uint16(port))
 		}
 	}
+
 	expectDenyHostToRemotePodViaServiceTraffic := func() {
 		port := 8055
 		tgtPort := 8055
 		// host to remote pod always denied, even via a service IP
 		for i := range felixes {
 			// Allocate a service IP.
-			serviceIP := fmt.Sprintf("10.101.0.%v", i+10)
+			serviceIP := fmt.Sprintf("10.101.10.%v", i+10)
+			svcName := fmt.Sprintf("test-svc-%v", i+10)
 
-			createK8sService(infra, felixes[i], w[1-i], serviceIP, w[1-i].IP, port, tgtPort, "OUTPUT")
+			createK8sService(infra, felixes[i], w[1-i], svcName, serviceIP, w[1-i].IP, port, tgtPort, "OUTPUT")
 
 			// Expect not to be able to connect to the service IP.
 			cc.ExpectNone(felixes[i], connectivity.TargetIP(serviceIP), uint16(port))
 		}
 	}
+
 	expectPodToPodTraffic := func() {
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
 	}
+
 	expectLocalPodToRemotePodViaServiceTraffic := func() {
 		port := 8055
 		tgtPort := 8055
 		for i := range felixes {
 			// Allocate a service IP.
-			serviceIP := fmt.Sprintf("10.101.0.%v", i+10)
-
-			createK8sService(infra, felixes[i], w[1-i], serviceIP, w[1-i].IP, port, tgtPort, "PREROUTING")
+			serviceIP := fmt.Sprintf("10.101.10.%v", i)
+			svcName := fmt.Sprintf("test-svc-%v", i)
+			createK8sService(infra, felixes[i], w[1-i], svcName, serviceIP, w[1-i].IP, port, tgtPort, "PREROUTING")
 
 			// Expect to connect from local pod to the service IP.
 			cc.ExpectSome(w[i], connectivity.TargetIP(serviceIP), uint16(port))
 		}
 	}
+
 	expectDenyHostToHostTraffic := func() {
 		cc.ExpectNone(felixes[0], hostW[1])
 		cc.ExpectNone(felixes[1], hostW[0])
@@ -260,13 +266,11 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			expectDenyHostToOtherPodTraffic()
 			expectPodToPodTraffic()
 			expectHostToOwnPodTraffic()
-			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
-				// These tests use iptables to implement a simulated service, which doesn't work in BPF mode.
-				// TODO-HEP: implement proper services for BPF mode
-				expectHostToOwnPodViaServiceTraffic()
-				expectDenyHostToRemotePodViaServiceTraffic()
-				expectLocalPodToRemotePodViaServiceTraffic()
-			}
+			// These tests use iptables to implement a simulated service, which doesn't work in BPF mode.
+			// TODO-HEP: implement proper services for BPF mode
+			expectHostToOwnPodViaServiceTraffic()
+			expectDenyHostToRemotePodViaServiceTraffic()
+			expectLocalPodToRemotePodViaServiceTraffic()
 			cc.CheckConnectivity()
 		})
 

@@ -426,8 +426,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						port := 8055
 						tgtPort := 8055
 
-						createK8sService(infra, felixes[0], w[1], serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
-
+						createK8sService(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
 						// Expect to connect to the service IP.
 						cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
 						cc.CheckConnectivity()
