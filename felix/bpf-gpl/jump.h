@@ -8,7 +8,7 @@
 #include "conntrack.h"
 #include "policy.h"
 
-CALI_MAP(cali_v4_state, 4,
+CALI_MAP(cali_state, 2,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
 		__u32, struct cali_tc_state,
 		1, 0, MAP_PIN_GLOBAL)
@@ -16,7 +16,7 @@ CALI_MAP(cali_v4_state, 4,
 static CALI_BPF_INLINE struct cali_tc_state *state_get(void)
 {
 	__u32 key = 0;
-	return cali_v4_state_lookup_elem(&key);
+	return cali_state_lookup_elem(&key);
 }
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump2 = {
