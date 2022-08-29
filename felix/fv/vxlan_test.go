@@ -59,7 +59,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		enableIPv6 := testConfig.EnableIPv6
 
 		if BPFMode() && enableIPv6 && !BPFIPv6Support() {
-			return
+			continue
 		}
 
 		Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", vxlanMode, routeSource, brokenXSum, enableIPv6), func() {
@@ -422,7 +422,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// existing case to pass for a different reason.
 					It("allows host0 to remote Calico-networked workload via service IP", func() {
 						// Allocate a service IP.
-						serviceIP := "10.111.0.11"
+						serviceIP := "10.101.0.11"
 						port := 8055
 						tgtPort := 8055
 
