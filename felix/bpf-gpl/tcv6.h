@@ -68,8 +68,13 @@ int calico_tc_v6(struct __sk_buff *skb)
 		goto allow;
 	}
 
+	CALI_DEBUG("start=%x\n", ctx.data_start);
+	CALI_DEBUG("ip=%x\n", ctx.ip_header);
+	CALI_DEBUG("ip len=%x\n", ctx.ipheader_len);
+	CALI_DEBUG("nh=%x\n", ctx.nh);
+	CALI_DEBUG("end=%x\n", ctx.data_end);
+
 	CALI_LOG_IPV6(ipv6_hdr(&ctx));
-	CALI_DEBUG("iphdr len=%d\n", ctx.ipheader_len);
 	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
 	CALI_DEBUG("size=%d\n", ctx.state->ip_size);
 	CALI_DEBUG("sport=%d\n", ctx.state->sport);
