@@ -97,6 +97,10 @@ func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
 	return utils.GetEtcdClient(eds.etcdContainer.IP)
 }
 
+func (eds *EtcdDatastoreInfra) GetDataStoreType() string {
+	return "etcdv3"
+}
+
 func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
 	ci, err := eds.GetCalicoClient().ClusterInformation().Get(
 		context.Background(),
