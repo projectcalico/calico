@@ -42,6 +42,8 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -61,6 +63,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 
 	BeforeEach(func() {
 		infra = getInfra()
+		if BPFMode() && getDataStoreType(infra) == "etcdv3" {
+			Skip("Skipping BPF test for etcdv3 backend.")
+		}
 		felixes, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -311,13 +316,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			// existing case to pass for a different reason.
 			It("allows host0 to remote Calico-networked workload via service IP", func() {
 				// Allocate a service IP.
-				serviceIP := "10.96.10.1"
+				serviceIP := "10.101.0.11"
+				port := 8055
+				tgtPort := 8055
 
-				// Add a NAT rule for the service IP.
-				felixes[0].ProgramIptablesDNAT(serviceIP, w[1].IP, "OUTPUT")
-
+				createK8sServiceWithoutKubeProxy(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
 				// Expect to connect to the service IP.
-				cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), 8055)
+				cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
 				cc.CheckConnectivity()
 			})
 		})
@@ -468,4 +473,28 @@ func getIPSetCounts(c *containers.Container) map[string]int {
 		}
 	}
 	return numMembers
+}
+
+func createK8sServiceWithoutKubeProxy(infra infrastructure.DatastoreInfra, felix *infrastructure.Felix, w *workload.Workload, svcName, serviceIP, targetIP string, port, tgtPort int, chain string) {
+	if BPFMode() {
+		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+		testSvc := k8sService(svcName, serviceIP, w, port, tgtPort, 0, "tcp")
+		testSvcNamespace := testSvc.ObjectMeta.Namespace
+		_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+			"Service endpoints didn't get created? Is controller-manager happy?")
+	}
+	felix.ProgramIptablesDNAT(serviceIP, targetIP, chain)
+}
+
+func getDataStoreType(infra infrastructure.DatastoreInfra) string {
+	switch infra.(type) {
+	case *infrastructure.K8sDatastoreInfra:
+		return "kubernetes"
+	case *infrastructure.EtcdDatastoreInfra:
+		return "etcdv3"
+	default:
+		return "kubernetes"
+	}
 }

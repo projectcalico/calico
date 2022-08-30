@@ -59,7 +59,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		enableIPv6 := testConfig.EnableIPv6
 
 		if BPFMode() && enableIPv6 && !BPFIPv6Support() {
-			return
+			continue
 		}
 
 		Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", vxlanMode, routeSource, brokenXSum, enableIPv6), func() {
@@ -85,6 +85,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// tested but we can verify the state with ethtool.
 				topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 
+				if getDataStoreType(infra) == "etcdv3" && BPFMode() {
+					Skip("Skipping BPF tests for etcdv3 backend.")
+				}
 				felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 				// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -419,13 +422,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// existing case to pass for a different reason.
 					It("allows host0 to remote Calico-networked workload via service IP", func() {
 						// Allocate a service IP.
-						serviceIP := "10.96.10.1"
+						serviceIP := "10.101.0.11"
+						port := 8055
+						tgtPort := 8055
 
-						// Add a NAT rule for the service IP.
-						felixes[0].ProgramIptablesDNAT(serviceIP, w[1].IP, "OUTPUT")
-
+						createK8sServiceWithoutKubeProxy(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
 						// Expect to connect to the service IP.
-						cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), 8055)
+						cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
 						cc.CheckConnectivity()
 					})
 				})
