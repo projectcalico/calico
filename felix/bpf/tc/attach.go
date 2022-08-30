@@ -582,16 +582,16 @@ func RemoveQdisc(ifaceName string) error {
 
 // Return a key that uniquely identifies this attach point, amongst all of the possible attach
 // points associated with a single given interface.
-func (ap *AttachPoint) JumpMapFDMapKey() string {
-	return "tc-" + string(ap.Hook)
+func (ap AttachPoint) JumpMapFDMapKey() string {
+	return string(ap.Hook)
 }
 
 func (ap AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
-func (ap AttachPoint) HookName() string {
-	return string(ap.Hook)
+func (ap AttachPoint) HookName() bpf.Hook {
+	return ap.Hook
 }
 
 func (ap AttachPoint) Config() string {

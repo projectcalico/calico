@@ -44,6 +44,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // Hook is the hook to which a BPF program should be attached. This is relative to
@@ -2279,8 +2280,8 @@ func JumpMapName() string {
 	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
 }
 
-func PolicyDebugJSONFileName(iface, dir string) string {
-	return (RuntimePolDir + "/" + iface + "_" + dir + ".json")
+func PolicyDebugJSONFileName(iface, polDir string, ipFamily proto.IPVersion) string {
+	return path.Join(RuntimePolDir, fmt.Sprintf("%s_%s_v%d.json", iface, polDir, ipFamily))
 }
 
 const countersMapVersion = 1
