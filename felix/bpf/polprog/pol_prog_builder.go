@@ -805,7 +805,7 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 			// then we can skip the match since the result of AND operation is
 			// irrelevant of packet address. However, we need to check at least one 32bit section.
 			if section > 0 && maskU32[section] == 0 {
-				continue
+				break
 			}
 
 			offset := leg.offsetToStateIPAddressField()
