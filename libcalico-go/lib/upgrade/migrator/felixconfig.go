@@ -346,13 +346,9 @@ func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error)
 			return nil, m.parseProtoPortFailed("unknown protocol: " + protocolStr)
 		}
 
-		port, err := strconv.Atoi(portStr)
+		port, err := strconv.ParseUint(portStr, 10, 16)
 		if err != nil {
-			return nil, m.parseProtoPortFailed("ports should be integers")
-		}
-		if port < 0 || port > 65535 {
-			err = m.parseProtoPortFailed("ports must be in range 0-65535")
-			return nil, err
+			return nil, m.parseProtoPortFailed("ports should be integers in range 0-65535")
 		}
 
 		protoPort := apiv3.ProtoPort{
