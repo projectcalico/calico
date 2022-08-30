@@ -2582,6 +2582,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"bpfHostConntrackBypass": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for workloads and services. [Default: true - bypass Linux conntrack]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"bpfEnforceRPF": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnforceRPF enforce strict RPF on all interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled or Strict. [Default: Strict]",
