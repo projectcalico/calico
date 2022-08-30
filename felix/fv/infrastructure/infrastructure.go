@@ -41,8 +41,6 @@ type DatastoreInfra interface {
 	GetCalicoClient() client.Interface
 	// GetClusterGUID will return the cluster GUID.
 	GetClusterGUID() string
-	// GetDataStoreType will return the datastore type (etcdv3/kubernetes)
-	GetDataStoreType() string
 	// SetExpectedIPIPTunnelAddr will set the Felix object's
 	// ExpectedIPIPTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.

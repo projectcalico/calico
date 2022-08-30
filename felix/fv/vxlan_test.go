@@ -85,7 +85,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// tested but we can verify the state with ethtool.
 				topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 
-				if infra.GetDataStoreType() == "etcdv3" && BPFMode() {
+				if getDataStoreType(infra) == "etcdv3" && BPFMode() {
 					Skip("Skipping BPF tests for etcdv3 backend.")
 				}
 				felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
@@ -426,7 +426,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						port := 8055
 						tgtPort := 8055
 
-						createK8sService(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
+						createK8sServiceWithoutKubeProxy(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
 						// Expect to connect to the service IP.
 						cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
 						cc.CheckConnectivity()

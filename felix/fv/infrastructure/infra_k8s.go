@@ -557,10 +557,6 @@ func (kds *K8sDatastoreInfra) GetCalicoClient() client.Interface {
 	return kds.calicoClient
 }
 
-func (kds *K8sDatastoreInfra) GetDataStoreType() string {
-	return "kubernetes"
-}
-
 func (kds *K8sDatastoreInfra) GetClusterGUID() string {
 	ci, err := kds.GetCalicoClient().ClusterInformation().Get(
 		context.Background(),

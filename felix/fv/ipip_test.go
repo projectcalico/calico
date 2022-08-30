@@ -44,8 +44,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v1 "k8s.io/api/core/v1"
-
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -65,7 +63,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 
 	BeforeEach(func() {
 		infra = getInfra()
-		if BPFMode() && infra.GetDataStoreType() == "etcdv3" {
+		if BPFMode() && getDataStoreType(infra) == "etcdv3" {
 			Skip("Skipping BPF test for etcdv3 backend.")
 		}
 		felixes, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
@@ -322,7 +320,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				port := 8055
 				tgtPort := 8055
 
-				createK8sService(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
+				createK8sServiceWithoutKubeProxy(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
 				// Expect to connect to the service IP.
 				cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
 				cc.CheckConnectivity()
@@ -477,7 +475,7 @@ func getIPSetCounts(c *containers.Container) map[string]int {
 	return numMembers
 }
 
-func createK8sService(infra infrastructure.DatastoreInfra, felix *infrastructure.Felix, w *workload.Workload, svcName, serviceIP, targetIP string, port, tgtPort int, chain string) *v1.Service {
+func createK8sServiceWithoutKubeProxy(infra infrastructure.DatastoreInfra, felix *infrastructure.Felix, w *workload.Workload, svcName, serviceIP, targetIP string, port, tgtPort int, chain string) {
 	if BPFMode() {
 		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 		testSvc := k8sService(svcName, serviceIP, w, port, tgtPort, 0, "tcp")
@@ -486,8 +484,17 @@ func createK8sService(infra infrastructure.DatastoreInfra, felix *infrastructure
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 			"Service endpoints didn't get created? Is controller-manager happy?")
-		return testSvc
 	}
 	felix.ProgramIptablesDNAT(serviceIP, targetIP, chain)
-	return nil
+}
+
+func getDataStoreType(infra infrastructure.DatastoreInfra) string {
+	switch infra.(type) {
+	case *infrastructure.K8sDatastoreInfra:
+		return "kubernetes"
+	case *infrastructure.EtcdDatastoreInfra:
+		return "etcdv3"
+	default:
+		return "kubernetes"
+	}
 }
