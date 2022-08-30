@@ -331,6 +331,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFLogLevel:                        configParams.BPFLogLevel,
 			BPFExtToServiceConnmark:            configParams.BPFExtToServiceConnmark,
 			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
+			BPFL3IfacePattern:                  configParams.BPFL3IfacePattern,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			BPFMapRepin:                        configParams.DebugBPFMapRepinEnabled,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
@@ -352,6 +353,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			KubeClientSet: k8sClientSet,
 
 			FeatureDetectOverrides: configParams.FeatureDetectOverride,
+			FeatureGates:           configParams.FeatureGates,
 
 			RouteSource: configParams.RouteSource,
 

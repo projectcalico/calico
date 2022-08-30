@@ -186,6 +186,7 @@ type Config struct {
 	BPFLogLevel                        string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
+	BPFL3IfacePattern                  *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
 	BPFConntrackTimeouts               conntrack.Timeouts
@@ -213,6 +214,7 @@ type Config struct {
 	KubeClientSet *kubernetes.Clientset
 
 	FeatureDetectOverrides map[string]string
+	FeatureGates           map[string]string
 
 	// Populated with the smallest host MTU based on auto-detection.
 	hostMTU         int

@@ -1976,7 +1976,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"featureDetectOverride": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FeatureDetectOverride is used to override the feature detection. Values are specified in a comma separated list with no spaces, example; \"SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=\". \"true\" or \"false\" will force the feature, empty or omitted values are auto-detected.",
+							Description: "FeatureDetectOverride is used to override feature detection based on auto-detected platform capabilities.  Values are specified in a comma separated list with no spaces, example; \"SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=\".  \"true\" or \"false\" will force the feature, empty or omitted values are auto-detected.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"featureGates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FeatureGates is used to enable or disable tech-preview Calico features. Values are specified in a comma separated list with no spaces, example; \"BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false\". This is used to enable features that are not fully production ready.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2469,6 +2476,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfDataIfacePattern": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFDataIfacePattern is a regular expression that controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"bpfL3IfacePattern": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFL3IfacePattern is a regular expression that allows to list tunnel devices like wireguard or vxlan (i.e., L3 devices) in addition to BPFDataIfacePattern. That is, tunnel interfaces not created by Calico, that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

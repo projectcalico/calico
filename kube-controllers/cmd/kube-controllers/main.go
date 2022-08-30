@@ -252,6 +252,11 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 	s.SetReady("CalicoDatastore", false, "initialized to false")
 	s.SetReady("KubeAPIServer", false, "initialized to false")
 
+	// Initialize a timeout for API calls. Start with a short timeout. We'll increase the timeout if we start seeing errors.
+	defaultTimeout := 4 * time.Second
+	maxTimeout := 16 * time.Second
+	timeout := defaultTimeout
+
 	// Loop until context expires and perform healthchecks.
 	for {
 		select {
@@ -261,9 +266,10 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 			// carry on
 		}
 
-		// skip healthchecks if configured
-		// Datastore HealthCheck
-		healthCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		// Perform a health check against the Calico data store. Just query the
+		// default cluster information and make sure it's up-to-date, which will
+		// fail if the data store isn't working.
+		healthCtx, cancel := context.WithTimeout(ctx, timeout)
 		err := calicoClient.EnsureInitialized(healthCtx, "", "k8s")
 		if err != nil {
 			log.WithError(err).Errorf("Failed to verify datastore")
@@ -277,29 +283,12 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 		}
 		cancel()
 
-		// Kube-apiserver HealthCheck
-		healthStatus := 0
-		k8sCheckDone := make(chan interface{}, 1)
-		go func(k8sCheckDone <-chan interface{}) {
-			time.Sleep(2 * time.Second)
-			select {
-			case <-k8sCheckDone:
-				// The check has completed.
-			default:
-				// Check is still running, so report not ready.
-				s.SetReady(
-					"KubeAPIServer",
-					false,
-					"Error reaching apiserver: taking a long time to check apiserver",
-				)
-			}
-		}(k8sCheckDone)
-
 		// Call the /healthz endpoint using the same clientset as our main controllers. This allows us to share a connection
 		// and gives us a good idea of whether or not the other controllers are currently experiencing issues accessing the apiserver.
-		result := k8sClientset.Discovery().RESTClient().Get().Timeout(20 * time.Second).AbsPath("/healthz").Do(ctx).StatusCode(&healthStatus)
-		k8sCheckDone <- nil
-
+		healthCtx, cancel = context.WithTimeout(ctx, timeout)
+		healthStatus := 0
+		result := k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do(healthCtx).StatusCode(&healthStatus)
+		cancel()
 		if healthStatus != http.StatusOK {
 			log.WithError(result.Error()).WithField("status", healthStatus).Errorf("Received bad status code from apiserver")
 			s.SetReady(
@@ -311,6 +300,19 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 			s.SetReady("KubeAPIServer", true, "")
 		}
 
+		// If we encountered errors, retry again with a longer timeout.
+		if !s.GetReadiness() {
+			timeout = 2 * timeout
+			if timeout > maxTimeout {
+				timeout = maxTimeout
+			}
+			log.Infof("Health check is not ready, retrying in 2 seconds with new timeout: %s", timeout)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		// Success! Reset the timeout.
+		timeout = defaultTimeout
 		time.Sleep(10 * time.Second)
 	}
 }

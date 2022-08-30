@@ -821,6 +821,14 @@ spec:
                   kube-proxy.  Lower values give reduced set-up latency.  Higher values
                   reduce Felix CPU usage by batching up more work.  [Default: 1s]'
                 type: string
+              bpfL3IfacePattern:
+                description: BPFL3IfacePattern is a regular expression that allows
+                  to list tunnel devices like wireguard or vxlan (i.e., L3 devices)
+                  in addition to BPFDataIfacePattern. That is, tunnel interfaces not
+                  created by Calico, that Calico workload traffic flows over as well
+                  as any interfaces that handle incoming traffic to nodeports and
+                  services from outside the cluster.
+                type: string
               bpfLogLevel:
                 description: 'BPFLogLevel controls the log level of the BPF programs
                   when in BPF dataplane mode.  One of "Off", "Info", or "Debug".  The
@@ -1004,11 +1012,16 @@ spec:
                   type: object
                 type: array
               featureDetectOverride:
-                description: FeatureDetectOverride is used to override the feature
-                  detection. Values are specified in a comma separated list with no
-                  spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".
-                  "true" or "false" will force the feature, empty or omitted values
-                  are auto-detected.
+                description: FeatureDetectOverride is used to override feature detection
+                  based on auto-detected platform capabilities.  Values are specified
+                  in a comma separated list with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".  "true"
+                  or "false" will force the feature, empty or omitted values are auto-detected.
+                type: string
+              featureGates:
+                description: FeatureGates is used to enable or disable tech-preview
+                  Calico features. Values are specified in a comma separated list
+                  with no spaces, example; "BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false".
+                  This is used to enable features that are not fully production ready.
                 type: string
               floatingIPs:
                 description: FloatingIPs configures whether or not Felix will program
@@ -5384,7 +5397,7 @@ spec:
       openAPIV3Schema:
         description: ImageSet is used to specify image digests for the images that
           the operator deploys. The name of the ImageSet is expected to be in the
-          format `<variang>-<release>`. The `variant` used is `enterprise` if the
+          format `<variant>-<release>`. The `variant` used is `enterprise` if the
           InstallationSpec Variant is `TigeraSecureEnterprise` otherwise it is `calico`.
           The `release` must match the version of the variant that the operator is
           built to deploy, this version can be obtained by passing the `--version`
