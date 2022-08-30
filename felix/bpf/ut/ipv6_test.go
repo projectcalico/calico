@@ -66,10 +66,8 @@ var ipTestCases = []ipv6Test{
 		Section:     "calico_from_workload_ep",
 		Rules:       nil,
 		pkt: Packet{
-			l3: ipv6Default,
-			l3Ext: []gopacket.Layer{
-				&layers.IPv6HopByHop{},
-			},
+			l3:           ipv6Default,
+			ipv6HopByHop: true,
 			l4: &layers.UDP{
 				DstPort: 53,
 				SrcPort: 54321,

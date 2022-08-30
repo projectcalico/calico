@@ -1036,6 +1036,7 @@ type Packet struct {
 	l3           gopacket.Layer
 	ipv4         *layers.IPv4
 	ipv6         *layers.IPv6
+	ipv6HopByHop bool
 	l3Ext        []gopacket.Layer
 	l4           gopacket.Layer
 	payload      []byte
@@ -1131,12 +1132,12 @@ func (pkt *Packet) handleIPv6Extentions() error {
 			pkt.l3NextHeader = layers.IPProtocolIPv6HopByHop
 			nextHeader = layers.IPProtocolIPv6HopByHop
 			opt := layers.IPv6HopByHopOption{}
-			opt.SetJumboLength(0)
+			opt.SetJumboLength(4096)
 			h.Options = []*layers.IPv6HopByHopOption{
 				&opt,
 			}
 			h.HeaderLength = 3
-			h.ActualLength = 32
+			//h.ActualLength = 8
 			pkt.layers = append(pkt.layers, h)
 		}
 	}
@@ -1163,11 +1164,20 @@ func (pkt *Packet) handleL3() error {
 		pkt.l2NextHeader = layers.EthernetTypeIPv6
 		pkt.handleEthernet()
 		pkt.ipv6.Length = uint16(pkt.length)
-		pkt.layers = append(pkt.layers, pkt.ipv6)
-		err := pkt.handleIPv6Extentions()
-		if err != nil {
-			return err
+		if pkt.ipv6HopByHop {
+			pkt.ipv6.HopByHop = &layers.IPv6HopByHop{}
+			opt := layers.IPv6HopByHopOption{}
+			opt.SetJumboLength(65536)
+			pkt.ipv6.HopByHop.Options = []*layers.IPv6HopByHopOption{
+				&opt,
+			}
+			pkt.ipv6.Length = 0
 		}
+		pkt.layers = append(pkt.layers, pkt.ipv6)
+		//err := pkt.handleIPv6Extentions()
+		//if err != nil {
+		//	return err
+		//}
 		pkt.ipv6.NextHeader = pkt.l3NextHeader
 	default:
 		return errors.Errorf("unrecognized l3 layer type %t", pkt.l3)
@@ -1180,6 +1190,7 @@ func (pkt *Packet) handleEthernet() {
 		pkt.eth = ethDefault
 	}
 	pkt.eth.EthernetType = pkt.l2NextHeader
+	//pkt.eth.Length = uint16(pkt.length)
 	pkt.layers = append(pkt.layers, pkt.eth)
 }
 
