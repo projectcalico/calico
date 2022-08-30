@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -42,7 +43,7 @@ type AttachedProgInfo struct {
 // AttachPointInfo describes what we need to know about an attach point
 type AttachPointInfo interface {
 	IfaceName() string
-	HookName() Hook
+	HookName() string
 	Config() string
 }
 
@@ -120,7 +121,7 @@ func RememberAttachedProg(a AttachPointInfo, object string, id int) error {
 
 // ForgetAttachedProg removes what we store about the iface/hook
 // program.
-func ForgetAttachedProg(iface string, hook Hook) error {
+func ForgetAttachedProg(iface, hook string) error {
 	err := os.Remove(RuntimeJSONFilename(iface, hook))
 	// If the hash file does not exist, just ignore the err code, and return false
 	if err != nil && !os.IsNotExist(err) {
@@ -133,7 +134,7 @@ func ForgetAttachedProg(iface string, hook Hook) error {
 // associated with an iface.
 func ForgetIfaceAttachedProg(iface string) error {
 	for _, hook := range Hooks {
-		err := ForgetAttachedProg(iface, hook)
+		err := ForgetAttachedProg(iface, string(hook))
 		if err != nil {
 			return err
 		}
@@ -156,7 +157,7 @@ func CleanAttachedProgDir() {
 	expectedJSONFiles := set.New[string]()
 	for _, iface := range interfaces {
 		for _, hook := range Hooks {
-			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, hook))
+			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, string(hook)))
 		}
 	}
 
@@ -183,10 +184,14 @@ func CleanAttachedProgDir() {
 }
 
 // RuntimeJSONFilename returns filename where we store information about
-// attached program. The filename is [iface name]_[hook].json, for
-// example, eth0_egress.json
-func RuntimeJSONFilename(iface string, hook Hook) string {
-	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, string(hook)))
+// attached program. The filename is [iface name]_[tc_hook name | xdp].json, for
+// example, eth0_tc_egress.json
+func RuntimeJSONFilename(iface, hook string) string {
+	filename := path.Join(RuntimeProgDir, iface+"_tc_"+hook+".json")
+	if strings.ToLower(hook) == "xdp" {
+		return path.Join(RuntimeProgDir, iface+"_xdp.json")
+	}
+	return filename
 }
 
 func sha256OfFile(name string) (string, error) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -417,6 +417,9 @@ type FelixConfigurationSpec struct {
 	// BPFMapSizeIfState sets the size for ifstate map.  The ifstate map must be large enough to hold an entry
 	// for each device (host + workloads) on a host.
 	BPFMapSizeIfState *int `json:"bpfMapSizeIfState,omitempty"`
+	// BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for
+	// workloads and services. [Default: true - bypass Linux conntrack]
+	BPFHostConntrackBypass *bool `json:"bpfHostConntrackBypass,omitempty"`
 	// BPFEnforceRPF enforce strict RPF on all interfaces with BPF programs regardless of
 	// what is the per-interfaces or global setting. Possible values are Disabled or
 	// Strict. [Default: Strict]
