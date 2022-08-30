@@ -143,7 +143,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			/* XXX do a proper CT lookup to find this */
 			ip_hdr(&ctx)->saddr = HOST_IP;
-			int l3_csum_off = skb_iphdr_offset(&ctx) + offsetof(struct iphdr, check);
+			int l3_csum_off = skb_iphdr_offset() + offsetof(struct iphdr, check);
 
 			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
 			if (res) {
@@ -643,7 +643,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	l3_csum_off = skb_iphdr_offset(ctx) +  offsetof(struct iphdr, check);
+	l3_csum_off = skb_iphdr_offset() +  offsetof(struct iphdr, check);
 
 	if (ct_related) {
 		if (ip_hdr(ctx)->protocol == IPPROTO_ICMP) {
