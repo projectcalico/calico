@@ -45,6 +45,7 @@ type Builder struct {
 	stateMapFD         bpf.MapFD
 	jumpMapFD          bpf.MapFD
 	policyDebugEnabled bool
+	forIPv6            bool
 }
 
 type ipSetIDProvider interface {
@@ -86,28 +87,28 @@ var (
 	offDstIPSetKey = nextOffset(ipsets.IPSetEntrySize, 8)
 
 	// Offsets within the cal_tc_state struct.
-	// WARNING: must be kept in sync with the definitions in bpf/include/jump.h.
+	// WARNING: must be kept in sync with the definitions in bpf-gpl/types.h.
 	stateOffIPSrc          = FieldOffset{Offset: stateEventHdrSize + 0, Field: "state->ip_src"}
-	stateOffIPDst          = FieldOffset{Offset: stateEventHdrSize + 4, Field: "state->ip_dst"}
+	stateOffIPDst          = FieldOffset{Offset: stateEventHdrSize + 16, Field: "state->ip_dst"}
 	_                      = stateOffIPDst
-	stateOffPreNATIPDst    = FieldOffset{Offset: stateEventHdrSize + 8, Field: "state->pre_nat_ip_dst"}
+	stateOffPreNATIPDst    = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->pre_nat_ip_dst"}
 	_                      = stateOffPreNATIPDst
-	stateOffPostNATIPDst   = FieldOffset{Offset: stateEventHdrSize + 12, Field: "state->post_nat_ip_dst"}
-	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 20, Field: "state->pol_rc"}
-	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 24, Field: "state->sport"}
-	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 26, Field: "state->dport"}
+	stateOffPostNATIPDst   = FieldOffset{Offset: stateEventHdrSize + 48, Field: "state->post_nat_ip_dst"}
+	stateOffPolResult      = FieldOffset{Offset: stateEventHdrSize + 84, Field: "state->pol_rc"}
+	stateOffSrcPort        = FieldOffset{Offset: stateEventHdrSize + 88, Field: "state->sport"}
+	stateOffDstPort        = FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->dport"}
 	_                      = stateOffDstPort
-	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 26, Field: "state->icmp_type"}
-	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 28, Field: "state->pre_nat_dport"}
+	stateOffICMPType       = FieldOffset{Offset: stateEventHdrSize + 90, Field: "state->icmp_type"}
+	stateOffPreNATDstPort  = FieldOffset{Offset: stateEventHdrSize + 92, Field: "state->pre_nat_dport"}
 	_                      = stateOffPreNATDstPort
-	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 30, Field: "state->post_nat_dport"}
-	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 32, Field: "state->ip_proto"}
-	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 33, Field: "state->flags"}
-	stateOffIPSize         = FieldOffset{Offset: stateEventHdrSize + 34, Field: "state->ip_size"}
+	stateOffPostNATDstPort = FieldOffset{Offset: stateEventHdrSize + 94, Field: "state->post_nat_dport"}
+	stateOffIPProto        = FieldOffset{Offset: stateEventHdrSize + 96, Field: "state->ip_proto"}
+	stateOffFlags          = FieldOffset{Offset: stateEventHdrSize + 97, Field: "state->flags"}
+	stateOffIPSize         = FieldOffset{Offset: stateEventHdrSize + 98, Field: "state->ip_size"}
 	_                      = stateOffIPSize
 
-	stateOffRulesHit = FieldOffset{Offset: stateEventHdrSize + 36, Field: "state->rules_hit"}
-	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 40, Field: "state->rule_ids"}
+	stateOffRulesHit = FieldOffset{Offset: stateEventHdrSize + 100, Field: "state->rules_hit"}
+	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 104, Field: "state->rule_ids"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -185,6 +186,10 @@ const (
 	TierEndDeny  TierEndAction = "deny"
 	TierEndPass  TierEndAction = "pass"
 )
+
+func (p *Builder) EnableIPv6Mode() {
+	p.forIPv6 = true
+}
 
 func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	p.b = NewBlock(p.policyDebugEnabled)
@@ -283,17 +288,6 @@ func (p *Builder) writeProgramHeader() {
 	p.b.LabelNextInsn("policy")
 }
 
-const (
-	jumpIdxPolicy = iota
-	jumpIdxAllowed
-	jumpIdxICMP
-	jumpIdxDrop
-
-	_ = jumpIdxPolicy
-	_ = jumpIdxICMP
-	_ = jumpIdxDrop
-)
-
 func (p *Builder) writeJumpIfToOrFromHost(label string) {
 	// Load state flags.
 	p.b.Load8(R1, R9, stateOffFlags)
@@ -303,6 +297,22 @@ func (p *Builder) writeJumpIfToOrFromHost(label string) {
 
 	// If non-zero, jump to specified label.
 	p.b.JumpNEImm64(R1, 0, label)
+}
+
+func (p *Builder) indexOfDropProgram() int32 {
+	if p.forIPv6 {
+		return int32(bpf.ProgIndexV6Drop)
+	} else {
+		return int32(bpf.ProgIndexDrop)
+	}
+}
+
+func (p *Builder) indexOfAllowesProgram() int32 {
+	if p.forIPv6 {
+		return int32(bpf.ProgIndexV6Allowed)
+	} else {
+		return int32(bpf.ProgIndexAllowed)
+	}
 }
 
 // writeProgramFooter emits the program exit jump targets.
@@ -315,9 +325,9 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	p.b.Store32(R9, R1, stateOffPolResult)
 
 	// Execute the tail call to drop program
-	p.b.Mov64(R1, R6)                      // First arg is the context.
-	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-	p.b.MovImm32(R3, jumpIdxDrop)          // Third arg is the index (rather than a pointer to the index).
+	p.b.Mov64(R1, R6)                        // First arg is the context.
+	p.b.LoadMapFD(R2, uint32(p.jumpMapFD))   // Second arg is the map.
+	p.b.MovImm32(R3, p.indexOfDropProgram()) // Third arg is the index (rather than a pointer to the index).
 	p.b.Call(HelperTailCall)
 
 	// Fall through if tail call fails.
@@ -341,9 +351,9 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		p.b.MovImm32(R1, int32(state.PolicyAllow))
 		p.b.Store32(R9, R1, stateOffPolResult)
 		// Execute the tail call.
-		p.b.Mov64(R1, R6)                      // First arg is the context.
-		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-		p.b.MovImm32(R3, jumpIdxAllowed)       // Third arg is the index (rather than a pointer to the index).
+		p.b.Mov64(R1, R6)                           // First arg is the context.
+		p.b.LoadMapFD(R2, uint32(p.jumpMapFD))      // Second arg is the map.
+		p.b.MovImm32(R3, p.indexOfAllowesProgram()) // Third arg is the index (rather than a pointer to the index).
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.
@@ -530,12 +540,20 @@ func (leg matchLeg) stackOffsetToIPSetKey() (keyOffset int16) {
 	return
 }
 
+func (p Builder) ipVersion() uint8 {
+	if p.forIPv6 {
+		return uint8(proto.IPVersion_IPV6)
+	} else {
+		return uint8(proto.IPVersion_IPV4)
+	}
+}
+
 func (p *Builder) writeRule(r Rule, actionLabel string, destLeg matchLeg) {
 	if actionLabel == "" {
 		log.Panic("empty action label")
 	}
 
-	rule := rules.FilterRuleToIPVersion(4, r.Rule)
+	rule := rules.FilterRuleToIPVersion(p.ipVersion(), r.Rule)
 	if rule == nil {
 		log.Debugf("Version mismatch, skipping rule")
 		return
@@ -738,25 +756,78 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 
 		p.b.AddComment(comment)
 	}
-	p.b.Load32(R1, R9, leg.offsetToStateIPAddressField())
 
 	var onMatchLabel string
 	if negate {
 		// Match negated, if we match any CIDR then we jump to the next rule.
 		onMatchLabel = p.endOfRuleLabel()
 	} else {
-		// Match is non-negated, if we match, got to the next match criteria.
+		// Match is non-negated, if we match, go to the next match criteria.
 		onMatchLabel = p.freshPerRuleLabel()
 	}
-	for _, cidrStr := range cidrs {
-		cidr := ip.MustParseCIDROrIP(cidrStr)
-		addrU32 := bits.ReverseBytes32(cidr.Addr().(ip.V4Addr).AsUint32()) // TODO IPv6
-		maskU32 := bits.ReverseBytes32(math.MaxUint32 << (32 - cidr.Prefix()) & math.MaxUint32)
 
-		p.b.MovImm32(R2, int32(maskU32))
-		p.b.And32(R2, R1)
-		p.b.JumpEqImm32(R2, int32(addrU32), onMatchLabel)
+	size := ip.IPv4SizeDword
+	if p.forIPv6 {
+		size = ip.IPv6SizeDword
 	}
+
+	addrU32 := make([]uint32, size)
+	maskU32 := make([]uint32, size)
+	for cidrIndex, cidrStr := range cidrs {
+		cidr := ip.MustParseCIDROrIP(cidrStr)
+		if p.forIPv6 {
+			addrU64P1, addrU64P2 := cidr.Addr().(ip.V6Addr).AsUint64Pair()
+			addrU32[0] = bits.ReverseBytes32(uint32(addrU64P1 >> 32))
+			addrU32[1] = bits.ReverseBytes32(uint32(addrU64P1))
+			addrU32[2] = bits.ReverseBytes32(uint32(addrU64P2 >> 32))
+			addrU32[3] = bits.ReverseBytes32(uint32(addrU64P2))
+
+			var maskU64P1, maskU64P2 uint64
+			if cidr.Prefix() > 64 {
+				maskU64P1 = math.MaxUint64
+				maskU64P2 = uint64(math.MaxUint64 << (128 - cidr.Prefix()) & math.MaxUint64)
+			} else {
+				maskU64P1 = uint64(math.MaxUint64 << (64 - cidr.Prefix()) & math.MaxUint64)
+				maskU64P2 = 0
+			}
+			maskU32[0] = bits.ReverseBytes32(uint32(maskU64P1 >> 32))
+			maskU32[1] = bits.ReverseBytes32(uint32(maskU64P1))
+			maskU32[2] = bits.ReverseBytes32(uint32(maskU64P2 >> 32))
+			maskU32[3] = bits.ReverseBytes32(uint32(maskU64P2))
+		} else { // IPv4
+			addrU32[0] = bits.ReverseBytes32(cidr.Addr().(ip.V4Addr).AsUint32())
+			maskU32[0] = bits.ReverseBytes32(math.MaxUint32 << (32 - cidr.Prefix()) & math.MaxUint32)
+		}
+
+		lastAddr := addrU32[0]
+		for section, addr := range addrU32 {
+			// Optimisation: If mask for this section, i.e. this match, is 0,
+			// then we can skip the match since the result of AND operation is
+			// irrelevant of packet address. However, we need to check at least one 32bit section.
+			if section > 0 && maskU32[section] == 0 {
+				break
+			}
+
+			offset := leg.offsetToStateIPAddressField()
+			offset.Offset += int16(section * 4)
+			p.b.Load32(R1, R9, offset)
+			p.b.MovImm32(R2, int32(maskU32[section]))
+			p.b.And32(R2, R1)
+
+			lastAddr = addr
+			// If a 32bits section of an IPv6 does not match, we can skip the rest and jump to the
+			// next CIDR, rather than checking all 4 32bits sections.
+			if section != len(addrU32)-1 {
+				p.b.JumpNEImm32(R2, int32(addr), p.endOfcidrV6Match(cidrIndex))
+			}
+		}
+
+		p.b.JumpEqImm32(R2, int32(lastAddr), onMatchLabel)
+		if p.forIPv6 {
+			p.b.LabelNextInsn(p.endOfcidrV6Match(cidrIndex))
+		}
+	}
+
 	if !negate {
 		// If we fall through then none of the CIDRs matched so the rule doesn't match.
 		p.b.Jump(p.endOfRuleLabel())
@@ -940,6 +1011,10 @@ func (p *Builder) freshPerRuleLabel() string {
 
 func (p *Builder) endOfRuleLabel() string {
 	return fmt.Sprintf("rule_%d_no_match", p.ruleID)
+}
+
+func (p *Builder) endOfcidrV6Match(cidrIndex int) string {
+	return fmt.Sprintf("rule_%d_cidr_%d_end", p.ruleID, cidrIndex)
 }
 
 func protocolToNumber(protocol *proto.Protocol) uint8 {
