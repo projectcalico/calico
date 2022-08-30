@@ -43,6 +43,21 @@ int calico_tc_v6(struct __sk_buff *skb)
 		goto deny;
 	}
 
+	switch (parse_ipv6_extensions(&ctx)) {
+	case PARSING_OK_V6:
+		break;
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+		goto allow;
+	default:
+		goto deny;
+	}
+
+	if (validate_ptrs(&ctx, UDP_SIZE)) {
+		DENY_REASON(&ctx, CALI_REASON_SHORT);
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+
 	tc_state_fill_from_ipv6hdr(&ctx);
 
 	/* Parse out the source/dest ports (or type/code for ICMP). */
@@ -53,8 +68,15 @@ int calico_tc_v6(struct __sk_buff *skb)
 		goto allow;
 	}
 
+	CALI_DEBUG("start=%x\n", ctx.data_start);
+	CALI_DEBUG("ip=%x\n", ctx.ip_header);
+	CALI_DEBUG("ip len=%x\n", ctx.ipheader_len);
+	CALI_DEBUG("nh=%x\n", ctx.nh);
+	CALI_DEBUG("end=%x\n", ctx.data_end);
+
 	CALI_LOG_IPV6(ipv6_hdr(&ctx));
 	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
+	CALI_DEBUG("size=%d\n", ctx.state->ip_size);
 	CALI_DEBUG("sport=%d\n", ctx.state->sport);
 	CALI_DEBUG("dport=%d\n", ctx.state->dport);
 

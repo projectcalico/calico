@@ -1032,29 +1032,34 @@ func testPacket(eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket.Layer, payl
 }
 
 type Packet struct {
-	eth        *layers.Ethernet
-	l3         gopacket.Layer
-	ipv4       *layers.IPv4
-	ipv6       *layers.IPv6
-	l4         gopacket.Layer
-	udp        *layers.UDP
-	tcp        *layers.TCP
-	icmp       *layers.ICMPv4
-	icmpv6     *layers.ICMPv6
-	payload    []byte
-	bytes      []byte
-	layers     []gopacket.SerializableLayer
-	length     int
-	l4Protocol layers.IPProtocol
-	l3Protocol layers.EthernetType
+	eth          *layers.Ethernet
+	l3           gopacket.Layer
+	ipv4         *layers.IPv4
+	ipv6         *layers.IPv6
+	ipv6HopByHop bool
+	l3Ext        []gopacket.Layer
+	l4           gopacket.Layer
+	payload      []byte
+	bytes        []byte
+	layers       []gopacket.SerializableLayer
+	length       int
+	l3NextHeader layers.IPProtocol
+	l2NextHeader layers.EthernetType
+	lastExtProto layers.IPProtocol
 }
 
-func (pkt *Packet) handlePayload() {
+func (pkt *Packet) handleLayers() error {
+	pkt.layers = []gopacket.SerializableLayer{}
 	if pkt.payload == nil {
 		pkt.payload = payloadDefault
 	}
 	pkt.length = len(pkt.payload)
-	pkt.layers = []gopacket.SerializableLayer{gopacket.Payload(pkt.payload)}
+	err := pkt.handleL4()
+	if err != nil {
+		return err
+	}
+	pkt.layers = append(pkt.layers, gopacket.Payload(pkt.payload))
+	return nil
 }
 
 func (pkt *Packet) handleL4() error {
@@ -1064,29 +1069,79 @@ func (pkt *Packet) handleL4() error {
 
 	switch v := pkt.l4.(type) {
 	case *layers.UDP:
-		pkt.udp = v
+		var udp *layers.UDP
+		udp = v
 		pkt.length += 8
-		pkt.udp.Length = uint16(pkt.length)
-		pkt.l4Protocol = layers.IPProtocolUDP
-		pkt.layers = append(pkt.layers, pkt.udp)
+		udp.Length = uint16(pkt.length)
+		pkt.l3NextHeader = layers.IPProtocolUDP
+		err := pkt.handleL3()
+		if err != nil {
+			return err
+		}
+		_ = udp.SetNetworkLayerForChecksum(pkt.NetworkLayer())
+		pkt.layers = append(pkt.layers, udp)
 	case *layers.TCP:
-		pkt.tcp = v
+		var tcp *layers.TCP
+		tcp = v
 		pkt.length += 20
-		pkt.l4Protocol = layers.IPProtocolTCP
-		pkt.layers = append(pkt.layers, pkt.tcp)
+		pkt.l3NextHeader = layers.IPProtocolTCP
+		err := pkt.handleL3()
+		if err != nil {
+			return err
+		}
+		_ = tcp.SetNetworkLayerForChecksum(pkt.NetworkLayer())
+		pkt.layers = append(pkt.layers, tcp)
 	case *layers.ICMPv4:
-		pkt.icmp = v
+		var icmp *layers.ICMPv4
+		icmp = v
 		pkt.length += 8
-		pkt.l4Protocol = layers.IPProtocolICMPv4
-		pkt.layers = append(pkt.layers, pkt.icmp)
+		pkt.l3NextHeader = layers.IPProtocolICMPv4
+		err := pkt.handleL3()
+		if err != nil {
+			return err
+		}
+		pkt.layers = append(pkt.layers, icmp)
 	case *layers.ICMPv6:
-		pkt.icmpv6 = v
+		var icmpv6 *layers.ICMPv6
+		icmpv6 = v
 		pkt.length += 8
-		pkt.l4Protocol = layers.IPProtocolICMPv6
-		pkt.layers = append(pkt.layers, pkt.icmpv6)
+		pkt.l3NextHeader = layers.IPProtocolICMPv6
+		err := pkt.handleL3()
+		if err != nil {
+			return err
+		}
+		pkt.layers = append(pkt.layers, icmpv6)
 	default:
 		return errors.Errorf("unrecognized l4 layer type %t", pkt.l4)
 	}
+	return nil
+}
+
+func (pkt *Packet) handleIPv6Extentions() error {
+	if len(pkt.l3Ext) == 0 {
+		return nil
+	}
+
+	nextHeader := pkt.l3NextHeader
+	for _, ext := range pkt.l3Ext {
+		switch v := ext.(type) {
+		case *layers.IPv6HopByHop:
+			var h *layers.IPv6HopByHop
+			h = v
+			h.NextHeader = nextHeader
+			pkt.l3NextHeader = layers.IPProtocolIPv6HopByHop
+			nextHeader = layers.IPProtocolIPv6HopByHop
+			opt := layers.IPv6HopByHopOption{}
+			opt.SetJumboLength(4096)
+			h.Options = []*layers.IPv6HopByHopOption{
+				&opt,
+			}
+			h.HeaderLength = 3
+			//h.ActualLength = 8
+			pkt.layers = append(pkt.layers, h)
+		}
+	}
+
 	return nil
 }
 
@@ -1099,16 +1154,31 @@ func (pkt *Packet) handleL3() error {
 	case *layers.IPv4:
 		pkt.ipv4 = v
 		pkt.length += 5 * 4
-		pkt.l3Protocol = layers.EthernetTypeIPv4
-		pkt.ipv4.Protocol = pkt.l4Protocol
+		pkt.l2NextHeader = layers.EthernetTypeIPv4
+		pkt.handleEthernet()
+		pkt.ipv4.Protocol = pkt.l3NextHeader
 		pkt.ipv4.Length = uint16(pkt.length)
 		pkt.layers = append(pkt.layers, pkt.ipv4)
 	case *layers.IPv6:
 		pkt.ipv6 = v
-		pkt.l3Protocol = layers.EthernetTypeIPv6
-		pkt.ipv6.NextHeader = pkt.l4Protocol
+		pkt.l2NextHeader = layers.EthernetTypeIPv6
+		pkt.handleEthernet()
 		pkt.ipv6.Length = uint16(pkt.length)
+		if pkt.ipv6HopByHop {
+			pkt.ipv6.HopByHop = &layers.IPv6HopByHop{}
+			opt := layers.IPv6HopByHopOption{}
+			opt.SetJumboLength(65536)
+			pkt.ipv6.HopByHop.Options = []*layers.IPv6HopByHopOption{
+				&opt,
+			}
+			pkt.ipv6.Length = 0
+		}
 		pkt.layers = append(pkt.layers, pkt.ipv6)
+		//err := pkt.handleIPv6Extentions()
+		//if err != nil {
+		//	return err
+		//}
+		pkt.ipv6.NextHeader = pkt.l3NextHeader
 	default:
 		return errors.Errorf("unrecognized l3 layer type %t", pkt.l3)
 	}
@@ -1119,41 +1189,27 @@ func (pkt *Packet) handleEthernet() {
 	if pkt.eth == nil {
 		pkt.eth = ethDefault
 	}
-	pkt.eth.EthernetType = pkt.l3Protocol
+	pkt.eth.EthernetType = pkt.l2NextHeader
+	//pkt.eth.Length = uint16(pkt.length)
 	pkt.layers = append(pkt.layers, pkt.eth)
 }
 
-func (pkt *Packet) setChecksum() {
-	switch pkt.l4Protocol {
-	case layers.IPProtocolUDP:
-		if pkt.l3Protocol == layers.EthernetTypeIPv6 {
-			_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv6)
-		} else {
-			_ = pkt.udp.SetNetworkLayerForChecksum(pkt.ipv4)
-		}
-	case layers.IPProtocolTCP:
-		if pkt.l3Protocol == layers.EthernetTypeIPv6 {
-			_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv6)
-		} else {
-			_ = pkt.tcp.SetNetworkLayerForChecksum(pkt.ipv4)
-		}
+func (pkt *Packet) NetworkLayer() gopacket.NetworkLayer {
+	if pkt.ipv4 != nil {
+		return pkt.ipv4
 	}
+	if pkt.ipv6 != nil {
+		return pkt.ipv6
+	}
+	panic("either ipv4 or ipv6 must be set")
 }
 
 func (pkt *Packet) Generate() error {
-	pkt.handlePayload()
-	err := pkt.handleL4()
+	err := pkt.handleLayers()
 	if err != nil {
 		return err
 	}
 
-	err = pkt.handleL3()
-	if err != nil {
-		return err
-	}
-
-	pkt.handleEthernet()
-	pkt.setChecksum()
 	pkt.bytes, err = generatePacket(pkt.layers)
 	return err
 }
@@ -1165,7 +1221,8 @@ func generatePacket(layers []gopacket.SerializableLayer) ([]byte, error) {
 		return nil, fmt.Errorf("Failed to init packet buffer: %w", err)
 	}
 
-	for i, layer := range layers {
+	for i := len(layers) - 1; i >= 0; i-- {
+		layer := layers[i]
 		log.Infof("Layer %d: %v", i, layer)
 		if layer == nil {
 			continue
