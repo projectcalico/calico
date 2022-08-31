@@ -37,7 +37,7 @@ The procedure differs according to your datastore type. Refer to the section tha
 1. Download the flannel networking manifest for the Kubernetes API datastore.
 
    ```bash
-   curl {{ "/manifests/canal.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/canal.yaml -O
    ```
 
 {% include content/pod-cidr-sed.md yaml="canal" %}
@@ -62,7 +62,7 @@ etcd, complete the following steps.
 1. Download the {{site.prodname}} networking manifest.
 
    ```bash
-   curl {{ "/manifests/canal-etcd.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/canal-etcd.yaml -O
    ```
 
 {% include content/pod-cidr-sed.md yaml="canal-etcd" %}

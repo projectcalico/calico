@@ -79,7 +79,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Check if the base directory exisits
+	// Check if the base directory exists
 	_, e := os.Stat(WorkloadApiUdsHome)
 	if e != nil {
 		log.Fatalf("WorkloadApi Directory not present (%v)", WorkloadApiUdsHome)

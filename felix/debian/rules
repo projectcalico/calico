@@ -21,7 +21,7 @@ override_dh_install:
 	install -d debian/tmp/usr/share/calico/bird
 	install -m 644 etc/bird/*.template debian/tmp/usr/share/calico/bird
 	install -d debian/tmp/usr/bin
-	install -m 755 bin/* etc/calico-diags etc/*.sh debian/tmp/usr/bin/
+	install -m 755 bin/calico-felix etc/calico-diags etc/*.sh debian/tmp/usr/bin/
 	install -d debian/tmp/usr/lib/calico/bpf
 	install -m 644 bpf-apache/bin/*.o bpf-gpl/bin/*.o debian/tmp/usr/lib/calico/bpf/
 	dh_install

@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_POLICY_H__
@@ -44,9 +44,6 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ip_sets = {
 	.value_size     = sizeof(__u32),
 	.max_entries    = 1024*1024,
 	.map_flags      = BPF_F_NO_PREALLOC,
-#if !defined(__BPFTOOL_LOADER__) && defined(__IPTOOL_LOADER__)
-	.pinning_strategy        = MAP_PIN_GLOBAL,
-#endif
 };
 
 #define RULE_START(id) \

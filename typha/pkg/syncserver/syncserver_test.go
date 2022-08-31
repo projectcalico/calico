@@ -34,8 +34,8 @@ var _ = Describe("With zero config", func() {
 		config.ApplyDefaults()
 		Expect(config).To(Equal(Config{
 			MaxMessageSize:                 100,
-			MaxFallBehind:                  90 * time.Second,
-			NewClientFallBehindGracePeriod: 90 * time.Second,
+			MaxFallBehind:                  300 * time.Second,
+			NewClientFallBehindGracePeriod: 300 * time.Second,
 			MinBatchingAgeThreshold:        100 * time.Millisecond,
 			PingInterval:                   10 * time.Second,
 			PongTimeout:                    60 * time.Second,

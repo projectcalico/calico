@@ -7,7 +7,6 @@
         "List$",
         "AmazonCloudIntegration",
         "MetadataAccessAllowedType",
-        "APIServer",
         "Authentication",
         "Auth",
         "AuthMethod",

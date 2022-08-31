@@ -102,8 +102,8 @@ func (r *IndexAllocator) ReleaseIndex(index int) {
 }
 
 // GrabBlock tries to grab a contiguous block of indices from the stack
-func (r *IndexAllocator) GrabBlock(len int) (set.Set, error) {
-	indices := set.New()
+func (r *IndexAllocator) GrabBlock(len int) (set.Set[int], error) {
+	indices := set.New[int]()
 	for i := 0; i < len; i++ {
 		idx, err := r.GrabIndex()
 		if err != nil {

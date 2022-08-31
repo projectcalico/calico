@@ -77,7 +77,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: deny-app-policy
 spec:
-  namespaceSelector: has(projectcalico.org/name) && projectcalico.org/name not in {"kube-system", "calico-system"}
+  namespaceSelector: has(projectcalico.org/name) && projectcalico.org/name not in {"kube-system", "calico-system", "calico-apiserver"}
   types:
   - Ingress
   - Egress
@@ -91,7 +91,7 @@ spec:
       - 53
 ```
 
-It is important to note the above policy deliberately excludes the `kube-system` and `calico-system` namespaces by using a negative `namespaceSelector` to avoid impacting any control plane components. To secure the control plane you can write specific policies for each control plane component, though you should do so with care, ideally at cluster creation time, since getting these wrong can leave your cluster in a broken state. We recommend you always make sure you have the correct {{site.prodname}} [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place before you start trying to create policies for the control plane. 
+It is important to note the above policy deliberately excludes the `kube-system`, `calico-system` and `calico-apiserver` namespaces by using a negative `namespaceSelector` to avoid impacting any control plane components. To secure the control plane you can write specific policies for each control plane component, though you should do so with care, ideally at cluster creation time, since getting these wrong can leave your cluster in a broken state. We recommend you always make sure you have the correct {{site.prodname}} [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place before you start trying to create policies for the control plane. 
 
 #### Enable default deny {{site.prodname}} network policy, namespaced
 

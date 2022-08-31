@@ -24,7 +24,8 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/cachingmap"
 
 	"github.com/projectcalico/calico/felix/bpf/nat"
 
@@ -45,8 +46,12 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 		eps := makeEps(svcN, epsN)
 		k8s := fake.NewSimpleClientset(append(svcs, eps...)...)
 
-		feCache := cachingmap.New(nat.FrontendMapParameters, &mock.DummyMap{})
-		beCache := cachingmap.New(nat.BackendMapParameters, &mock.DummyMap{})
+		feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+			bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+				&mock.DummyMap{}, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+		beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+			bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+				&mock.DummyMap{}, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 		syncer, err := proxy.NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},

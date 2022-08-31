@@ -73,22 +73,28 @@ func (_ WorkloadEndpoint) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVP
 		})
 	}
 
+	var allowedSources []net.IPNet
+	for _, prefix := range ah.Spec.AllowSpoofedSourcePrefixes {
+		allowedSources = append(allowedSources, prefix)
+	}
+
 	d := model.KVPair{
 		Key: k,
 		Value: &model.WorkloadEndpoint{
-			Labels:           ah.Metadata.Labels,
-			ActiveInstanceID: ah.Metadata.ActiveInstanceID,
-			State:            "active",
-			Name:             ah.Spec.InterfaceName,
-			Mac:              ah.Spec.MAC,
-			ProfileIDs:       ah.Spec.Profiles,
-			IPv4Nets:         ipv4Nets,
-			IPv6Nets:         ipv6Nets,
-			IPv4NAT:          ipv4NAT,
-			IPv6NAT:          ipv6NAT,
-			IPv4Gateway:      ah.Spec.IPv4Gateway,
-			IPv6Gateway:      ah.Spec.IPv6Gateway,
-			Ports:            ports,
+			Labels:                     ah.Metadata.Labels,
+			ActiveInstanceID:           ah.Metadata.ActiveInstanceID,
+			State:                      "active",
+			Name:                       ah.Spec.InterfaceName,
+			Mac:                        ah.Spec.MAC,
+			ProfileIDs:                 ah.Spec.Profiles,
+			IPv4Nets:                   ipv4Nets,
+			IPv6Nets:                   ipv6Nets,
+			IPv4NAT:                    ipv4NAT,
+			IPv6NAT:                    ipv6NAT,
+			IPv4Gateway:                ah.Spec.IPv4Gateway,
+			IPv6Gateway:                ah.Spec.IPv6Gateway,
+			Ports:                      ports,
+			AllowSpoofedSourcePrefixes: allowedSources,
 		},
 		Revision: ah.Metadata.Revision,
 	}
@@ -138,6 +144,8 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 	ipNats := convertIPNATs(wepValue.IPv4NAT)
 	ipNats = append(ipNats, convertIPNATs(wepValue.IPv6NAT)...)
 
+	allowedSources := convertIPNetworks(wepValue.AllowSpoofedSourcePrefixes)
+
 	wep := libapiv3.NewWorkloadEndpoint()
 
 	wep.ObjectMeta = v1.ObjectMeta{
@@ -145,17 +153,18 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 		Labels:    labels,
 	}
 	wep.Spec = libapiv3.WorkloadEndpointSpec{
-		Orchestrator:  convertName(wepKey.OrchestratorID),
-		Workload:      workload,
-		Node:          ConvertNodeName(wepKey.Hostname),
-		Pod:           pod,
-		ContainerID:   container,
-		Endpoint:      convertName(wepKey.EndpointID),
-		IPNetworks:    ipNets,
-		IPNATs:        ipNats,
-		Profiles:      convertProfiles(wepValue.ProfileIDs),
-		InterfaceName: wepValue.Name,
-		Ports:         convertPorts(wepValue.Ports),
+		Orchestrator:               convertName(wepKey.OrchestratorID),
+		Workload:                   workload,
+		Node:                       ConvertNodeName(wepKey.Hostname),
+		Pod:                        pod,
+		ContainerID:                container,
+		Endpoint:                   convertName(wepKey.EndpointID),
+		IPNetworks:                 ipNets,
+		IPNATs:                     ipNats,
+		Profiles:                   convertProfiles(wepValue.ProfileIDs),
+		InterfaceName:              wepValue.Name,
+		Ports:                      convertPorts(wepValue.Ports),
+		AllowSpoofedSourcePrefixes: allowedSources,
 	}
 
 	if wepValue.IPv4Gateway != nil {

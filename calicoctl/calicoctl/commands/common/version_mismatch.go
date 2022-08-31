@@ -70,9 +70,9 @@ func CheckVersionMismatch(configArg, allowMismatchArg interface{}) error {
 		return nil
 	}
 
-	clusterv = strings.Split(clusterv, "-")[0]
+	clusterv = strings.Split(strings.TrimPrefix(clusterv, "v"), "-")[0]
 
-	clientv := strings.Split(VERSION, "-")[0]
+	clientv := strings.Split(strings.TrimPrefix(VERSION, "v"), "-")[0]
 
 	if clusterv != clientv {
 		return fmt.Errorf("Version mismatch.\nClient Version:   %s\nCluster Version:  %s\nUse --allow-version-mismatch to override.\n", VERSION, clusterv)

@@ -55,7 +55,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 	namespaceConverter := converter.NewNamespaceConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
-	// in the Calico datastore. Indentifies controller written objects by
+	// in the Calico datastore. Identifies controller written objects by
 	// their naming convention.
 	listFunc := func() (map[string]interface{}, error) {
 		log.Debugf("Listing profiles from Calico datastore")
@@ -160,7 +160,9 @@ func (c *namespaceController) Run(stopCh chan struct{}) {
 	// Wait till k8s cache is synced
 	log.Debug("Waiting to sync with Kubernetes API (Namespaces)")
 	go c.informer.Run(stopCh)
-	for !c.informer.HasSynced() {
+	if !cache.WaitForNamedCacheSync("namespaces", stopCh, c.informer.HasSynced) {
+		log.Info("Failed to sync resources, received signal for controller to shut down.")
+		return
 	}
 	log.Debug("Finished syncing with Kubernetes API (Namespaces)")
 

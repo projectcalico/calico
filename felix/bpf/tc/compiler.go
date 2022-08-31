@@ -20,16 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
-)
-
-// TCHook is the hook to which a BPF program should be attached.  This is relative to the host namespace
-// so workload PolDirnIngress policy is attached to the HookEgress.
-type Hook string
-
-const (
-	HookIngress Hook = "ingress"
-	HookEgress  Hook = "egress"
+	"github.com/projectcalico/calico/felix/environment"
 )
 
 type ToOrFromEp string
@@ -46,6 +37,7 @@ const (
 	EpTypeHost     EndpointType = "host"
 	EpTypeTunnel   EndpointType = "tunnel"
 	EpTypeL3Device EndpointType = "l3dev"
+	EpTypeNAT      EndpointType = "nat"
 )
 
 type ProgName string
@@ -55,6 +47,7 @@ var programNames = []ProgName{
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
+	"calico_tc_host_ct_conflict",
 	"calico_tc_v6",
 	"calico_tc_v6_norm_pol_tail",
 	"calico_tc_v6_skb_accepted_entrypoint",
@@ -66,7 +59,7 @@ func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
 }
 
-func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, btf bool) string {
+func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, btf bool, features *environment.Features) string {
 	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
 		// epToHostDrop only makes sense in the from-workload program.
 		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
@@ -101,13 +94,11 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 	case EpTypeHost:
 		epTypeShort = "hep"
 	case EpTypeTunnel:
-		if bpf.IPIPDeviceIsL3() {
-			epTypeShort = "l3"
-		} else {
-			epTypeShort = "tnl"
-		}
+		epTypeShort = "tnl"
 	case EpTypeL3Device:
 		epTypeShort = "l3"
+	case EpTypeNAT:
+		epTypeShort = "nat"
 	}
 	corePart := ""
 	if btf {

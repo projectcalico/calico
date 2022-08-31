@@ -91,6 +91,8 @@ const (
 
 	ChainSetWireguardIncomingMark = ChainNamePrefix + "wireguard-incoming-mark"
 
+	ChainRpfSkip = ChainNamePrefix + "rpf-skip"
+
 	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
 	WorkloadPfxSpecialAllow = "ALLOW"
 	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
@@ -122,8 +124,10 @@ const (
 )
 
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
-type PolicyChainNamePrefix string
-type ProfileChainNamePrefix string
+type (
+	PolicyChainNamePrefix  string
+	ProfileChainNamePrefix string
+)
 
 var (
 	// AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
@@ -171,7 +175,7 @@ type RuleRenderer interface {
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATPostroutingChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
-	StaticBPFModeRawChains(ipVersion uint8, wgEncryptHost, disableConntrack, enforceRPF bool) []*iptables.Chain
+	StaticBPFModeRawChains(ipVersion uint8, wgEncryptHost, disableConntrack bool) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 	StaticFilterForwardAppendRules() []iptables.Rule
 
@@ -279,9 +283,10 @@ type Config struct {
 	OpenStackMetadataPort        uint16
 	OpenStackSpecialCasesEnabled bool
 
-	VXLANEnabled bool
-	VXLANPort    int
-	VXLANVNI     int
+	VXLANEnabled   bool
+	VXLANEnabledV6 bool
+	VXLANPort      int
+	VXLANVNI       int
 
 	IPIPEnabled            bool
 	FelixConfigIPIPEnabled *bool
@@ -289,15 +294,19 @@ type Config struct {
 	// by the host when sending traffic to a workload over IPIP.
 	IPIPTunnelAddress net.IP
 	// Same for VXLAN.
-	VXLANTunnelAddress net.IP
+	VXLANTunnelAddress   net.IP
+	VXLANTunnelAddressV6 net.IP
 
 	AllowVXLANPacketsFromWorkloads bool
 	AllowIPIPPacketsFromWorkloads  bool
 
 	WireguardEnabled            bool
+	WireguardEnabledV6          bool
 	WireguardInterfaceName      string
+	WireguardInterfaceNameV6    string
 	WireguardIptablesMark       uint32
 	WireguardListeningPort      int
+	WireguardListeningPortV6    int
 	WireguardEncryptHostTraffic bool
 	RouteSource                 string
 

@@ -21,21 +21,62 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Set", func() {
-	var s set.Set
+type factory interface {
+	New() set.Set[int]
+	From(...int) set.Set[int]
+	FromArray([]int) set.Set[int]
+}
+
+type typedFactory struct{}
+
+func (t typedFactory) New() set.Set[int] {
+	return set.New[int]()
+}
+
+func (t typedFactory) From(i ...int) set.Set[int] {
+	return set.From(i...)
+}
+
+func (t typedFactory) FromArray(i []int) set.Set[int] {
+	return set.FromArray(i)
+}
+
+type boxedFactory struct{}
+
+func (t boxedFactory) New() set.Set[int] {
+	return set.NewBoxed[int]()
+}
+
+func (t boxedFactory) From(i ...int) set.Set[int] {
+	return set.FromBoxed(i...)
+}
+
+func (t boxedFactory) FromArray(i []int) set.Set[int] {
+	return set.FromArrayBoxed(i)
+}
+
+var _ = Describe("Typed set", func() {
+	describeSetTests(typedFactory{})
+})
+var _ = Describe("Boxed set", func() {
+	describeSetTests(boxedFactory{})
+})
+
+func describeSetTests(factory factory) {
+	var s set.Set[int]
 	BeforeEach(func() {
-		s = set.New()
+		s = factory.New()
 	})
 
 	It("should be empty", func() {
 		Expect(s.Len()).To(BeZero())
 	})
 	It("should stringify", func() {
-		Expect(s.String()).To(Equal("set.mapSet{}"))
+		Expect(s.String()).To(Equal("set.Set{}"))
 	})
 	It("should iterate over no items", func() {
 		called := false
-		s.Iter(func(item interface{}) error {
+		s.Iter(func(item int) error {
 			called = true
 			return nil
 		})
@@ -48,7 +89,7 @@ var _ = Describe("Set", func() {
 
 	Describe("Set created by FromArray", func() {
 		BeforeEach(func() {
-			s = set.FromArray([]int{1, 2})
+			s = factory.FromArray([]int{1, 2})
 		})
 		It("should contain 1", func() {
 			Expect(s.Contains(1)).To(BeTrue())
@@ -61,14 +102,14 @@ var _ = Describe("Set", func() {
 		})
 		It("should stringify", func() {
 			Expect(s.String()).To(Or(
-				Equal("set.mapSet{1,2}"),
-				Equal("set.mapSet{2,1}")))
+				Equal("set.Set{1,2}"),
+				Equal("set.Set{2,1}")))
 		})
 	})
 
 	Describe("Set created by From", func() {
 		BeforeEach(func() {
-			s = set.From(1, 2)
+			s = factory.From(1, 2)
 		})
 		It("should contain 1", func() {
 			Expect(s.Contains(1)).To(BeTrue())
@@ -105,11 +146,11 @@ var _ = Describe("Set", func() {
 		It("should iterate over 1 and 2 in some order", func() {
 			seen1 := false
 			seen2 := false
-			s.Iter(func(item interface{}) error {
-				if item.(int) == 1 {
+			s.Iter(func(item int) error {
+				if item == 1 {
 					Expect(seen1).To(BeFalse())
 					seen1 = true
-				} else if item.(int) == 2 {
+				} else if item == 2 {
 					Expect(seen2).To(BeFalse())
 					seen2 = true
 				} else {
@@ -121,8 +162,8 @@ var _ = Describe("Set", func() {
 			Expect(seen2).To(BeTrue())
 		})
 		It("should allow remove during iteration", func() {
-			s.Iter(func(item interface{}) error {
-				if item.(int) == 1 {
+			s.Iter(func(item int) error {
+				if item == 1 {
 					return set.RemoveItem
 				}
 				return nil
@@ -132,7 +173,7 @@ var _ = Describe("Set", func() {
 		})
 		It("should support stopping iteration", func() {
 			iterationStarted := false
-			s.Iter(func(item interface{}) error {
+			s.Iter(func(item int) error {
 				if iterationStarted {
 					Fail("Iteration continued after stop")
 				}
@@ -205,12 +246,12 @@ var _ = Describe("Set", func() {
 			})
 		})
 	})
-})
+}
 
 var _ = Describe("EmptySet", func() {
-	var empty set.Set
+	var empty set.Set[any]
 	BeforeEach(func() {
-		empty = set.Empty()
+		empty = set.Empty[any]()
 	})
 	It("has length 0", func() {
 		Expect(empty.Len()).To(Equal(0))
@@ -228,6 +269,6 @@ var _ = Describe("EmptySet", func() {
 		})
 	})
 	It("should stringify", func() {
-		Expect(empty.String()).To(Equal("set.mapSet{}"))
+		Expect(empty.String()).To(Equal("set.Set{}"))
 	})
 })

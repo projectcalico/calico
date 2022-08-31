@@ -8,6 +8,8 @@ type BGPConfigurationExpansion interface{}
 
 type BGPPeerExpansion interface{}
 
+type BlockAffinityExpansion interface{}
+
 type CalicoNodeStatusExpansion interface{}
 
 type ClusterInformationExpansion interface{}
@@ -19,6 +21,8 @@ type GlobalNetworkPolicyExpansion interface{}
 type GlobalNetworkSetExpansion interface{}
 
 type HostEndpointExpansion interface{}
+
+type IPAMConfigurationExpansion interface{}
 
 type IPPoolExpansion interface{}
 

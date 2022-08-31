@@ -180,11 +180,15 @@ func autoDetectUsingK8sInternalIP(version int, k8sNode *v1.Node, getInterfaces f
 		}
 	}
 
-	_, ipNet, err := cnet.ParseCIDR(address)
+	ip, ipNet, err := cnet.ParseCIDR(address)
 	if err != nil {
 		log.Errorf("Unable to parse CIDR %v : %v", address, err)
 		return nil
 	}
+	// ParseCIDR masks off the IP addr of the IPNet it returns eg. ParseCIDR("192.168.1.2/24" will return
+	//"192.168.1.2, 192.168.1.0/24". Callers of this function (autoDetectUsingK8sInternalIP) expect the full IP address
+	// to be preserved in the CIDR ie. we should return 192.168.1.2/24
+	ipNet.IP = ip.IP
 	return ipNet
 }
 

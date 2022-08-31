@@ -135,3 +135,26 @@ const (
 	HelperProbeReadUserStr       Helper = 114
 	HelperProbeReadKernelStr     Helper = 115
 )
+
+var HelperString = []string{
+	"",
+	"bpf_map_lookup_elem",
+	"bpf_map_update_elem",
+	"bpf_map_delete_elem",
+	"bpf_probe_read",
+	"bpf_ktime_get_ns",
+	"bpf_trace_printk",
+	"bpf_get_prandom_u32",
+	"bpf_get_smp_processor_id",
+	"bpf_skb_store_bytes",
+	"bpf_l3_csum_replace",
+	"bpf_l4_csum_replace",
+	"bpf_tail_call",
+	"bpf_clone_redirect",
+	"bpf_get_current_pid_tgid",
+	"bpf_get_current_uid_gid",
+	"bpf_get_current_comm",
+	"bpf_get_cgroup_classid",
+	"bpf_skb_vlan_push",
+	"bpf_skb_vlan_pop",
+}

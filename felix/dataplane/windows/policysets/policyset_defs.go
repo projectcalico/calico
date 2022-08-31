@@ -72,7 +72,7 @@ type PolicySetsDataplane interface {
 type policySet struct {
 	// metadata for the Policy set.
 	PolicySetMetadata
-	// the original policy received from the datatore, which could be
+	// the original policy received from the datastore, which could be
 	// either a Profile or a Policy.
 	Policy interface{}
 	// Each member of the Policy set is a hns ACLRule computed from the
@@ -82,5 +82,5 @@ type policySet struct {
 	// The set of IP set ids which are referenced by this Policy set. We
 	// maintain this to make it easier to look up which Policy sets are
 	// impacted (in need of recomputation) after a IP set update occurs.
-	IpSetIds set.Set
+	IpSetIds set.Set[string]
 }

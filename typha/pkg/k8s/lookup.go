@@ -66,7 +66,7 @@ func (r *RealK8sAPI) GetNumTyphas(ctx context.Context, namespace, serviceName, p
 		return 0, err
 	}
 
-	ips := set.New()
+	ips := set.New[string]()
 	for _, s := range ep.Subsets {
 		found := false
 		for _, port := range s.Ports {

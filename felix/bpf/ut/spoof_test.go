@@ -62,6 +62,7 @@ func TestWorkloadSpoof(t *testing.T) {
 func runSpoofTest(t *testing.T, expRC int) {
 	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())

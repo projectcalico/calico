@@ -53,13 +53,14 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		// Moved to Node.
 		"IpInIpTunnelAddr",
 		"IPv4VXLANTunnelAddr",
+		"IPv6VXLANTunnelAddr",
 		"VXLANTunnelMACAddr",
+		"VXLANTunnelMACAddrV6",
 		"loadClientConfigFromEnvironment",
 
 		"loadClientConfigFromEnvironment",
 		"useNodeResourceUpdates",
 		"internalOverrides",
-		"BPFHostConntrackBypass",
 
 		// Temporary field to implement and test IPv6 in BPF dataplane
 		"BpfIpv6Support",

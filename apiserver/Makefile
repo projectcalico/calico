@@ -12,7 +12,7 @@ API_SERVER_IMAGE      ?=apiserver
 BUILD_IMAGES          ?=$(API_SERVER_IMAGE)
 
 EXTRA_DOCKER_ARGS += -e GOLANGCI_LINT_CACHE=/lint-cache -v $(CURDIR)/.lint-cache:/lint-cache:rw \
-				 -v $(CURDIR)/hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
+				 -v $(CURDIR)/../hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
 
 ###############################################################################
 BINDIR ?= bin
@@ -47,9 +47,6 @@ VERSION_FLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERS
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_DESCRIPTION=$(APISERVER_GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_REVISION=$(APISERVER_GIT_REVISION)
 
-BUILD_LDFLAGS = -ldflags "$(VERSION_FLAGS)"
-RELEASE_LDFLAGS = -ldflags "$(VERSION_FLAGS) -w"
-
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -65,10 +62,8 @@ else
 CGO_ENABLED=0
 endif
 
-ifeq ($(ARCH),arm64)
-# Forces ARM64 build image to be used in a crosscompilation run.
+# Use ARCH specific build image.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-endif
 
 ###############################################################################
 # Static checks
@@ -82,7 +77,7 @@ LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused,inef
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks image-all fv ut
+ci: clean static-checks image fv ut
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -92,23 +87,13 @@ cd: image-all cd-common
 # "apiserver" instead of "$(BINDIR)/apiserver".
 #########################################################################
 $(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
-ifndef RELEASE_BUILD
-	$(eval LDFLAGS:=$(RELEASE_LDFLAGS))
-else
-	$(eval LDFLAGS:=$(BUILD_LDFLAGS))
-endif
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/apiserver'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
-ifndef RELEASE_BUILD
-	$(eval LDFLAGS:=$(RELEASE_LDFLAGS))
-else
-	$(eval LDFLAGS:=$(BUILD_LDFLAGS))
-endif
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/filecheck'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
 
 ###############################################################################
 # Building the image
@@ -137,7 +122,7 @@ check-boring-ssl: $(BINDIR)/apiserver-$(ARCH)
 		go tool nm $(BINDIR)/apiserver-$(ARCH) > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
 	-rm -f $(BINDIR)/tags.txt
 
-.PHONY: ut 
+.PHONY: ut
 ut: lint-cache-dir run-etcd
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" go test $(UNIT_TEST_FLAGS) \
@@ -149,7 +134,7 @@ st:
 
 .PHONY: check-copyright
 check-copyright:
-	@hack/check-copyright.sh
+	@../hack/check-copyright.sh
 
 GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/v1.16.4/hack/lib
 
@@ -229,7 +214,7 @@ clean-hack-lib:
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true

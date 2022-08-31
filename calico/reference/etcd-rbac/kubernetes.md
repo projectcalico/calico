@@ -4,6 +4,18 @@ description: Limit user access to Kubernetes and Calico components.
 canonical_url: '/reference/etcd-rbac/kubernetes'
 ---
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+This document does not apply to operator installations of Calico.
+
+%>
+
+  <label:Manifest>
+<%
+
+
 When using etcd with RBAC, all components that access etcd must be configured
 with the proper certificates. This document describes the users and roles
 needed to segment etcd so that Kubernetes and {{site.prodname}} can only read and write
@@ -54,7 +66,7 @@ to your integrator's documentation for help setting these flags.
 ## Updating a hosted {{site.prodname}} manifest
 
 To deploy {{site.prodname}} with the CA and {{site.prodname}}-specific certificate/key pair,
-use [this manifest template]({{ site.baseurl }}/manifests/calico-etcd.yaml)
+use [this manifest template]({{site.data.versions.first.manifests_url}}/manifests/calico-etcd.yaml)
 with the modifications described below. The same information could be added to
 or updated in other manifests but the linked one is the most straight forward
 example.
@@ -85,3 +97,7 @@ The pieces that would need updating are:
   calico-kube-controllers deployment by setting the `COMPACTION_PERIOD` environment variable to 0.
 
 Once the updates above are made then the manifest can be applied in the normal manner.
+
+%>
+
+{% endtabs %}

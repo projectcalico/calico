@@ -279,7 +279,7 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 			// Unrecoverable error, terminate to restart.
 			utils.Terminate()
 		} else {
-			log.Warn("No IPv4 or IPv6 addresses configured or detected. Some features may not work properly.")
+			log.Info("No IPv4 or IPv6 addresses configured or detected. Some features may not work properly.")
 			// Bail here setting BGPSpec to nil (if empty) to pass validation.
 			if reflect.DeepEqual(node.Spec.BGP, &libapi.NodeBGPSpec{}) {
 				node.Spec.BGP = nil
@@ -754,6 +754,7 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 
 	ipv4IpipModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
 	ipv4VXLANModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_VXLAN"))
+	ipv6VXLANModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV6POOL_VXLAN"))
 
 	var (
 		ipv4BlockSize int
@@ -840,20 +841,23 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	if !ipv4Present {
 		log.Debug("Create default IPv4 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV4POOL_NAT_OUTGOING", true)
+		bgpExportDisabled := evaluateENVBool("CALICO_IPV4POOL_DISABLE_BGP_EXPORT", false)
 
-		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled, ipv4BlockSize, ipv4NodeSelector)
+		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled, ipv4BlockSize, ipv4NodeSelector, bgpExportDisabled)
 	}
 	if !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV6POOL_NAT_OUTGOING", false)
+		bgpExportDisabled := evaluateENVBool("CALICO_IPV6POOL_DISABLE_BGP_EXPORT", false)
 
-		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), string(api.VXLANModeNever), outgoingNATEnabled, ipv6BlockSize, ipv6NodeSelector)
+		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), ipv6VXLANModeEnvVar, outgoingNATEnabled, ipv6BlockSize, ipv6NodeSelector, bgpExportDisabled)
 	}
+
 }
 
 // createIPPool creates an IP pool using the specified CIDR.  This
 // method is a no-op if the pool already exists.
-func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, poolName, ipipModeName, vxlanModeName string, isNATOutgoingEnabled bool, blockSize int, nodeSelector string) {
+func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, poolName, ipipModeName, vxlanModeName string, isNATOutgoingEnabled bool, blockSize int, nodeSelector string, bgpExportDisabled bool) {
 	version := cidr.Version()
 	var ipipMode api.IPIPMode
 	var vxlanMode api.VXLANMode
@@ -880,7 +884,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 	case "always":
 		vxlanMode = api.VXLANModeAlways
 	default:
-		log.Errorf("Unrecognized VXLAN mode specified in CALICO_IPV4POOL_VXLAN'%s'", vxlanModeName)
+		log.Errorf("Unrecognized VXLAN mode specified in CALICO_IPV%dPOOL_VXLAN '%s'", version, vxlanModeName)
 		utils.Terminate()
 	}
 
@@ -889,16 +893,17 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 			Name: poolName,
 		},
 		Spec: api.IPPoolSpec{
-			CIDR:         cidr.String(),
-			NATOutgoing:  isNATOutgoingEnabled,
-			IPIPMode:     ipipMode,
-			VXLANMode:    vxlanMode,
-			BlockSize:    blockSize,
-			NodeSelector: nodeSelector,
+			CIDR:             cidr.String(),
+			NATOutgoing:      isNATOutgoingEnabled,
+			IPIPMode:         ipipMode,
+			VXLANMode:        vxlanMode,
+			BlockSize:        blockSize,
+			NodeSelector:     nodeSelector,
+			DisableBGPExport: bgpExportDisabled,
 		},
 	}
 
-	log.Infof("Ensure default IPv%d pool is created. IPIP mode: %s, VXLAN mode: %s", version, ipipMode, vxlanMode)
+	log.Infof("Ensure default IPv%d pool is created. IPIP mode: %s, VXLAN mode: %s, DisableBGPExport: %t", version, ipipMode, vxlanMode, bgpExportDisabled)
 
 	// Create the pool.  There is a small chance that another node may
 	// beat us to it, so handle the fact that the pool already exists.
@@ -908,8 +913,8 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 			utils.Terminate()
 		}
 	} else {
-		log.Infof("Created default IPv%d pool (%s) with NAT outgoing %t. IPIP mode: %s, VXLAN mode: %s",
-			version, cidr, isNATOutgoingEnabled, ipipMode, vxlanMode)
+		log.Infof("Created default IPv%d pool (%s) with NAT outgoing %t. IPIP mode: %s, VXLAN mode: %s, DisableBGPExport: %t",
+			version, cidr, isNATOutgoingEnabled, ipipMode, vxlanMode, bgpExportDisabled)
 	}
 }
 

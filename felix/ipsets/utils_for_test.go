@@ -15,23 +15,20 @@
 package ipsets_test
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	"bufio"
-
-	"time"
-
-	"bytes"
-	"regexp"
 
 	. "github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -46,14 +43,14 @@ var (
 
 func newMockDataplane() *mockDataplane {
 	return &mockDataplane{
-		IPSetMembers:     make(map[string]set.Set),
+		IPSetMembers:     make(map[string]set.Set[string]),
 		IPSetMetadata:    make(map[string]setMetadata),
-		FailDestroyNames: set.New(),
+		FailDestroyNames: set.New[string](),
 	}
 }
 
 type mockDataplane struct {
-	IPSetMembers      map[string]set.Set
+	IPSetMembers      map[string]set.Set[string]
 	IPSetMetadata     map[string]setMetadata
 	Cmds              []CmdIface
 	CmdNames          []string
@@ -62,7 +59,7 @@ type mockDataplane struct {
 	ListOpFailures    []string
 	RestoreOpFailures []string
 	FailNextDestroy   bool
-	FailDestroyNames  set.Set
+	FailDestroyNames  set.Set[string]
 
 	// Record when various (expected) error cases are hit.
 	TriedToDeleteNonExistent bool
@@ -75,9 +72,9 @@ type mockDataplane struct {
 
 func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
 	// Input has a slice for each set, convert to a set for comparison.
-	membersToCompare := map[string]set.Set{}
+	membersToCompare := map[string]set.Set[string]{}
 	for name, members := range expected {
-		memberSet := set.New()
+		memberSet := set.New[string]()
 		for _, member := range members {
 			memberSet.Add(member)
 		}
@@ -304,7 +301,7 @@ func (c *restoreCmd) main() {
 				return
 			}
 
-			c.Dataplane.IPSetMembers[name] = set.New()
+			c.Dataplane.IPSetMembers[name] = set.New[string]()
 			c.Dataplane.IPSetMetadata[name] = setMetadata
 		case "destroy":
 			Expect(len(parts)).To(Equal(2))
@@ -667,7 +664,7 @@ func (c *listCmd) main() {
 		fmt.Fprintf(c.Stdout, "Name: %s\n", setName)
 		fmt.Fprint(c.Stdout, "Field: foobar\n") // Dummy field, should get ignored.
 		fmt.Fprint(c.Stdout, "Members:\n")
-		members.Iter(func(member interface{}) error {
+		members.Iter(func(member string) error {
 			fmt.Fprintf(c.Stdout, "%s\n", member)
 			return nil
 		})

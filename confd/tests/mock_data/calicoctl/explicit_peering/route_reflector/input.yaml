@@ -78,6 +78,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.3/16
+    ipv6Address: fe0a::3/96
 
 ---
 
@@ -88,3 +89,4 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.4/16
+    ipv6Address: fe0a::4/96

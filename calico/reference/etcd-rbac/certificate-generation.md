@@ -4,6 +4,17 @@ description: Generate Certificates of Authority (CA) to authenticate users with 
 canonical_url: '/reference/etcd-rbac/certificate-generation'
 ---
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+This document does not apply to operator installations of Calico.
+
+%>
+
+  <label:Manifest>
+<%
+
 The etcd datastore has the concept of users that are linked to roles, where
 each role has a defined set of access permissions to the data stored in etcd.
 This tutorial walks you through the process of generating the Certificate
@@ -110,3 +121,7 @@ Once the certificate and key files are generated they will need to be provided
 to the proper component which is beyond the scope of this particular document.
 See [this](kubernetes) for how to provide certificates to Kubernetes and {{site.prodname}}
 components.
+
+%>
+
+{% endtabs %}

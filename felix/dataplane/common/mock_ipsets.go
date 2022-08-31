@@ -24,21 +24,21 @@ import (
 )
 
 type MockIPSets struct {
-	Members            map[string]set.Set
+	Members            map[string]set.Set[string]
 	Metadata           map[string]ipsets.IPSetMetadata
 	AddOrReplaceCalled bool
 }
 
 func NewMockIPSets() *MockIPSets {
 	return &MockIPSets{
-		Members:  map[string]set.Set{},
+		Members:  map[string]set.Set[string]{},
 		Metadata: map[string]ipsets.IPSetMetadata{},
 	}
 }
 
 func (s *MockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, newMembers []string) {
 	s.Metadata[setMetadata.SetID] = setMetadata
-	members := set.New()
+	members := set.New[string]()
 	for _, member := range newMembers {
 		if setMetadata.Type == ipsets.IPSetTypeHashIP {
 			Expect(net.ParseIP(member)).ToNot(BeNil())
@@ -79,7 +79,7 @@ func (s *MockIPSets) GetIPFamily() ipsets.IPFamily {
 	return ipsets.IPFamilyV4
 }
 
-func (s *MockIPSets) GetMembers(setID string) (set.Set, error) {
+func (s *MockIPSets) GetMembers(setID string) (set.Set[string], error) {
 	return s.Members[setID], nil
 }
 
@@ -99,6 +99,6 @@ func (s *MockIPSets) ApplyDeletions() {
 	// Not implemented for UT.
 }
 
-func (s *MockIPSets) SetFilter(ipSetNames set.Set) {
+func (s *MockIPSets) SetFilter(ipSetNames set.Set[string]) {
 	// Not implemented for UT.
 }

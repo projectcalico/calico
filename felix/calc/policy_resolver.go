@@ -54,7 +54,7 @@ type PolicyResolver struct {
 	endpointIDToPolicyIDs multidict.IfaceToIface
 	sortedTierData        *tierInfo
 	endpoints             map[model.Key]interface{}
-	dirtyEndpoints        set.Set
+	dirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
 	sortRequired          bool
 	policySorter          *PolicySorter
 	Callbacks             PolicyResolverCallbacks
@@ -71,7 +71,7 @@ func NewPolicyResolver() *PolicyResolver {
 		endpointIDToPolicyIDs: multidict.NewIfaceToIface(),
 		sortedTierData:        NewTierInfo("default"),
 		endpoints:             make(map[model.Key]interface{}),
-		dirtyEndpoints:        set.New(),
+		dirtyEndpoints:        set.NewBoxed[any](),
 		policySorter:          NewPolicySorter(),
 	}
 }
@@ -152,7 +152,7 @@ func (pr *PolicyResolver) maybeFlush() {
 		pr.refreshSortOrder()
 	}
 	pr.dirtyEndpoints.Iter(pr.sendEndpointUpdate)
-	pr.dirtyEndpoints = set.New()
+	pr.dirtyEndpoints = set.NewBoxed[any]()
 }
 
 func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {

@@ -18,16 +18,20 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	backendapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -41,6 +45,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 	ctx := context.Background()
 	name1 := "ippool-1"
 	name2 := "ippool-2"
+	name3 := "ippool-3"
 	spec1 := apiv3.IPPoolSpec{
 		CIDR:         "1.2.3.0/24",
 		IPIPMode:     apiv3.IPIPModeAlways,
@@ -78,6 +83,22 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 		DisableBGPExport: false,
 	}
+	spec3 := apiv3.IPPoolSpec{
+		CIDR:         "1.2.3.0/24",
+		IPIPMode:     "",
+		VXLANMode:    "",
+		BlockSize:    26,
+		NodeSelector: "all()",
+		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+	}
+	spec3_1 := apiv3.IPPoolSpec{
+		CIDR:         "1.2.3.0/24",
+		IPIPMode:     apiv3.IPIPModeNever,
+		VXLANMode:    apiv3.VXLANModeNever,
+		BlockSize:    26,
+		NodeSelector: "all()",
+		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+	}
 
 	It("should error when creating an IPPool with no name", func() {
 		c, err := clientv3.New(config)
@@ -93,7 +114,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 	})
 
 	DescribeTable("IPPool e2e CRUD tests",
-		func(name1, name2 string, spec1, spec1_2, spec2 apiv3.IPPoolSpec) {
+		func(name1, name2, name3 string, spec1, spec1_2, spec2, spec3, spec3_1 apiv3.IPPoolSpec) {
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -318,10 +339,57 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			_, outError = c.IPPools().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name2 + ") with error:"))
+
+			By("Adding an IPPool with empty string for IPIPMode and VXLANMode and expecting it to be defaulted to 'Never'")
+
+			// Get the Calico backend client.
+			type accessor interface {
+				Backend() backendapi.Client
+			}
+			bc := c.(accessor).Backend()
+
+			// Add the IPPool through the backend so it skips setting default values
+			kvp := &model.KVPair{
+				Key: model.ResourceKey{
+					Name: name3,
+					Kind: apiv3.KindIPPool,
+				},
+				Value: &apiv3.IPPool{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              name3,
+						CreationTimestamp: metav1.Now(),
+						ResourceVersion:   "1",
+						UID:               types.UID(uuid.NewString()),
+					},
+					TypeMeta: metav1.TypeMeta{Kind: apiv3.KindIPPool, APIVersion: apiv3.GroupVersionCurrent},
+					Spec:     spec3,
+				},
+			}
+			outKVP, outError := bc.Create(ctx, kvp)
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(outKVP.Value).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3))
+
+			// Verify Get() on the IPPool sets the encapsulations to "Never"
+			res, outError = c.IPPools().Get(ctx, name3, options.GetOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(res).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3_1))
+
+			// Verify List() on the IPPool sets the encapsulations to "Never"
+			outList, outError = c.IPPools().List(ctx, options.ListOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3_1),
+			))
+
+			By("Deleting IPPool (name3)")
+			dres, outError = c.IPPools().Delete(ctx, name3, options.DeleteOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+			spec3_1.Disabled = true
+			Expect(dres).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3_1))
 		},
 
 		// Test 1: Pass two fully populated IPPoolSpecs and expect the series of operations to succeed.
-		Entry("Two fully populated IPPoolSpecs", name1, name2, spec1, spec1_2, spec2),
+		Entry("Two fully populated IPPoolSpecs", name1, name2, name3, spec1, spec1_2, spec2, spec3, spec3_1),
 	)
 
 	Describe("IPPool watch functionality", func() {
@@ -590,7 +658,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 		})
 
-		It("should enable VXLAN globally on an IPPool Update if the global setting is not configured", func() {
+		It("should not enable VXLAN globally on an IPPool Update if the global setting is not configured", func() {
 			By("Getting the current felix configuration - checking does not exist")
 			_, err = getGlobalSetting()
 			Expect(err).To(HaveOccurred())
@@ -664,7 +732,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			return cfg.Spec.IPIPEnabled, nil
 		}
 
-		It("should enable IPIP globally on an IPPool Create (IPIPModeAlways) if the global setting is not configured", func() {
+		It("should not enable IPIP globally on an IPPool Create (IPIPModeAlways) if the global setting is not configured", func() {
 			By("Getting the current felix configuration - checking does not exist")
 			_, err = getGlobalSetting()
 			Expect(err).To(HaveOccurred())
@@ -711,7 +779,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 		})
 
-		It("should enable IPIP globally on an IPPool Create (IPIPModeNever) if the global setting is not configured", func() {
+		It("should not enable IPIP globally on an IPPool Create (IPIPModeNever) if the global setting is not configured", func() {
 			By("Getting the current felix configuration - checking does not exist")
 			_, err = getGlobalSetting()
 			Expect(err).To(HaveOccurred())
@@ -731,7 +799,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 		})
 
-		It("should enable IPIP globally on an IPPool Update if the global setting is not configured", func() {
+		It("should not enable IPIP globally on an IPPool Update if the global setting is not configured", func() {
 			By("Getting the current felix configuration - checking does not exist")
 			_, err = getGlobalSetting()
 			Expect(err).To(HaveOccurred())

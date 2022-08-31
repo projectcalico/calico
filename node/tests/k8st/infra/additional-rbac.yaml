@@ -1,0 +1,32 @@
+# This ClusterRole provides additional permissions to calico/node for the tests
+# which are not part of our default manifests.
+#
+# This simulates what a user would also need to do for our BGP password feature.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-node-secret-getter
+rules:
+  # The tests require that node has access to secrets for BGP peering.
+  - apiGroups: [""]
+    resources:
+    - secrets
+    verbs:
+    - get
+    - list
+    - watch
+
+---
+
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-node-secret-getter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-node-secret-getter
+subjects:
+- kind: ServiceAccount
+  name: calico-node
+  namespace: kube-system

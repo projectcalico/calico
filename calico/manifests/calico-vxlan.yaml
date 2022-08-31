@@ -1,8 +1,0 @@
----
-layout: null
----
-{% helm %}
-datastore: kubernetes
-network: calico
-vxlan: true
-{% endhelm %}

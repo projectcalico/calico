@@ -32,6 +32,7 @@ ephemeral nature of init containers.
 
 * {{site.prodname}} Enterprise
 * eBPF dataplane
+* WorkloadSourceSpoofing felix option and the related `cni.projectcalico.org/allowedSourcePrefixes` annotation
 
 > **Note:** Support for features added after Calico v3.21 is not guaranteed.
 {: .alert .alert-info }

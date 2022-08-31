@@ -22,9 +22,7 @@ const (
 	IPAMConfigGlobalName = "default"
 )
 
-var (
-	typeIPAMConfig = reflect.TypeOf(IPAMConfig{})
-)
+var typeIPAMConfig = reflect.TypeOf(IPAMConfig{})
 
 type IPAMConfigKey struct{}
 

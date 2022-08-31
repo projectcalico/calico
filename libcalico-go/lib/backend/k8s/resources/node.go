@@ -41,18 +41,20 @@ import (
 )
 
 const (
-	nodeBgpIpv4AddrAnnotation               = "projectcalico.org/IPv4Address"
-	nodeBgpIpv4IPIPTunnelAddrAnnotation     = "projectcalico.org/IPv4IPIPTunnelAddr"
-	nodeBgpIpv4VXLANTunnelAddrAnnotation    = "projectcalico.org/IPv4VXLANTunnelAddr"
-	nodeBgpVXLANTunnelMACAddrAnnotation     = "projectcalico.org/VXLANTunnelMACAddr"
-	nodeBgpIpv6VXLANTunnelAddrAnnotation    = "projectcalico.org/IPv6VXLANTunnelAddr"
-	nodeBgpIpv6VXLANTunnelMACAddrAnnotation = "projectcalico.org/IPv6VXLANTunnelMACAddr"
-	nodeBgpIpv6AddrAnnotation               = "projectcalico.org/IPv6Address"
-	nodeBgpAsnAnnotation                    = "projectcalico.org/ASNumber"
-	nodeBgpCIDAnnotation                    = "projectcalico.org/RouteReflectorClusterID"
-	nodeK8sLabelAnnotation                  = "projectcalico.org/kube-labels"
-	nodeWireguardIpv4IfaceAddrAnnotation    = "projectcalico.org/IPv4WireguardInterfaceAddr"
-	nodeWireguardPublicKeyAnnotation        = "projectcalico.org/WireguardPublicKey"
+	nodeBgpIpv4AddrAnnotation             = "projectcalico.org/IPv4Address"
+	nodeBgpIpv4IPIPTunnelAddrAnnotation   = "projectcalico.org/IPv4IPIPTunnelAddr"
+	nodeBgpIpv4VXLANTunnelAddrAnnotation  = "projectcalico.org/IPv4VXLANTunnelAddr"
+	nodeBgpVXLANTunnelMACAddrAnnotation   = "projectcalico.org/VXLANTunnelMACAddr"
+	nodeBgpIpv6VXLANTunnelAddrAnnotation  = "projectcalico.org/IPv6VXLANTunnelAddr"
+	nodeBgpVXLANTunnelMACAddrV6Annotation = "projectcalico.org/VXLANTunnelMACAddrV6"
+	nodeBgpIpv6AddrAnnotation             = "projectcalico.org/IPv6Address"
+	nodeBgpAsnAnnotation                  = "projectcalico.org/ASNumber"
+	nodeBgpCIDAnnotation                  = "projectcalico.org/RouteReflectorClusterID"
+	nodeK8sLabelAnnotation                = "projectcalico.org/kube-labels"
+	nodeWireguardIpv4IfaceAddrAnnotation  = "projectcalico.org/IPv4WireguardInterfaceAddr"
+	nodeWireguardIpv6IfaceAddrAnnotation  = "projectcalico.org/IPv6WireguardInterfaceAddr"
+	nodeWireguardPublicKeyAnnotation      = "projectcalico.org/WireguardPublicKey"
+	nodeWireguardPublicKeyV6Annotation    = "projectcalico.org/WireguardPublicKeyV6"
 )
 
 func NewNodeClient(c *kubernetes.Clientset, usePodCIDR bool) K8sResourceClient {
@@ -263,6 +265,7 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 		// We are not using host local, so assign tunnel addresses from annotations.
 		bgpSpec.IPv4IPIPTunnelAddr = annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]
 		wireguardSpec.InterfaceIPv4Address = annotations[nodeWireguardIpv4IfaceAddrAnnotation]
+		wireguardSpec.InterfaceIPv6Address = annotations[nodeWireguardIpv6IfaceAddrAnnotation]
 	}
 
 	// Only set the BGP spec if it is not empty.
@@ -279,11 +282,12 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	calicoNode.Spec.IPv4VXLANTunnelAddr = annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation]
 	calicoNode.Spec.VXLANTunnelMACAddr = annotations[nodeBgpVXLANTunnelMACAddrAnnotation]
 	calicoNode.Spec.IPv6VXLANTunnelAddr = annotations[nodeBgpIpv6VXLANTunnelAddrAnnotation]
-	calicoNode.Spec.IPv6VXLANTunnelMACAddr = annotations[nodeBgpIpv6VXLANTunnelMACAddrAnnotation]
+	calicoNode.Spec.VXLANTunnelMACAddrV6 = annotations[nodeBgpVXLANTunnelMACAddrV6Annotation]
 
 	// Set the node status
 	nodeStatus := libapiv3.NodeStatus{}
 	nodeStatus.WireguardPublicKey = annotations[nodeWireguardPublicKeyAnnotation]
+	nodeStatus.WireguardPublicKeyV6 = annotations[nodeWireguardPublicKeyV6Annotation]
 	if !reflect.DeepEqual(nodeStatus, libapiv3.NodeStatus{}) {
 		calicoNode.Status = nodeStatus
 	}
@@ -369,10 +373,10 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node)
 	}
 
 	// Handle IPv6 VXLAN MAC address.
-	if calicoNode.Spec.IPv6VXLANTunnelMACAddr != "" {
-		k8sNode.Annotations[nodeBgpIpv6VXLANTunnelMACAddrAnnotation] = calicoNode.Spec.IPv6VXLANTunnelMACAddr
+	if calicoNode.Spec.VXLANTunnelMACAddrV6 != "" {
+		k8sNode.Annotations[nodeBgpVXLANTunnelMACAddrV6Annotation] = calicoNode.Spec.VXLANTunnelMACAddrV6
 	} else {
-		delete(k8sNode.Annotations, nodeBgpIpv6VXLANTunnelMACAddrAnnotation)
+		delete(k8sNode.Annotations, nodeBgpVXLANTunnelMACAddrV6Annotation)
 	}
 
 	if calicoNode.Spec.BGP == nil {
@@ -417,12 +421,18 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node)
 
 	if calicoNode.Spec.Wireguard == nil {
 		delete(k8sNode.Annotations, nodeWireguardIpv4IfaceAddrAnnotation)
+		delete(k8sNode.Annotations, nodeWireguardIpv6IfaceAddrAnnotation)
 	} else {
 		// Handle Wireguard interface address.
 		if calicoNode.Spec.Wireguard.InterfaceIPv4Address != "" {
 			k8sNode.Annotations[nodeWireguardIpv4IfaceAddrAnnotation] = calicoNode.Spec.Wireguard.InterfaceIPv4Address
 		} else {
 			delete(k8sNode.Annotations, nodeWireguardIpv4IfaceAddrAnnotation)
+		}
+		if calicoNode.Spec.Wireguard.InterfaceIPv6Address != "" {
+			k8sNode.Annotations[nodeWireguardIpv6IfaceAddrAnnotation] = calicoNode.Spec.Wireguard.InterfaceIPv6Address
+		} else {
+			delete(k8sNode.Annotations, nodeWireguardIpv6IfaceAddrAnnotation)
 		}
 	}
 
@@ -431,6 +441,11 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node)
 		k8sNode.Annotations[nodeWireguardPublicKeyAnnotation] = calicoNode.Status.WireguardPublicKey
 	} else {
 		delete(k8sNode.Annotations, nodeWireguardPublicKeyAnnotation)
+	}
+	if calicoNode.Status.WireguardPublicKeyV6 != "" {
+		k8sNode.Annotations[nodeWireguardPublicKeyV6Annotation] = calicoNode.Status.WireguardPublicKeyV6
+	} else {
+		delete(k8sNode.Annotations, nodeWireguardPublicKeyV6Annotation)
 	}
 
 	return k8sNode, nil

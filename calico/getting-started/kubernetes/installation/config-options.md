@@ -176,12 +176,12 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico-etcd.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{ "/manifests/canal.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/canal.yaml -O
    ```
 
 1. Within the `ConfigMap` section, uncomment the `etcd_ca`, `etcd_key`, and `etcd_cert`
@@ -291,19 +291,48 @@ Open the `install/kubernetes/istio-demo-auth.yaml` file in an
 editor, and locate the `istio-sidecar-injector` ConfigMap.  In the existing `istio-proxy` container, add a new `volumeMount`.
 
 ```
-{% include non-helm-manifests/istio-proxy-volume-mounts %}
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
 ```
 
 Add a new container to the template.
 
 ```
-{% include non-helm-manifests/dikastes-container %}
+      - name: dikastes
+        image: {{page.registry}}{{page.imageNames["calico/dikastes"]}}:{{site.data.versions.first.components["calico/dikastes"].version}}
+        args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          exec:
+            command:
+            - /healthz
+            - liveness
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        readinessProbe:
+          exec:
+            command:
+            - /healthz
+            - readiness
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        volumeMounts:
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
+        - mountPath: /var/run/felix
+          name: felix-sync```
 ```
 
 Add two new volumes.
 
 ```
-{% include non-helm-manifests/istio-volumes %}
+      - name: dikastes-sock
+        emptyDir:
+          medium: Memory
+      - name: felix-sync
+        csi:
+          driver: "csi.tigera.io"
 ```
 
 The volumes you added are used to create Unix domain sockets that allow
@@ -312,7 +341,7 @@ Felix.  Once created, a Unix domain socket is an in-memory communications
 channel. The volumes are not used for any kind of stateful storage on disk.
 
 Refer to the
-[Calico ConfigMap manifest](/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
+[Calico ConfigMap manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
 example with the above changes.
 
 %>

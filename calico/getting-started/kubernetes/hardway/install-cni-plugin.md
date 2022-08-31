@@ -37,7 +37,7 @@ sudo openssl x509 -req -in cni.csr \
 sudo chown $(id -u):$(id -g) cni.crt
 ```
 
-Next, we create a kubeconfig file for the CNI plugin to use to access Kubernetes.
+Next, we create a kubeconfig file for the CNI plugin to use to access Kubernetes. Copy this `cni.kubeconfig` file **to every node** in the cluster.
 
 ```bash
 APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}')
@@ -60,8 +60,6 @@ kubectl config set-context default \
 
 kubectl config use-context default --kubeconfig=cni.kubeconfig
 ```
-
-Copy this `cni.kubeconfig` file to every node in the cluster.
 
 ## Provision RBAC
 

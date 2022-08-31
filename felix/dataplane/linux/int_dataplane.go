@@ -29,10 +29,13 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -74,6 +77,9 @@ const (
 
 	// Interface name used by kube-proxy to bind service ips.
 	KubeIPVSInterface = "kube-ipvs0"
+
+	// Route cleanup grace period. Used for workload routes only.
+	routeCleanupGracePeriod = 10 * time.Second
 )
 
 var (
@@ -128,10 +134,12 @@ type Config struct {
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
 	VXLANMTU             int
+	VXLANMTUV6           int
 	VXLANPort            int
 
 	MaxIPSetSize int
 
+	RouteSyncDisabled              bool
 	IptablesBackend                string
 	IPSetsRefreshInterval          time.Duration
 	RouteRefreshInterval           time.Duration
@@ -172,11 +180,13 @@ type Config struct {
 	ExternalNodesCidrs []string
 
 	BPFEnabled                         bool
+	BPFPolicyDebugEnabled              bool
 	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
+	BPFL3IfacePattern                  *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
 	BPFConntrackTimeouts               conntrack.Timeouts
@@ -191,6 +201,7 @@ type Config struct {
 	BPFMapSizeNATBackend               int
 	BPFMapSizeNATAffinity              int
 	BPFMapSizeIPSets                   int
+	BPFMapSizeIfState                  int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
@@ -203,6 +214,7 @@ type Config struct {
 	KubeClientSet *kubernetes.Clientset
 
 	FeatureDetectOverrides map[string]string
+	FeatureGates           map[string]string
 
 	// Populated with the smallest host MTU based on auto-detection.
 	hostMTU         int
@@ -262,7 +274,8 @@ type InternalDataplane struct {
 
 	ipipManager *ipipManager
 
-	wireguardManager *wireguardManager
+	wireguardManager   *wireguardManager
+	wireguardManagerV6 *wireguardManager
 
 	ifaceMonitor     *ifacemonitor.InterfaceMonitor
 	ifaceUpdates     chan *ifaceUpdate
@@ -313,10 +326,12 @@ const (
 	healthName     = "int_dataplane"
 	healthInterval = 10 * time.Second
 
-	ipipMTUOverhead      = 20
-	vxlanMTUOverhead     = 50
-	wireguardMTUOverhead = 60
-	aksMTUOverhead       = 100
+	ipipMTUOverhead        = 20
+	vxlanMTUOverhead       = 50
+	vxlanV6MTUOverhead     = 70
+	wireguardMTUOverhead   = 60
+	wireguardV6MTUOverhead = 80
+	aksMTUOverhead         = 100
 )
 
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
@@ -356,7 +371,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
-	backendMode := iptables.DetectBackend(config.LookPathOverride, iptables.NewRealCmd, config.IptablesBackend)
+	backendMode := environment.DetectBackend(config.LookPathOverride, cmdshim.NewRealCmd, config.IptablesBackend)
 
 	// Most iptables tables need the same options.
 	iptablesOptions := iptables.TableOptions{
@@ -379,6 +394,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesOptions.HistoricChainPrefixes = append(iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...)
 	}
 
+	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
+		err := os.RemoveAll(bpf.RuntimePolDir)
+		if err != nil && !os.IsNotExist(err) {
+			log.WithError(err).Info("Policy debug disabled but failed to remove the debug directory.  Ignoring.")
+		}
+	}
+
 	// However, the NAT tables need an extra cleanup regex.
 	iptablesNATOptions := iptablesOptions
 	if iptablesNATOptions.ExtraCleanupRegexPattern == "" {
@@ -387,11 +409,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
-	featureDetector := iptables.NewFeatureDetector(config.FeatureDetectOverrides)
-	iptablesFeatures := featureDetector.GetFeatures()
+	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
+	dataplaneFeatures := featureDetector.GetFeatures()
 
 	var iptablesLock sync.Locker
-	if iptablesFeatures.RestoreSupportsLock {
+	if dataplaneFeatures.RestoreSupportsLock {
 		log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
 			"iptables-restore will use its own implementation).")
 		iptablesLock = dummyLock{}
@@ -449,9 +471,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
 	if config.RulesConfig.VXLANEnabled {
-		routeTableVXLAN := routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
-			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+		var routeTableVXLAN routetable.RouteTableInterface
+		if !config.RouteSyncDisabled {
+			log.Debug("RouteSyncDisabled is false.")
+			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+		} else {
+			log.Info("RouteSyncDisabled is true, using DummyTable.")
+			routeTableVXLAN = &routetable.DummyTable{}
+		}
 
 		vxlanManager := newVXLANManager(
 			ipSetsV4,
@@ -459,12 +488,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			"vxlan.calico",
 			config,
 			dp.loopSummarizer,
+			4,
 		)
-		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, iptablesFeatures.ChecksumOffloadBroken, 10*time.Second)
+		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpVXLANDevice()
+		go cleanUpVXLANDevice("vxlan.calico")
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -554,17 +584,33 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		tc.CleanUpProgramsAndPins()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, func(neededIPSets set.Set) {
-			ipSetsV4.SetFilter(neededIPSets)
-		}))
+		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4,
+			func(neededIPSets set.Set[string]) {
+				ipSetsV4.SetFilter(neededIPSets)
+			}))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
 	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
 		interfaceRegexes[i] = "^" + r + ".*"
 	}
-	bpfMapContext := bpfmap.CreateBPFMapContext(config.BPFMapSizeIPSets, config.BPFMapSizeNATFrontend,
-		config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeRoute, config.BPFMapSizeConntrack, config.BPFMapRepin)
+
+	defaultRPFilter, err := os.ReadFile("/proc/sys/net/ipv4/conf/default/rp_filter")
+	if err != nil {
+		log.Warn("could not determine default rp_filter setting, defaulting to strict")
+		defaultRPFilter = []byte{'1'}
+	}
+
+	bpfMapContext := bpfmap.CreateBPFMapContext(
+		config.BPFMapSizeIPSets,
+		config.BPFMapSizeNATFrontend,
+		config.BPFMapSizeNATBackend,
+		config.BPFMapSizeNATAffinity,
+		config.BPFMapSizeRoute,
+		config.BPFMapSizeConntrack,
+		config.BPFMapSizeIfState,
+		config.BPFMapRepin,
+	)
 
 	var bpfEndpointManager *bpfEndpointManager
 
@@ -586,7 +632,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
 		ipsetsManager.AddDataplane(ipSetsV4)
-		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer)
+		bpfRTMgr := newBPFRouteManager(&config, bpfMapContext, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
@@ -601,7 +647,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(failsafeMgr)
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
-		bpfEndpointManager = newBPFEndpointManager(
+		bpfEndpointManager, err = newBPFEndpointManager(
+			nil,
 			&config,
 			bpfMapContext,
 			fibLookupEnabled,
@@ -612,7 +659,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.reportHealth,
 			dp.loopSummarizer,
 		)
+
+		if err != nil {
+			log.WithError(err).Panic("Failed to create BPF endpoint manager.")
+		}
+
 		dp.RegisterManager(bpfEndpointManager)
+
+		bpfEndpointManager.Features = dataplaneFeatures
 
 		conntrackScanner := conntrack.NewScanner(bpfMapContext.CtMap,
 			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
@@ -665,9 +719,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-		dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+	var routeTableV4 routetable.RouteTableInterface
+
+	if !config.RouteSyncDisabled {
+		log.Debug("RouteSyncDisabled is false.")
+		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_UNSPEC,
+			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+	} else {
+		log.Info("RouteSyncDisabled is true, using DummyTable.")
+		routeTableV4 = &routetable.DummyTable{}
+	}
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -680,6 +743,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.KubeIPVSSupportEnabled,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+		string(defaultRPFilter),
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -701,20 +765,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	// Add a manager for wireguard configuration. This is added irrespective of whether wireguard is actually enabled
+	// Add a manager for IPv4 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
 	// because it may need to tidy up some of the routing rules when disabled.
-	cryptoRouteTableWireguard := wireguard.New(config.Hostname, &config.Wireguard, config.NetlinkTimeout,
+	cryptoRouteTableWireguard := wireguard.New(config.Hostname, &config.Wireguard, 4, config.NetlinkTimeout,
 		config.DeviceRouteProtocol, func(publicKey wgtypes.Key) error {
 			if publicKey == zeroKey {
-				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: ""}
+				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: "", IpVersion: 4}
 			} else {
-				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String()}
+				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String(), IpVersion: 4}
 			}
 			return nil
 		},
 		dp.loopSummarizer)
-	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config)
-	dp.RegisterManager(dp.wireguardManager) // IPv4-only
+	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config, 4)
+	dp.RegisterManager(dp.wireguardManager) // IPv4
 
 	dp.RegisterManager(newServiceLoopManager(filterTableV4, ruleRenderer, 4))
 
@@ -760,10 +824,45 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
-		routeTableV6 := routetable.New(
-			interfaceRegexes, 6, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
-			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+		if config.RulesConfig.VXLANEnabledV6 {
+			var routeTableVXLANV6 routetable.RouteTableInterface
+			if !config.RouteSyncDisabled {
+				log.Debug("RouteSyncDisabled is false.")
+				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
+					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+					dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+			} else {
+				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
+				routeTableVXLANV6 = &routetable.DummyTable{}
+			}
+
+			vxlanManagerV6 := newVXLANManager(
+				ipSetsV6,
+				routeTableVXLANV6,
+				"vxlan-v6.calico",
+				config,
+				dp.loopSummarizer,
+				6,
+			)
+			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
+			dp.RegisterManager(vxlanManagerV6)
+		} else {
+			// Start a cleanup goroutine not to block felix if it needs to retry
+			go cleanUpVXLANDevice("vxlan-v6.calico")
+		}
+
+		var routeTableV6 routetable.RouteTableInterface
+		if !config.RouteSyncDisabled {
+			log.Debug("RouteSyncDisabled is false.")
+			routeTableV6 = routetable.New(
+				interfaceRegexes, 6, false, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
+				unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+		} else {
+			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")
+			routeTableV6 = &routetable.DummyTable{}
+		}
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))
@@ -785,6 +884,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.KubeIPVSSupportEnabled,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+			"",
 			config.BPFEnabled,
 			nil,
 			callbacks,
@@ -793,6 +893,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+
+		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
+		// because it may need to tidy up some of the routing rules when disabled.
+		cryptoRouteTableWireguardV6 := wireguard.New(config.Hostname, &config.Wireguard, 6, config.NetlinkTimeout,
+			config.DeviceRouteProtocol, func(publicKey wgtypes.Key) error {
+				if publicKey == zeroKey {
+					dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: "", IpVersion: 6}
+				} else {
+					dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String(), IpVersion: 6}
+				}
+				return nil
+			},
+			dp.loopSummarizer)
+		dp.wireguardManagerV6 = newWireguardManager(cryptoRouteTableWireguardV6, config, 6)
+		dp.RegisterManager(dp.wireguardManagerV6)
 	}
 
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesMangleTables...)
@@ -888,7 +1003,9 @@ func determinePodMTU(config Config) int {
 	for _, s := range []mtuState{
 		{config.IPIPMTU, config.RulesConfig.IPIPEnabled},
 		{config.VXLANMTU, config.RulesConfig.VXLANEnabled},
+		{config.VXLANMTUV6, config.RulesConfig.VXLANEnabledV6},
 		{config.Wireguard.MTU, config.Wireguard.Enabled},
+		{config.Wireguard.MTUV6, config.Wireguard.EnabledV6},
 	} {
 		if s.enabled && s.mtu != 0 && (s.mtu < mtu || mtu == 0) {
 			mtu = s.mtu
@@ -916,8 +1033,12 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 		c.IPIPMTU = hostMTU - ipipMTUOverhead
 	}
 	if c.VXLANMTU == 0 {
-		log.Debug("Defaulting VXLAN MTU based on host")
+		log.Debug("Defaulting IPv4 VXLAN MTU based on host")
 		c.VXLANMTU = hostMTU - vxlanMTUOverhead
+	}
+	if c.VXLANMTUV6 == 0 {
+		log.Debug("Defaulting IPv6 VXLAN MTU based on host")
+		c.VXLANMTUV6 = hostMTU - vxlanV6MTUOverhead
 	}
 	if c.Wireguard.MTU == 0 {
 		if c.KubernetesProvider == config.ProviderAKS && c.Wireguard.EncryptHostTraffic {
@@ -927,11 +1048,26 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 			// Additionally, Wireguard sets the DF bit on its packets, and so if the MTU is set too high large packets
 			// will be dropped. Therefore it is necessary to allow for the difference between the MTU of the host and
 			// the underlying network.
-			log.Debug("Defaulting Wireguard MTU based on host and AKS with WorkloadIPs")
+			log.Debug("Defaulting IPv4 Wireguard MTU based on host and AKS with WorkloadIPs")
 			c.Wireguard.MTU = hostMTU - aksMTUOverhead - wireguardMTUOverhead
 		} else {
-			log.Debug("Defaulting Wireguard MTU based on host")
+			log.Debug("Defaulting IPv4 Wireguard MTU based on host")
 			c.Wireguard.MTU = hostMTU - wireguardMTUOverhead
+		}
+	}
+	if c.Wireguard.MTUV6 == 0 {
+		if c.KubernetesProvider == config.ProviderAKS && c.Wireguard.EncryptHostTraffic {
+			// The default MTU on Azure is 1500, but the underlying network stack will fragment packets at 1400 bytes,
+			// see https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning#azure-and-vm-mtu
+			// for details.
+			// Additionally, Wireguard sets the DF bit on its packets, and so if the MTU is set too high large packets
+			// will be dropped. Therefore it is necessary to allow for the difference between the MTU of the host and
+			// the underlying network.
+			log.Debug("Defaulting IPv6 Wireguard MTU based on host and AKS with WorkloadIPs")
+			c.Wireguard.MTUV6 = hostMTU - aksMTUOverhead - wireguardV6MTUOverhead
+		} else {
+			log.Debug("Defaulting IPv6 Wireguard MTU based on host")
+			c.Wireguard.MTUV6 = hostMTU - wireguardV6MTUOverhead
 		}
 	}
 }
@@ -987,7 +1123,7 @@ cleanupRetry:
 	}
 }
 
-func cleanUpVXLANDevice() {
+func cleanUpVXLANDevice(deviceName string) {
 	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
 	log.Debug("Checking if we need to clean up the VXLAN device")
 
@@ -997,7 +1133,7 @@ func cleanUpVXLANDevice() {
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		link, err := netlink.LinkByName("vxlan.calico")
+		link, err := netlink.LinkByName(deviceName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); ok {
 				log.Debug("VXLAN disabled and no VXLAN device found")
@@ -1037,20 +1173,12 @@ type Manager interface {
 
 type ManagerWithRouteTables interface {
 	Manager
-	GetRouteTableSyncers() []routeTableSyncer
+	GetRouteTableSyncers() []routetable.RouteTableSyncer
 }
 
 type ManagerWithRouteRules interface {
 	Manager
 	GetRouteRules() []routeRules
-}
-
-// routeTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
-// interface state changes, hooks to queue a full resync and apply routing updates.
-type routeTableSyncer interface {
-	OnIfaceStateChanged(string, ifacemonitor.State)
-	QueueResync()
-	Apply() error
 }
 
 type routeRules interface {
@@ -1060,8 +1188,8 @@ type routeRules interface {
 	Apply() error
 }
 
-func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
-	var rts []routeTableSyncer
+func (d *InternalDataplane) routeTableSyncers() []routetable.RouteTableSyncer {
+	var rts []routetable.RouteTableSyncer
 	for _, mrts := range d.managersWithRouteTables {
 		rts = append(rts, mrts.GetRouteTableSyncers()...)
 	}
@@ -1144,7 +1272,7 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 
 // onIfaceAddrsChange is our interface address monitor callback.  It gets called
 // from the monitor's thread.
-func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) {
+func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[string]) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
@@ -1157,7 +1285,7 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) 
 
 type ifaceAddrsUpdate struct {
 	Name  string
-	Addrs set.Set
+	Addrs set.Set[string]
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {
@@ -1279,6 +1407,16 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			})
 		}
 
+		// Accept any SEEN packets that go to the host. What remains here should be from
+		// host interfaces. This should accept packets in default-DROP iptable
+		// environments.  Such packets go through BPF on host iface but must go through
+		// the INPUT of iptables too. default-DROP would block IPIP/VXLAN/WG/etc. traffic
+		// without explicit ACCEPT.
+		inputRules = append(inputRules, iptables.Rule{
+			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
+			Action: iptables.AcceptAction{},
+		})
+
 		if t.IPVersion == 6 {
 			for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
 				// In BPF mode, we don't support IPv6 yet.  Drop it.
@@ -1328,6 +1466,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					},
 				)
 			}
+			fwdRules = append(fwdRules,
+				iptables.Rule{
+					Match:   iptables.Match().InInterface(bpfOutDev),
+					Action:  iptables.AcceptAction{},
+					Comment: []string{"From ", bpfOutDev, " device, mark verified, accept."},
+				},
+			)
 		}
 
 		t.InsertOrAppendRules("INPUT", inputRules)
@@ -1345,7 +1490,6 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	for _, t := range d.iptablesRawTables {
 		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion,
 			d.config.Wireguard.EncryptHostTraffic, d.config.BPFHostConntrackBypass,
-			d.config.BPFEnforceRPF == "Strict",
 		))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
@@ -1734,7 +1878,7 @@ func (d *InternalDataplane) configureKernel() {
 			log.WithError(err).Error("Failed to set unprivileged_bpf_disabled sysctl")
 		}
 	}
-	if d.config.Wireguard.Enabled {
+	if d.config.Wireguard.Enabled || d.config.Wireguard.EnabledV6 {
 		// wireguard module is available in linux kernel >= 5.6
 		mpwg := newModProbe(moduleWireguard, newRealCmd)
 		out, err = mpwg.Exec()
@@ -1852,7 +1996,7 @@ func (d *InternalDataplane) apply() {
 	var routesWG sync.WaitGroup
 	for _, r := range d.routeTableSyncers() {
 		routesWG.Add(1)
-		go func(r routeTableSyncer) {
+		go func(r routetable.RouteTableSyncer) {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing table, will retry...")

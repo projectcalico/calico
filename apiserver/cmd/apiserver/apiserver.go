@@ -22,13 +22,20 @@ import (
 	"os"
 	"runtime"
 
+	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 )
 
 func main() {
+	// Make sure the RNG is seeded.
+	seedrng.EnsureSeeded()
+
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
@@ -49,9 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := cmd.Execute(); err != nil {
-		klog.Errorf("server exited unexpectedly (%s)", err)
-		logs.FlushLogs()
-		os.Exit(1)
-	}
+	code := cli.Run(cmd)
+	os.Exit(code)
+
 }

@@ -47,10 +47,12 @@ type resourceConverter interface {
 }
 type clientOpts interface{}
 
-type clientObjectOperator func(context.Context, clientv3.Interface, resourceObject, clientOpts) (resourceObject, error)
-type clientNameOperator func(context.Context, clientv3.Interface, string, string, clientOpts) (resourceObject, error)
-type clientLister func(context.Context, clientv3.Interface, clientOpts) (resourceListObject, error)
-type clientWatcher func(context.Context, clientv3.Interface, clientOpts) (calicowatch.Interface, error)
+type (
+	clientObjectOperator func(context.Context, clientv3.Interface, resourceObject, clientOpts) (resourceObject, error)
+	clientNameOperator   func(context.Context, clientv3.Interface, string, string, clientOpts) (resourceObject, error)
+	clientLister         func(context.Context, clientv3.Interface, clientOpts) (resourceListObject, error)
+	clientWatcher        func(context.Context, clientv3.Interface, clientOpts) (calicowatch.Interface, error)
+)
 
 type resourceStore struct {
 	client            clientv3.Interface
@@ -250,13 +252,14 @@ func (rs *resourceStore) Get(ctx context.Context, key string, optsK8s storage.Ge
 	return nil
 }
 
-// GetToList unmarshals json found at key and opaque it into *List api object
-// (an object that satisfies the runtime.IsList definition).
+// GetList unmarshalls objects found at key into a *List api object (an object
+// that satisfies runtime.IsList definition).
+// If 'opts.Recursive' is false, 'key' is used as an exact match. If `opts.Recursive'
+// is true, 'key' is used as a prefix.
 // The returned contents may be delayed, but it is guaranteed that they will
-// be have at least 'resourceVersion'.
-func (rs *resourceStore) GetToList(ctx context.Context, key string,
-	opts storage.ListOptions, listObj runtime.Object) error {
-	klog.Infof("GetToList called with key: %v on resource %v\n", key, rs.resourceName)
+// match 'opts.ResourceVersion' according 'opts.ResourceVersionMatch'.
+func (rs *resourceStore) GetList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
+	klog.Infof("GetList called with key: %v on resource %v\n", key, rs.resourceName)
 	return rs.List(ctx, key, opts, listObj)
 }
 
@@ -360,7 +363,7 @@ func decode(
 // })
 func (rs *resourceStore) GuaranteedUpdate(
 	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
-	precondtions *storage.Preconditions, userUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
+	preconditions *storage.Preconditions, userUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
 	klog.V(6).Infof("GuaranteedUpdate called with key: %v on resource %v\n", key, rs.resourceName)
 	// If a cachedExistingObject was passed, use that as the initial object, otherwise use Get() to retrieve it
 	var initObj runtime.Object
@@ -392,7 +395,7 @@ func (rs *resourceStore) GuaranteedUpdate(
 	for totalLoopCount < 5 {
 		totalLoopCount++
 
-		if err := checkPreconditions(key, precondtions, curState.obj); err != nil {
+		if err := checkPreconditions(key, preconditions, curState.obj); err != nil {
 			klog.Errorf("checking preconditions (%s)", err)
 			return err
 		}

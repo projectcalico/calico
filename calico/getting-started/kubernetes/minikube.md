@@ -53,8 +53,11 @@ minikube start --network-plugin=cni --extra-config=kubeadm.pod-network-cidr=192.
 Install the Tigera {{site.prodname}} operator and custom resource definitions.
 
 ```bash
-kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
 ```
+
+> **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+{: .alert .alert-info}
 
 Install {{site.prodname}} by creating the necessary custom resource. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
@@ -63,7 +66,7 @@ Install {{site.prodname}} by creating the necessary custom resource. For more in
 {: .alert .alert-info}
 
 ```bash
-kubectl create -f {{ "/manifests/custom-resources.yaml" | absolute_url }}
+kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/custom-resources.yaml
 ```
 
 %>
@@ -79,7 +82,7 @@ minikube start --network-plugin=cni
 Install {{site.prodname}}.
 
 ```bash
-kubectl apply -f {{ "/manifests/calico.yaml" | absolute_url }}
+kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/calico.yaml
 ```
 
 %>

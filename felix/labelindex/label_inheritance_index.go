@@ -57,6 +57,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// FIXME make InheritIndex generic
+
 // itemData holds the data that we know about a particular item (i.e. a workload or host endpoint).
 // In particular, it holds it current explicitly-assigned labels and a pointer to the parent data
 // for each of its parents.
@@ -85,7 +87,7 @@ func (itemData *itemData) Get(labelName string) (value string, present bool) {
 type parentData struct {
 	id      string
 	labels  map[string]string
-	itemIDs set.Set
+	itemIDs set.Set[any]
 }
 
 type MatchCallback func(selId, labelId interface{})
@@ -96,14 +98,14 @@ type InheritIndex struct {
 	selectorsById        map[interface{}]selector.Selector
 
 	// Current matches.
-	selIdsByLabelId map[interface{}]set.Set
-	labelIdsBySelId map[interface{}]set.Set
+	selIdsByLabelId map[interface{}]set.Set[any]
+	labelIdsBySelId map[interface{}]set.Set[any]
 
 	// Callback functions
 	OnMatchStarted MatchCallback
 	OnMatchStopped MatchCallback
 
-	dirtyItemIDs set.Set
+	dirtyItemIDs set.Set[any]
 }
 
 func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex {
@@ -113,14 +115,14 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		parentDataByParentID: map[string]*parentData{},
 		selectorsById:        map[interface{}]selector.Selector{},
 
-		selIdsByLabelId: map[interface{}]set.Set{},
-		labelIdsBySelId: map[interface{}]set.Set{},
+		selIdsByLabelId: map[interface{}]set.Set[any]{},
+		labelIdsBySelId: map[interface{}]set.Set[any]{},
 
 		// Callback functions
 		OnMatchStarted: onMatchStarted,
 		OnMatchStopped: onMatchStopped,
 
-		dirtyItemIDs: set.New(),
+		dirtyItemIDs: set.NewBoxed[any](),
 	}
 	return &inheritIDx
 }
@@ -273,7 +275,7 @@ func (idx *InheritIndex) onItemParentsUpdate(id interface{}, oldParents, newPare
 	// Calculate the current set of parent IDs so we can skip deletion of parents that are still
 	// present.  We need to do this to avoid removing a still-current parent via
 	// discardParentIfEmpty().
-	currentParentIDs := set.New()
+	currentParentIDs := set.NewBoxed[any]()
 	for _, parentData := range newParents {
 		currentParentIDs.Add(parentData.id)
 	}
@@ -292,7 +294,7 @@ func (idx *InheritIndex) onItemParentsUpdate(id interface{}, oldParents, newPare
 
 	for _, parent := range newParents {
 		if parent.itemIDs == nil {
-			parent.itemIDs = set.New()
+			parent.itemIDs = set.NewBoxed[any]()
 		}
 		parent.itemIDs.Add(id)
 	}
@@ -384,7 +386,7 @@ func (idx *InheritIndex) updateMatches(
 func (idx *InheritIndex) storeMatch(selId, labelId interface{}) {
 	labelIds := idx.labelIdsBySelId[selId]
 	if labelIds == nil {
-		labelIds = set.New()
+		labelIds = set.NewBoxed[any]()
 		idx.labelIdsBySelId[selId] = labelIds
 	}
 	previouslyMatched := labelIds.Contains(labelId)
@@ -394,7 +396,7 @@ func (idx *InheritIndex) storeMatch(selId, labelId interface{}) {
 
 		selIDs, ok := idx.selIdsByLabelId[labelId]
 		if !ok {
-			selIDs = set.New()
+			selIDs = set.NewBoxed[any]()
 			idx.selIdsByLabelId[labelId] = selIDs
 		}
 		selIDs.Add(selId)

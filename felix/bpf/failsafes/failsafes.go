@@ -70,7 +70,7 @@ func (m *Manager) ResyncFailsafes() error {
 	m.opReporter.RecordOperation("resync-failsafes")
 
 	syncFailed := false
-	unknownKeys := set.New()
+	unknownKeys := set.New[Key]()
 	err := m.failsafesMap.Iter(func(rawKey, _ []byte) bpf.IteratorAction {
 		key := KeyFromSlice(rawKey)
 		unknownKeys.Add(key)
@@ -126,8 +126,10 @@ func (m *Manager) ResyncFailsafes() error {
 		unknownKeys.Discard(k)
 		err = m.failsafesMap.Update(k.ToSlice(), Value())
 		if err != nil {
-			log.WithError(err).Error("Failed to update failsafe port.")
+			log.WithError(err).WithField("key", k).Error("Failed to update failsafe port.")
 			syncFailed = true
+		} else {
+			log.WithField("key", k).Debug("Installed failsafe port.")
 		}
 	}
 
@@ -138,12 +140,13 @@ func (m *Manager) ResyncFailsafes() error {
 		addPort(p, true)
 	}
 
-	unknownKeys.Iter(func(item interface{}) error {
-		k := item.(Key)
+	unknownKeys.Iter(func(k Key) error {
 		err := m.failsafesMap.Delete(k.ToSlice())
 		if err != nil {
 			log.WithError(err).WithField("key", k).Warn("Failed to remove failsafe port from map.")
 			syncFailed = true
+		} else {
+			log.WithField("key", k).Debug("Deleted failsafe port.")
 		}
 		return nil
 	})

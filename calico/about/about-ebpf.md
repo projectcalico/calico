@@ -73,7 +73,7 @@ eBPF program depend hugely on the hook to which it is attached:
 * There are various security-related hooks that allow for program behaviour to be policed in various ways. For
   example, the **seccomp** hooks allow for syscalls to be policed in fine-grained ways.
 
-* And... probably a few more hooks by the time you ready this; eBPF is under heavy development in the kernel.
+* And... probably a few more hooks by the time you read this; eBPF is under heavy development in the kernel.
 
 The kernel exposes the capabilities of each hook via "helper functions". For example, the `tc` hook has a helper
 function to resize the packet, but that helper would not be available in a tracing hook. One of the challenges of
@@ -123,7 +123,7 @@ While the eBPF dataplane has some features that the standard Linux dataplane lac
 | Kubernetes services       | kube-proxy iptables or IPVS mode        | BPF program and maps               |
 | IPIP                      | Supported                               | Supported (no performance advantage due to kernel limitations) |
 | VXLAN                     | Supported                               | Supported                          |
-| Wireguard                 | Supported                               | Supported                          |
+| Wireguard                 | Supported (IPv4 and IPv6)               | Supported (IPv4)                   |
 | Other routing             | Supported                               | Supported                          |
 | Supports third party CNI plugins | Yes (compatible plugins only)    | Yes (compatible plugins only)      |
 | Compatible with other iptables rules | Yes (can write rules above or below other rules) | Partial; iptables bypassed for workload traffic |
@@ -159,4 +159,4 @@ NAT overhead from service connections.
 ### Above and beyond
 
 * For more information and performance metrics for the eBPF dataplane, see the [announcement blog post](https://www.projectcalico.org/introducing-the-calico-ebpf-dataplane/).
-* If you'd like to try eBPF mode in your Kubernetes cluster, follow the [Enable the eBPF dataplane]({{site.baseurl}}/maintenance/ebpf/enabling-bpf) guide.
+* If you'd like to try eBPF mode in your Kubernetes cluster, follow the [Enable the eBPF dataplane]({{site.baseurl}}/maintenance/ebpf/enabling-ebpf) guide.

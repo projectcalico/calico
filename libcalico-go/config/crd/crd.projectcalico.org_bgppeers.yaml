@@ -9,6 +9,7 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1

@@ -1,1 +1,0 @@
-ebpf/ebpf-and-eks.md

@@ -149,7 +149,7 @@ BGP state:          OpenSent
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check we can print peers.
-		printPeers(bgpPeers)
+		printPeers(bgpPeers, GinkgoWriter)
 	})
 
 	It("should not allow a table with invalid headings", func() {
@@ -230,7 +230,7 @@ BGP state:          Established
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check we can print peers.
-		printPeers(bgpPeers)
+		printPeers(bgpPeers, GinkgoWriter)
 	})
 
 	DescribeTable("Convert to v3 object",

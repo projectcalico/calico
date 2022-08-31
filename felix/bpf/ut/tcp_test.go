@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
 func TestTCPRecycleClosedConn(t *testing.T) {
@@ -48,11 +49,12 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
 	defer resetRTMap(rtMap)
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -60,6 +62,7 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
+	expectMark(tcdefs.MarkSeen)
 
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -89,6 +92,7 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 	_ = ctMap.Update(ctKey.AsBytes(), ctVal.AsBytes())
 
 	bpfIfaceName = "REC2"
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -96,6 +100,7 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
+	expectMark(tcdefs.MarkSeen)
 
 	ct, err = conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -146,11 +151,12 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
 	defer resetRTMap(rtMap)
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -158,6 +164,7 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
+	expectMark(tcdefs.MarkSeen)
 
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -188,6 +195,7 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 
 	_ = ctMap.Update(ctKey.AsBytes(), ctVal.AsBytes())
 
+	skbMark = 0
 	bpfIfaceName = "Rec2"
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
@@ -196,6 +204,7 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
+	expectMark(tcdefs.MarkSeen)
 
 	ct, err = conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())

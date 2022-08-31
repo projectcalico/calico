@@ -1261,7 +1261,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Attempting to allocate a ninth address should fail, since
-			// it would require allcoating a third block.
+			// it would require allocating a third block.
 			v4ia, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
 				IntendedUse: v3.IPPoolAllowedUseWorkload,
 				Num4:        1,

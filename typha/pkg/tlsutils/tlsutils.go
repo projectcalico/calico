@@ -120,9 +120,10 @@ func PanicIfErr(err error) {
 }
 
 var serialNumber int = 0
+var RSAKeySize int = 2048
 
 func MakeCACert(name string) (*x509.Certificate, *rsa.PrivateKey) {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
 	PanicIfErr(err)
 
 	notBefore := time.Now()
@@ -162,7 +163,7 @@ func MakePeerCert(cn, uriSAN string, extKeyUsage x509.ExtKeyUsage, caCert *x509.
 		"uriSAN":      uriSAN,
 		"extKeyUsage": extKeyUsage,
 	}).Info("Make peer cert")
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
 	PanicIfErr(err)
 
 	notBefore := time.Now()

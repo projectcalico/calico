@@ -45,8 +45,10 @@ const (
 	// Maximum size of annotations.
 	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
 
-	// linux can support route-tables with indices up to 0xfffffff
-	routeTableMaxLinux uint32 = 0xffffffff
+	// linux can support route-table indices up to 0xFFFFFFFF
+	// however, using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
+	routeTableMaxLinux       uint32 = 0xffffffff
+	routeTableRangeMaxTables uint32 = 0xffff
 
 	globalSelector = "global()"
 )
@@ -204,6 +206,7 @@ func init() {
 	registerStructValidator(validate, validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validate, validateIPPoolSpec, api.IPPoolSpec{})
 	registerStructValidator(validate, validateNodeSpec, libapi.NodeSpec{})
+	registerStructValidator(validate, validateIPAMConfigSpec, libapi.IPAMConfigSpec{})
 	registerStructValidator(validate, validateObjectMeta, metav1.ObjectMeta{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
 	registerStructValidator(validate, validateFelixConfigSpec, api.FelixConfigurationSpec{})
@@ -220,6 +223,7 @@ func init() {
 	registerStructValidator(validate, validateRouteTableIDRange, api.RouteTableIDRange{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
+	registerStructValidator(validate, validateBlockAffinitySpec, libapi.BlockAffinitySpec{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -570,7 +574,7 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 		return true
 	}
 
-	var rex = regexp.MustCompile("\\s*(\\w+)=(.*)")
+	rex := regexp.MustCompile("\\s*(\\w+)=(.*)")
 	for _, item := range strings.Split(n, ",") {
 		if item == "" {
 			// Accept empty items (e.g tailing ",")
@@ -792,6 +796,11 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(c.RouteTableRange),
 			"RouteTableRange", "", reason("cannot be set when `RouteTableRanges` is also set"), "")
 	}
+
+	if c.RouteTableRanges != nil && c.RouteTableRanges.NumDesignatedTables() > int(routeTableRangeMaxTables) {
+		structLevel.ReportError(reflect.ValueOf(c.RouteTableRanges),
+			"RouteTableRanges", "", reason("targets too many tables"), "")
+	}
 }
 
 func validateWorkloadEndpointSpec(structLevel validator.StructLevel) {
@@ -910,12 +919,6 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	if cidr.Version() == 6 && pool.IPIPMode != api.IPIPModeNever {
 		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
 			"IPpool.IPIPMode", "", reason("IPIPMode other than 'Never' is not supported on an IPv6 IP pool"), "")
-	}
-
-	// VXLAN cannot be enabled for IPv6.
-	if cidr.Version() == 6 && pool.VXLANMode != api.VXLANModeNever {
-		structLevel.ReportError(reflect.ValueOf(pool.VXLANMode),
-			"IPpool.VXLANMode", "", reason("VXLANMode other than 'Never' is not supported on an IPv6 IP pool"), "")
 	}
 
 	// Cannot have both VXLAN and IPIP on the same IP pool.
@@ -1149,6 +1152,15 @@ func validateEntityRule(structLevel validator.StructLevel) {
 			structLevel.ReportError(reflect.ValueOf(rule.Services),
 				"Services field", "", reason("cannot specify Nets/NotNets and Services on the same rule"), "")
 		}
+	}
+}
+
+func validateIPAMConfigSpec(structLevel validator.StructLevel) {
+	ics := structLevel.Current().Interface().(libapi.IPAMConfigSpec)
+
+	if ics.MaxBlocksPerHost < 0 {
+		structLevel.ReportError(reflect.ValueOf(ics.MaxBlocksPerHost), "MaxBlocksPerHost", "",
+			reason("must be greater than or equal to 0"), "")
 	}
 }
 
@@ -1618,7 +1630,6 @@ func validateRouteTableIDRange(structLevel validator.StructLevel) {
 		)
 	}
 
-	// cast both ints to 64bit as casting the max 32-bit integer to int() would overflow on 32bit systems
 	if int64(r.Max) > int64(routeTableMaxLinux) {
 		log.Warningf("RouteTableRange is invalid: %v", r)
 		structLevel.ReportError(
@@ -1640,13 +1651,12 @@ func validateRouteTableIDRange(structLevel validator.StructLevel) {
 	if includesReserved {
 		log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
 	}
-
 }
 
 func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 	spec := structLevel.Current().Interface().(api.BGPConfigurationSpec)
 
-	//check if Spec.Communities[] are valid
+	// check if Spec.Communities[] are valid
 	communities := spec.Communities
 	for _, community := range communities {
 		isValid := isValidCommunity(community.Value, "Spec.Communities[].Value", structLevel)
@@ -1690,6 +1700,13 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 	// Check that node mesh max restart time cannot be set if node to node mesh is disabled.
 	if spec.NodeMeshMaxRestartTime != nil && spec.NodeToNodeMeshEnabled != nil && !*spec.NodeToNodeMeshEnabled {
 		structLevel.ReportError(reflect.ValueOf(spec), "Spec.NodeMeshMaxRestartTime", "", reason("spec.NodeMeshMaxRestartTime cannot be set if spec.NodeToNodeMesh is disabled"), "")
+	}
+}
+
+func validateBlockAffinitySpec(structLevel validator.StructLevel) {
+	spec := structLevel.Current().Interface().(libapi.BlockAffinitySpec)
+	if spec.Deleted == fmt.Sprintf("%t", true) {
+		structLevel.ReportError(reflect.ValueOf(spec), "Spec.Deleted", "", reason("spec.Deleted cannot be set to \"true\""), "")
 	}
 }
 

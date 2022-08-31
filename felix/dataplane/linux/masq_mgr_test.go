@@ -54,9 +54,9 @@ var _ = Describe("Masquerade manager", func() {
 	})
 
 	It("should create its IP sets on startup", func() {
-		Expect(ipSets.Members).To(Equal(map[string]set.Set{
-			"all-ipam-pools":  set.New(),
-			"masq-ipam-pools": set.New(),
+		Expect(ipSets.Members).To(Equal(map[string]set.Set[string]{
+			"all-ipam-pools":  set.New[string](),
+			"masq-ipam-pools": set.New[string](),
 		}))
 	})
 
@@ -161,7 +161,7 @@ var _ = Describe("Masquerade manager", func() {
 					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should remove from the masq IP set", func() {
-					Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New()))
+					Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 				})
 				It("should remove from the all IP set", func() {
 					Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From(
@@ -183,10 +183,10 @@ var _ = Describe("Masquerade manager", func() {
 						Expect(err).ToNot(HaveOccurred())
 					})
 					It("masq set should be empty", func() {
-						Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New()))
+						Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 					})
 					It("all set should be empty", func() {
-						Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New()))
+						Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
 					})
 					It("should program empty chain", func() {
 						natTable.checkChains([][]*iptables.Chain{{{
@@ -213,7 +213,7 @@ var _ = Describe("Masquerade manager", func() {
 		})
 
 		It("should not add the pool to the masq IP set", func() {
-			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New()))
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 		})
 		It("should add the pool to the all IP set", func() {
 			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))

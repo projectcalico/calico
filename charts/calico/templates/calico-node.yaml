@@ -1,0 +1,697 @@
+# This manifest installs the {{ include "nodeName" . }} container, as well
+# as the CNI plugins and network config on
+# each master and worker node in a Kubernetes cluster.
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: {{include "nodeName" . }}
+  namespace: kube-system
+  labels:
+    k8s-app: {{include "nodeName" . }}
+spec:
+  selector:
+    matchLabels:
+      k8s-app: {{include "nodeName" . }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: {{include "nodeName" . }}
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+{{- if .Values.flannel_migration}}
+        # Only run Calico on nodes that have been migrated.
+        projectcalico.org/node-network-during-migration: calico
+{{- end}}
+      hostNetwork: true
+      tolerations:
+        # Make sure {{include "nodeName" . }} gets scheduled on all nodes.
+        - effect: NoSchedule
+          operator: Exists
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      serviceAccountName: {{include "nodeName" . }}
+      # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
+      # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
+      terminationGracePeriodSeconds: 0
+      priorityClassName: system-node-critical
+      initContainers:
+{{- if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") }}
+        # This container performs upgrade from host-local IPAM to calico-ipam.
+        # It can be deleted if this is a fresh installation, or if you have already
+        # upgraded to use calico-ipam.
+        - name: upgrade-ipam
+          image: {{.Values.cni.image}}:{{ .Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
+          command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
+          env:
+{{- if .Values.bpf }}
+            # Overrides for kubernetes API server host/port. Needed in BPF mode.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
+{{- end }}
+            - name: KUBERNETES_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CALICO_NETWORKING_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: calico_backend
+          volumeMounts:
+            - mountPath: /var/lib/cni/networks
+              name: host-local-net-dir
+            - mountPath: /host/opt/cni/bin
+              name: cni-bin-dir
+          securityContext:
+            privileged: true
+{{- end }}
+        # This container installs the CNI binaries
+        # and CNI network config file on each node.
+        - name: install-cni
+          image: {{.Values.cni.image}}:{{ .Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
+          command: ["/opt/cni/bin/install"]
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
+          env:
+{{- if eq .Values.network "flannel" }}
+            # Set the serviceaccount name to use for the Calico CNI plugin.
+            # We use canal-node instead of calico-node when using flannel networking.
+            - name: CALICO_CNI_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+{{- end }}
+{{- if .Values.bpf }}
+            # Overrides for kubernetes API server host/port. Needed in BPF mode.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
+{{- end }}
+            # Name of the CNI config file to create.
+            - name: CNI_CONF_NAME
+              value: "10-{{include "variant_name" . | lower}}.conflist"
+            # The CNI network config to install on each node.
+            - name: CNI_NETWORK_CONFIG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: cni_network_config
+{{- if eq .Values.datastore "etcd" }}
+            # The location of the etcd cluster.
+            - name: ETCD_ENDPOINTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: etcd_endpoints
+  {{- if eq .Values.network "flannel" }}
+            # Location of the CA certificate for etcd.
+            - name: ETCD_CA_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_ca
+            # Location of the client key for etcd.
+            - name: ETCD_KEY_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_key
+            # Location of the client certificate for etcd.
+            - name: ETCD_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_cert
+  {{- end }}
+{{- else if eq .Values.datastore "kubernetes" }}
+            # Set the hostname based on the k8s node name.
+            - name: KUBERNETES_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+{{- end }}
+{{- if or (eq .Values.network "calico") (eq .Values.network "flannel") }}
+            # CNI MTU Config variable
+            - name: CNI_MTU
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: veth_mtu
+{{- end }}
+            # Prevents the container from sleeping forever.
+            - name: SLEEP
+              value: "false"
+{{- if .Values.cni.env }}
+{{ toYaml .Values.cni.env | indent 12 }}
+{{- end }}
+          volumeMounts:
+            - mountPath: /host/opt/cni/bin
+              name: cni-bin-dir
+            - mountPath: /host/etc/cni/net.d
+              name: cni-net-dir
+{{- if eq .Values.datastore "etcd" }}
+            - mountPath: /calico-secrets
+              name: etcd-certs
+{{- end }}
+          securityContext:
+            privileged: true
+        # This init container mounts the necessary filesystems needed by the BPF data plane
+        # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
+        # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
+        - name: "mount-bpffs"
+          image: {{.Values.node.image}}:{{.Values.version}}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
+          command: ["calico-node", "-init", "-best-effort"]
+          volumeMounts:
+            - mountPath: /sys/fs
+              name: sys-fs
+              # Bidirectional is required to ensure that the new mount we make at /sys/fs/bpf propagates to the host
+              # so that it outlives the init container.
+              mountPropagation: Bidirectional
+            - mountPath: /var/run/calico
+              name: var-run-calico
+              # Bidirectional is required to ensure that the new mount we make at /run/calico/cgroup propagates to the host
+              # so that it outlives the init container.
+              mountPropagation: Bidirectional
+            # Mount /proc/ from host which usually is an init program at /nodeproc. It's needed by mountns binary,
+            # executed by calico-node, to mount root cgroup2 fs at /run/calico/cgroup to attach CTLB programs correctly.
+            - mountPath: /nodeproc
+              name: nodeproc
+              readOnly: true
+          securityContext:
+            privileged: true
+      containers:
+        # Runs {{ include "nodeName" . }} container on each Kubernetes node. This
+        # container programs network policy and routes on each
+        # host.
+        - name: calico-node
+          image: {{.Values.node.image}}:{{.Values.version}}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
+          env:
+{{- if .Values.bpf }}
+            # Overrides for kubernetes API server host/port. Needed in BPF mode.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
+            # Actually enable BPF mode.
+            - name: FELIX_BPFENABLED
+              value: "true"
+{{- end }}
+{{- if eq .Values.datastore "etcd" }}
+            # The location of the etcd cluster.
+            - name: ETCD_ENDPOINTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: etcd_endpoints
+            # Location of the CA certificate for etcd.
+            - name: ETCD_CA_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: etcd_ca
+            # Location of the client key for etcd.
+            - name: ETCD_KEY_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: etcd_key
+            # Location of the client certificate for etcd.
+            - name: ETCD_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: etcd_cert
+            # Set noderef for node controller.
+            - name: CALICO_K8S_NODE_REF
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+{{- else if eq .Values.datastore "kubernetes" }}
+            # Use Kubernetes API as the backing datastore.
+            - name: DATASTORE_TYPE
+              value: "kubernetes"
+  {{- if eq .Values.ipam "host-local" }}
+            # Configure route aggregation based on pod CIDR.
+            - name: USE_POD_CIDR
+              value: "true"
+  {{- end }}
+  {{- if .Values.typha.enabled }}
+            # Typha support: controlled by the ConfigMap.
+            - name: FELIX_TYPHAK8SSERVICENAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: typha_service_name
+  {{- end }}
+            # Wait for the datastore.
+            - name: WAIT_FOR_DATASTORE
+              value: "true"
+            # Set based on the k8s node name.
+            - name: NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+{{- end }}
+{{- if eq .Values.network "calico" }}
+            # Choose the backend to use.
+            - name: CALICO_NETWORKING_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: calico_backend
+            # Cluster type to identify the deployment type
+            - name: CLUSTER_TYPE
+              value: "k8s,bgp"
+            # Auto-detect the BGP IP address.
+            - name: IP
+              value: "autodetect"
+            # {{- if .Values.bpf }} For best performance, disable {{- else }} Enable {{- end }} IPIP
+            - name: CALICO_IPV4POOL_IPIP
+              value: "{{- if .Values.bpf -}} Never {{- else if .Values.vxlan -}} Never {{- else -}} Always {{- end -}}"
+            # Enable or Disable VXLAN on the default IP pool.
+            - name: CALICO_IPV4POOL_VXLAN
+              value: "{{- if .Values.vxlan -}} CrossSubnet {{- else -}} Never {{- end -}}"
+            # Enable or Disable VXLAN on the default IPv6 IP pool.
+            - name: CALICO_IPV6POOL_VXLAN
+              value: "{{- if .Values.vxlan -}} CrossSubnet {{- else -}} Never {{- end -}}"
+            # Set MTU for tunnel device used if ipip is enabled
+            - name: FELIX_IPINIPMTU
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: veth_mtu
+            # Set MTU for the VXLAN tunnel device.
+            - name: FELIX_VXLANMTU
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: veth_mtu
+            # Set MTU for the Wireguard tunnel device.
+            - name: FELIX_WIREGUARDMTU
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: veth_mtu
+{{- else if eq .Values.network "flannel" }}
+            # Set the serviceaccount name to use for the Calico CNI plugin.
+            # We use canal-node instead of calico-node when using flannel networking.
+            - name: CALICO_CNI_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+            # Don't enable BGP.
+            - name: CALICO_NETWORKING_BACKEND
+              value: "none"
+            # Cluster type to identify the deployment type
+            - name: CLUSTER_TYPE
+              value: "k8s,canal"
+            # Period, in seconds, at which felix re-applies all iptables state
+            - name: FELIX_IPTABLESREFRESHINTERVAL
+              value: "60"
+            # No IP address needed.
+            - name: IP
+              value: ""
+{{- else }}
+            # Don't enable BGP.
+            - name: CALICO_NETWORKING_BACKEND
+              value: "none"
+            # Cluster type to identify the deployment type
+            - name: CLUSTER_TYPE
+              value: "k8s"
+            # Non-calico CNI, disable credential management.
+            - name: CALICO_MANAGE_CNI
+              value: "false"
+{{- end }}
+            # The default IPv4 pool to create on startup if none exists. Pod IPs will be
+            # chosen from this range. Changing this value after installation will have
+            # no effect. This should fall within `--cluster-cidr`.
+            # - name: CALICO_IPV4POOL_CIDR
+            #   value: "192.168.0.0/16"
+            # Disable file logging so `kubectl logs` works.
+            - name: CALICO_DISABLE_FILE_LOGGING
+              value: "true"
+            # Set Felix endpoint to host default action to ACCEPT.
+            - name: FELIX_DEFAULTENDPOINTTOHOSTACTION
+              value: "ACCEPT"
+            # Disable IPv6 on Kubernetes.
+            - name: FELIX_IPV6SUPPORT
+              value: "false"
+            - name: FELIX_HEALTHENABLED
+              value: "true"
+{{- if .Values.node.env }}
+{{ toYaml .Values.node.env | indent 12 }}
+{{- end }}
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 250m
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - /bin/calico-node
+                - -shutdown
+          livenessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              - -felix-live
+{{- if and (eq .Values.network "calico") (not .Values.flannel_migration) (not .Values.vxlan) }}
+              - -bird-live
+{{- end }}
+            periodSeconds: 10
+            initialDelaySeconds: 10
+            failureThreshold: 6
+            timeoutSeconds: 10
+          readinessProbe:
+{{- if eq .Values.network "calico" }}
+            exec:
+              command:
+              - /bin/calico-node
+              - -felix-ready
+{{- if and (not .Values.flannel_migration) (not .Values.vxlan) }}
+              - -bird-ready
+{{- end }}
+{{- else if eq .Values.network "flannel" }}
+            httpGet:
+              path: /readiness
+              port: 9099
+              host: localhost
+{{- else }}
+            exec:
+              command:
+              - /bin/calico-node
+              - -felix-ready
+{{- end }}
+            periodSeconds: 10
+            timeoutSeconds: 10
+          volumeMounts:
+            # For maintaining CNI plugin API credentials.
+            - mountPath: /host/etc/cni/net.d
+              name: cni-net-dir
+              readOnly: false
+            - mountPath: /lib/modules
+              name: lib-modules
+              readOnly: true
+            - mountPath: /run/xtables.lock
+              name: xtables-lock
+              readOnly: false
+            - mountPath: /var/run/calico
+              name: var-run-calico
+              readOnly: false
+            - mountPath: /var/lib/calico
+              name: var-lib-calico
+              readOnly: false
+{{- if eq .Values.datastore "etcd" }}
+            - mountPath: /calico-secrets
+              name: etcd-certs
+{{- end }}
+            - name: policysync
+              mountPath: /var/run/nodeagent
+            # For eBPF mode, we need to be able to mount the BPF filesystem at /sys/fs/bpf so we mount in the
+            # parent directory.
+            - name: bpffs
+              mountPath: /sys/fs/bpf
+            - name: cni-log-dir
+              mountPath: /var/log/calico/cni
+              readOnly: true
+{{- if eq .Values.network "flannel" }}
+  {{- if eq .Values.datastore "kubernetes" }}
+        # This container runs flannel using the kube-subnet-mgr backend
+        # for allocating subnets.
+        - name: kube-flannel
+          image: {{ .Values.flannel.image }}:{{ .Values.flannel.tag }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
+          command: [ "/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr" ]
+          securityContext:
+            privileged: true
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: FLANNELD_IFACE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: canal_iface
+            - name: FLANNELD_IP_MASQ
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: masquerade
+{{- if .Values.flannel.env }}
+{{ toYaml .Values.flannel.env | indent 12 }}
+{{- end }}
+          volumeMounts:
+          - mountPath: /run/xtables.lock
+            name: xtables-lock
+            readOnly: false
+          - name: flannel-cfg
+            mountPath: /etc/kube-flannel/
+  {{- else if eq .Values.datastore "etcd" }}
+        # Runs the flannel daemon to enable vxlan networking between
+        # container hosts.
+        - name: flannel
+          image: {{ .Values.flannel.image }}:{{ .Values.flannel.tag }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
+          env:
+            # The location of the etcd cluster.
+            - name: FLANNELD_ETCD_ENDPOINTS
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_endpoints
+            # Location of the CA certificate for etcd.
+            - name: ETCD_CA_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_ca
+            # Location of the client key for etcd.
+            - name: ETCD_KEY_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_key
+            # Location of the client certificate for etcd.
+            - name: ETCD_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_cert
+            # Location of the CA certificate for etcd.
+            - name: FLANNELD_ETCD_CAFILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_ca
+            # Location of the client key for etcd.
+            - name: FLANNELD_ETCD_KEYFILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_key
+            # Location of the client certificate for etcd.
+            - name: FLANNELD_ETCD_CERTFILE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: etcd_cert
+            # The interface flannel should run on.
+            - name: FLANNELD_IFACE
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: canal_iface
+            # Perform masquerade on traffic leaving the pod cidr.
+            - name: FLANNELD_IP_MASQ
+              valueFrom:
+                configMapKeyRef:
+                  name: canal-config
+                  key: masquerade
+            # Write the subnet.env file to the mounted directory.
+            - name: FLANNELD_SUBNET_FILE
+              value: "/run/flannel/subnet.env"
+{{- if .Values.flannel.env }}
+{{ toYaml .Values.flannel.env | indent 12 }}
+{{- end }}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /etc/resolv.conf
+              name: resolv
+            - mountPath: /run/flannel
+              name: run-flannel
+            - mountPath: /calico-secrets
+              name: etcd-certs
+  {{- end }}
+{{- end }}
+      volumes:
+        # Used by {{ include "nodeName" . }}.
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: var-run-calico
+          hostPath:
+            path: /var/run/calico
+        - name: var-lib-calico
+          hostPath:
+            path: /var/lib/calico
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
+        - name: sys-fs
+          hostPath:
+            path: /sys/fs/
+            type: DirectoryOrCreate
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
+        # mount /proc at /nodeproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
+        - name: nodeproc
+          hostPath:
+            path: /proc
+{{- if and (eq .Values.network "flannel") (eq .Values.datastore "kubernetes") }}
+        # Used by flannel.
+        - name: flannel-cfg
+          configMap:
+            name: canal-config
+{{- else if and (eq .Values.network "flannel") (eq .Values.datastore "etcd") }}
+        # Used by flannel.
+        - name: run-flannel
+          hostPath:
+            path: /run/flannel
+        - name: resolv
+          hostPath:
+            path: /etc/resolv.conf
+{{- end }}
+        # Used to install CNI.
+        - name: cni-bin-dir
+          hostPath:
+            path: /opt/cni/bin
+        - name: cni-net-dir
+          hostPath:
+            path: /etc/cni/net.d
+        # Used to access CNI logs.
+        - name: cni-log-dir
+          hostPath:
+            path: /var/log/calico/cni
+{{- if eq .Values.datastore "etcd" }}
+        # Mount in the etcd TLS secrets with mode 400.
+        # See https://kubernetes.io/docs/concepts/configuration/secret/
+        - name: etcd-certs
+          secret:
+            secretName: calico-etcd-secrets
+            defaultMode: 0400
+{{- else if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") }}
+        # Mount in the directory for host-local IPAM allocations. This is
+        # used when upgrading from host-local to calico-ipam, and can be removed
+        # if not using the upgrade-ipam init container.
+        - name: host-local-net-dir
+          hostPath:
+            path: /var/lib/cni/networks
+{{- end }}
+        # Used to create per-pod Unix Domain Sockets
+        - name: policysync
+          hostPath:
+            type: DirectoryOrCreate
+            path: /var/run/nodeagent
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{include "nodeName" . }}
+  namespace: kube-system
+
+{{- if and (eq .Values.datastore "etcd") (eq .Values.network "flannel") }}
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: canal
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: canal
+subjects:
+- kind: ServiceAccount
+  name: canal-node
+  namespace: kube-system
+
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: canal
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - namespaces
+    verbs:
+      - get
+  # Pod CIDR auto-detection on kubeadm needs access to config maps.
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs:
+      - get
+{{- end }}

@@ -38,6 +38,6 @@ for series in trusty xenial bionic focal; do
                 break
             fi
         done
-        ${already_exists} || docker run --rm -v ${rootdir}:/code -w /code calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file}
+        ${already_exists} || docker run --rm -v ${rootdir}:/code -w /code/hack/release/packaging/output calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file}
     done
 done

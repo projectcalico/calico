@@ -50,7 +50,7 @@ func main() {
 // limitations under the License.
 
 `, time.Now().Format("2006"))))
-	_, _ = out.Write([]byte("package crds \n\n//DO NOT CHANGE. This is a generated file. In order to update, run `make gen-crds`.\n\nconst (\n"))
+	_, _ = out.Write([]byte("package crds\n\n//DO NOT CHANGE. This is a generated file. In order to update, run `make gen-crds`.\n\nconst (\n"))
 	for _, f := range fs {
 		if strings.HasSuffix(f.Name(), fileSuffix) && strings.HasPrefix(f.Name(), crdPrefix) {
 			fname := strings.TrimPrefix(f.Name(), crdPrefix)

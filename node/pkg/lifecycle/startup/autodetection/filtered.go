@@ -52,7 +52,7 @@ func FilteredEnumeration(incl, excl []string, cidrs []net.IPNet, version int) (*
 	return nil, nil, fmt.Errorf("no valid IPv%d addresses found on the host interfaces", version)
 }
 
-// matchCIDRs matchs an IP address against a list of cidrs.
+// matchCIDRs matches an IP address against a list of cidrs.
 // If the list is empty, it always matches.
 func matchCIDRs(ip gnet.IP, cidrs []net.IPNet) bool {
 	if len(cidrs) == 0 {

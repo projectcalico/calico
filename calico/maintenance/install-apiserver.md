@@ -79,7 +79,7 @@ Select the method below based on your installation method.
 1. Create the following manifest, which will install the API server as a deployment in the `calico-apiserver` namespace.
 
    ```
-   kubectl create -f {{ "/manifests/apiserver.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/apiserver.yaml
    ```
 
    You will notice that the API server remains in a `ContainerCreating` state, as it is waiting for credentials to be provided for authenticating the main Kubernetes API server.
@@ -169,7 +169,7 @@ To uninstall the API server, use the following instructions depending on your in
 <%
 
    ```
-   kubectl delete -f {{ "/manifests/apiserver.yaml" | absolute_url }}
+   kubectl delete -f {{site.data.versions.first.manifests_url}}/manifests/apiserver.yaml
    ```
 %>
 {% endtabs %}

@@ -62,7 +62,7 @@ type InitResponse struct {
 }
 
 // ConfigurationOptions may be used to setup the driver.
-// These are optional and most users will not depened on them and will instead use the defaults.
+// These are optional and most users will not depend on them and will instead use the defaults.
 type ConfigurationOptions struct {
 	// Version of the Kubernetes cluster on which the driver is running.
 	K8sVersion string `json:"k8s_version,omitempty"`

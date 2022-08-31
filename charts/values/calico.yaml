@@ -1,0 +1,2 @@
+datastore: kubernetes
+network: calico

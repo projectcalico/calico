@@ -22,7 +22,7 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 
 include ../lib.Makefile
 
-SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
+SRC_FILES=$(shell find cmd -name '*.go') $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
 
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
@@ -79,7 +79,7 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH)
+image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH) register
 	$(DOCKER_BUILD) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(DOCKER_BUILD) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-images/flannel-migration/Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
@@ -100,33 +100,45 @@ check-boring-ssl: bin/kube-controllers-linux-amd64
 ###############################################################################
 # Tests
 ###############################################################################
+ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
+# Determine the tests to run using the test spider tool, which emits a list of impacted packages.
+WHAT=$(shell $(DOCKER_GO_BUILD) go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/)
+else
+# By default, run all tests.
+WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
+endif
+
+# The list of test binaries to build.
+# We pre-build the test binary so that we can run it outside a container and allow it
+# to interact with docker.
+TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
+
 ## Run the unit tests in a container.
-ut:
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'WHAT=$(WHAT) SKIP=$(SKIP) GINKGO_ARGS=$(GINKGO_ARGS) ./run-uts'
+test: ut
+ut fv: $(TEST_BINARIES)
+	KUBE_IMAGE=$(CALICO_BUILD) \
+		   ETCD_IMAGE=$(ETCD_IMAGE) \
+		   CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
+		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
+		   CRDS=$(CURDIR)/../libcalico-go/config/crd \
+		   CERTS_PATH=$(CERTS_PATH) \
+		   ./run-uts $(WHAT)
 
-.PHONY: fv
-## Build and run the FV tests.
-fv: tests/fv/fv.test image
-	@echo Running Go FVs.
-	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) \
-		KUBE_IMAGE=$(CALICO_BUILD) \
-		CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
-		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
-		PRIVATE_KEY=`pwd`/private.key \
-		CRDS=$(CURDIR)/../libcalico-go/config/crd \
-		CERTS_PATH=$(CERTS_PATH) \
-		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
-
-tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
-	# We pre-build the test binary so that we can run it outside a container and allow it
-	# to interact with docker.
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
+# Produce test binaries for each package that needs them.
+# ginkgo doesn't let you produce a single test binary with multiple packages.
+# Only do this if there are .go files in the path.
+%/ut.test: $(SRC_FILES)
+	if [ $$(find ./$* -name '*.go' | wc -l) -gt 0 ]; then \
+		$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@; \
+	else \
+		echo "Skipping $* as it has no .go files in it"; \
+	fi
 
 ###############################################################################
 # CI
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download image-all static-checks ut fv
+ci: clean mod-download image-all static-checks ut
 
 ###############################################################################
 # CD

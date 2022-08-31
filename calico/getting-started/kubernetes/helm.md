@@ -50,6 +50,20 @@ If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubern
    ```
    echo '{ installation: {kubernetesProvider: EKS }}' > values.yaml
    ```
+   For Azure AKS cluster with no Kubernetes CNI pre-installed, create `values.yaml` with the following command:
+   ```
+   cat > values.yaml <<EOF
+   installation:
+     kubernetesProvider: AKS
+     cni:
+       type: Calico
+     calicoNetwork:
+       bgp: Disabled
+       ipPools:
+       - cidr: 10.244.0.0/16
+         encapsulation: VXLAN
+   EOF
+   ```
 
 1. Add any other customizations you require to `values.yaml`.  You might like to refer to the [helm docs](https://helm.sh/docs/) or run
 

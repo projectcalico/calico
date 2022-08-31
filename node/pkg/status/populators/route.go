@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"regexp"
@@ -366,12 +367,12 @@ func (b BirdRoutes) Show() {
 	}
 
 	fmt.Printf("\nbird v%s routes\n", b.ipv.String())
-	printRoutes(routes)
+	printRoutes(routes, os.Stdout)
 }
 
 // printRoutes prints out the slice of route in table format.
-func printRoutes(routes []route) {
-	table := tablewriter.NewWriter(os.Stdout)
+func printRoutes(routes []route, out io.Writer) {
+	table := tablewriter.NewWriter(out)
 	table.SetHeader([]string{"Destination", "Gateway", "Iface", "LearnedFrom", "primary"})
 
 	for _, r := range routes {

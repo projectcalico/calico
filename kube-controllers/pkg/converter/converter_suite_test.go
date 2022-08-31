@@ -15,15 +15,15 @@
 package converter_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
 )
 
-func TestConverter(t *testing.T) {
+func Test(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../report/converter_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Converter Suite", []Reporter{junitReporter})

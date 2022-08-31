@@ -69,6 +69,7 @@ func TestIPv6Parsing(t *testing.T) {
 	defer resetBPFMaps()
 
 	for _, tc := range ipTestCases {
+		skbMark = 0
 		runBpfTest(t, tc.Section, tc.Rules, func(bpfrun bpfProgRunFn) {
 			err := tc.pkt.Generate()
 			Expect(err).NotTo(HaveOccurred())

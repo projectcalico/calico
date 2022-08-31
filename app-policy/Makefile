@@ -82,7 +82,7 @@ bin/dikastes-%: protobuf $(SRC_FILES)
 	$(DOCKER_RUN_RO) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -ldflags "-X main.VERSION=$(GIT_VERSION) -w" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
+	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
 
 bin/healthz-amd64: ARCH=amd64
 bin/healthz-arm64: ARCH=arm64
@@ -94,7 +94,7 @@ bin/healthz-%: protobuf $(SRC_FILES)
 	$(DOCKER_RUN_RO) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/healthz-$(ARCH) ./cmd/healthz
+	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/healthz-$(ARCH) ./cmd/healthz
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that

@@ -39,7 +39,7 @@ Description:
 These are the steps that `calicoctl` takes in order to pinpoint what modules are available in your system.
 
 1. `calicoctl` checks the kernel version.
-2. By executing `lsmod` it tries to findout what modules are enabled.
+2. By executing `lsmod` it tries to find out what modules are enabled.
 3. Modules without a match in step 2 will be checked against `/lib/modules/<YOUR_KERNEL_VERSION>/modules.dep` file.
 4. Modules without a match in step 2 & 3 will be checked against `/lib/modules/<YOUR_KERNEL_VERSION>/modules.builtin` file.
 5. Modules without a match in previous steps will be tested against `kernelconfig` file `/usr/src/linux/.config`.

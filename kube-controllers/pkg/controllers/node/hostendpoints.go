@@ -92,8 +92,6 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 					}
 				}
 			}
-		default:
-			logrus.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
 		}
 	} else {
 		switch update.KVPair.Key.(type) {
@@ -109,8 +107,6 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 						logrus.WithError(err).Fatal()
 					}
 				}
-			default:
-				logrus.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
 			}
 		}
 	}
@@ -325,9 +321,17 @@ func (c *autoHostEndpointController) getAutoHostendpointExpectedIPs(node *libapi
 		expectedIPs = append(expectedIPs, node.Spec.IPv4VXLANTunnelAddr)
 		ipMap[node.Spec.IPv4VXLANTunnelAddr] = struct{}{}
 	}
+	if node.Spec.IPv6VXLANTunnelAddr != "" {
+		expectedIPs = append(expectedIPs, node.Spec.IPv6VXLANTunnelAddr)
+		ipMap[node.Spec.IPv6VXLANTunnelAddr] = struct{}{}
+	}
 	if node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv4Address != "" {
 		expectedIPs = append(expectedIPs, node.Spec.Wireguard.InterfaceIPv4Address)
 		ipMap[node.Spec.Wireguard.InterfaceIPv4Address] = struct{}{}
+	}
+	if node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv6Address != "" {
+		expectedIPs = append(expectedIPs, node.Spec.Wireguard.InterfaceIPv6Address)
+		ipMap[node.Spec.Wireguard.InterfaceIPv6Address] = struct{}{}
 	}
 	for _, addr := range node.Spec.Addresses {
 		// Add internal IPs only

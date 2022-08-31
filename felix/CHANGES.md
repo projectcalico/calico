@@ -88,7 +88,7 @@
   address is not policed in iptables.
 - Add support for running Felix on RedHat 6.5+ and other distributions with
   glibc 2.12+ and kernel 2.6.32+ via creation of Python 2.7 PyInstaller bundle.
-- Fix iptables programming for interfaces with untypically long names.
+- Fix iptables programming for interfaces with atypically long names.
 - Documentation fixes and updates.
 - Add Xenial support (systemd configuration for Felix).
 - Update CLA process and copyrights for new sponsor Tigera.

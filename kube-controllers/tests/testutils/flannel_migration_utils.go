@@ -72,7 +72,7 @@ func (n FlannelNode) getFlannelAnnotations() map[string]string {
 	jsonString, err := json.Marshal(map[string]string{"VtepMac": n.VtepMac})
 	Expect(err).ShouldNot(HaveOccurred())
 	return map[string]string{
-		"flannel.alpha.coreos.com/backend-data": fmt.Sprintf("%s", jsonString),
+		"flannel.alpha.coreos.com/backend-data": string(jsonString),
 		"flannel.alpha.coreos.com/backend-type": n.BackEnd,
 		"flannel.alpha.coreos.com/public-ip":    n.PublicIP,
 	}

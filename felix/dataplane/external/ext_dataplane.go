@@ -206,6 +206,10 @@ func WrapPayloadWithEnvelope(msg interface{}, seqNo uint64) (*proto.ToDataplane,
 		envelope.Payload = &proto.ToDataplane_HostMetadataUpdate{HostMetadataUpdate: msg}
 	case *proto.HostMetadataRemove:
 		envelope.Payload = &proto.ToDataplane_HostMetadataRemove{HostMetadataRemove: msg}
+	case *proto.HostMetadataV6Update:
+		envelope.Payload = &proto.ToDataplane_HostMetadataV6Update{HostMetadataV6Update: msg}
+	case *proto.HostMetadataV6Remove:
+		envelope.Payload = &proto.ToDataplane_HostMetadataV6Remove{HostMetadataV6Remove: msg}
 	case *proto.IPAMPoolUpdate:
 		envelope.Payload = &proto.ToDataplane_IpamPoolUpdate{IpamPoolUpdate: msg}
 	case *proto.IPAMPoolRemove:
@@ -230,6 +234,10 @@ func WrapPayloadWithEnvelope(msg interface{}, seqNo uint64) (*proto.ToDataplane,
 		envelope.Payload = &proto.ToDataplane_WireguardEndpointUpdate{WireguardEndpointUpdate: msg}
 	case *proto.WireguardEndpointRemove:
 		envelope.Payload = &proto.ToDataplane_WireguardEndpointRemove{WireguardEndpointRemove: msg}
+	case *proto.WireguardEndpointV6Update:
+		envelope.Payload = &proto.ToDataplane_WireguardEndpointV6Update{WireguardEndpointV6Update: msg}
+	case *proto.WireguardEndpointV6Remove:
+		envelope.Payload = &proto.ToDataplane_WireguardEndpointV6Remove{WireguardEndpointV6Remove: msg}
 	case *proto.GlobalBGPConfigUpdate:
 		envelope.Payload = &proto.ToDataplane_GlobalBgpConfigUpdate{GlobalBgpConfigUpdate: msg}
 	case *proto.Encapsulation:

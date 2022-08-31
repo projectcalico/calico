@@ -75,13 +75,16 @@ The geeky details of what you get:
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions.
 
    ```
-   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
+
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 1. Install {{site.prodname}} by creating the necessary custom resource. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
    ```
-   kubectl create -f {{ "/manifests/custom-resources.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/custom-resources.yaml
    ```
 
    > **Note**: Before creating this manifest, read its contents and make sure its settings are correct for your environment. For example,
@@ -103,7 +106,7 @@ The geeky details of what you get:
 1. Remove the taints on the master so that you can schedule pods on it.
 
    ```
-   kubectl taint nodes --all node-role.kubernetes.io/master-
+   kubectl taint nodes --all node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master-
    ```
 
    It should return the following.

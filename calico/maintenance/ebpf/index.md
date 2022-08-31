@@ -10,3 +10,4 @@ show_toc: false
 
 {% capture content %}{% include index.html %}{% endcapture %}
 {{ content | replace: "    ", "" }}
+

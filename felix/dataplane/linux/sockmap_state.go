@@ -58,8 +58,8 @@ func (s *sockmapState) DepopulateCallbacks(cbs *common.Callbacks) {
 	s.cbIDs = nil
 }
 
-func (s *sockmapState) flattenWorkloadEndpoints() set.Set {
-	wep := set.New()
+func (s *sockmapState) flattenWorkloadEndpoints() set.Set[string] {
+	wep := set.New[string]()
 	for _, nets := range s.workloadEndpoints {
 		for _, net := range nets {
 			wep.Add(net)
@@ -80,8 +80,8 @@ func (s *sockmapState) updateWorkload(old, new *proto.WorkloadEndpoint) {
 	}
 }
 
-func (s *sockmapState) processWorkloadUpdates(desired set.Set) error {
-	current := set.New()
+func (s *sockmapState) processWorkloadUpdates(desired set.Set[string]) error {
+	current := set.New[string]()
 
 	cidrs, err := s.bpfLib.DumpSockmapEndpointsMap(bpf.IPFamilyV4)
 	if err != nil {
@@ -93,11 +93,10 @@ func (s *sockmapState) processWorkloadUpdates(desired set.Set) error {
 		current.Add(ipnet.String())
 	}
 
-	toAdd := setDifference(desired, current)
-	toDrop := setDifference(current, desired)
+	toAdd := setDifference[string](desired, current)
+	toDrop := setDifference[string](current, desired)
 
-	toDrop.Iter(func(item interface{}) error {
-		cidr := item.(string)
+	toDrop.Iter(func(cidr string) error {
 		logCxt := log.WithField("cidr", cidr)
 
 		ip, mask, err := bpf.MemberToIPMask(cidr)
@@ -116,9 +115,7 @@ func (s *sockmapState) processWorkloadUpdates(desired set.Set) error {
 		return nil
 	})
 
-	toAdd.Iter(func(item interface{}) error {
-		cidr := item.(string)
-
+	toAdd.Iter(func(cidr string) error {
 		logCxt := log.WithField("cidr", cidr)
 
 		ip, mask, err := bpf.MemberToIPMask(cidr)

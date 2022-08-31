@@ -109,7 +109,7 @@ type ipNetSet struct {
 	v6 *trieNode
 }
 
-// trieNode implments a modified trie. We use a traditional trie to store the network prefixes. For IP addresses, we
+// trieNode implements a modified trie. We use a traditional trie to store the network prefixes. For IP addresses, we
 // use the trie down to the last 8-bits, but then switch to a bitmap after that. This is because we expect a large
 // number of IPs, so don't want to balloon the bottom tier of the tree.
 type trieNode struct {

@@ -60,6 +60,10 @@ func K8sErrorToCalico(ke error, id interface{}) error {
 			Identifier: id,
 		}
 	}
+	if kerrors.IsResourceExpired(ke) {
+		// Re-use the Kubernetes resource expired type.
+		return ke
+	}
 	if keStat, ok := ke.(kerrors.APIStatus); ok {
 		// Look for the errors we get when we try to patch a resource but it has been recreated or revved.
 		if details := keStat.Status().Details; details != nil {

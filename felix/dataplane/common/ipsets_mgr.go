@@ -29,7 +29,7 @@ type IPSetsDataplane interface {
 	RemoveIPSet(setID string)
 	GetIPFamily() ipsets.IPFamily
 	GetTypeOf(setID string) (ipsets.IPSetType, error)
-	GetMembers(setID string) (set.Set, error)
+	GetMembers(setID string) (set.Set[string], error)
 	QueueResync()
 	ApplyUpdates()
 	ApplyDeletions()
@@ -64,7 +64,7 @@ func (m *IPSetsManager) GetIPSetType(setID string) (typ ipsets.IPSetType, err er
 	return
 }
 
-func (m *IPSetsManager) GetIPSetMembers(setID string) (members set.Set /*<string>*/, err error) {
+func (m *IPSetsManager) GetIPSetMembers(setID string) (members set.Set[string], err error) {
 	for _, dp := range m.dataplanes {
 		members, err = dp.GetMembers(setID)
 		if err == nil {

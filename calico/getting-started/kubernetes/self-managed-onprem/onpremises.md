@@ -40,13 +40,13 @@ installed directly on the cluster as a Deployment, and is configured through one
 1. First, install the operator on your cluster.
 
    ```
-   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
 
 1. Download the custom resources necessary to configure {{site.prodname}}
 
    ```
-   curl {{ "/manifests/custom-resources.yaml" | absolute_url}} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/custom-resources.yaml -O
    ```
    
    If you wish to customize the {{site.prodname}} install, customize the downloaded custom-resources.yaml manifest locally.
@@ -77,7 +77,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
-   curl {{ "/manifests/calico.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico.yaml -O
    ```
 {% include content/pod-cidr-sed.md yaml="calico" %}
 1. Customize the manifest as necessary.
@@ -95,7 +95,7 @@ The geeky details of what you get:
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
-   curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico-typha.yaml -o calico.yaml
    ```
 {% include content/pod-cidr-sed.md yaml="calico" %}
 1. Modify the replica count to the desired number in the `Deployment` named, `calico-typha`.
@@ -141,7 +141,7 @@ The geeky details of what you get:
 1. Download the {{site.prodname}} networking manifest for etcd.
 
    ```bash
-   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -o calico.yaml
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico-etcd.yaml -o calico.yaml
    ```
 {% include content/pod-cidr-sed.md yaml="calico" %}
 1. In the `ConfigMap` named, `calico-config`, set the value of `etcd_endpoints` to the IP address and port of your etcd server.

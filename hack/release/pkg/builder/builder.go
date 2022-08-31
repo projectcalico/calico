@@ -65,7 +65,7 @@ func (r *ReleaseBuilder) BuildRelease() error {
 	// Check that the repository is not a shallow clone. We need correct history.
 	out, err = r.git("rev-parse", "--is-shallow-repository")
 	if err != nil {
-		return err
+		return fmt.Errorf("rev-parse failed: %s", err)
 	}
 	if strings.TrimSpace(out) == "true" {
 		return fmt.Errorf("Attempt to release from a shallow clone is not possible")
@@ -98,7 +98,7 @@ func (r *ReleaseBuilder) BuildRelease() error {
 	// Successfully tagged. If we fail to release after this stage, we need to delete the tag.
 	defer func() {
 		if err != nil {
-			logrus.Warn("Failed to release, cleaning up tag")
+			logrus.WithError(err).Warn("Failed to release, cleaning up tag")
 			r.git("tag", "-d", ver)
 		}
 	}()
@@ -107,6 +107,9 @@ func (r *ReleaseBuilder) BuildRelease() error {
 	if err = r.buildContainerImages(ver); err != nil {
 		return err
 	}
+
+	// Build the helm charts
+	r.runner.Run("make", []string{"chart"}, []string{})
 
 	// TODO: Assert the produced images are OK. e.g., have correct
 	// commit and version information compiled in.
@@ -218,9 +221,13 @@ func (r *ReleaseBuilder) publishPrereqs(ver string) error {
 
 // We include the following GitHub artifacts on each release. This function assumes
 // that they have already been built, and simply wraps them up.
+//
 // - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // - tigera-operator-vX.Y.Z.tgz: contains the helm v3 chart.
 // - calico-windows-vX.Y.Z.zip: Calico for Windows.
+// - calicoctl/bin: All calicoctl binaries.
+//
+// This function also generates checksums for each artifact that is uploaded to the release.
 func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	// Final artifacts will be moved here.
 	uploadDir := r.uploadDir(ver)
@@ -253,7 +260,27 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	if _, err := r.runner.Run("cp", []string{"calico/_site/scripts/install-calico-windows.ps1", uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calico/bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
+		return err
+	}
+
+	// Generate a SHA256SUMS file containing the checksums for each artifact
+	// that we attach to the release. These can be confirmed by end users via the following command:
+	// sha256sum -c --ignore-missing SHA256SUMS
+	files, err = ioutil.ReadDir(uploadDir)
+	if err != nil {
+		return err
+	}
+	sha256args := []string{}
+	for _, f := range files {
+		sha256args = append(sha256args, f.Name())
+	}
+	output, err := r.runner.RunInDir(uploadDir, "sha256sum", sha256args, nil)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(fmt.Sprintf("%s/SHA256SUMS", uploadDir), []byte(output), 0o644)
+	if err != nil {
 		return err
 	}
 
@@ -321,14 +348,13 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 		return err
 	}
 
-	// tar up the whole thing.
+	// tar up the whole thing, and copy it to the target directory
 	if _, err := r.runner.Run("tar", []string{"-czvf", fmt.Sprintf("_output/release-%s.tgz", ver), "-C", "_output", fmt.Sprintf("release-%s", ver)}, nil); err != nil {
 		return err
 	}
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("_output/release-%s.tgz", ver), targetDir}, nil); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -343,11 +369,9 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 		"app-policy",
 		"typha",
 		"felix",
-		"calico", // Technically not a container image, but a helm chart.
 	}
 
 	// Build env.
-	// TODO: Pass CHART_RELEASE to calico repo if needed.
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
@@ -366,7 +390,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 
 func (r *ReleaseBuilder) publishGithubRelease(ver string) error {
 	releaseNoteTemplate := `
-Release notes can be found at https://projectcalico.docs.tigera.io/archive/{release_stream}/release-notes/
+Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{version}/calico/_includes/release-notes/{version}-release-notes.md)
 
 Attached to this release are the following artifacts:
 
@@ -382,6 +406,7 @@ Attached to this release are the following artifacts:
 		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
 		// so we replace anything that needs to be backticked into it here.
 		"{version}", ver,
+		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major, sv.Minor),
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major, sv.Minor),
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", ver),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", ver),
@@ -451,7 +476,7 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 // release number to use for this release.
 func (r *ReleaseBuilder) determineReleaseVersion(previousTag string) (string, error) {
 	// There are two types of tag that this might be - either it was a previous patch release,
-	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the relaese branch.
+	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.
 	if strings.Contains(previousTag, "-0.dev") {
 		// This is the first release from this branch - we can simply extract the version from
 		// the dev tag.

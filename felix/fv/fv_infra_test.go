@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -175,7 +175,7 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 		})
 
 		It("should only report that existing files actually exist", func() {
-			Expect(felixes[0].FileExists("/usr/bin/calico-felix")).To(BeTrue())
+			Expect(felixes[0].FileExists("/usr/local/bin/calico-felix")).To(BeTrue())
 			Expect(felixes[0].FileExists("/garbage")).To(BeFalse())
 		})
 

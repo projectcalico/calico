@@ -35,8 +35,8 @@ type policyManager struct {
 	ruleRenderer   policyRenderer
 	ipVersion      uint8
 	rawEgressOnly  bool
-	neededIPSets   map[proto.PolicyID]set.Set
-	ipSetsCallback func(neededIPSets set.Set)
+	neededIPSets   map[proto.PolicyID]set.Set[string]
+	ipSetsCallback func(neededIPSets set.Set[string])
 }
 
 type policyRenderer interface {
@@ -54,7 +54,8 @@ func newPolicyManager(rawTable, mangleTable, filterTable iptablesTable, ruleRend
 	}
 }
 
-func newRawEgressPolicyManager(rawTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8, ipSetsCallback func(neededIPSets set.Set)) *policyManager {
+func newRawEgressPolicyManager(rawTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8,
+	ipSetsCallback func(neededIPSets set.Set[string])) *policyManager {
 	return &policyManager{
 		rawTable:       rawTable,
 		mangleTable:    &noopTable{},
@@ -62,20 +63,20 @@ func newRawEgressPolicyManager(rawTable iptablesTable, ruleRenderer policyRender
 		ruleRenderer:   ruleRenderer,
 		ipVersion:      ipVersion,
 		rawEgressOnly:  true,
-		neededIPSets:   make(map[proto.PolicyID]set.Set),
+		neededIPSets:   make(map[proto.PolicyID]set.Set[string]),
 		ipSetsCallback: ipSetsCallback,
 	}
 }
 
-func (m *policyManager) mergeNeededIPSets(id *proto.PolicyID, neededIPSets set.Set) {
+func (m *policyManager) mergeNeededIPSets(id *proto.PolicyID, neededIPSets set.Set[string]) {
 	if neededIPSets != nil {
 		m.neededIPSets[*id] = neededIPSets
 	} else {
 		delete(m.neededIPSets, *id)
 	}
-	merged := set.New()
+	merged := set.New[string]()
 	for _, ipSets := range m.neededIPSets {
-		ipSets.Iter(func(item interface{}) error {
+		ipSets.Iter(func(item string) error {
 			merged.Add(item)
 			return nil
 		})
@@ -93,7 +94,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
 		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy, m.ipVersion)
 		if m.rawEgressOnly {
-			neededIPSets := set.New()
+			neededIPSets := set.New[string]()
 			filteredChains := []*iptables.Chain(nil)
 			for _, chain := range chains {
 				if strings.Contains(chain.Name, string(rules.PolicyOutboundPfx)) {

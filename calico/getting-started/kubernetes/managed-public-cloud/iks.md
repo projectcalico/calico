@@ -23,7 +23,7 @@ The geeky details of what you get:
 **Required**
 - [Install calicoctl command line tool]({{ site.baseurl }}/maintenance/clis/calicoctl/install)
 
-**Recommmended**
+**Recommended**
 - {% include open-new-window.html text='Controlling traffic with network policies for IKS' url='https://cloud.ibm.com/docs/containers?topic=containers-network_policies' %}
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
 - [Get started with Calico network policy]({{ site.baseurl }}/security/calico-network-policy)

@@ -25,7 +25,7 @@ func IntersectCIDRs(aStrs []string, bStrs []string) (out []string) {
 	aCIDRs := parseCIDRs(aStrs)
 	bCIDRs := parseCIDRs(bStrs)
 
-	intersection := set.New()
+	intersection := set.NewBoxed[ip.CIDR]()
 
 	for _, a := range aCIDRs {
 		for _, b := range bCIDRs {
@@ -52,8 +52,8 @@ func IntersectCIDRs(aStrs []string, bStrs []string) (out []string) {
 		}
 	}
 
-	intersection.Iter(func(item interface{}) error {
-		out = append(out, item.(ip.CIDR).String())
+	intersection.Iter(func(cidr ip.CIDR) error {
+		out = append(out, cidr.String())
 		return set.RemoveItem
 	})
 

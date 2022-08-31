@@ -22,11 +22,16 @@ import (
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
 func main() {
+	// Make sure the RNG is seeded.
+	seedrng.EnsureSeeded()
+
 	name, desc := util.NameAndDescription()
 	doc := fmt.Sprintf(`Usage:
   <BINARY_NAME> [options] <command> [<args>...]

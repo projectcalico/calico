@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_BPF_TYPES_H__
@@ -18,6 +18,9 @@
 #include "conntrack_types.h"
 #include "nat_types.h"
 #include "reasons.h"
+#include "counters.h"
+
+#define MAX_RULE_IDS    32
 
 // struct cali_tc_state holds state that is passed between the BPF programs.
 // WARNING: must be kept in sync with
@@ -27,20 +30,36 @@ struct cali_tc_state {
 	/* Initial IP read from the packet, updated to host's IP when doing NAT encap/ICMP error.
 	 * updated when doing CALI_CT_ESTABLISHED_SNAT handling. Used for FIB lookup. */
 	__be32 ip_src;
+	__be32 ip_src1;
+	__be32 ip_src2;
+	__be32 ip_src3;
 	/* Initial IP read from packet. Updated when doing encap and ICMP errors or CALI_CT_ESTABLISHED_DNAT.
 	 * If connect-time load balancing is enabled, this will be the post-NAT IP because the connect-time
 	 * load balancer gets in before TC. */
 	__be32 ip_dst;
+	__be32 ip_dst1;
+	__be32 ip_dst2;
+	__be32 ip_dst3;
 	/* Set when invoking the policy program; if no NAT, ip_dst; otherwise, the pre-DNAT IP.  If the connect
 	 * time load balancer is enabled, this may be different from ip_dst. */
 	__be32 pre_nat_ip_dst;
+	__be32 pre_nat_ip_dst1;
+	__be32 pre_nat_ip_dst2;
+	__be32 pre_nat_ip_dst3;
 	/* If no NAT, ip_dst.  Otherwise the NAT dest that we look up from the NAT maps or the conntrack entry
 	 * for CALI_CT_ESTABLISHED_DNAT. */
 	__be32 post_nat_ip_dst;
+	__be32 post_nat_ip_dst1;
+	__be32 post_nat_ip_dst2;
+	__be32 post_nat_ip_dst3;
 	/* For packets that arrived over our VXLAN tunnel, the source IP of the tunnel packet.
 	 * Zeroed out when we decide to respond with an ICMP error.
 	 * Also used to stash the ICMP MTU when calling the ICMP response program. */
 	__be32 tun_ip;
+	__be32 tun_ip1;
+	__be32 tun_ip2;
+	__be32 tun_ip3;
+	__u32 unused;
 	/* Return code from the policy program CALI_POL_DENY/ALLOW etc. */
 	__s32 pol_rc;
 	/* Source port of the packet; updated on the CALI_CT_ESTABLISHED_SNAT path or when doing encap.
@@ -66,6 +85,10 @@ struct cali_tc_state {
 	__u8 flags;
 	/* Packet size filled from iphdr->tot_len in tc_state_fill_from_iphdr(). */
 	__be16 ip_size;
+	/* Count of rules that were hit while processing policy. */
+	__u32 rules_hit;
+	/* Record of the rule IDs of the rules that were hit. */
+	__u64 rule_ids[MAX_RULE_IDS];
 
 	/* Result of the conntrack lookup. */
 	struct calico_ct_result ct_result;
@@ -92,6 +115,8 @@ enum cali_state_flags {
 	CALI_ST_SUPPRESS_CT_STATE = 0x10,
 	/* CALI_ST_SKIP_POLICY is set when the policy program is skipped. */
 	CALI_ST_SKIP_POLICY = 0x20,
+	/* CALI_ST_HOST_PSNAT is set when we are resolving host source port collision. */
+	CALI_ST_HOST_PSNAT = 0x40,
 };
 
 struct fwd {
@@ -111,33 +136,50 @@ struct cali_tc_ctx {
   /* Our single copies of the data start/end pointers loaded from the skb. */
   void *data_start;
   void *data_end;
-  struct iphdr *ip_header;
+  void *ip_header;
   void *nh;
+  long ipheader_len;
 
   struct cali_tc_state *state;
   struct calico_nat_dest *nat_dest;
   struct arp_key arpk;
   struct fwd fwd;
+  counters_t *counters;
 };
 
-static CALI_BPF_INLINE struct ethhdr* tc_ethhdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct iphdr *)ctx->ip_header;
+}
+
+static CALI_BPF_INLINE struct ipv6hdr* ipv6_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct ipv6hdr *)ctx->ip_header;
+}
+
+static CALI_BPF_INLINE struct ethhdr* eth_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct ethhdr *)ctx->data_start;
 }
 
-static CALI_BPF_INLINE struct tcphdr* tc_tcphdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct tcphdr* tcp_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct tcphdr *)ctx->nh;
 }
 
-static CALI_BPF_INLINE struct udphdr* tc_udphdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct udphdr* udp_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct udphdr *)ctx->nh;
 }
 
-static CALI_BPF_INLINE struct icmphdr* tc_icmphdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct icmphdr *)ctx->nh;
+}
+
+static CALI_BPF_INLINE struct ipv6_opt_hdr* ipv6ext_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct ipv6_opt_hdr *)ctx->nh;
 }
 
 #endif /* __CALI_BPF_TYPES_H__ */

@@ -138,12 +138,10 @@ func (m *networkMigrator) checkCalicoVxlan(node *v1.Node) error {
 // Drain node, remove Flannel and setup Calico network for a node.
 func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 	log.Infof("Setting node label to disable Flannel daemonset pod on node %s.", node.Name)
-	// Set two node labels at the beginning of network migration.
-	// - Label nodeNetworkNone stops Flannel pod from being scheduled on this node.
-	//   Flannel pod currently running on the node starts to be evicted as the side effect.
-	// - Label nodeMigrationInProgress marks that the node is in migration process.
+
+	// Label nodeMigrationInProgress marks that the node is in migration process.
 	n := k8snode(node.Name)
-	err := n.addNodeLabels(m.k8sClientset, nodeNetworkNone, nodeMigrationInProgress)
+	err := n.addNodeLabels(m.k8sClientset, nodeMigrationInProgress)
 	if err != nil {
 		log.WithError(err).Errorf("Error adding node labels to disable Flannel network and mark migration in process for node %s.", node.Name)
 		return err
@@ -156,10 +154,17 @@ func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 		return err
 	}
 
+	// Label the node to evict the flannel / canal pod from this node. Do this after evicting other pods.
+	err = n.addNodeLabels(m.k8sClientset, nodeNetworkNone)
+	if err != nil {
+		log.WithError(err).Errorf("Error adding node labels to disable Flannel network and mark migration in process for node %s.", node.Name)
+		return err
+	}
+
 	log.Infof("Removing flannel tunnel device/routes on %s.", node.Name)
 	// Remove Flannel network from node.
 	// Note Flannel vxlan tunnel device (flannel.1) is created by Flannel daemonset pod (not Flannel CNI)
-	// Therefor if Flannel daemonset pod can not run on this node, the tunnel device will not be recreated
+	// Therefore if Flannel daemonset pod can not run on this node, the tunnel device will not be recreated
 	// after we delete it.
 	err = m.removeFlannelNetworkAndInstallDummyCalicoCNI(node)
 	if err != nil {

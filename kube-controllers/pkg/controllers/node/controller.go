@@ -194,11 +194,16 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 
 	// Wait till k8s cache is synced
 	log.Debug("Waiting to sync with Kubernetes API (Nodes and Pods)")
-	for !c.nodeInformer.HasSynced() || !c.podInformer.HasSynced() {
-		f := log.Fields{"node": c.nodeInformer.HasSynced(), "pod": c.podInformer.HasSynced()}
-		log.WithFields(f).Debug("Waiting for sync")
-		time.Sleep(100 * time.Millisecond)
+	if !cache.WaitForNamedCacheSync("nodes", stopCh, c.nodeInformer.HasSynced) {
+		log.Info("Failed to sync resources, received signal for controller to shut down.")
+		return
 	}
+
+	if !cache.WaitForNamedCacheSync("pods", stopCh, c.podInformer.HasSynced) {
+		log.Info("Failed to sync resources, received signal for controller to shut down.")
+		return
+	}
+
 	log.Debug("Finished syncing with Kubernetes API (Nodes and Pods)")
 
 	// We're in-sync. Start the sub-controllers.

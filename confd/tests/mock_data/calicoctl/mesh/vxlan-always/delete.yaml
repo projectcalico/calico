@@ -4,5 +4,18 @@ metadata:
   name: ippool-1
 spec:
   cidr: 192.168.0.0/16
-  ipipMode: Always
+  ipipMode: Never
+  vxlanMode: Always
+  natOutgoing: true
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-v6-1
+spec:
+  cidr: dead::beef::/64
+  ipipMode: Never
+  vxlanMode: Always
   natOutgoing: true

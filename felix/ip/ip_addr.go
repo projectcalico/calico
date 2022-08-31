@@ -33,6 +33,11 @@ import (
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
+const (
+	IPv4SizeDword = 1
+	IPv6SizeDword = 4
+)
+
 var ErrInvalidIP = errors.New("Failed to parse IP address")
 
 // Addr represents either an IPv4 or IPv6 IP address.
@@ -45,6 +50,7 @@ type Addr interface {
 	AsCalicoNetIP() calinet.IP
 	AsCIDR() CIDR
 	String() string
+	NthBit(uint) int
 }
 
 type V4Addr [4]byte
@@ -101,6 +107,21 @@ func (a V6Addr) AsCIDR() CIDR {
 	}
 }
 
+// AsUint64Pair returns a pair of uint64 representing a V6Addr as there is
+// no native 128 bit uint type in go.
+func (a V6Addr) AsUint64Pair() (uint64, uint64) {
+	return binary.BigEndian.Uint64(a[:8]), binary.BigEndian.Uint64(a[8:])
+}
+
+func (a V6Addr) NthBit(n uint) int {
+	h, l := a.AsUint64Pair()
+	if n <= 64 {
+		return int(h >> (64 - n) & 1)
+	}
+
+	return int(l >> (128 - n) & 1)
+}
+
 func (a V6Addr) String() string {
 	return a.AsNetIP().String()
 }
@@ -111,6 +132,7 @@ type CIDR interface {
 	Prefix() uint8
 	String() string
 	ToIPNet() net.IPNet
+	Contains(addr Addr) bool
 }
 
 type V4CIDR struct {
@@ -135,6 +157,15 @@ func (c V4CIDR) ToIPNet() net.IPNet {
 		IP:   c.Addr().AsNetIP(),
 		Mask: net.CIDRMask(int(c.Prefix()), 32),
 	}
+}
+
+func (c V4CIDR) Contains(addr Addr) bool {
+	v4Addr, ok := addr.(V4Addr)
+	if !ok {
+		return false
+	}
+
+	return c.ContainsV4(v4Addr)
 }
 
 func (c V4CIDR) ContainsV4(addr V4Addr) bool {
@@ -171,6 +202,29 @@ func (c V6CIDR) ToIPNet() net.IPNet {
 		IP:   c.Addr().AsNetIP(),
 		Mask: net.CIDRMask(int(c.Prefix()), 128),
 	}
+}
+
+func (c V6CIDR) Contains(addr Addr) bool {
+	v6Addr, ok := addr.(V6Addr)
+	if !ok {
+		return false
+	}
+
+	return c.ContainsV6(v6Addr)
+}
+
+func (c V6CIDR) ContainsV6(addr V6Addr) bool {
+	a64_h, a64_l := c.addr.AsUint64Pair()
+	b64_h, b64_l := addr.AsUint64Pair()
+	xored_h := a64_h ^ b64_h // Has a zero bit wherever the two values are the same.
+	xored_l := a64_l ^ b64_l
+
+	commonPrefixLen := uint8(bits.LeadingZeros64(xored_h))
+	if xored_h == 0 {
+		commonPrefixLen = 64 + uint8(bits.LeadingZeros64(xored_l))
+	}
+
+	return commonPrefixLen >= c.prefix
 }
 
 func (c V6CIDR) String() string {

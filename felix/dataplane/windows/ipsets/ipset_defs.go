@@ -35,7 +35,7 @@ const (
 // ipSet holds the state for a particular IP set.
 type ipSet struct {
 	IPSetMetadata
-	Members set.Set
+	Members set.Set[string]
 }
 
 // IPVersionConfig wraps up the metadata for a particular IP version.

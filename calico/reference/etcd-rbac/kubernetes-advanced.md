@@ -4,6 +4,18 @@ description: Limit user access to Calico components or calicoctl.
 canonical_url: '/reference/etcd-rbac/kubernetes-advanced'
 ---
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+This document does not apply to operator installations of Calico.
+
+%>
+
+  <label:Manifest>
+<%
+
+
 This document describes advanced segmentation of the etcd roles to limit
 access of individual {{site.prodname}} components or to limit calicoctl user access.
 It assumes you have followed [this guide](kubernetes) for initial etcd
@@ -72,3 +84,7 @@ the implementor. Some possibilities for achieving this are:
   tool which installs and configures the certificates.
 - Creating a manifest with a side car container that pulls the proper
   certificate information from Vault or other secret management tool.
+
+%>
+
+{% endtabs %}

@@ -30,7 +30,7 @@ import (
 )
 
 type mockIPSetValue struct {
-	members   set.Set
+	members   set.Set[string]
 	ipsetType ipsets.IPSetType
 }
 
@@ -42,7 +42,7 @@ func (s *mockIPSetsSource) GetIPSetType(setID string) (ipsets.IPSetType, error) 
 	return s.ipsetsMap[setID].ipsetType, nil
 }
 
-func (s *mockIPSetsSource) GetIPSetMembers(setID string) (set.Set, error) {
+func (s *mockIPSetsSource) GetIPSetMembers(setID string) (set.Set[string], error) {
 	return s.ipsetsMap[setID].members, nil
 }
 
@@ -157,7 +157,7 @@ func (rp *removePolicyType) Do(ipState *xdpIPState) {
 
 type addMembersIPSetType struct {
 	setID   string
-	members set.Set
+	members set.Set[string]
 }
 
 func (am *addMembersIPSetType) Do(ipState *xdpIPState) {
@@ -166,7 +166,7 @@ func (am *addMembersIPSetType) Do(ipState *xdpIPState) {
 
 type removeMembersIPSetType struct {
 	setID   string
-	members set.Set
+	members set.Set[string]
 }
 
 func (rm *removeMembersIPSetType) Do(ipState *xdpIPState) {
@@ -175,7 +175,7 @@ func (rm *removeMembersIPSetType) Do(ipState *xdpIPState) {
 
 type replaceIPSetType struct {
 	setID   string
-	members set.Set
+	members set.Set[string]
 }
 
 func (r *replaceIPSetType) Do(ipState *xdpIPState) {
@@ -370,7 +370,7 @@ type testIfaceData struct {
 
 func testStateToRealState(testIfaces map[string]testIfaceData, testEligiblePolicies map[string][][]string, realState *xdpSystemState) {
 	for ifaceName, ifaceData := range testIfaces {
-		policiesToSetIDs := make(map[proto.PolicyID]set.Set, len(ifaceData.policiesToSets))
+		policiesToSetIDs := make(map[proto.PolicyID]set.Set[string], len(ifaceData.policiesToSets))
 		for policyID, setIDs := range ifaceData.policiesToSets {
 			protoID := proto.PolicyID{Tier: "default", Name: policyID}
 			setIDsSet := set.FromArray(setIDs)
@@ -421,12 +421,12 @@ var _ = Describe("XDP state", func() {
 	Context("XDP state logic", func() {
 		Context("processPendingDiffState", func() {
 			type bpfActions struct {
-				createMap     set.Set
-				removeMap     set.Set
+				createMap     set.Set[string]
+				removeMap     set.Set[string]
 				addToMap      map[string]map[string]uint32
 				removeFromMap map[string]map[string]uint32
-				installXDP    set.Set
-				uninstallXDP  set.Set
+				installXDP    set.Set[string]
+				uninstallXDP  set.Set[string]
 			}
 
 			type testStruct struct {
@@ -472,10 +472,10 @@ var _ = Describe("XDP state", func() {
 						s.actions = &bpfActions{}
 					}
 					if s.actions.createMap == nil {
-						s.actions.createMap = set.New()
+						s.actions.createMap = set.New[string]()
 					}
 					if s.actions.removeMap == nil {
-						s.actions.removeMap = set.New()
+						s.actions.removeMap = set.New[string]()
 					}
 					if s.actions.addToMap == nil {
 						s.actions.addToMap = make(map[string]map[string]uint32)
@@ -484,10 +484,10 @@ var _ = Describe("XDP state", func() {
 						s.actions.removeFromMap = make(map[string]map[string]uint32)
 					}
 					if s.actions.installXDP == nil {
-						s.actions.installXDP = set.New()
+						s.actions.installXDP = set.New[string]()
 					}
 					if s.actions.uninstallXDP == nil {
-						s.actions.uninstallXDP = set.New()
+						s.actions.uninstallXDP = set.New[string]()
 					}
 					ba := ipState.bpfActions
 					ncs := ipState.newCurrentState
@@ -1406,7 +1406,7 @@ var _ = Describe("XDP state", func() {
 					},
 				}),
 				// TODO: That's not really possible - we support only one policy in host endpoint
-				//Entry("ipset gets dropped from bpf map when policy becomes unoptimizable", testStruct{
+				// Entry("ipset gets dropped from bpf map when policy becomes unoptimizable", testStruct{
 				//	currentState: map[string]testIfaceData{
 				//		"iface": testIfaceData{
 				//			epID: "ep",
@@ -1442,9 +1442,9 @@ var _ = Describe("XDP state", func() {
 				//	newEligiblePolicies: map[string][][]string{
 				//		"policy": [][]string{[]string{"ipset"}},
 				//	},
-				//}),
-				//TODO: uncomment it when we support optimization of more than one policy in the host endpoint
-				//Entry("ipset gets added to bpf map when policy becomes optimizable", testStruct{
+				// }),
+				// TODO: uncomment it when we support optimization of more than one policy in the host endpoint
+				// Entry("ipset gets added to bpf map when policy becomes optimizable", testStruct{
 				//	currentState: map[string]testIfaceData{
 				//		"iface": testIfaceData{
 				//			epID: "ep",
@@ -1480,7 +1480,7 @@ var _ = Describe("XDP state", func() {
 				//		"policy":  [][]string{[]string{"ipset"}},
 				//		"policy2": [][]string{[]string{"ipset2"}},
 				//	},
-				//}),
+				// }),
 				Entry("invalid policies", func() testStruct {
 					modifiedRule := func(field string, value interface{}) *proto.Rule {
 						rule := denyRule("ipset")
@@ -1746,10 +1746,10 @@ var _ = Describe("XDP state", func() {
 						s.actions = newXDPBPFActions()
 					}
 					if s.actions.CreateMap == nil {
-						s.actions.CreateMap = set.New()
+						s.actions.CreateMap = set.New[string]()
 					}
 					if s.actions.RemoveMap == nil {
-						s.actions.RemoveMap = set.New()
+						s.actions.RemoveMap = set.New[string]()
 					}
 					if s.actions.AddToMap == nil {
 						s.actions.AddToMap = make(map[string]map[string]uint32)
@@ -1758,10 +1758,10 @@ var _ = Describe("XDP state", func() {
 						s.actions.RemoveFromMap = make(map[string]map[string]uint32)
 					}
 					if s.actions.InstallXDP == nil {
-						s.actions.InstallXDP = set.New()
+						s.actions.InstallXDP = set.New[string]()
 					}
 					if s.actions.UninstallXDP == nil {
-						s.actions.UninstallXDP = set.New()
+						s.actions.UninstallXDP = set.New[string]()
 					}
 					if s.actions.MembersToDrop == nil {
 						s.actions.MembersToDrop = make(map[string]map[string]uint32)
@@ -2161,9 +2161,9 @@ var _ = Describe("XDP state", func() {
 			}
 			DescribeTable("",
 				func(s testStruct) {
-					ipsetsWithTestStateToBPFStateAndCache := func(ipsets map[string][]string, testState map[string]testIfaceData) (map[string]map[string]uint32, map[string]set.Set) {
+					ipsetsWithTestStateToBPFStateAndCache := func(ipsets map[string][]string, testState map[string]testIfaceData) (map[string]map[string]uint32, map[string]set.Set[string]) {
 						bpfState := make(map[string]map[string]uint32, len(testState))
-						cache := make(map[string]set.Set)
+						cache := make(map[string]set.Set[string])
 						for iface, ifaceData := range testState {
 							for _, setIDs := range ifaceData.policiesToSets {
 								for _, setID := range setIDs {
@@ -2409,35 +2409,35 @@ var _ = Describe("XDP state", func() {
 			ipState := state.ipV4State
 			testStateToRealState(testState, nil, ipState.currentState)
 			cache := ipState.ipsetIDsToMembers
-			cache.cache = map[string]set.Set{
+			cache.cache = map[string]set.Set[string]{
 				"ipset":  set.From("1.2.3.4/32"),
 				"ipset2": set.From("2.3.4.5/32"),
 				"ipset3": set.From("3.4.5.6/32"),
 			}
-			cache.pendingReplaces = map[string]set.Set{
+			cache.pendingReplaces = map[string]set.Set[string]{
 				"ipset":  set.From("10.20.30.40/32"),
 				"ipset4": set.From("2.2.2.2/32"),
 			}
-			cache.pendingAdds = map[string]set.Set{
+			cache.pendingAdds = map[string]set.Set[string]{
 				"ipset2": set.From("11.21.31.41/32"),
 				"ipset5": set.From("3.3.3.3/32"),
 			}
-			cache.pendingDeletions = map[string]set.Set{
+			cache.pendingDeletions = map[string]set.Set[string]{
 				"ipset3": set.From("12.22.32.42/32"),
 				"ipset6": set.From("4.4.4.4/32"),
 			}
 			expectedCache := newIPSetIDsToMembers()
-			expectedCache.cache = map[string]set.Set{
+			expectedCache.cache = map[string]set.Set[string]{
 				"ipset":  set.From("1.2.3.4/32"),
 				"ipset2": set.From("2.3.4.5/32"),
 			}
-			expectedCache.pendingReplaces = map[string]set.Set{
+			expectedCache.pendingReplaces = map[string]set.Set[string]{
 				"ipset": set.From("10.20.30.40/32"),
 			}
-			expectedCache.pendingAdds = map[string]set.Set{
+			expectedCache.pendingAdds = map[string]set.Set[string]{
 				"ipset2": set.From("11.21.31.41/32"),
 			}
-			expectedCache.pendingDeletions = map[string]set.Set{}
+			expectedCache.pendingDeletions = map[string]set.Set[string]{}
 			ipState.cleanupCache()
 			Expect(cache).To(Equal(expectedCache))
 		})
@@ -2545,13 +2545,13 @@ var _ = Describe("XDP state", func() {
 					},
 					ipsetsSrc: &mockIPSetsSource{},
 					ipsetIDsToMembers: &ipsetIDsToMembers{
-						cache: map[string]set.Set{
+						cache: map[string]set.Set[string]{
 							"id0001": set.From("10.0.0.1", "10.0.0.2"),
 							"id0004": set.From("10.1.0.0/16", "10.1.1.0/24"),
 						},
-						pendingReplaces:  make(map[string]set.Set),
-						pendingAdds:      make(map[string]set.Set),
-						pendingDeletions: make(map[string]set.Set),
+						pendingReplaces:  make(map[string]set.Set[string]),
+						pendingAdds:      make(map[string]set.Set[string]),
+						pendingDeletions: make(map[string]set.Set[string]),
 					},
 					install:   nil,
 					uninstall: []string{"eth1"},
@@ -2603,12 +2603,12 @@ var _ = Describe("XDP state", func() {
 						},
 					},
 					ipsetIDsToMembers: &ipsetIDsToMembers{
-						cache: map[string]set.Set{
+						cache: map[string]set.Set[string]{
 							"id0009": set.From("10.0.1.0/24"),
 						},
-						pendingReplaces:  make(map[string]set.Set),
-						pendingAdds:      make(map[string]set.Set),
-						pendingDeletions: make(map[string]set.Set),
+						pendingReplaces:  make(map[string]set.Set[string]),
+						pendingAdds:      make(map[string]set.Set[string]),
+						pendingDeletions: make(map[string]set.Set[string]),
 					},
 					install:   []string{"wlan0"},
 					uninstall: []string{"eth0"},
@@ -2669,10 +2669,10 @@ var _ = Describe("XDP state", func() {
 					},
 					ipsetsSrc: &mockIPSetsSource{},
 					ipsetIDsToMembers: &ipsetIDsToMembers{
-						cache:            make(map[string]set.Set),
-						pendingReplaces:  make(map[string]set.Set),
-						pendingAdds:      make(map[string]set.Set),
-						pendingDeletions: make(map[string]set.Set),
+						cache:            make(map[string]set.Set[string]),
+						pendingReplaces:  make(map[string]set.Set[string]),
+						pendingAdds:      make(map[string]set.Set[string]),
+						pendingDeletions: make(map[string]set.Set[string]),
 					},
 					install:       []string{"eth0"},
 					uninstall:     []string{"eth0", "eth1"},
@@ -2726,7 +2726,7 @@ var _ = Describe("XDP state", func() {
 							policyID := proto.PolicyID{Tier: "default", Name: "bar"}
 							endpointID := proto.HostEndpointID{EndpointId: "foo"}
 							data.EpID = endpointID
-							data.PoliciesToSetIDs = map[proto.PolicyID]set.Set{
+							data.PoliciesToSetIDs = map[proto.PolicyID]set.Set[string]{
 								policyID: set.From("ipset"),
 							}
 						}

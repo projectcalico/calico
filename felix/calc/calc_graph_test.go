@@ -322,7 +322,7 @@ var _ = Describe("specific scenario tests", func() {
 			return nil
 		})
 		statsCollector.RegisterWith(calcGraph)
-		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher)
+		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher, conf)
 	})
 
 	It("should squash no-op policy updates", func() {

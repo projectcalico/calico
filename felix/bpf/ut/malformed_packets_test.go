@@ -87,6 +87,7 @@ func TestMalformedPackets(t *testing.T) {
 	defer resetBPFMaps()
 
 	for _, tc := range malformedTestCases {
+		skbMark = 0
 		runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 			err := tc.Pkt.Generate()
 			Expect(err).NotTo(HaveOccurred())

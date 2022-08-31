@@ -22,7 +22,7 @@ Options:
   -h --help                 Show this screen.
 
 Description:
-  Check the status of the Calico node instance.  This incudes the status and
+  Check the status of the Calico node instance.  This includes the status and
   uptime of the node instance, and BGP peering states.
 ```
 {: .no-select-button}

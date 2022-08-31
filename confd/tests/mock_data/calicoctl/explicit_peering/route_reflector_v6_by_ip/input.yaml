@@ -1,0 +1,93 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  asNumber: 64532
+  nodeToNodeMeshEnabled: false
+
+---
+
+# This BGPPeer peers the RR node (kube-master) with an explicit
+# external peer.
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-1
+spec:
+  peerIP: 172.19.4.87
+  asNumber: 64533
+  nodeSelector: has(routeReflector)
+
+---
+
+# This BGPPeer peers the RR node (kube-master) with an explicit
+# external v6 peer.
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-v6
+spec:
+  peerIP: "[ac13::57]:50"
+  asNumber: 64533
+  nodeSelector: has(routeReflector)
+
+---
+
+# This BGPPeer peers the RR node (kube-master) with the other
+# non-RR nodes in the cluster (kube-node-1, kube-node-2) using
+# its IP address only; this should be picked up as a bidirectional
+# peering but over IPv6 only.
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-other-nodes
+spec:
+  peerIP: "fe0a::2"
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-1
+spec:
+  cidr: 192.168.0.0/16
+  ipipMode: Always
+  natOutgoing: true
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    routeReflector: true
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: fe0a::2/96
+    routeReflectorClusterID: 10.0.0.1
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: fe0a::3/96
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: fe0a::4/96

@@ -172,7 +172,7 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpWl.Start()
 				defer tcpdumpWl.Stop()
 
-				_, err := external.RunCmd("/pktgen", fakeWorkloadIP, w.IP, "udp",
+				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
 				Expect(err).NotTo(HaveOccurred())
 
@@ -208,7 +208,7 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpWl.Start()
 				defer tcpdumpWl.Stop()
 
-				_, err := external.RunCmd("/pktgen", fakeWorkloadIP, w.IP, "udp",
+				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
 				Expect(err).NotTo(HaveOccurred())
 

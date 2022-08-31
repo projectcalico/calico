@@ -12,6 +12,7 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1

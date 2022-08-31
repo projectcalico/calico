@@ -28,6 +28,8 @@ import (
 	"github.com/pkg/profile"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
@@ -55,11 +57,16 @@ import (
 )
 
 // VERSION is filled out during the build process (using git describe output)
-var VERSION string
-var version bool
-var statusFile string
+var (
+	VERSION    string
+	version    bool
+	statusFile string
+)
 
 func init() {
+	// Make sure the RNG is seeded.
+	seedrng.EnsureSeeded()
+
 	// Add a flag to check the version.
 	flag.BoolVar(&version, "version", false, "Display version")
 	flag.StringVar(&statusFile, "status-file", status.DefaultStatusFile, "File to write status information to")
@@ -114,13 +121,38 @@ func main() {
 	// Create the context.
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create the status file. We will only update it if we have healthchecks enabled.
+	s := status.New(statusFile)
+
 	log.Info("Ensuring Calico datastore is initialized")
-	initCtx, cancelInit := context.WithTimeout(ctx, 10*time.Second)
-	defer cancelInit()
-	err = calicoClient.EnsureInitialized(initCtx, "", "k8s")
-	if err != nil {
-		log.WithError(err).Fatal("Failed to initialize Calico datastore")
+	s.SetReady("Startup", false, "initialized to false")
+	initCtx, cancelInit := context.WithTimeout(ctx, 60*time.Second)
+	// Loop until context expires or calicoClient is initialized.
+	for {
+		err := calicoClient.EnsureInitialized(initCtx, "", "k8s")
+		if err != nil {
+			log.WithError(err).Info("Failed to initialize datastore")
+			s.SetReady(
+				"Startup",
+				false,
+				fmt.Sprintf("Error initializing datastore: %v", err),
+			)
+		} else {
+			// Exit loop
+			break
+		}
+
+		select {
+		case <-initCtx.Done():
+			log.Fatal("Failed to initialize Calico datastore")
+			break
+		case <-time.After(5 * time.Second):
+			// Try to initialize again
+		}
 	}
+	log.Info("Calico datastore is initialized")
+	s.SetReady("Startup", true, "")
+	cancelInit()
 
 	controllerCtrl := &controllerControl{
 		ctx:         ctx,
@@ -164,9 +196,6 @@ func main() {
 		controllerCtrl.restart = cCtrlr.ConfigChan()
 		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, calicoClient)
 	}
-
-	// Create the status file. We will only update it if we have healthchecks enabled.
-	s := status.New(statusFile)
 
 	if cfg.DatastoreType == "etcdv3" {
 		// If configured to do so, start an etcdv3 compaction.
@@ -223,6 +252,11 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 	s.SetReady("CalicoDatastore", false, "initialized to false")
 	s.SetReady("KubeAPIServer", false, "initialized to false")
 
+	// Initialize a timeout for API calls. Start with a short timeout. We'll increase the timeout if we start seeing errors.
+	defaultTimeout := 4 * time.Second
+	maxTimeout := 16 * time.Second
+	timeout := defaultTimeout
+
 	// Loop until context expires and perform healthchecks.
 	for {
 		select {
@@ -232,9 +266,10 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 			// carry on
 		}
 
-		// skip healthchecks if configured
-		// Datastore HealthCheck
-		healthCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		// Perform a health check against the Calico data store. Just query the
+		// default cluster information and make sure it's up-to-date, which will
+		// fail if the data store isn't working.
+		healthCtx, cancel := context.WithTimeout(ctx, timeout)
 		err := calicoClient.EnsureInitialized(healthCtx, "", "k8s")
 		if err != nil {
 			log.WithError(err).Errorf("Failed to verify datastore")
@@ -248,27 +283,14 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 		}
 		cancel()
 
-		// Kube-apiserver HealthCheck
+		// Call the /healthz endpoint using the same clientset as our main controllers. This allows us to share a connection
+		// and gives us a good idea of whether or not the other controllers are currently experiencing issues accessing the apiserver.
+		healthCtx, cancel = context.WithTimeout(ctx, timeout)
 		healthStatus := 0
-		k8sCheckDone := make(chan interface{}, 1)
-		go func(k8sCheckDone <-chan interface{}) {
-			time.Sleep(2 * time.Second)
-			select {
-			case <-k8sCheckDone:
-				// The check has completed.
-			default:
-				// Check is still running, so report not ready.
-				s.SetReady(
-					"KubeAPIServer",
-					false,
-					"Error reaching apiserver: taking a long time to check apiserver",
-				)
-			}
-		}(k8sCheckDone)
-		k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do(ctx).StatusCode(&healthStatus)
-		k8sCheckDone <- nil
+		result := k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do(healthCtx).StatusCode(&healthStatus)
+		cancel()
 		if healthStatus != http.StatusOK {
-			log.WithError(err).Errorf("Failed to reach apiserver")
+			log.WithError(result.Error()).WithField("status", healthStatus).Errorf("Received bad status code from apiserver")
 			s.SetReady(
 				"KubeAPIServer",
 				false,
@@ -278,13 +300,25 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 			s.SetReady("KubeAPIServer", true, "")
 		}
 
+		// If we encountered errors, retry again with a longer timeout.
+		if !s.GetReadiness() {
+			timeout = 2 * timeout
+			if timeout > maxTimeout {
+				timeout = maxTimeout
+			}
+			log.Infof("Health check is not ready, retrying in 2 seconds with new timeout: %s", timeout)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		// Success! Reset the timeout.
+		timeout = defaultTimeout
 		time.Sleep(10 * time.Second)
 	}
 }
 
 // Starts an etcdv3 compaction goroutine with the given config.
 func startCompactor(ctx context.Context, interval time.Duration) {
-
 	if interval.Nanoseconds() == 0 {
 		log.Info("Disabling periodic etcdv3 compaction")
 		return
@@ -374,7 +408,6 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 		KeyFile:       config.Spec.EtcdKeyFile,
 	}
 	tlsClient, err := tlsInfo.ClientConfig()
-
 	if err != nil {
 		return nil, err
 	}

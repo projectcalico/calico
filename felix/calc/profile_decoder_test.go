@@ -146,6 +146,14 @@ func (p *passthruCallbackRecorder) OnHostIPRemove(hostname string) {
 	Fail("HostIPRemove received")
 }
 
+func (p *passthruCallbackRecorder) OnHostIPv6Update(hostname string, ip *net.IP) {
+	Fail("HostIPv6Update received")
+}
+
+func (p *passthruCallbackRecorder) OnHostIPv6Remove(hostname string) {
+	Fail("HostIPv6Remove received")
+}
+
 func (p *passthruCallbackRecorder) OnIPPoolUpdate(model.IPPoolKey, *model.IPPool) {
 	Fail("IPPoolUpdate received")
 }

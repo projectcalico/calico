@@ -723,6 +723,8 @@ func init() {
 		Entry("should reject route table ranges min negative", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: -5, Max: 250}}}, false),
 		Entry("should reject route table ranges max < min", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 50, Max: 45}}}, false),
 		Entry("should reject route table ranges max too large", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0xf00000000}}}, false),
+		Entry("should reject single route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0x10000}}}, false),
+		Entry("should reject multitple route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 2}, {Min: 3, Max: 4}, {Min: 5, Max: 0x10000}}}, false),
 
 		Entry("should reject spec with both RouteTableRanges and RouteTableRange set", api.FelixConfigurationSpec{
 			RouteTableRanges: &api.RouteTableRanges{
@@ -2692,6 +2694,20 @@ func init() {
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"community-test", "8988:202"}}},
 		}, true),
+
+		// Block Affinities validation in BlockAffinitySpec
+		Entry("should accept non-deleted block affinities", libapiv3.BlockAffinitySpec{
+			Deleted: "false",
+			State:   "confirmed",
+			CIDR:    "10.0.0.0/24",
+			Node:    "node-1",
+		}, true),
+		Entry("should not accept delted block affinities", libapiv3.BlockAffinitySpec{
+			Deleted: "true",
+			State:   "confirmed",
+			CIDR:    "10.0.0.0/24",
+			Node:    "node-1",
+		}, false),
 	)
 }
 

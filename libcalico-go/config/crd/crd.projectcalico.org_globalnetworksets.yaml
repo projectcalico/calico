@@ -9,6 +9,7 @@ spec:
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
     singular: globalnetworkset
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1

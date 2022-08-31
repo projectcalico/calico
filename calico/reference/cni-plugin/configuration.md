@@ -4,6 +4,19 @@ description: Details for configuring the Calico CNI plugins.
 canonical_url: '/reference/cni-plugin/configuration'
 ---
 
+{% tabs %}
+  <label:Operator,active:true>
+<%
+
+The {{site.prodname}} CNI plugins do not need to be configured directly when installed by the operator. For a complete operator 
+configuration reference, see [the installation API reference documentation][installation].
+
+%>
+
+  <label:Manifest>
+<%
+
+
 The {{site.prodname}} CNI plugin is configured through the standard CNI
 [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration){:target="_blank"}
 
@@ -382,7 +395,7 @@ There are two annotations to request a specific IP address:
    ```
 
 - `cni.projectcalico.org/ipAddrsNoIpam`: A list of IPv4 and/or IPv6 addresses to assign to the Pod, bypassing IPAM. Any IP conflicts and routing have to be taken care of manually or by some other system.
-{{site.prodname}} will only distribute routes to a Pod if its IP address falls within a {{site.prodname}} IP pool. If you assign an IP address that is not in a {{site.prodname}} IP pool, you must ensure that routing to that IP address is taken care of through another mechanism.
+{{site.prodname}} will only distribute routes to a Pod if its IP address falls within a {{site.prodname}} IP pool using BGP mode. Calico will not distribute ipAddrsNoIpam routes when operating in VXLAN mode. If you assign an IP address that is not in a {{site.prodname}} IP pool or if its IP address falls within a {{site.prodname}} IP pool that uses VXLAN encapsulation, you must ensure that routing to that IP address is taken care of through another mechanism.
 
   Example:
 
@@ -550,7 +563,7 @@ take on the following precedence, 1 being the highest:
 
 > **Note**: {{site.prodname}} IPAM will not reassign IP addresses to workloads
 > that are already running. To update running workloads with IP addresses from
-> a newly configured IP pool, they must be recreated. We recommmend doing this
+> a newly configured IP pool, they must be recreated. We recommend doing this
 > before going into production or during a maintenance window.
 {: .alert .alert-info}
 
@@ -565,3 +578,9 @@ For example:
   "num_queues": 3,
 }
 ```
+
+%>
+
+{% endtabs %}
+
+[installation]: {{site.baseurl}}/reference/installation/api

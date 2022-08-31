@@ -134,7 +134,7 @@ func registerResource(res ResourceObject, resList ResourceListObject, isNamespac
 	helpers[res.GetObjectKind().GroupVersionKind()] = rh
 
 	rh = resourceHelper{
-		listResource:      resList.(ResourceListObject),
+		listResource:      resList,
 		resourceType:      reflect.ValueOf(resList).Elem().Type(),
 		tableHeadings:     tableHeadings,
 		tableHeadingsWide: tableHeadingsWide,
@@ -165,7 +165,7 @@ func (rh resourceHelper) Apply(ctx context.Context, client client.Interface, res
 	}
 
 	// Store the original ResourceVersion for the Update operation later.
-	originalRV := resource.(ResourceObject).GetObjectMeta().GetResourceVersion()
+	originalRV := resource.GetObjectMeta().GetResourceVersion()
 
 	// Remove the resourceVersion, because Create call can't have
 	// resourceVersion set and Update automatically gets and sets
@@ -180,7 +180,7 @@ func (rh resourceHelper) Apply(ctx context.Context, client client.Interface, res
 	switch err.(type) {
 	case cerrors.ErrorResourceAlreadyExists, cerrors.ErrorOperationNotSupported:
 		// Insert the original ResourceVersion back into the object before trying the Update.
-		resource.(ResourceObject).GetObjectMeta().SetResourceVersion(originalRV)
+		resource.GetObjectMeta().SetResourceVersion(originalRV)
 
 		// Try updating if the resource already exists.
 		return rh.Update(ctx, client, resource)
@@ -206,7 +206,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 	var err error
 
 	// Check to see if the resourceVersion is specified in the resource object.
-	rv := resource.(ResourceObject).GetObjectMeta().GetResourceVersion()
+	rv := resource.GetObjectMeta().GetResourceVersion()
 
 	// Copy the resource to prevent modifying the input resource metadata.
 	resource = resource.DeepCopyObject().(ResourceObject)
@@ -215,7 +215,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 	// Do not attempt to retry if the resource version is specified.
 	if rv != "" {
 		// Clean out the resource version to always get the latest revision.
-		resource.(ResourceObject).GetObjectMeta().SetResourceVersion("")
+		resource.GetObjectMeta().SetResourceVersion("")
 		// Validate the metadata is not changed for the the resource.
 		ro, err := rh.get(ctx, client, resource)
 		if err != nil {
@@ -365,11 +365,11 @@ func GetResourcesFromArgs(args map[string]interface{}) ([]ResourceObject, error)
 			return nil, fmt.Errorf("resource type '%s' is not supported", kind)
 		}
 		res = res.DeepCopyObject().(ResourceObject)
-		res.(ResourceObject).GetObjectMeta().SetName(name)
+		res.GetObjectMeta().SetName(name)
 
 		// Set the namespace if the object kind is namespaced.
 		if helpers[res.GetObjectKind().GroupVersionKind()].isNamespaced {
-			res.(ResourceObject).GetObjectMeta().SetNamespace(namespace)
+			res.GetObjectMeta().SetNamespace(namespace)
 		}
 
 		ret = append(ret, res)
@@ -393,16 +393,16 @@ func newResource(tm schema.GroupVersionKind) (runtime.Object, error) {
 	log.Infof("Found resource helper: %s", rh)
 
 	// Create new resource and fill in the type metadata.
-	new := reflect.New(rh.resourceType)
-	elem := new.Elem()
+	n := reflect.New(rh.resourceType)
+	elem := n.Elem()
 	elem.FieldByName("Kind").SetString(tm.Kind)
 	elem.FieldByName("APIVersion").SetString(tm.GroupVersion().String())
 
-	_, ok = new.Interface().(ResourceObject)
+	_, ok = n.Interface().(ResourceObject)
 	if ok {
-		return new.Interface().(ResourceObject), nil
+		return n.Interface().(ResourceObject), nil
 	}
-	return new.Interface().(ResourceListObject), nil
+	return n.Interface().(ResourceListObject), nil
 }
 
 // Create the resource from the specified byte array encapsulating the resource.

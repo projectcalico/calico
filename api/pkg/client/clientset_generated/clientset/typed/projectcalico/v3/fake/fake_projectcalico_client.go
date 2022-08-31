@@ -22,6 +22,10 @@ func (c *FakeProjectcalicoV3) BGPPeers() v3.BGPPeerInterface {
 	return &FakeBGPPeers{c}
 }
 
+func (c *FakeProjectcalicoV3) BlockAffinities() v3.BlockAffinityInterface {
+	return &FakeBlockAffinities{c}
+}
+
 func (c *FakeProjectcalicoV3) CalicoNodeStatuses() v3.CalicoNodeStatusInterface {
 	return &FakeCalicoNodeStatuses{c}
 }
@@ -44,6 +48,10 @@ func (c *FakeProjectcalicoV3) GlobalNetworkSets() v3.GlobalNetworkSetInterface {
 
 func (c *FakeProjectcalicoV3) HostEndpoints() v3.HostEndpointInterface {
 	return &FakeHostEndpoints{c}
+}
+
+func (c *FakeProjectcalicoV3) IPAMConfigurations() v3.IPAMConfigurationInterface {
+	return &FakeIPAMConfigurations{c}
 }
 
 func (c *FakeProjectcalicoV3) IPPools() v3.IPPoolInterface {

@@ -1,6 +1,6 @@
 //go:build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
-
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -56,10 +56,17 @@ var _ = Describe("with running container", func() {
 		// but the calico/felix container has all the iptables dependencies we need to
 		// check the lock behaviour.  Note: we don't map the host's iptables lock into the
 		// container so the scope of the lock is limited to the container.
+		wd, err := os.Getwd()
+		Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
+		fvBin := os.Getenv("FV_BINARY")
+		if fvBin == "" {
+			fvBin = "bin/calico-felix-amd64"
+		}
 		felixCmd = utils.Command("docker", "run",
 			"--rm",
 			"--name", containerName,
 			"-v", fmt.Sprintf("%s/..:/codebase", myDir),
+			"-v", fmt.Sprintf("%s:/usr/local/bin/calico-felix", path.Join(wd, "..", fvBin)),
 			"--privileged",
 			utils.Config.FelixImage)
 		err = felixCmd.Start()

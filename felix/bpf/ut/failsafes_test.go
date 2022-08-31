@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 )
@@ -216,7 +217,9 @@ func TestFailsafes(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		prog := "calico_from_host_ep"
+		skbMark = 0
 		if test.Outbound {
+			skbMark = tcdefs.MarkSeen
 			prog = "calico_to_host_ep"
 		}
 
@@ -230,6 +233,9 @@ func TestFailsafes(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res.RetvalStr()).To(Equal(result), fmt.Sprintf("expected program to return %s", result))
 		})
+		if !test.Outbound && test.Allowed {
+			expectMark(tcdefs.MarkSeen)
+		}
 	}
 }
 

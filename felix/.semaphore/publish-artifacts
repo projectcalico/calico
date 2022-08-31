@@ -17,6 +17,9 @@
 # No set -e so that we continue to collect artifacts even if some fail.
 set -x
 
+# set nullglob so that '*' is not used literally if the artifacts dir is empty
+shopt -s nullglob
+
 my_dir=$(dirname "$0")
 repo_dir=$my_dir/..
 

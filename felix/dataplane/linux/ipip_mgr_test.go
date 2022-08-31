@@ -227,7 +227,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
 	})
 
-	allHostsSet := func() set.Set {
+	allHostsSet := func() set.Set[string] {
 		log.Info(ipSets.Members)
 		Expect(ipSets.Members).To(HaveLen(1))
 		return ipSets.Members["all-hosts-net"]

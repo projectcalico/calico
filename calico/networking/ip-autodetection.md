@@ -53,7 +53,7 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - Regex to exclude matching interfaces (**skip-interface**)
 - A list of IP ranges in CIDR format to determine valid IP addresses on the node to choose from (**cidrs**)
 
-For details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
+For more details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration) reference.
 
 ### How to
 
@@ -293,7 +293,7 @@ calicoctl patch node kind-control-plane \
 
 ### Above and beyond
 
-- For details on autodetection methods, see the [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
+- For details on autodetection methods, see the [node configuration]({{ site.baseurl }}/reference/node/configuration) reference.
 - For calicoctl environment variables, see [Configuring {{site.nodecontainer}}]({{ site.baseurl }}/reference/node/configuration)
 - [Node resource]({{ site.baseurl }}/reference/resources/node)
 - [Reference documentation for calicoctl patch]({{ site.baseurl }}/reference/calicoctl/patch)

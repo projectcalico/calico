@@ -311,7 +311,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 								Expect(err).NotTo(HaveOccurred())
 
 								if wlIdx != 2 {
-									Eventually(mockWlClient[wlIdx].ActivePolicies, waitTime).Should(Equal(set.New()))
+									Eventually(mockWlClient[wlIdx].ActivePolicies, waitTime).Should(Equal(set.New[proto.PolicyID]()))
 								}
 							}
 						}
@@ -375,8 +375,8 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 									IngressPolicyNames: []string{"default.policy-0"},
 								}}}))
 
-							Consistently(mockWlClient[1].ActivePolicies).Should(Equal(set.New()))
-							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New()))
+							Consistently(mockWlClient[1].ActivePolicies).Should(Equal(set.New[proto.PolicyID]()))
+							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New[proto.PolicyID]()))
 						})
 
 						It("should be correctly mapped to proto policy", func() {
@@ -429,7 +429,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 							_, err := calicoClient.GlobalNetworkPolicies().Delete(ctx, "policy-0", options.DeleteOptions{})
 							Expect(err).NotTo(HaveOccurred())
 
-							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.New()))
+							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.New[proto.PolicyID]()))
 						})
 
 						It("should handle a change of selector", func() {
@@ -447,7 +447,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 							Eventually(mockWlClient[0].EndpointToPolicyOrder).Should(Equal(
 								map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
-							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.New()))
+							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.New[proto.PolicyID]()))
 
 							By("Updating workload 1 to make the policy active")
 							Eventually(mockWlClient[1].ActivePolicies).Should(Equal(set.From(policyID)))
@@ -458,7 +458,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 									IngressPolicyNames: []string{"default.policy-0"},
 								}}}))
 
-							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New()))
+							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New[proto.PolicyID]()))
 						})
 
 						It("should handle a change of profiles", func() {

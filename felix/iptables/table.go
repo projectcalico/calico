@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
@@ -189,7 +191,7 @@ type Table struct {
 	IPVersion uint8
 
 	// featureDetector detects the features of the dataplane.
-	featureDetector *FeatureDetector
+	featureDetector *environment.FeatureDetector
 
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
@@ -198,7 +200,7 @@ type Table struct {
 	// chainToAppendRules maps from chain name to a list of rules to be appended at the end
 	// of that chain.
 	chainToAppendedRules map[string][]Rule
-	dirtyInsertAppend    set.Set
+	dirtyInsertAppend    set.Set[string]
 
 	// chainToRuleFragments contains the desired state of our iptables chains, indexed by
 	// chain name.  The values are slices of iptables fragments, such as
@@ -210,7 +212,7 @@ type Table struct {
 	// avoid programming unreferenced leaf chains (for example, policies that aren't used in
 	// this table).
 	chainRefCounts map[string]int
-	dirtyChains    set.Set
+	dirtyChains    set.Set[string]
 
 	inSyncWithDataPlane bool
 
@@ -269,7 +271,7 @@ type Table struct {
 	restoreInputBuffer RestoreInputBuilder
 
 	// Factory for making commands, used by UTs to shim exec.Command().
-	newCmd cmdFactory
+	newCmd cmdshim.CmdFactory
 	// Shims for time.XXX functions:
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
@@ -294,7 +296,7 @@ type TableOptions struct {
 	LockProbeInterval time.Duration
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
-	NewCmdOverride cmdFactory
+	NewCmdOverride cmdshim.CmdFactory
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
@@ -312,7 +314,7 @@ func NewTable(
 	ipVersion uint8,
 	hashPrefix string,
 	iptablesWriteLock sync.Locker,
-	detector *FeatureDetector,
+	featuredetector *environment.FeatureDetector,
 	options TableOptions,
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
@@ -338,7 +340,7 @@ func NewTable(
 	// clean up any chains that we hooked on a previous run.
 	inserts := map[string][]Rule{}
 	appends := map[string][]Rule{}
-	dirtyInsertAppend := set.New()
+	dirtyInsertAppend := set.New[string]()
 	refcounts := map[string]int{}
 	for _, kernelChain := range tableToKernelChains[name] {
 		inserts[kernelChain] = []Rule{}
@@ -367,7 +369,7 @@ func NewTable(
 	}
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
-	newCmd := NewRealCmd
+	newCmd := cmdshim.NewRealCmd
 	if options.NewCmdOverride != nil {
 		newCmd = options.NewCmdOverride
 	}
@@ -387,13 +389,13 @@ func NewTable(
 	table := &Table{
 		Name:                   name,
 		IPVersion:              ipVersion,
-		featureDetector:        detector,
+		featureDetector:        featuredetector,
 		chainToInsertedRules:   inserts,
 		chainToAppendedRules:   appends,
 		dirtyInsertAppend:      dirtyInsertAppend,
 		chainNameToChain:       map[string]*Chain{},
 		chainRefCounts:         refcounts,
-		dirtyChains:            set.New(),
+		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]string{},
 		logCxt: log.WithFields(log.Fields{
@@ -448,8 +450,8 @@ func NewTable(
 		table.nftablesMode = true
 	}
 
-	table.iptablesRestoreCmd = findBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
-	table.iptablesSaveCmd = findBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
+	table.iptablesRestoreCmd = environment.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
+	table.iptablesSaveCmd = environment.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
 
 	return table
 }
@@ -702,8 +704,8 @@ func (t *Table) loadDataplaneState() {
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
 // given our inserts and appends.
-// Hashes for inserted rules are caculated first. If we're in append mode, that consists of numNonCalicoRules empty strings
-// followed by our inserted hashes; in insert mode, the opposite way round. Hashes for appended rules are caculated and
+// Hashes for inserted rules are calculated first. If we're in append mode, that consists of numNonCalicoRules empty strings
+// followed by our inserted hashes; in insert mode, the opposite way round. Hashes for appended rules are calculated and
 // appended at the end.
 // To avoid recalculation, it returns the inserted rule hashes as a second output and appended rule hashes
 // a third output.
@@ -832,7 +834,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 	// Keep track of whether the non-Calico chain has inserts. If the chain does not have inserts, we'll remove the
 	// full rules for that chain.
-	chainHasCalicoRule := set.New()
+	chainHasCalicoRule := set.New[string]()
 
 	// Figure out if debug logging is enabled so we can skip some WithFields() calls in the
 	// tight loop below if the log wouldn't be emitted anyway.
@@ -1052,8 +1054,7 @@ func (t *Table) applyUpdates() error {
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
 	// Writing a forward reference ensures that the chain exists and that it is empty.
-	t.dirtyChains.Iter(func(item interface{}) error {
-		chainName := item.(string)
+	t.dirtyChains.Iter(func(chainName string) error {
 		chainNeedsToBeFlushed := false
 		if t.nftablesMode {
 			// iptables-nft-restore <v1.8.3 has a bug (https://bugzilla.netfilter.org/show_bug.cgi?id=1348)
@@ -1087,8 +1088,7 @@ func (t *Table) applyUpdates() error {
 
 	// Make a second pass over the dirty chains.  This time, we write out the rule changes.
 	newHashes := map[string][]string{}
-	t.dirtyChains.Iter(func(item interface{}) error {
-		chainName := item.(string)
+	t.dirtyChains.Iter(func(chainName string) error {
 		if chain, ok := t.desiredStateOfChain(chainName); ok {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
@@ -1138,8 +1138,7 @@ func (t *Table) applyUpdates() error {
 	// Now calculate iptables updates for our inserted and appended rules, which are used to hook top-level chains.
 	var deleteRenderingErr error
 	var line string
-	t.dirtyInsertAppend.Iter(func(item interface{}) error {
-		chainName := item.(string)
+	t.dirtyInsertAppend.Iter(func(chainName string) error {
 		previousHashes := t.chainToDataplaneHashes[chainName]
 		newRules := newChainToFullRules[chainName]
 
@@ -1235,8 +1234,7 @@ func (t *Table) applyUpdates() error {
 		buf.EndTransaction()
 		buf.StartTransaction(t.Name)
 
-		t.dirtyChains.Iter(func(item interface{}) error {
-			chainName := item.(string)
+		t.dirtyChains.Iter(func(chainName string) error {
 			if _, ok := t.desiredStateOfChain(chainName); !ok {
 				// Chain deletion
 				buf.WriteForwardReference(chainName)
@@ -1250,8 +1248,7 @@ func (t *Table) applyUpdates() error {
 	// above).  Note: if a chain is being deleted at the same time as a chain that it refers to
 	// then we'll issue a create+flush instruction in the very first pass, which will sever the
 	// references.
-	t.dirtyChains.Iter(func(item interface{}) error {
-		chainName := item.(string)
+	t.dirtyChains.Iter(func(chainName string) error {
 		if _, ok := t.desiredStateOfChain(chainName); !ok {
 			// Chain deletion
 			buf.WriteLine(fmt.Sprintf("--delete-chain %s", chainName))
@@ -1333,8 +1330,8 @@ func (t *Table) applyUpdates() error {
 	// Now we've successfully updated iptables, clear the dirty sets.  We do this even if we
 	// found there was nothing to do above, since we may have found out that a dirty chain
 	// was actually a no-op update.
-	t.dirtyChains = set.New()
-	t.dirtyInsertAppend = set.New()
+	t.dirtyChains = set.New[string]()
+	t.dirtyInsertAppend = set.New[string]()
 
 	// Store off the updates.
 	for chainName, hashes := range newHashes {
@@ -1383,7 +1380,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	return strings.Replace(rule, "-A", "-D", 1), nil
 }
 
-func calculateRuleHashes(chainName string, rules []Rule, features *Features) []string {
+func calculateRuleHashes(chainName string, rules []Rule, features *environment.Features) []string {
 	chain := Chain{
 		Name:  chainName,
 		Rules: rules,

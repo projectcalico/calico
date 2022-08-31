@@ -2,9 +2,12 @@
 report/
 bin/
 *.created*
+*.pyc
 .idea
 .vscode
 vendor/
+artifacts/
+postrelease-checks.xml
 
 /* Produced as part of release */
 hack/release/release
@@ -18,3 +21,5 @@ hack/release/ghr
 hack/test/kind/kind
 hack/test/kind/kubectl
 hack/test/kind/*kubeconfig.yaml
+pod2daemon/node-driver-registrar/
+

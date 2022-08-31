@@ -36,13 +36,16 @@ The following steps will outline the installation of {{site.prodname}} networkin
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions.
 
    ```
-   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
+   
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 1. Download the necessary Installation custom resource.
 
    ```bash
-   wget {{ "/manifests/custom-resources.yaml" | absolute_url }}
+   wget {{site.data.versions.first.manifests_url}}/manifests/custom-resources.yaml
    ```
 
 1. Update the `calicoNetwork` options, ensuring that the correct pod CIDR is set. (Rancher uses `10.42.0.0/16` by default.)
@@ -96,14 +99,12 @@ The following steps will outline the installation of {{site.prodname}} networkin
    kubectl create -f custom-resources.yaml
    ```
 
-1. [Install and configure calicoctl]({{site.baseurl}}/maintenance/clis/calicoctl/install)
-
 1. Configure strict affinity:
    ```bash
-   calicoctl ipam configure --strictaffinity=true
+   kubectl patch ipamconfigurations default --type merge --patch='{"spec": {"strictAffinity": true}}'
    ```
 
-1. Finally, follow the {{site.prodnameWindows}} [quickstart guide for Kubernetes]({{site.baseurl}}/getting-started/windows-calico/quickstart#install-calico-for-windows)
+1. Finally, follow the {{site.prodnameWindows}} [quickstart guide for Kubernetes]({{site.baseurl}}/getting-started/windows-calico/quickstart#install-calico-for-windows-manually)
    For VXLAN clusters, follow the instructions under the "Kubernetes VXLAN" tab. For BGP clusters, follow the instructions under the "Kubernetes BGP" tab.
 
    > **Note**: For Rancher default values for service CIDR and DNS cluster IP, see the {% include open-new-window.html text='Rancher kube-api service options' url='https://rancher.com/docs/rke/latest/en/config-options/services/#kubernetes-api-server-options' %}.

@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/cachingmap"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -54,8 +54,12 @@ var _ = Describe("BPF Syncer", func() {
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
-	beCache := cachingmap.New(nat.BackendMapParameters, eps)
+	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+			svcs, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
+		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+			eps, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 
@@ -618,7 +622,7 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(cluster.LocalCount()).To(Equal(uint32(1)))
 		}))
 
-		By("adding an unrelated route does not change anyhing", makestep(func() {
+		By("adding an unrelated route does not change anything", makestep(func() {
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.55.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(

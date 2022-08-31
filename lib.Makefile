@@ -25,8 +25,7 @@ ifeq ($(ARCHES),)
 endif
 
 # list of arches *not* to build when doing *-all
-#    until s390x works correctly
-EXCLUDEARCH ?= s390x
+EXCLUDEARCH?=
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
 # BUILDARCH is the host architecture
@@ -224,13 +223,16 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
-# Set the platform correctly for building docker images so that 
+# Set the platform correctly for building docker images so that
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
 TARGET_PLATFORM=--platform=linux/arm64/v8
 endif
 ifeq ($(ARCH),armv7)
 TARGET_PLATFORM=--platform=linux/arm/v7
+endif
+ifeq ($(ARCH),ppc64le)
+TARGET_PLATFORM=--platform=linux/ppc64le
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
@@ -272,6 +274,10 @@ DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+
+# A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
+.PHONY: force-rebuild
+force-rebuild:
 
 ###############################################################################
 # Updating pins
@@ -699,7 +705,7 @@ semaphore-run-workflow:
 # This is a helpful wrapper of the semaphore-run-workflow target to run the update_pins workflow file for a project.
 semaphore-run-auto-pin-update-workflow:
 	SEMAPHORE_WORKFLOW_FILE=update_pins.yml $(MAKE) semaphore-run-workflow
-	@echo Successully triggered the semaphore pin update workflow
+	@echo Successfully triggered the semaphore pin update workflow
 
 # This target triggers the 'semaphore-run-auto-pin-update-workflow' target for every SEMAPHORE_PROJECT_ID in the list of
 # SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS.
@@ -862,7 +868,7 @@ cd-common: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 ###############################################################################
 # Release targets and helpers
 #
-# The followings targets and macros are used to help start and cut releases.
+# The following targets and macros are used to help start and cut releases.
 # At high level, this involves:
 # - Creating release branches
 # - Adding empty commits to start next release, and updating the 'dev' tag
@@ -895,7 +901,7 @@ fetch-all:
 
 # git-dev-tag retrieves the dev tag for the current commit (the one are dev images are tagged with).
 git-dev-tag = $(shell git describe --tags --long --always --abbrev=12 --match "*dev*")
-# git-release-tag-from-dev-tag get's the release version from the current commits dev tag.
+# git-release-tag-from-dev-tag gets the release version from the current commits dev tag.
 git-release-tag-from-dev-tag = $(shell echo $(call git-dev-tag) | grep -P -o "^v\d*.\d*.\d*")
 # git-release-tag-for-current-commit gets the release tag for the current commit if there is one.
 git-release-tag-for-current-commit = $(shell git describe --tags --exact-match --exclude "*dev*")
@@ -1107,6 +1113,11 @@ ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
 
+# Check if the codebase is dirty or not.
+check-dirty:
+	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
+	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
+
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
 ###############################################################################
@@ -1213,12 +1224,19 @@ kind-cluster-destroy: $(KIND) $(KUBECTL)
 
 kind $(KIND):
 	mkdir -p $(KIND_DIR)
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.11.1"
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.14.0"
 
 kubectl $(KUBECTL):
 	mkdir -p $(KIND_DIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
+	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
+
+bin/helm:
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	wget -q https://get.helm.sh/helm-v3.3.1-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
+	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
+	mv $(TMP)/linux-amd64/helm bin/helm
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

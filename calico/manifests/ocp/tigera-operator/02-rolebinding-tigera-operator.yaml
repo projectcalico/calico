@@ -1,7 +1,0 @@
----
-layout: null
----
-{% helm tigera-operator --execute templates/tigera-operator/02-rolebinding-tigera-operator.yaml %}
-installation:
-  kubernetesProvider: openshift
-{% endhelm %}

@@ -1,9 +1,0 @@
----
-layout: null
----
-{% helm tigera-operator --execute-dir crds/calico %}
-installation:
-  enabled: false
-apiServer:
-  enabled: false
-{% endhelm %}

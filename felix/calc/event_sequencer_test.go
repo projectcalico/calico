@@ -62,7 +62,22 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 				IntIp: "10.28.0.13",
 			},
 		},
-		Ipv6Nat: []*proto.NatInfo{},
+		Ipv6Nat:                    []*proto.NatInfo{},
+		AllowSpoofedSourcePrefixes: []string{},
+	}),
+	Entry("workload endpoint with source IP spoofing configured", model.WorkloadEndpoint{
+		State:                      "up",
+		Name:                       "bill",
+		AllowSpoofedSourcePrefixes: []net.IPNet{net.MustParseCIDR("8.8.8.8/32")},
+	}, proto.WorkloadEndpoint{
+		State:                      "up",
+		Name:                       "bill",
+		Ipv4Nets:                   []string{},
+		Ipv6Nets:                   []string{},
+		Tiers:                      []*proto.TierInfo{},
+		Ipv4Nat:                    []*proto.NatInfo{},
+		Ipv6Nat:                    []*proto.NatInfo{},
+		AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32"},
 	}),
 )
 
@@ -96,7 +111,7 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 
 	It("a fully-loaded ParsedRules struct should result in all fields being set in the protobuf rules", func() {
 		// We use reflection to scan all the fields in the protobuf rule to make sure that they're
-		// all filled in.  If any are still at their zero value, either hte test is out of date
+		// all filled in.  If any are still at their zero value, either the test is out of date
 		// or we forgot to add conversion logic for that field.
 		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
 		protoPolicy := *protoUpdate.Policy

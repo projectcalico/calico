@@ -332,7 +332,7 @@ func (d *WindowsDataplane) loopUpdatingDataplane() {
 }
 
 // Applies any pending changes to the dataplane by giving each of the managers a chance to
-// complete their deffered work. If the operation fails, then this will also set up a
+// complete their deferred work. If the operation fails, then this will also set up a
 // rescheduling kick so that the apply can be reattempted.
 func (d *WindowsDataplane) apply() {
 	// Unset the needs-sync flag, a rescheduling kick will reset it later if something failed

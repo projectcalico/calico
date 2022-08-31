@@ -30,6 +30,7 @@ func (rs *resourceStore) watchResource(ctx context.Context, resourceVersion stri
 	ctx, cancel := context.WithCancel(ctx)
 	lWatch, err := rs.watch(ctx, rs.client, opts)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	wc := &watchChan{

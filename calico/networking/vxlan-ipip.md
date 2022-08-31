@@ -45,7 +45,7 @@ Encapsulation of workload traffic is typically required only when traffic crosse
 
 #### IPv4/6 address support
 
-IP in IP and VXLAN support only IPv4 addresses.
+IP in IP supports only IPv4 addresses.
 
 #### Best practice
 
@@ -79,7 +79,7 @@ spec:
   <label:Manifest>
 <%
 
-For manifest installations of Calico, you can control the deafult IP pool encapsualtion mode using the `CALICO_IPV4POOL_VXLAN` and `CALICO_IPV4POOL_IPIP` environment variables in the environment of the `calico-node` daemon set.
+For manifest installations of Calico, you can control the default IP pool encapsulation mode using the `CALICO_IPV4POOL_VXLAN` and `CALICO_IPV4POOL_IPIP` (and `CALICO_IPV6POOL_VXLAN` for IPv6) environment variables in the environment of the `calico-node` daemon set.
 
 %>
 {% endtabs %}

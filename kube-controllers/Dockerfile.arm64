@@ -11,9 +11,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+ARG QEMU_IMAGE
+ARG UBI_IMAGE
+
+FROM ${QEMU_IMAGE} as qemu
+
+FROM --platform=linux/arm64 ${UBI_IMAGE} as ubi
+
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/
+
+# Make sure the status file is owned by our user.
+RUN mkdir /status
+RUN touch /status/status.json && chown 999 /status/status.json
+
 FROM scratch
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
+COPY --from=ubi /status /status
+
 ADD bin/kube-controllers-linux-arm64 /usr/bin/kube-controllers
 ADD bin/check-status-linux-arm64 /usr/bin/check-status
+USER 999
 ENTRYPOINT ["/usr/bin/kube-controllers"]

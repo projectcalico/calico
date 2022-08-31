@@ -10,7 +10,7 @@
 1. [Create a release branch](#3-create-a-release-branch)
 1. [Performing a release](#4-performing-a-release)
 1. [Promoting to be the latest release in the docs](#5-promoting-to-be-the-latest-release-in-the-docs)
-1. [Post-release checks](#6-post-release-checks)
+1. [Post-release](#6-post-release)
 
 ## 1. Prerequisites
 
@@ -75,6 +75,8 @@ To verify that the code and GitHub are in the right state for releasing the chos
 1. [Make sure each PR with a release note is within a Milestone](https://github.com/projectcalico/calico/pulls?q=is%3Apr+label%3Arelease-note-required+is%3Aclosed+milestone%3A%22Calico+v3.21.3%22+).
 1. [Make sure CI is passing](https://tigera.semaphoreci.com/projects/calico) for the target release branch.
 
+Check the status of each of these items daily in the week leading up to the release.
+
 ## 3. Create a release branch
 
 When starting development on a new minor release, the first step is to create a release branch.
@@ -110,6 +112,12 @@ When starting development on a new minor release, the first step is to create a 
           typha:
             version: release-v4.1
         ... etc ...
+   ```
+
+1. Update manifests (and other auto-generated code) by running the following command in the repository root.
+
+   ```
+   make generate
    ```
 
 1. Create the the release notes file. This does not need to be populated now but does need to exist for the site to render. The file should match
@@ -158,10 +166,28 @@ When starting development on a new minor release, the first step is to create a 
       to = "https://calico-v3-21.netlify.app/archive/v3.21/:splat"
       status = 200
     ```
+
 1. Add another commit for the redirect.
 
    ```
    git commit -a -m "Add redirects for archive/vX.Y"
+   ```
+
+1. Update manifests to use the new release branch instead of master.  Update versions in the following files:
+
+   - charts/calico/values.yaml
+   - charts/tigera-operator/values.yaml
+
+   Then, run manifest generation
+
+   ```
+   make gen-manifests
+   ```
+
+   Commit your changes
+
+   ```
+   Update manifests for release-vX.Y
    ```
 
    Then, push your changes to the branch.
@@ -181,6 +207,14 @@ When starting development on a new minor release, the first step is to create a 
 1. Cherry-pick the proxy rules commit created earlier to the latest production branch, as well as `master`.
    This will make the candidate site docs available at `projectcalico.docs.tigera.io/archive/vX.Y/` (Note: the trailing slash)
 
+### Updating milestones for the new branch
+
+Once a new branch is cut, we need to ensure a new milestone exists to represent the next release that will be cut from the master branch.
+
+1. Go to the [Calico milestones page](https://github.com/projectcalico/calico/milestones)
+
+1. Create a new release of the form `Calico vX.Y+1.0`. Leave the existing `Calico vX.Y.0` milestone open.
+
 ## 4. Performing a release
 
 ### 4.a Create a temporary branch for this release against origin
@@ -196,6 +230,18 @@ When starting development on a new minor release, the first step is to create a 
    ```
 
 1. Add the new version to the top of `calico/_data/versions.yml`
+
+1. Update version information in the following files:
+
+   - `calico/_data/versions.yml`: Versions displayed in the documentation.
+   - `charts/calico/values.yaml`: Calico version used in manifest generation.
+   - `charts/tigera-operator/values.yaml`: Versions of operator and calicoctl used in the helm chart and manifests.
+
+1. Update manifests (and other auto-generated code) by running the following command in the repository root.
+
+   ```
+   make generate
+   ```
 
 1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
 
@@ -263,7 +309,7 @@ releases, the following steps can be skipped.
 1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
 
    ```
-   make -C calico update-authors
+   make update-authors
    ```
 
 1. Commit your changes. For example:
@@ -279,20 +325,37 @@ releases, the following steps can be skipped.
 > (Note: This site contains the `LATEST_RELEASE` environment variable in the netlify UI, from which `netlify.toml` picks up the correct build for latest release.)
 > This will cause `projectcalico.docs.tigera.io` to be updated (after a few minutes). Validate that everything looks correct.
 
-## 6. Post-release checks
+## 6. Post-release
 
-Veriy the release is working as expected. This is important, so please don't skip it.
+### Update milestones
+
+1. Go to the [Calico milestones page](https://github.com/projectcalico/calico/milestones)
+
+1. Open a new milestone of the form `Calico vX.Y.Z` for the next patch release in the series if it does not yet exist.
+
+1. Close out the milestone for the release that was just published, moving any remaining open issues and PRs to the newly created milestone.
+
+### Post-release verification
+
+Verify the release is working as expected. This is important, so please don't skip it.
 
 1. Ensure that the site is accessible by visiting `projectcalico.docs.tigera.io/archive/<version>/`.
+
 1. Checkout the relevant docs branch (i.e. the release-vX.Y branch)
-1. Run `make release-test`.  The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
-1. check the output of the tests - if any test failed, dig in and understand why.
+
+1. Run the post-release checks. The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
+   
+   ```
+   make VERSION=... FLANNEL_VERSION=... OPERATOR_VERSION=... postrelease-checks
+   ```   
+
+1. Check the output of the tests - if any test failed, dig in and understand why.
+
 1. Kick off some e2e tests to test the contents of the release.
 
 # Release notes
 
-Release notes for a Calico release contain notable changes across Calico repositories. To write
-release notes for a given version, perform the following steps.
+Release notes for a Calico release contain notable changes across Calico repositories. To write release notes for a given version, perform the following steps.
 
 1. Check the merged pull requests in the milestone and make sure each has a release note if it needs one.
 
@@ -311,10 +374,10 @@ release notes for a given version, perform the following steps.
 1. Run the following command to collect all release notes for the given version.
 
    ```
-   make -C calico release-notes
+   make release-notes
    ```
 
-   A file called `<VERSION>-release-notes.md` will be created with the raw release note content.
+   A file called `release-notes/<VERSION>-release-notes.md` will be created with the raw release note content.
 
    > **NOTE**: If you receive a ratelimit error, you can specify a `GITHUB_TOKEN` in the above command to
    > increase the number of allowed API calls. [See here for details](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/).
@@ -328,3 +391,9 @@ release notes for a given version, perform the following steps.
 
    - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.1.0/_includes/v3.1/release-notes/v3.1.0-release-notes.md)
    - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/7d5594dbca14cb1b765b65eb11bdd8239d23dfb3/_includes/v3.0/release-notes/v3.0.5-release-notes.md)
+
+1. Add the generated file to git.
+
+   ```
+   git add release-notes/
+   ```

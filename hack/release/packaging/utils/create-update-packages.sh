@@ -291,6 +291,7 @@ function do_nettle {
     rm -rf ../nettle-3.3
     mv nettle-3.3 ../
     cp -a nettle_3.3.orig.tar.gz ../
+    cp -a nettle_3.3.orig.tar.gz $outputDir
     cd ../nettle-3.3
     sed -i '1 s/unstable/xenial/' debian/changelog
     docker_run_rm calico-build/xenial dpkg-buildpackage -S
@@ -306,8 +307,8 @@ function do_nettle {
 
 function do_pub_debs {
     # Publish Debian packages.
-    pushd ${rootdir}/hack/release/packaging
-    ./utils/publish-debs.sh
+    pushd ${rootdir}/hack/release/packaging/output
+    ../utils/publish-debs.sh
     popd
 }
 
@@ -317,8 +318,8 @@ function do_pub_rpms {
 
     # Publish RPM packages.  Note, this includes updating the RPM repo
     # metadata.
-    pushd ${rootdir}/hack/release/packaging
-    ./utils/publish-rpms.sh
+    pushd ${rootdir}/hack/release/packaging/output
+    ../utils/publish-rpms.sh
     popd
 }
 

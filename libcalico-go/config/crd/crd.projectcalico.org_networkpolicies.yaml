@@ -9,6 +9,7 @@ spec:
     listKind: NetworkPolicyList
     plural: networkpolicies
     singular: networkpolicy
+  preserveUnknownFields: false
   scope: Namespaced
   versions:
   - name: v1

@@ -513,7 +513,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 	})
 
 	It("should handle the static default-allow Profile", func() {
-
 		findAllowAllProfileEvent := func(c <-chan api.WatchEvent) bool {
 			found := false
 			for i := 0; i < 10; i++ {
@@ -989,7 +988,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(keys).To(ContainElement(kvp2b.Key))
 			Expect(vals).To(ContainElement(kvp1b.Value.(*apiv3.HostEndpoint).Spec))
 			Expect(vals).To(ContainElement(kvp2b.Value.(*apiv3.HostEndpoint).Spec))
-
 		})
 
 		By("Deleting an existing Host Endpoint", func() {
@@ -1312,7 +1310,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(keys).To(ContainElement(kvp2b.Key))
 			Expect(vals).To(ContainElement(kvp1b.Value.(*apiv3.BGPPeer).Spec))
 			Expect(vals).To(ContainElement(kvp2b.Value.(*apiv3.BGPPeer).Spec))
-
 		})
 
 		By("Deleting the BGP Peer created by Create", func() {
@@ -2038,8 +2035,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().GetResourceVersion()).To(Equal(""))
 			fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().SetResourceVersion(updFC.Value.(*apiv3.FelixConfiguration).GetObjectMeta().GetResourceVersion())
 
-			// UID is auto-generated, make sure we don't fail the assertion based on it.
+			// UID and CreationTimestamp are auto-generated, make sure we don't fail the assertion based on it.
 			fc.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID = updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID
+			fc.Value.(*apiv3.FelixConfiguration).ObjectMeta.CreationTimestamp = updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.CreationTimestamp
 
 			// Assert the created object matches what we created.
 			Expect(updFC.Value.(*apiv3.FelixConfiguration)).To(Equal(fc.Value.(*apiv3.FelixConfiguration)))
@@ -2343,10 +2341,11 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				Key: model.HostConfigKey{
 					Hostname: "127.0.0.1",
 					Name:     "IpInIpTunnelAddr",
-				}}
+				},
+			}
 
 			expectedKeys := []api.Update{
-				api.Update{hostConfigKey, api.UpdateTypeKVNew},
+				{hostConfigKey, api.UpdateTypeKVNew},
 			}
 
 			snapshotCallbacks.ExpectExists(expectedKeys)
@@ -2708,7 +2707,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
-					"key":      l.KVPairs[i].Key.String()}).Info("[Test] starting watch")
+					"key":      l.KVPairs[i].Key.String(),
+				}).Info("[Test] starting watch")
 				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
@@ -2729,7 +2729,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
-					"key":      l.KVPairs[i].Key.String()}).Info("[Test] starting watch")
+					"key":      l.KVPairs[i].Key.String(),
+				}).Info("[Test] starting watch")
 				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
@@ -2738,7 +2739,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				watch.Stop()
 			}
 		})
-
 	})
 
 	Describe("watching Custom Resources", func() {
@@ -2964,7 +2964,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 	})
 
-	It("should handle a CRUD of IPAM Config", func() {
+	It("should handle a CRUD of IPAM Config (v1 format)", func() {
 		ipamKVP := &model.KVPair{
 			Key: model.IPAMConfigKey{},
 			Value: &model.IPAMConfig{
@@ -2972,11 +2972,28 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				AutoAllocateBlocks: true,
 			},
 		}
+		v3Key := model.ResourceKey{
+			Name: "default",
+			Kind: "IPAMConfig",
+		}
+
 		By("Creating an IPAM Config", func() {
 			kvpRes, err := c.Create(ctx, ipamKVP)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvpRes.Value).To(Equal(ipamKVP.Value))
 		})
+
+		var createdAt metav1.Time
+		var uid types.UID
+		By("Reading it with the v3 client and checking metadata", func() {
+			v3Res, err := c.Get(ctx, v3Key, "")
+			Expect(err).NotTo(HaveOccurred())
+			createdAt = v3Res.Value.(*libapiv3.IPAMConfig).CreationTimestamp
+			uid = v3Res.Value.(*libapiv3.IPAMConfig).UID
+			Expect(createdAt).NotTo(Equal(metav1.Time{}))
+			Expect(uid).NotTo(Equal(""))
+		})
+
 		By("Reading and updating an IPAM Config", func() {
 			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -2990,6 +3007,87 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(kvpRes2.Value).NotTo(Equal(ipamKVP.Value))
 			Expect(kvpRes2.Value).To(Equal(kvpRes.Value))
 		})
+
+		By("Reading it with the v3 client and checking metadata hasn't changed", func() {
+			v3Res, err := c.Get(ctx, v3Key, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v3Res.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+			Expect(v3Res.Value.(*libapiv3.IPAMConfig).UID).To(Equal(uid))
+		})
+
+		By("Deleting an IPAM Config", func() {
+			_, err := c.Delete(ctx, ipamKVP.Key, "")
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	It("should handle a CRUD of IPAM config (v3 format)", func() {
+		ipamKVP := &model.KVPair{
+			Key: model.ResourceKey{
+				Name: "default",
+				Kind: "IPAMConfig",
+			},
+			Value: &libapiv3.IPAMConfig{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "IPAMConfig",
+					APIVersion: "projectcalico.org/v3",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "default",
+				},
+				Spec: libapiv3.IPAMConfigSpec{
+					StrictAffinity:     false,
+					AutoAllocateBlocks: true,
+				},
+			},
+		}
+
+		kvpRes, err := c.Create(ctx, ipamKVP)
+		By("Creating an IPAM Config", func() {
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
+		})
+
+		By("Expecting the creation timestamp to be set")
+		createdAt := kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp
+		Expect(createdAt).NotTo(Equal(metav1.Time{}))
+
+		By("Reading and updating an IPAM Config", func() {
+			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
+
+			kvpRes.Value.(*libapiv3.IPAMConfig).Spec.StrictAffinity = true
+			kvpRes.Value.(*libapiv3.IPAMConfig).Spec.AutoAllocateBlocks = false
+			kvpRes2, err := c.Update(ctx, kvpRes)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).Spec).NotTo(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
+			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(kvpRes.Value.(*libapiv3.IPAMConfig).Spec))
+
+			// Expect the creation time stamp to be the same.
+			Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+		})
+
+		By("Updating the IPAMConfig using the v1 client", func() {
+			kvpRes, err := c.Get(ctx, model.IPAMConfigKey{}, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			kvpRes.Value.(*model.IPAMConfig).MaxBlocksPerHost = 1000
+
+			kvpRes, err = c.Update(ctx, kvpRes)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking the update using the v3 client", func() {
+			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec.MaxBlocksPerHost).To(Equal(1000))
+
+			// Expect the creation time stamp to be the same.
+			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+		})
+
 		By("Deleting an IPAM Config", func() {
 			_, err := c.Delete(ctx, ipamKVP.Key, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -2998,9 +3096,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 })
 
 var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
-	var (
-		c *KubeClient
-	)
+	var c *KubeClient
 
 	ctx := context.Background()
 

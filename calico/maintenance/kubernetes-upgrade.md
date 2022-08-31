@@ -60,8 +60,12 @@ ownership of the helm resources to the new chart location.
 1. Once the install has succeeded, you can delete any old releases in the `default` namespace.
 
    ```
-   kubectl delete secret -n default -l name=calico -l owner=helm
+   kubectl delete secret -n default -l name=calico,owner=helm --dry-run
    ```
+
+> **Note:** The above command uses --dry-run to avoid making changes to your cluster. We recommend reviewing
+> the output and then re-running the command without --dry-run to commit to the changes.
+{: .alert .alert-info}
 
 ### All other upgrades
 
@@ -76,7 +80,7 @@ ownership of the helm resources to the new chart location.
 1. Download the {{page.version}} operator manifest.
 
    ```bash
-   curl {{ "/manifests/tigera-operator.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml -O
    ```
 
 1. Use the following command to initiate an upgrade.
@@ -91,17 +95,17 @@ ownership of the helm resources to the new chart location.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{ "/manifests/calico.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{ "/manifests/canal.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/canal.yaml -O
    ```
 
    **{{site.prodname}} for policy (advanced)**
    ```bash
-   curl {{ "/manifests/calico-policy-only.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico-policy-only.yaml -O
    ```
 
    > **Note**: If you manually modified the manifest, you must manually apply the
@@ -156,12 +160,12 @@ ownership of the helm resources to the new chart location.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/calico-etcd.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{ "/manifests/canal-etcd.yaml" | absolute_url }} -O
+   curl {{site.data.versions.first.manifests_url}}/manifests/canal-etcd.yaml -O
    ```
 
    > **Note**: You must manually apply the changes you made to the manifest
@@ -228,7 +232,7 @@ take the following steps to upgrade the Dikastes sidecars running in your applic
    the full version string of your Istio install, for example `1.4.2`.
 
    ```bash
-   kubectl apply -f {{ "/manifests/alp/istio-inject-configmap-<your Istio version>.yaml" | absolute_url }}
+   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
    ```
 
 1. Once the new template is in place, newly created pods use the upgraded version of Dikastes. Perform a rolling update of each of your service deployments

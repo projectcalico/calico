@@ -17,17 +17,7 @@ in touch for help debugging any issues with Calico.
 
 ## Read the source, Luke!
 
-All of Calico's code is on [GitHub](https://github.com/projectcalico){:target="_blank"}.  The following
-list contains the most commonly encountered repositories:
-
-Repository                                                              | Description
-------------------------------------------------------------------------|----------------------------
-[Calico](https://github.com/projectcalico/calico){:target="_blank"}                       | Calico release artifacts and documentation
-[calicoctl](https://github.com/projectcalico/calicoctl){:target="_blank"}                 | calicoctl CLI tool
-[cni-plugin](https://github.com/projectcalico/cni-plugin){:target="_blank"}               | Calico CNI plugin
-[felix](https://github.com/projectcalico/felix){:target="_blank"}                         | felix policy enforcement agent
-[kube-controllers](https://github.com/projectcalico/kube-controllers){:target="_blank"}   | Kubernetes controllers
-[libcalico-go](https://github.com/projectcalico/libcalico-go){:target="_blank"}           | Golang Calico library
+All of Calico's code is on [GitHub](https://github.com/projectcalico/calico){:target="_blank"}.
 
 ## Contributing
 
@@ -40,4 +30,4 @@ interested in doing that:
 -   Thanks!
 -   See the [GitHub docs](https://help.github.com/articles/using-pull-requests){:target="_blank"} for how
     to create a pull request.
--   Check the contribution guidelines at the root of each repo for more details.
+-   Check the [contribution and developer docs](https://github.com/projectcalico/calico/blob/master/CONTRIBUTING_CODE.md).

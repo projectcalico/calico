@@ -701,6 +701,11 @@ func (in *WorkloadEndpointSpec) DeepCopyInto(out *WorkloadEndpointSpec) {
 		*out = make([]WorkloadEndpointPort, len(*in))
 		copy(*out, *in)
 	}
+	if in.AllowSpoofedSourcePrefixes != nil {
+		in, out := &in.AllowSpoofedSourcePrefixes, &out.AllowSpoofedSourcePrefixes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

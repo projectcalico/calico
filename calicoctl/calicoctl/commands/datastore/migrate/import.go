@@ -121,7 +121,7 @@ Description:
 
 	// Make sure that the datastore is locked. Since the call to EnsureInitialized
 	// should initialize it to unlocked, lock it before we continue.
-	locked, err := checkLocked(ctx, client)
+	locked, err := common.CheckLocked(ctx, client)
 	if err != nil {
 		return fmt.Errorf("Error while checking if datastore was locked: %s", err)
 	} else if !locked {

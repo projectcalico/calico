@@ -9,6 +9,7 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1

@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -221,12 +222,12 @@ func (b BirdInfo) Show() {
 	}
 
 	fmt.Printf("\nbird v%s status\n", b.ipv.String())
-	printStatus(birdStatus)
+	printStatus(birdStatus, os.Stdout)
 }
 
 // printStatus prints out bird status.
-func printStatus(status *birdStatus) {
-	table := tablewriter.NewWriter(os.Stdout)
+func printStatus(status *birdStatus, out io.Writer) {
+	table := tablewriter.NewWriter(out)
 	table.SetHeader([]string{"Ready", "Version", "RouteID", "ServerTime", "LastBoot", "LastReconfig"})
 
 	row := []string{

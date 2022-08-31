@@ -1924,6 +1924,20 @@ func schema_libcalico_go_lib_apis_v1_WorkloadEndpointSpec(ref common.ReferenceCa
 							},
 						},
 					},
+					"allow_spoofed_source_prefixes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowSpoofedSourcePrefixes is a list of CIDRs this workload endpoint is allowed to send traffic from, i.e. this allows the workload endpoint to spoof its IP address using addresses in these prefixes",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/net.IPNet"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -2808,9 +2822,9 @@ func schema_libcalico_go_lib_apis_v3_NodeSpec(ref common.ReferenceCallback) comm
 							Format:      "",
 						},
 					},
-					"ipv6VXLANTunnelMACAddr": {
+					"vxlanTunnelMACAddrV6": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IPv6VXLANTunnelMACAddr is the MAC address of the IPv6 VXLAN tunnel.",
+							Description: "VXLANTunnelMACAddrV6 is the MAC address of the IPv6 VXLAN tunnel.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2865,7 +2879,14 @@ func schema_libcalico_go_lib_apis_v3_NodeStatus(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"wireguardPublicKey": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WireguardPublicKey is the Wireguard public-key for this node. wireguardPublicKey validates if the string is a valid base64 encoded key.",
+							Description: "WireguardPublicKey is the IPv4 Wireguard public-key for this node. wireguardPublicKey validates if the string is a valid base64 encoded key.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"wireguardPublicKeyV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WireguardPublicKeyV6 is the IPv6 Wireguard public-key for this node. wireguardPublicKey validates if the string is a valid base64 encoded key.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2900,7 +2921,14 @@ func schema_libcalico_go_lib_apis_v3_NodeWireguardSpec(ref common.ReferenceCallb
 				Properties: map[string]spec.Schema{
 					"interfaceIPv4Address": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceIPv4Address is the IPv4 address for the Wireguard interface.",
+							Description: "InterfaceIPv4Address is the IP address for the IPv4 Wireguard interface.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"interfaceIPv6Address": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterfaceIPv6Address is the IP address for the IPv6 Wireguard interface.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3219,6 +3247,21 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref common.ReferenceCa
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
 										Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v3.WorkloadEndpointPort"),
+									},
+								},
+							},
+						},
+					},
+					"allowSpoofedSourcePrefixes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowSpoofedSourcePrefixes is a list of CIDRs that the endpoint should be able to send traffic from, bypassing the RPF check.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
 									},
 								},
 							},

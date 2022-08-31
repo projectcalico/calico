@@ -14,10 +14,22 @@
 
 . $PSScriptRoot\config.ps1
 
+Write-Host "Starting Calico..."
+Write-Host "This may take several seconds if the vSwitch needs to be created."
+
 Start-Service CalicoNode
+Wait-ForCalicoInit
 Start-Service CalicoFelix
 
 if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
 {
     Start-Service CalicoConfd
 }
+
+while ((Get-Service | where Name -Like 'Calico*' | where Status -NE Running) -NE $null) {
+    Write-Host "Waiting for the Calico services to be running..."
+    Start-Sleep 1
+}
+
+Write-Host "Done, the Calico services are running:"
+Get-Service | where Name -Like 'Calico*'

@@ -29,7 +29,7 @@ There are two ways to switch your cluster to use {{site.prodname}} networking. B
 
 - **Create a new cluster using {{site.prodname}} and migrate existing workloads**
 
-  If you have the ability to migrate worloads from one cluster to the next without caring about downtime, this is the easiest method: [create a new cluster using {{site.prodname}}]({{site.baseurl}}/getting-started/kubernetes/quickstart).
+  If you have the ability to migrate workloads from one cluster to the next without caring about downtime, this is the easiest method: [create a new cluster using {{site.prodname}}]({{site.baseurl}}/getting-started/kubernetes/quickstart).
 
 - **Live migration on an existing cluster**
 
@@ -61,13 +61,13 @@ There are two ways to switch your cluster to use {{site.prodname}} networking. B
 1. Install {{site.prodname}}.
 
    ```
-   kubectl apply -f {{ "/manifests/flannel-migration/calico.yaml" | absolute_url }}
+   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/flannel-migration/calico.yaml
    ```
 
 1. Start the migration controller.
 
    ```
-   kubectl apply -f {{ "/manifests/flannel-migration/migration-job.yaml" | absolute_url }}
+   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/flannel-migration/migration-job.yaml
    ```
 
    You will see nodes begin to update one at a time.
@@ -88,7 +88,7 @@ There are two ways to switch your cluster to use {{site.prodname}} networking. B
 1. Delete the migration controller.
 
    ```
-   kubectl delete -f {{ "/manifests/flannel-migration/migration-job.yaml" | absolute_url }}
+   kubectl delete -f {{site.data.versions.first.manifests_url}}/manifests/flannel-migration/migration-job.yaml
    ```
 
 #### Modify flannel configuration 
@@ -100,10 +100,12 @@ which can be set as environment variables within the pod.
 | Configuration options            | Description                                                          | Default                                    |
 |----------------------------------|----------------------------------------------------------------------|--------------------------------------------|
 | FLANNEL_NETWORK                  | IPv4 network CIDR used by flannel for the cluster.                   | Automatically detected                     |
-| FLANNEL_DAEMONSET_NAME           | Name of the flannel daemon set in the kube-system namespace.         | kube-flannel-ds-amd64                      |
+| FLANNEL_IPV6_NETWORK             | IPv6 network CIDR used by flannel for the cluster.                   | Automatically detected                     |
+| FLANNEL_DAEMONSET_NAME           | Name of the flannel daemon set in the kube-system namespace.         | kube-flannel-ds                            |
 | FLANNEL_MTU                      | MTU for the flannel VXLAN device.                                    | Automatically detected                     |
 | FLANNEL_IP_MASQ                  | Whether masquerading is enabled for outbound traffic.                | Automatically detected                     |
-| FLANNEL_SUBNET_LEN               | Per-node subnet length used by flannel.                              | 24                                         |
+| FLANNEL_SUBNET_LEN               | Per-node IPv4 subnet length used by flannel.                         | 24                                         |
+| FLANNEL_IPV6_SUBNET_LEN          | Per-node IPv6 subnet length used by flannel.                         | 64                                         |
 | FLANNEL_ANNOTATION_PREFIX        | Value provided via the kube-annotation-prefix option to flannel.     |  flannel.alpha.coreos.com                  |
 | FLANNEL_VNI                      | The VNI used for the flannel network.                                |  1                                         |
 | FLANNEL_PORT                     | UDP port used for VXLAN.                                             |  8472                                      |
@@ -134,8 +136,8 @@ If you need to revert a cluster from {{site.prodname}} back to flannel, follow t
 1. Remove the migration controller and {{site.prodname}}.
 
    ```
-   kubectl delete -f {{ "/manifests/flannel-migration/migration-job.yaml" | absolute_url }}
-   kubectl delete -f {{ "/manifests/flannel-migration/calico.yaml" | absolute_url }}
+   kubectl delete -f {{site.data.versions.first.manifests_url}}/manifests/flannel-migration/migration-job.yaml
+   kubectl delete -f {{site.data.versions.first.manifests_url}}/manifests/flannel-migration/calico.yaml
    ```
 
 1. Determine the nodes that were migrated to {{site.prodname}}.
@@ -177,7 +179,7 @@ After the above steps have been completed on each node, perform the following st
 1. Remove the `nodeSelector` from the flannel daemonset.
 
    ```
-   kubectl patch ds/kube-flannel-ds-amd64 -n kube-system -p '{"spec": {"template": {"spec": {"nodeSelector": null}}}}'
+   kubectl patch ds/kube-flannel-ds -n kube-system -p '{"spec": {"template": {"spec": {"nodeSelector": null}}}}'
    ```
 
 1. Remove the migration label from all nodes.

@@ -1,7 +1,0 @@
----
-layout: null
----
-{% helm --execute templates/calico-node-rbac.yaml --execute templates/calico-kube-controllers-rbac.yaml %}
-datastore: etcd
-network: flannel
-{% endhelm %}

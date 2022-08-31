@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
 func TestICMPCTPlain(t *testing.T) {
@@ -43,6 +44,7 @@ func TestICMPCTPlain(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	dumpRTMap(rtMap)
 
+	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpEcho)
 		Expect(err).NotTo(HaveOccurred())
@@ -61,6 +63,7 @@ func TestICMPCTPlain(t *testing.T) {
 
 	icmpEcho = makeICMPEcho(srcIP, node1ip, 0 /* Echo Reply */) // pong
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpEcho)
 		Expect(err).NotTo(HaveOccurred())
@@ -76,6 +79,7 @@ func TestICMPCTPlain(t *testing.T) {
 			Expect(k.PortB()).To(Equal(uint16(0)))
 		}
 	})
+	expectMark(tcdefs.MarkSeen)
 }
 
 func makeICMPEcho(src, dst net.IP, icmpType uint8) []byte {

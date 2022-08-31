@@ -52,6 +52,7 @@ Although we expect future minor versions to work with the corresponding manifest
 ### How to
 
 1. [Enable application layer policy](#enable-application-layer-policy)
+1. [Install Calico CSI Driver](#install-calico-csi-driver)
 1. [Install Istio](#install-istio)
 1. [Update Istio sidecar injector](#update-istio-sidecar-injector)
 1. [Add Calico authorization services to the mesh](#add-calico-authorization-services-to-the-mesh)
@@ -66,6 +67,22 @@ In the default **FelixConfiguration**, set the field, `policySyncPathPrefix` to 
 ```bash
 calicoctl patch FelixConfiguration default --patch \
    '{"spec": {"policySyncPathPrefix": "/var/run/nodeagent"}}'
+```
+
+Additionally, if you have installed Calico via the operator, you can optionally disable flexvolumes.
+Flexvolumes were used in earlier implementations and have since been deprecated.
+
+```bash
+kubectl patch installation default --type=merge -p '{"spec": {"flexVolumePath": "None"}}'
+```
+
+#### Install Calico CSI Driver
+
+{{site.prodname}} utilizes a Container Storage Interface (CSI) driver to help set up the policy sync API on every node.
+Apply the following to install the Calico CSI driver
+
+```bash
+kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/csi-driver.yaml
 ```
 
 #### Install Istio
@@ -107,20 +124,20 @@ The sidecar injector automatically modifies pods as they are created to work wit
 <label:Istio v1.10.x,active:true>
 <%
 ```bash
-curl {{ "/manifests/alp/istio-inject-configmap-1.10.yaml" | absolute_url }} -o istio-inject-configmap.yaml
+curl {{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.10.yaml -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
 
-[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.10.yaml" | absolute_url }}){:target="_blank"}
+[View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.10.yaml){:target="_blank"}
 %>
 <label:Istio v1.9.x>
 <%
 ```bash
-curl {{ "/manifests/alp/istio-inject-configmap-1.9.yaml" | absolute_url }} -o istio-inject-configmap.yaml
+curl {{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.9.yaml -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
 
-[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.9.yaml" | absolute_url }}){:target="_blank"}
+[View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.9.yaml){:target="_blank"}
 %>
 {% endtabs %}
 
@@ -132,9 +149,9 @@ Apply the following manifest to configure Istio to query {{site.prodname}} for a
 <label: Istio v1.10.x and v1.9.x,active:true>
 <%
 ```bash
-kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-envoy-v3.yaml" | absolute_url }}
+kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/alp/istio-app-layer-policy-envoy-v3.yaml
 ```
-[View sample manifest]({{ "/manifests/alp/istio-app-layer-policy-envoy-v3.yaml" | absolute_url }}){:target="_blank"}
+[View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-app-layer-policy-envoy-v3.yaml){:target="_blank"}
 %>
 {% endtabs %}
 
@@ -144,13 +161,16 @@ You can control enforcement of application layer policy on a per-namespace basis
 
 To enable Istio and application layer policy in a namespace, add the label `istio-injection=enabled`.
 
-```
+```bash
 kubectl label namespace <your namespace name> istio-injection=enabled
 ```
 
 If the namespace already has pods in it, you must recreate them for this to take effect.
 
->**Note**: Envoy must be able to communicate with the `istio-pilot.istio-system service`. If you apply any egress policies to your pods, you *must* enable access. For example, you could [apply a network policy]({{ "/getting-started/kubernetes/installation/manifests/app-layer-policy/allow-istio-pilot.yaml" | absolute_url }}).
+>**Note**: Envoy must be able to communicate with the `istio-pilot.istio-system service`. If you apply any egress policies to your pods, you *must* enable access. For example, you could [apply a network policy]({{ "/security/calico-network-policy" | absolute_url }}).
+```bash
+kubectl apply -f {{ "/getting-started/kubernetes/installation/manifests/app-layer-policy/allow-istio-pilot.yaml" | absolute_url }}
+```
 {: .alert .alert-info}
 
 ### Above and beyond

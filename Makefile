@@ -19,8 +19,6 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
-MAKE_DIRS=$(shell ls -d */)
-
 clean:
 	$(MAKE) -C api clean
 	$(MAKE) -C apiserver clean
@@ -34,13 +32,32 @@ clean:
 	$(MAKE) -C node clean
 	$(MAKE) -C pod2daemon clean
 	$(MAKE) -C typha clean
-	$(MAKE) -C calico clean
+	rm -rf ./bin
 
 generate:
+	$(MAKE) gen-semaphore-yaml
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C app-policy protobuf
+	$(MAKE) gen-manifests
+
+gen-manifests: bin/helm
+	cd ./manifests && \
+		OPERATOR_VERSION=$(OPERATOR_VERSION) \
+		CALICO_VERSION=$(CALICO_VERSION) \
+		./generate.sh
+
+gen-semaphore-yaml:
+	cd .semaphore && ./generate-semaphore-yaml.sh
+
+# Build the tigera-operator helm chart.
+chart: bin/tigera-operator-$(GIT_VERSION).tgz
+bin/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+	bin/helm package ./charts/tigera-operator \
+	--destination ./bin/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
 
 # Build all Calico images for the current architecture.
 image:
@@ -78,7 +95,7 @@ hack/release/ghr:
 release: hack/release/release 
 	@hack/release/release -create
 
-# test the release code
+# Test the release code
 release-test:
 	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
 
@@ -90,9 +107,58 @@ release-publish: hack/release/release hack/release/ghr
 create-release-branch: hack/release/release
 	@hack/release/release -new-branch
 
-gen-semaphore-yaml:
-	cd .semaphore && ./generate-semaphore-yaml.sh
+## Kicks semaphore job which syncs github released helm charts with helm index file
+.PHONY: helm-index
+helm-index:
+	@echo "Triggering semaphore workflow to update helm index."
+	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea \
+			     SEMAPHORE_WORKFLOW_BRANCH=master \
+			     SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml \
+			     $(MAKE) semaphore-run-workflow
 
-check-dirty:
-	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
-	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
+## Generates release notes for the given version.
+.PHONY: release-notes
+release-notes:
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set)
+endif
+ifndef VERSION
+	$(error VERSION must be set)
+endif
+	VERSION=$(VERSION) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./hack/release/generate-release-notes.py
+
+## Update the AUTHORS.md file.
+update-authors:
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set)
+endif
+	@echo "# Calico authors" > AUTHORS.md
+	@echo "" >> AUTHORS.md
+	@echo "This file is auto-generated based on commit records reported" >> AUTHORS.md
+	@echo "by git for the projectcalico/calico repository. It is ordered alphabetically." >> AUTHORS.md
+	@echo "" >> AUTHORS.md
+	@docker run -ti --rm --net=host \
+		-v $(REPO_ROOT):/code \
+		-w /code \
+		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
+		python:3 \
+		bash -c '/usr/local/bin/python hack/release/get-contributors.py >> /code/AUTHORS.md'
+
+###############################################################################
+# Post-release validation
+###############################################################################
+POSTRELEASE_IMAGE=calico/postrelease
+POSTRELEASE_IMAGE_CREATED=.calico.postrelease.created
+$(POSTRELEASE_IMAGE_CREATED):
+	cd hack/postrelease && docker build -t $(POSTRELEASE_IMAGE) .
+	touch $@
+
+postrelease-checks: $(POSTRELEASE_IMAGE_CREATED)
+	$(DOCKER_RUN) \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-e VERSION=$(VERSION) \
+		-e FLANNEL_VERSION=$(FLANNEL_VERSION) \
+		-e VPP_VERSION=$(VPP_VERSION) \
+		-e OPERATOR_VERSION=$(OPERATOR_VERSION) \
+		$(POSTRELEASE_IMAGE) \
+		sh -c "nosetests hack/postrelease -e "$(EXCLUDE_REGEX)" -s -v --with-xunit --xunit-file='postrelease-checks.xml' --with-timer $(EXTRA_NOSE_ARGS)"

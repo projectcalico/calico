@@ -92,9 +92,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		}
 
 		if bpfEnabled {
-			for _, f := range felixes {
-				Eventually(f.NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
-			}
+			ensureAllNodesBPFProgramsAttached(felixes)
 		}
 
 		cc = &connectivity.Checker{}

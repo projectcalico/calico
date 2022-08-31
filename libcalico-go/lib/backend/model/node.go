@@ -64,6 +64,8 @@ type OrchRef struct {
 type Wireguard struct {
 	InterfaceIPv4Addr *net.IP `json:"interfaceIPv4Addr,omitempty"`
 	PublicKey         string  `json:"publicKey,omitempty"`
+	InterfaceIPv6Addr *net.IP `json:"interfaceIPv6Addr,omitempty"`
+	PublicKeyV6       string  `json:"publicKeyV6,omitempty"`
 }
 
 type NodeKey struct {

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,14 +29,31 @@ const (
 	PolicyAllow
 	PolicyDeny
 	PolicyTailCallFailed = 10
+	MaxRuleIDs           = 32
 )
 
 // struct cali_tc_state {
 //    __be32 ip_src;
+//    __be32 ip_src1;
+//    __be32 ip_src2;
+//    __be32 ip_src3;
 //    __be32 ip_dst;
+//    __be32 ip_dst1;
+//    __be32 ip_dst2;
+//    __be32 ip_dst3;
 //    __be32 pre_nat_ip_dst;
+//    __be32 pre_nat_ip_dst1;
+//    __be32 pre_nat_ip_dst2;
+//    __be32 pre_nat_ip_dst3;
 //    __be32 post_nat_ip_dst;
+//    __be32 post_nat_ip_dst1;
+//    __be32 post_nat_ip_dst2;
+//    __be32 post_nat_ip_dst3;
 //    __be32 tun_ip;
+//    __be32 tun_ip1;
+//    __be32 tun_ip2;
+//    __be32 tun_ip3;
+//    __u32 unused;
 //    __s32 pol_rc;
 //    __u16 sport;
 //    __u16 dport;
@@ -45,16 +62,34 @@ const (
 //    __u8 ip_proto;
 //    __u8 flags;
 //    __be16 ip_size;
+//    __u32 rules_hit;
+//    __u64 rule_ids[MAX_RULE_IDS];
 //    struct calico_ct_result ct_result;
 //    struct calico_nat_dest nat_dest;
 //    __u64 prog_start_time;
 // };
 type State struct {
 	SrcAddr             uint32
+	SrcAddr1            uint32
+	SrcAddr2            uint32
+	SrcAddr3            uint32
 	DstAddr             uint32
+	DstAddr1            uint32
+	DstAddr2            uint32
+	DstAddr3            uint32
 	PreNATDstAddr       uint32
+	PreNATDstAddr1      uint32
+	PreNATDstAddr2      uint32
+	PreNATDstAddr3      uint32
 	PostNATDstAddr      uint32
+	PostNATDstAddr1     uint32
+	PostNATDstAddr2     uint32
+	PostNATDstAddr3     uint32
 	TunIP               uint32
+	TunIP1              uint32
+	TunIP2              uint32
+	TunIP3              uint32
+	_                   uint32
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16
@@ -63,16 +98,20 @@ type State struct {
 	IPProto             uint8
 	Flags               uint8
 	IPSize              uint16
+	RulesHit            uint32
+	RuleIDs             [MaxRuleIDs]uint64
 	ConntrackRCFlags    uint32
+	_                   uint32
 	ConntrackNATIPPort  uint64
 	ConntrackTunIP      uint32
 	ConntrackIfIndexFwd uint32
 	ConntrackIfIndexCtd uint32
+	_                   uint32
 	NATData             uint64
 	ProgStartTime       uint64
 }
 
-const expectedSize = 80
+const expectedSize = 408
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})
@@ -93,13 +132,13 @@ func StateFromBytes(bytes []byte) State {
 }
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_state",
+	Filename:   "/sys/fs/bpf/tc/globals/cali_state",
 	Type:       "percpu_array",
 	KeySize:    4,
 	ValueSize:  expectedSize,
 	MaxEntries: 1,
-	Name:       "cali_v4_state",
-	Version:    3,
+	Name:       "cali_state",
+	Version:    2,
 }
 
 func Map(mc *bpf.MapContext) bpf.Map {
@@ -108,11 +147,11 @@ func Map(mc *bpf.MapContext) bpf.Map {
 
 func MapForTest(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/test_v4_state",
+		Filename:   "/sys/fs/bpf/tc/globals/test_state",
 		Type:       "array",
 		KeySize:    4,
 		ValueSize:  expectedSize,
 		MaxEntries: 1,
-		Name:       "test_v4_state",
+		Name:       "test_state",
 	})
 }

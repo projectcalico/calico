@@ -153,6 +153,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				Port:     uint16(8080),
 			},
 		}
+		res.Spec.AllowSpoofedSourcePrefixes = []string{"8.8.8.8/32"}
 
 		kvps, err = up.Process(&model.KVPair{
 			Key:      v3WorkloadEndpointKey2,
@@ -184,6 +185,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 							Port:     uint16(8080),
 						},
 					},
+					AllowSpoofedSourcePrefixes: []cnet.IPNet{cnet.MustParseCIDR("8.8.8.8/32")},
 				},
 				Revision: "1234",
 			},

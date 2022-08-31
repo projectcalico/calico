@@ -60,7 +60,7 @@ var _ = Describe("Host ip manager", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should remove the IP set", func() {
-				Expect(ipSets.Members["this-host"]).To(Equal(set.New()))
+				Expect(ipSets.Members["this-host"]).To(Equal(set.New[string]()))
 			})
 		})
 

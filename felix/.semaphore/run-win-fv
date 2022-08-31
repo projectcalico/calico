@@ -50,7 +50,8 @@ ${SCP_CMD} -r ubuntu@${MASTER_IP}:/home/ubuntu/report /home/semaphore
 
 ls -ltr ./report
 mkdir /home/semaphore/fv.log
-mv /home/semaphore/report/*.log /home/semaphore/fv.log
+# check if *.log glob contains any files so that mv doesn't fail
+compgen -G /home/semaphore/report/*.log > /dev/null && mv /home/semaphore/report/*.log /home/semaphore/fv.log
 
 # Stop for debug
 echo "Check for pause file..."

@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 
 	"github.com/docopt/docopt-go"
 	"github.com/pkg/errors"
@@ -42,6 +43,7 @@ func init() {
 	})
 	conntrackCmd.AddCommand(newConntrackWriteCmd())
 	conntrackCmd.AddCommand(newConntrackFillCmd())
+	conntrackCmd.AddCommand(newConntrackCreateCmd())
 	rootCmd.AddCommand(conntrackCmd)
 }
 
@@ -53,16 +55,18 @@ var conntrackCmd = &cobra.Command{
 
 type conntrackDumpCmd struct {
 	*cobra.Command
+	Version string `docopt:"--ver"`
+	version string
 }
 
 func newConntrackDumpCmd() *cobra.Command {
 	cmd := &conntrackDumpCmd{
 		Command: &cobra.Command{
-			Use:   "dump",
+			Use:   "dump [--ver=<version>]",
 			Short: "Dumps connection tracking table",
 		},
 	}
-
+	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "version to dump from")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -74,20 +78,53 @@ func (cmd *conntrackDumpCmd) Args(c *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.New(err.Error())
 	}
-
 	err = a.Bind(cmd)
 	if err != nil {
 		return errors.New(err.Error())
 	}
-
 	return nil
 }
 
+func dumpCtMapV2(ctMap bpf.Map) error {
+	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		var ctKey v2.Key
+		if len(k) != len(ctKey) {
+			log.Panic("Key has unexpected length")
+		}
+		copy(ctKey[:], k[:])
+
+		var ctVal v2.Value
+		if len(v) != len(ctVal) {
+			log.Panic("Value has unexpected length")
+		}
+		copy(ctVal[:], v[:])
+
+		fmt.Printf("%v -> %v", ctKey, ctVal)
+		dumpExtrav2(ctKey, ctVal)
+		fmt.Printf("\n")
+		return bpf.IterNone
+	})
+	return err
+}
+
 func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
+	var ctMap bpf.Map
 	mc := &bpf.MapContext{}
-	ctMap := conntrack.Map(mc)
+	switch cmd.version {
+	case "2":
+		ctMap = conntrack.MapV2(mc)
+	default:
+		ctMap = conntrack.Map(mc)
+	}
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Fatal("Failed to access ConntrackMap")
+	}
+	if cmd.version == "2" {
+		err := dumpCtMapV2(ctMap)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to iterate over conntrack entries")
+		}
+		return
 	}
 	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		var ctKey conntrack.Key
@@ -110,6 +147,35 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
 	}
+}
+
+func dumpExtrav2(k v2.Key, v v2.Value) {
+	now := bpf.KTimeNanos()
+
+	fmt.Printf(" Age: %s Active ago %s",
+		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
+
+	if k.Proto() != conntrack.ProtoTCP {
+		return
+	}
+
+	if v.Type() == conntrack.TypeNATForward {
+		return
+	}
+
+	data := v.Data()
+
+	if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() {
+		fmt.Printf(" CLOSED")
+		return
+	}
+
+	if data.Established() {
+		fmt.Printf(" ESTABLISHED")
+		return
+	}
+
+	fmt.Printf(" SYN-SENT")
 }
 
 func dumpExtra(k conntrack.Key, v conntrack.Value) {
@@ -253,26 +319,77 @@ func runClean(c *cobra.Command, _ []string) {
 	}
 }
 
+type conntrackCreateCmd struct {
+	*cobra.Command
+	Version string `docopt:"--ver"`
+	version string
+}
+
+func newConntrackCreateCmd() *cobra.Command {
+	cmd := &conntrackCreateCmd{
+		Command: &cobra.Command{
+			Use:   "create [--ver=<version>]",
+			Short: "create a conntrack map of specified version",
+		},
+	}
+
+	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "conntrack version to create")
+	cmd.Command.Args = cmd.Args
+	cmd.Command.Run = cmd.Run
+
+	return cmd.Command
+}
+
+func (cmd *conntrackCreateCmd) Args(c *cobra.Command, args []string) error {
+	a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	err = a.Bind(cmd)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	return nil
+}
+
+func (cmd *conntrackCreateCmd) Run(c *cobra.Command, _ []string) {
+	var ctMap bpf.Map
+	mc := &bpf.MapContext{}
+	switch cmd.version {
+	case "2":
+		ctMap = conntrack.MapV2(mc)
+	default:
+		ctMap = conntrack.Map(mc)
+	}
+	if err := ctMap.EnsureExists(); err != nil {
+		log.WithError(err).Errorf("Failed to create conntrackMap version %s", cmd.version)
+	}
+}
+
 type conntrackWriteCmd struct {
 	*cobra.Command
 
-	Key   string `docopt:"<key>"`
-	Value string `docopt:"<value>"`
+	Version string `docopt:"--ver"`
+	Key     string `docopt:"<key>"`
+	Value   string `docopt:"<value>"`
 
-	key []byte
-	val []byte
+	key     []byte
+	val     []byte
+	version string
 }
 
 func newConntrackWriteCmd() *cobra.Command {
 	cmd := &conntrackWriteCmd{
 		Command: &cobra.Command{
-			Use:   "write <key> <value>",
+			Use:   "write [--ver=<version>] <key> <value>",
 			Short: "write a key-value pair, each encoded in base64",
 		},
 	}
 
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
+	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "conntrack map version")
 
 	return cmd.Command
 }
@@ -289,21 +406,44 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 	}
 
 	cmd.key, err = base64.StdEncoding.DecodeString(cmd.Key)
-	if err != nil || len(cmd.key) != len(conntrack.Key{}) {
-		return errors.Errorf("failed to decode key: %s", err)
+	if err != nil {
+		switch cmd.version {
+		case "2":
+			if len(cmd.key) != len(v2.Key{}) {
+				return errors.Errorf("failed to decode key: %s", err)
+			}
+		default:
+			if len(cmd.key) != len(conntrack.Key{}) {
+				return errors.Errorf("failed to decode key: %s", err)
+			}
+		}
 	}
 
 	cmd.val, err = base64.StdEncoding.DecodeString(cmd.Value)
-	if err != nil || len(cmd.val) != len(conntrack.Value{}) {
-		return errors.Errorf("failed to decode val: %s", err)
+	if err != nil {
+		switch cmd.version {
+		case "2":
+			if len(cmd.val) != len(v2.Value{}) {
+				return errors.Errorf("failed to decode val: %s", err)
+			}
+		default:
+			if len(cmd.val) != len(conntrack.Value{}) {
+				return errors.Errorf("failed to decode val: %s", err)
+			}
+		}
 	}
-
 	return nil
 }
 
 func (cmd *conntrackWriteCmd) Run(c *cobra.Command, _ []string) {
 	mc := &bpf.MapContext{}
-	ctMap := conntrack.Map(mc)
+	var ctMap bpf.Map
+	if cmd.version == "2" {
+		ctMap = conntrack.MapV2(mc)
+	} else {
+		ctMap = conntrack.Map(mc)
+	}
+
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}

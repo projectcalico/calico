@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
 func TestICMPPortUnreachable(t *testing.T) {
@@ -68,6 +69,7 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 	}()
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
@@ -78,6 +80,7 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 
 		checkICMPPortUnreachable(pktR, ipv4)
 	})
+	expectMark(tcdefs.MarkSeenBypassForward)
 
 	// Test with count as 0. This results in a no backend after frontend lookup as count is 0.
 	err = natMap.Update(
@@ -86,6 +89,7 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
@@ -96,6 +100,7 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 
 		checkICMPPortUnreachable(pktR, ipv4)
 	})
+	expectMark(tcdefs.MarkSeenBypassForward)
 }
 
 func checkICMPPortUnreachable(pktR gopacket.Packet, ipv4 *layers.IPv4) {

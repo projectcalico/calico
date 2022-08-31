@@ -9,6 +9,7 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
+  preserveUnknownFields: false
   scope: Cluster
   versions:
   - name: v1
@@ -86,7 +87,7 @@ spec:
                 description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
                   mark that is set on connections from an external client to a local
                   service. This mark allows us to control how packets of that connection
-                  are routed within the host and how is routing intepreted by RPF
+                  are routed within the host and how is routing interpreted by RPF
                   check. [Default: 0]'
                 type: integer
               bpfExternalServiceMode:
@@ -99,6 +100,11 @@ spec:
                   node appears to use the IP of the ingress node; this requires a
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
+              bpfHostConntrackBypass:
+                description: 'BPFHostConntrackBypass Controls whether to bypass Linux
+                  conntrack in BPF mode for workloads and services. [Default: true
+                  - bypass Linux conntrack]'
+                type: boolean
               bpfKubeProxyEndpointSlicesEnabled:
                 description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls
                   whether Felix's embedded kube-proxy accepts EndpointSlices or not.
@@ -114,6 +120,14 @@ spec:
                   minimum time between updates to the dataplane for Felix''s embedded
                   kube-proxy.  Lower values give reduced set-up latency.  Higher values
                   reduce Felix CPU usage by batching up more work.  [Default: 1s]'
+                type: string
+              bpfL3IfacePattern:
+                description: BPFL3IfacePattern is a regular expression that allows
+                  to list tunnel devices like wireguard or vxlan (i.e., L3 devices)
+                  in addition to BPFDataIfacePattern. That is, tunnel interfaces not
+                  created by Calico, that Calico workload traffic flows over as well
+                  as any interfaces that handle incoming traffic to nodeports and
+                  services from outside the cluster.
                 type: string
               bpfLogLevel:
                 description: 'BPFLogLevel controls the log level of the BPF programs
@@ -133,6 +147,11 @@ spec:
                   matched by every selector in the source/destination matches in network
                   policy.  Selectors such as "all()" can result in large numbers of
                   entries (one entry per endpoint in that case).
+                type: integer
+              bpfMapSizeIfState:
+                description: BPFMapSizeIfState sets the size for ifstate map.  The
+                  ifstate map must be large enough to hold an entry for each device
+                  (host + workloads) on a host.
                 type: integer
               bpfMapSizeNATAffinity:
                 type: integer
@@ -166,6 +185,11 @@ spec:
                   are inclusive. [Default: 20000:29999]'
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
+              bpfPolicyDebugEnabled:
+                description: BPFPolicyDebugEnabled when true, Felix records detailed
+                  information about the BPF policy programs, which can be examined
+                  with the calico-bpf command-line tool.
+                type: boolean
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s
                   top-level iptables chains by inserting a rule at the top of the
@@ -288,14 +312,18 @@ spec:
                   type: object
                 type: array
               featureDetectOverride:
-                description: FeatureDetectOverride is used to override the feature
-                  detection. Values are specified in a comma separated list with no
-                  spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".
-                  "true" or "false" will force the feature, empty or omitted values
-                  are auto-detected.
+                description: FeatureDetectOverride is used to override feature detection
+                  based on auto-detected platform capabilities.  Values are specified
+                  in a comma separated list with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".  "true"
+                  or "false" will force the feature, empty or omitted values are auto-detected.
+                type: string
+              featureGates:
+                description: FeatureGates is used to enable or disable tech-preview
+                  Calico features. Values are specified in a comma separated list
+                  with no spaces, example; "BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false".
+                  This is used to enable features that are not fully production ready.
                 type: string
               floatingIPs:
-                default: Disabled
                 description: FloatingIPs configures whether or not Felix will program
                   floating IP addresses.
                 enum:
@@ -557,6 +585,10 @@ spec:
                   information. - WorkloadIPs: use workload endpoints to construct
                   routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
                 type: string
+              routeSyncDisabled:
+                description: RouteSyncDisabled will disable all operations performed
+                  on the route table. Set to true to run in network-policy mode only.
+                type: boolean
               routeTableRange:
                 description: Deprecated in favor of RouteTableRanges. Calico programs
                   additional Linux route tables for various purposes. RouteTableRange
@@ -622,15 +654,25 @@ spec:
                   this based on the existing IP pools. [Default: nil (unset)]'
                 type: boolean
               vxlanMTU:
-                description: 'VXLANMTU is the MTU to set on the tunnel device. See
-                  Configuring MTU [Default: 1440]'
+                description: 'VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel
+                  device. See Configuring MTU [Default: 1410]'
+                type: integer
+              vxlanMTUV6:
+                description: 'VXLANMTUV6 is the MTU to set on the IPv6 VXLAN tunnel
+                  device. See Configuring MTU [Default: 1390]'
                 type: integer
               vxlanPort:
                 type: integer
               vxlanVNI:
                 type: integer
               wireguardEnabled:
-                description: 'WireguardEnabled controls whether Wireguard is enabled.
+                description: 'WireguardEnabled controls whether Wireguard is enabled
+                  for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network).
+                  [Default: false]'
+                type: boolean
+              wireguardEnabledV6:
+                description: 'WireguardEnabledV6 controls whether Wireguard is enabled
+                  for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network).
                   [Default: false]'
                 type: boolean
               wireguardHostEncryptionEnabled:
@@ -639,7 +681,11 @@ spec:
                 type: boolean
               wireguardInterfaceName:
                 description: 'WireguardInterfaceName specifies the name to use for
-                  the Wireguard interface. [Default: wg.calico]'
+                  the IPv4 Wireguard interface. [Default: wireguard.cali]'
+                type: string
+              wireguardInterfaceNameV6:
+                description: 'WireguardInterfaceNameV6 specifies the name to use for
+                  the IPv6 Wireguard interface. [Default: wg-v6.cali]'
                 type: string
               wireguardKeepAlive:
                 description: 'WireguardKeepAlive controls Wireguard PersistentKeepalive
@@ -647,16 +693,30 @@ spec:
                 type: string
               wireguardListeningPort:
                 description: 'WireguardListeningPort controls the listening port used
-                  by Wireguard. [Default: 51820]'
+                  by IPv4 Wireguard. [Default: 51820]'
+                type: integer
+              wireguardListeningPortV6:
+                description: 'WireguardListeningPortV6 controls the listening port
+                  used by IPv6 Wireguard. [Default: 51821]'
                 type: integer
               wireguardMTU:
-                description: 'WireguardMTU controls the MTU on the Wireguard interface.
-                  See Configuring MTU [Default: 1420]'
+                description: 'WireguardMTU controls the MTU on the IPv4 Wireguard
+                  interface. See Configuring MTU [Default: 1440]'
+                type: integer
+              wireguardMTUV6:
+                description: 'WireguardMTUV6 controls the MTU on the IPv6 Wireguard
+                  interface. See Configuring MTU [Default: 1420]'
                 type: integer
               wireguardRoutingRulePriority:
                 description: 'WireguardRoutingRulePriority controls the priority value
                   to use for the Wireguard routing rule. [Default: 99]'
                 type: integer
+              workloadSourceSpoofing:
+                description: WorkloadSourceSpoofing controls whether pods can use
+                  the allowedSourcePrefixes annotation to send traffic with a source
+                  IP address that is not theirs. This is disabled by default. When
+                  set to "Any", pods can request any prefix.
+                type: string
               xdpEnabled:
                 description: 'XDPEnabled enables XDP acceleration for suitable untracked
                   incoming deny rules. [Default: true]'

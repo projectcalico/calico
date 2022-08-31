@@ -16,12 +16,14 @@ type ProjectcalicoV3Interface interface {
 	RESTClient() rest.Interface
 	BGPConfigurationsGetter
 	BGPPeersGetter
+	BlockAffinitiesGetter
 	CalicoNodeStatusesGetter
 	ClusterInformationsGetter
 	FelixConfigurationsGetter
 	GlobalNetworkPoliciesGetter
 	GlobalNetworkSetsGetter
 	HostEndpointsGetter
+	IPAMConfigurationsGetter
 	IPPoolsGetter
 	IPReservationsGetter
 	KubeControllersConfigurationsGetter
@@ -41,6 +43,10 @@ func (c *ProjectcalicoV3Client) BGPConfigurations() BGPConfigurationInterface {
 
 func (c *ProjectcalicoV3Client) BGPPeers() BGPPeerInterface {
 	return newBGPPeers(c)
+}
+
+func (c *ProjectcalicoV3Client) BlockAffinities() BlockAffinityInterface {
+	return newBlockAffinities(c)
 }
 
 func (c *ProjectcalicoV3Client) CalicoNodeStatuses() CalicoNodeStatusInterface {
@@ -65,6 +71,10 @@ func (c *ProjectcalicoV3Client) GlobalNetworkSets() GlobalNetworkSetInterface {
 
 func (c *ProjectcalicoV3Client) HostEndpoints() HostEndpointInterface {
 	return newHostEndpoints(c)
+}
+
+func (c *ProjectcalicoV3Client) IPAMConfigurations() IPAMConfigurationInterface {
+	return newIPAMConfigurations(c)
 }
 
 func (c *ProjectcalicoV3Client) IPPools() IPPoolInterface {

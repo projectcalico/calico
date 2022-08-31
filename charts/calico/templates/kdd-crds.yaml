@@ -1,0 +1,6 @@
+{{- if .Values.includeCRDs -}}
+{{ range $path, $_ := .Files.Glob "crds/*" }}
+{{ $.Files.Get $path }}
+---
+{{- end -}}
+{{- end -}}

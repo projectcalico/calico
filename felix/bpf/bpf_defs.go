@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/bpf/asm"
 )
 
 type MapFD uint32
@@ -55,9 +57,18 @@ type MapInfo struct {
 	MaxEntries int
 }
 
+// PolicyDebugInfo describes policy debug info
+type PolicyDebugInfo struct {
+	IfaceName  string    `json:"ifacename"`
+	Hook       string    `json:"hook"`
+	PolicyInfo asm.Insns `json:"policyInfo"`
+	Error      string    `json:"error"`
+}
+
 const (
 	ObjectDir      = "/usr/lib/calico/bpf"
 	RuntimeProgDir = "/var/run/calico/bpf/prog"
+	RuntimePolDir  = "/var/run/calico/bpf/policy"
 )
 
 // ErrIterationFinished is returned by the MapIterator's Next() method when there are no more keys.
@@ -66,3 +77,16 @@ var ErrIterationFinished = errors.New("iteration finished")
 // ErrVisitedTooManyKeys is returned by the MapIterator's Next() method if it sees many more keys than there should
 // be in the map.
 var ErrVisitedTooManyKeys = errors.New("visited 10x the max size of the map keys")
+
+const (
+	ProgIndexPolicy = iota
+	ProgIndexAllowed
+	ProgIndexICMP
+	ProgIndexDrop
+	ProgIndexHostCTConflict
+	ProgIndexV6Prologue
+	ProgIndexV6Policy
+	ProgIndexV6Allowed
+	ProgIndexV6ICMP
+	ProgIndexV6Drop
+)

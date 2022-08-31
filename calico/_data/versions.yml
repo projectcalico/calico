@@ -1,5 +1,6 @@
 - title: master
   note: ""
+  manifests_url: https://raw.githubusercontent.com/projectcalico/calico/master
   chart:
     version: 1
   tigera-operator:
@@ -21,6 +22,8 @@
       version: master
      calico/flannel-migration-controller:
       version: master
+     calico/windows:
+      version: master
      networking-calico:
       version: master
      flannel:
@@ -28,4 +31,6 @@
      calico/dikastes:
       version: master
      flexvol:
+      version: master
+     csi-driver:
       version: master

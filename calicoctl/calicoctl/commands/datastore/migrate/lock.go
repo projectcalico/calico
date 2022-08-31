@@ -25,7 +25,6 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
-	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -92,14 +91,4 @@ Description:
 
 	fmt.Print("Datastore locked.\n")
 	return nil
-}
-
-func checkLocked(ctx context.Context, c clientv3.Interface) (bool, error) {
-	// Get the cluster information resource
-	clusterinfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-	if err != nil {
-		return false, fmt.Errorf("Error retrieving ClusterInformation: %s", err)
-	}
-
-	return !*clusterinfo.Spec.DatastoreReady, nil
 }

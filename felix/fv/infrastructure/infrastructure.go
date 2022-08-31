@@ -49,10 +49,15 @@ type DatastoreInfra interface {
 	// ExpectedVXLANTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
 	SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needVXLAN bool)
+	SetExpectedVXLANV6TunnelAddr(felix *Felix, idx int, needVXLAN bool)
 	// SetExpectedWireguardTunnelAddr will set the Felix object's
 	// ExpectedWireguardTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
 	SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWireguard bool)
+	// SetExpectedWireguardV6TunnelAddr will set the Felix object's
+	// ExpectedWireguardV6TunnelAddr field, if we expect Felix to see that field being
+	// set after it has started up for the first time.
+	SetExpectedWireguardV6TunnelAddr(felix *Felix, idx int, needWireguard bool)
 	// RemoveNodeAddresses will remove all the addresses (InternalIP, ExternalIP)
 	RemoveNodeAddresses(felix *Felix)
 	// AddNode will take the appropriate steps to add a node to the datastore.

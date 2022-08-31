@@ -35,13 +35,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// routeTable is the interface provided by the standard routetable module used to progam the RIB.
-type routeTable interface {
-	routeTableSyncer
-	SetRoutes(ifaceName string, targets []routetable.Target)
-	SetL2Routes(ifaceName string, targets []routetable.L2Target)
-}
-
 type hepListener interface {
 	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
 }
@@ -135,7 +128,7 @@ type endpointManager struct {
 	mangleTable  iptablesTable
 	filterTable  iptablesTable
 	ruleRenderer rules.RuleRenderer
-	routeTable   routeTable
+	routeTable   routetable.RouteTableInterface
 	writeProcSys procSysWriter
 	osStat       func(path string) (os.FileInfo, error)
 	epMarkMapper rules.EndpointMarkMapper
@@ -148,7 +141,7 @@ type endpointManager struct {
 	// Active state, updated in CompleteDeferredWork.
 	activeWlEndpoints          map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	activeWlIfaceNameToID      map[string]proto.WorkloadEndpointID
-	activeUpIfaces             set.Set
+	activeUpIfaces             set.Set[string]
 	activeWlIDToChains         map[proto.WorkloadEndpointID][]*iptables.Chain
 	activeWlDispatchChains     map[string]*iptables.Chain
 	activeEPMarkDispatchChains map[string]*iptables.Chain
@@ -159,15 +152,24 @@ type endpointManager struct {
 
 	// wlIfaceNamesToReconfigure contains names of workload interfaces that need to have
 	// their configuration (sysctls etc.) refreshed.
-	wlIfaceNamesToReconfigure set.Set
+	wlIfaceNamesToReconfigure set.Set[string]
 
 	// epIDsToUpdateStatus contains IDs of endpoints that we need to report status for.
 	// Mix of host and workload endpoint IDs.
-	epIDsToUpdateStatus set.Set
+	epIDsToUpdateStatus set.Set[any]
+
+	// sourceSpoofingConfig maps interface names to lists of source IPs that we accept from these interfaces
+	// these interfaces (in addition to the pod IPs)
+	sourceSpoofingConfig map[string][]string
+	// rpfSkipChainDirty is set to true when the rpf status of some endpoints is updated
+	rpfSkipChainDirty bool
+	// default configuration for new interfaces
+	// used to reset kernel settings when source spoofing is disabled
+	defaultRPFilter string
 
 	// hostIfaceToAddrs maps host interface name to the set of IPs on that interface (reported
-	// fro the dataplane).
-	hostIfaceToAddrs map[string]set.Set
+	// from the dataplane).
+	hostIfaceToAddrs map[string]set.Set[string]
 	// rawHostEndpoints contains the raw (i.e. not resolved to interface) host endpoints.
 	rawHostEndpoints map[proto.HostEndpointID]*proto.HostEndpoint
 	// hostEndpointsDirty is set to true when host endpoints are updated.
@@ -206,12 +208,13 @@ func newEndpointManager(
 	mangleTable iptablesTable,
 	filterTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
-	routeTable routeTable,
+	routeTable routetable.RouteTableInterface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
 	kubeIPVSSupportEnabled bool,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
+	defaultRPFilter string,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -230,6 +233,7 @@ func newEndpointManager(
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
 		os.Stat,
+		defaultRPFilter,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -242,7 +246,7 @@ func newEndpointManagerWithShims(
 	mangleTable iptablesTable,
 	filterTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
-	routeTable routeTable,
+	routeTable routetable.RouteTableInterface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
 	kubeIPVSSupportEnabled bool,
@@ -250,6 +254,7 @@ func newEndpointManagerWithShims(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
+	defaultRPFilter string,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -280,7 +285,7 @@ func newEndpointManagerWithShims(
 		pendingWlEpUpdates:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIfaceUpdates: map[string]ifacemonitor.State{},
 
-		activeUpIfaces: set.New(),
+		activeUpIfaces: set.New[string](),
 
 		activeWlEndpoints:     map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		activeWlIfaceNameToID: map[string]proto.WorkloadEndpointID{},
@@ -288,11 +293,15 @@ func newEndpointManagerWithShims(
 
 		shadowedWlEndpoints: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 
-		wlIfaceNamesToReconfigure: set.New(),
+		wlIfaceNamesToReconfigure: set.New[string](),
 
-		epIDsToUpdateStatus: set.New(),
+		epIDsToUpdateStatus: set.NewBoxed[any](),
 
-		hostIfaceToAddrs:   map[string]set.Set{},
+		sourceSpoofingConfig: map[string][]string{},
+		rpfSkipChainDirty:    true,
+		defaultRPFilter:      defaultRPFilter,
+
+		hostIfaceToAddrs:   map[string]set.Set[string]{},
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
@@ -393,6 +402,12 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		m.hostEndpointsDirty = false
 	}
 
+	if m.rpfSkipChainDirty {
+		log.Debug("Workload RPF configuration updated, applying changes")
+		m.updateRPFSkipChain()
+		m.rpfSkipChainDirty = false
+	}
+
 	if m.kubeIPVSSupportEnabled && m.needToCheckEndpointMarkChains {
 		m.resolveEndpointMarks()
 		m.needToCheckEndpointMarkChains = false
@@ -404,8 +419,8 @@ func (m *endpointManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *endpointManager) GetRouteTableSyncers() []routeTableSyncer {
-	return []routeTableSyncer{m.routeTable}
+func (m *endpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
+	return []routetable.RouteTableSyncer{m.routeTable}
 }
 
 func (m *endpointManager) markEndpointStatusDirtyByIface(ifaceName string) {
@@ -542,6 +557,11 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 			delete(m.activeWlIfaceNameToID, oldWorkload.Name)
+			if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
+				logCxt.Debugf("Removing RPF configuration for old workload %s", oldWorkload.Name)
+				delete(m.sourceSpoofingConfig, oldWorkload.Name)
+				m.rpfSkipChainDirty = true
+			}
 		}
 		delete(m.activeWlEndpoints, id)
 	}
@@ -583,6 +603,11 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 					if !m.bpfEnabled {
 						m.filterTable.RemoveChains(m.activeWlIDToChains[id])
+						if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
+							logCxt.Debugf("Removing RPF configuration for workload %s", workload.Name)
+							delete(m.sourceSpoofingConfig, workload.Name)
+							m.rpfSkipChainDirty = true
+						}
 					}
 					m.routeTable.SetRoutes(oldWorkload.Name, nil)
 					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
@@ -605,6 +630,16 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					)
 					m.filterTable.UpdateChains(chains)
 					m.activeWlIDToChains[id] = chains
+
+					if len(workload.AllowSpoofedSourcePrefixes) > 0 && !m.hasSourceSpoofingConfiguration(workload.Name) {
+						logCxt.Infof("Disabling RPF check for workload %s", workload.Name)
+						m.sourceSpoofingConfig[workload.Name] = workload.AllowSpoofedSourcePrefixes
+						m.rpfSkipChainDirty = true
+					} else if m.hasSourceSpoofingConfiguration(workload.Name) && len(workload.AllowSpoofedSourcePrefixes) == 0 {
+						logCxt.Infof("Enabling RPF check for workload %s (previously disabled)", workload.Name)
+						delete(m.sourceSpoofingConfig, workload.Name)
+						m.rpfSkipChainDirty = true
+					}
 				}
 
 				// Collect the IP prefixes that we want to route locally to this endpoint:
@@ -702,8 +737,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.needToCheckEndpointMarkChains = true
 	}
 
-	m.wlIfaceNamesToReconfigure.Iter(func(item interface{}) error {
-		ifaceName := item.(string)
+	m.wlIfaceNamesToReconfigure.Iter(func(ifaceName string) error {
 		err := m.configureInterface(ifaceName)
 		if err != nil {
 			if exists, err := m.interfaceExistsInProcSys(ifaceName); err == nil && !exists {
@@ -728,6 +762,28 @@ func wlIdsAscending(id1, id2 *proto.WorkloadEndpointID) bool {
 		return id1.WorkloadId < id2.WorkloadId
 	}
 	return id1.OrchestratorId < id2.OrchestratorId
+}
+
+func (m *endpointManager) hasSourceSpoofingConfiguration(interfaceName string) bool {
+	_, ok := m.sourceSpoofingConfig[interfaceName]
+	return ok
+}
+
+func (m *endpointManager) updateRPFSkipChain() {
+	log.Debug("Updating RPF skip chain")
+	chain := &iptables.Chain{
+		Name:  rules.ChainRpfSkip,
+		Rules: make([]iptables.Rule, 0),
+	}
+	for interfaceName, addresses := range m.sourceSpoofingConfig {
+		for _, addr := range addresses {
+			chain.Rules = append(chain.Rules, iptables.Rule{
+				Match:  iptables.Match().InInterface(interfaceName).SourceNet(addr),
+				Action: iptables.AcceptAction{},
+			})
+		}
+	}
+	m.rawTable.UpdateChain(chain)
 }
 
 func (m *endpointManager) resolveEndpointMarks() {
@@ -1011,7 +1067,7 @@ func (m *endpointManager) updateHostEndpoints() {
 		m.activeHostIfaceToMangleIngressChains = newHostIfaceMangleIngressChains
 	}
 
-	if m.ipVersion == 4 || !m.bpfEnabled {
+	if m.ipVersion == 4 || !m.bpfEnabled /* BPF enforces RPF on its own */ {
 		// Build iptables chains for untracked host endpoint policy.
 		newHostIfaceRawChains := map[string][]*iptables.Chain{}
 		for ifaceName, id := range newUntrackedIfaceNameToHostEpID {
@@ -1118,7 +1174,7 @@ func (m *endpointManager) updateDispatchChains(
 	newChains []*iptables.Chain,
 	table iptablesTable,
 ) {
-	seenChains := set.New()
+	seenChains := set.New[string]()
 	for _, newChain := range newChains {
 		seenChains.Add(newChain.Name)
 		oldChain := activeChains[newChain.Name]
@@ -1152,7 +1208,7 @@ func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
 	return true, nil
 }
 
-func configureInterface(name string, ipVersion int, writeProcSys procSysWriter) error {
+func configureInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
 	if ipVersion == 4 {
@@ -1192,6 +1248,12 @@ func configureInterface(name string, ipVersion int, writeProcSys procSysWriter) 
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
 		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name), "1")
+		if err != nil {
+			return err
+		}
+		// Disable kernel rpf check for interfaces that have rpf filtering explicitly disabled
+		// This is set only in IPv4 mode as there's no equivalent sysctl in IPv6
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), rpFilter)
 		if err != nil {
 			return err
 		}
@@ -1235,7 +1297,12 @@ func (m *endpointManager) configureInterface(name string) error {
 		}
 	}
 
-	return configureInterface(name, int(m.ipVersion), m.writeProcSys)
+	rpFilter := m.defaultRPFilter
+	if m.hasSourceSpoofingConfiguration(name) || m.bpfEnabled {
+		rpFilter = "0"
+	}
+
+	return configureInterface(name, int(m.ipVersion), rpFilter, m.writeProcSys)
 }
 
 func writeProcSys(path, value string) error {

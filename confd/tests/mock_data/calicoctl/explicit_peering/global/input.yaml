@@ -7,6 +7,7 @@ spec:
   logSeverityScreen: Debug
   asNumber: 64567
   listenPort: 150
+  bindMode: NodeIP
 
 ---
 

@@ -24,7 +24,7 @@ import (
 
 // This file contains helper functions for projectcalico printer package.
 
-// The followings are helper functions copied from k8s.io/kubernetes
+// The following are helper functions copied from k8s.io/kubernetes
 
 // translateTimestampSince returns the elapsed time since timestamp in
 // human-readable approximation.

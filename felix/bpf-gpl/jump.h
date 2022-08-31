@@ -8,7 +8,7 @@
 #include "conntrack.h"
 #include "policy.h"
 
-CALI_MAP(cali_v4_state, 3,
+CALI_MAP(cali_state, 2,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
 		__u32, struct cali_tc_state,
 		1, 0, MAP_PIN_GLOBAL)
@@ -16,7 +16,7 @@ CALI_MAP(cali_v4_state, 3,
 static CALI_BPF_INLINE struct cali_tc_state *state_get(void)
 {
 	__u32 key = 0;
-	return cali_v4_state_lookup_elem(&key);
+	return cali_state_lookup_elem(&key);
 }
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump2 = {
@@ -24,10 +24,6 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump2 = {
 	.key_size = 4,
 	.value_size = 4,
 	.max_entries = 16,
-#if !defined(__BPFTOOL_LOADER__) && defined(__IPTOOL_LOADER__)
-	.map_id = 1,
-	.pinning_strategy = 1 /* object namespace */,
-#endif
 };
 
 #define CALI_JUMP_TO(ctx, index) bpf_tail_call(ctx, &map_symbol(cali_jump, 2), index)
@@ -38,6 +34,7 @@ enum cali_jump_index {
 	PROG_INDEX_ALLOWED,
 	PROG_INDEX_ICMP,
 	PROG_INDEX_DROP,
+	PROG_INDEX_HOST_CT_CONFLICT,
 	PROG_INDEX_V6_PROLOGUE,
 	PROG_INDEX_V6_POLICY,
 	PROG_INDEX_V6_ALLOWED,

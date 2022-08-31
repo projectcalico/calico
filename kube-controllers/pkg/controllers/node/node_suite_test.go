@@ -15,13 +15,13 @@
 package node_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
-
-	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
 )
@@ -31,7 +31,7 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-func TestConverter(t *testing.T) {
+func Test(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../report/node_controller_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Node controller Suite", []Reporter{junitReporter})

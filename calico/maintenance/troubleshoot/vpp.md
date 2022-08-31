@@ -20,12 +20,12 @@ curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbra
   | tee /usr/bin/calivppctl
 chmod +x /usr/bin/calivppctl
 ````
-* With docker (and a cluster with calico-vpp runnning)
+* With docker (and a cluster with calico-vpp running)
 ````bash
 vppcontainer=$(docker ps | grep vpp_calico-vpp | awk '{ print $1 }')
 docker cp ${vppcontainer}:/usr/bin/calivppctl /usr/bin/calivppctl
 ````
-* With kubectl (and a cluster with calico-vpp runnning)
+* With kubectl (and a cluster with calico-vpp running)
 ````bash
 vpppod=$(kubectl -n calico-vpp-dataplane get pods -o wide | grep calico-vpp-node- | awk '{ print $1 }' | head -1)
 kubectl -n calico-vpp-dataplane exec -it ${vpppod} -c vpp -- cat /usr/bin/calivppctl | tee /usr/bin/calivppctl > /dev/null

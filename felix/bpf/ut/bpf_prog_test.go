@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -40,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
@@ -47,15 +49,24 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
+var canTestMarks bool
+
 func init() {
 	logutils.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
+
+	fd := environment.NewFeatureDetector(make(map[string]string))
+	if ok, err := fd.KernelIsAtLeast("5.9.0"); err == nil && ok {
+		canTestMarks = true
+	}
 }
 
 // Constants that are shared with the UT binaries that we build.
@@ -74,11 +85,12 @@ var (
 			}},
 		}},
 	}
-	node1ip   = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
-	node2ip   = net.IPv4(10, 10, 0, 2).To4()
-	intfIP    = net.IPv4(10, 10, 0, 3).To4()
-	node1CIDR = net.IPNet{
+	node1ip    = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2   = net.IPv4(10, 10, 2, 1).To4()
+	node1tunIP = net.IPv4(11, 11, 0, 1).To4()
+	node2ip    = net.IPv4(10, 10, 0, 2).To4()
+	intfIP     = net.IPv4(10, 10, 0, 3).To4()
+	node1CIDR  = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
@@ -131,7 +143,19 @@ var retvalToStrXDP = map[int]string{
 	resXDP_DROP:    "XDP_DROP",
 }
 
+func expectMark(expect int) {
+	if canTestMarks {
+		ExpectWithOffset(1, skbMark).To(Equal(uint32(expect)),
+			fmt.Sprintf("skbMark 0x%08x should be 0x%08x at %s", skbMark, expect, caller(2)))
+	} else {
+		// If we cannot verify the mark, set it to the expected value as the
+		// next stage expects it to be set.
+		skbMark = uint32(expect)
+	}
+}
+
 func TestCompileTemplateRun(t *testing.T) {
+	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_workload_ep", &polprog.Rules{}, func(bpfrun bpfProgRunFn) {
 		_, _, _, _, pktBytes, err := testPacketUDPDefault()
 		Expect(err).NotTo(HaveOccurred())
@@ -175,11 +199,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	maps := make([]bpf.Map, len(progMaps))
 	copy(maps, progMaps)
 
-outter:
+outer:
 	for _, m := range topts.extraMaps {
 		for i := range maps {
 			if maps[i].Path() == m.Path() {
-				continue outter
+				continue outer
 			}
 		}
 		maps = append(maps, m)
@@ -209,6 +233,12 @@ outter:
 		if strings.Contains(section, "host") {
 			obj += "hep_"
 			progLog = "HEP"
+		} else if strings.Contains(section, "nat") {
+			obj += "nat_"
+			progLog = "NAT"
+		} else if strings.Contains(section, "wireguard") {
+			obj += "wg_"
+			progLog = "WG"
 		} else {
 			obj += "wep_"
 			progLog = "WEP"
@@ -238,7 +268,13 @@ outter:
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
+	// XXX for now we both path the mark here and include it in the context as
+	// well. This needs to be done for as long as we want to run the tests on
+	// older kernels.
 	bin.PatchSkbMark(skbMark)
+	err = bin.PatchHostTunnelIPv4(node1tunIP)
+	Expect(err).NotTo(HaveOccurred())
+	bin.PatchExtToServiceConnmark(0)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -258,14 +294,20 @@ outter:
 
 	if rules != nil {
 		alloc := &forceAllocator{alloc: idalloc.New()}
-		pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
+		ipsMapFD := ipsMap.MapFD()
+		Expect(ipsMapFD).NotTo(BeZero())
+		stateMapFD := stateMap.MapFD()
+		Expect(stateMapFD).NotTo(BeZero())
+		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD(), false)
 		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
-		polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+		var polProgFD bpf.ProgFD
 		if topts.xdp {
 			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_XDP)
+		} else {
+			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 		}
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
 		defer func() { _ = polProgFD.Close() }()
 		progFDBytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
@@ -276,20 +318,65 @@ outter:
 	runFn(bpfFsDir + "/" + section)
 }
 
+func caller(skip int) string {
+	_, f, l, ok := runtime.Caller(skip)
+	if ok {
+		return fmt.Sprintf("%s:%d", f, l)
+	}
+
+	return "<unknown>"
+}
+
 // runBpfTest runs a specific section of the entire bpf program in isolation
 func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
+	xdp := false
 	if strings.Contains(section, "xdp") == false {
 		section = "classifier_" + section
+	} else {
+		xdp = true
 	}
+
+	ctxIn := make([]byte, 18*4)
+	binary.LittleEndian.PutUint32(ctxIn[2*4:3*4], skbMark)
+	if xdp {
+		// XDP tests cannot take context and would fail.
+		ctxIn = nil
+	}
+
+	topts := testOpts{}
+
+	for _, o := range opts {
+		o(&topts)
+	}
+
+	cllr := caller(2)
+
 	setupAndRun(t, "debug", section, rules, func(progName string) {
 		t.Run(section, func(_ *testing.T) {
+			if strings.Contains(section, "calico_from_") {
+				ExpectWithOffset(2, skbMark).To(Equal(uint32(0)),
+					fmt.Sprintf("skb mark 0x%08x should be zero at %s", skbMark, cllr))
+			}
+			if !topts.hostNetworked && strings.Contains(section, "calico_to_") {
+				ExpectWithOffset(2, skbMark&uint32(tcdefs.MarkSeen) != 0).
+					To(BeTrue(), fmt.Sprintf("skb mark 0x%08x does not have tcdefs.MarkSeen 0x%08x set before tc at %s",
+						skbMark, tcdefs.MarkSeen, cllr))
+			}
+
 			testFn(func(dataIn []byte) (bpfRunResult, error) {
-				res, err := bpftoolProgRun(progName, dataIn)
+				res, err := bpftoolProgRun(progName, dataIn, ctxIn)
 				log.Debugf("dataIn  = %+v", dataIn)
 				if err == nil {
 					log.Debugf("dataOut = %+v", res.dataOut)
 				}
+
+				if res.Retval != resTC_ACT_SHOT && canTestMarks && strings.Contains(section, "calico_from_") {
+					ExpectWithOffset(3, skbMark&uint32(tcdefs.MarkSeen) != 0).
+						To(BeTrue(), fmt.Sprintf("skb mark 0x%08x does not have tcdefs.MarkSeen 0x%08x set after tc at %s",
+							skbMark, tcdefs.MarkSeen, cllr))
+				}
+
 				return res, err
 			})
 		})
@@ -323,8 +410,8 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, tcJumpMap, xdpJumpMap, affinityMap, arpMap, fsafeMap bpf.Map
-	allMaps, progMaps                                                                                                    []bpf.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, tcJumpMap, xdpJumpMap, affinityMap, arpMap, fsafeMap, countersMap bpf.Map
+	allMaps, progMaps                                                                                                                 []bpf.Map
 )
 
 func initMapsOnce() {
@@ -343,8 +430,10 @@ func initMapsOnce() {
 		affinityMap = nat.AffinityMap(mc)
 		arpMap = arp.Map(mc)
 		fsafeMap = failsafes.Map(mc)
+		countersMap = counters.MapForTest(mc)
 
-		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, tcJumpMap, xdpJumpMap, affinityMap, arpMap, fsafeMap}
+		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap,
+			tcJumpMap, xdpJumpMap, affinityMap, arpMap, fsafeMap, countersMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -363,6 +452,7 @@ func initMapsOnce() {
 			affinityMap,
 			arpMap,
 			fsafeMap,
+			countersMap,
 		}
 
 	})
@@ -376,7 +466,7 @@ func cleanUpMaps() {
 	defer log.SetLevel(logLevel)
 
 	for _, m := range allMaps {
-		if m == stateMap || m == testStateMap || m == tcJumpMap || m == xdpJumpMap {
+		if m == stateMap || m == testStateMap || m == tcJumpMap || m == xdpJumpMap || m == countersMap {
 			continue // Can't clean up array maps
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
@@ -421,7 +511,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 	}
 
 	if polProg {
-		polProgPath := "1_0"
+		polProgPath := "xdp_policy"
 		if !forXDP {
 			polProgPath = "classifier_tc_policy"
 		}
@@ -453,7 +543,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 			log.WithError(err).Info("failed to update jump map (deleting policy_v6 program)")
 		}
 	}
-	polProgPath := "1_1"
+	polProgPath := "xdp_accept"
 	if !forXDP {
 		polProgPath = "classifier_tc_accept"
 	}
@@ -462,16 +552,21 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		return errors.Wrap(err, "failed to update jump map (allowed program)")
 	}
 
+	dropProgPath := "xdp_drop"
+	if !forXDP {
+		dropProgPath = "classifier_tc_drop"
+	}
+	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "3", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, dropProgPath))
+	if err != nil {
+		return errors.Wrap(err, "failed to update jump map (drop program)")
+	}
+
 	if !forXDP {
 		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "2", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "3", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop"))
-		if err != nil {
-			return errors.Wrap(err, "failed to update jump map (drop program)")
-		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (prologue_v6)")
 		}
@@ -486,6 +581,13 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "8", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (drop_v6 program)")
+		}
+	}
+
+	if !forXDP {
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
 	}
 
@@ -514,11 +616,11 @@ func (r bpfRunResult) RetvalStrXDP() string {
 	return s
 }
 
-func bpftoolProgRun(progName string, dataIn []byte) (bpfRunResult, error) {
-	return bpftoolProgRunN(progName, dataIn, 1)
+func bpftoolProgRun(progName string, dataIn, ctxIn []byte) (bpfRunResult, error) {
+	return bpftoolProgRunN(progName, dataIn, ctxIn, 1)
 }
 
-func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error) {
+func bpftoolProgRunN(progName string, dataIn, ctxIn []byte, N int) (bpfRunResult, error) {
 	var res bpfRunResult
 
 	tempDir, err := ioutil.TempDir("", "bpftool-data-")
@@ -529,11 +631,23 @@ func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error
 	dataInFname := tempDir + "/data_in"
 	dataOutFname := tempDir + "/data_out"
 
+	ctxInFname := tempDir + "/ctx_in"
+	ctxOutFname := tempDir + "/ctx_out"
+
 	if err := ioutil.WriteFile(dataInFname, dataIn, 0644); err != nil {
 		return res, errors.Errorf("failed to write input data in file: %s", err)
 	}
 
+	if ctxIn != nil {
+		if err := ioutil.WriteFile(ctxInFname, ctxIn, 0644); err != nil {
+			return res, errors.Errorf("failed to write input ctx in file: %s", err)
+		}
+	}
+
 	args := []string{"prog", "run", "pinned", progName, "data_in", dataInFname, "data_out", dataOutFname}
+	if ctxIn != nil {
+		args = append(args, "ctx_in", ctxInFname, "ctx_out", ctxOutFname)
+	}
 	if N > 1 {
 		args = append(args, "repeat", fmt.Sprintf("%d", N))
 	}
@@ -550,6 +664,14 @@ func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error
 	res.dataOut, err = ioutil.ReadFile(dataOutFname)
 	if err != nil {
 		return res, errors.Errorf("failed to read output data from file: %s", err)
+	}
+
+	if ctxIn != nil {
+		ctxOut, err := ioutil.ReadFile(ctxOutFname)
+		if err != nil {
+			return res, errors.Errorf("failed to read output ctx from file: %s", err)
+		}
+		skbMark = binary.LittleEndian.Uint32(ctxOut[2*4 : 3*4])
 	}
 
 	return res, nil
@@ -580,11 +702,11 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 	maps := make([]bpf.Map, len(progMaps))
 	copy(maps, progMaps)
 
-outter:
+outer:
 	for _, m := range topts.extraMaps {
 		for i := range maps {
 			if maps[i].Path() == m.Path() {
-				continue outter
+				continue outer
 			}
 		}
 		maps = append(maps, m)
@@ -612,6 +734,7 @@ outter:
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
+	bin.PatchExtToServiceConnmark(0)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -619,9 +742,11 @@ outter:
 	err = bpftoolProgLoadAll(tempObj, bpfFsDir, false, true, maps...)
 	Expect(err).NotTo(HaveOccurred())
 
+	ctxIn := make([]byte, 18*4)
+
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
-			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn)
+			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn, ctxIn)
 			log.Debugf("dataIn  = %+v", dataIn)
 			if err == nil {
 				log.Debugf("dataOut = %+v", res.dataOut)
@@ -640,12 +765,13 @@ outter:
 }
 
 type testOpts struct {
-	subtests  bool
-	logLevel  log.Level
-	extraMaps []bpf.Map
-	xdp       bool
-	psnaStart uint32
-	psnatEnd  uint32
+	subtests      bool
+	logLevel      log.Level
+	extraMaps     []bpf.Map
+	xdp           bool
+	psnaStart     uint32
+	psnatEnd      uint32
+	hostNetworked bool
 }
 
 type testOption func(opts *testOpts)
@@ -682,6 +808,12 @@ func withPSNATPorts(start, end uint16) testOption {
 	return func(o *testOpts) {
 		o.psnaStart = uint32(start)
 		o.psnatEnd = uint32(end)
+	}
+}
+
+func withHostNetworked() testOption {
+	return func(o *testOpts) {
+		o.hostNetworked = true
 	}
 }
 
@@ -934,6 +1066,7 @@ func (pkt *Packet) handleL4() error {
 	case *layers.UDP:
 		pkt.udp = v
 		pkt.length += 8
+		pkt.udp.Length = uint16(pkt.length)
 		pkt.l4Protocol = layers.IPProtocolUDP
 		pkt.layers = append(pkt.layers, pkt.udp)
 	case *layers.TCP:
@@ -965,9 +1098,10 @@ func (pkt *Packet) handleL3() error {
 	switch v := pkt.l3.(type) {
 	case *layers.IPv4:
 		pkt.ipv4 = v
+		pkt.length += 5 * 4
 		pkt.l3Protocol = layers.EthernetTypeIPv4
 		pkt.ipv4.Protocol = pkt.l4Protocol
-		pkt.ipv4.Length = uint16(pkt.length + 5*4)
+		pkt.ipv4.Length = uint16(pkt.length)
 		pkt.layers = append(pkt.layers, pkt.ipv4)
 	case *layers.IPv6:
 		pkt.ipv6 = v
@@ -1172,7 +1306,7 @@ func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
 	jumpMapFD := tcJumpMap.MapFD()
-	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD)
+	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, false)
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)
 	Expect(err).NotTo(HaveOccurred())

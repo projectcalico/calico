@@ -278,7 +278,7 @@ func (c *Checker) CheckConnectivityWithTimeout(timeout time.Duration, opts ...in
 }
 
 func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, opts ...interface{}) {
-
+	log.Info("Starting connectivity check...")
 	for _, o := range opts {
 		switch v := o.(type) {
 		case string:
@@ -299,7 +299,8 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 	var actualConnPretty []string
 	var finalErr error
 
-	for !c.RetriesDisabled && time.Since(start) < timeout || completedAttempts < 2 {
+	for {
+		checkStartTime := time.Now()
 		actualConn, actualConnPretty = c.ActualConnectivity()
 		failed := false
 		finalErr = nil
@@ -314,6 +315,8 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 			}
 		}
 
+		completedAttempts++
+
 		if !failed {
 			if c.finalTest != nil {
 				finalErr = c.finalTest()
@@ -323,10 +326,24 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 			}
 			if !failed {
 				// Success!
+				log.WithField("attempts", completedAttempts).Info("Connectivity check passed.")
 				return
 			}
 		}
-		completedAttempts++
+
+		if c.RetriesDisabled {
+			break
+		}
+
+		// Check the timeout before we execute the retry function since the retry function might take a while,
+		// effectively cutting down the timeout.  Since one check should take ~2s we also check that we started
+		// the iteration close to the end of the.  Better to be a little permissive than flaky!
+		if time.Since(start) > timeout &&
+			checkStartTime.Sub(start) > timeout-2*time.Second &&
+			completedAttempts >= 2 {
+			break
+		}
+
 		if c.beforeRetry != nil {
 			log.Debug("calling beforeRetry")
 			c.beforeRetry()
@@ -346,6 +363,9 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 	if c.description != "" {
 		message += "\nDescription:\n" + c.description
 	}
+
+	log.Warn("Connectivity check failed: " + message)
+	message += fmt.Sprintf("\n\n Test took %s and %d tries.\n", time.Since(start), completedAttempts)
 
 	if c.OnFail != nil {
 		c.OnFail(message)
@@ -483,7 +503,7 @@ func ExpectWithClientAdjustedMTU(from, to int) ExpectationOption {
 	}
 }
 
-// ExpectWithLoss asserts that the connection has a certain loos rate
+// ExpectWithLoss asserts that the connection has a certain loss rate
 func ExpectWithLoss(duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int) ExpectationOption {
 	Expect(duration.Seconds()).NotTo(BeZero(),
 		"Packet loss test must have a duration")
@@ -599,7 +619,7 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 	return true
 }
 
-var UnactivatedCheckers = set.New()
+var UnactivatedCheckers = set.New[*Checker]()
 
 // MTUPair is a pair of MTU value recorded before and after data were transferred
 type MTUPair struct {
@@ -676,7 +696,7 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 		cmd.ip, cmd.port, cmd.protocol, cmd.sendLen, cmd.recvLen)
 
 	args := []string{"exec", cName,
-		"/test-connection", "--protocol=" + cmd.protocol,
+		"test-connection", "--protocol=" + cmd.protocol,
 		fmt.Sprintf("--duration=%d", int(cmd.duration.Seconds())),
 		fmt.Sprintf("--sendlen=%d", cmd.sendLen),
 		fmt.Sprintf("--recvlen=%d", cmd.recvLen),
@@ -834,7 +854,6 @@ func IsMessagePartOfStream(msg string) bool {
 
 // Runtime abstracts *containers.Container to avoid import loops
 type Runtime interface {
-	EnsureBinary(name string)
 	ExecMayFail(cmd ...string) error
 }
 
@@ -883,8 +902,6 @@ func (pc *PersistentConnection) Start() error {
 		namespacePath = "-"
 	}
 
-	// Ensure that the host has the 'test-connection' binary.
-	pc.Runtime.EnsureBinary("test-connection")
 	permConnIdx++
 	n := fmt.Sprintf("%s-pc%d", pc.RuntimeName, permConnIdx)
 	loopFile := fmt.Sprintf("/tmp/%s-loop", n)
@@ -897,7 +914,7 @@ func (pc *PersistentConnection) Start() error {
 	args := []string{
 		"exec",
 		pc.RuntimeName,
-		"/test-connection",
+		"test-connection",
 		namespacePath,
 		pc.IP,
 		fmt.Sprintf("%d", pc.Port),

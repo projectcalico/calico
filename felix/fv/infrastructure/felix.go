@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
+	"strings"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -38,11 +41,17 @@ type Felix struct {
 	// get assigned to the IPIP tunnel.  Filled in by AddNode().
 	ExpectedIPIPTunnelAddr string
 	// ExpectedVXLANTunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the VXLAN tunnel.  Filled in by AddNode().
+	// get assigned to the IPv4 VXLAN tunnel.  Filled in by AddNode().
 	ExpectedVXLANTunnelAddr string
-	// ExpectedWireguardTunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the Wireguard tunnel.  Filled in by AddNode().
+	// ExpectedVXLANV6TunnelAddr contains the IP that the infrastructure expects to
+	// get assigned to the IPv6 VXLAN tunnel.  Filled in by AddNode().
+	ExpectedVXLANV6TunnelAddr string
+	// ExpectedWireguardTunnelAddr contains the IPv4 address that the infrastructure expects to
+	// get assigned to the IPv4 Wireguard tunnel.  Filled in by AddNode().
 	ExpectedWireguardTunnelAddr string
+	// ExpectedWireguardV6TunnelAddr contains the IPv6 address that the infrastructure expects to
+	// get assigned to the IPv6 Wireguard tunnel.  Filled in by AddNode().
+	ExpectedWireguardV6TunnelAddr string
 
 	// IP of the Typha that this Felix is using (if any).
 	TyphaIP string
@@ -52,6 +61,14 @@ type Felix struct {
 	ExternalIP string
 
 	startupDelayed bool
+	Workloads      []workload
+}
+
+type workload interface {
+	Runs() bool
+	GetIP() string
+	GetInterfaceName() string
+	GetSpoofInterfaceName() string
 }
 
 func (f *Felix) GetFelixPID() int {
@@ -104,9 +121,18 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
 	}
 	// Collect the volumes for this container.
+	wd, err := os.Getwd()
+	Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
+	fvBin := os.Getenv("FV_BINARY")
+	if fvBin == "" {
+		fvBin = "bin/calico-felix-amd64"
+	}
 	volumes := map[string]string{
-		"/lib/modules": "/lib/modules",
-		"/tmp":         "/tmp",
+		path.Join(wd, "..", "bin"):        "/usr/local/bin",
+		path.Join(wd, "..", fvBin):        "/usr/local/bin/calico-felix",
+		path.Join(wd, "..", "bin", "bpf"): "/usr/lib/calico/bpf/",
+		"/lib/modules":                    "/lib/modules",
+		"/tmp":                            "/tmp",
 	}
 
 	containerName := containers.UniqueName(fmt.Sprintf("felix-%d", id))
@@ -217,4 +243,40 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string) {
 		"--destination", serviceIP,
 		"-j", "DNAT", "--to-destination", targetIP,
 	)
+}
+
+type BPFIfState struct {
+	IfIndex  int
+	Workload bool
+	Ready    bool
+}
+
+var bpfIfStateRegexp = regexp.MustCompile(`.*([0-9]+) : \{flags: (.*) name: (.*)\}`)
+
+func (f *Felix) BPFIfState() map[string]BPFIfState {
+	out, err := f.ExecOutput("calico-bpf", "ifstate", "dump")
+	Expect(err).NotTo(HaveOccurred())
+
+	states := make(map[string]BPFIfState)
+
+	lines := strings.Split(out, "\n")
+	for _, line := range lines {
+		match := bpfIfStateRegexp.FindStringSubmatch(line)
+		if len(match) == 0 {
+			continue
+		}
+
+		name := match[3]
+		flags := match[2]
+		ifIndex, _ := strconv.Atoi(match[1])
+		state := BPFIfState{
+			IfIndex:  ifIndex,
+			Workload: strings.Contains(flags, "workload"),
+			Ready:    strings.Contains(flags, "ready"),
+		}
+
+		states[name] = state
+	}
+
+	return states
 }

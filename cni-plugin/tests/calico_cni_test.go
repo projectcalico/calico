@@ -800,7 +800,7 @@ var _ = Describe("CalicoCni", func() {
 
 		Context("with networking rigged to fail", func() {
 			BeforeEach(func() {
-				// To prevent the networking atempt from succeeding, rename the old veth.
+				// To prevent the networking attempt from succeeding, rename the old veth.
 				// This leaves a route and an eth0 in place that the plugin will struggle with.
 				By("Breaking networking for the created interface")
 				hostVeth := endpointSpec.InterfaceName

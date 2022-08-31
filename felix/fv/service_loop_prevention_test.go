@@ -27,9 +27,7 @@ import (
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
-	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -124,18 +122,10 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 
 		// Run containers to model a default gateway, and an external client connecting to
 		// services within the cluster via that gateway.
-		externalGW := containers.Run("external-gw",
-			containers.RunOpts{AutoRemove: true},
-			"--privileged", // So that we can add routes inside the container.
-			utils.Config.BusyboxImage,
-			"/bin/sh", "-c", "sleep 1000")
+		externalGW := infrastructure.RunExtClient("ext-gw")
 		defer externalGW.Stop()
 
-		externalClient := containers.Run("external-client",
-			containers.RunOpts{AutoRemove: true},
-			"--privileged", // So that we can add routes inside the container.
-			utils.Config.BusyboxImage,
-			"/bin/sh", "-c", "sleep 1000")
+		externalClient := infrastructure.RunExtClient("ext-client")
 		defer externalClient.Stop()
 
 		// Add a service CIDR route in those containers, similar to the routes that they

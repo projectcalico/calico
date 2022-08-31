@@ -20,11 +20,17 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+
 	homedir "github.com/mitchellh/go-homedir"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var (
+	cfgFile  string
+	logLevel string
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -35,19 +41,23 @@ var rootCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	// Make sure the RNG is seeded.
+	seedrng.EnsureSeeded()
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(initConfig, setLogLevel)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.calico-bpf.yaml)")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "warn", "Set log level")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -83,4 +93,13 @@ func initConfig() {
 
 func makeDocUsage(cmd *cobra.Command) string {
 	return fmt.Sprintf("Usage:\n\t%s\n\n", cmd.Use)
+}
+
+func setLogLevel() {
+	var err error
+	level, err := log.ParseLevel(logLevel)
+	if err != nil {
+		level = log.WarnLevel
+	}
+	log.SetLevel(level)
 }
