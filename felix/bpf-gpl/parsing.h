@@ -10,6 +10,46 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
+#define MAX_EXTENSIONS 5
+
+static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
+	unsigned long header_length = 0;
+	__u8 next_header = ipv6_hdr(ctx)->nexthdr;
+	int i = 0;
+
+	for (i = 0; i < MAX_EXTENSIONS; i++) {
+		switch (next_header) {
+		case IPPROTO_HOPOPTS:
+		// Must be the first option, but at the moment, we only want to find
+		// transport layer, so we don't care about ordering.
+		case IPPROTO_ROUTING:
+		case IPPROTO_DSTOPTS:
+		case IPPROTO_AH:
+			if (validate_ptrs(ctx, sizeof(struct ipv6_opt_hdr))) {
+				return PARSING_ERROR;
+			}
+
+			if (next_header == IPPROTO_AH)
+				header_length += (ipv6ext_hdr(ctx)->hdrlen * 4 + 8);
+			else
+				header_length += (ipv6ext_hdr(ctx)->hdrlen * 8 + 8);
+
+			if (validate_ptrs(ctx, header_length)) {
+				return PARSING_ERROR;
+			}
+			ctx->ipheader_len += header_length;
+			next_header = ipv6ext_hdr(ctx)->nexthdr;
+			break;
+		default:
+			CALI_DEBUG("Finished parsing IPv6 extension\n");
+			ctx->state->ip_proto = next_header;
+			return PARSING_OK_V6;
+		}
+	}
+	CALI_DEBUG("Too many IPv6 extensions\n");
+	return PARSING_ERROR;
+}
+
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
 
@@ -133,7 +173,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_ipv6hdr(struct cali_tc_ctx *ctx)
 	ctx->state->pre_nat_ip_dst2 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[2];
 	ctx->state->pre_nat_ip_dst3 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[3];
 	// Fill in other information
-	ctx->state->ip_proto = ipv6_hdr(ctx)->nexthdr;
+	//ctx->state->ip_proto = ipv6_hdr(ctx)->nexthdr;
 	ctx->state->ip_size = ipv6_hdr(ctx)->payload_len;
 }
 
@@ -144,11 +184,12 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 	switch (ctx->state->ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+		if (validate_ptrs(ctx, TCP_SIZE)) {
 			DENY_REASON(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
+
 		ctx->state->sport = bpf_ntohs(tcp_hdr(ctx)->source);
 		ctx->state->dport = bpf_ntohs(tcp_hdr(ctx)->dest);
 		ctx->state->pre_nat_dport = ctx->state->dport;
