@@ -46,6 +46,7 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 			return PARSING_OK_V6;
 		}
 	}
+	CALI_DEBUG("Too many IPv6 extensions\n");
 	return PARSING_ERROR;
 }
 
@@ -157,7 +158,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE void tc_state_fill_from_ipv6hdr(struct cali_tc_ctx *ctx)
 {
 	// TODO: Store IPv6 address in the state map
-	ctx->state->ip_proto = ipv6_hdr(ctx)->nexthdr;
+	//ctx->state->ip_proto = ipv6_hdr(ctx)->nexthdr;
 	ctx->state->ip_size = ipv6_hdr(ctx)->payload_len;
 }
 

@@ -1137,7 +1137,6 @@ func (pkt *Packet) handleIPv6Extentions() error {
 				&opt,
 			}
 			h.HeaderLength = 3
-			//h.ActualLength = 8
 			pkt.layers = append(pkt.layers, h)
 		}
 	}
@@ -1163,7 +1162,6 @@ func (pkt *Packet) handleL3() error {
 		pkt.ipv6 = v
 		pkt.l2NextHeader = layers.EthernetTypeIPv6
 		pkt.handleEthernet()
-		pkt.ipv6.Length = uint16(pkt.length)
 		if pkt.ipv6HopByHop {
 			pkt.ipv6.HopByHop = &layers.IPv6HopByHop{}
 			opt := layers.IPv6HopByHopOption{}
@@ -1172,13 +1170,13 @@ func (pkt *Packet) handleL3() error {
 				&opt,
 			}
 			pkt.ipv6.Length = 0
+			pkt.ipv6.NextHeader = layers.IPProtocolIPv6HopByHop
+			pkt.ipv6.HopByHop.NextHeader = pkt.l3NextHeader
+		} else {
+			pkt.ipv6.NextHeader = pkt.l3NextHeader
+			pkt.ipv6.Length = uint16(pkt.length)
 		}
 		pkt.layers = append(pkt.layers, pkt.ipv6)
-		//err := pkt.handleIPv6Extentions()
-		//if err != nil {
-		//	return err
-		//}
-		pkt.ipv6.NextHeader = pkt.l3NextHeader
 	default:
 		return errors.Errorf("unrecognized l3 layer type %t", pkt.l3)
 	}
