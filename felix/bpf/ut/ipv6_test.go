@@ -61,6 +61,20 @@ var ipTestCases = []ipv6Test{
 		},
 		Drop: true,
 	},
+	{
+		Description: "3 - A packet from workload with extensions, must drop",
+		Section:     "calico_from_workload_ep",
+		Rules:       nil,
+		pkt: Packet{
+			l3:           ipv6Default,
+			ipv6HopByHop: true,
+			l4: &layers.UDP{
+				DstPort: 53,
+				SrcPort: 54321,
+			},
+		},
+		Drop: true,
+	},
 }
 
 func TestIPv6Parsing(t *testing.T) {

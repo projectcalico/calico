@@ -138,7 +138,7 @@ struct cali_tc_ctx {
   void *data_end;
   void *ip_header;
   void *nh;
-  long ipheader_len;
+  unsigned long ipheader_len;
 
   struct cali_tc_state *state;
   struct calico_nat_dest *nat_dest;
