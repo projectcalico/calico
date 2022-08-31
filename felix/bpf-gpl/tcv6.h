@@ -52,7 +52,7 @@ int calico_tc_v6(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	if (validate_ptrs(&ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		DENY_REASON(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;

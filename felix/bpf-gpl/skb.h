@@ -135,19 +135,6 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	return 0;
 }
 
-static CALI_BPF_INLINE int validate_ptrs(struct cali_tc_ctx *ctx, unsigned long nh_len) {
-	//skb_refresh_start_end(ctx);
-	if (ctx->data_start + ETH_IPLEN(ctx) + nh_len > ctx->data_end) {
-			CALI_DEBUG("Too short to have %d bytes for next header\n",
-							ETH_IPLEN(ctx) + nh_len);
-		return -2;
-	}
-	// Success, refresh the ip_header/nh fields in the context.
-	ctx->ip_header = ctx->data_start + skb_iphdr_offset();
-	ctx->nh = ctx->ip_header + ctx->ipheader_len;
-	return 0;
-}
-
 #define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))
 #define skb_seen(skb) (((skb)->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN)
 

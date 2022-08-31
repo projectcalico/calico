@@ -10,7 +10,7 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
-#define MAX_EXTENSIONS 5
+#define MAX_EXTENSIONS 1
 
 static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 	unsigned long header_length = 0;
@@ -25,7 +25,7 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 		case IPPROTO_ROUTING:
 		case IPPROTO_DSTOPTS:
 		case IPPROTO_AH:
-			if (validate_ptrs(ctx, sizeof(struct ipv6_opt_hdr))) {
+			if (skb_refresh_validate_ptrs(ctx, sizeof(struct ipv6_opt_hdr))) {
 				return PARSING_ERROR;
 			}
 
@@ -34,7 +34,7 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 			else
 				header_length += (ipv6ext_hdr(ctx)->hdrlen * 8 + 8);
 
-			if (validate_ptrs(ctx, header_length)) {
+			if (skb_refresh_validate_ptrs(ctx, header_length)) {
 				return PARSING_ERROR;
 			}
 			ctx->ipheader_len += header_length;
@@ -184,7 +184,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 	switch (ctx->state->ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		if (validate_ptrs(ctx, TCP_SIZE)) {
+		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			DENY_REASON(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
