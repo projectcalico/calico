@@ -43,13 +43,16 @@ int calico_tc_v6(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	switch (parse_ipv6_extensions(&ctx)) {
-	case PARSING_OK_V6:
-		break;
-	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
-		goto allow;
-	default:
-		goto deny;
+	ctx.state->ip_proto = ipv6_hdr(&ctx)->nexthdr;
+	for (int i = 0; i < 6; i++) {
+		switch (parse_ipv6_extensions(&ctx, ctx.state->ip_proto)) {
+		case PARSING_OK_V6:
+			break;
+		case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+			goto allow;
+		default:
+			goto deny;
+		}
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {

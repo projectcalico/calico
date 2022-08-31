@@ -12,12 +12,11 @@
 
 #define MAX_EXTENSIONS 1
 
-static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
+static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx, __u8 nh) {
 	unsigned long header_length = 0;
-	__u8 next_header = ipv6_hdr(ctx)->nexthdr;
-	int i = 0;
+	__u8 next_header = nh;
 
-	for (i = 0; i < MAX_EXTENSIONS; i++) {
+	for (int i = 0; i < MAX_EXTENSIONS; i++) {
 		switch (next_header) {
 		case IPPROTO_HOPOPTS:
 		// Must be the first option, but at the moment, we only want to find
@@ -37,8 +36,8 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 			if (skb_refresh_validate_ptrs(ctx, header_length)) {
 				return PARSING_ERROR;
 			}
-			ctx->ipheader_len += header_length;
 			next_header = ipv6ext_hdr(ctx)->nexthdr;
+			ctx->ipheader_len += header_length;
 			break;
 		default:
 			CALI_DEBUG("Finished parsing IPv6 extension\n");
