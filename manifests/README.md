@@ -34,6 +34,5 @@ commit your changes. **The following manifests are not auto generated:**
 - ocp/00-namespace-tigera-operator.yaml
 - ocp/01-cr-apiserver.yaml
 - ocp/01-cr-installation.yaml
-- ocp/02-tigera-operator-no-resource-loading.yaml
 - operator-crds.yaml
 - windows-kube-proxy.yaml
