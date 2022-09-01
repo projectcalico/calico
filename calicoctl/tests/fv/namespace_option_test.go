@@ -53,17 +53,29 @@ func TestMultiOption(t *testing.T) {
 	pool.Spec.CIDR = "10.65.0.0/16"
 	_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		_, err = client.IPPools().Delete(ctx, "ipam-test-v4", options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}()
 
 	np := v3.NewNetworkPolicy()
 	np.Name = "policy1"
 	np.Namespace = "firstns"
 	_, err = client.NetworkPolicies().Create(ctx, np, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		_, err = client.NetworkPolicies().Delete(ctx, "firstns", "policy1", options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}()
 
 	np.Name = "policy2"
 	np.Namespace = "secondns"
 	_, err = client.NetworkPolicies().Create(ctx, np, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		_, err = client.NetworkPolicies().Delete(ctx, "secondns", "policy2", options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}()
 
 	// Set Calico version in ClusterInformation
 	out, err := SetCalicoVersion(false)
@@ -83,14 +95,4 @@ func TestMultiOption(t *testing.T) {
 
 	out = Calicoctl(false, "get", "networkPolicy", "-a")
 	Expect(out).To(Equal("NAMESPACE   NAME      \nfirstns     policy1   \nsecondns    policy2   \n\n"))
-
-	// Clean up resources
-	_, err = client.IPPools().Delete(ctx, "ipam-test-v4", options.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
-
-	_, err = client.NetworkPolicies().Delete(ctx, "firstns", "policy1", options.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
-
-	_, err = client.NetworkPolicies().Delete(ctx, "secondns", "policy2", options.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
 }
