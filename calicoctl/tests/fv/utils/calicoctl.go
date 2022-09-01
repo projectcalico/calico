@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -44,7 +45,7 @@ func getEnv(kdd bool) []string {
 
 func Calicoctl(kdd bool, args ...string) string {
 	out, err := CalicoctlMayFail(kdd, args...)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to run calicoctl (kdd:%v) %v", kdd, args))
 	return out
 }
 
