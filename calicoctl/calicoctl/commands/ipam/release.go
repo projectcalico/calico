@@ -23,6 +23,7 @@ import (
 	"time"
 
 	docopt "github.com/docopt/docopt-go"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
@@ -297,10 +298,7 @@ func releaseHandles(notInUseHandles map[string]HandleInfo, c clientv3.Interface)
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go func() {
 			for handleInfo := range handlesC {
-				handleKey := model.IPAMHandleKey{HandleID: handleInfo.ID}
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				_, err := bc.Delete(ctx, handleKey, handleInfo.Revision)
-				cancel()
+				err := deleteHandle(bc, handleInfo)
 				resultsC <- result{
 					Handle: handleInfo,
 					Err:    err,
@@ -321,8 +319,6 @@ func releaseHandles(notInUseHandles map[string]HandleInfo, c clientv3.Interface)
 		err := result.Err
 		if err != nil {
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-				// Since we supply a revision, we don't actually hit this case, we end up going through the
-				// following branch.  Just in case datastore behaviour changes, handle this case too...
 				numConflict++
 				fmt.Print("x")
 			} else if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {
@@ -340,4 +336,36 @@ func releaseHandles(notInUseHandles map[string]HandleInfo, c clientv3.Interface)
 	fmt.Println()
 	fmt.Printf("Released %d handles; %d skipped; %d errors.\n",
 		numReleased, numConflict, numErrors)
+}
+
+func deleteHandle(bc bapi.Client, handleInfo HandleInfo) error {
+	handleKey := model.IPAMHandleKey{HandleID: handleInfo.ID}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Note: getting the latest cached revision here and then checking it locally so that we can't get a
+	// "revision compacted" error.  It should be safe to read from the cache since the handles we're deleting
+	// should have been stale for a long time.
+	kvp, err := bc.Get(ctx, handleKey, "0")
+	if err != nil {
+		return err
+	}
+	if kvp.Revision != handleInfo.Revision || !uidsEqual(handleInfo.UID, kvp.UID) {
+		return errors.ErrorResourceUpdateConflict{
+			Err:        fmt.Errorf("IPAM handle revision or UID didn't match"),
+			Identifier: handleKey,
+		}
+	}
+
+	// Must use DeleteKVP for IPAM handles (not Delete) since KDD requires the UID information from the KVP struct.
+	_, err = bc.DeleteKVP(ctx, kvp)
+
+	return err
+}
+
+func uidsEqual(a, b *types.UID) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
