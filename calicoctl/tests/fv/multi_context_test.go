@@ -15,7 +15,6 @@
 package fv_test
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -35,10 +34,12 @@ func init() {
 func TestMultiCluster(t *testing.T) {
 	RegisterTestingT(t)
 
-	os.Setenv("KUBECONFIG", strings.Join([]string{
+	unpatchEnv, err := PatchEnv("KUBECONFIG", strings.Join([]string{
 		"/go/src/github.com/projectcalico/calico/calicoctl/test-data/multi-context/kubectl-config.yaml",
 		"/go/src/github.com/projectcalico/calico/calicoctl/test-data/multi-context/kubectl-config-second.yaml",
 	}, ":"))
+	Expect(err).NotTo(HaveOccurred())
+	defer unpatchEnv()
 
 	// Set Calico version in ClusterInformation for both contexts
 	out, err := SetCalicoVersion(true, "--context", "main")
