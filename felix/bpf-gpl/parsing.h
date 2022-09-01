@@ -10,12 +10,13 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
-#define MAX_EXTENSIONS 1
+#define MAX_EXTENSIONS 2
 
-static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx, __u8 nh) {
+static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 	unsigned long header_length = 0;
-	__u8 next_header = nh;
+	__u8 next_header = ipv6_hdr(ctx)->nexthdr;
 
+#pragma unroll
 	for (int i = 0; i < MAX_EXTENSIONS; i++) {
 		switch (next_header) {
 		case IPPROTO_HOPOPTS:
@@ -40,9 +41,9 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx, __u8 n
 			ctx->ipheader_len += header_length;
 			break;
 		default:
-			CALI_DEBUG("Finished parsing IPv6 extension\n");
+			CALI_DEBUG("Parsed IPv6 extension successfully\n");
 			ctx->state->ip_proto = next_header;
-			return PARSING_OK_V6;
+			return PARSING_OK;
 		}
 	}
 	CALI_DEBUG("Too many IPv6 extensions\n");
