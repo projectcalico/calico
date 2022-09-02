@@ -331,7 +331,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 
 	// Don't release block affinity if we require it to be empty and it's not empty.
 	if requireEmpty && !b.empty() {
-		logCtx.Info("Block must be empty but is not empty, refusing to remove affinity.")
+		logCtx.WithField("inUseIPs", b.inUseIPs()).Info("Block must be empty but is not empty, refusing to remove affinity.")
 		return errBlockNotEmpty{Block: b}
 	}
 
