@@ -224,6 +224,19 @@ func (b allocationBlock) empty() bool {
 	return b.containsOnlyReservedIPs()
 }
 
+// inUseIPs returns a list of IPs currently allocated in this block in string format.
+func (b allocationBlock) inUseIPs() []string {
+	ips := []string{}
+	for o, idx := range b.Allocations {
+		if idx == nil {
+			// Not allocated.
+			continue
+		}
+		ips = append(ips, b.OrdinalToIP(o).String())
+	}
+	return ips
+}
+
 // containsOnlyReservedIPs returns true if the block is empty excepted for
 // expected "reserved" IP addresses.
 func (b *allocationBlock) containsOnlyReservedIPs() bool {
