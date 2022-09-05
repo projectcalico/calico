@@ -71,6 +71,7 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(__be32 addr)
 #define cali_rt_flags_local_workload(t) (((t) & CALI_RT_LOCAL) && ((t) & CALI_RT_WORKLOAD))
 #define cali_rt_flags_remote_workload(t) (!((t) & CALI_RT_LOCAL) && ((t) & CALI_RT_WORKLOAD))
 #define cali_rt_flags_remote_host(t) (((t) & (CALI_RT_LOCAL | CALI_RT_HOST)) == CALI_RT_HOST)
+#define cali_rt_flags_unknown(t) ((t) == CALI_RT_UNKNOWN)
 
 static CALI_BPF_INLINE bool rt_addr_is_local_host(__be32 addr)
 {
@@ -80,6 +81,11 @@ static CALI_BPF_INLINE bool rt_addr_is_local_host(__be32 addr)
 static CALI_BPF_INLINE bool rt_addr_is_remote_host(__be32 addr)
 {
 	return  cali_rt_flags_remote_host(cali_rt_lookup_flags(addr));
+}
+
+static CALI_BPF_INLINE bool rt_addr_is_unknown(__be32 addr)
+{
+	return  cali_rt_flags_unknown(cali_rt_lookup_flags(addr));
 }
 
 #endif /* __CALI_ROUTES_H__ */

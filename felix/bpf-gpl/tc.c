@@ -172,6 +172,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		fwd_fib_set(&ctx.fwd, false);
 		ctx.fwd.res = TC_ACT_UNSPEC;
 		goto finalize;
+	case PARSING_ALLOW_WITHOUT_ROUTE:
+		// A packet that we automatically let through
+		fwd_fib_set(&ctx.fwd, false);
+		ctx.fwd.res = TC_ACT_OK;
+		goto finalize;
 	case PARSING_ERROR:
 	default:
 		// A malformed packet or a packet we don't support

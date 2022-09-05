@@ -8,6 +8,7 @@
 #define PARSING_OK 0
 #define PARSING_OK_V6 1
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
+#define PARSING_ALLOW_WITHOUT_ROUTE 3
 #define PARSING_ERROR -1
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
@@ -63,6 +64,23 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		}
 	}
 
+	// For ingress packet, check if it has local route matched, for unknown packet,
+	// just allow it with CALI_REASON_RT_UNKNOWN
+	if (CALI_F_FROM_HEP) {
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			goto deny;
+		}
+		CALI_DEBUG("check if dst addr route is known\n");
+		if (rt_addr_is_unknown(ip_hdr(ctx)->daddr)) {
+			ctx->fwd.reason = CALI_REASON_RT_UNKNOWN;
+			ctx->state->flags |= CALI_ST_SKIP_FIB;
+			CALI_DEBUG("No route found\n");
+			goto allow_no_route;
+		}
+	}
+
 	// In TC programs, parse packet and validate its size. This is
 	// already done for XDP programs at the beginning of the function.
 	if (!CALI_F_XDP) {
@@ -101,6 +119,9 @@ ipv6_packet:
 
 allow_no_fib:
 	return PARSING_ALLOW_WITHOUT_ENFORCING_POLICY;
+
+allow_no_route:
+	return PARSING_ALLOW_WITHOUT_ROUTE;
 
 deny:
 	return PARSING_ERROR;

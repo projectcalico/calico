@@ -56,6 +56,11 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
+	if (rc == TC_ACT_OK) {
+		CALI_DEBUG("See TC_ACT_OK\n");
+		goto ok;
+	}
+
 	if (rc == CALI_RES_REDIR_BACK) {
 		int redir_flags = 0;
 		if  (CALI_F_FROM_HOST) {
@@ -271,6 +276,15 @@ skip_fib:
 	}
 
 	return rc;
+
+ok:
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+		__u64 prog_end_time = bpf_ktime_get_ns();
+		CALI_INFO("Final result=OK (%x). Program execution time: %lluns\n",
+				reason, prog_end_time-state->prog_start_time);
+	}
+
+	return TC_ACT_OK;
 
 deny:
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
