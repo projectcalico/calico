@@ -75,10 +75,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			/* We are turning a packet around to a local WEP using bpfnat
 			 * iface, the WEP should do normal processing.
 			 */
-			{
-				__u32 mark = 0;
-				skb->mark = mark;
-			}
+			skb->mark = 0UL;
 			CALI_INFO("Final result=ALLOW (%d). Bypass mark set at bpfnat local WL\n", CALI_REASON_BYPASS);
 			return TC_ACT_UNSPEC;
 		case CALI_SKB_MARK_BYPASS_FWD:

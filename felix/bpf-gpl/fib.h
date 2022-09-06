@@ -25,7 +25,7 @@ static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 	/* Let's assume that unittest is setup so that WEP's are ready - for UT simplicity */
 	return true;
 #else
-	/* If we are turnign packets around on lo to a remote pod, approve the
+	/* If we are turning packets around on lo to a remote pod, approve the
 	 * fib as it does not concern a possibly not ready local WEP.
 	 */
 	if (CALI_F_TO_HEP && ctx->state->flags & CALI_ST_CT_NP_REMOTE) {
