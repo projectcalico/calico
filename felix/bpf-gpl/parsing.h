@@ -10,6 +10,40 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
+#define MAX_EXTENSIONS 2
+
+static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
+	__u8 next_header = ipv6_hdr(ctx)->nexthdr;
+	struct ipv6_opt_hdr ipv6_ext;
+
+	for (int i = 0; i < MAX_EXTENSIONS; i++) {
+		switch (next_header) {
+		case IPPROTO_HOPOPTS:
+		// Must be the first option, but at the moment, we only want to find
+		// transport layer, so we don't care about ordering.
+		case IPPROTO_ROUTING:
+		case IPPROTO_DSTOPTS:
+		case IPPROTO_AH:
+			if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx), &ipv6_ext, sizeof(ipv6_ext))) {
+				return PARSING_ERROR;
+			}
+
+			if (next_header == IPPROTO_AH)
+				ctx->ipheader_len += (ipv6ext_hdr(ctx)->hdrlen * 4 + 8);
+			else
+				ctx->ipheader_len += (ipv6ext_hdr(ctx)->hdrlen * 8 + 8);
+			next_header = ipv6_ext.nexthdr;
+			break;
+		default:
+			CALI_DEBUG("Parsed IPv6 extension successfully\n");
+			ctx->state->ip_proto = next_header;
+			return PARSING_OK;
+		}
+	}
+	CALI_DEBUG("Too many IPv6 extensions\n");
+	return PARSING_ERROR;
+}
+
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
 
@@ -133,7 +167,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_ipv6hdr(struct cali_tc_ctx *ctx)
 	ctx->state->pre_nat_ip_dst2 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[2];
 	ctx->state->pre_nat_ip_dst3 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[3];
 	// Fill in other information
-	ctx->state->ip_proto = ipv6_hdr(ctx)->nexthdr;
+	//ctx->state->ip_proto = ipv6_hdr(ctx)->nexthdr;
 	ctx->state->ip_size = ipv6_hdr(ctx)->payload_len;
 }
 

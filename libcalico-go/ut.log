@@ -1,0 +1,691 @@
+mkdir -p ../.go-pkg-cache bin /home/mazdak/src/go/pkg/mod && docker run --rm --net=host --init -v /run/user/1000/keyring/ssh:/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent -v /home/mazdak/src/go/pkg/mod:/go/pkg/mod:rw -e LOCAL_USER_ID=1000 -e GOCACHE=/go-cache -e GOARCH=amd64 -e GOPATH=/go -e OS=linux -e GOOS=linux -e GOFLAGS= -v /home/mazdak/src/calico:/go/src/github.com/projectcalico/calico:rw -v /home/mazdak/src/calico/.go-pkg-cache:/go-cache:rw -w /go/src/github.com/projectcalico/calico/libcalico-go --privileged calico/go-build:v0.73 \
+	sh -c 'cd /go/src/github.com/projectcalico/calico/libcalico-go && ginkgo -r -skip "\[Datastore\]" -focus=".*" .'
+Starting with UID : 1000
+[1661895464] [1mv3 API Suite[0m - 0/0 specs 
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/v3_api_suite.xml
+ [32mSUCCESS![0m 13.044438ms PASS
+[1661895464] [1mBackend Suite[0m - 0/2 specs [36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/backend_suite.xml
+ [32mSUCCESS![0m 162.433µs PASS
+[1661895464] [1mEtcd Suite[0m - 0/0 specs 
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/etcd_suite.xml
+ [32mSUCCESS![0m 1.210973ms PASS
+[1661895464] [1mEtcdV3 Suite[0m - 3/11 specs [32m•[0m[32m•[0m[32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/etcdv3_suite.xml
+ [32mSUCCESS![0m 1.052528ms PASS
+[1661895464] [1mKDD Suite[0m - 2/47 specs [32m•[0m[32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/kdd_suite.xml
+ [32mSUCCESS![0m 591.249µs PASS
+[1661895464] [1mConversion Suite[0m - 101/101 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/conversion_suite.xml
+ [32mSUCCESS![0m 81.817034ms PASS
+[1661895464] [1mK8s resources Suite[0m - 44/46 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/k8s_resources_suite.xml
+ [32mSUCCESS![0m 29.656135ms PASS
+[1661895464] [1mModel Suite[0m - 94/94 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/model_suite.xml
+ [32mSUCCESS![0m 23.48071ms PASS
+[1661895464] [1mBGP syncer test suite[0m - 0/2 specs [36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/bgpsyncer_suite.xml
+ [32mSUCCESS![0m 256.841µs PASS
+[1661895464] [1mFelix syncer test Suite[0m - 0/4 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/felix_syncer_suite.xml
+ [32mSUCCESS![0m 635.897µs PASS
+[1661895464] [1mNode status syncer test suite[0m - 0/2 specs [36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/nodestatussyncer_suite.xml
+ [32mSUCCESS![0m 272.933µs PASS
+[1661895464] [1mTunnel IP syncer test suite[0m - 0/2 specs [36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/tunnelipsyncer_suite.xml
+ [32mSUCCESS![0m 144.75µs PASS
+[1661895464] [1mSyncer update processors suite[0m - 71/71 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/syncer_update_proc_suite.xml
+ [32mSUCCESS![0m 45.49944ms PASS
+[1661895464] [1mBackend multi-watcher/syncer test suite[0m - 11/11 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:7.159 seconds][0m
+[90mTest the backend datastore multi-watch syncer [0m[0mshould handle reconnection if watchers fail to be created [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer/watchersyncer_test.go:177[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/backend_watcher_syncer_suite.xml
+ [32mSUCCESS![0m 18.214928123s PASS
+[1661895464] [1mClient Suite[0m - 10/10 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/client_suite.xml
+ [32mSUCCESS![0m 1.023472ms PASS
+[1661895464] [1mclient Suite[0m - 0/140 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/client_suite.xml
+ [32mSUCCESS![0m 714.185µs PASS
+[1661895464] [1mConverter Suite[0m - 6/6 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/converter_suite.xml
+ [32mSUCCESS![0m 348.121µs PASS
+[1661895464] [1mErrors Suite[0m - 5/5 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/errors_suite.xml
+ [32mSUCCESS![0m 225.868µs PASS
+[1661895464] [1mHealth Suite[0m - 10/10 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/health_suite.xml
+ [32mSUCCESS![0m 2.20957978s PASS
+[1661895464] [1mHWM Tracker Suite[0m - 9/9 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/hwm_tracker_suite.xml
+ [32mSUCCESS![0m 828.825µs PASS
+[1661895464] [1mIPAM Suite[0m - 41/285 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/ipam_suite.xml
+ [32mSUCCESS![0m 7.985098ms PASS
+[1661895464] [1mJitter Suite[0m - 25/25 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/jitter_suite.xml
+ [32mSUCCESS![0m 940.232505ms PASS
+[1661895464] [1mLogutils Suite[0m - 44/44 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/logutils_suite.xml
+ [32mSUCCESS![0m 3.962847248s PASS
+[1661895464] [1mnames Suite[0m - 31/31 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/names_suite.xml
+ [32mSUCCESS![0m 531.424µs PASS
+[1661895464] [1mlib/namespace suite[0m - 4/4 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/lib_namespace_suite.xml
+ [32mSUCCESS![0m 119.799µs PASS
+=== RUN   TestIPNet_Covers
+=== RUN   TestIPNet_Covers/0.0.0.0/0_Covers_0.0.0.0/0
+=== RUN   TestIPNet_Covers/0.0.0.0/0_Covers_10.0.0.0/8
+=== RUN   TestIPNet_Covers/10.0.0.0/8_Covers_10.0.0.0/9
+=== RUN   TestIPNet_Covers/0.0.0.0/1_Covers_128.0.0.0/1
+=== RUN   TestIPNet_Covers/10.0.0.0/8_Covers_0.0.0.0/0
+=== RUN   TestIPNet_Covers/10.0.0.0/9_Covers_10.0.0.0/8
+=== RUN   TestIPNet_Covers/11.0.0.0/9_Covers_10.0.0.0/9
+--- PASS: TestIPNet_Covers (0.00s)
+    --- PASS: TestIPNet_Covers/0.0.0.0/0_Covers_0.0.0.0/0 (0.00s)
+    --- PASS: TestIPNet_Covers/0.0.0.0/0_Covers_10.0.0.0/8 (0.00s)
+    --- PASS: TestIPNet_Covers/10.0.0.0/8_Covers_10.0.0.0/9 (0.00s)
+    --- PASS: TestIPNet_Covers/0.0.0.0/1_Covers_128.0.0.0/1 (0.00s)
+    --- PASS: TestIPNet_Covers/10.0.0.0/8_Covers_0.0.0.0/0 (0.00s)
+    --- PASS: TestIPNet_Covers/10.0.0.0/9_Covers_10.0.0.0/8 (0.00s)
+    --- PASS: TestIPNet_Covers/11.0.0.0/9_Covers_10.0.0.0/9 (0.00s)
+=== RUN   TestIPNet_NthIP
+=== RUN   TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(0)_should_be_10.0.0.0
+=== RUN   TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(1)_should_be_10.0.0.1
+=== RUN   TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(256)_should_be_10.0.1.0
+=== RUN   TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(257)_should_be_10.0.1.1
+=== RUN   TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(0)_should_be_0.0.0.0
+=== RUN   TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(4294967295)_should_be_255.255.255.255
+=== RUN   TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(16777216)_should_be_1.0.0.0
+=== RUN   TestIPNet_NthIP/IPNet(::/0).NthIP(0)_should_be_::
+=== RUN   TestIPNet_NthIP/IPNet(::/0).NthIP(1)_should_be_::1
+=== RUN   TestIPNet_NthIP/IPNet(::/0).NthIP(61453)_should_be_::f00d
+=== RUN   TestIPNet_NthIP/IPNet(255.255.255.255/32).NthIP(0)_should_be_255.255.255.255
+=== RUN   TestIPNet_NthIP/IPNet(255.255.255.254/32).NthIP(1)_should_be_255.255.255.255
+--- PASS: TestIPNet_NthIP (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(0)_should_be_10.0.0.0 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(1)_should_be_10.0.0.1 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(256)_should_be_10.0.1.0 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(257)_should_be_10.0.1.1 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(0)_should_be_0.0.0.0 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(4294967295)_should_be_255.255.255.255 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(16777216)_should_be_1.0.0.0 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(::/0).NthIP(0)_should_be_:: (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(::/0).NthIP(1)_should_be_::1 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(::/0).NthIP(61453)_should_be_::f00d (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(255.255.255.255/32).NthIP(0)_should_be_255.255.255.255 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(255.255.255.254/32).NthIP(1)_should_be_255.255.255.255 (0.00s)
+PASS
+[1661895464] [1mSelectors Suite[0m - 0/0 specs 
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/selectors_suite.xml
+ [32mSUCCESS![0m 108.735µs PASS
+[1661895464] [1mParser Suite[0m - 335/335 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/parser_suite.xml
+ [32mSUCCESS![0m 5.37544ms PASS
+[1661895464] [1mTokenizer Suite[0m - 30/30 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/tokenizer_suite.xml
+ [32mSUCCESS![0m 496.489µs PASS
+[1661895464] [1mSet Suite[0m - 63/63 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/set_suite.xml
+ [32mSUCCESS![0m 463.491µs PASS
+[1661895464] [1mcalico-upgrade converter pkg suite[0m - 121/121 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/converter_suite.xml
+ [32mSUCCESS![0m 5.831825ms PASS
+[1661895464] [1mcalico-upgrade migration pkg suite[0m - 26/38 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/migrate_suite.xml
+ [32mSUCCESS![0m 30.25644ms PASS
+[1661895464] [1mcalico-upgrade KDD v1 resources Suite[0m - 22/22 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/resources_suite.xml
+ [32mSUCCESS![0m 496.357µs PASS
+[1661895464] [1mv1 Validator Suite[0m - 257/257 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/v1_validator_suite.xml
+ [32mSUCCESS![0m 11.159743ms PASS
+[1661895464] [1mv3 Validator Suite[0m - 487/487 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/v3_validator_suite.xml
+ [32mSUCCESS![0m 24.984472ms PASS
+
+Ginkgo ran 35 suites in 36.08763446s
+Test Suite Passed
+Error: No such container: calico-etcd
+docker run --detach \
+	--net=host \
+	--entrypoint=/usr/local/bin/etcd \
+	--name calico-etcd quay.io/coreos/etcd:v3.5.1 \
+	--enable-v2 \
+	--advertise-client-urls "http://192.168.1.75:2379,http://127.0.0.1:2379,http://192.168.1.75:4001,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+19833a7c432aa3eb9716a75f23236c566508e38b464bb11ec8afbbd2b03f4004
+docker rm -f calico-etcd-tls
+Error: No such container: calico-etcd-tls
+# TODO: We shouldn't need to enable the v2 API, but some of our test code
+# still relies on it.
+docker run --detach \
+	-v /home/mazdak/src/calico/libcalico-go/test/etcd-ut-certs:/root/etcd-certificates/ \
+	--net=host \
+	--entrypoint=/usr/local/bin/etcd \
+	--name calico-etcd-tls quay.io/coreos/etcd:v3.5.1  \
+	--listen-peer-urls https://127.0.0.1:5008 \
+	--peer-cert-file=/root/etcd-certificates/server.crt \
+	--peer-key-file=/root/etcd-certificates/server.key \
+	--advertise-client-urls https://127.0.0.1:5007 \
+	--listen-client-urls https://0.0.0.0:5007 \
+	--trusted-ca-file=/root/etcd-certificates/ca.crt \
+	--cert-file=/root/etcd-certificates/server.crt \
+	--key-file=/root/etcd-certificates/server.key \
+	--client-cert-auth=true \
+	--enable-v2 \
+	--data-dir=/var/lib/etcd
+01954f34fe9150dd892f1be353b2f61d0fe14907b0b66ae78c327dc1088e2b7d
+# First make sure any previous cluster is deleted
+make kind-cluster-destroy
+make[1]: Entering directory '/home/mazdak/src/calico/libcalico-go'
+/home/mazdak/src/calico/hack/test/kind/kubectl --kubeconfig=/home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
+error: stat /home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml: no such file or directory
+make[1]: [../lib.Makefile:1220: kind-cluster-destroy] Error 1 (ignored)
+/home/mazdak/src/calico/hack/test/kind/kind delete cluster --name kind-single
+Deleting cluster "kind-single" ...
+rm -f /home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml
+rm -f /home/mazdak/src/calico/.kind-single.created
+make[1]: Leaving directory '/home/mazdak/src/calico/libcalico-go'
+# Create a kind cluster.
+/home/mazdak/src/calico/hack/test/kind/kind create cluster \
+	--config /home/mazdak/src/calico/hack/test/kind/kind-single.config \
+	--kubeconfig /home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml \
+	--name kind-single \
+	--image kindest/node:v1.24.3
+Creating cluster "kind-single" ...
+ • Ensuring node image (kindest/node:v1.24.3) 🖼  ...
+ ✓ Ensuring node image (kindest/node:v1.24.3) 🖼
+ • Preparing nodes 📦   ...
+ ✓ Preparing nodes 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+Set kubectl context to "kind-kind-single"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-kind-single --kubeconfig /home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml
+
+Not sure what to do next? 😅  Check out https://kind.sigs.k8s.io/docs/user/quick-start/
+# Wait for controller manager to be running and healthy, then create Calico CRDs.
+while ! KUBECONFIG=/home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml /home/mazdak/src/calico/hack/test/kind/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
+Error from server (NotFound): serviceaccounts "default" not found
+Waiting for default serviceaccount to be created...
+Error from server (NotFound): serviceaccounts "default" not found
+Waiting for default serviceaccount to be created...
+Error from server (NotFound): serviceaccounts "default" not found
+Waiting for default serviceaccount to be created...
+Error from server (NotFound): serviceaccounts "default" not found
+Waiting for default serviceaccount to be created...
+Error from server (NotFound): serviceaccounts "default" not found
+Waiting for default serviceaccount to be created...
+Error from server (NotFound): serviceaccounts "default" not found
+Waiting for default serviceaccount to be created...
+Error from server (NotFound): serviceaccounts "default" not found
+Waiting for default serviceaccount to be created...
+NAME      SECRETS   AGE
+default   0         1s
+while ! KUBECONFIG=/home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml /home/mazdak/src/calico/hack/test/kind/kubectl create -f /home/mazdak/src/calico/libcalico-go/config/crd; do echo "Waiting for CRDs to be created"; sleep 2; done
+customresourcedefinition.apiextensions.k8s.io/bgpconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/bgppeers.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/blockaffinities.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/caliconodestatuses.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/clusterinformations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/felixconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalnetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalnetworksets.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/hostendpoints.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamblocks.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamconfigs.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamhandles.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ippools.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipreservations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/kubecontrollersconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/networkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/networksets.crd.projectcalico.org created
+touch /home/mazdak/src/calico/.kind-single.created
+node/127.0.0.1 created
+namespace/namespace-1 created
+namespace/namespace-2 created
+docker rm -f coredns
+Error: No such container: coredns
+docker run \
+	--detach \
+	--name coredns \
+	--rm \
+	-v /home/mazdak/src/calico/libcalico-go/test/coredns:/etc/coredns \
+	-w /etc/coredns \
+	coredns/coredns:1.5.2
+2759c056dcb95fd49bfae56c748290c8c2f44bf8fa1adf65caf3c95d1d04c078
+mkdir -p ../.go-pkg-cache bin /home/mazdak/src/go/pkg/mod && docker run --rm --net=host --init -v /run/user/1000/keyring/ssh:/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent -v /home/mazdak/src/go/pkg/mod:/go/pkg/mod:rw -e LOCAL_USER_ID=1000 -e GOCACHE=/go-cache -e GOARCH=amd64 -e GOPATH=/go -e OS=linux -e GOOS=linux -e GOFLAGS= -v /home/mazdak/src/calico:/go/src/github.com/projectcalico/calico:rw -v /home/mazdak/src/calico/.go-pkg-cache:/go-cache:rw -w /go/src/github.com/projectcalico/calico/libcalico-go --privileged \
+	-e KUBECONFIG=/kubeconfig.yaml \
+	-v /home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml:/kubeconfig.yaml \
+	--dns 172.17.0.2 \
+	calico/go-build:v0.73 sh -c 'cd /go/src/github.com/projectcalico/calico/libcalico-go && ginkgo -r -focus ".*.*\[Datastore\]|\[Datastore\].*.*" .'
+Starting with UID : 1000
+[1661895531] [1mv3 API Suite[0m - 0/0 specs 
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/v3_api_suite.xml
+ [32mSUCCESS![0m 13.049287ms PASS
+[1661895531] [1mBackend Suite[0m - 2/2 specs [32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/backend_suite.xml
+ [32mSUCCESS![0m 3.041743623s PASS
+[1661895531] [1mEtcd Suite[0m - 0/0 specs 
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/etcd_suite.xml
+ [32mSUCCESS![0m 103.327µs PASS
+[1661895531] [1mEtcdV3 Suite[0m - 8/11 specs [36mS[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/etcdv3_suite.xml
+ [32mSUCCESS![0m 16.115174ms PASS
+[1661895531] [1mKDD Suite[0m - 45/47 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:181.556 seconds][0m
+[90mTest Watch support [Datastore] (kubernetes backend) [0m[0mwatching NetworkPolicies (native) [0m[90mshould handle a list for many network policies with a revision [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/k8s_test.go:2458[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[36mS[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.209 seconds][0m
+[90mTest Inline kubeconfig support [Datastore] (kubernetes backend) [0m[0mshould handle creating and deleting a namespace [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/k8s_test.go:3127[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.622 seconds][0m
+[90mTest Syncer API for Kubernetes backend [Datastore] (kubernetes backend) [0m[0mshould handle a Namespace with DefaultDeny (v1beta annotation for namespace isolation) [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/k8s_test.go:417[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.622 seconds][0m
+[90mTest Syncer API for Kubernetes backend [Datastore] (kubernetes backend) [0m[0mshould handle a Namespace without any annotations [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/k8s_test.go:465[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:5.433 seconds][0m
+[90mTest Syncer API for Kubernetes backend [Datastore] (kubernetes backend) [0m[0mshould handle the static default-allow Profile [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/k8s_test.go:515[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.616 seconds][0m
+[90mTest Syncer API for Kubernetes backend [Datastore] (kubernetes backend) [0m[0mshould handle a CRUD of Network Sets [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/k8s_test.go:999[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0mUpdating Wep {Orchestrator:k8s Workload: Node:127.0.0.1 ContainerID: Pod:basic-pod Endpoint:eth0 ServiceAccountName:default IPNetworks:[192.168.1.1/32] IPNATs:[] IPv4Gateway: IPv6Gateway: Profiles:[kns.default ksa.default.default] InterfaceName:cali3857a214bd5 MAC: Ports:[] AllowSpoofedSourcePrefixes:[]}
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0mUpdating Wep {Orchestrator:k8s Workload: Node:127.0.0.1 ContainerID: Pod:test-syncer-basic-pod Endpoint:eth0 ServiceAccountName:default IPNetworks:[192.168.1.1] IPNATs:[] IPv4Gateway: IPv6Gateway: Profiles:[kns.default ksa.default.default] InterfaceName:caliaa82377f0d5 MAC: Ports:[] AllowSpoofedSourcePrefixes:[]}
+[32m•[0mUpdating Wep {Orchestrator:k8s Workload: Node:127.0.0.1 ContainerID: Pod:test-syncer-basic-pod Endpoint:eth0 ServiceAccountName:default IPNetworks:[192.168.1.1] IPNATs:[] IPv4Gateway: IPv6Gateway: Profiles:[kns.default ksa.default.default] InterfaceName:caliaa82377f0d5 MAC: Ports:[] AllowSpoofedSourcePrefixes:[]}
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/kdd_suite.xml
+ [32mSUCCESS![0m 3m53.341901552s PASS
+[1661895531] [1mConversion Suite[0m - 0/101 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/conversion_suite.xml
+ [32mSUCCESS![0m 396.885µs PASS
+[1661895531] [1mK8s resources Suite[0m - 2/46 specs [32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/k8s_resources_suite.xml
+ [32mSUCCESS![0m 82.302986ms PASS
+[1661895531] [1mModel Suite[0m - 0/94 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/model_suite.xml
+ [32mSUCCESS![0m 389.664µs PASS
+[1661895531] [1mBGP syncer test suite[0m - 2/2 specs [32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/bgpsyncer_suite.xml
+ [32mSUCCESS![0m 6.51475856s PASS
+[1661895531] [1mFelix syncer test Suite[0m - 4/4 specs 
+[90m------------------------------[0m
+[32m• [SLOW TEST:34.978 seconds][0m
+[90mFelix syncer tests [Datastore] (kubernetes backend) [0m[0mFelix syncer functionality [0m[90mshould receive the synced after return all current data [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer/felixsyncer_e2e_test.go:250[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/felix_syncer_suite.xml
+ [32mSUCCESS![0m 40.491217076s PASS
+[1661895531] [1mNode status syncer test suite[0m - 2/2 specs [32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/nodestatussyncer_suite.xml
+ [32mSUCCESS![0m 2.50540651s PASS
+[1661895531] [1mTunnel IP syncer test suite[0m - 2/2 specs [32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/tunnelipsyncer_suite.xml
+ [32mSUCCESS![0m 2.896121056s PASS
+[1661895531] [1mSyncer update processors suite[0m - 0/71 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/syncer_update_proc_suite.xml
+ [32mSUCCESS![0m 430.854µs PASS
+[1661895531] [1mBackend multi-watcher/syncer test suite[0m - 0/11 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/backend_watcher_syncer_suite.xml
+ [32mSUCCESS![0m 145.528µs PASS
+[1661895531] [1mClient Suite[0m - 0/10 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/client_suite.xml
+ [32mSUCCESS![0m 304.003µs PASS
+[1661895531] [1mclient Suite[0m - 140/140 specs [32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.025 seconds][0m
+[90mGlobalNetworkSet tests [Datastore] (etcdv3 backend) [0m[0mGlobalNetworkSet e2e CRUD tests [0m[90mTwo fully populated GlobalNetworkSetSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/globalnetworkset_e2e_test.go:269[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.044 seconds][0m
+[90mGlobalNetworkPolicy tests [Datastore] (etcdv3 backend) [0m[0mGlobalNetworkPolicy e2e CRUD tests [0m[90mTwo fully populated GlobalNetworkPolicySpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/globalnetworkpolicy_e2e_test.go:305[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.033 seconds][0m
+[90mGlobalNetworkPolicy tests [Datastore] (etcdv3 backend) [0m[0mGlobalNetworkPolicy e2e CRUD tests [0m[90mIngress-only and egress-only policies [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/globalnetworkpolicy_e2e_test.go:307[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.045 seconds][0m
+[90mGlobalNetworkPolicy tests [Datastore] (etcdv3 backend) [0m[0mGlobalNetworkPolicy e2e CRUD tests [0m[90mPolicies with explicit ingress and egress Types [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/globalnetworkpolicy_e2e_test.go:309[0m
+[90m------------------------------[0m
+[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.042 seconds][0m
+[90mBGPConfiguration tests [Datastore] (etcdv3 backend) [0m[0mBGPConfiguration e2e CRUD tests [0m[90mTwo fully populated BGPConfigurationSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/bgpconfig_e2e_test.go:394[0m
+[90m------------------------------[0m
+[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.024 seconds][0m
+[90mWorkloadEndpoint tests [Datastore] (etcdv3 backend) [0m[0mWorkloadEndpoint e2e CRUD tests [0m[90mTwo fully populated WorkloadEndpointSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/workloadendpoint_e2e_test.go:329[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.017 seconds][0m
+[90mNetworkSet tests [Datastore] (etcdv3 backend) [0m[0mNetworkSet e2e CRUD tests [0m[90mTwo fully populated NetworkSetSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/networkset_e2e_test.go:275[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.040 seconds][0m
+[90mNetworkPolicy tests [Datastore] (etcdv3 backend) [0m[0mNetworkPolicy e2e CRUD tests [0m[90mTwo fully populated PolicySpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/networkpolicy_e2e_test.go:300[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.038 seconds][0m
+[90mNetworkPolicy tests [Datastore] (etcdv3 backend) [0m[0mNetworkPolicy e2e CRUD tests [0m[90mIngress-only and egress-only policies [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/networkpolicy_e2e_test.go:307[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.043 seconds][0m
+[90mNetworkPolicy tests [Datastore] (etcdv3 backend) [0m[0mNetworkPolicy e2e CRUD tests [0m[90mPolicies with explicit ingress and egress Types [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/networkpolicy_e2e_test.go:314[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.033 seconds][0m
+[90mProfile tests [Datastore] (etcdv3 backend) [0m[0mProfile e2e CRUD tests [0m[90mTwo fully populated ProfileSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/profile_e2e_test.go:324[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.049 seconds][0m
+[90mNode tests (etcdv3) [Datastore] (etcdv3 backend) [0m[0mNode e2e CRUD tests [0m[90mTwo fully populated NodeSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/node_e2e_test.go:657[0m
+[90m------------------------------[0m
+[32m•[0mGetting res &{{BlockAffinity projectcalico.org/v3} {affinity-1    46ea29b0-9cb9-4a48-915a-0b0c8aab4f29 3575 0 2022-08-30 21:45:18 +0000 UTC <nil> <nil> map[] map[] [] []  []} {confirmed node-1 10.0.0.0/24 false}}[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:7.057 seconds][0m
+[90mIPPool tests [Datastore] (etcdv3 backend) [0m[0mIPPool e2e CRUD tests [0m[90mTwo fully populated IPPoolSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/ippool_e2e_test.go:392[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.029 seconds][0m
+[90mFelixConfiguration tests [Datastore] (etcdv3 backend) [0m[0mFelixConfiguration e2e CRUD tests [0m[90mTwo fully populated FelixConfigurationSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/felixconfig_e2e_test.go:280[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.024 seconds][0m
+[90mHostEndpoint tests [Datastore] (etcdv3 backend) [0m[0mHostEndpoint e2e CRUD tests [0m[90mTwo fully populated HostEndpointSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/hostendpoint_e2e_test.go:279[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.025 seconds][0m
+[90mHostEndpoint tests [Datastore] (etcdv3 backend) [0m[0mHostEndpoint e2e CRUD tests [0m[90mTwo fully populated HostEndpointSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/hostendpoint_e2e_test.go:280[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.032 seconds][0m
+[90mHostEndpoint tests [Datastore] (etcdv3 backend) [0m[0mHostEndpoint e2e CRUD tests [0m[90mTwo fully populated HostEndpointSpecs [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/hostendpoint_e2e_test.go:281[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0mGetting res &{{BlockAffinity projectcalico.org/v3} {affinity-1    069628cb-6ff1-4a34-8368-66b0274d7dd9 6390 0 2022-08-30 21:45:58 +0000 UTC <nil> <nil> map[] map[] [] []  []} {confirmed node-1 10.0.0.0/24 false}}[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.051 seconds][0m
+[90mCalicoNodeStatus tests [Datastore] (etcdv3 backend) [0m[0mCalicoNodeStatus e2e CRUD tests [0m[90mCalicoNodeStatus 1,2 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/caliconodestatus_e2e_test.go:426[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.033 seconds][0m
+[90mBGPPeer tests [Datastore] (etcdv3 backend) [0m[0mBGPPeer e2e CRUD tests [0m[90mBGPPeerSpecs 1,2 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/bgppeer_e2e_test.go:285[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.031 seconds][0m
+[90mBGPPeer tests [Datastore] (etcdv3 backend) [0m[0mBGPPeer e2e CRUD tests [0m[90mBGPPeerSpecs 2,3 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/bgppeer_e2e_test.go:286[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:6.027 seconds][0m
+[90mBGPPeer tests [Datastore] (etcdv3 backend) [0m[0mBGPPeer e2e CRUD tests [0m[90mBGPPeerSpecs 3,1 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/clientv3/bgppeer_e2e_test.go:287[0m
+[90m------------------------------[0m
+[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/client_suite.xml
+ [32mSUCCESS![0m 2m37.780196369s PASS
+[1661895531] [1mConverter Suite[0m - 0/6 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/converter_suite.xml
+ [32mSUCCESS![0m 120.096µs PASS
+[1661895531] [1mErrors Suite[0m - 0/5 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/errors_suite.xml
+ [32mSUCCESS![0m 138.506µs PASS
+[1661895531] [1mHealth Suite[0m - 0/10 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/health_suite.xml
+ [32mSUCCESS![0m 137.308µs PASS
+[1661895531] [1mHWM Tracker Suite[0m - 0/9 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/hwm_tracker_suite.xml
+ [32mSUCCESS![0m 130.528µs PASS
+[1661895531] [1mIPAM Suite[0m - 244/285 specs 
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (etcdv3 backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate a single address quickly - blocksize 32 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:227[0m
+
+  [1m100[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.005[0ms, Average Time: [36m0.012[0ms ± [36m0.005[0ms, Slowest Time: [91m0.025[0ms
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (etcdv3 backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate a single address quickly - blocksize 26 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:244[0m
+
+  [1m100[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.018[0ms, Average Time: [36m0.026[0ms ± [36m0.005[0ms, Slowest Time: [91m0.044[0ms
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (etcdv3 backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate a single address quickly - blocksize 20 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:261[0m
+
+  [1m100[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.019[0ms, Average Time: [36m0.024[0ms ± [36m0.004[0ms, Slowest Time: [91m0.040[0ms
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (etcdv3 backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate a lot of addresses quickly [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:278[0m
+
+  [1m20[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.026[0ms, Average Time: [36m0.031[0ms ± [36m0.004[0ms, Slowest Time: [91m0.044[0ms
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (etcdv3 backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate and release addresses quickly [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:295[0m
+
+  [1m20[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.006[0ms, Average Time: [36m0.007[0ms ± [36m0.000[0ms, Slowest Time: [91m0.008[0ms
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0mI0830 21:46:37.121391    7715 request.go:601] Waited for 1.131696516s due to client-side throttling, not priority and fairness, request: GET:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamconfigs/default
+I0830 21:46:47.321084    7715 request.go:601] Waited for 6.393338013s due to client-side throttling, not priority and fairness, request: GET:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamblocks?limit=500
+I0830 21:46:57.321703    7715 request.go:601] Waited for 6.392055474s due to client-side throttling, not priority and fairness, request: GET:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamblocks/10-0-3-0-26
+I0830 21:47:07.521889    7715 request.go:601] Waited for 6.392930498s due to client-side throttling, not priority and fairness, request: GET:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamconfigs/default
+I0830 21:47:17.721769    7715 request.go:601] Waited for 6.39646939s due to client-side throttling, not priority and fairness, request: POST:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamblocks
+I0830 21:47:27.921143    7715 request.go:601] Waited for 6.397161081s due to client-side throttling, not priority and fairness, request: POST:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamblocks
+I0830 21:47:38.121666    7715 request.go:601] Waited for 5.79551842s due to client-side throttling, not priority and fairness, request: DELETE:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/blockaffinities/host-24-10-0-3-192-26
+I0830 21:47:48.320914    7715 request.go:601] Waited for 3.587664962s due to client-side throttling, not priority and fairness, request: POST:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/blockaffinities
+I0830 21:47:58.321841    7715 request.go:601] Waited for 3.395160749s due to client-side throttling, not priority and fairness, request: GET:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamblocks/10-0-0-0-26
+I0830 21:48:08.521943    7715 request.go:601] Waited for 3.395398202s due to client-side throttling, not priority and fairness, request: POST:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamblocks
+I0830 21:48:18.721027    7715 request.go:601] Waited for 3.193880017s due to client-side throttling, not priority and fairness, request: GET:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamblocks?limit=500
+I0830 21:48:28.721205    7715 request.go:601] Waited for 3.194431856s due to client-side throttling, not priority and fairness, request: POST:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamhandles
+I0830 21:48:38.721660    7715 request.go:601] Waited for 1.395630125s due to client-side throttling, not priority and fairness, request: DELETE:https://127.0.0.1:36761/apis/crd.projectcalico.org/v1/ipamhandles/host-16
+
+[90m------------------------------[0m
+[32m• [SLOW TEST:150.806 seconds][0m
+[90mIPAM affine block allocation tests [Datastore] (kubernetes backend) [0m[0mIPAM block allocation race conditions [0m[90mshould handle multiple racing block affinity claims from different hosts [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_block_reader_writer_test.go:202[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:32.007 seconds][0m
+[90mIPAM affine block allocation tests [Datastore] (kubernetes backend) [0m[0mIPAM block allocation race conditions [0m[90mshould handle multiple racing block affinity claims from the same host [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_block_reader_writer_test.go:293[0m
+[90m------------------------------[0m
+[32m• [SLOW TEST:129.206 seconds][0m
+[90mIPAM affine block allocation tests [Datastore] (kubernetes backend) [0m[0mIPAM block allocation race conditions [0m[90mshould handle multiple racing claims for the same affinity [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_block_reader_writer_test.go:359[0m
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (kubernetes backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate a single address quickly - blocksize 32 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:227[0m
+
+  [1m100[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.020[0ms, Average Time: [36m0.029[0ms ± [36m0.005[0ms, Slowest Time: [91m0.042[0ms
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (kubernetes backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate a single address quickly - blocksize 26 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:244[0m
+
+  [1m100[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.035[0ms, Average Time: [36m0.044[0ms ± [36m0.006[0ms, Slowest Time: [91m0.066[0ms
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (kubernetes backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate a single address quickly - blocksize 20 [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:261[0m
+
+  [1m100[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.067[0ms, Average Time: [36m0.075[0ms ± [36m0.007[0ms, Slowest Time: [91m0.104[0ms
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (kubernetes backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate a lot of addresses quickly [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:278[0m
+
+  [1m20[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.071[0ms, Average Time: [36m0.084[0ms ± [36m0.014[0ms, Slowest Time: [91m0.133[0ms
+[90m------------------------------[0m
+[32m• [MEASUREMENT][0m
+[90mIPAM tests [Datastore] (kubernetes backend) [0m[0mMeasuring allocation performance [0m[90mIt should be able to allocate and release addresses quickly [0m
+[37m/go/src/github.com/projectcalico/calico/libcalico-go/lib/ipam/ipam_test.go:295[0m
+
+  [1m20[0m samples:
+    [1mruntime[0m - Fastest Time: [32m0.023[0ms, Average Time: [36m0.026[0ms ± [36m0.003[0ms, Slowest Time: [91m0.032[0ms
+[90m------------------------------[0m
+[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/ipam_suite.xml
+ [32mSUCCESS![0m 6m23.340664851s PASS
+[1661895531] [1mJitter Suite[0m - 0/25 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/jitter_suite.xml
+ [32mSUCCESS![0m 217.586µs PASS
+[1661895531] [1mLogutils Suite[0m - 0/44 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/logutils_suite.xml
+ [32mSUCCESS![0m 195.858µs PASS
+[1661895531] [1mnames Suite[0m - 0/31 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/names_suite.xml
+ [32mSUCCESS![0m 312.812µs PASS
+[1661895531] [1mlib/namespace suite[0m - 0/4 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/lib_namespace_suite.xml
+ [32mSUCCESS![0m 103.301µs PASS
+=== RUN   TestIPNet_Covers
+=== RUN   TestIPNet_Covers/0.0.0.0/0_Covers_0.0.0.0/0
+=== RUN   TestIPNet_Covers/0.0.0.0/0_Covers_10.0.0.0/8
+=== RUN   TestIPNet_Covers/10.0.0.0/8_Covers_10.0.0.0/9
+=== RUN   TestIPNet_Covers/0.0.0.0/1_Covers_128.0.0.0/1
+=== RUN   TestIPNet_Covers/10.0.0.0/8_Covers_0.0.0.0/0
+=== RUN   TestIPNet_Covers/10.0.0.0/9_Covers_10.0.0.0/8
+=== RUN   TestIPNet_Covers/11.0.0.0/9_Covers_10.0.0.0/9
+--- PASS: TestIPNet_Covers (0.00s)
+    --- PASS: TestIPNet_Covers/0.0.0.0/0_Covers_0.0.0.0/0 (0.00s)
+    --- PASS: TestIPNet_Covers/0.0.0.0/0_Covers_10.0.0.0/8 (0.00s)
+    --- PASS: TestIPNet_Covers/10.0.0.0/8_Covers_10.0.0.0/9 (0.00s)
+    --- PASS: TestIPNet_Covers/0.0.0.0/1_Covers_128.0.0.0/1 (0.00s)
+    --- PASS: TestIPNet_Covers/10.0.0.0/8_Covers_0.0.0.0/0 (0.00s)
+    --- PASS: TestIPNet_Covers/10.0.0.0/9_Covers_10.0.0.0/8 (0.00s)
+    --- PASS: TestIPNet_Covers/11.0.0.0/9_Covers_10.0.0.0/9 (0.00s)
+=== RUN   TestIPNet_NthIP
+=== RUN   TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(0)_should_be_10.0.0.0
+=== RUN   TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(1)_should_be_10.0.0.1
+=== RUN   TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(256)_should_be_10.0.1.0
+=== RUN   TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(257)_should_be_10.0.1.1
+=== RUN   TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(0)_should_be_0.0.0.0
+=== RUN   TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(4294967295)_should_be_255.255.255.255
+=== RUN   TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(16777216)_should_be_1.0.0.0
+=== RUN   TestIPNet_NthIP/IPNet(::/0).NthIP(0)_should_be_::
+=== RUN   TestIPNet_NthIP/IPNet(::/0).NthIP(1)_should_be_::1
+=== RUN   TestIPNet_NthIP/IPNet(::/0).NthIP(61453)_should_be_::f00d
+=== RUN   TestIPNet_NthIP/IPNet(255.255.255.255/32).NthIP(0)_should_be_255.255.255.255
+=== RUN   TestIPNet_NthIP/IPNet(255.255.255.254/32).NthIP(1)_should_be_255.255.255.255
+--- PASS: TestIPNet_NthIP (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(0)_should_be_10.0.0.0 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(1)_should_be_10.0.0.1 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(256)_should_be_10.0.1.0 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(10.0.0.0/8).NthIP(257)_should_be_10.0.1.1 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(0)_should_be_0.0.0.0 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(4294967295)_should_be_255.255.255.255 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(0.0.0.0/0).NthIP(16777216)_should_be_1.0.0.0 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(::/0).NthIP(0)_should_be_:: (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(::/0).NthIP(1)_should_be_::1 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(::/0).NthIP(61453)_should_be_::f00d (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(255.255.255.255/32).NthIP(0)_should_be_255.255.255.255 (0.00s)
+    --- PASS: TestIPNet_NthIP/IPNet(255.255.255.254/32).NthIP(1)_should_be_255.255.255.255 (0.00s)
+PASS
+[1661895531] [1mSelectors Suite[0m - 0/0 specs 
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/selectors_suite.xml
+ [32mSUCCESS![0m 78.523µs PASS
+[1661895531] [1mParser Suite[0m - 0/335 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/parser_suite.xml
+ [32mSUCCESS![0m 1.449909ms PASS
+[1661895531] [1mTokenizer Suite[0m - 0/30 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/tokenizer_suite.xml
+ [32mSUCCESS![0m 274.023µs PASS
+[1661895531] [1mSet Suite[0m - 0/63 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/set_suite.xml
+ [32mSUCCESS![0m 378.139µs PASS
+[1661895531] [1mcalico-upgrade converter pkg suite[0m - 0/121 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/converter_suite.xml
+ [32mSUCCESS![0m 451.649µs PASS
+[1661895531] [1mcalico-upgrade migration pkg suite[0m - 12/38 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[32m•[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/migrate_suite.xml
+ [32mSUCCESS![0m 30.56833ms PASS
+[1661895531] [1mcalico-upgrade KDD v1 resources Suite[0m - 0/22 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/resources_suite.xml
+ [32mSUCCESS![0m 421.253µs PASS
+[1661895531] [1mv1 Validator Suite[0m - 0/257 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/v1_validator_suite.xml
+ [32mSUCCESS![0m 1.549126ms PASS
+[1661895531] [1mv3 Validator Suite[0m - 0/487 specs [36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m[36mS[0m
+JUnit report was created: /go/src/github.com/projectcalico/calico/libcalico-go/report/v3_validator_suite.xml
+ [32mSUCCESS![0m 1.939861ms PASS
+
+Ginkgo ran 35 suites in 13m57.419618837s
+Test Suite Passed
+make fv-teardown
+make[1]: Entering directory '/home/mazdak/src/calico/libcalico-go'
+calico-etcd
+docker rm -f calico-etcd-tls
+calico-etcd-tls
+/home/mazdak/src/calico/hack/test/kind/kubectl --kubeconfig=/home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
+Error from server (NotFound): nodes "kind-control-plane" not found
+make[1]: [../lib.Makefile:1220: kind-cluster-destroy] Error 1 (ignored)
+/home/mazdak/src/calico/hack/test/kind/kind delete cluster --name kind-single
+Deleting cluster "kind-single" ...
+rm -f /home/mazdak/src/calico/hack/test/kind/kind-single-kubeconfig.yaml
+rm -f /home/mazdak/src/calico/.kind-single.created
+docker rm -f coredns
+coredns
+make[1]: Leaving directory '/home/mazdak/src/calico/libcalico-go'
+No STs available
