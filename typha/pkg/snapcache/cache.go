@@ -21,7 +21,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/Workiva/go-datastructures/trie/ctrie"
+	"github.com/google/btree"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -39,6 +39,7 @@ const (
 )
 
 var (
+	// FIXME All of these should be upgraded to vectors so that each syncer has its own stats.
 	summaryUpdateSize = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_breadcrumb_size",
 		Help: "Number of KVs recorded in each breadcrumb.",
@@ -63,18 +64,24 @@ var (
 		Name: "typha_updates_skipped",
 		Help: "Total number of updates skipped as duplicates.",
 	})
+
+	gaugeVecSnapshotSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "typha_snapshot_size",
+		Help: "Current number of key/value pairs contained in the cache of the datastore.",
+	}, []string{"syncer"})
 )
 
 func init() {
 	prometheus.MustRegister(summaryUpdateSize)
 	prometheus.MustRegister(gaugeCurrentSequenceNumber)
+	prometheus.MustRegister(gaugeVecSnapshotSize)
 	prometheus.MustRegister(counterBreadcrumbNonBlock)
 	prometheus.MustRegister(counterBreadcrumbBlock)
 	prometheus.MustRegister(counterUpdatesTotal)
 	prometheus.MustRegister(counterUpdatesSkipped)
 }
 
-// SnapshotCache consumes updates from the Syncer API and caches them in the form of a series of
+// Cache consumes updates from the Syncer API and caches them in the form of a series of
 // Breadcrumb objects.  Each Breadcrumb (conceptually) contains the complete snapshot of the
 // datastore at the revision it was created as well as a list of deltas from the previous snapshot.
 // A client that wants to keep in sync can get the current Breadcrumb, process the key-value pairs
@@ -89,10 +96,10 @@ func init() {
 //
 // Implementation
 //
-// To avoid the overhead of taking a complete copy of the state for each Breadcrumb, we use a Ctrie,
+// To avoid the overhead of taking a complete copy of the state for each Breadcrumb, we use a B-tree,
 // which supports efficient, concurrent-read-safe snapshots.  The main thread of the SnapshotCache
-// processes updates sequentially, updating the Ctrie.  After processing a batch of updates, the
-// main thread generates a new Breadcrumb object with a read-only snapshot of the Ctrie along with
+// processes updates sequentially, updating the B-tree.  After processing a batch of updates, the
+// main thread generates a new Breadcrumb object with a snapshot of the B-tree along with
 // the list of deltas.
 //
 // Each Breadcrumb object contains a pointer to the next Breadcrumb, which is filled in using an
@@ -103,7 +110,7 @@ func init() {
 //
 // Why not use channels to fan out to the clients?  I think it'd be more tricky to make robust and
 // non-blocking:  We'd need to keep a list of channels to send to (one per client); the
-// book-keeping around adding/removing from that list is a little fiddly and we'd need to
+// bookkeeping around adding/removing from that list is a little fiddly and we'd need to
 // iterate over the list (which may be slow) to send the updates to each client.  If any of the
 // clients were blocked, we'd need to selectively skip channels (else we'd block all clients due
 // to one slow client) and keep track of what we'd sent to each channel.  All doable but, I think,
@@ -119,7 +126,7 @@ type Cache struct {
 
 	// kvs contains the current state of the datastore.  Its keys are the serialized form of our model keys
 	// and the values are SerializedUpdate objects.
-	kvs *ctrie.Ctrie
+	kvs *btree.BTreeG[syncproto.SerializedUpdate]
 	// breadcrumbCond is the condition variable used to signal when a new breadcrumb is available.
 	breadcrumbCond *sync.Cond
 	// currentBreadcrumb points to the most recent Breadcrumb, which contains the most recent snapshot of kvs.
@@ -129,11 +136,13 @@ type Cache struct {
 
 	wakeUpTicker *jitter.Ticker
 	healthTicks  <-chan time.Time
+
+	gaugeSnapSize prometheus.Gauge
 }
 
 const (
-	healthNameDefault = "cache"
-	healthInterval    = 10 * time.Second
+	nameDefault    = "cache"
+	healthInterval = 10 * time.Second
 )
 
 type healthAggregator interface {
@@ -145,7 +154,7 @@ type Config struct {
 	MaxBatchSize     int
 	WakeUpInterval   time.Duration
 	HealthAggregator healthAggregator
-	HealthName       string
+	Name             string
 }
 
 func (config *Config) ApplyDefaults() {
@@ -163,19 +172,19 @@ func (config *Config) ApplyDefaults() {
 		}).Info("Defaulting WakeUpInterval.")
 		config.WakeUpInterval = defaultWakeUpInterval
 	}
-	if config.HealthName == "" {
-		config.HealthName = healthNameDefault
+	if config.Name == "" {
+		config.Name = nameDefault
 	}
 }
 
 func New(config Config) *Cache {
 	config.ApplyDefaults()
-	kvs := ctrie.New(nil /*default hash factory*/)
+	kvs := btree.NewG[syncproto.SerializedUpdate](2, func(a, b syncproto.SerializedUpdate) bool { return a.Key < b.Key })
 	cond := sync.NewCond(&sync.Mutex{})
 	snap := &Breadcrumb{
 		Timestamp: time.Now(),
 		nextCond:  cond,
-		KVs:       kvs.ReadOnlySnapshot(),
+		KVs:       kvs.Clone(),
 	}
 	c := &Cache{
 		config:            config,
@@ -186,8 +195,15 @@ func New(config Config) *Cache {
 		wakeUpTicker:      jitter.NewTicker(config.WakeUpInterval, config.WakeUpInterval/10),
 		healthTicks:       time.NewTicker(healthInterval).C,
 	}
+
+	var err error
+	c.gaugeSnapSize, err = gaugeVecSnapshotSize.GetMetricWithLabelValues(config.Name)
+	if err != nil {
+		log.WithError(err).Panic("Bug: failed to get Prometheus gauge.")
+	}
+
 	if config.HealthAggregator != nil {
-		config.HealthAggregator.RegisterReporter(config.HealthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
+		config.HealthAggregator.RegisterReporter(config.Name, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
 	}
 	c.reportHealth()
 	return c
@@ -287,7 +303,7 @@ func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 
 func (c *Cache) reportHealth() {
 	if c.config.HealthAggregator != nil {
-		c.config.HealthAggregator.Report(c.config.HealthName, &health.HealthReport{
+		c.config.HealthAggregator.Report(c.config.Name, &health.HealthReport{
 			Live:  true,
 			Ready: c.pendingStatus == api.InSync,
 		})
@@ -304,8 +320,8 @@ func (c *Cache) publishBreadcrumbs() {
 	}
 }
 
-// publishBreadcrumb updates the master Ctrie and publishes a new Breadcrumb containing a read-only
-// snapshot of the Ctrie and the deltas from this batch.
+// publishBreadcrumb updates the master tree and publishes a new Breadcrumb containing a read-only
+// snapshot of the tree and the deltas from this batch.
 func (c *Cache) publishBreadcrumb() {
 	var somethingChanged bool
 	var updates []api.Update
@@ -347,8 +363,7 @@ func (c *Cache) publishBreadcrumb() {
 			continue
 		}
 		// Update the master KV map.
-		keyAsBytes := []byte(newUpd.Key)
-		oldUpd, exists := c.kvs.Lookup(keyAsBytes)
+		oldUpd, exists := c.kvs.Get(newUpd)
 		log.WithFields(log.Fields{
 			"oldUpd": oldUpd,
 			"newUpd": newUpd,
@@ -357,9 +372,9 @@ func (c *Cache) publishBreadcrumb() {
 			// This is either a deletion or a validation failure.  We can't skip deletions even if we
 			// didn't have that key before because we need to pass through the UpdateType for Felix to
 			// correctly calculate its stats.
-			c.kvs.Remove(keyAsBytes)
+			c.kvs.Delete(newUpd)
 		} else {
-			if exists && newUpd.WouldBeNoOp(oldUpd.(syncproto.SerializedUpdate)) {
+			if exists && newUpd.WouldBeNoOp(oldUpd) {
 				log.WithField("key", newUpd.Key).Debug("Skipping update to unchanged key")
 				counterUpdatesSkipped.Inc()
 				continue
@@ -369,7 +384,7 @@ func (c *Cache) publishBreadcrumb() {
 			// the KV and adjust it before storing it in the snapshot.
 			updToStore := newUpd
 			updToStore.UpdateType = api.UpdateTypeKVNew
-			c.kvs.Insert(keyAsBytes, updToStore)
+			c.kvs.ReplaceOrInsert(updToStore)
 		}
 
 		// Record the update in the new Breadcrumb so that clients following the chain of
@@ -384,8 +399,9 @@ func (c *Cache) publishBreadcrumb() {
 	}
 
 	summaryUpdateSize.Observe(float64(len(newCrumb.Deltas)))
+	c.gaugeSnapSize.Set(float64(c.kvs.Len()))
 	// Add the new read-only snapshot to the new crumb.
-	newCrumb.KVs = c.kvs.ReadOnlySnapshot()
+	newCrumb.KVs = c.kvs.Clone()
 
 	// Replace the Breadcrumb and link the old Breadcrumb to the new so that clients can follow
 	// the trail.
@@ -406,7 +422,7 @@ type Breadcrumb struct {
 	SequenceNumber uint64
 	Timestamp      time.Time
 
-	KVs        *ctrie.Ctrie
+	KVs        *btree.BTreeG[syncproto.SerializedUpdate]
 	Deltas     []syncproto.SerializedUpdate
 	SyncStatus api.SyncStatus
 

@@ -5,7 +5,6 @@ go 1.18
 require (
 	github.com/BurntSushi/toml v1.2.0
 	github.com/Microsoft/hcsshim v0.8.22
-	github.com/Workiva/go-datastructures v1.0.53
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/aws/aws-sdk-go-v2 v1.11.0
 	github.com/aws/aws-sdk-go-v2/config v1.10.0
@@ -27,6 +26,7 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
 	github.com/golang/protobuf v1.5.2
+	github.com/google/btree v1.1.2
 	github.com/google/gopacket v1.1.19
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
 	github.com/google/uuid v1.2.0
@@ -165,7 +165,6 @@ require (
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/google/btree v1.0.1 // indirect
 	github.com/google/cadvisor v0.44.1 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.5.8 // indirect
