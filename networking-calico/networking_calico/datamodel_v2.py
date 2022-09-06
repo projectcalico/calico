@@ -96,3 +96,12 @@ def key_for_subnet(subnet_id, region_string):
 # Key used for leader election by Neutron mechanism drivers.
 def neutron_election_key(region_string):
     return "/calico/openstack/v2/%s/neutron_election" % region_string
+
+
+# Region-aware network path.
+def network_dir(region_string=NO_REGION):
+    return "/calico/dhcp/v2/%s/network" % region_string
+
+
+def key_for_network(network_id, region_string):
+    return network_dir(region_string) + "/%s" % network_id
