@@ -107,7 +107,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			MaxBatchSize:     10,
 			WakeUpInterval:   10 * time.Second,
 			HealthAggregator: mockHealth,
-			HealthName:       "my-cache",
+			Name:             "my-cache",
 		}
 		cache = snapcache.New(cacheConfig)
 		cxt, cancel = context.WithCancel(context.Background())

@@ -38,6 +38,7 @@ const (
 )
 
 var (
+	// FIXME All of these should be upgraded to vectors so that each syncer has its own stats.
 	summaryUpdateSize = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_breadcrumb_size",
 		Help: "Number of KVs recorded in each breadcrumb.",
@@ -62,11 +63,17 @@ var (
 		Name: "typha_updates_skipped",
 		Help: "Total number of updates skipped as duplicates.",
 	})
+
+	gaugeVecSnapshotSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "typha_snapshot_size",
+		Help: "Current (server-local) sequence number; number of snapshot deltas processed.",
+	}, []string{"syncer"})
 )
 
 func init() {
 	prometheus.MustRegister(summaryUpdateSize)
 	prometheus.MustRegister(gaugeCurrentSequenceNumber)
+	prometheus.MustRegister(gaugeVecSnapshotSize)
 	prometheus.MustRegister(counterBreadcrumbNonBlock)
 	prometheus.MustRegister(counterBreadcrumbBlock)
 	prometheus.MustRegister(counterUpdatesTotal)
@@ -128,11 +135,13 @@ type Cache struct {
 
 	wakeUpTicker *jitter.Ticker
 	healthTicks  <-chan time.Time
+
+	gaugeSnapSize prometheus.Gauge
 }
 
 const (
-	healthNameDefault = "cache"
-	healthInterval    = 10 * time.Second
+	nameDefault    = "cache"
+	healthInterval = 10 * time.Second
 )
 
 type healthAggregator interface {
@@ -144,7 +153,7 @@ type Config struct {
 	MaxBatchSize     int
 	WakeUpInterval   time.Duration
 	HealthAggregator healthAggregator
-	HealthName       string
+	Name             string
 }
 
 func (config *Config) ApplyDefaults() {
@@ -162,8 +171,8 @@ func (config *Config) ApplyDefaults() {
 		}).Info("Defaulting WakeUpInterval.")
 		config.WakeUpInterval = defaultWakeUpInterval
 	}
-	if config.HealthName == "" {
-		config.HealthName = healthNameDefault
+	if config.Name == "" {
+		config.Name = nameDefault
 	}
 }
 
@@ -185,8 +194,15 @@ func New(config Config) *Cache {
 		wakeUpTicker:      jitter.NewTicker(config.WakeUpInterval, config.WakeUpInterval/10),
 		healthTicks:       time.NewTicker(healthInterval).C,
 	}
+
+	var err error
+	c.gaugeSnapSize, err = gaugeVecSnapshotSize.GetMetricWithLabelValues(config.Name)
+	if err != nil {
+		log.WithError(err).Panic("Bug: failed to get Prometheus gauge.")
+	}
+
 	if config.HealthAggregator != nil {
-		config.HealthAggregator.RegisterReporter(config.HealthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
+		config.HealthAggregator.RegisterReporter(config.Name, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
 	}
 	c.reportHealth()
 	return c
@@ -286,7 +302,7 @@ func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 
 func (c *Cache) reportHealth() {
 	if c.config.HealthAggregator != nil {
-		c.config.HealthAggregator.Report(c.config.HealthName, &health.HealthReport{
+		c.config.HealthAggregator.Report(c.config.Name, &health.HealthReport{
 			Live:  true,
 			Ready: c.pendingStatus == api.InSync,
 		})
@@ -382,6 +398,7 @@ func (c *Cache) publishBreadcrumb() {
 	}
 
 	summaryUpdateSize.Observe(float64(len(newCrumb.Deltas)))
+	c.gaugeSnapSize.Set(float64(c.kvs.Len()))
 	// Add the new read-only snapshot to the new crumb.
 	newCrumb.KVs = c.kvs.Clone()
 
