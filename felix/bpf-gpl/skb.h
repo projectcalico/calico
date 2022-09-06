@@ -65,12 +65,12 @@ static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
  * For example, in programs attached to L3 tunnel devices, the IP header is at location 0.
  * Whereas, in L2 programs, it's past the ethernet header.
  */
-static CALI_BPF_INLINE unsigned long skb_iphdr_offset()
+static CALI_BPF_INLINE unsigned long skb_iphdr_offset(struct cali_tc_ctx *ctx)
 {
 	if (CALI_F_IPIP_ENCAPPED) {
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
 		// TODO: we need to consider different types of IPIP tunnels like 4in6 or 6in4
-		return sizeof(struct ethhdr);
+		return sizeof(struct ethhdr) + ctx->ipheader_len;
 	} else if (CALI_F_L3) {
 		// Egress on an IPIP tunnel, or any other l3 devices (wireguard) both directions:
 		// skb is [inner IP|payload]
@@ -79,6 +79,11 @@ static CALI_BPF_INLINE unsigned long skb_iphdr_offset()
 		// Normal L2 interface: skb is [ether|IP|payload]
 		return sizeof(struct ethhdr);
 	}
+}
+
+static CALI_BPF_INLINE unsigned long skb_l4hdr_offset(struct cali_tc_ctx *ctx)
+{
+	return skb_iphdr_offset(ctx) + ctx->ipheader_len;
 }
 
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
@@ -90,7 +95,6 @@ static CALI_BPF_INLINE unsigned long skb_iphdr_offset()
 #define UDP_SIZE (sizeof(struct udphdr))
 #define TCP_SIZE (sizeof(struct tcphdr))
 #define ICMP_SIZE (sizeof(struct icmphdr))
-#define ETH_IPLEN(ctx) skb_iphdr_offset() + (ctx)->ipheader_len
 
 /* skb_refresh_validate_ptrs refreshes the packet pointers in the context and validates access
  * to the IP header + nh_len (next header length) bytes.  If the skb is non-linear; attempts to
@@ -103,34 +107,32 @@ static CALI_BPF_INLINE unsigned long skb_iphdr_offset()
  * - ctx->nh/tcp_header/udp_header/icmp_header.
  */
 static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
-	//long min_size = skb_iphdr_offset() + ctx->ipheader_len;
 	skb_refresh_start_end(ctx);
-	if (ctx->data_start + ( ETH_IPLEN(ctx) + nh_len) > ctx->data_end) {
+	if (ctx->data_start + skb_l4hdr_offset(ctx) + nh_len > ctx->data_end) {
 		// This is an XDP program and there is not enough data for next header.
 		if (CALI_F_XDP) {
 			CALI_DEBUG("Too short to have %d bytes for next header\n",
-					ETH_IPLEN(ctx) + nh_len);
+					skb_l4hdr_offset(ctx) + nh_len);
 			return -2;
 		} else {
 		// Try to pull in more data.  Ideally enough for TCP, or, failing that, the
 		// minimum we've been asked for.
 			if (nh_len > TCP_SIZE ||
-					bpf_skb_pull_data(ctx->skb, ETH_IPLEN(ctx) + TCP_SIZE)) {
-				//CALI_DEBUG("Pulling %d bytes.\n", min_size + nh_len);
-				if (bpf_skb_pull_data(ctx->skb, ETH_IPLEN(ctx) + nh_len)) {
+					bpf_skb_pull_data(ctx->skb, skb_l4hdr_offset(ctx) + TCP_SIZE)) {
+				if (bpf_skb_pull_data(ctx->skb, skb_l4hdr_offset(ctx) + nh_len)) {
 					CALI_DEBUG("Pull failed (min len)\n");
 					return -1;
 				}
 			}
 			CALI_DEBUG("Pulled data\n");
 			skb_refresh_start_end(ctx);
-			if (ctx->data_start + (ETH_IPLEN(ctx) + nh_len) > ctx->data_end) {
+			if (ctx->data_start + skb_l4hdr_offset(ctx) + nh_len > ctx->data_end) {
 				return -2;
 			}
 		}
 	}
 	// Success, refresh the ip_header/nh fields in the context.
-	ctx->ip_header =  ctx->data_start + skb_iphdr_offset();
+	ctx->ip_header =  ctx->data_start + skb_iphdr_offset(ctx);
 	ctx->nh = ctx->ip_header + ctx->ipheader_len;
 	return 0;
 }
@@ -139,11 +141,6 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 #define skb_seen(skb) (((skb)->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN)
 
 #define skb_from_host(skb) (CALI_F_TO_HEP && !skb_seen(skb))
-
-static CALI_BPF_INLINE unsigned long skb_l4hdr_offset(struct cali_tc_ctx *ctx)
-{
-	return skb_iphdr_offset() + ctx->ipheader_len;
-}
 
 static CALI_BPF_INLINE __u32 skb_ingress_ifindex(struct __sk_buff *skb)
 {
