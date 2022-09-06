@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	"github.com/projectcalico/calico/felix/bpf/xdp"
 )
 
 func checkBTFEnabled() []bool {
@@ -119,6 +120,30 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 				}
 			}
 		}
+	}
+
+	// Test XDP objects are loadable
+	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
+		logLevel := logLevel
+		// Compile the XDP endpoint programs.
+		logCxt := log.WithField("logLevel", logLevel)
+
+		ap := xdp.AttachPoint{
+			LogLevel: logLevel,
+			Modes:    []bpf.XDPMode{bpf.XDPGeneric},
+		}
+
+		t.Run(ap.FileName(), func(t *testing.T) {
+			RegisterTestingT(t)
+			logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
+
+			vethName, veth := createVeth()
+			defer deleteLink(veth)
+			ap.Iface = vethName
+			opts, err := ap.AttachProgram()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(opts).NotTo(Equal(nil))
+		})
 	}
 }
 
