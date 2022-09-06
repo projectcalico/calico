@@ -505,7 +505,7 @@ syn_force_policy:
 	struct cali_rt *dest_rt = cali_rt_lookup(ctx->state->post_nat_ip_dst);
 
 	if (!dest_rt) {
-		CALI_DEBUG("No route for post DNAT dest %x\n", ctx->state->post_nat_ip_dst);
+		CALI_DEBUG("No route for post DNAT dest %x\n", bpf_ntohl(ctx->state->post_nat_ip_dst));
 		goto do_policy;
 	}
 
@@ -648,6 +648,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
 	__u32 seen_mark = ctx->fwd.mark;
 	size_t l4_csum_off = 0, l3_csum_off;
+	bool is_dnat = false;
 
 	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(state->ip_src), bpf_ntohl(state->ip_dst));
 	CALI_DEBUG("post_nat=%x:%d\n", bpf_ntohl(state->post_nat_ip_dst), state->post_nat_dport);
@@ -899,9 +900,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			}
 		}
 
+		is_dnat = state->ip_dst != state->post_nat_ip_dst;
+
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
 		if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
+			is_dnat = true;
 			if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
 				/* Packet is returning from a NAT tunnel,
 				 * already SNATed, just forward it.
@@ -1290,29 +1294,35 @@ allow:
 		fib = false; /* Disable FIB because we want to drop to iptables */
 	}
 
-	if (CALI_F_TO_HEP && !skb_seen(skb)) {
-		CALI_DEBUG("Host accesses nodeport backend %x:%d\n",
-			   bpf_htonl(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
-
+	if (CALI_F_TO_HEP && !skb_seen(skb) && is_dnat) {
 		struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
 
 		if (r) {
 			if (cali_rt_flags_local_workload(r->flags)) {
 				state->ct_result.ifindex_fwd = r->if_index;
-				CALI_DEBUG("NP local WL on HEP\n");
+				CALI_DEBUG("NP local WL %x:%d on HEP\n",
+						bpf_htonl(state->post_nat_ip_dst), state->post_nat_dport);
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 				fib = true; /* Enforce FIB since we want to redirect */
 			} else if (cali_rt_flags_remote_workload(r->flags)) {
 				if (CALI_F_LO || CALI_F_MAIN) {
 					state->ct_result.ifindex_fwd = NATIN_IFACE  ;
-					CALI_DEBUG("NP remote WL on LO or main HEP\n");
+					CALI_DEBUG("NP remote WL %x:%d on LO or main HEP\n",
+						bpf_htonl(state->post_nat_ip_dst), state->post_nat_dport);
 					ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 				}
 				ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
 				fib = true; /* Enforce FIB since we want to redirect */
 			}
 		} else {
-			/* might go outside the cluster */
+			/* Did not find a route for a service BE? Should be just
+			 * temporary sync issue, nevertheless, drop it for
+			 * now.
+			 */
+			CALI_DEBUG("No route to %x:%d after DNAT, DROP\n",
+					bpf_htonl(state->post_nat_ip_dst), state->post_nat_dport);
+			DENY_REASON(ctx, CALI_REASON_RT_UNKNOWN);
+			goto deny;
 		}
 	}
 
