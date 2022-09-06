@@ -537,8 +537,6 @@ syn_force_policy:
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 			}
 			ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
-			ctx->state->pol_rc = CALI_POL_ALLOW;
-			/* XXX We need to do HEP policy here, where we do NAT. */
 		}
 	}
 
