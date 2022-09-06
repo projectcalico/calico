@@ -13,10 +13,9 @@
 #define MAX_EXTENSIONS 2
 
 static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
-	unsigned long header_length = 0;
 	__u8 next_header = ipv6_hdr(ctx)->nexthdr;
+	struct ipv6_opt_hdr ipv6_ext;
 
-#pragma unroll
 	for (int i = 0; i < MAX_EXTENSIONS; i++) {
 		switch (next_header) {
 		case IPPROTO_HOPOPTS:
@@ -25,20 +24,15 @@ static CALI_BPF_INLINE int parse_ipv6_extensions(struct cali_tc_ctx *ctx) {
 		case IPPROTO_ROUTING:
 		case IPPROTO_DSTOPTS:
 		case IPPROTO_AH:
-			if (skb_refresh_validate_ptrs(ctx, sizeof(struct ipv6_opt_hdr))) {
+			if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx), &ipv6_ext, sizeof(ipv6_ext))) {
 				return PARSING_ERROR;
 			}
 
 			if (next_header == IPPROTO_AH)
-				header_length += (ipv6ext_hdr(ctx)->hdrlen * 4 + 8);
+				ctx->ipheader_len += (ipv6ext_hdr(ctx)->hdrlen * 4 + 8);
 			else
-				header_length += (ipv6ext_hdr(ctx)->hdrlen * 8 + 8);
-
-			if (skb_refresh_validate_ptrs(ctx, header_length)) {
-				return PARSING_ERROR;
-			}
-			next_header = ipv6ext_hdr(ctx)->nexthdr;
-			ctx->ipheader_len += header_length;
+				ctx->ipheader_len += (ipv6ext_hdr(ctx)->hdrlen * 8 + 8);
+			next_header = ipv6_ext.nexthdr;
 			break;
 		default:
 			CALI_DEBUG("Parsed IPv6 extension successfully\n");
