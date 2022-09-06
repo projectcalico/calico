@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -395,8 +396,9 @@ func (s *Server) serve(cxt context.Context) {
 				"connID": connID,
 			}),
 
-			encoder: gob.NewEncoder(conn),
-			readC:   make(chan interface{}),
+			encoder:     gob.NewEncoder(conn),
+			flushWriter: func() error { return nil },
+			readC:       make(chan interface{}),
 
 			allMetrics: s.perSyncerConnMetrics,
 		}
@@ -519,10 +521,12 @@ type connection struct {
 	cache     BreadcrumbProvider
 	conn      net.Conn
 
-	encoder *gob.Encoder
-	readC   chan interface{}
+	encoder     *gob.Encoder
+	flushWriter func() error
+	readC       chan interface{}
 
-	logCxt *log.Entry
+	logCxt            *log.Entry
+	chosenCompression syncproto.CompressionAlgorithm
 
 	// Similarly to allCaches, allMetrics contains all the metrics relevant to a particular syncer.  We copy one
 	// of them to the unnamed field after the handshake.
@@ -693,6 +697,18 @@ func (h *connection) doHandshake() error {
 	}
 	h.cache = desiredSyncerCache
 
+	for _, alg := range hello.SupportedCompressionAlgorithms {
+		switch alg {
+		case syncproto.CompressionSnappy:
+			h.chosenCompression = syncproto.CompressionSnappy
+			break
+		}
+	}
+	if !hello.SupportsDecoderRestart {
+		log.WithError(err).Warning("Client signalled compression but no support for decoder restart")
+		h.chosenCompression = ""
+	}
+
 	// Respond to client's hello.
 	err = h.sendMsg(syncproto.MsgServerHello{
 		Version: buildinfo.GitVersion,
@@ -705,6 +721,50 @@ func (h *connection) doHandshake() error {
 		log.WithError(err).Warning("Failed to send hello to client")
 		return err
 	}
+
+	if h.chosenCompression != "" {
+		err = h.restartEncoding()
+	}
+	return err
+}
+
+func (h *connection) restartEncoding() error {
+	// Signal for the client to restart its decoder (possibly) with compression enabled.
+	err := h.sendMsg(syncproto.MsgDecoderRestart{
+		CompressionAlgorithm: h.chosenCompression,
+	})
+	if err != nil {
+		log.WithError(err).Warning("Failed to send DecoderRestart to client")
+		return err
+	}
+
+	// Wait until the client ACKs.  This avoids sending compressed data that might get misinterpreted
+	// by the gob decoder.
+	msg, err := h.waitForMessage(h.logCxt)
+	if err != nil {
+		h.logCxt.WithError(err).Warn("Failed to read client ACK.")
+		return err
+	}
+	ack, ok := msg.(syncproto.MsgACK)
+	if !ok {
+		h.logCxt.WithField("msg", msg).Error("Unexpected message from client.")
+		return ErrUnexpectedClientMsg
+	}
+	h.logCxt.WithField("msg", ack).Info("Received ACK message from client.")
+
+	// Upgrade to compressed connection if required.
+	switch h.chosenCompression {
+	case syncproto.CompressionSnappy:
+		w := snappy.NewBufferedWriter(h.conn)
+		h.encoder = gob.NewEncoder(w) // Need a new Encoder, there's no way to change out the Writer.
+		h.flushWriter = w.Flush
+	default:
+		h.encoder = gob.NewEncoder(h.conn) // Need a new Encoder, there's no way to change out the Writer.
+		h.flushWriter = func() error {
+			return nil
+		}
+	}
+
 	return nil
 }
 
@@ -723,6 +783,12 @@ func (h *connection) sendMsg(msg interface{}) error {
 		h.logCxt.WithError(err).Info("Failed to write to client")
 		return err
 	}
+	err = h.flushWriter()
+	if err != nil {
+		h.logCxt.WithError(err).Info("Failed to flush write to client")
+		return err
+	}
+
 	h.summaryWriteLatency.Observe(time.Since(startTime).Seconds())
 	return nil
 }

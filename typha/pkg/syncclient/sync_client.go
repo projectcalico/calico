@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/snappy"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -174,6 +175,9 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 
 	s.Finished.Add(1)
 	go func() {
+		// Broadcast that we're finished.
+		defer s.Finished.Done()
+
 		// Wait for the context to finish, either due to external cancel or our own loop
 		// exiting.
 		<-cxt.Done()
@@ -184,8 +188,6 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 		if err != nil {
 			log.WithError(err).Warn("Ignoring error from Close during shut-down of client.")
 		}
-		// Broadcast that we're finished.
-		s.Finished.Done()
 	}()
 	return nil
 }
@@ -315,6 +317,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
 	logCxt.Info("Started Typha client main loop")
 
+	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
 	s.encoder = gob.NewEncoder(s.connection)
 	s.decoder = gob.NewDecoder(s.connection)
 
@@ -324,16 +327,51 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	}
 	err := s.sendMessageToServer(cxt, logCxt, "send hello to server",
 		syncproto.MsgClientHello{
-			Hostname:   s.myHostname,
-			Version:    s.myVersion,
-			Info:       s.myInfo,
-			SyncerType: ourSyncerType,
+			Hostname:                       s.myHostname,
+			Version:                        s.myVersion,
+			Info:                           s.myInfo,
+			SyncerType:                     ourSyncerType,
+			SupportsDecoderRestart:         true,
+			SupportedCompressionAlgorithms: []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy},
 		},
 	)
 	if err != nil {
 		return // (Failure already logged.)
 	}
 
+	msg, err := s.readMessageFromServer(cxt, logCxt)
+	if err != nil {
+		return
+	}
+	serverHello, ok := msg.(syncproto.MsgServerHello)
+	if !ok {
+		logCxt.WithField("msg", msg).Error("Unexpected first message from server.")
+		return
+	}
+	logCxt.WithField("serverMsg", serverHello).Info("ServerHello message received")
+
+	// Check whether Typha supports node resource updates.
+	if !serverHello.SupportsNodeResourceUpdates {
+		logCxt.Info("Server responded without support for node resource updates, assuming older Typha")
+	}
+	s.supportsNodeResourceUpdates = serverHello.SupportsNodeResourceUpdates
+	s.handshakeStatus.helloReceivedChan <- struct{}{}
+
+	// Check the SyncerType reported by the server.  If the server is too old to support SyncerType then
+	// the message will have an empty string in place of the SyncerType.  In that case we only proceed if
+	// the client wants the felix syncer.
+	serverSyncerType := serverHello.SyncerType
+	if serverSyncerType == "" {
+		logCxt.Info("Server responded without SyncerType, assuming an old Typha version that only " +
+			"supports SyncerTypeFelix.")
+		serverSyncerType = syncproto.SyncerTypeFelix
+	}
+	if ourSyncerType != serverSyncerType {
+		logCxt.Errorf("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
+		return
+	}
+
+	// Handshake done, start processing messages from the server.
 	for cxt.Err() == nil {
 		msg, err := s.readMessageFromServer(cxt, logCxt)
 		if err != nil {
@@ -369,31 +407,35 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 				updates = append(updates, update)
 			}
 			s.callbacks.OnUpdates(updates)
-		case syncproto.MsgServerHello:
-			logCxt.WithField("serverVersion", msg.Version).Info("Server hello message received")
-
-			// Check whether Typha supports node resource updates.
-			if !msg.SupportsNodeResourceUpdates {
-				logCxt.Info("Server responded without support for node resource updates, assuming older Typha")
-			}
-			s.supportsNodeResourceUpdates = msg.SupportsNodeResourceUpdates
-			s.handshakeStatus.helloReceivedChan <- struct{}{}
-
-			// Check the SyncerType reported by the server.  If the server is too old to support SyncerType then
-			// the message will have an empty string in place of the SyncerType.  In that case we only proceed if
-			// the client wants the felix syncer.
-			serverSyncerType := msg.SyncerType
-			if serverSyncerType == "" {
-				logCxt.Info("Server responded without SyncerType, assuming an old Typha version that only " +
-					"supports SyncerTypeFelix.")
-				serverSyncerType = syncproto.SyncerTypeFelix
-			}
-			if ourSyncerType != serverSyncerType {
-				logCxt.Errorf("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
+		case syncproto.MsgDecoderRestart:
+			err = s.restartDecoder(cxt, logCxt, msg)
+			if err != nil {
 				return
 			}
+		case syncproto.MsgServerHello:
+			logCxt.WithField("serverVersion", msg.Version).Error("Unexpected extra server hello message received")
+			return
 		}
 	}
+}
+
+func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, msg syncproto.MsgDecoderRestart) error {
+	logCxt.WithField("msg", msg).Info("Server asked us to restart our decoder")
+	// Check if we should enable compression.
+	switch msg.CompressionAlgorithm {
+	case syncproto.CompressionSnappy:
+		logCxt.Info("Server selected snappy compression.")
+		r := snappy.NewReader(s.connection)
+		s.decoder = gob.NewDecoder(r)
+	case "":
+		logCxt.Info("Server selected no compression.")
+		s.decoder = gob.NewDecoder(s.connection)
+	}
+	// Server requires an ack of the MsgDecoderRestart before it can send data in the new format.
+	err := s.sendMessageToServer(cxt, logCxt, "send ACK to server",
+		syncproto.MsgACK{},
+	)
+	return err
 }
 
 // sendMessageToServer sends a single value-type MsgXYZ object to the server.  It updates the connection's
