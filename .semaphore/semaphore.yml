@@ -628,12 +628,10 @@ blocks:
     prologue:
       commands:
       - cd networking-calico
-      - sudo apt-get install -y python-all-dev python3-all-dev python3-pip
-      - sudo pip3 install tox
     jobs:
       - name: 'Unit and FV tests (tox)'
         commands:
-          - ../.semaphore/run-and-monitor tox.log tox
+          - ../.semaphore/run-and-monitor tox.log make tox
       # TODO: Re-enable
       # - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
       #   commands:
