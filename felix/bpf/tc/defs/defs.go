@@ -47,6 +47,7 @@ const (
 	ProgIndexHostCtConflict
 	ProgIndexV6Prologue
 	ProgIndexV6Policy
+	ProgIndexV6Allowed
 	ProgIndexV6Icmp
 	ProgIndexV6Drop
 )
@@ -75,6 +76,7 @@ var JumpMapIndexes = map[string][]int{
 	"IPv6": []int{
 		ProgIndexV6Prologue,
 		ProgIndexV6Policy,
+		ProgIndexV6Allowed,
 		ProgIndexV6Icmp,
 		ProgIndexV6Drop,
 	},
