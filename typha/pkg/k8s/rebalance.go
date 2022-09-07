@@ -54,7 +54,7 @@ func PollK8sForConnectionLimit(
 				logCxt.WithError(tErr).WithField("numTyphas", numTyphas).Warn(
 					"Failed to get number of Typhas")
 			}
-			// Get the number of nodes as an estimate for the number of Felix connections we should expect.
+			// Get the number of nodes.  We expect one syncer connection of each type per node.
 			numNodes, nErr := k8sAPI.GetNumNodes()
 			if nErr != nil || numNodes <= 0 {
 				logCxt.WithError(nErr).WithField("numNodes", numNodes).Warn(

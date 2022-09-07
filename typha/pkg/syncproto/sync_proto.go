@@ -200,6 +200,21 @@ const (
 	SyncerTypeBGP                SyncerType = "bgp"
 	SyncerTypeTunnelIPAllocation SyncerType = "tunnel-ip-allocation"
 	SyncerTypeNodeStatus         SyncerType = "node-status"
+
+	// NumSyncerTypes is the number of SyncerType constants above.  For iota to pick up the correct value, all
+	// new consts must be added to this block and NumSyncerTypes must be the last entry.
+	NumSyncerTypes = iota
+)
+
+var (
+	// AllSyncerTypes contains each of the SyncerType constants. We use an array rather than a slice for a
+	// compile-time length check.
+	AllSyncerTypes = [NumSyncerTypes]SyncerType{
+		SyncerTypeFelix,
+		SyncerTypeBGP,
+		SyncerTypeTunnelIPAllocation,
+		SyncerTypeNodeStatus,
+	}
 )
 
 type MsgClientHello struct {
