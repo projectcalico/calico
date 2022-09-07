@@ -77,16 +77,3 @@ var ErrIterationFinished = errors.New("iteration finished")
 // ErrVisitedTooManyKeys is returned by the MapIterator's Next() method if it sees many more keys than there should
 // be in the map.
 var ErrVisitedTooManyKeys = errors.New("visited 10x the max size of the map keys")
-
-const (
-	ProgIndexPolicy = iota
-	ProgIndexAllowed
-	ProgIndexICMP
-	ProgIndexDrop
-	ProgIndexHostCTConflict
-	ProgIndexV6Prologue
-	ProgIndexV6Policy
-	ProgIndexV6Allowed
-	ProgIndexV6ICMP
-	ProgIndexV6Drop
-)
