@@ -640,6 +640,8 @@ blocks:
           # message for more context.
           - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
           - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
+          - export NC_PLUGIN_REPO=$(dirname $(pwd))
+          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
     epilogue:
       on_fail:
