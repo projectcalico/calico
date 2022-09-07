@@ -40,21 +40,6 @@ const (
 	EpTypeNAT      EndpointType = "nat"
 )
 
-type ProgName string
-
-var programNames = []ProgName{
-	"calico_tc_norm_pol_tail",
-	"calico_tc_skb_accepted_entrypoint",
-	"calico_tc_skb_send_icmp_replies",
-	"calico_tc_skb_drop",
-	"calico_tc_host_ct_conflict",
-	"calico_tc_v6",
-	"calico_tc_v6_norm_pol_tail",
-	"calico_tc_v6_skb_accepted_entrypoint",
-	"calico_tc_v6_skb_send_icmp_replies",
-	"calico_tc_v6_skb_drop",
-}
-
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/environment"
 )
 
@@ -648,51 +649,16 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		ipVersions = append(ipVersions, "IPv6")
 	}
 
-	for _, ipFamily := range ipVersions {
-		// Since in IPv4, we don't add prologue to the jump map, and hence the first
-		// program is policy, the base index should be set to -1 to properly offset the
-		// policy program (base+1) to the first entry in the jump map, i.e. 0. However,
-		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
-		base := -1
-		if ipFamily == "IPv6" {
-			base = 5
-		}
+	mapName := bpf.JumpMapName()
 
-		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
-		// of execution, and we don't need to add it into the jump map
-		if ipFamily == "IPv6" {
-			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[base]), base)
-			if err != nil {
-				return fmt.Errorf("error updating %v proglogue program: %v", ipFamily, err)
+	for _, ipFamily := range ipVersions {
+		for _, idx := range tcdefs.JumpMapIndexes[ipFamily] {
+			if isHost && (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) {
+				continue
 			}
-		}
-		pIndex := base + 1
-		if !isHost {
-			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
+			err := obj.UpdateJumpMap(mapName, tcdefs.ProgramNames[idx], idx)
 			if err != nil {
-				return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
-			}
-		}
-		eIndex := base + 2
-		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
-		}
-		iIndex := base + 3
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
-		}
-		dIndex := base + 4
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
-		}
-		if ipFamily != "IPv6" {
-			iIndex := base + 5
-			err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
-			if err != nil {
-				return fmt.Errorf("error updating %v host CT conflict program: %v", ipFamily, err)
+				return fmt.Errorf("error updating %v %s program: %w", ipFamily, tcdefs.ProgramNames[idx], err)
 			}
 		}
 	}
