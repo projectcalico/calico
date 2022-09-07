@@ -626,24 +626,21 @@ blocks:
     prologue:
       commands:
       - cd networking-calico
-      - sudo apt-get install -y python-all-dev python3-all-dev python3-pip
-      - sudo pip3 install tox
     jobs:
       - name: 'Unit and FV tests (tox)'
         commands:
-          - ../.semaphore/run-and-monitor tox.log tox
-      # TODO: Re-enable
-      # - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
-      #   commands:
-      #     - git checkout -b devstack-test
-      #     - export LIBVIRT_TYPE=qemu
-      #     - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/ussuri
-      #     # Use proposed fix at
-      #     # https://review.opendev.org/c/openstack/requirements/+/810859.  See commit
-      #     # message for more context.
-      #     - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
-      #     - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
-      #     - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
+          - ../.semaphore/run-and-monitor tox.log make tox
+      - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
+        commands:
+          - git checkout -b devstack-test
+          - export LIBVIRT_TYPE=qemu
+          - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/ussuri
+          # Use proposed fix at
+          # https://review.opendev.org/c/openstack/requirements/+/810859.  See commit
+          # message for more context.
+          - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
+          - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
+          - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
     epilogue:
       on_fail:
         commands:
