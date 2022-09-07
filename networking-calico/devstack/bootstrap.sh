@@ -121,6 +121,8 @@ disable_service horizon
 LOGFILE=stack.log
 LOG_COLOR=False
 
+TEMPEST_BRANCH=29.0.0
+
 EOF
 
 if ! ${TEMPEST:-false}; then
