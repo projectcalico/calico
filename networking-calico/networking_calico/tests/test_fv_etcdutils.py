@@ -23,6 +23,8 @@ from __future__ import print_function
 
 import logging
 import os
+import shutil
+import subprocess
 import unittest
 
 import eventlet
@@ -35,14 +37,11 @@ from networking_calico import etcdv3
 
 _log = logging.getLogger(__name__)
 
-ETCD_IMAGE = "quay.io/coreos/etcd:v3.3.11"
-
 
 class TestFVEtcdutils(unittest.TestCase):
     def setUp(self):
         super(TestFVEtcdutils, self).setUp()
         self.etcd_server_running = False
-        os.system("docker pull " + ETCD_IMAGE)
 
     def tearDown(self):
         self.stop_etcd_server()
@@ -50,10 +49,12 @@ class TestFVEtcdutils(unittest.TestCase):
         super(TestFVEtcdutils, self).tearDown()
 
     def start_etcd_server(self):
-        os.system("docker run -d --rm --net=host --name etcd" +
-                  " " + ETCD_IMAGE + " etcd" +
-                  " --advertise-client-urls http://127.0.0.1:2379" +
-                  " --listen-client-urls http://0.0.0.0:2379")
+        shutil.rmtree(".default.etcd", ignore_errors=True)
+        self.etcd = subprocess.Popen([
+            "/usr/local/bin/etcd",
+            "--advertise-client-urls", "http://127.0.0.1:2379",
+            "--listen-client-urls", "http://0.0.0.0:2379"
+        ])
         self.etcd_server_running = True
 
     def wait_etcd_ready(self):
@@ -61,6 +62,7 @@ class TestFVEtcdutils(unittest.TestCase):
         ready = False
         for ii in range(10):
             try:
+                _log.warning("Try connecting to etcd server...")
                 etcdv3.get_status()
                 ready = True
                 break
@@ -71,7 +73,8 @@ class TestFVEtcdutils(unittest.TestCase):
 
     def stop_etcd_server(self):
         if self.etcd_server_running:
-            os.system("docker kill etcd")
+            self.etcd.kill()
+            self.etcd.wait()
         self.etcd_server_running = False
 
     def test_must_update(self):
