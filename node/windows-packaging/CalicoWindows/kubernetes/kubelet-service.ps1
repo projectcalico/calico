@@ -22,6 +22,8 @@ $baseDir = "$PSScriptRoot\.."
 ipmo $baseDir\libs\calico\calico.psm1 -Force
 
 Write-Host "Running kubelet service."
+Wait-ForCalicoInit
+
 Write-Host "Using configured nodename: $env:NODENAME DNS: $env:DNS_NAME_SERVERS"
 
 Write-Host "Auto-detecting node IP, looking for interface named like '$InterfaceName' ..."
