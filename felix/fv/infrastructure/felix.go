@@ -15,6 +15,7 @@
 package infrastructure
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -25,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -279,4 +281,26 @@ func (f *Felix) BPFIfState() map[string]BPFIfState {
 	}
 
 	return states
+}
+
+func (f *Felix) DumpBPFMaps(typ string) {
+	out, err := f.ExecOutput("bpftool", "map", "list", "-p")
+	Expect(err).NotTo(HaveOccurred())
+
+	var maps []bpf.MapInfo
+	err = json.Unmarshal([]byte(out), &maps)
+	Expect(err).NotTo(HaveOccurred())
+
+	for _, m := range maps {
+		if m.Type == typ {
+			err := f.ExecMayFail(
+				"bpftool",
+				"--json",
+				"--pretty",
+				"map",
+				"dump",
+				"id", fmt.Sprintf("%d", m.Id))
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
 }

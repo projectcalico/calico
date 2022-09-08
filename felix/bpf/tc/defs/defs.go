@@ -52,6 +52,8 @@ const (
 	ProgIndexV6Allowed
 	ProgIndexV6Icmp
 	ProgIndexV6Drop
+
+	ProgIndexStart = ProgIndexPolicy
 )
 
 var ProgramNames = []string{
