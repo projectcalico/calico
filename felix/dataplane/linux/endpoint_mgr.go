@@ -25,6 +25,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -658,13 +660,14 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					natInfos = workload.Ipv6Nat
 					addrSuffix = "/128"
 				}
-				if m.floatingIPsEnabled && len(natInfos) != 0 {
-					// Include any floating IP NATs if the feature is enabled.
-					old := ipStrings
-					ipStrings = make([]string, len(old)+len(natInfos))
-					copy(ipStrings, old)
-					for ii, natInfo := range natInfos {
-						ipStrings[len(old)+ii] = natInfo.ExtIp + addrSuffix
+				alreadyCopied := false
+				for _, natInfo := range natInfos {
+					if m.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
+						if !alreadyCopied {
+							ipStrings = append([]string(nil), ipStrings...)
+							alreadyCopied = true
+						}
+						ipStrings = append(ipStrings, natInfo.ExtIp+addrSuffix)
 					}
 				}
 
