@@ -128,9 +128,8 @@ func (m *floatingIPManager) CompleteDeferredWork() error {
 		for _, natInfos := range m.natInfo {
 			for _, natInfo := range natInfos {
 				log.WithFields(log.Fields{
-					"ExtIP":  natInfo.ExtIp,
-					"IntIP":  natInfo.IntIp,
-					"Source": natInfo.Source,
+					"ExtIP": natInfo.ExtIp,
+					"IntIP": natInfo.IntIp,
 				}).Debug("NAT mapping")
 
 				// We shouldn't ever have the same floating IP mapping to multiple
