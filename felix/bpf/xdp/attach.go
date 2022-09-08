@@ -57,8 +57,16 @@ func (ap *AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
 
-func (ap *AttachPoint) JumpMapFDMapKey() string {
+func (ap *AttachPoint) Debug() bool {
+	return false
+}
+
+func (ap *AttachPoint) JumpMapFDMapKey(_ int, _ bool) string {
 	return string(bpf.HookXDP)
+}
+
+func (ap *AttachPoint) ExpectedJumpMaps(fds []bpf.MapFD) bool {
+	return len(fds) == 1 && fds[0] != 0
 }
 
 func (ap *AttachPoint) FileName() string {
@@ -82,7 +90,7 @@ func (ap *AttachPoint) Log() *log.Entry {
 }
 
 func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
-	progID, err := ap.ProgramID()
+	progID, err := ap.programID()
 	if err != nil {
 		ap.Log().Debugf("Couldn't get the attached XDP program ID. err=%v", err)
 		return -1, false
@@ -106,10 +114,10 @@ func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	return -1, false
 }
 
-func (ap *AttachPoint) AttachProgram() (int, error) {
+func (ap *AttachPoint) AttachPrograms() ([]bpf.MapFD, error) {
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
-		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
+		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 	defer func() {
 		_ = os.RemoveAll(tempDir)
@@ -123,20 +131,20 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	err = ap.patchBinary(preCompiledBinary, tempBinary)
 	if err != nil {
 		ap.Log().WithError(err).Error("Failed to patch binary")
-		return -1, err
+		return nil, err
 	}
 
 	obj, err := libbpf.OpenObject(tempBinary)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 	defer obj.Close()
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		// TODO: We need to set map size here like tc.
-		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, bpf.HookXDP)
+		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, bpf.HookXDP, false)
 		if err := m.SetPinPath(pinPath); err != nil {
-			return -1, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
 
@@ -144,25 +152,29 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
 	if isAttached {
 		ap.Log().Infof("Programs already attached, skip reattaching %s", filename)
-		return progID, nil
+		fd, err := obj.GetJumpMapFd(bpf.JumpMapName())
+		if err != nil {
+			return nil, err
+		}
+		return []bpf.MapFD{bpf.MapFD(fd)}, nil
 	}
 	ap.Log().Infof("Continue with attaching BPF program %s", filename)
 
 	if err := obj.Load(); err != nil {
 		ap.Log().Warn("Failed to load program")
-		return -1, fmt.Errorf("error loading program: %w", err)
+		return nil, fmt.Errorf("error loading program: %w", err)
 	}
 
 	// TODO: Add support for IPv6
 	err = updateJumpMap(obj)
 	if err != nil {
 		ap.Log().Warn("Failed to update jump map")
-		return -1, fmt.Errorf("error updating jump map %v", err)
+		return nil, fmt.Errorf("error updating jump map %v", err)
 	}
 
-	oldID, err := ap.ProgramID()
+	oldID, err := ap.programID()
 	if err != nil {
-		return -1, fmt.Errorf("failed to get the attached XDP program ID: %w", err)
+		return nil, fmt.Errorf("failed to get the attached XDP program ID: %w", err)
 	}
 
 	attachmentSucceeded := false
@@ -181,7 +193,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 
 	if !attachmentSucceeded {
-		return -1, fmt.Errorf("failed to attach XDP program with program name %v to interface %v",
+		return nil, fmt.Errorf("failed to attach XDP program with program name %v to interface %v",
 			ap.ProgramName(), ap.Iface)
 	}
 
@@ -190,12 +202,17 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
 	}
 
-	return progID, nil
+	jumpMapFd, err := obj.GetJumpMapFd(bpf.JumpMapName())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get jump map fd: %w", err)
+	}
+
+	return []bpf.MapFD{bpf.MapFD(jumpMapFd)}, nil
 }
 
-func (ap *AttachPoint) DetachProgram() error {
+func (ap *AttachPoint) DetachPrograms() error {
 	// Get the current XDP program ID, if any.
-	progID, err := ap.ProgramID()
+	progID, err := ap.programID()
 	if err != nil {
 		return fmt.Errorf("failed to get the attached XDP program ID: %w", err)
 	}
@@ -218,7 +235,7 @@ func (ap *AttachPoint) DetachProgram() error {
 			ap.Log().Debugf("Failed to detach XDP program in mode %v: %v.", mode, err)
 			continue
 		}
-		curProgId, err := ap.ProgramID()
+		curProgId, err := ap.programID()
 		if err != nil {
 			return fmt.Errorf("failed to get the attached XDP program ID: %w", err)
 		}
@@ -259,11 +276,11 @@ func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
 }
 
 func (ap *AttachPoint) IsAttached() (bool, error) {
-	_, err := ap.ProgramID()
+	_, err := ap.programID()
 	return err == nil, err
 }
 
-func (ap *AttachPoint) ProgramID() (int, error) {
+func (ap *AttachPoint) programID() (int, error) {
 	progID, err := libbpf.GetXDPProgramID(ap.Iface)
 	if err != nil {
 		return -1, fmt.Errorf("Couldn't check for XDP program on iface %v: %w", ap.Iface, err)

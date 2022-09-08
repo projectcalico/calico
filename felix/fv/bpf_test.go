@@ -92,7 +92,7 @@ var _ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoad
 // with debug disabled and that can lead to verifier issues.
 var _ = describeBPFTests(withProto("tcp"),
 	withConnTimeLoadBalancingEnabled(),
-	withBPFLogLevel("info"))
+	withBPFLogLevel("off"))
 
 type bpfTestOptions struct {
 	connTimeEnabled bool
@@ -293,11 +293,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 
+			if testOpts.protocol == "tcp" {
+				options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFLogFilters=enabled"
+				options.ExtraEnvVars["FELIX_BPFLogFilters"] = "all=tcp"
+				if testOpts.connTimeEnabled {
+					options.ExtraEnvVars["FELIX_BPFLogFilters"] += ",ctlb=on"
+				}
+			}
+
 			if ctlbWorkaround {
 				if testOpts.protocol == "udp" {
 					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
 				} else {
-					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
+					options.ExtraEnvVars["FELIX_FeatureGates"] += ",BPFConnectTimeLoadBalancingWorkaround=enabled"
 				}
 			}
 		})
@@ -314,6 +322,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("ip", "rule")
 					felix.Exec("ip", "route")
 					felix.Exec("ip", "neigh")
+					felix.Exec("bpftool", "-jp", "net")
+					felix.Exec("bpftool", "-jp", "prog", "show")
+					felix.Exec("bpftool", "-jp", "map", "show")
+					felix.DumpBPFMaps("prog_array")
+					felix.Exec("tc", "-s", "qdisc", "show")
 					felix.Exec("arp")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
@@ -1991,6 +2004,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.Expect(Some, w[1][0], TargetIP(ip), ExpectWithPorts(port))
 						cc.Expect(Some, w[1][1], TargetIP(ip), ExpectWithPorts(port))
 						cc.CheckConnectivity()
+						//Fail("XXX")
 					})
 
 					It("should only have connectivity from the local host via a service to workload 0", func() {
