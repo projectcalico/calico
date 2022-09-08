@@ -70,11 +70,17 @@ var (
 
 func init() {
 	prometheus.MustRegister(gaugeVecCurrentSequenceNumber)
+	promutils.PreCreateGaugePerSyncer(gaugeVecCurrentSequenceNumber)
 	prometheus.MustRegister(gaugeVecSnapshotSize)
+	promutils.PreCreateGaugePerSyncer(gaugeVecSnapshotSize)
 	prometheus.MustRegister(counterVecBreadcrumbNonBlock)
+	promutils.PreCreateCounterPerSyncer(counterVecBreadcrumbNonBlock)
 	prometheus.MustRegister(counterVecBreadcrumbBlock)
+	promutils.PreCreateCounterPerSyncer(counterVecBreadcrumbBlock)
 	prometheus.MustRegister(counterVecUpdatesTotal)
+	promutils.PreCreateCounterPerSyncer(counterVecUpdatesTotal)
 	prometheus.MustRegister(counterVecUpdatesSkipped)
+	promutils.PreCreateCounterPerSyncer(counterVecUpdatesSkipped)
 }
 
 // Cache consumes updates from the Syncer API and caches them in the form of a series of

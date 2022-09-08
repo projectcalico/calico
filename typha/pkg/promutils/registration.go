@@ -15,6 +15,7 @@
 package promutils
 
 import (
+	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
@@ -32,4 +33,16 @@ func GetOrRegister[T prometheus.Collector](collector T) T {
 		}
 	}
 	return collector
+}
+
+func PreCreateCounterPerSyncer(cv *prometheus.CounterVec) {
+	for _, st := range syncproto.AllSyncerTypes {
+		cv.WithLabelValues(string(st))
+	}
+}
+
+func PreCreateGaugePerSyncer(cv *prometheus.GaugeVec) {
+	for _, st := range syncproto.AllSyncerTypes {
+		cv.WithLabelValues(string(st))
+	}
 }
