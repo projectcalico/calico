@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 )
 
 // A floating IP is an IP that can be used to reach a particular workload endpoint, but that the
@@ -117,24 +118,29 @@ func (m *floatingIPManager) CompleteDeferredWork() error {
 	if m.dirtyNATInfo {
 		// Collate required DNATs as a map from external IP to internal IP.
 		dnats := map[string]string{}
-		if m.enabled {
-			// We only perform nat if the feature is explicitly enabled, otherwise
-			// we will simply remove any programmed floating IP NAT fules.
-			for _, natInfos := range m.natInfo {
-				for _, natInfo := range natInfos {
-					log.WithFields(log.Fields{
-						"ExtIP": natInfo.ExtIp,
-						"IntIP": natInfo.IntIp,
-					}).Debug("NAT mapping")
+		for _, natInfos := range m.natInfo {
+			for _, natInfo := range natInfos {
+				log.WithFields(log.Fields{
+					"ExtIP":  natInfo.ExtIp,
+					"IntIP":  natInfo.IntIp,
+					"Source": natInfo.Source,
+				}).Debug("NAT mapping")
 
-					// We shouldn't ever have the same floating IP mapping to multiple
-					// workload IPs, but if we do we'll program the mapping to the
-					// alphabetically earlier one.
-					existingIntIP := dnats[natInfo.ExtIp]
-					if existingIntIP == "" || natInfo.IntIp < existingIntIP {
-						log.Debug("Wanted NAT mapping")
-						dnats[natInfo.ExtIp] = natInfo.IntIp
-					}
+				// We only program NAT mappings if the FloatingIPs feature is
+				// globally enabled, or if the requested mapping comes from
+				// OpenStack.  Otherwise we will simply remove any programmed
+				// floating IP NAT fules.
+				if !(m.enabled || natInfo.Source == apiv3.IPNATSourceOpenStack) {
+					continue
+				}
+
+				// We shouldn't ever have the same floating IP mapping to multiple
+				// workload IPs, but if we do we'll program the mapping to the
+				// alphabetically earlier one.
+				existingIntIP := dnats[natInfo.ExtIp]
+				if existingIntIP == "" || natInfo.IntIp < existingIntIP {
+					log.Debug("Wanted NAT mapping")
+					dnats[natInfo.ExtIp] = natInfo.IntIp
 				}
 			}
 		}

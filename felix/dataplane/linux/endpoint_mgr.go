@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -658,13 +659,9 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					natInfos = workload.Ipv6Nat
 					addrSuffix = "/128"
 				}
-				if m.floatingIPsEnabled && len(natInfos) != 0 {
-					// Include any floating IP NATs if the feature is enabled.
-					old := ipStrings
-					ipStrings = make([]string, len(old)+len(natInfos))
-					copy(ipStrings, old)
-					for ii, natInfo := range natInfos {
-						ipStrings[len(old)+ii] = natInfo.ExtIp + addrSuffix
+				for _, natInfo := range natInfos {
+					if m.floatingIPsEnabled || natInfo.Source == apiv3.IPNATSourceOpenStack {
+						ipStrings = append(ipStrings, natInfo.ExtIp+addrSuffix)
 					}
 				}
 
