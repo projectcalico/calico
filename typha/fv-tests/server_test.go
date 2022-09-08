@@ -525,12 +525,12 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should report the correct number of connections", func() {
-			expectGaugeValue("typha_connections_active", 1.0)
+			expectGlobalGaugeValue("typha_connections_active", 1.0)
 		})
 
 		It("should report the correct number of connections after killing the client", func() {
 			clientCancel()
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		})
 	})
 
@@ -583,7 +583,7 @@ var _ = Describe("With an in-process Server", func() {
 			}
 			// After the timeout we should have dropped exactly the right number of connections.
 			Expect(numFinished).To(Equal(40))
-			expectGaugeValue("typha_connections_active", 60.0)
+			expectGlobalGaugeValue("typha_connections_active", 60.0)
 		})
 
 		It("should pass through a KV and status", func() {
@@ -604,14 +604,14 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should report the correct number of connections", func() {
-			expectGaugeValue("typha_connections_active", 100.0)
+			expectGlobalGaugeValue("typha_connections_active", 100.0)
 		})
 
 		It("should report the correct number of connections after killing the clients", func() {
 			for _, c := range clientStates {
 				c.clientCancel()
 			}
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		})
 
 		It("with churn, it should report the correct number of connections after killing the clients", func() {
@@ -627,7 +627,7 @@ var _ = Describe("With an in-process Server", func() {
 				c.clientCancel()
 				time.Sleep(100 * time.Microsecond)
 			}
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		})
 	})
 })
@@ -790,14 +790,14 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 				Fail("client wasn't disconnected within expected time")
 			case <-disconnected:
 			}
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		}
 
 		It("should clean up if the hello doesn't get sent", func() {
-			expectGaugeValue("typha_connections_active", 1.0)
+			expectGlobalGaugeValue("typha_connections_active", 1.0)
 			err := rawConn.Close()
 			Expect(err).ToNot(HaveOccurred())
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		})
 
 		Describe("After sending Hello with bad syncer type", func() {
@@ -1082,7 +1082,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
 			recorder := NewRecorder()
 
-			origGaugeValue, err := getCounter("typha_connections_grace_used")
+			origGaugeValue, err := getPerSyncerCounter("typha_connections_grace_used", syncproto.SyncerTypeFelix)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make the client block after it reads the first update.  This means the server will have started
@@ -1124,14 +1124,14 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			sendNUpdates(1)
 
 			Eventually(recorder.Len, 2*time.Second).Should(BeNumerically("==", initialSnapshotSize+3))
-			Expect(getCounter("typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue+1))
+			Expect(getPerSyncerCounter("typha_connections_grace_used", syncproto.SyncerTypeFelix)).To(BeNumerically("==", origGaugeValue+1))
 		})
 
 		It("client should get disconnected if it falls behind after the grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
 			recorder := NewRecorder()
 
-			origGaugeValue, err := getCounter("typha_connections_grace_used")
+			origGaugeValue, err := getPerSyncerCounter("typha_connections_grace_used", syncproto.SyncerTypeFelix)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make the client block after it reads the first update.  This means the server will have started
@@ -1187,12 +1187,12 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			Expect(recorder.Len()).To(BeNumerically("<=", initialSnapshotSize*2))
 
 			// Should not use the grace period at all.
-			Expect(getCounter("typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue))
+			Expect(getPerSyncerCounter("typha_connections_grace_used", syncproto.SyncerTypeFelix)).To(BeNumerically("==", origGaugeValue))
 		})
 	})
 })
 
-func getGauge(name string) (float64, error) {
+func getGlobalGauge(name string) (float64, error) {
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		return 0, err
@@ -1205,23 +1205,31 @@ func getGauge(name string) (float64, error) {
 	return 0, errors.New("not found")
 }
 
-func getCounter(name string) (float64, error) {
+func expectGlobalGaugeValue(name string, value float64) {
+	Eventually(func() (float64, error) {
+		return getGlobalGauge(name)
+	}).Should(Equal(value))
+}
+
+func getPerSyncerCounter(name string, syncer syncproto.SyncerType) (float64, error) {
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		return 0, err
 	}
 	for _, mf := range mfs {
 		if mf.GetName() == name {
-			return mf.Metric[0].GetCounter().GetValue(), nil
+			for _, m := range mf.Metric {
+				for _, l := range m.Label {
+					if l.GetName() == "syncer" && l.GetValue() == string(syncer) {
+						return m.GetCounter().GetValue(), nil
+					}
+				}
+			}
+			// Found the metric but no value for that syncer yet.
+			return 0, nil
 		}
 	}
-	return 0, errors.New("not found")
-}
-
-func expectGaugeValue(name string, value float64) {
-	Eventually(func() (float64, error) {
-		return getGauge(name)
-	}).Should(Equal(value))
+	return 0, errors.New("metric not found")
 }
 
 // TLS connection tests.
