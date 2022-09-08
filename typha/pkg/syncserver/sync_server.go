@@ -59,12 +59,12 @@ var (
 		Name: "typha_connections_dropped",
 		Help: "Total number of connections dropped due to rebalancing.",
 	})
-	gaugeNumConnections = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "typha_connections_active",
-		Help: "Number of open client connections.",
-	})
 
 	// Counters with per-syncer-type values.
+	gaugeVecNumConnections = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "typha_connections_active",
+		Help: "Number of open client connections.",
+	}, []string{"syncer"})
 	counterVecGracePeriodUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_connections_grace_used",
 		Help: "Total number of connections that made use of the grace period to catch up after sending the initial " +
@@ -75,8 +75,9 @@ var (
 func init() {
 	prometheus.MustRegister(counterNumConnectionsAccepted)
 	prometheus.MustRegister(counterNumConnectionsDropped)
-	prometheus.MustRegister(gaugeNumConnections)
 
+	prometheus.MustRegister(gaugeVecNumConnections)
+	promutils.PreCreateGaugePerSyncer(gaugeVecNumConnections)
 	prometheus.MustRegister(counterVecGracePeriodUsed)
 	promutils.PreCreateCounterPerSyncer(counterVecGracePeriodUsed)
 }
@@ -537,13 +538,14 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 		}
 		// Wait for the background threads to shut down.
 		h.shutDownWG.Wait()
-		gaugeNumConnections.Dec()
+		if h.gaugeNumConnections != nil {
+			h.gaugeNumConnections.Dec()
+		}
 		h.logCxt.Info("Client connection shut down.")
 		finishedWG.Done()
 	}()
 
 	h.logCxt.Info("Per-connection goroutine started")
-	gaugeNumConnections.Inc()
 
 	// Start goroutine to read messages from client and put them on a channel for this goroutine to process.
 	h.shutDownWG.Add(1)
@@ -553,6 +555,7 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	if err = h.doHandshake(); err != nil {
 		return // Error already logged.
 	}
+	h.gaugeNumConnections.Inc()
 
 	// Start a goroutine to stream the snapshot and then the deltas to the client.
 	h.shutDownWG.Add(1)
@@ -675,6 +678,7 @@ func (h *connection) doHandshake() error {
 		h.logCxt.Info("Client didn't provide a SyncerType, assuming SyncerTypeFelix for back-compatibility.")
 		syncerType = syncproto.SyncerTypeFelix
 	}
+	h.logCxt = h.logCxt.WithField("type", syncerType)
 	h.perSyncerConnMetrics = h.allMetrics[syncerType]
 	desiredSyncerCache := h.allCaches[syncerType]
 	if desiredSyncerCache == nil {
@@ -963,6 +967,7 @@ type perSyncerConnMetrics struct {
 	summaryNextCatchupLatency prometheus.Summary
 	summaryPingLatency        prometheus.Summary
 	summaryNumKVsPerMsg       prometheus.Summary
+	gaugeNumConnections       prometheus.Gauge
 }
 
 func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetrics {
@@ -999,5 +1004,6 @@ func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetr
 		Help: "Number of KV pairs sent in each message.",
 	}))
 	c.counterGracePeriodUsed = counterVecGracePeriodUsed.WithLabelValues(string(syncerType))
+	c.gaugeNumConnections = gaugeVecNumConnections.WithLabelValues(string(syncerType))
 	return c
 }
