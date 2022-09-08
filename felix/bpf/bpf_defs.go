@@ -50,13 +50,6 @@ type ProgResult struct {
 	DataOut  []byte
 }
 
-type MapInfo struct {
-	Type       int
-	KeySize    int
-	ValueSize  int
-	MaxEntries int
-}
-
 // PolicyDebugInfo describes policy debug info
 type PolicyDebugInfo struct {
 	IfaceName  string    `json:"ifacename"`

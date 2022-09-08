@@ -149,7 +149,12 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen time.Duration, bpfMc *bpf.MapContext,
+func InstallConnectTimeLoadBalancer(
+	cgroupv2 string,
+	logLevel string,
+	logFilter string,
+	udpNotSeen time.Duration,
+	bpfMc *bpf.MapContext,
 	excludeUDP bool) error {
 
 	bpfMount, err := bpf.MaybeMountBPFfs()
