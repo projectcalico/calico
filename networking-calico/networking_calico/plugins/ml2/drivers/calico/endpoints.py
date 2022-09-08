@@ -402,7 +402,6 @@ def endpoint_spec(port):
         ip_nats.append({
             'internalIP': ip['int_ip'],
             'externalIP': ip['ext_ip'],
-            'source': 'openstack',
         })
     if ip_nats:
         data['ipNATs'] = ip_nats

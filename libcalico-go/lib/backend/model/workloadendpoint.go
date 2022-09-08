@@ -182,9 +182,4 @@ type IPNAT struct {
 
 	// The external IP address.
 	ExtIP net.IP `json:"ext_ip" validate:"ip"`
-
-	// Source of this NAT mapping.  Value "openstack" indicates that it corresponds to an
-	// OpenStack floating IP, and in that case Calico will program the dataplane for it
-	// regardless of the global FloatingIPs setting in FelixConfiguration.
-	Source string `json:"source"`
 }

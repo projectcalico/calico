@@ -426,7 +426,6 @@ message TierInfo {
 message NatInfo {
   string ext_ip = 1;
   string int_ip = 2;
-  string source = 3;
 }
 
 message ProcessStatusUpdate {

@@ -24,7 +24,6 @@ import (
 const (
 	KindWorkloadEndpoint     = "WorkloadEndpoint"
 	KindWorkloadEndpointList = "WorkloadEndpointList"
-	IPNATSourceOpenStack     = "openstack"
 )
 
 // +genclient
@@ -101,10 +100,6 @@ type IPNAT struct {
 	InternalIP string `json:"internalIP" validate:"omitempty,ip"`
 	// The external IP address.
 	ExternalIP string `json:"externalIP" validate:"omitempty,ip"`
-	// Source of this NAT mapping.  Value "openstack" indicates that it corresponds to an
-	// OpenStack floating IP, and in that case Calico will program the dataplane for it
-	// regardless of the global FloatingIPs setting in FelixConfiguration.
-	Source string `json:"source" validate:"omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

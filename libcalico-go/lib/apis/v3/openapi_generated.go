@@ -2605,16 +2605,8 @@ func schema_libcalico_go_lib_apis_v3_IPNAT(ref common.ReferenceCallback) common.
 							Format:      "",
 						},
 					},
-					"source": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Source of this NAT mapping.  Value \"openstack\" indicates that it corresponds to an OpenStack floating IP, and in that case Calico will program the dataplane for it regardless of the global FloatingIPs setting in FelixConfiguration.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 				},
-				Required: []string{"internalIP", "externalIP", "source"},
+				Required: []string{"internalIP", "externalIP"},
 			},
 		},
 	}
