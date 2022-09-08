@@ -141,6 +141,7 @@ const (
 	LoadReg32 OpCode = OpClassLoadReg | MemOpModeMem | MemOpSize32
 	LoadReg64 OpCode = OpClassLoadReg | MemOpModeMem | MemOpSize64
 
+	LoadImm32 OpCode = OpClassLoadImm | MemOpModeImm | MemOpSize32
 	// LoadImm64 loads a 64-bit immediate value; it is a double-length instruction.
 	// The immediate is split into two 32-bit halves; the first half is in the
 	// first instruction's immediate; the second half is in the second instruction's
@@ -318,6 +319,10 @@ func MakeInsn(opcode OpCode, dst, src Reg, offset int16, imm int32) Insn {
 }
 
 func (n Insn) String() string {
+	if n.OpCode() == LoadImm64Pt2 && n.Dst() == R0 && n.Src() == R0 && n.Off() == 0 {
+		return fmt.Sprintf("%v dst=%v src=%v off=%v imm=%#08x/%d", "LoadImm64Pt2",
+			n.Dst(), n.Src(), n.Off(), uint32(n.Imm()), n.Imm())
+	}
 	return fmt.Sprintf("%v dst=%v src=%v off=%v imm=%#08x/%d", n.OpCode(), n.Dst(), n.Src(), n.Off(), uint32(n.Imm()), n.Imm())
 }
 
@@ -391,6 +396,10 @@ func (b *Block) LoadImm64(dst Reg, imm int64) {
 	// LoadImm64 is the only double-length instruction.
 	b.add(LoadImm64, dst, 0, 0, int32(imm), "")
 	b.add(LoadImm64Pt2, 0, 0, 0, int32(imm>>32), "")
+}
+
+func (b *Block) LoadImm32(dst Reg, imm int32) {
+	b.add(LoadImm32, dst, 0, 0, int32(imm), "")
 }
 
 // LoadMapFD special variant of LoadImm64 for loading map FDs.
