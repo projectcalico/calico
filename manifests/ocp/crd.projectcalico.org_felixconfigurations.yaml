@@ -325,7 +325,8 @@ spec:
                 type: string
               floatingIPs:
                 description: FloatingIPs configures whether or not Felix will program
-                  floating IP addresses.
+                  non-OpenStack floating IP addresses.  (OpenStack-derived floating
+                  IPs are always programmed, regardless of this setting.)
                 enum:
                 - Enabled
                 - Disabled

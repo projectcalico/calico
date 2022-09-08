@@ -297,7 +297,9 @@ type Config struct {
 	IpInIpMtu        int    `config:"int;0"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
 
-	// Feature enablement. Can be either "Enabled" or "Disabled".
+	// Feature enablement.  Can be either "Enabled" or "Disabled".  Note, this governs the
+	// programming of NAT mappings derived from Kubernetes pod annotations.  OpenStack floating
+	// IPs are always programmed, regardless of this setting.
 	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
 
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
