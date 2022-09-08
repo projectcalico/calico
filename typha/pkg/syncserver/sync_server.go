@@ -28,9 +28,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/typha/pkg/promutils"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
