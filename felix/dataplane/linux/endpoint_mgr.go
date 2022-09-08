@@ -26,6 +26,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
