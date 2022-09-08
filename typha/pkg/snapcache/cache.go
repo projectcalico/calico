@@ -63,7 +63,7 @@ var (
 		Help: "Total number of updates skipped as duplicates.",
 	}, syncerLabel)
 	gaugeVecSnapshotSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "typha_snapshot_size",
+		Name: "typha_cache_size",
 		Help: "Current number of key/value pairs contained in the cache of the datastore.",
 	}, syncerLabel)
 )
