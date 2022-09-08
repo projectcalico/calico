@@ -25,6 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -32,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -660,7 +660,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					addrSuffix = "/128"
 				}
 				for _, natInfo := range natInfos {
-					if m.floatingIPsEnabled || natInfo.Source == apiv3.IPNATSourceOpenStack {
+					if m.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
 						ipStrings = append(ipStrings, natInfo.ExtIp+addrSuffix)
 					}
 				}

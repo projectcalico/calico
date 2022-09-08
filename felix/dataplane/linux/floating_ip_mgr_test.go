@@ -294,8 +294,8 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 					fipMgr.enabled = false
 					fipMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 						Id: &proto.WorkloadEndpointID{
-							OrchestratorId: "k8s",
-							WorkloadId:     "pod-11",
+							OrchestratorId: "openstack",
+							WorkloadId:     "vm-11",
 							EndpointId:     "endpoint-id-11",
 						},
 						Endpoint: &proto.WorkloadEndpoint{
@@ -307,12 +307,12 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 							Ipv4Nets:   []string{"10.0.240.2/24"},
 							Ipv6Nets:   []string{"2001:db8:2::2/128"},
 							Ipv4Nat: []*proto.NatInfo{
-								{ExtIp: "172.16.1.3", IntIp: "10.0.240.2", Source: "openstack"},
-								{ExtIp: "172.18.1.4", IntIp: "10.0.240.2", Source: "openstack"},
+								{ExtIp: "172.16.1.3", IntIp: "10.0.240.2"},
+								{ExtIp: "172.18.1.4", IntIp: "10.0.240.2"},
 							},
 							Ipv6Nat: []*proto.NatInfo{
-								{ExtIp: "2001:db8:3::2", IntIp: "2001:db8:2::2", Source: "openstack"},
-								{ExtIp: "2001:db8:4::2", IntIp: "2001:db8:2::2", Source: "openstack"},
+								{ExtIp: "2001:db8:3::2", IntIp: "2001:db8:2::2"},
+								{ExtIp: "2001:db8:4::2", IntIp: "2001:db8:2::2"},
 							},
 						},
 					})
@@ -348,8 +348,8 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 					JustBeforeEach(func() {
 						fipMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 							Id: &proto.WorkloadEndpointID{
-								OrchestratorId: "k8s",
-								WorkloadId:     "pod-11",
+								OrchestratorId: "openstack",
+								WorkloadId:     "vm-11",
 								EndpointId:     "endpoint-id-11",
 							},
 						})
