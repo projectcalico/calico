@@ -193,8 +193,9 @@ func ConvertV2ToV1IPNAT(ipnat libapiv3.IPNAT) *model.IPNAT {
 	externalip := cnet.ParseIP(ipnat.ExternalIP)
 	if internalip != nil && externalip != nil {
 		return &model.IPNAT{
-			IntIP: *internalip,
-			ExtIP: *externalip,
+			IntIP:  *internalip,
+			ExtIP:  *externalip,
+			Source: ipnat.Source,
 		}
 	}
 	return nil

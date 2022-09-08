@@ -241,6 +241,7 @@ func convertIPNATs(v1IPNATs []model.IPNAT) []libapiv3.IPNAT {
 		ipNATs = append(ipNATs, libapiv3.IPNAT{
 			InternalIP: ipNAT.IntIP.String(),
 			ExternalIP: ipNAT.ExtIP.String(),
+			Source:     ipNAT.Source,
 		})
 	}
 

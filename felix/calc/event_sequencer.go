@@ -1133,8 +1133,9 @@ func natsToProtoNatInfo(nats []model.IPNAT) []*proto.NatInfo {
 	protoNats := make([]*proto.NatInfo, len(nats))
 	for ii, nat := range nats {
 		protoNats[ii] = &proto.NatInfo{
-			ExtIp: nat.ExtIP.String(),
-			IntIp: nat.IntIP.String(),
+			ExtIp:  nat.ExtIP.String(),
+			IntIp:  nat.IntIP.String(),
+			Source: nat.Source,
 		}
 	}
 	return protoNats
