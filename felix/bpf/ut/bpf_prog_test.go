@@ -620,7 +620,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 	if !forXDP {
 		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexHostCtConflict, path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
 		if err != nil && !strings.Contains(err.Error(), "classifier_tc_host_ct_conflict): No such file or directory") {
-			return errors.Wrap(err, "failed to update jump map (icmp program)")
+			return errors.Wrap(err, "failed to update jump map (classifier_tc_host_ct_conflict program)")
 		}
 	}
 
@@ -779,7 +779,7 @@ outer:
 
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
-			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn, ctxIn)
+			res, err := bpftoolProgRun(bpfFsDir+"/classifier_calico_unittest", dataIn, ctxIn)
 			log.Debugf("dataIn  = %+v", dataIn)
 			if err == nil {
 				log.Debugf("dataOut = %+v", res.dataOut)
