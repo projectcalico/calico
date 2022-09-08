@@ -180,10 +180,7 @@ class TestElection(unittest.TestCase):
     def test_exception_detail_logging(self):
         LOG.debug("test_exception_detail_logging")
 
-        with mock.patch.object(
-                log.getLogger(
-                    'networking_calico.plugins.ml2.drivers.calico.election'),
-                'warning') as mock_lw:
+        with mock.patch.object(election.LOG, 'warning') as mock_lw:
             etcdv3._client = client = stub_etcd.Client()
             exc = e3e.Etcd3Exception(detail_text="Unauthorised user")
             client.add_read_exception(exc)
