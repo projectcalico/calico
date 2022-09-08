@@ -56,7 +56,12 @@ func hashToIPv4(nodeName string) string {
 	}
 	hashBytes := hash.Sum(nil)
 	ip := hashBytes[:4]
-	routerId := strconv.Itoa(int(ip[0])) + "." +
+	//Allow unicast ip
+	ip0Value := int(ip[0])
+	if ip0Value > 223 {
+		ip0Value = ip0Value - 32
+	}
+	routerId := strconv.Itoa(ip0Value) + "." +
 		strconv.Itoa(int(ip[1])) + "." +
 		strconv.Itoa(int(ip[2])) + "." +
 		strconv.Itoa(int(ip[3]))
