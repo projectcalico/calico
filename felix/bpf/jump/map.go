@@ -15,6 +15,8 @@
 package jump
 
 import (
+	"encoding/binary"
+
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
@@ -27,4 +29,25 @@ func MapForTest(mc *bpf.MapContext) bpf.Map {
 		MaxEntries: 32,
 		Name:       bpf.JumpMapName(),
 	})
+}
+
+func GetEntry(fd bpf.MapFD, i int) (int, error) {
+	var k [4]byte
+
+	binary.LittleEndian.PutUint32(k[:], uint32(i))
+
+	bytes, err := bpf.GetMapEntry(fd, k[:], 4)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(binary.LittleEndian.Uint32(bytes)), nil
+}
+
+func DeleteEntry(fd bpf.MapFD, i int) error {
+	var k [4]byte
+
+	binary.LittleEndian.PutUint32(k[:], uint32(i))
+
+	return bpf.DeleteMapEntry(fd, k[:], 4)
 }

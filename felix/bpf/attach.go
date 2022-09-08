@@ -37,6 +37,7 @@ type AttachedProgInfo struct {
 	Hash   string `json:"hash"`
 	ID     int    `json:"id"`
 	Config string `json:"config"`
+	Debug  bool   `json:"debug"`
 }
 
 // AttachPointInfo describes what we need to know about an attach point
@@ -44,6 +45,7 @@ type AttachPointInfo interface {
 	IfaceName() string
 	HookName() Hook
 	Config() string
+	Debug() bool
 }
 
 // AlreadyAttachedProg checks that the program we are going to attach has the
@@ -76,6 +78,7 @@ func AlreadyAttachedProg(a AttachPointInfo, object string, id int) (bool, error)
 			"object": progInfo.Object == object,
 			"id":     progInfo.ID == id,
 			"config": progInfo.Config == a.Config(),
+			"debug":  progInfo.Debug == a.Debug(),
 		}).Debugf("AlreadyAttachedProg result %t", progInfo.Hash == hash &&
 			progInfo.Object == object && progInfo.ID == id &&
 			progInfo.Config == a.Config())
@@ -100,6 +103,7 @@ func RememberAttachedProg(a AttachPointInfo, object string, id int) error {
 		Hash:   hash,
 		ID:     id,
 		Config: a.Config(),
+		Debug:  a.Debug(),
 	}
 
 	if err := os.MkdirAll(RuntimeProgDir, 0600); err != nil {
