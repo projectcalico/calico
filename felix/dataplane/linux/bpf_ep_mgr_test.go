@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -71,26 +72,58 @@ func (m *mockDataplane) ensureBPFDevices() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error) {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) ([]bpf.MapFD, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
-	if fd, exists := m.fds[key]; exists {
-		return bpf.MapFD(fd), nil
+
+	paths := []bool{false}
+	if ap.Debug() {
+		paths = append(paths, true)
 	}
-	m.lastFD += 1
-	m.fds[key] = m.lastFD
-	return bpf.MapFD(m.lastFD), nil
+
+	fds := make([]bpf.MapFD, tc.JumpFDCount)
+	if ap.HookName() == bpf.HookXDP {
+		fds = make([]bpf.MapFD, 1)
+	}
+
+	for _, debug := range paths {
+		var idx int
+
+		if ap.HookName() == bpf.HookXDP {
+			idx = 0
+		} else if !debug {
+			idx = tc.JumpFDRegularV4
+		} else {
+			idx = tc.JumpFDDebugV4
+		}
+
+		key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey(4, debug)
+		if fd, exists := m.fds[key]; exists {
+			fds[idx] = bpf.MapFD(fd)
+			continue
+		}
+		m.lastFD += 1
+		m.fds[key] = m.lastFD
+
+		fds[idx] = bpf.MapFD(m.lastFD)
+	}
+
+	return fds, nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
+	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey(4, false)
 	if fd, exists := m.fds[key]; exists {
 		delete(m.state, uint32(fd))
-		delete(m.fds, key)
 	}
+	delete(m.fds, key)
+	key = ap.IfaceName() + ":" + ap.JumpMapFDMapKey(4, true)
+	if fd, exists := m.fds[key]; exists {
+		delete(m.state, uint32(fd))
+	}
+	delete(m.fds, key)
 	return nil
 }
 
@@ -129,6 +162,7 @@ func (m *mockDataplane) getRules(key string) *polprog.Rules {
 		if exist {
 			return &rules
 		}
+	} else {
 	}
 	return nil
 }
@@ -178,6 +212,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ruleRenderer         rules.RuleRenderer
 		filterTableV4        iptablesTable
 		ifStateMap           *mock.Map
+		logFilters           map[string]string
+		logLevel             = "info"
 	)
 
 	BeforeEach(func() {
@@ -223,7 +259,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			dp,
 			&Config{
 				Hostname:              "uthost",
-				BPFLogLevel:           "info",
+				BPFLogLevel:           logLevel,
 				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),
 				BPFL3IfacePattern:     regexp.MustCompile(l3IfacePattern),
 				VXLANMTU:              vxlanMTU,
@@ -237,6 +273,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
 				},
 				BPFPolicyDebugEnabled: true,
+				BPFLogFilters:         logFilters,
 			},
 			bpfMapContext,
 			fibLookupEnabled,
@@ -346,6 +383,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).NotTo(Equal(hostEp))
 	})
 
+	tcJumpMapFDMapKey := func(iface string, hook bpf.Hook, debug bool) string {
+		return iface + ":" + (&tc.AttachPoint{
+			Hook: hook,
+		}).JumpMapFDMapKey(4, debug)
+	}
+
 	Context("with workload and host-* endpoints", func() {
 		JustBeforeEach(func() {
 			genPolicy("default", "mypolicy")()
@@ -359,26 +402,26 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			var eth0I, eth0E, eth0X, caliI, caliE *polprog.Rules
 
 			// Check eth0 ingress.
-			Eventually(dp.setAndReturn(&eth0I, "eth0:ingress")).ShouldNot(BeNil())
+			Eventually(dp.setAndReturn(&eth0I, tcJumpMapFDMapKey("eth0", bpf.HookIngress, false))).ShouldNot(BeNil())
 			Expect(eth0I.ForHostInterface).To(BeTrue())
 			Expect(eth0I.HostNormalTiers).To(HaveLen(1))
 			Expect(eth0I.HostNormalTiers[0].Policies).To(HaveLen(1))
 			Expect(eth0I.SuppressNormalHostPolicy).To(BeFalse())
 
 			// Check eth0 egress.
-			Eventually(dp.setAndReturn(&eth0E, "eth0:egress")).ShouldNot(BeNil())
+			Eventually(dp.setAndReturn(&eth0E, tcJumpMapFDMapKey("eth0", bpf.HookEgress, false))).ShouldNot(BeNil())
 			Expect(eth0E.ForHostInterface).To(BeTrue())
 			Expect(eth0E.HostNormalTiers).To(HaveLen(1))
 			Expect(eth0E.HostNormalTiers[0].Policies).To(HaveLen(1))
 			Expect(eth0E.SuppressNormalHostPolicy).To(BeFalse())
 
 			// Check workload ingress.
-			Eventually(dp.setAndReturn(&caliI, "cali12345:egress")).ShouldNot(BeNil())
+			Eventually(dp.setAndReturn(&caliI, tcJumpMapFDMapKey("cali12345", bpf.HookEgress, false))).ShouldNot(BeNil())
 			Expect(caliI.ForHostInterface).To(BeFalse())
 			Expect(caliI.SuppressNormalHostPolicy).To(BeTrue())
 
 			// Check workload egress.
-			Eventually(dp.setAndReturn(&caliE, "cali12345:ingress")).ShouldNot(BeNil())
+			Eventually(dp.setAndReturn(&caliE, tcJumpMapFDMapKey("cali12345", bpf.HookIngress, false))).ShouldNot(BeNil())
 			Expect(caliE.ForHostInterface).To(BeFalse())
 			Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
 
@@ -395,16 +438,39 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				var caliI, caliE *polprog.Rules
 
 				// Check workload ingress.
-				Eventually(dp.setAndReturn(&caliI, "cali12345:egress")).ShouldNot(BeNil())
-				Expect(caliI.ForHostInterface).To(BeFalse())
-				Expect(caliI.SuppressNormalHostPolicy).To(BeTrue())
+				Eventually(dp.setAndReturn(&caliE, tcJumpMapFDMapKey("cali12345", bpf.HookEgress, false))).ShouldNot(BeNil())
+				Expect(caliE.ForHostInterface).To(BeFalse())
+				Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
 
 				// Check workload egress.
-				Eventually(dp.setAndReturn(&caliE, "cali12345:ingress")).ShouldNot(BeNil())
-				Expect(caliE.ForHostInterface).To(BeFalse())
-				Expect(caliE.HostNormalTiers).To(HaveLen(1))
-				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
-				Expect(caliE.SuppressNormalHostPolicy).To(BeFalse())
+				Eventually(dp.setAndReturn(&caliI, tcJumpMapFDMapKey("cali12345", bpf.HookIngress, false))).ShouldNot(BeNil())
+				Expect(caliI.ForHostInterface).To(BeFalse())
+				Expect(caliI.HostNormalTiers).To(HaveLen(1))
+				Expect(caliI.HostNormalTiers[0].Policies).To(HaveLen(1))
+				Expect(caliI.SuppressNormalHostPolicy).To(BeFalse())
+			})
+		})
+
+		Context("with log filters enabled", func() {
+			BeforeEach(func() {
+				logLevel = "debug"
+				logFilters = map[string]string{"eth0": "tcp"}
+			})
+
+			It("should install debug path on eth0", func() {
+				var eth0I, eth0E, caliI, caliE *polprog.Rules
+
+				fmt.Printf("dp.fds = %+v\n", dp.fds)
+				fmt.Printf("dp.state = %+v\n", dp.state)
+
+				Eventually(dp.setAndReturn(&eth0I, tcJumpMapFDMapKey("eth0", bpf.HookIngress, false))).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&eth0I, tcJumpMapFDMapKey("eth0", bpf.HookIngress, true))).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&eth0E, tcJumpMapFDMapKey("eth0", bpf.HookEgress, false))).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&eth0E, tcJumpMapFDMapKey("eth0", bpf.HookEgress, true))).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&caliI, tcJumpMapFDMapKey("cali12345", bpf.HookEgress, false))).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&caliI, tcJumpMapFDMapKey("cali12345", bpf.HookEgress, true))).Should(BeNil())
+				Eventually(dp.setAndReturn(&caliE, tcJumpMapFDMapKey("cali12345", bpf.HookIngress, false))).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&caliE, tcJumpMapFDMapKey("cali12345", bpf.HookIngress, true))).Should(BeNil())
 			})
 		})
 	})
@@ -428,13 +494,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				var eth0I, eth0E, eth0X *polprog.Rules
 
 				// Check ingress rules.
-				Eventually(dp.setAndReturn(&eth0I, "eth0:ingress")).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&eth0I, tcJumpMapFDMapKey("eth0", bpf.HookIngress, false))).ShouldNot(BeNil())
 				Expect(eth0I.ForHostInterface).To(BeTrue())
 				Expect(eth0I.HostPreDnatTiers).To(HaveLen(1))
 				Expect(eth0I.HostPreDnatTiers[0].Policies).To(HaveLen(1))
 
 				// Check egress rules.
-				Eventually(dp.setAndReturn(&eth0E, "eth0:egress")).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&eth0E, tcJumpMapFDMapKey("eth0", bpf.HookEgress, false))).ShouldNot(BeNil())
 				Expect(eth0E.ForHostInterface).To(BeTrue())
 				Expect(eth0E.HostPreDnatTiers).To(BeNil())
 

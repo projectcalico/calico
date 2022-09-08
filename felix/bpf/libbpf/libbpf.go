@@ -122,7 +122,7 @@ func (m *Map) NextMap() (*Map, error) {
 }
 
 func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
-	isIngress := 0
+	isIngress := false
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
@@ -133,15 +133,40 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	}
 
 	if hook == string(QdiskIngress) {
-		isIngress = 1
+		isIngress = true
 	}
 
-	opts, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.int(isIngress))
+	opts, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(isIngress))
 	if err != nil {
 		return -1, fmt.Errorf("error attaching tc program %w", err)
 	}
 
-	progId, err := C.bpf_tc_query_iface(C.int(ifIndex), opts, C.int(isIngress))
+	progId, err := C.bpf_tc_query_iface(C.int(ifIndex), opts, C.bool(isIngress))
+	if err != nil {
+		return -1, fmt.Errorf("error querying interface %s: %w", ifName, err)
+	}
+	return int(progId), nil
+}
+
+func AttachClassifier(progFd int, ifName, hook string) (int, error) {
+	isIngress := false
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return -1, err
+	}
+
+	if hook == string(QdiskIngress) {
+		isIngress = true
+	}
+
+	opts, err := C.bpf_tc_program_attach_fd(C.int(progFd), C.int(ifIndex), C.bool(isIngress))
+	if err != nil {
+		return -1, fmt.Errorf("error attaching tc program %w", err)
+	}
+
+	progId, err := C.bpf_tc_query_iface(C.int(ifIndex), opts, C.bool(isIngress))
 	if err != nil {
 		return -1, fmt.Errorf("error querying interface %s: %w", ifName, err)
 	}
@@ -244,12 +269,42 @@ func RemoveQDisc(ifName string) error {
 	return nil
 }
 
+func (o *Obj) GetJumpMapFd(mapName string) (int, error) {
+	cMapName := C.CString(mapName)
+	defer C.free(unsafe.Pointer(cMapName))
+	fd, err := C.bpf_get_jump_map_fd(o.obj, cMapName)
+	if err != nil {
+		return 0, fmt.Errorf("map %s not found: %w", mapName, err)
+	}
+	return int(fd), nil
+}
+
+func (o *Obj) GetProgramFd(progName string) (int, error) {
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cProgName))
+	fd, err := C.bpf_get_program_fd(o.obj, cProgName)
+	if err != nil {
+		return 0, fmt.Errorf("program %s not found: %w", progName, err)
+	}
+	return int(fd), nil
+}
+
 func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	cMapName := C.CString(mapName)
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cMapName))
 	defer C.free(unsafe.Pointer(cProgName))
 	_, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
+	if err != nil {
+		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
+	}
+	return nil
+}
+
+func (o *Obj) UpdateJumpMapFd(mapName string, progFd, mapIndex int) error {
+	cMapName := C.CString(mapName)
+	defer C.free(unsafe.Pointer(cMapName))
+	_, err := C.bpf_update_jump_map_fd(o.obj, cMapName, C.int(progFd), C.int(mapIndex))
 	if err != nil {
 		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
 	}
