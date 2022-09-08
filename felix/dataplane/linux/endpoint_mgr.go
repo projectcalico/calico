@@ -659,8 +659,13 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					natInfos = workload.Ipv6Nat
 					addrSuffix = "/128"
 				}
+				alreadyCopied := false
 				for _, natInfo := range natInfos {
 					if m.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
+						if !alreadyCopied {
+							ipStrings = append([]string(nil), ipStrings...)
+							alreadyCopied = true
+						}
 						ipStrings = append(ipStrings, natInfo.ExtIp+addrSuffix)
 					}
 				}
