@@ -101,12 +101,13 @@ const (
 )
 
 type Server struct {
-	config     Config
-	caches     map[syncproto.SyncerType]BreadcrumbProvider
-	nextConnID uint64
-	maxConnsC  chan int
-	chosenPort int
-	listeningC chan struct{}
+	config       Config
+	caches       map[syncproto.SyncerType]BreadcrumbProvider
+	snapshotters map[syncproto.SyncerType]*Snapshotter
+	nextConnID   uint64
+	maxConnsC    chan int
+	chosenPort   int
+	listeningC   chan struct{}
 
 	dropInterval     time.Duration
 	connTrackingLock sync.Mutex
@@ -231,6 +232,7 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 	s := &Server{
 		config:               config,
 		caches:               caches,
+		snapshotters:         map[syncproto.SyncerType]*Snapshotter{},
 		maxConnsC:            make(chan int),
 		dropInterval:         config.DropInterval,
 		maxConns:             config.MaxConns,
@@ -239,8 +241,9 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
 	}
 
-	for st := range caches {
+	for st, cache := range caches {
 		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
+		s.snapshotters[st] = NewSnapshotter(string(st), config.PingInterval, cache) // FIXME use own timeout
 	}
 
 	// Register that we will report liveness.
@@ -385,12 +388,13 @@ func (s *Server) serve(cxt context.Context) {
 		// goroutines to halt.
 		connCxt, cancel := context.WithCancel(cxt)
 		connection := &connection{
-			ID:        connID,
-			config:    &s.config,
-			allCaches: s.caches,
-			cxt:       connCxt,
-			cancelCxt: cancel,
-			conn:      conn,
+			ID:              connID,
+			config:          &s.config,
+			allCaches:       s.caches,
+			allSnapshotters: s.snapshotters,
+			cxt:             connCxt,
+			cancelCxt:       cancel,
+			conn:            conn,
 			logCxt: log.WithFields(log.Fields{
 				"client": conn.RemoteAddr(),
 				"connID": connID,
@@ -517,9 +521,11 @@ type connection struct {
 	// allCaches contains a mapping from syncer type (felix/BGP) to the right cache to use.  We don't know
 	// which cache to use until we do the handshake.  Once the handshake is complete, we store the correct
 	// cache in the "cache" field.
-	allCaches map[syncproto.SyncerType]BreadcrumbProvider
-	cache     BreadcrumbProvider
-	conn      net.Conn
+	allCaches       map[syncproto.SyncerType]BreadcrumbProvider
+	allSnapshotters map[syncproto.SyncerType]*Snapshotter
+	cache           BreadcrumbProvider
+	syncerType      syncproto.SyncerType
+	conn            net.Conn
 
 	encoder     *gob.Encoder
 	flushWriter func() error
@@ -561,25 +567,48 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	h.shutDownWG.Add(1)
 	go h.readFromClient(h.logCxt.WithField("thread", "read"))
 
-	// Now do the (synchronous) handshake before we start our update-writing thread.
+	// Now do the (synchronous) handshake..
 	if err = h.doHandshake(); err != nil {
 		return // Error already logged.
 	}
 	h.gaugeNumConnectionsStreaming.Inc()
 	defer h.gaugeNumConnectionsStreaming.Dec()
 
-	// Get the current snapshot and stream it to the client.  We do this synchronously so that we can easily
-	// reset the encoder afterwards without needing to synchronise with the ping goroutine.
-	breadcrumb := h.cache.CurrentBreadcrumb()
-	err = h.streamSnapshotToClient(h.logCxt, breadcrumb)
-	if err != nil {
-		log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
-		return
-	}
-	err = h.restartEncodingIfSupported()
-	if err != nil {
-		log.WithError(err).Info("Failed to restart encoding after snapshot, tearing down connection.")
-		return
+	var breadcrumb *snapcache.Breadcrumb
+	if h.clientSupportsDecoderRestart && h.chosenCompression == syncproto.CompressionSnappy {
+		// New client that supports restarting the decoder.  We reset the decoder after the handshake, then send
+		// a pre-serialised snapshot (possibly from a slightly older breadcrumb).  Then we reset the decoder again
+		// before continuing to send normal deltas.
+		h.logCxt.Info("Sending compressed binary snapshot.")
+		err = h.restartEncodingIfSupported("Upgrade to compressed connection.")
+		if err != nil {
+			log.WithError(err).Info("Failed to restart encoding before snapshot, tearing down connection.")
+			return
+		}
+
+		breadcrumb, err = h.allSnapshotters[h.syncerType].SendSnapshot(h.cxt, h.conn)
+		if err != nil {
+			log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
+			return
+		}
+
+		// The canned snapshot ends with a MsgDecoderRestart, so we just need to wait for the ACK.
+		err = h.waitForAckAndRestartEncoder()
+		if err != nil {
+			log.WithError(err).Info("Failed to restart encoding after snapshot, tearing down connection.")
+			return
+		}
+		h.logCxt.Info("Sent compressed binary snapshot.")
+	} else {
+		// Old client that doesn't support decoder restart.  We can't send a pre-canned snapshot so just use the old
+		// behaviour: get the current snapshot and serialise it once per client.
+		h.logCxt.Info("Sending streamed snapshot. (Client doesn't support compressed snapshot.)")
+		breadcrumb = h.cache.CurrentBreadcrumb()
+		err = h.streamSnapshotToClient(h.logCxt, breadcrumb)
+		if err != nil {
+			log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
+			return
+		}
 	}
 
 	// Start a goroutine to stream deltas to the client.
@@ -703,6 +732,7 @@ func (h *connection) doHandshake() error {
 		h.logCxt.Info("Client didn't provide a SyncerType, assuming SyncerTypeFelix for back-compatibility.")
 		syncerType = syncproto.SyncerTypeFelix
 	}
+	h.syncerType = syncerType
 	h.logCxt = h.logCxt.WithField("type", syncerType)
 	h.perSyncerConnMetrics = h.allMetrics[syncerType]
 	desiredSyncerCache := h.allCaches[syncerType]
@@ -737,13 +767,10 @@ func (h *connection) doHandshake() error {
 		log.WithError(err).Warning("Failed to send hello to client")
 		return err
 	}
-
-	err = h.restartEncodingIfSupported()
-
-	return err
+	return nil
 }
 
-func (h *connection) restartEncodingIfSupported() error {
+func (h *connection) restartEncodingIfSupported(message string) error {
 	if !h.clientSupportsDecoderRestart {
 		log.Debug("Can't restart decoder, client doesn't support it.")
 		return nil
@@ -751,6 +778,7 @@ func (h *connection) restartEncodingIfSupported() error {
 
 	// Signal for the client to restart its decoder (possibly) with compression enabled.
 	err := h.sendMsg(syncproto.MsgDecoderRestart{
+		Message:              message,
 		CompressionAlgorithm: h.chosenCompression,
 	})
 	if err != nil {
@@ -758,6 +786,11 @@ func (h *connection) restartEncodingIfSupported() error {
 		return err
 	}
 
+	err = h.waitForAckAndRestartEncoder()
+	return err
+}
+
+func (h *connection) waitForAckAndRestartEncoder() error {
 	// Wait until the client ACKs.  This avoids sending compressed data that might get misinterpreted
 	// by the gob decoder.
 	msg, err := h.waitForMessage(h.logCxt)
@@ -784,7 +817,6 @@ func (h *connection) restartEncodingIfSupported() error {
 			return nil
 		}
 	}
-
 	return nil
 }
 
@@ -794,6 +826,7 @@ func (h *connection) sendMsg(msg interface{}) error {
 		// Optimisation, don't bother to send if we're being torn down.
 		return h.cxt.Err()
 	}
+	h.logCxt.WithField("msg", msg).Debug("Sending message to client")
 	envelope := syncproto.Envelope{
 		Message: msg,
 	}
@@ -970,60 +1003,15 @@ func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *sna
 }
 
 // streamSnapshotToClient takes the snapshot contained in the Breadcrumb and streams it to the client in chunks.
-func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) (err error) {
-	logCxt = logCxt.WithFields(log.Fields{
-		"seqNo":  breadcrumb.SequenceNumber,
-		"status": breadcrumb.SyncStatus,
-	})
-	logCxt.Info("Starting to send snapshot to client")
+func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) error {
 	startTime := time.Now()
-
-	// sendKVs is a utility function that sends the kvs buffer to the client and clears the buffer.
-	var kvs []syncproto.SerializedUpdate
-	var numKeys int
-	sendKVs := func() error {
-		if len(kvs) == 0 {
-			return nil
-		}
-		logCxt.WithField("numKVs", len(kvs)).Debug("Sending snapshot KVs to client.")
-		numKeys += len(kvs)
-		h.summaryNumKVsPerMsg.Observe(float64(len(kvs)))
-		err := h.sendMsg(syncproto.MsgKVs{
-			KVs: kvs,
-		})
-		if err != nil {
-			logCxt.WithError(err).Info("Failed to send to client")
-		}
-		kvs = kvs[:0]
+	err := writeSnapshotMessages(h.cxt, h.logCxt, breadcrumb, h.sendMsg, h.config.MaxMessageSize)
+	if err != nil {
 		return err
 	}
-
-	breadcrumb.KVs.Ascend(func(entry syncproto.SerializedUpdate) bool {
-		if h.cxt.Err() != nil {
-			err = h.cxt.Err()
-			return false
-		}
-		kvs = append(kvs, entry)
-		if len(kvs) >= h.config.MaxMessageSize {
-			// Buffer is full, send the next batch.
-			err = sendKVs()
-			if err != nil {
-				return false
-			}
-		}
-		return true
-	})
-	if err != nil {
-		return
-	}
-
-	err = sendKVs()
-	if err != nil {
-		return
-	}
-	logCxt.WithField("numKeys", numKeys).Info("Finished sending snapshot to client")
+	logCxt.WithField("numKeys", breadcrumb.KVs.Len()).Info("Finished sending snapshot to client")
 	h.summarySnapshotSendTime.Observe(time.Since(startTime).Seconds())
-	return
+	return nil
 }
 
 // sendPingsToClient loops, sending pings to the client at the configured interval.

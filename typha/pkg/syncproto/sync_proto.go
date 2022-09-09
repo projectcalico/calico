@@ -269,6 +269,7 @@ type MsgServerHello struct {
 // MsgDecoderRestart is sent (currently only from server to client) to tell it to restart its decoder with new
 // parameters.
 type MsgDecoderRestart struct {
+	Message              string
 	CompressionAlgorithm CompressionAlgorithm
 }
 
