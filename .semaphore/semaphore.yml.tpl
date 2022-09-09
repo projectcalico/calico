@@ -623,6 +623,10 @@ blocks:
     when: "${FORCE_RUN} or change_in(['/networking-calico/'])"
   dependencies: ["Prerequisites"]
   task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
     prologue:
       commands:
       - cd networking-calico
