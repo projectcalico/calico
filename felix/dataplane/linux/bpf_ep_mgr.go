@@ -58,6 +58,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -91,10 +92,18 @@ var (
 	})
 )
 
+var (
+	jumpMapV4PolicyKey = make([]byte, 4)
+	jumpMapV6PolicyKey = make([]byte, 4)
+)
+
 func init() {
 	prometheus.MustRegister(bpfEndpointsGauge)
 	prometheus.MustRegister(bpfDirtyEndpointsGauge)
 	prometheus.MustRegister(bpfHappyEndpointsGauge)
+
+	binary.LittleEndian.PutUint32(jumpMapV4PolicyKey, uint32(tcdefs.ProgIndexPolicy))
+	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexV6Policy))
 }
 
 type attachPoint interface {
@@ -1879,11 +1888,11 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	return nil
 }
 
-func indexOfPolicyProgram(ipFamily proto.IPVersion) uint32 {
+func jumpPolicyKey(ipFamily proto.IPVersion) []byte {
 	if ipFamily == proto.IPVersion_IPV6 {
-		return bpf.ProgIndexV6Policy
+		return jumpMapV6PolicyKey
 	} else {
-		return bpf.ProgIndexPolicy
+		return jumpMapV4PolicyKey
 	}
 }
 
@@ -1912,13 +1921,11 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(jumpMapFD bpf.MapFD, rules po
 		}
 	}()
 
-	k := make([]byte, 4)
-	binary.LittleEndian.PutUint32(k, indexOfPolicyProgram(ipFamily))
 	v := make([]byte, 4)
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
-	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
+	err = bpf.UpdateMapEntry(jumpMapFD, jumpPolicyKey(ipFamily), v)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
+		return nil, fmt.Errorf("failed to update %v=%v in jump map %v: %w", jumpMapV4PolicyKey, v, jumpMapFD, err)
 	}
 
 	return insns, nil
@@ -1941,9 +1948,7 @@ func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD, ap attachP
 }
 
 func (m *bpfEndpointManager) doRemovePolicyProgram(jumpMapFD bpf.MapFD, ipFamily proto.IPVersion) error {
-	k := make([]byte, 4)
-	binary.LittleEndian.PutUint32(k, indexOfPolicyProgram(ipFamily))
-	err := bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	err := bpf.DeleteMapEntryIfExists(jumpMapFD, jumpPolicyKey(ipFamily), 4)
 	if err != nil {
 		return fmt.Errorf("failed to update jump map: %w", err)
 	}
