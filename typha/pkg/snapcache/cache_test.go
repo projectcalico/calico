@@ -82,11 +82,13 @@ func (r *healthRecorder) LastReport() (rep health.HealthReport) {
 
 func crumbToSnapshotUpdates(crumb *snapcache.Breadcrumb) []api.Update {
 	var snapshotUpdates []api.Update
-	for entry := range crumb.KVs.Iterator(nil) {
-		upd, err := entry.Value.(syncproto.SerializedUpdate).ToUpdate()
+	crumb.KVs.Ascend(func(entry syncproto.SerializedUpdate) bool {
+		upd, err := entry.ToUpdate()
 		Expect(err).NotTo(HaveOccurred())
 		snapshotUpdates = append(snapshotUpdates, upd)
-	}
+		return true // Keep iterating.
+	})
+
 	return snapshotUpdates
 }
 
@@ -105,7 +107,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			MaxBatchSize:     10,
 			WakeUpInterval:   10 * time.Second,
 			HealthAggregator: mockHealth,
-			HealthName:       "my-cache",
+			Name:             "my-cache",
 		}
 		cache = snapcache.New(cacheConfig)
 		cxt, cancel = context.WithCancel(context.Background())
@@ -144,13 +146,9 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			// Wait for the update to flow through...
 			Eventually(func() bool {
 				crumb = cache.CurrentBreadcrumb()
-				crumbSize := crumb.KVs.Size()
-				// Check snapshot is read-only.
-				Expect(func() {
-					crumb.KVs.Insert([]byte("abcd"), "unused")
-				}).To(Panic())
+				crumbSize := crumb.KVs.Len()
 				log.WithField("crumb", crumb).WithField("size", crumbSize).Info("Current crumb now...")
-				Consistently(func() uint { return crumb.KVs.Size() }).Should(Equal(crumbSize))
+				Consistently(crumb.KVs.Len).Should(Equal(crumbSize))
 				return crumbSize > 0
 			}).Should(BeTrue())
 			log.WithField("crumb", crumb).Info("Got initial crumb")
@@ -227,13 +225,9 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			// Wait for the update to flow through...
 			Eventually(func() bool {
 				crumb = cache.CurrentBreadcrumb()
-				crumbSize := crumb.KVs.Size()
-				// Check snapshot is read-only.
-				Expect(func() {
-					crumb.KVs.Insert([]byte("abcd"), "unused")
-				}).To(Panic())
+				crumbSize := crumb.KVs.Len()
 				log.WithField("crumb", crumb).WithField("size", crumbSize).Info("Current crumb now...")
-				Consistently(func() uint { return crumb.KVs.Size() }).Should(Equal(crumbSize))
+				Consistently(crumb.KVs.Len).Should(Equal(crumbSize))
 				return crumbSize > 0
 			}).Should(BeTrue())
 			log.WithField("crumb", crumb).Info("Got initial crumb")
@@ -583,14 +577,16 @@ func (f *follower) Loop(cxt context.Context) {
 	crumb := f.cache.CurrentBreadcrumb()
 	logCxt.WithField("crumb", crumb.SequenceNumber).Info("Got first crumb")
 	done := false
-	for item := range crumb.KVs.Iterator(cxt.Done()) {
-		upd := item.Value.(syncproto.SerializedUpdate)
-		f.storeKV(upd)
+
+	crumb.KVs.Ascend(func(update syncproto.SerializedUpdate) bool {
+		f.storeKV(update)
 		if crumb.SyncStatus == api.InSync {
 			f.inSyncAt = f.maxRev
 			done = true
 		}
-	}
+		return true // Keep iterating.
+	})
+
 	var minSleepCrumbSeqNo uint64
 	for !done && cxt.Err() == nil {
 		var err error
