@@ -525,8 +525,9 @@ type connection struct {
 	flushWriter func() error
 	readC       chan interface{}
 
-	logCxt            *log.Entry
-	chosenCompression syncproto.CompressionAlgorithm
+	logCxt                       *log.Entry
+	chosenCompression            syncproto.CompressionAlgorithm
+	clientSupportsDecoderRestart bool
 
 	// Similarly to allCaches, allMetrics contains all the metrics relevant to a particular syncer.  We copy one
 	// of them to the unnamed field after the handshake.
@@ -567,9 +568,23 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	h.gaugeNumConnectionsStreaming.Inc()
 	defer h.gaugeNumConnectionsStreaming.Dec()
 
-	// Start a goroutine to stream the snapshot and then the deltas to the client.
+	// Get the current snapshot and stream it to the client.  We do this synchronously so that we can easily
+	// reset the encoder afterwards without needing to synchronise with the ping goroutine.
+	breadcrumb := h.cache.CurrentBreadcrumb()
+	err = h.streamSnapshotToClient(h.logCxt, breadcrumb)
+	if err != nil {
+		log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
+		return
+	}
+	err = h.restartEncodingIfSupported()
+	if err != nil {
+		log.WithError(err).Info("Failed to restart encoding after snapshot, tearing down connection.")
+		return
+	}
+
+	// Start a goroutine to stream deltas to the client.
 	h.shutDownWG.Add(1)
-	go h.sendSnapshotAndUpdatesToClient(h.logCxt.WithField("thread", "kv-sender"))
+	go h.sendDeltaUpdatesToClient(h.logCxt.WithField("thread", "kv-sender"), breadcrumb)
 
 	// Start a goroutine to send periodic pings.  We send pings from their own goroutine so that, if the Encoder
 	// blocks, we don't prevent the main goroutine from checking the pongs.
@@ -704,6 +719,7 @@ func (h *connection) doHandshake() error {
 			break
 		}
 	}
+	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
 	if !hello.SupportsDecoderRestart {
 		log.WithError(err).Warning("Client signalled compression but no support for decoder restart")
 		h.chosenCompression = ""
@@ -722,13 +738,17 @@ func (h *connection) doHandshake() error {
 		return err
 	}
 
-	if h.chosenCompression != "" {
-		err = h.restartEncoding()
-	}
+	err = h.restartEncodingIfSupported()
+
 	return err
 }
 
-func (h *connection) restartEncoding() error {
+func (h *connection) restartEncodingIfSupported() error {
+	if !h.clientSupportsDecoderRestart {
+		log.Debug("Can't restart decoder, client doesn't support it.")
+		return nil
+	}
+
 	// Signal for the client to restart its decoder (possibly) with compression enabled.
 	err := h.sendMsg(syncproto.MsgDecoderRestart{
 		CompressionAlgorithm: h.chosenCompression,
@@ -778,7 +798,15 @@ func (h *connection) sendMsg(msg interface{}) error {
 		Message: msg,
 	}
 	startTime := time.Now()
-	err := h.encoder.Encode(&envelope)
+	// We need some timeout here to ensure that we can't get wedged when trying to send the initial snapshot.
+	// After the snapshot is sent, we then have regular ping/pongs so this timeout should never fire (the pong will
+	// time out first).
+	err := h.conn.SetWriteDeadline(startTime.Add(h.config.PongTimeout * 2))
+	if err != nil {
+		h.logCxt.WithError(err).Info("Failed to set client write timeout")
+		return err
+	}
+	err = h.encoder.Encode(&envelope)
 	if err != nil {
 		h.logCxt.WithError(err).Info("Failed to write to client")
 		return err
@@ -788,14 +816,20 @@ func (h *connection) sendMsg(msg interface{}) error {
 		h.logCxt.WithError(err).Info("Failed to flush write to client")
 		return err
 	}
-
+	// Disable the write timeout again.
+	var zeroTime time.Time
+	err = h.conn.SetWriteDeadline(zeroTime)
+	if err != nil {
+		h.logCxt.WithError(err).Info("Failed to set client write timeout")
+		return err
+	}
 	h.summaryWriteLatency.Observe(time.Since(startTime).Seconds())
 	return nil
 }
 
-// sendSnapshotAndUpdatesToClient sends the snapshot from the current Breadcrumb and then follows the Breadcrumbs
+// sendDeltaUpdatesToClient sends the snapshot from the current Breadcrumb and then follows the Breadcrumbs
 // sending deltas to the client.
-func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
+func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) {
 	defer func() {
 		logCxt.Info("KV-sender goroutine shutting down")
 		h.cancelCxt()
@@ -803,13 +837,6 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 		logCxt.Info("KV-sender goroutine finished")
 	}()
 
-	// Get the current snapshot and stream it to the client...
-	breadcrumb := h.cache.CurrentBreadcrumb()
-	err := h.streamSnapshotToClient(logCxt, breadcrumb)
-	if err != nil {
-		log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
-		return
-	}
 	// Finished sending the snapshot, calculate the grace time for the client to catch up to a recent breadcrumb.
 	gracePeriodEndTime := time.Now().Add(h.config.NewClientFallBehindGracePeriod)
 
