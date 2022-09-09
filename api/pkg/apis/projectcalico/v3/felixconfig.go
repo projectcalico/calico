@@ -489,7 +489,8 @@ type FelixConfigurationSpec struct {
 	// +optional
 	MTUIfacePattern string `json:"mtuIfacePattern,omitempty" validate:"omitempty,regexp"`
 
-	// FloatingIPs configures whether or not Felix will program floating IP addresses.
+	// FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
+	// floating IPs are always programmed, regardless of this setting.)
 	//
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
