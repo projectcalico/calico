@@ -54,6 +54,10 @@ promotions:
   pipeline_file: push-images/node.yml
   auto_promote:
     when: "branch =~ 'master|release-'"
+- name: Publish openstack packages
+  pipeline_file: push-images/packaging.yaml
+  auto_promote:
+    when: "branch =~ 'master'"
 
 global_job_config:
   secrets:
