@@ -29,6 +29,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -605,6 +606,7 @@ var _ = Describe("With an in-process Server", func() {
 
 		It("should report the correct number of connections", func() {
 			expectGlobalGaugeValue("typha_connections_active", 100.0)
+			expectPerSyncerGaugeValue(syncproto.SyncerTypeFelix, "typha_connections_streaming", 100.0)
 		})
 
 		It("should report the correct number of connections after killing the clients", func() {
@@ -612,6 +614,7 @@ var _ = Describe("With an in-process Server", func() {
 				c.clientCancel()
 			}
 			expectGlobalGaugeValue("typha_connections_active", 0.0)
+			expectPerSyncerGaugeValue(syncproto.SyncerTypeFelix, "typha_connections_streaming", 0.0)
 		})
 
 		It("with churn, it should report the correct number of connections after killing the clients", func() {
@@ -815,6 +818,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 
 			It("should disconnect the client", func() {
 				expectDisconnection(100 * time.Millisecond)
+				expectGlobalGaugeValue("typha_connections_active", 0.0)
 			})
 		})
 
@@ -1082,7 +1086,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
 			recorder := NewRecorder()
 
-			origGaugeValue, err := getPerSyncerCounter("typha_connections_grace_used", syncproto.SyncerTypeFelix)
+			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make the client block after it reads the first update.  This means the server will have started
@@ -1124,14 +1128,14 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			sendNUpdates(1)
 
 			Eventually(recorder.Len, 2*time.Second).Should(BeNumerically("==", initialSnapshotSize+3))
-			Expect(getPerSyncerCounter("typha_connections_grace_used", syncproto.SyncerTypeFelix)).To(BeNumerically("==", origGaugeValue+1))
+			Expect(getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue+1))
 		})
 
 		It("client should get disconnected if it falls behind after the grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
 			recorder := NewRecorder()
 
-			origGaugeValue, err := getPerSyncerCounter("typha_connections_grace_used", syncproto.SyncerTypeFelix)
+			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make the client block after it reads the first update.  This means the server will have started
@@ -1187,7 +1191,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			Expect(recorder.Len()).To(BeNumerically("<=", initialSnapshotSize*2))
 
 			// Should not use the grace period at all.
-			Expect(getPerSyncerCounter("typha_connections_grace_used", syncproto.SyncerTypeFelix)).To(BeNumerically("==", origGaugeValue))
+			Expect(getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue))
 		})
 	})
 })
@@ -1206,30 +1210,58 @@ func getGlobalGauge(name string) (float64, error) {
 }
 
 func expectGlobalGaugeValue(name string, value float64) {
-	Eventually(func() (float64, error) {
+	EventuallyWithOffset(1, func() (float64, error) {
 		return getGlobalGauge(name)
 	}).Should(Equal(value))
 }
 
-func getPerSyncerCounter(name string, syncer syncproto.SyncerType) (float64, error) {
-	mfs, err := prometheus.DefaultGatherer.Gather()
+func getPerSyncerCounter(syncer syncproto.SyncerType, name string) (float64, error) {
+	m, err := getPerSyncerMetric(name, syncer)
 	if err != nil {
 		return 0, err
+	}
+	if m == nil {
+		return 0, nil
+	}
+	return m.GetCounter().GetValue(), nil
+}
+
+func expectPerSyncerGaugeValue(syncer syncproto.SyncerType, name string, value float64) {
+	EventuallyWithOffset(1, func() (float64, error) {
+		return getPerSyncerGauge(syncer, name)
+	}).Should(Equal(value))
+}
+
+func getPerSyncerGauge(syncer syncproto.SyncerType, name string) (float64, error) {
+	m, err := getPerSyncerMetric(name, syncer)
+	if err != nil {
+		return 0, err
+	}
+	if m == nil {
+		return 0, nil
+	}
+	return m.GetGauge().GetValue(), nil
+}
+
+func getPerSyncerMetric(name string, syncer syncproto.SyncerType) (*io_prometheus_client.Metric, error) {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return nil, err
 	}
 	for _, mf := range mfs {
 		if mf.GetName() == name {
 			for _, m := range mf.Metric {
 				for _, l := range m.Label {
 					if l.GetName() == "syncer" && l.GetValue() == string(syncer) {
-						return m.GetCounter().GetValue(), nil
+						return m, nil
 					}
 				}
 			}
 			// Found the metric but no value for that syncer yet.
-			return 0, nil
+			return nil, nil
 		}
 	}
-	return 0, errors.New("metric not found")
+	return nil, errors.New("metric not found")
 }
 
 // TLS connection tests.
