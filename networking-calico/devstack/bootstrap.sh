@@ -33,7 +33,7 @@ set -ex
 #
 #     If the SERVICE_HOST environment variable is already set when ./stack.sh
 #     is run, and is _different_ from the local machine's hostname, the
-#     networking-calico DevStack plugin will interpret that as a request to set
+#     Calico DevStack plugin will interpret that as a request to set
 #     up a compute-only node, that points to $SERVICE_HOST as its controller.
 #
 #     On the other hand, if SERVICE_HOST is not set, or is the _same_ as the
@@ -62,30 +62,33 @@ set -ex
 #     set to 'true', Tempest will be installed and the required initial
 #     networks created, ready for a Tempest run after the stack setup has
 #     completed.
+#
+# NC_PLUGIN_REPO
+#
+#     Repository for the Calico devstack plugin.  By default this is
+#     https://github.com/projectcalico/calico.
+#
+# NC_PLUGIN_REF
+#
+#     Git ref for the Calico devstack plugin.  By default this is master.
+#
 # ------------------------------------------------------------------------------
+
+: ${NC_PLUGIN_REPO:=https://github.com/projectcalico/calico}
+: ${NC_PLUGIN_REF:=master}
 
 # Assume that we are starting from the home directory of a non-root
 # user that can sudo, and hence is suitable for running DevStack.  For
 # example, the 'ubuntu' user on Ubuntu.
 cd
 
-# Create a directory for Calico stuff.
-mkdir -p calico
-cd calico
+# Create a directory for DevStack bootstrap and testing.
+mkdir -p devstack-bootstrap
+cd devstack-bootstrap
 
 # Ensure that Git is installed.
 sudo apt-get update
 sudo apt-get -y install git
-
-# Prepare networking-calico tree - the following lines will check out
-# the master branch of networking-calico (if not already present).
-test -e networking-calico
-pushd networking-calico
-
-# Remember the current directory.
-ncdir=`pwd`
-ncref=`git rev-parse --abbrev-ref HEAD`
-popd
 
 # Enable IPv4 and IPv6 forwarding.
 sudo sysctl -w net.ipv4.ip_forward=1
@@ -112,11 +115,13 @@ RABBIT_PASSWORD=6366743536a8216bde26
 SERVICE_PASSWORD=91eb72bcafb4ddf246ab
 SERVICE_TOKEN=c5680feca5e2c9c8f820
 
-enable_plugin networking-calico $ncdir $ncref
+enable_plugin calico $NC_PLUGIN_REPO $NC_PLUGIN_REF
 disable_service horizon
 
 LOGFILE=stack.log
 LOG_COLOR=False
+
+TEMPEST_BRANCH=29.0.0
 
 EOF
 
@@ -164,7 +169,7 @@ if ! ${TEMPEST:-false}; then
     fi
 else
     # Run mainline Tempest tests.
-    source ../networking-calico/devstack/devstackgaterc
+    source ../calico/devstack/devstackgaterc
     cd /opt/stack/tempest
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
