@@ -101,13 +101,13 @@ const (
 )
 
 type Server struct {
-	config       Config
-	caches       map[syncproto.SyncerType]BreadcrumbProvider
-	snapshotters map[syncproto.SyncerType]*Snapshotter
-	nextConnID   uint64
-	maxConnsC    chan int
-	chosenPort   int
-	listeningC   chan struct{}
+	config        Config
+	caches        map[syncproto.SyncerType]BreadcrumbProvider
+	binSnapCaches map[syncproto.CompressionAlgorithm]map[syncproto.SyncerType]*BinarySnapshotCache
+	nextConnID    uint64
+	maxConnsC     chan int
+	chosenPort    int
+	listeningC    chan struct{}
 
 	dropInterval     time.Duration
 	connTrackingLock sync.Mutex
@@ -232,7 +232,7 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 	s := &Server{
 		config:               config,
 		caches:               caches,
-		snapshotters:         map[syncproto.SyncerType]*Snapshotter{},
+		binSnapCaches:        map[syncproto.CompressionAlgorithm]map[syncproto.SyncerType]*BinarySnapshotCache{},
 		maxConnsC:            make(chan int),
 		dropInterval:         config.DropInterval,
 		maxConns:             config.MaxConns,
@@ -241,9 +241,10 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
 	}
 
+	s.binSnapCaches[syncproto.CompressionSnappy] = map[syncproto.SyncerType]*BinarySnapshotCache{}
 	for st, cache := range caches {
 		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
-		s.snapshotters[st] = NewSnapshotter(string(st), config.PingInterval, cache) // FIXME use own timeout
+		s.binSnapCaches[syncproto.CompressionSnappy][st] = NewBinarySnapCache(string(st), cache, time.Second) // FIXME use own timeout
 	}
 
 	// Register that we will report liveness.
@@ -391,7 +392,7 @@ func (s *Server) serve(cxt context.Context) {
 			ID:              connID,
 			config:          &s.config,
 			allCaches:       s.caches,
-			allSnapshotters: s.snapshotters,
+			allSnapshotters: s.binSnapCaches,
 			cxt:             connCxt,
 			cancelCxt:       cancel,
 			conn:            conn,
@@ -522,7 +523,7 @@ type connection struct {
 	// which cache to use until we do the handshake.  Once the handshake is complete, we store the correct
 	// cache in the "cache" field.
 	allCaches       map[syncproto.SyncerType]BreadcrumbProvider
-	allSnapshotters map[syncproto.SyncerType]*Snapshotter
+	allSnapshotters map[syncproto.CompressionAlgorithm]map[syncproto.SyncerType]*BinarySnapshotCache
 	cache           BreadcrumbProvider
 	syncerType      syncproto.SyncerType
 	conn            net.Conn
@@ -586,7 +587,7 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 			return
 		}
 
-		breadcrumb, err = h.allSnapshotters[h.syncerType].SendSnapshot(h.cxt, h.conn)
+		breadcrumb, err = h.allSnapshotters[h.chosenCompression][h.syncerType].SendSnapshot(h.cxt, h.conn)
 		if err != nil {
 			log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
 			return
@@ -743,6 +744,7 @@ func (h *connection) doHandshake() error {
 	h.cache = desiredSyncerCache
 
 	for _, alg := range hello.SupportedCompressionAlgorithms {
+		// Note: the BinarySnapshotCache assumes snappy right now.
 		switch alg {
 		case syncproto.CompressionSnappy:
 			h.chosenCompression = syncproto.CompressionSnappy

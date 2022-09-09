@@ -60,7 +60,7 @@ func init() {
 	prometheus.MustRegister(gaugeVecSnapCompressedBytes)
 }
 
-type Snapshotter struct {
+type BinarySnapshotCache struct {
 	snapValidityTimeout time.Duration
 
 	cache BreadcrumbProvider
@@ -75,8 +75,12 @@ type Snapshotter struct {
 	gaugeSnapBytesComp       prometheus.Gauge
 }
 
-func NewSnapshotter(syncerName string, snapValidityTimeout time.Duration, cache BreadcrumbProvider) *Snapshotter {
-	s := &Snapshotter{
+func NewBinarySnapCache(
+	syncerName string,
+	cache BreadcrumbProvider,
+	snapValidityTimeout time.Duration,
+) *BinarySnapshotCache {
+	s := &BinarySnapshotCache{
 		snapValidityTimeout: snapValidityTimeout,
 		cache:               cache,
 
@@ -89,11 +93,16 @@ func NewSnapshotter(syncerName string, snapValidityTimeout time.Duration, cache 
 	return s
 }
 
-func (s *Snapshotter) SendSnapshot(ctx context.Context, w net.Conn) (*snapcache.Breadcrumb, error) {
+// SendSnapshot waits for a binary snapshot to be ready and then sends it as a raw snappy-compressed gob stream
+// on the given connection.  Since the stream is cached, it starts with fresh snappy/gob headers.  Hence, the
+// decoder at the client side must also be reset before sending such a snapshot.  The snapshot ends with
+// a MsgDecoderRestart, so the caller should wait for an ACK and then reset their encoder.
+func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*snapcache.Breadcrumb, error) {
 	snap, err := s.getOrWaitForSnap(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	buf := snap.buf
 	for len(buf) > 0 {
 		const chunkSize = 65536
@@ -119,31 +128,37 @@ func (s *Snapshotter) SendSnapshot(ctx context.Context, w net.Conn) (*snapcache.
 	return snap.crumb, nil
 }
 
-func (s *Snapshotter) getOrWaitForSnap(ctx context.Context) (*snapshot, error) {
+func (s *BinarySnapshotCache) getOrWaitForSnap(ctx context.Context) (*snapshot, error) {
+	snap := s.getOrCreateSnap()
+	select {
+	case <-snap.done:
+		return snap, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// getOrCreateSnap either returns the current active snapshot (which may still be being created on a background
+// goroutine), or it starts a new snapshot.  The returned snapshot's done channel will be closed once it is ready
+// and it is guaranteed to become ready at some point.
+func (s *BinarySnapshotCache) getOrCreateSnap() *snapshot {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
 	if s.activeSnapshot == nil {
 		s.activeSnapshot = &snapshot{
 			crumb: s.cache.CurrentBreadcrumb(),
+			done:  make(chan struct{}),
 		}
 		go s.populateSnapshot(s.activeSnapshot)
 	} else {
 		s.counterBinSnapsReused.Inc()
 	}
-	// Lock in the snapshot that we're waiting for by takin ga local copy.  Otherwise, we might miss our snapshot
-	// (due to racing with a fresh call to getOrWaitForSnap()) and end up waiting for the next one.
-	snap := s.activeSnapshot
-	for !snap.done {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		s.cond.Wait()
-	}
-	return snap, nil
+	return s.activeSnapshot
 }
 
-func (s *Snapshotter) populateSnapshot(snap *snapshot) {
-	buf := s.writeSnapshotToBuffer(snap)
+func (s *BinarySnapshotCache) populateSnapshot(snap *snapshot) {
+	buf := s.writeCrumbToBuffer(snap.crumb)
 	s.publishSnapshot(snap, buf)
 	// Wait until the snapshot expires...
 	time.Sleep(s.snapValidityTimeout)
@@ -152,18 +167,15 @@ func (s *Snapshotter) populateSnapshot(snap *snapshot) {
 	s.clearSnapshot()
 }
 
-func (s *Snapshotter) clearSnapshot() {
+func (s *BinarySnapshotCache) clearSnapshot() {
 	s.lock.Lock()
 	s.activeSnapshot = nil
 	s.lock.Unlock()
 }
 
-func (s *Snapshotter) publishSnapshot(snap *snapshot, buf bytes.Buffer) {
-	s.lock.Lock()
+func (s *BinarySnapshotCache) publishSnapshot(snap *snapshot, buf bytes.Buffer) {
 	snap.buf = buf.Bytes()
-	snap.done = true
-	s.cond.Broadcast()
-	s.lock.Unlock()
+	close(snap.done)
 }
 
 type progressWriter struct {
@@ -177,7 +189,7 @@ func (p2 *progressWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (s *Snapshotter) writeSnapshotToBuffer(snap *snapshot) bytes.Buffer {
+func (s *BinarySnapshotCache) writeCrumbToBuffer(crumb *snapcache.Breadcrumb) bytes.Buffer {
 	s.counterBinSnapsGenerated.Inc()
 	var buf bytes.Buffer
 	snappyW := snappy.NewBufferedWriter(&buf)
@@ -193,7 +205,13 @@ func (s *Snapshotter) writeSnapshotToBuffer(snap *snapshot) bytes.Buffer {
 		}
 		return nil
 	}
-	err := writeSnapshotMessages(context.Background(), logrus.WithField("thread", "snapshotter"), snap.crumb, writeMsg, 100)
+	err := writeSnapshotMessages(
+		context.Background(),
+		logrus.WithField("thread", "snapshotter"),
+		crumb,
+		writeMsg,
+		1000, // Allow bigger messages in the snapshot.
+	)
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
 		logrus.WithError(err).Panic("Failed to serialise datastore snapshot.")
@@ -221,11 +239,17 @@ func (s *Snapshotter) writeSnapshotToBuffer(snap *snapshot) bytes.Buffer {
 type snapshot struct {
 	crumb *snapcache.Breadcrumb
 	buf   []byte
-	done  bool
+	done  chan struct{}
 }
 
 // writeSnapshotMessages chunks the given breadcrumb up into syncproto.MsgKVs objects and calls writeMsg for each one.
-func writeSnapshotMessages(ctx context.Context, logCxt *logrus.Entry, breadcrumb *snapcache.Breadcrumb, writeMsg func(any) error, maxMsgSize int) (err error) {
+func writeSnapshotMessages(
+	ctx context.Context,
+	logCxt *logrus.Entry,
+	breadcrumb *snapcache.Breadcrumb,
+	writeMsg func(any) error,
+	maxMsgSize int,
+) (err error) {
 	logCxt = logCxt.WithFields(logrus.Fields{
 		"seqNo":  breadcrumb.SequenceNumber,
 		"status": breadcrumb.SyncStatus,
@@ -241,7 +265,6 @@ func writeSnapshotMessages(ctx context.Context, logCxt *logrus.Entry, breadcrumb
 		}
 		logCxt.WithField("numKVs", len(kvs)).Debug("Writing snapshot KVs.")
 		numKeys += len(kvs)
-		// h.summaryNumKVsPerMsg.Observe(float64(len(kvs))) FIXME stats for snapshot
 		err := writeMsg(syncproto.MsgKVs{
 			KVs: kvs,
 		})
