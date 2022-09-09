@@ -60,11 +60,15 @@ var (
 		Name: "typha_connections_dropped",
 		Help: "Total number of connections dropped due to rebalancing.",
 	})
+	gaugeNumConnections = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "typha_connections_active",
+		Help: "Number of open client connections, including connections that are still in the handshake.",
+	})
 
 	// Counters with per-syncer-type values.
-	gaugeVecNumConnections = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "typha_connections_active",
-		Help: "Number of open client connections.",
+	gaugeVecNumConnectionsStreaming = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "typha_connections_streaming",
+		Help: "Number of client connections that completed the handshake and are streaming data.",
 	}, []string{"syncer"})
 	counterVecGracePeriodUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_connections_grace_used",
@@ -76,9 +80,10 @@ var (
 func init() {
 	prometheus.MustRegister(counterNumConnectionsAccepted)
 	prometheus.MustRegister(counterNumConnectionsDropped)
+	prometheus.MustRegister(gaugeNumConnections)
 
-	prometheus.MustRegister(gaugeVecNumConnections)
-	promutils.PreCreateGaugePerSyncer(gaugeVecNumConnections)
+	prometheus.MustRegister(gaugeVecNumConnectionsStreaming)
+	promutils.PreCreateGaugePerSyncer(gaugeVecNumConnectionsStreaming)
 	prometheus.MustRegister(counterVecGracePeriodUsed)
 	promutils.PreCreateCounterPerSyncer(counterVecGracePeriodUsed)
 }
@@ -539,14 +544,13 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 		}
 		// Wait for the background threads to shut down.
 		h.shutDownWG.Wait()
-		if h.gaugeNumConnections != nil {
-			h.gaugeNumConnections.Dec()
-		}
+		gaugeNumConnections.Dec()
 		h.logCxt.Info("Client connection shut down.")
 		finishedWG.Done()
 	}()
 
 	h.logCxt.Info("Per-connection goroutine started")
+	gaugeNumConnections.Inc()
 
 	// Start goroutine to read messages from client and put them on a channel for this goroutine to process.
 	h.shutDownWG.Add(1)
@@ -556,7 +560,8 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	if err = h.doHandshake(); err != nil {
 		return // Error already logged.
 	}
-	h.gaugeNumConnections.Inc()
+	h.gaugeNumConnectionsStreaming.Inc()
+	defer h.gaugeNumConnectionsStreaming.Dec()
 
 	// Start a goroutine to stream the snapshot and then the deltas to the client.
 	h.shutDownWG.Add(1)
@@ -961,14 +966,14 @@ func (h *connection) sendPingsToClient(logCxt *log.Entry) {
 // perSyncerConnMetrics contains a set of Prometheus metrics that each connection needs to update.  There is one
 // set per syncer type.
 type perSyncerConnMetrics struct {
-	counterGracePeriodUsed    prometheus.Counter
-	summarySnapshotSendTime   prometheus.Summary
-	summaryClientLatency      prometheus.Summary
-	summaryWriteLatency       prometheus.Summary
-	summaryNextCatchupLatency prometheus.Summary
-	summaryPingLatency        prometheus.Summary
-	summaryNumKVsPerMsg       prometheus.Summary
-	gaugeNumConnections       prometheus.Gauge
+	counterGracePeriodUsed       prometheus.Counter
+	summarySnapshotSendTime      prometheus.Summary
+	summaryClientLatency         prometheus.Summary
+	summaryWriteLatency          prometheus.Summary
+	summaryNextCatchupLatency    prometheus.Summary
+	summaryPingLatency           prometheus.Summary
+	summaryNumKVsPerMsg          prometheus.Summary
+	gaugeNumConnectionsStreaming prometheus.Gauge
 }
 
 func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetrics {
@@ -1010,6 +1015,6 @@ func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetr
 		ConstLabels: syncerLabels,
 	}))
 	c.counterGracePeriodUsed = counterVecGracePeriodUsed.WithLabelValues(string(syncerType))
-	c.gaugeNumConnections = gaugeVecNumConnections.WithLabelValues(string(syncerType))
+	c.gaugeNumConnectionsStreaming = gaugeVecNumConnectionsStreaming.WithLabelValues(string(syncerType))
 	return c
 }
