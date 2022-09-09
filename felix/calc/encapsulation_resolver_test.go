@@ -179,13 +179,17 @@ var _ = Describe("EncapsulationCalculator", func() {
 				[]model.KVPair{*getAPIPool("fe80::0/122", apiv3.IPIPModeNever, apiv3.VXLANModeCrossSubnet)},
 				nil, nil, nil, nil,
 				false, false, true),
+			Entry("V6 API pool with VXLAN disabled",
+				[]model.KVPair{*getAPIPool("fe80::0/122", apiv3.IPIPModeNever, apiv3.VXLANModeNever)},
+				nil, nil, nil, nil,
+				false, false, false),
 		)
 	})
 	Context("FelixConfig set", func() {
 		t := true
 		f := false
 		DescribeTable("FelixConfig tests",
-			func(felixIPIP, felixVXLAN *bool, apiPoolsToAdd, modelPoolsToAdd []model.KVPair, expectedIPIP, expectedVXLAN bool) {
+			func(felixIPIP, felixVXLAN *bool, apiPoolsToAdd, modelPoolsToAdd []model.KVPair, expectedIPIP, expectedVXLAN bool, expectedVXLANv6 bool) {
 				conf.IpInIpEnabled = felixIPIP
 				conf.VXLANEnabled = felixVXLAN
 				for _, p := range apiPoolsToAdd {
@@ -198,21 +202,27 @@ var _ = Describe("EncapsulationCalculator", func() {
 				}
 				Expect(encapsulationCalculator.IPIPEnabled()).To(Equal(expectedIPIP))
 				Expect(encapsulationCalculator.VXLANEnabled()).To(Equal(expectedVXLAN))
+				Expect(encapsulationCalculator.VXLANEnabledV6()).To(Equal(expectedVXLANv6))
 			},
 			Entry("IPIP true in FelixConfig and no pools",
 				&t, nil, nil, nil,
-				true, false),
+				true, false, false),
 			Entry("VXLAN true in FelixConfig and no pools",
 				nil, &t, nil, nil,
-				false, true),
+				false, true, false),
 			Entry("Both IPIP and VXLAN true in FelixConfig and no pools",
 				&t, &t, nil, nil,
-				true, true),
+				true, true, false),
 			Entry("Both IPIP and VXLAN false in FelixConfig with mixed pools",
 				&f, &f,
 				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), *getAPIPool("192.168.2.0/24", apiv3.IPIPModeCrossSubnet, apiv3.VXLANModeNever)},
 				[]model.KVPair{*getModelPool("192.168.3.0/24", encap.Undefined, encap.Always), *getModelPool("192.168.4.0/24", encap.CrossSubnet, encap.Undefined)},
-				false, false),
+				false, false, false),
+			Entry("Mixed VXLAN (ipv4 enabled, ipv6 disabled)",
+				&f, &t,
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways), *getAPIPool("fe80::0/122", apiv3.IPIPModeNever, apiv3.VXLANModeNever)},
+				nil,
+				false, true, false),
 		)
 	})
 	Describe("Invalid IPIPMode and/or VXLANMode", func() {
