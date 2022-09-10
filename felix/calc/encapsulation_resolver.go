@@ -267,9 +267,5 @@ func (c *EncapsulationCalculator) VXLANEnabled() bool {
 }
 
 func (c *EncapsulationCalculator) VXLANEnabledV6() bool {
-	if c.config != nil && c.config.VXLANEnabled != nil {
-		return *c.config.VXLANEnabled
-	}
-
 	return len(c.vxlanPoolsv6) > 0
 }
