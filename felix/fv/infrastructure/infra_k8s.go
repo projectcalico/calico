@@ -163,13 +163,19 @@ func GetK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 
 func (kds *K8sDatastoreInfra) PerTestSetup() {
 	// In BPF mode, start BPF logging.
+        arch := os.Getenv("ARCH")
+	if len(arch) == 0 {
+		log.Info("ARCH env is not defined, set it to amd64");
+                arch = "amd64"
+        }
+
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		kds.bpfLog = containers.Run("bpf-log",
 			containers.RunOpts{
 				AutoRemove:       true,
 				IgnoreEmptyLines: true,
 			}, "--privileged",
-			"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
+			"calico/bpftool:v5.3-" + arch, "/bpftool", "prog", "tracelog")
 	}
 	K8sInfra.runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
