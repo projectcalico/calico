@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Copyright (c) 2020  All rights reserved.
-
 package tc
 
 import (
@@ -21,6 +19,8 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/environment"
 )
 
 // TCHook is the hook to which a BPF program should be attached.  This is relative to the host namespace
@@ -42,10 +42,10 @@ const (
 type EndpointType string
 
 const (
-	EpTypeWorkload  EndpointType = "workload"
-	EpTypeHost      EndpointType = "host"
-	EpTypeTunnel    EndpointType = "tunnel"
-	EpTypeWireguard EndpointType = "wireguard"
+	EpTypeWorkload EndpointType = "workload"
+	EpTypeHost     EndpointType = "host"
+	EpTypeTunnel   EndpointType = "tunnel"
+	EpTypeL3Device EndpointType = "l3dev"
 )
 
 type ProgName string
@@ -66,7 +66,7 @@ func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
 }
 
-func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string) string {
+func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, features *environment.Features) string {
 	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
 		// epToHostDrop only makes sense in the from-workload program.
 		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
@@ -102,8 +102,8 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		epTypeShort = "hep"
 	case EpTypeTunnel:
 		epTypeShort = "tnl"
-	case EpTypeWireguard:
-		epTypeShort = "wg"
+	case EpTypeL3Device:
+		epTypeShort = "l3"
 	}
 	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v.o",
 		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel)

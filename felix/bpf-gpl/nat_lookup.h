@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_NAT_LOOKUP_H__
@@ -11,7 +11,6 @@
 #include <linux/udp.h>
 
 #include "bpf.h"
-#include "skb.h"
 #include "routes.h"
 #include "nat_types.h"
 

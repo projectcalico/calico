@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,12 +27,12 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/labelindex"
-	"github.com/projectcalico/calico/felix/versionparse"
 )
 
 var (
@@ -765,9 +765,9 @@ func TestVersionParse(t *testing.T) {
 	}
 
 	versionStrTest := func(versionStr, distStr string, expected int) {
-		distName := versionparse.GetDistFromString(versionStr)
+		distName := environment.GetDistFromString(versionStr)
 		Expect(distName).To(Equal(distStr))
-		parsedVer, err := versionparse.GetVersionFromString(versionStr)
+		parsedVer, err := environment.GetVersionFromString(versionStr)
 		Expect(err).NotTo(HaveOccurred())
 		expVer := GetMinKernelVersionForDistro(distName)
 		Expect(parsedVer.Compare(expVer)).To(Equal(expected))
@@ -777,7 +777,7 @@ func TestVersionParse(t *testing.T) {
 	versionStrTest(rhelVersionStr, "rhel", 0)
 	versionStrTest(fedVersionStr, "default", 1)
 
-	// Tests to verify the compare function in versionparse
+	// Tests to verify the compare function in environment package
 	tests := []comparisonTest{
 		{a: "4.18.0-193", b: "4.18.0-194", expected: -1},
 		{a: "4.18.0-193", b: "4.18.0-192", expected: 1},
@@ -789,8 +789,8 @@ func TestVersionParse(t *testing.T) {
 
 	for _, test := range tests {
 		t.Log("Comparing ", test.a, " to ", test.b)
-		ver1 := versionparse.MustParseVersion(test.a)
-		ver2 := versionparse.MustParseVersion(test.b)
+		ver1 := environment.MustParseVersion(test.a)
+		ver2 := environment.MustParseVersion(test.b)
 		Expect(ver1.Compare(ver2)).To(Equal(test.expected))
 	}
 }

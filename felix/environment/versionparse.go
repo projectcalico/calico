@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package versionparse
+package environment
 
 import (
 	"fmt"
@@ -29,6 +29,12 @@ import (
 var (
 	kernelVersionRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d+(?:-\d+)?)`)
 	splitRe             = regexp.MustCompile(`[\.-]`)
+)
+
+const (
+	Ubuntu        string = "ubuntu"
+	RedHat        string = "rhel"
+	DefaultDistro string = "default"
 )
 
 type Version struct {
@@ -115,11 +121,13 @@ func GetVersionFromString(s string) (*Version, error) {
 }
 
 func GetDistFromString(s string) string {
-	distName := "default"
-	if strings.Contains(s, "Ubuntu") {
-		distName = "ubuntu"
-	} else if strings.Contains(s, "Red Hat") {
-		distName = "rhel"
+	sLower := strings.ToLower(s)
+	redhatRegexp := regexp.MustCompile(`el(\d+\_\d+)`)
+	distName := DefaultDistro
+	if strings.Contains(sLower, "ubuntu") {
+		distName = Ubuntu
+	} else if strings.Contains(sLower, "red hat") || redhatRegexp.MatchString(sLower) {
+		distName = RedHat
 	}
 	return distName
 }
@@ -138,12 +146,12 @@ func GetDistributionName() string {
 	reader, err := GetKernelVersionReader()
 	if err != nil {
 		log.WithError(err).Warn("Failed to get kernel version reader")
-		return "default"
+		return DefaultDistro
 	}
 	kernVersion, err := ioutil.ReadAll(reader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to read kernel version from reader")
-		return "default"
+		return DefaultDistro
 	}
 	s := string(kernVersion)
 

@@ -71,7 +71,7 @@ static CALI_BPF_INLINE long skb_iphdr_offset(void)
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
 		return sizeof(struct ethhdr) + sizeof(struct iphdr);
 	} else if (CALI_F_L3) {
-		// Egress on an IPIP tunnel, or Wireguard both directions:
+		// Egress on an IPIP tunnel, or any other l3 devices (wireguard) both directions:
 		// skb is [inner IP|payload]
 		return 0;
 	} else {
