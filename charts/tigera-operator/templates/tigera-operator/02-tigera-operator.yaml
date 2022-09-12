@@ -35,9 +35,10 @@ spec:
       hostNetwork: true
       # This must be set when hostNetwork is true or else the cluster services won't resolve
       dnsPolicy: ClusterFirstWithHostNet
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range $name := .Values.imagePullSecrets }}
-        - name: {{ $name }}
+          - name: {{ $name }}
         {{- end}}
         {{- end}}
       containers:
