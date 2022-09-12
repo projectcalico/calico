@@ -1293,7 +1293,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		ap.RPFStrictEnabled = true
 	}
 
-	ap.Features = *m.Features
 	return ap
 }
 
