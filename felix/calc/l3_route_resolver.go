@@ -29,6 +29,8 @@ import (
 	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
@@ -84,6 +86,10 @@ type l3rrNodeInfo struct {
 	WireguardV6Addr ip.Addr
 
 	Addresses []ip.Addr
+
+	ASNumber           *numorstring.ASNumber
+	Labels             map[string]string
+	WireguardPublicKey string
 }
 
 var (
@@ -368,6 +374,9 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 				nodeInfo.V6Addr = ip.FromCalicoIP(*ipv6).(ip.V6Addr)
 				nodeInfo.V6CIDR = ip.CIDRFromCalicoNet(*caliNodeCIDRV6).(ip.V6CIDR)
 			}
+			if bgp.ASNumber != nil {
+				nodeInfo.ASNumber = bgp.ASNumber
+			}
 		} else {
 			ipv4, caliNodeCIDR := cresources.FindNodeAddress(node, apiv3.InternalIP, 4)
 			if ipv4 == nil {
@@ -393,6 +402,10 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 		}
 
 		if nodeInfo != nil {
+			if node.Labels != nil {
+				nodeInfo.Labels = node.Labels
+			}
+			nodeInfo.WireguardPublicKey = node.Status.WireguardPublicKey
 			if node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv4Address != "" {
 				nodeInfo.WireguardAddr = ip.FromString(node.Spec.Wireguard.InterfaceIPv4Address)
 			}
@@ -561,7 +574,7 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 	if newNodeInfo != nil {
 		c.nodeNameToNodeInfo[nodeName] = *newNodeInfo
 		for _, a := range newNodeInfo.AddressesAsCIDRs() {
-			c.trie.AddHost(a, nodeName)
+			c.trie.AddHost(a, nodeName, newNodeInfo)
 		}
 	}
 
@@ -736,9 +749,8 @@ func (c *L3RouteResolver) flush() {
 					rt.Type = proto.RouteType_REMOTE_WORKLOAD
 				}
 			}
-			if len(ri.Host.NodeNames) > 0 {
-				rt.DstNodeName = ri.Host.NodeNames[0]
-
+			if len(ri.Host.NodeInfos) > 0 {
+				rt.DstNodeName = ri.Host.NodeInfos[0].NodeName
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local host route.")
 					rt.Type = proto.RouteType_LOCAL_HOST
@@ -746,6 +758,11 @@ func (c *L3RouteResolver) flush() {
 					logCxt.Debug("Remote host route.")
 					rt.Type = proto.RouteType_REMOTE_HOST
 				}
+				if ri.Host.NodeInfos[0].ASNumber != nil {
+					rt.Asnumber = ri.Host.NodeInfos[0].ASNumber.String()
+				}
+				rt.Labels = ri.Host.NodeInfos[0].Labels
+				rt.WireguardPublicKey = ri.Host.NodeInfos[0].WireguardPublicKey
 			}
 
 			if len(ri.Refs) > 0 {
@@ -940,30 +957,36 @@ func (r *RouteTrie) RemoveBlockRoute(cidr ip.CIDR) {
 	r.UpdateBlockRoute(cidr, "")
 }
 
-func (r *RouteTrie) AddHost(cidr ip.CIDR, nodeName string) {
+func (r *RouteTrie) AddHost(cidr ip.CIDR, nodeName string, nodeInfo *l3rrNodeInfo) {
 	r.updateCIDR(cidr, func(ri *RouteInfo) {
-		ri.Host.NodeNames = append(ri.Host.NodeNames, nodeName)
-		if len(ri.Host.NodeNames) > 1 {
+		ri.Host.NodeInfos = append(ri.Host.NodeInfos, &NodeInfo{
+			NodeName:           nodeName,
+			ASNumber:           nodeInfo.ASNumber,
+			WireguardPublicKey: nodeInfo.WireguardPublicKey,
+			Labels:             nodeInfo.Labels})
+		if len(ri.Host.NodeInfos) > 1 {
 			logrus.WithFields(logrus.Fields{
 				"cidr":  cidr,
-				"nodes": ri.Host.NodeNames,
+				"nodes": ri.Host.NodeInfos,
 			}).Warn("Some nodes share IP address, route calculation may choose wrong node.")
 			// For determinism in case we have two hosts sharing an IP, sort the entries.
-			sort.Strings(ri.Host.NodeNames)
+			sort.Slice(ri.Host.NodeInfos, func(i, j int) bool {
+				return ri.Host.NodeInfos[i].NodeName < ri.Host.NodeInfos[j].NodeName
+			})
 		}
 	})
 }
 
 func (r *RouteTrie) RemoveHost(cidr ip.CIDR, nodeName string) {
 	r.updateCIDR(cidr, func(ri *RouteInfo) {
-		var ns []string
-		for _, n := range ri.Host.NodeNames {
-			if n == nodeName {
+		var ns []*NodeInfo
+		for _, n := range ri.Host.NodeInfos {
+			if n.NodeName == nodeName {
 				continue
 			}
 			ns = append(ns, n)
 		}
-		ri.Host.NodeNames = ns
+		ri.Host.NodeInfos = ns
 	})
 }
 
@@ -1099,7 +1122,7 @@ type RouteInfo struct {
 
 	// Host contains information extracted from the node/host config updates.
 	Host struct {
-		NodeNames []string // set if this CIDR _is_ a node's own IP.
+		NodeInfos []*NodeInfo // set if this CIDR _is_ a node's own IP.
 	}
 
 	// Refs contains information extracted from workload endpoints, or tunnel addresses extracted from the node.
@@ -1107,6 +1130,13 @@ type RouteInfo struct {
 
 	// WasSent is set to true when the route is sent downstream.
 	WasSent bool
+}
+
+type NodeInfo struct {
+	NodeName           string
+	ASNumber           *numorstring.ASNumber
+	Labels             map[string]string
+	WireguardPublicKey string
 }
 
 type RefType byte
@@ -1138,7 +1168,7 @@ type Ref struct {
 func (r RouteInfo) IsValidRoute() bool {
 	return r.Pool.Type != proto.IPPoolType_NONE ||
 		r.Block.NodeName != "" ||
-		len(r.Host.NodeNames) > 0 ||
+		len(r.Host.NodeInfos) > 0 ||
 		r.Pool.NATOutgoing ||
 		len(r.Refs) > 0
 }

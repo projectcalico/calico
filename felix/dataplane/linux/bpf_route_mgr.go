@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"net"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -521,7 +522,7 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 		return
 	}
 
-	if m.cidrToRoute[v4CIDR] == *update {
+	if reflect.DeepEqual(m.cidrToRoute[v4CIDR], *update) {
 		return
 	}
 

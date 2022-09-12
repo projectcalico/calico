@@ -568,6 +568,9 @@ message RouteUpdate {
   bool nat_outgoing = 8;
   bool local_workload = 9;
   TunnelType tunnel_type = 10;
+  map<string, string> labels = 11;
+  string asnumber = 12;
+  string wireguard_public_key = 13;
 }
 
 message RouteRemove {
