@@ -39,7 +39,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-	"github.com/projectcalico/calico/felix/environment"
 )
 
 type AttachPoint struct {
@@ -62,7 +61,6 @@ type AttachPoint struct {
 	PSNATEnd             uint16
 	IPv6Enabled          bool
 	MapSizes             map[string]uint32
-	Features             environment.Features
 	RPFStrictEnabled     bool
 }
 
@@ -365,7 +363,7 @@ func (ap *AttachPoint) ProgramID() (int, error) {
 
 // FileName return the file the AttachPoint will load the program from
 func (ap AttachPoint) FileName() string {
-	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, bpfutils.BTFEnabled, &ap.Features)
+	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, bpfutils.BTFEnabled)
 }
 
 func (ap AttachPoint) IsAttached() (bool, error) {
