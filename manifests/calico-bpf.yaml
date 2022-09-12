@@ -1434,8 +1434,8 @@ spec:
                 type: boolean
               vxlanEnabled:
                 description: 'VXLANEnabled overrides whether Felix should create the
-                  VXLAN tunnel device for VXLAN networking. Optional as Felix determines
-                  this based on the existing IP pools. [Default: nil (unset)]'
+                  VXLAN tunnel device for IPv4 VXLAN networking. Optional as Felix
+                  determines this based on the existing IP pools. [Default: nil (unset)]'
                 type: boolean
               vxlanMTU:
                 description: 'VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel

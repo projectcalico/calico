@@ -654,13 +654,31 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				// Expect the VXLAN device to be deleted.
+				// Expect the ipv4 VXLAN device to be deleted.
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "10s", "100ms").ShouldNot(ContainSubstring(mtuStr))
+					// IPv6 ignores the VXLAN enabled flag and must be disabled at the pool level. As such the ipv6
+					// interfaces should still exist at this point
 					if enableIPv6 {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring(mtuStrV6))
+					}
+				}
+
+				if enableIPv6 {
+					ip6pool, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPv6PoolName, options.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					ip6pool.Spec.VXLANMode = "Never"
+					_, err = client.IPPools().Update(context.Background(), ip6pool, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Expect the ipv6 VXLAN device to be deleted.
+					for _, felix := range felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
 							return out
