@@ -393,6 +393,21 @@ var baseTests = []StateList{
 		endpointSliceAndLocalWorkload,
 		endpointSliceActive,
 	},
+	{
+		// Service NetworkPolicy test updating endpoint slices.
+		endpointSliceActiveNewIPs,
+		endpointSliceActiveNewIPs2,
+		endpointSliceActiveNewIPs,
+	},
+	{
+		// Service NetworkPolicy test overlapping two endpoint slices with same IPs.
+		endpointSliceActiveNewIPs,
+		endpointSliceOverlap,
+		endpointSlice2OnlyActiveNewIPs2,
+	},
+	{
+		endpointSliceActiveSpecNoPorts,
+	},
 }
 
 var logOnce sync.Once
