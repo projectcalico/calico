@@ -56,7 +56,7 @@ func hashToIPv4(nodeName string) string {
 	}
 	hashBytes := hash.Sum(nil)
 	ip := hashBytes[:4]
-	//Allow unicast ip
+	//BGP doesn't allow router IDs in special IP ranges (e.g., 224.x.x.x)
 	ip0Value := int(ip[0])
 	if ip0Value > 223 {
 		ip0Value = ip0Value - 32
