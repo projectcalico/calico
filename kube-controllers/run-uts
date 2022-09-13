@@ -29,7 +29,9 @@ for PKG in "$@"; do
 	HAS_TESTS=$(find ${PKG} -name "ut.test")
 	if [ ! -z "${HAS_TESTS}" ]; then 
 		echo "Running tests for package: ${PKG}";
-		${PKG}/ut.test ${GINKGO_ARGS} || ((RC++))
+		for i in {0..50}; do
+		  ${PKG}/ut.test ${GINKGO_ARGS} || ((RC++))
+	  done
 	else 
 		echo "WARNING: No tests to run in ${PKG}, skipping"
 	fi
