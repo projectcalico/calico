@@ -92,6 +92,14 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		}
 		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
 
+		// Wait for the underlying local APIService that backs the CRDs to be created.
+		k8sAggregatorClient, err := testutils.GetK8sAggregatorClient(kconfigfile.Name())
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			_, err := k8sAggregatorClient.ApiregistrationV1().APIServices().Get(context.Background(), "v1.crd.projectcalico.org", metav1.GetOptions{})
+			return err
+		}, 10*time.Second).Should(BeNil())
+
 		// Make a Calico client and backend client.
 		type accessor interface {
 			Backend() backend.Client
