@@ -104,15 +104,20 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*sn
 	}
 
 	buf := snap.buf
+	var currentWriteDeadline time.Time
 	for len(buf) > 0 {
 		const chunkSize = 65536
 		b := buf
 		if len(b) > chunkSize {
 			b = b[:chunkSize]
 		}
-		err = w.SetWriteDeadline(time.Now().Add(60 * time.Second))
-		if err != nil {
-			return nil, err
+		if time.Until(currentWriteDeadline) < 60*time.Second {
+			newDeadline := time.Now().Add(90 * time.Second)
+			err = w.SetWriteDeadline(newDeadline)
+			if err != nil {
+				return nil, err
+			}
+			currentWriteDeadline = newDeadline
 		}
 		n, err := w.Write(b)
 		if err != nil {
