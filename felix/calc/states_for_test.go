@@ -2398,6 +2398,40 @@ var endpointSliceActive = endpointSliceAndLocalWorkload.withKVUpdates(
 	},
 )
 
+// Change the endpoint slice
+var endpointSliceActiveNewIPs = endpointSliceActive.withName("EndpointSliceActiveNewIPs").withKVUpdates(
+	KVPair{Key: endpointSliceKey1, Value: &endpointSlice1NewIPs},
+).withIPSet("svc:Jhwii46PCMT5NlhWsUqZmv7al8TeHFbNQMhoVg", []string{
+	"10.0.0.1,tcp:80",
+	"10.0.0.2,tcp:80",
+	"10.0.0.3,tcp:80",
+})
+
+var endpointSliceActiveNewIPs2 = endpointSliceActive.withName("EndpointSliceActiveNewIPs").withKVUpdates(
+	KVPair{Key: endpointSliceKey1, Value: &endpointSlice1NewIPs2},
+).withIPSet("svc:Jhwii46PCMT5NlhWsUqZmv7al8TeHFbNQMhoVg", []string{
+	"10.0.0.2,tcp:80",
+	"10.0.0.3,tcp:80",
+	"10.0.0.4,tcp:80",
+})
+
+// Overlap two endpoint slices
+var endpointSliceOverlap = endpointSliceActiveNewIPs.withName("EndpointSliceOverlap").withKVUpdates(
+	KVPair{Key: endpointSliceKey2, Value: &endpointSlice2NewIPs2},
+).withIPSet("svc:Jhwii46PCMT5NlhWsUqZmv7al8TeHFbNQMhoVg", []string{
+	"10.0.0.1,tcp:80",
+	"10.0.0.2,tcp:80",
+	"10.0.0.3,tcp:80",
+	"10.0.0.4,tcp:80",
+})
+var endpointSlice2ActiveNewIPs2 = endpointSliceActive.withName("EndpointSliceActiveNewIPs").withKVUpdates(
+	KVPair{Key: endpointSliceKey2, Value: &endpointSlice2NewIPs2},
+).withIPSet("svc:Jhwii46PCMT5NlhWsUqZmv7al8TeHFbNQMhoVg", []string{
+	"10.0.0.2,tcp:80",
+	"10.0.0.3,tcp:80",
+	"10.0.0.4,tcp:80",
+})
+
 var encapWithIPIPPool = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithIPIP},
 ).withExpectedEncapsulation(
