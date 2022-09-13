@@ -763,7 +763,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
-			if strings.HasPrefix(m.Name(), ".rodata") {
+			if strings.Contains(m.Name(), ".rodata") {
 				continue
 			}
 			if forXDP {
