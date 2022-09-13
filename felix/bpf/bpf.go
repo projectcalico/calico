@@ -40,8 +40,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex"
-	"github.com/projectcalico/calico/felix/versionparse"
 )
 
 type XDPMode int
@@ -90,22 +90,22 @@ var (
 	ifaceRegexp     = regexp.MustCompile(`(?m)^[0-9]+:\s+(?P<name>.+):`)
 	// v4Dot16Dot0 is the first kernel version that has all the
 	// required features we use for XDP filtering
-	v4Dot16Dot0 = versionparse.MustParseVersion("4.16.0")
+	v4Dot16Dot0 = environment.MustParseVersion("4.16.0")
 	// v4Dot18Dot0 is the kernel version in RHEL that has all the
 	// required features for BPF dataplane, sidecar acceleration
-	v4Dot18Dot0 = versionparse.MustParseVersion("4.18.0-193")
+	v4Dot18Dot0 = environment.MustParseVersion("4.18.0-193")
 	// v4Dot20Dot0 is the first kernel version that has all the
 	// required features we use for sidecar acceleration
-	v4Dot20Dot0 = versionparse.MustParseVersion("4.20.0")
+	v4Dot20Dot0 = environment.MustParseVersion("4.20.0")
 	// v5Dot3Dot0 is the first kernel version that has all the
 	// required features we use for BPF dataplane mode
-	v5Dot3Dot0 = versionparse.MustParseVersion("5.3.0")
+	v5Dot3Dot0 = environment.MustParseVersion("5.3.0")
 )
 
-var distToVersionMap = map[string]*versionparse.Version{
-	"ubuntu":  v5Dot3Dot0,
-	"rhel":    v4Dot18Dot0,
-	"default": v5Dot3Dot0,
+var distToVersionMap = map[string]*environment.Version{
+	environment.Ubuntu:        v5Dot3Dot0,
+	environment.RedHat:        v4Dot18Dot0,
+	environment.DefaultDistro: v5Dot3Dot0,
 }
 
 func (m XDPMode) String() string {
@@ -2172,13 +2172,13 @@ func (b *BPFLib) RemoveSockmapEndpointsMap() error {
 	return os.Remove(mapPath)
 }
 
-func isAtLeastKernel(v *versionparse.Version) error {
-	versionReader, err := versionparse.GetKernelVersionReader()
+func isAtLeastKernel(v *environment.Version) error {
+	versionReader, err := environment.GetKernelVersionReader()
 	if err != nil {
 		return fmt.Errorf("failed to get kernel version reader: %v", err)
 	}
 
-	kernelVersion, err := versionparse.GetKernelVersion(versionReader)
+	kernelVersion, err := environment.GetKernelVersion(versionReader)
 	if err != nil {
 		return fmt.Errorf("failed to get kernel version: %v", err)
 	}
@@ -2203,12 +2203,12 @@ func SupportsSockmap() error {
 	return nil
 }
 
-func GetMinKernelVersionForDistro(distName string) *versionparse.Version {
+func GetMinKernelVersionForDistro(distName string) *environment.Version {
 	return distToVersionMap[distName]
 }
 
 func SupportsBPFDataplane() error {
-	distName := versionparse.GetDistributionName()
+	distName := environment.GetDistributionName()
 	if err := isAtLeastKernel(GetMinKernelVersionForDistro(distName)); err != nil {
 		return err
 	}

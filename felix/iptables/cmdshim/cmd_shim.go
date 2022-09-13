@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables
+package cmdshim
 
 import (
 	"fmt"
@@ -33,7 +33,7 @@ type CmdIface interface {
 	String() string
 }
 
-type cmdFactory func(name string, arg ...string) CmdIface
+type CmdFactory func(name string, arg ...string) CmdIface
 
 func NewRealCmd(name string, arg ...string) CmdIface {
 	cmd := exec.Command(name, arg...)

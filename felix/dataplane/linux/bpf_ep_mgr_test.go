@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -198,6 +199,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			nil,
 			logutils.NewSummarizer("test"),
 		)
+		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
 		bpfEpMgr.dp = dp
 	})
 
