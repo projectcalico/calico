@@ -1233,64 +1233,72 @@ const (
 	serverURISAN = "spiffe://k8s.example.com/typha-server"
 )
 
-var certDir string
-
-var _ = BeforeSuite(func() {
-	// Create a temporary directory for certificates.
-	var err error
-	certDir, err = ioutil.TempDir("", "typhafv")
-	tlsutils.PanicIfErr(err)
-
-	// Trusted CA.
-	caCert, caKey := tlsutils.MakeCACert("trustedCA")
-	tlsutils.WriteCert(caCert.Raw, filepath.Join(certDir, "ca.crt"))
-
-	// An untrusted CA.
-	untrustedCert, untrustedKey := tlsutils.MakeCACert("untrustedCA")
-	tlsutils.WriteCert(untrustedCert.Raw, filepath.Join(certDir, "untrusted.crt"))
-
-	// Typha server.
-	serverCert, serverKey := tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, caCert, caKey)
-	tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server.key"))
-	tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server.crt"))
-
-	// Typha server using untrusted CA.
-	serverCert, serverKey = tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, untrustedCert, untrustedKey)
-	tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server-untrusted.key"))
-	tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server-untrusted.crt"))
-
-	// Typha client with good CN.
-	clientCert, clientKey := tlsutils.MakePeerCert(clientCN, "", x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcn.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcn.crt"))
-
-	// Typha client with good URI.
-	clientCert, clientKey = tlsutils.MakePeerCert("", clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "gooduri.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "gooduri.crt"))
-
-	// Typha client with good CN and URI.
-	clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcnuri.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcnuri.crt"))
-
-	// Typha client with bad CN and URI.
-	clientCert, clientKey = tlsutils.MakePeerCert(clientCN+"bad", clientURISAN+"bad", x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "badcnuri.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "badcnuri.crt"))
-
-	// Typha client using untrusted CA.
-	clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client-untrusted.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
-})
-
-var _ = AfterSuite(func() {
-	// Remove TLS keys and certificates.
-	os.RemoveAll(certDir)
-})
-
 var _ = Describe("with server requiring TLS", func() {
+	var certDir string
+
+	BeforeEach(func() {
+		// Generating certs is expensive, so we defer it until this BeforeEach and then reuse the certs for all the
+		// tests.
+		if certDir != "" {
+			return
+		}
+
+		// Create a temporary directory for certificates.
+		var err error
+		certDir, err = ioutil.TempDir("", "typhafv")
+		tlsutils.PanicIfErr(err)
+
+		// Trusted CA.
+		caCert, caKey := tlsutils.MakeCACert("trustedCA")
+		tlsutils.WriteCert(caCert.Raw, filepath.Join(certDir, "ca.crt"))
+
+		// An untrusted CA.
+		untrustedCert, untrustedKey := tlsutils.MakeCACert("untrustedCA")
+		tlsutils.WriteCert(untrustedCert.Raw, filepath.Join(certDir, "untrusted.crt"))
+
+		// Typha server.
+		serverCert, serverKey := tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, caCert, caKey)
+		tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server.key"))
+		tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server.crt"))
+
+		// Typha server using untrusted CA.
+		serverCert, serverKey = tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, untrustedCert, untrustedKey)
+		tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server-untrusted.key"))
+		tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server-untrusted.crt"))
+
+		// Typha client with good CN.
+		clientCert, clientKey := tlsutils.MakePeerCert(clientCN, "", x509.ExtKeyUsageClientAuth, caCert, caKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcn.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcn.crt"))
+
+		// Typha client with good URI.
+		clientCert, clientKey = tlsutils.MakePeerCert("", clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "gooduri.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "gooduri.crt"))
+
+		// Typha client with good CN and URI.
+		clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcnuri.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcnuri.crt"))
+
+		// Typha client with bad CN and URI.
+		clientCert, clientKey = tlsutils.MakePeerCert(clientCN+"bad", clientURISAN+"bad", x509.ExtKeyUsageClientAuth, caCert, caKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "badcnuri.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "badcnuri.crt"))
+
+		// Typha client using untrusted CA.
+		clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client-untrusted.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
+	})
+
+	var _ = AfterSuite(func() {
+		// Remove TLS keys and certificates.
+		if certDir != "" {
+			_ = os.RemoveAll(certDir)
+		}
+	})
+
 	// We'll create this pipeline for updates to flow through:
 	//
 	//    This goroutine -> callback -chan-> validation -> snapshot -> server
