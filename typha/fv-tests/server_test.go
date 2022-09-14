@@ -603,11 +603,11 @@ var _ = Describe("With an in-process Server", func() {
 		})
 	})
 
-	Describe("with big starting snapshot and 100 clients", func() {
+	Describe("with big starting snapshot and 10 clients", func() {
 		var expectedEndState map[string]api.Update
 		BeforeEach(func() {
-			expectedEndState = sendNUpdatesThenInSync(10000)
-			createClients(100)
+			expectedEndState = sendNUpdatesThenInSync(100000)
+			createClients(10)
 		})
 
 		// expectClientState asserts that every client eventually reaches the given state.
