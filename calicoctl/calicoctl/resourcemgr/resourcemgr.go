@@ -17,7 +17,6 @@ package resourcemgr
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -25,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -299,6 +299,7 @@ func (rh resourceHelper) Patch(ctx context.Context, client client.Interface, res
 	resource = mergeMetadataForUpdate(ro, resource)
 
 	// Marshal original obj for comparison
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	original, err := json.Marshal(ro)
 	if err != nil {
 		return resource, fmt.Errorf("marshalling original resource: %v", err)

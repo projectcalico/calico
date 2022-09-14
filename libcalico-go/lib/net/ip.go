@@ -15,9 +15,10 @@
 package net
 
 import (
-	"encoding/json"
 	"math/big"
 	"net"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Sub class net.IP so that we can add JSON marshalling and unmarshalling.
@@ -31,12 +32,14 @@ func (i IP) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Marshal(string(s))
 }
 
 // UnmarshalJSON interface for an IP
 func (i *IP) UnmarshalJSON(b []byte) error {
 	var s string
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}

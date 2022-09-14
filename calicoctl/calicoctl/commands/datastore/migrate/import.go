@@ -17,13 +17,13 @@ package migrate
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -153,6 +153,7 @@ Description:
 	// Import IPAM components
 	fmt.Print("Importing IPAM resources\n")
 	ipam := NewMigrateIPAM(client)
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(ipamJson, ipam)
 	if err != nil {
 		return fmt.Errorf("Failed to read IPAM resources: %s\n", err)
@@ -281,6 +282,7 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 func updateClusterInfo(ctx context.Context, c client.Interface, clusterInfoJson []byte) error {
 	// Unmarshal the etcd cluster info resource.
 	migrated := apiv3.ClusterInformation{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err := json.Unmarshal(clusterInfoJson, &migrated)
 	if err != nil {
 		return fmt.Errorf("Error reading exported cluster info for migration: %s", err)
