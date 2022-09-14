@@ -26,6 +26,7 @@ import (
 	"path"
 	"path/filepath"
 
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -59,6 +60,7 @@ func AlreadyAttachedProg(a AttachPointInfo, object string, id int) (bool, error)
 	}
 
 	var progInfo AttachedProgInfo
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(bytesToRead, &progInfo); err != nil {
 		return false, err
 	}

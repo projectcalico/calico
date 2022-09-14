@@ -15,7 +15,6 @@
 package binder
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net"
@@ -23,6 +22,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/grpc"
 )
 
@@ -154,6 +154,7 @@ func readCredentials(path string, c *Credentials) error {
 	if err != nil {
 		return err
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(data, c)
 	if err != nil {
 		return err

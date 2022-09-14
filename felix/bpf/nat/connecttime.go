@@ -15,7 +15,6 @@
 package nat
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -61,6 +61,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 
 	var progs []cgroupProgs
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(out, &progs)
 	if err != nil {
 		log.WithError(err).WithField("output", string(out)).Error("BPF program list not json.")
