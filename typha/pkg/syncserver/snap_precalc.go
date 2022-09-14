@@ -15,9 +15,9 @@
 package syncserver
 
 import (
-	"bytes"
 	"context"
 	"encoding/gob"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -98,49 +98,56 @@ func NewBinarySnapCache(
 // decoder at the client side must also be reset before sending such a snapshot.  The snapshot ends with
 // a MsgDecoderRestart, so the caller should wait for an ACK and then reset their encoder.
 func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*snapcache.Breadcrumb, error) {
-	snap, err := s.getOrWaitForSnap(ctx)
-	if err != nil {
-		return nil, err
-	}
+	snap := s.getOrCreateSnap()
 
-	buf := snap.buf
+	s.lock.Lock()
+
+	var bytesSent int
 	var currentWriteDeadline time.Time
-	for len(buf) > 0 {
-		const chunkSize = 65536
-		b := buf
-		if len(b) > chunkSize {
-			b = b[:chunkSize]
+	for bytesSent < len(snap.buf) || !snap.complete {
+		for len(snap.buf) == bytesSent {
+			snap.cond.Wait()
 		}
-		if time.Until(currentWriteDeadline) < 60*time.Second {
-			newDeadline := time.Now().Add(90 * time.Second)
-			err = w.SetWriteDeadline(newDeadline)
+		buf := snap.buf[bytesSent:]
+		complete := snap.complete
+
+		// Drop the lock while we send the data.
+		s.lock.Unlock()
+
+		for len(buf) > 0 {
+			const chunkSize = 65536
+			b := buf
+			if len(b) > chunkSize {
+				b = b[:chunkSize]
+			}
+			if time.Until(currentWriteDeadline) < 60*time.Second {
+				newDeadline := time.Now().Add(90 * time.Second)
+				err := w.SetWriteDeadline(newDeadline)
+				if err != nil {
+					return nil, err
+				}
+				currentWriteDeadline = newDeadline
+			}
+			n, err := w.Write(b)
 			if err != nil {
 				return nil, err
 			}
-			currentWriteDeadline = newDeadline
+			buf = buf[n:]
+			bytesSent += n
 		}
-		n, err := w.Write(b)
-		if err != nil {
-			return nil, err
+
+		if complete {
+			break
 		}
-		buf = buf[n:]
+		s.lock.Lock()
 	}
+
 	var zeroTime time.Time
-	err = w.SetWriteDeadline(zeroTime)
+	err := w.SetWriteDeadline(zeroTime)
 	if err != nil {
 		return nil, err
 	}
 	return snap.crumb, nil
-}
-
-func (s *BinarySnapshotCache) getOrWaitForSnap(ctx context.Context) (*snapshot, error) {
-	snap := s.getOrCreateSnap()
-	select {
-	case <-snap.done:
-		return snap, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
 }
 
 // getOrCreateSnap either returns the current active snapshot (which may still be being created on a background
@@ -152,8 +159,8 @@ func (s *BinarySnapshotCache) getOrCreateSnap() *snapshot {
 
 	if s.activeSnapshot == nil {
 		s.activeSnapshot = &snapshot{
+			cond:  sync.NewCond(&s.lock),
 			crumb: s.cache.CurrentBreadcrumb(),
-			done:  make(chan struct{}),
 		}
 		go s.populateSnapshot(s.activeSnapshot)
 	} else {
@@ -163,8 +170,7 @@ func (s *BinarySnapshotCache) getOrCreateSnap() *snapshot {
 }
 
 func (s *BinarySnapshotCache) populateSnapshot(snap *snapshot) {
-	buf := s.writeCrumbToBuffer(snap.crumb)
-	s.publishSnapshot(snap, buf)
+	s.writeSnapshot(snap)
 	// Wait until the snapshot expires...
 	time.Sleep(s.snapValidityTimeout)
 	// No point in expiring the snapshot until there's a new one...
@@ -178,11 +184,6 @@ func (s *BinarySnapshotCache) clearSnapshot() {
 	s.lock.Unlock()
 }
 
-func (s *BinarySnapshotCache) publishSnapshot(snap *snapshot, buf bytes.Buffer) {
-	snap.buf = buf.Bytes()
-	close(snap.done)
-}
-
 type progressWriter struct {
 	W            *snappy.Writer
 	BytesWritten int
@@ -194,9 +195,25 @@ func (p2 *progressWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (s *BinarySnapshotCache) writeCrumbToBuffer(crumb *snapcache.Breadcrumb) bytes.Buffer {
+type appendOnlyByteBuffer struct {
+	Buf []byte
+}
+
+func (a *appendOnlyByteBuffer) Write(p []byte) (n int, err error) {
+	a.Buf = append(a.Buf, p...)
+	return len(p), nil
+}
+
+func (a *appendOnlyByteBuffer) Len() int {
+	return len(a.Buf)
+}
+
+var _ io.Writer = (*appendOnlyByteBuffer)(nil)
+
+func (s *BinarySnapshotCache) writeSnapshot(snap *snapshot) {
 	s.counterBinSnapsGenerated.Inc()
-	var buf bytes.Buffer
+	var buf appendOnlyByteBuffer
+
 	snappyW := snappy.NewBufferedWriter(&buf)
 	progressW := progressWriter{W: snappyW}
 	encoder := gob.NewEncoder(&progressW)
@@ -208,12 +225,23 @@ func (s *BinarySnapshotCache) writeCrumbToBuffer(crumb *snapcache.Breadcrumb) by
 		if err != nil {
 			return err
 		}
+		err = snappyW.Flush()
+		if err != nil {
+			return err
+		}
+		if s.lock.TryLock() {
+			// Opportunistically publish the snapshot so far, but don't block waiting for readers to get out of
+			// the way.
+			defer s.lock.Unlock()
+			snap.buf = buf.Buf
+			snap.cond.Broadcast()
+		}
 		return nil
 	}
 	err := writeSnapshotMessages(
 		context.Background(),
 		logrus.WithField("thread", "snapshotter"),
-		crumb,
+		snap.crumb,
 		writeMsg,
 		1000, // Allow bigger messages in the snapshot.
 	)
@@ -236,15 +264,22 @@ func (s *BinarySnapshotCache) writeCrumbToBuffer(crumb *snapcache.Breadcrumb) by
 		// Shouldn't happen because we're serialising to an in-memory buffer.
 		logrus.WithError(err).Panic("Failed to close datastore snapshot.")
 	}
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	snap.buf = buf.Buf
+	snap.complete = true
+	snap.cond.Broadcast()
+
 	s.gaugeSnapBytesRaw.Set(float64(progressW.BytesWritten))
 	s.gaugeSnapBytesComp.Set(float64(buf.Len()))
-	return buf
 }
 
 type snapshot struct {
-	crumb *snapcache.Breadcrumb
-	buf   []byte
-	done  chan struct{}
+	crumb    *snapcache.Breadcrumb
+	buf      []byte
+	cond     *sync.Cond
+	complete bool
 }
 
 // writeSnapshotMessages chunks the given breadcrumb up into syncproto.MsgKVs objects and calls writeMsg for each one.
