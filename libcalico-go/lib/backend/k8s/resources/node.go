@@ -16,11 +16,11 @@ package resources
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -473,6 +473,7 @@ func mergeCalicoAndK8sLabels(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) er
 	if calicoNode.Annotations == nil {
 		calicoNode.Annotations = map[string]string{}
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	bytes, err := json.Marshal(k8sNode.Labels)
 	if err != nil {
 		log.WithError(err).Errorf("Error marshalling node labels")
@@ -495,6 +496,7 @@ func restoreCalicoLabels(calicoNode *libapiv3.Node) (*libapiv3.Node, error) {
 
 	// We stashed the k8s labels in an annotation, extract them so we can compare with the combined labels.
 	k8sLabels := map[string]string{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal([]byte(rawLabels), &k8sLabels); err != nil {
 		log.WithError(err).Error("Failed to unmarshal k8s node labels from " +
 			nodeK8sLabelAnnotation + " annotation")

@@ -3,7 +3,6 @@ package cni
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -12,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/sirupsen/logrus"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -201,6 +201,7 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 		return TokenUpdate{}, err
 	}
 	var claimMap map[string]interface{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(decodedClaims, &claimMap)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to unmarshal service account token claims")

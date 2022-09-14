@@ -15,7 +15,6 @@
 package bpf
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -249,7 +248,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 	return nil, errors.Errorf("unrecognized map type %T", m)
 }
 
-//IterPerCpuMapCmdOutput iterates over the output of the dump of per-cpu map
+// IterPerCpuMapCmdOutput iterates over the output of the dump of per-cpu map
 func IterPerCpuMapCmdOutput(output []byte, f IterCallback) error {
 	var mp perCpuMapEntry
 	var v []byte

@@ -15,8 +15,9 @@
 package numorstring
 
 import (
-	"encoding/json"
 	"strconv"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // UInt8OrString is a type that can hold an uint8 or a string.  When used in
@@ -31,6 +32,7 @@ type Uint8OrString struct {
 
 // UnmarshalJSON implements the json.Unmarshaller interface.
 func (i *Uint8OrString) UnmarshalJSON(b []byte) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if b[0] == '"' {
 		var s string
 		if err := json.Unmarshal(b, &s); err != nil {
@@ -54,6 +56,7 @@ func (i *Uint8OrString) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON implements the json.Marshaller interface.
 func (i Uint8OrString) MarshalJSON() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if num, err := i.NumValue(); err == nil {
 		return json.Marshal(num)
 	} else {
