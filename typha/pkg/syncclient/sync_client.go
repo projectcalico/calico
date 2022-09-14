@@ -377,6 +377,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 		if err != nil {
 			return
 		}
+		debug := log.GetLevel() >= log.DebugLevel
 		switch msg := msg.(type) {
 		case syncproto.MsgSyncStatus:
 			logCxt.WithField("newStatus", msg.SyncStatus).Info("Status update from Typha.")
@@ -400,10 +401,12 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 					logCxt.WithError(err).Error("Failed to deserialize update, skipping.")
 					continue
 				}
-				logCxt.WithFields(log.Fields{
-					"serialized":   kv,
-					"deserialized": update,
-				}).Debug("Decoded update from Typha")
+				if debug {
+					logCxt.WithFields(log.Fields{
+						"serialized":   kv,
+						"deserialized": update,
+					}).Debug("Decoded update from Typha")
+				}
 				updates = append(updates, update)
 			}
 			s.callbacks.OnUpdates(updates)
