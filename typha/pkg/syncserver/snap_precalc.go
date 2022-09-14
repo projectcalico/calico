@@ -217,6 +217,7 @@ func (s *BinarySnapshotCache) writeSnapshot(snap *snapshot) {
 	snappyW := snappy.NewBufferedWriter(&buf)
 	progressW := progressWriter{W: snappyW}
 	encoder := gob.NewEncoder(&progressW)
+	lastFlushTime := time.Now()
 	writeMsg := func(msg any) error {
 		envelope := syncproto.Envelope{
 			Message: msg,
@@ -225,16 +226,21 @@ func (s *BinarySnapshotCache) writeSnapshot(snap *snapshot) {
 		if err != nil {
 			return err
 		}
-		err = snappyW.Flush()
-		if err != nil {
-			return err
-		}
-		if s.lock.TryLock() {
-			// Opportunistically publish the snapshot so far, but don't block waiting for readers to get out of
-			// the way.
-			defer s.lock.Unlock()
+
+		if time.Since(lastFlushTime) > 20*time.Millisecond {
+			lastFlushTime = time.Now()
+			err = snappyW.Flush()
+			if err != nil {
+				return err
+			}
+			s.lock.Lock()
 			snap.buf = buf.Buf
-			snap.cond.Broadcast()
+			// Using Signal() instead of Broadcast() so that we only wake up one waiter at a time.  That avoids
+			// having a thundering herd of wake ups, which then starve out this goroutine so that they all block
+			// again, then we wake them all up again. Doing it this way we'll wake them up less frequently but
+			// they'll get to write more data in one shot.
+			snap.cond.Signal()
+			s.lock.Unlock()
 		}
 		return nil
 	}
