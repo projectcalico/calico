@@ -1,6 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # Copyright 2015 Metaswitch Networks
-# Copyright 2016, 2018 Tigera, Inc.
+# Copyright 2016, 2018, 2022 Tigera, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -18,7 +18,9 @@
 import logging
 import netaddr
 import os
+import re
 import socket
+import subprocess
 import sys
 
 import eventlet
@@ -151,6 +153,29 @@ def split_endpoint_name(name):
     return tuple([p.replace('#', '-') for p in parts])
 
 
+class MTUWatcher(object):
+    def __init__(self):
+        self.mtu_by_if_name = {}
+        self.endpoint_name_by_if_name = {}
+        self.rx = re.compile('[0-9]+: ([a-z0-9-]+).* mtu ([0-9]+) .* state UP')
+
+    def start(self):
+        process = subprocess.Popen(['ip', 'monitor', 'link'],
+                                   stdout=subprocess.PIPE)
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                LOG.error("ip monitor exited")
+                break
+            match_data = self.rx.match(line.decode('utf-8'))
+            if match_data:
+                self.record_mtu(match_data.group(1), int(match_data.group(2)))
+
+    def record_mtu(self, if_name, mtu):
+        LOG.debug("MTU for %s is now %d", if_name, mtu)
+        self.mtu_by_if_name[if_name] = mtu
+
+
 class DnsmasqUpdater(object):
     def __init__(self, agent):
         self.agent = agent
@@ -235,6 +260,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # also trigger that for MTU changes.
         self.dnsmasq_updater = DnsmasqUpdater(agent)
 
+        # Create MTU watcher.
+        self.mtu_watcher = MTUWatcher()
+
         # Also watch the etcd subnet trees: both the new region-aware
         # one, and the old pre-region one, so as to support a VM
         # renewing its DHCP lease while an upgrade is still in
@@ -250,6 +278,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
     def start(self):
         eventlet.spawn(self.dnsmasq_updater.start)
+        eventlet.spawn(self.mtu_watcher.start)
         eventlet.spawn(self.v1_subnet_watcher.start)
         eventlet.spawn(self.subnet_watcher.start)
         super(CalicoEtcdWatcher, self).start()
