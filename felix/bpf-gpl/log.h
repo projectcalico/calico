@@ -21,7 +21,7 @@
 #define CALI_USE_LINUX_FIB true
 
 #define CALI_LOG(__fmt, ...) do { \
-		char fmt[] = __fmt; \
+		static const char fmt[] = __fmt; \
 		bpf_trace_printk(fmt, sizeof(fmt), ## __VA_ARGS__); \
 } while (0)
 
