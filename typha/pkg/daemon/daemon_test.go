@@ -180,6 +180,7 @@ var _ = Describe("Daemon", func() {
 					client.Finished.Wait()
 				}()
 				err := client.Start(clientCxt)
+				go cbs.Loop(clientCxt)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Send in an update at the top of the processing pipeline.

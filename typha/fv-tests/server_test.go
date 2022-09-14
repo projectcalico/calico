@@ -205,6 +205,7 @@ var _ = Describe("With an in-process Server", func() {
 
 		err := client.Start(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
+		go recorder.Loop(clientCxt)
 
 		cs := clientState{
 			clientCxt:    clientCxt,
@@ -707,6 +708,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		)
 		err := client.Start(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
+		go recorder.Loop(clientCxt)
 		defer func() {
 			clientCancel()
 			client.Finished.Wait()
@@ -740,6 +742,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			nil,
 		)
 		err := client.Start(clientCxt)
+		go recorder.Loop(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			clientCancel()
@@ -965,6 +968,7 @@ var _ = Describe("With an in-process Server with long ping interval", func() {
 			},
 		)
 		err := client.Start(clientCxt)
+		go recorder.Loop(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			clientCancel()
@@ -1095,6 +1099,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				nil,
 			)
 			err = client.Start(clientCxt)
+			go recorder.Loop(clientCxt)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				clientCancel()
@@ -1144,6 +1149,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				nil,
 			)
 			err = client.Start(clientCxt)
+			go recorder.Loop(clientCxt)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				clientCancel()
@@ -1386,6 +1392,7 @@ var _ = Describe("with server requiring TLS", func() {
 		)
 
 		err := client.Start(clientCxt)
+		go recorder.Loop(clientCxt)
 
 		cs := clientState{
 			clientCxt:    clientCxt,
