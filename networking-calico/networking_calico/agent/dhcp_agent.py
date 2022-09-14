@@ -1,6 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # Copyright 2015 Metaswitch Networks
-# Copyright 2016, 2018 Tigera, Inc.
+# Copyright 2016, 2018, 2022 Tigera, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -18,8 +18,11 @@
 import logging
 import netaddr
 import os
+import re
 import socket
+import subprocess
 import sys
+import time
 
 import eventlet
 eventlet.monkey_patch()
@@ -151,6 +154,82 @@ def split_endpoint_name(name):
     return tuple([p.replace('#', '-') for p in parts])
 
 
+class MTUWatcher(object):
+
+    # -----------------------------------------------------------------
+    # Methods called from DHCP agent's main thread.
+    # -----------------------------------------------------------------
+
+    def __init__(self, agent, port_handler):
+        self.agent = agent
+        self.port_handler = port_handler
+        self.mtu_by_if_name = {}
+        self.port_id_by_if_name = {}
+        self.rx_up = re.compile('[0-9]+: ([a-z0-9-]+).* mtu ([0-9]+) .* state UP')
+        self.rx_del = re.compile('Deleted [0-9]+: ([a-z0-9-]+)')
+
+    def get_mtu(self, if_name):
+        # Note, returns None if we haven't yet seen an MTU for the given
+        # interface name.
+        return self.mtu_by_if_name.get(if_name)
+
+    def watch_port(self, id, if_name):
+        self.port_id_by_if_name[if_name] = id
+
+    def unwatch_port(self, id, if_name):
+        if if_name in self.port_id_by_if_name:
+            del self.port_id_by_if_name[if_name]
+
+    def start_up(self):
+        # Start 'ip monitor link' running on a separate thread.
+        self.ip_monitor_running = False
+        eventlet.spawn(self.process_command, ['ip', 'monitor', 'link'])
+
+        # Wait until we can be sure that 'ip monitor link' is really
+        # running, and hence that we will see all further link
+        # transitions.
+        while not self.ip_monitor_running:
+            # Create and delete a dummy interface.
+            os.system("ip link add calico-dhcp-dummy type dummy")
+            os.system("ip link del calico-dhcp-dummy type dummy")
+            time.sleep(0.5)
+
+        # Now run 'ip link', to find MTU of all pre-existing interfaces.
+        self.process_command(['ip', 'link'])
+
+    # -----------------------------------------------------------------
+    # Methods called from MTU watcher's own thread, or from agent thread.
+    # -----------------------------------------------------------------
+
+    def process_command(self, command):
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                LOG.info("command %r exited", command)
+                break
+            self.ip_monitor_running = True
+            match_data = self.rx_up.match(line.decode('utf-8'))
+            if match_data:
+                self.record_mtu(match_data.group(1), int(match_data.group(2)))
+                continue
+            match_data = self.rx_del.match(line.decode('utf-8'))
+            if match_data:
+                self.if_deleted(match_data.group(1))
+
+    def record_mtu(self, if_name, mtu):
+        LOG.debug("MTU for %s is now %d", if_name, mtu)
+        if if_name in self.port_id_by_if_name and mtu != self.mtu_by_if_name.get(if_name):
+            # MTU changing for a watched port.
+            self.port_handler.on_mtu_change(self.port_id_by_if_name[if_name], mtu)
+        self.mtu_by_if_name[if_name] = mtu
+
+    def if_deleted(self, if_name):
+        LOG.debug("Interface %s deleted", if_name)
+        if if_name in self.mtu_by_if_name:
+            del self.mtu_by_if_name[if_name]
+
+
 class DnsmasqUpdater(object):
     def __init__(self, agent):
         self.agent = agent
@@ -188,9 +267,18 @@ class DnsmasqUpdater(object):
             port for port in net.ports if port.device_id.startswith('tap')
         ]
         ports_needed.sort(key=lambda port: port.id)
+        for p in ports_needed:
+            LOG.debug("Port %s", p)
+            for edo in p.extra_dhcp_opts:
+                LOG.debug("DHCP option %s", edo)
+
+        # Compare `str(p)` for each needed port, instead of just `p`
+        # (which is really just a pointer), so that we can spot when
+        # DHCP options change within the same port DictModel.
+        ports_needed_as_string = ' //// '.join([str(p) for p in ports_needed])
 
         # Compare that against what we've last asked Dnsmasq to handle.
-        if ports_needed != self._last_dnsmasq_ports.get(network_id):
+        if ports_needed_as_string != self._last_dnsmasq_ports.get(network_id):
             # Requirements have changed, so start, restart or stop Dnsmasq for
             # that network ID.
             if ports_needed:
@@ -202,8 +290,9 @@ class DnsmasqUpdater(object):
                 self.agent.call_driver('disable', net)
 
             # Remember what we've asked Dnsmasq for.
-            self._last_dnsmasq_ports[network_id] = ports_needed
-
+            self._last_dnsmasq_ports[network_id] = ports_needed_as_string
+        else:
+            LOG.debug("No change")
 
 class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
@@ -235,6 +324,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # also trigger that for MTU changes.
         self.dnsmasq_updater = DnsmasqUpdater(agent)
 
+        # Create MTU watcher.
+        self.mtu_watcher = MTUWatcher(agent, self)
+
         # Also watch the etcd subnet trees: both the new region-aware
         # one, and the old pre-region one, so as to support a VM
         # renewing its DHCP lease while an upgrade is still in
@@ -250,6 +342,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
     def start(self):
         eventlet.spawn(self.dnsmasq_updater.start)
+        self.mtu_watcher.start_up()
         eventlet.spawn(self.v1_subnet_watcher.start)
         eventlet.spawn(self.subnet_watcher.start)
         super(CalicoEtcdWatcher, self).start()
@@ -367,16 +460,22 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.warning("Endpoint has no DHCP-served IPs: %s", endpoint)
             return
 
+        extra_dhcp_opts = []
+        mtu = self.mtu_watcher.get_mtu(endpoint['interfaceName'])
+        self.mtu_watcher.watch_port(endpoint_id, endpoint['interfaceName'])
+        if mtu:
+            extra_dhcp_opts.append(self.get_mtu_option(mtu))
+
         port = {'id': endpoint_id,
                 'device_owner': 'calico',
                 'device_id': endpoint['interfaceName'],
                 'fixed_ips': fixed_ips,
                 'mac_address': endpoint['mac'],
-                # FIXME: Calico currently does not pass through extra DHCP
-                # options, but it would be nice if it did.  Perhaps we could
-                # use an endpoint annotation, similarly as we do for the FQDN.
+                # FIXME: Calico currently does not handle extra DHCP
+                # options, other than MTU, but there might be use cases
+                # where it should handle further options.
                 # https://bugs.launchpad.net/networking-calico/+bug/1553348
-                'extra_dhcp_opts': []}
+                'extra_dhcp_opts': extra_dhcp_opts}
         if fqdn:
             port['dns_assignment'] = dns_assignments
 
@@ -402,6 +501,22 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
         # Schedule updating Dnsmasq.
         self._update_dnsmasq(port['network_id'])
+
+    def get_mtu_option(self, mtu):
+        return dhcp.DictModel({
+            'opt_name': 'mtu',
+            'opt_value': str(mtu),
+            'ip_version': 4,
+        })
+
+    # Note, on_mtu_change is called from MTU watcher's thread.
+    def on_mtu_change(self, id, mtu):
+        port = self.agent.cache.get_port_by_id(id)
+        if port:
+            LOG.info("MTU changed to %s for %s (%s)", mtu, port.device_id, id)
+            port.extra_dhcp_opts = [self.get_mtu_option(mtu)]
+            self.agent.cache.put_port(port)
+            self._update_dnsmasq(port.network_id)
 
     def _ensure_net_and_subnets(self, port):
         """Ensure that the cache has a NetModel and subnets for PORT."""
@@ -502,6 +617,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         port = self.agent.cache.get_port_by_id(endpoint_id)
         if port:
             LOG.debug("deleted port: %s", port)
+            self.mtu_watcher.unwatch_port(endpoint_id, port.device_id)
             self.agent.cache.remove_port(port)
             self._update_dnsmasq(port.network_id)
 
