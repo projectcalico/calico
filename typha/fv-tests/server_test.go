@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -32,11 +33,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	io_prometheus_client "github.com/prometheus/client_model/go"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/prometheus/client_golang/prometheus"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 
@@ -286,18 +288,80 @@ var _ = Describe("With an in-process Server", func() {
 		Expect(server.Port()).ToNot(BeZero())
 	})
 
+	randomValue := func(n int) string {
+		v := fmt.Sprint(n, "=")
+		buf := make([]byte, 1000)
+		rand.Read(buf)
+		var outBuf bytes.Buffer
+		enc := base64.NewEncoder(base64.StdEncoding, &outBuf)
+		_, _ = enc.Write(buf)
+		v += outBuf.String()
+		return v
+	}
+	_ = randomValue
+
+	randomHex := func(length int) string {
+		buf := make([]byte, length/2)
+		rand.Read(buf)
+		return fmt.Sprintf("%x", buf)
+	}
+
+	generatePod := func(n int) *corev1.Pod {
+		namespace := fmt.Sprintf("a-namespace-name-%x", n/100)
+		var buf [8]byte
+		rand.Read(buf[:])
+		name := fmt.Sprintf("some-app-name-%d-%x", n, buf[:])
+		hostname := fmt.Sprintf("hostname%d", n/20)
+		ip := net.IP{0, 0, 0, 0}
+		binary.BigEndian.PutUint32(ip, uint32(n))
+		ip[0] = 10
+		p := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+				Annotations: map[string]string{
+					"cni.projectcalico.org/containerID": randomHex(64),
+					"cni.projectcalico.org/podIP":       fmt.Sprintf("%s,/32", ip.String()),
+					"cni.projectcalico.org/podIPs":      fmt.Sprintf("%s,/32", ip.String()),
+					"junk":                              randomHex(10000),
+				},
+				Labels: map[string]string{
+					"kubernetes-topology-label": "zone-A",
+					"kubernetes-region-label":   "zone-A",
+					"owner":                     randomHex(23),
+					"oneof10":                   fmt.Sprintf("value-%d", n/10),
+					"oneof100":                  fmt.Sprintf("value-%d", n/100),
+				},
+			},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{
+				Name:  fmt.Sprintf("container-%s", name),
+				Image: "ignore",
+			}},
+				NodeName: hostname,
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+				Conditions: []corev1.PodCondition{{
+					Type:   corev1.PodScheduled,
+					Status: corev1.ConditionTrue,
+				}},
+				PodIP:  ip.String(),
+				PodIPs: []corev1.PodIP{{IP: ip.String()}},
+			},
+		}
+		return p
+	}
+
 	sendNUpdates := func(n int) map[string]api.Update {
 		expectedEndState := map[string]api.Update{}
 		decoupler.OnStatusUpdated(api.ResyncInProgress)
+		conv := conversion.NewConverter()
 		for i := 0; i < n; i++ {
+			pod := generatePod(n)
+			weps, err := conv.PodToWorkloadEndpoints(pod)
+			Expect(err).NotTo(HaveOccurred())
 			update := api.Update{
-				KVPair: model.KVPair{
-					Key: model.GlobalConfigKey{
-						Name: fmt.Sprintf("foo%v", i),
-					},
-					Value:    fmt.Sprintf("baz%v", i),
-					Revision: fmt.Sprintf("%v", i),
-				},
+				KVPair:     *weps[0],
 				UpdateType: api.UpdateTypeKVNew,
 			}
 			path, err := model.KeyToDefaultPath(update.Key)
@@ -536,6 +600,34 @@ var _ = Describe("With an in-process Server", func() {
 		It("should report the correct number of connections after killing the client", func() {
 			clientCancel()
 			expectGlobalGaugeValue("typha_connections_active", 0.0)
+		})
+	})
+
+	Describe("with big starting snapshot and 100 clients", func() {
+		var expectedEndState map[string]api.Update
+		BeforeEach(func() {
+			expectedEndState = sendNUpdatesThenInSync(10000)
+			createClients(100)
+		})
+
+		// expectClientState asserts that every client eventually reaches the given state.
+		expectClientStates := func(status api.SyncStatus, kvs map[string]api.Update) {
+			var wg sync.WaitGroup
+			for _, s := range clientStates {
+				wg.Add(1)
+				go func(s clientState) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					// Wait until we reach that state.
+					Eventually(s.recorder.Status, 60*time.Second, 50*time.Millisecond).Should(Equal(status))
+					Eventually(s.recorder.KVCompareFn(kvs), 20*time.Second, 200*time.Millisecond).ShouldNot(HaveOccurred())
+				}(s)
+			}
+			wg.Wait()
+		}
+
+		It("should pass through many KVs", func() {
+			expectClientStates(api.InSync, expectedEndState)
 		})
 	})
 
