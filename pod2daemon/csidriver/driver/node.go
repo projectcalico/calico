@@ -16,7 +16,6 @@ package driver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -24,6 +23,7 @@ import (
 	"syscall"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -237,6 +237,7 @@ func (ns *nodeService) addCredentialFile(volumeID string, podInfo *creds.Credent
 	}
 
 	var attrs []byte
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	attrs, err = json.Marshal(podInfo)
 	if err != nil {
 		return err
@@ -272,6 +273,7 @@ func (ns *nodeService) retrievePodInfoFromFile(volumeID string) (*creds.Credenti
 	}
 
 	podInfo := creds.Credentials{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(credsFileBytes, &podInfo)
 	if err != nil {
 		return nil, err

@@ -15,11 +15,12 @@
 package numorstring
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Port represents either a range of numeric ports or a named port.
@@ -95,6 +96,7 @@ func PortFromString(s string) (Port, error) {
 
 // UnmarshalJSON implements the json.Unmarshaller interface.
 func (p *Port) UnmarshalJSON(b []byte) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if b[0] == '"' {
 		var s string
 		if err := json.Unmarshal(b, &s); err != nil {
@@ -121,6 +123,7 @@ func (p *Port) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON implements the json.Marshaller interface.
 func (p Port) MarshalJSON() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if p.PortName != "" {
 		return json.Marshal(p.PortName)
 	} else if p.MinPort == p.MaxPort {

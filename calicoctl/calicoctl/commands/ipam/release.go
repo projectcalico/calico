@@ -23,8 +23,8 @@ import (
 	"time"
 
 	docopt "github.com/docopt/docopt-go"
+	jsoniter "github.com/json-iterator/go"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/json"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
@@ -158,6 +158,7 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 	// Load the reports.
 	var foundCurrent bool
 	var reports []Report
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	for _, reportFile := range reportFiles {
 		r := Report{}
 		bytes, err := ioutil.ReadFile(reportFile)

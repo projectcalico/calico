@@ -26,11 +26,10 @@ import (
 	"text/tabwriter"
 	"text/template"
 
+	jsoniter "github.com/json-iterator/go"
+	"github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	"github.com/projectcalico/go-json/json"
-	"github.com/projectcalico/go-yaml-wrapper"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -54,6 +53,7 @@ func (r ResourcePrinterJSON) Print(client client.Interface, resources []runtime.
 	} else {
 		rs = resources
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if output, err := json.MarshalIndent(rs, "", "  "); err != nil {
 		return err
 	} else {

@@ -16,7 +16,6 @@ package ipam
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -24,6 +23,7 @@ import (
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
+	jsoniter "github.com/json-iterator/go"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
@@ -465,6 +465,7 @@ func (c *IPAMChecker) printReport() {
 		Allocations:         c.allocations,
 		LeakedHandles:       c.leakedHandles,
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	bytes, _ := json.MarshalIndent(r, "", "  ")
 	_ = ioutil.WriteFile(c.outFile, bytes, 0777)
 }
