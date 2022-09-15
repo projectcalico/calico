@@ -174,8 +174,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				if CurrentGinkgoTestDescription().Failed {
 					infra.DumpErrorData()
 				}
-				infra.Stop()
 			})
+			AfterEach(infra.Stop)
+
 			if brokenXSum {
 				It("should disable checksum offload", func() {
 					Eventually(func() string {
