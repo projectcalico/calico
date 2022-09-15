@@ -65,6 +65,7 @@ type watch struct {
 	c      chan struct{}
 }
 
+var containerIndexLock sync.Mutex
 var containerIdx = 0
 
 func (c *Container) StopLogs() {
@@ -189,8 +190,11 @@ type RunOpts struct {
 	StopSignal       string
 }
 
-func NextContainerIndex() int {
-	return containerIdx + 1
+func NewContainerIndex() int {
+	containerIndexLock.Lock()
+	defer containerIndexLock.Unlock()
+	containerIdx++
+	return containerIdx
 }
 
 func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
@@ -200,8 +204,7 @@ func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 
 func UniqueName(namePrefix string) string {
 	// Build unique container name and struct.
-	containerIdx++
-	name := fmt.Sprintf("%v-%d-%d-felixfv", namePrefix, os.Getpid(), containerIdx)
+	name := fmt.Sprintf("%v-%d-%d-felixfv", namePrefix, os.Getpid(), NewContainerIndex())
 	return name
 }
 
