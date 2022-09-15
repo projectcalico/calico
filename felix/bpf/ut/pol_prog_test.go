@@ -45,7 +45,7 @@ func TestLoadAllowAllProgram(t *testing.T) {
 	insns, err := b.Assemble()
 	Expect(err).NotTo(HaveOccurred())
 
-	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	fd, err := bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
 	defer func() {
@@ -79,7 +79,7 @@ func TestLoadProgramWithMapAccess(t *testing.T) {
 	insns, err := b.Assemble()
 	Expect(err).NotTo(HaveOccurred())
 
-	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	fd, err := bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
 	defer func() {
@@ -154,7 +154,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 		}}})
 
 	Expect(err).NotTo(HaveOccurred())
-	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	fd, err := bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
 	Expect(fd.Close()).NotTo(HaveOccurred())
@@ -169,7 +169,7 @@ func TestLoadGarbageProgram(t *testing.T) {
 		insns = append(insns, asm.Insn{Instruction: [8]uint8{i, i, i, i, i, i, i, i}})
 	}
 
-	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	fd, err := bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).To(HaveOccurred())
 	Expect(fd).To(BeZero())
 }
@@ -2412,7 +2412,7 @@ func runTest(t *testing.T, tp testPolicy) {
 
 	// Load the program into the kernel.  We don't pin it so it'll be removed when the
 	// test process exits (or by the defer).
-	polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 	Expect(polProgFD).NotTo(BeZero())
 	defer func() {
@@ -2473,7 +2473,7 @@ func installAllowedProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
 
 	epiInsns, err := b.Assemble()
 	Expect(err).NotTo(HaveOccurred())
-	epiFD, err := bpf.LoadBPFProgramFromInsns(epiInsns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	epiFD, err := bpf.LoadBPFProgramFromInsns(epiInsns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 	Expect(epiFD).NotTo(BeZero())
 
@@ -2496,7 +2496,7 @@ func installDropProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
 
 	epiInsns, err := b.Assemble()
 	Expect(err).NotTo(HaveOccurred())
-	dropFD, err := bpf.LoadBPFProgramFromInsns(epiInsns, "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	dropFD, err := bpf.LoadBPFProgramFromInsns(epiInsns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 	Expect(dropFD).NotTo(BeZero())
 

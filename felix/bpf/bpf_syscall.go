@@ -71,7 +71,7 @@ func GetMapFDByID(mapID int) (MapFD, error) {
 const defaultLogSize = 1024 * 1024
 const maxLogSize = 128 * 1024 * 1024
 
-func LoadBPFProgramFromInsns(insns asm.Insns, license string, progType uint32) (fd ProgFD, err error) {
+func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uint32) (fd ProgFD, err error) {
 	log.Debugf("LoadBPFProgramFromInsns(%v, %v, %v)", insns, license, progType)
 	bpfutils.IncreaseLockedMemoryQuota()
 
@@ -80,7 +80,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string, progType uint32) (
 	for retries := 10; retries > 0; retries-- {
 		// By default, try to load the program with logging disabled.  This has two advantages: better performance
 		// and the fact that the log cannot overflow.
-		fd, err = tryLoadBPFProgramFromInsns(insns, license, 0, progType)
+		fd, err = tryLoadBPFProgramFromInsns(insns, name, license, 0, progType)
 		if err == nil {
 			log.WithField("fd", fd).Debug("Loaded program successfully")
 			return fd, nil
@@ -94,7 +94,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string, progType uint32) (
 	log.WithError(err).Warn("Failed to load BPF program; collecting diagnostics...")
 	var logSize uint = defaultLogSize
 	for {
-		fd, err2 := tryLoadBPFProgramFromInsns(insns, license, logSize, progType)
+		fd, err2 := tryLoadBPFProgramFromInsns(insns, name, license, logSize, progType)
 		if err2 == nil {
 			// Unexpected but we'll take it.
 			log.Warn("Retry succeeded.")
@@ -113,7 +113,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string, progType uint32) (
 	}
 }
 
-func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, progType uint32) (ProgFD, error) {
+func tryLoadBPFProgramFromInsns(insns asm.Insns, name, license string, logSize uint, progType uint32) (ProgFD, error) {
 	log.Debugf("tryLoadBPFProgramFromInsns(..., %v, %v, %v)", license, logSize, progType)
 	bpfAttr := C.bpf_attr_alloc()
 	defer C.free(unsafe.Pointer(bpfAttr))
@@ -122,6 +122,8 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, p
 	defer C.free(cInsnBytes)
 	cLicense := C.CString(license)
 	defer C.free(unsafe.Pointer(cLicense))
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
 
 	var logBuf unsafe.Pointer
 	var logLevel uint
@@ -131,7 +133,9 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, p
 		defer C.free(logBuf)
 	}
 
-	C.bpf_attr_setup_load_prog(bpfAttr, (C.uint)(progType), C.uint(len(insns)), cInsnBytes, cLicense, (C.uint)(logLevel), (C.uint)(logSize), logBuf)
+	C.bpf_attr_setup_load_prog(bpfAttr, cName,
+		(C.uint)(progType), C.uint(len(insns)), cInsnBytes, cLicense,
+		(C.uint)(logLevel), (C.uint)(logSize), logBuf)
 	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_LOAD, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 
 	if errno != 0 && errno != unix.ENOSPC /* log buffer too small */ {
