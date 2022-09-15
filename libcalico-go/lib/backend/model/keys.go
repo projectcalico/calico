@@ -16,13 +16,13 @@ package model
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	net2 "net"
 	"reflect"
 	"strings"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -330,6 +330,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 		}
 	}
 	iface := value.Interface()
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(rawData, iface)
 	if err != nil {
 		// This is a special case to address backwards compatibility from the time when we had no state information as block affinity value.
@@ -358,13 +359,14 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 	return iface, nil
 }
 
-// Serialize a value in the model to a []byte to stored in the datastore.  This
+// SerializeValue serializes a value in the model to a []byte to stored in the datastore.  This
 // performs the opposite processing to ParseValue()
 func SerializeValue(d *KVPair) ([]byte, error) {
 	valueType, err := d.Key.valueType()
 	if err != nil {
 		return nil, err
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if d.Value == nil {
 		return json.Marshal(nil)
 	}

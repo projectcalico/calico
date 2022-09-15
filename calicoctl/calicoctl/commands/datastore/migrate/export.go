@@ -16,11 +16,11 @@ package migrate
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -334,6 +334,7 @@ Description:
 		"get":      true,
 	}
 	results := common.ExecuteConfigCommand(mockArgs, common.ActionGetOrList)
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	for _, resource := range results.Resources {
 		clusterinfo, ok := resource.(*apiv3.ClusterInformation)
 		if !ok {
