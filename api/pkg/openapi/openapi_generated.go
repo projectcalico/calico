@@ -2137,7 +2137,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"vxlanEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for VXLAN networking. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]",
+							Description: "VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for IPv4 VXLAN networking. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -2743,7 +2743,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"floatingIPs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FloatingIPs configures whether or not Felix will program floating IP addresses.",
+							Description: "FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived floating IPs are always programmed, regardless of this setting.)",
 							Type:        []string{"string"},
 							Format:      "",
 						},

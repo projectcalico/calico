@@ -17,7 +17,7 @@ else
     # -ti to docker-run, and $SECRET_KEY must not require a pass phrase.
     interactive=
 fi
-docker run --rm ${interactive} -v ${rootdir}:/code -v ${keydir}:/keydir -w /code/hack/release/packaging/output calico-build/bionic /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' *_*_source.changes"
+docker run --rm ${interactive} -v ${rootdir}:/code -v ${keydir}:/keydir -w /code/hack/release/packaging/output calico-build/bionic /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' --re-sign *_*_source.changes"
 
 for series in trusty xenial bionic focal; do
     # Get the packages and versions that already exist in the PPA, so we can avoid

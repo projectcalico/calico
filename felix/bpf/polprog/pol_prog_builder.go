@@ -28,6 +28,7 @@ import (
 
 	. "github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -301,17 +302,17 @@ func (p *Builder) writeJumpIfToOrFromHost(label string) {
 
 func (p *Builder) indexOfDropProgram() int32 {
 	if p.forIPv6 {
-		return int32(bpf.ProgIndexV6Drop)
+		return int32(tcdefs.ProgIndexV6Drop)
 	} else {
-		return int32(bpf.ProgIndexDrop)
+		return int32(tcdefs.ProgIndexDrop)
 	}
 }
 
 func (p *Builder) indexOfAllowesProgram() int32 {
 	if p.forIPv6 {
-		return int32(bpf.ProgIndexV6Allowed)
+		return int32(tcdefs.ProgIndexV6Allowed)
 	} else {
-		return int32(bpf.ProgIndexAllowed)
+		return int32(tcdefs.ProgIndexAllowed)
 	}
 }
 

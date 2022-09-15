@@ -29,6 +29,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -525,12 +526,12 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should report the correct number of connections", func() {
-			expectGaugeValue("typha_connections_active", 1.0)
+			expectGlobalGaugeValue("typha_connections_active", 1.0)
 		})
 
 		It("should report the correct number of connections after killing the client", func() {
 			clientCancel()
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		})
 	})
 
@@ -583,7 +584,7 @@ var _ = Describe("With an in-process Server", func() {
 			}
 			// After the timeout we should have dropped exactly the right number of connections.
 			Expect(numFinished).To(Equal(40))
-			expectGaugeValue("typha_connections_active", 60.0)
+			expectGlobalGaugeValue("typha_connections_active", 60.0)
 		})
 
 		It("should pass through a KV and status", func() {
@@ -604,14 +605,16 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should report the correct number of connections", func() {
-			expectGaugeValue("typha_connections_active", 100.0)
+			expectGlobalGaugeValue("typha_connections_active", 100.0)
+			expectPerSyncerGaugeValue(syncproto.SyncerTypeFelix, "typha_connections_streaming", 100.0)
 		})
 
 		It("should report the correct number of connections after killing the clients", func() {
 			for _, c := range clientStates {
 				c.clientCancel()
 			}
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
+			expectPerSyncerGaugeValue(syncproto.SyncerTypeFelix, "typha_connections_streaming", 0.0)
 		})
 
 		It("with churn, it should report the correct number of connections after killing the clients", func() {
@@ -627,7 +630,7 @@ var _ = Describe("With an in-process Server", func() {
 				c.clientCancel()
 				time.Sleep(100 * time.Microsecond)
 			}
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		})
 	})
 })
@@ -790,14 +793,14 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 				Fail("client wasn't disconnected within expected time")
 			case <-disconnected:
 			}
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		}
 
 		It("should clean up if the hello doesn't get sent", func() {
-			expectGaugeValue("typha_connections_active", 1.0)
+			expectGlobalGaugeValue("typha_connections_active", 1.0)
 			err := rawConn.Close()
 			Expect(err).ToNot(HaveOccurred())
-			expectGaugeValue("typha_connections_active", 0.0)
+			expectGlobalGaugeValue("typha_connections_active", 0.0)
 		})
 
 		Describe("After sending Hello with bad syncer type", func() {
@@ -815,6 +818,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 
 			It("should disconnect the client", func() {
 				expectDisconnection(100 * time.Millisecond)
+				expectGlobalGaugeValue("typha_connections_active", 0.0)
 			})
 		})
 
@@ -1082,7 +1086,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
 			recorder := NewRecorder()
 
-			origGaugeValue, err := getCounter("typha_connections_grace_used")
+			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make the client block after it reads the first update.  This means the server will have started
@@ -1124,14 +1128,14 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			sendNUpdates(1)
 
 			Eventually(recorder.Len, 2*time.Second).Should(BeNumerically("==", initialSnapshotSize+3))
-			Expect(getCounter("typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue+1))
+			Expect(getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue+1))
 		})
 
 		It("client should get disconnected if it falls behind after the grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
 			recorder := NewRecorder()
 
-			origGaugeValue, err := getCounter("typha_connections_grace_used")
+			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make the client block after it reads the first update.  This means the server will have started
@@ -1187,12 +1191,12 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			Expect(recorder.Len()).To(BeNumerically("<=", initialSnapshotSize*2))
 
 			// Should not use the grace period at all.
-			Expect(getCounter("typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue))
+			Expect(getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue))
 		})
 	})
 })
 
-func getGauge(name string) (float64, error) {
+func getGlobalGauge(name string) (float64, error) {
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		return 0, err
@@ -1205,23 +1209,59 @@ func getGauge(name string) (float64, error) {
 	return 0, errors.New("not found")
 }
 
-func getCounter(name string) (float64, error) {
-	mfs, err := prometheus.DefaultGatherer.Gather()
+func expectGlobalGaugeValue(name string, value float64) {
+	EventuallyWithOffset(1, func() (float64, error) {
+		return getGlobalGauge(name)
+	}).Should(Equal(value))
+}
+
+func getPerSyncerCounter(syncer syncproto.SyncerType, name string) (float64, error) {
+	m, err := getPerSyncerMetric(name, syncer)
 	if err != nil {
 		return 0, err
 	}
-	for _, mf := range mfs {
-		if mf.GetName() == name {
-			return mf.Metric[0].GetCounter().GetValue(), nil
-		}
+	if m == nil {
+		return 0, nil
 	}
-	return 0, errors.New("not found")
+	return m.GetCounter().GetValue(), nil
 }
 
-func expectGaugeValue(name string, value float64) {
-	Eventually(func() (float64, error) {
-		return getGauge(name)
+func expectPerSyncerGaugeValue(syncer syncproto.SyncerType, name string, value float64) {
+	EventuallyWithOffset(1, func() (float64, error) {
+		return getPerSyncerGauge(syncer, name)
 	}).Should(Equal(value))
+}
+
+func getPerSyncerGauge(syncer syncproto.SyncerType, name string) (float64, error) {
+	m, err := getPerSyncerMetric(name, syncer)
+	if err != nil {
+		return 0, err
+	}
+	if m == nil {
+		return 0, nil
+	}
+	return m.GetGauge().GetValue(), nil
+}
+
+func getPerSyncerMetric(name string, syncer syncproto.SyncerType) (*io_prometheus_client.Metric, error) {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return nil, err
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == name {
+			for _, m := range mf.Metric {
+				for _, l := range m.Label {
+					if l.GetName() == "syncer" && l.GetValue() == string(syncer) {
+						return m, nil
+					}
+				}
+			}
+			// Found the metric but no value for that syncer yet.
+			return nil, nil
+		}
+	}
+	return nil, errors.New("metric not found")
 }
 
 // TLS connection tests.
@@ -1233,64 +1273,72 @@ const (
 	serverURISAN = "spiffe://k8s.example.com/typha-server"
 )
 
-var certDir string
-
-var _ = BeforeSuite(func() {
-	// Create a temporary directory for certificates.
-	var err error
-	certDir, err = ioutil.TempDir("", "typhafv")
-	tlsutils.PanicIfErr(err)
-
-	// Trusted CA.
-	caCert, caKey := tlsutils.MakeCACert("trustedCA")
-	tlsutils.WriteCert(caCert.Raw, filepath.Join(certDir, "ca.crt"))
-
-	// An untrusted CA.
-	untrustedCert, untrustedKey := tlsutils.MakeCACert("untrustedCA")
-	tlsutils.WriteCert(untrustedCert.Raw, filepath.Join(certDir, "untrusted.crt"))
-
-	// Typha server.
-	serverCert, serverKey := tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, caCert, caKey)
-	tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server.key"))
-	tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server.crt"))
-
-	// Typha server using untrusted CA.
-	serverCert, serverKey = tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, untrustedCert, untrustedKey)
-	tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server-untrusted.key"))
-	tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server-untrusted.crt"))
-
-	// Typha client with good CN.
-	clientCert, clientKey := tlsutils.MakePeerCert(clientCN, "", x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcn.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcn.crt"))
-
-	// Typha client with good URI.
-	clientCert, clientKey = tlsutils.MakePeerCert("", clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "gooduri.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "gooduri.crt"))
-
-	// Typha client with good CN and URI.
-	clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcnuri.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcnuri.crt"))
-
-	// Typha client with bad CN and URI.
-	clientCert, clientKey = tlsutils.MakePeerCert(clientCN+"bad", clientURISAN+"bad", x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "badcnuri.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "badcnuri.crt"))
-
-	// Typha client using untrusted CA.
-	clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client-untrusted.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
-})
-
-var _ = AfterSuite(func() {
-	// Remove TLS keys and certificates.
-	os.RemoveAll(certDir)
-})
-
 var _ = Describe("with server requiring TLS", func() {
+	var certDir string
+
+	BeforeEach(func() {
+		// Generating certs is expensive, so we defer it until this BeforeEach and then reuse the certs for all the
+		// tests.
+		if certDir != "" {
+			return
+		}
+
+		// Create a temporary directory for certificates.
+		var err error
+		certDir, err = ioutil.TempDir("", "typhafv")
+		tlsutils.PanicIfErr(err)
+
+		// Trusted CA.
+		caCert, caKey := tlsutils.MakeCACert("trustedCA")
+		tlsutils.WriteCert(caCert.Raw, filepath.Join(certDir, "ca.crt"))
+
+		// An untrusted CA.
+		untrustedCert, untrustedKey := tlsutils.MakeCACert("untrustedCA")
+		tlsutils.WriteCert(untrustedCert.Raw, filepath.Join(certDir, "untrusted.crt"))
+
+		// Typha server.
+		serverCert, serverKey := tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, caCert, caKey)
+		tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server.key"))
+		tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server.crt"))
+
+		// Typha server using untrusted CA.
+		serverCert, serverKey = tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, untrustedCert, untrustedKey)
+		tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server-untrusted.key"))
+		tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server-untrusted.crt"))
+
+		// Typha client with good CN.
+		clientCert, clientKey := tlsutils.MakePeerCert(clientCN, "", x509.ExtKeyUsageClientAuth, caCert, caKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcn.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcn.crt"))
+
+		// Typha client with good URI.
+		clientCert, clientKey = tlsutils.MakePeerCert("", clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "gooduri.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "gooduri.crt"))
+
+		// Typha client with good CN and URI.
+		clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcnuri.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcnuri.crt"))
+
+		// Typha client with bad CN and URI.
+		clientCert, clientKey = tlsutils.MakePeerCert(clientCN+"bad", clientURISAN+"bad", x509.ExtKeyUsageClientAuth, caCert, caKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "badcnuri.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "badcnuri.crt"))
+
+		// Typha client using untrusted CA.
+		clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
+		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client-untrusted.key"))
+		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
+	})
+
+	var _ = AfterSuite(func() {
+		// Remove TLS keys and certificates.
+		if certDir != "" {
+			_ = os.RemoveAll(certDir)
+		}
+	})
+
 	// We'll create this pipeline for updates to flow through:
 	//
 	//    This goroutine -> callback -chan-> validation -> snapshot -> server

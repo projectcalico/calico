@@ -25,6 +25,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/typha/pkg/promutils"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
@@ -39,46 +41,47 @@ const (
 )
 
 var (
-	// FIXME All of these should be upgraded to vectors so that each syncer has its own stats.
-	summaryUpdateSize = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "typha_breadcrumb_size",
-		Help: "Number of KVs recorded in each breadcrumb.",
-	})
-	gaugeCurrentSequenceNumber = prometheus.NewGauge(prometheus.GaugeOpts{
+	syncerLabel = []string{"syncer"}
+
+	gaugeVecCurrentSequenceNumber = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "typha_breadcrumb_seq_number",
 		Help: "Current (server-local) sequence number; number of snapshot deltas processed.",
-	})
-	counterBreadcrumbNonBlock = prometheus.NewCounter(prometheus.CounterOpts{
+	}, syncerLabel)
+	counterVecBreadcrumbNonBlock = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_breadcrumb_non_block",
 		Help: "Count of the number of times Typha got the next Breadcrumb without blocking.",
-	})
-	counterBreadcrumbBlock = prometheus.NewCounter(prometheus.CounterOpts{
+	}, syncerLabel)
+	counterVecBreadcrumbBlock = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_breadcrumb_block",
 		Help: "Count of the number of times Typha got the next Breadcrumb after blocking.",
-	})
-	counterUpdatesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+	}, syncerLabel)
+	counterVecUpdatesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_updates_total",
 		Help: "Total number of updates received from the Syncer.",
-	})
-	counterUpdatesSkipped = prometheus.NewCounter(prometheus.CounterOpts{
+	}, syncerLabel)
+	counterVecUpdatesSkipped = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_updates_skipped",
 		Help: "Total number of updates skipped as duplicates.",
-	})
-
+	}, syncerLabel)
 	gaugeVecSnapshotSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "typha_snapshot_size",
+		Name: "typha_cache_size",
 		Help: "Current number of key/value pairs contained in the cache of the datastore.",
-	}, []string{"syncer"})
+	}, syncerLabel)
 )
 
 func init() {
-	prometheus.MustRegister(summaryUpdateSize)
-	prometheus.MustRegister(gaugeCurrentSequenceNumber)
+	prometheus.MustRegister(gaugeVecCurrentSequenceNumber)
+	promutils.PreCreateGaugePerSyncer(gaugeVecCurrentSequenceNumber)
 	prometheus.MustRegister(gaugeVecSnapshotSize)
-	prometheus.MustRegister(counterBreadcrumbNonBlock)
-	prometheus.MustRegister(counterBreadcrumbBlock)
-	prometheus.MustRegister(counterUpdatesTotal)
-	prometheus.MustRegister(counterUpdatesSkipped)
+	promutils.PreCreateGaugePerSyncer(gaugeVecSnapshotSize)
+	prometheus.MustRegister(counterVecBreadcrumbNonBlock)
+	promutils.PreCreateCounterPerSyncer(counterVecBreadcrumbNonBlock)
+	prometheus.MustRegister(counterVecBreadcrumbBlock)
+	promutils.PreCreateCounterPerSyncer(counterVecBreadcrumbBlock)
+	prometheus.MustRegister(counterVecUpdatesTotal)
+	promutils.PreCreateCounterPerSyncer(counterVecUpdatesTotal)
+	prometheus.MustRegister(counterVecUpdatesSkipped)
+	promutils.PreCreateCounterPerSyncer(counterVecUpdatesSkipped)
 }
 
 // Cache consumes updates from the Syncer API and caches them in the form of a series of
@@ -137,7 +140,13 @@ type Cache struct {
 	wakeUpTicker *jitter.Ticker
 	healthTicks  <-chan time.Time
 
-	gaugeSnapSize prometheus.Gauge
+	gaugeSnapSize              prometheus.Gauge
+	counterUpdatesTotal        prometheus.Counter
+	counterUpdatesSkipped      prometheus.Counter
+	gaugeCurrentSequenceNumber prometheus.Gauge
+	counterBreadcrumbBlock     prometheus.Counter
+	counterBreadcrumbNonBlock  prometheus.Counter
+	summaryUpdateSize          prometheus.Summary
 }
 
 const (
@@ -181,19 +190,14 @@ func New(config Config) *Cache {
 	config.ApplyDefaults()
 	kvs := btree.NewG[syncproto.SerializedUpdate](2, func(a, b syncproto.SerializedUpdate) bool { return a.Key < b.Key })
 	cond := sync.NewCond(&sync.Mutex{})
-	snap := &Breadcrumb{
-		Timestamp: time.Now(),
-		nextCond:  cond,
-		KVs:       kvs.Clone(),
-	}
+
 	c := &Cache{
-		config:            config,
-		inputC:            make(chan interface{}, config.MaxBatchSize*2),
-		breadcrumbCond:    cond,
-		kvs:               kvs,
-		currentBreadcrumb: (unsafe.Pointer)(snap),
-		wakeUpTicker:      jitter.NewTicker(config.WakeUpInterval, config.WakeUpInterval/10),
-		healthTicks:       time.NewTicker(healthInterval).C,
+		config:         config,
+		inputC:         make(chan interface{}, config.MaxBatchSize*2),
+		breadcrumbCond: cond,
+		kvs:            kvs,
+		wakeUpTicker:   jitter.NewTicker(config.WakeUpInterval, config.WakeUpInterval/10),
+		healthTicks:    time.NewTicker(healthInterval).C,
 	}
 
 	var err error
@@ -201,6 +205,29 @@ func New(config Config) *Cache {
 	if err != nil {
 		log.WithError(err).Panic("Bug: failed to get Prometheus gauge.")
 	}
+	c.counterUpdatesTotal = counterVecUpdatesTotal.WithLabelValues(config.Name)
+	c.counterUpdatesSkipped = counterVecUpdatesSkipped.WithLabelValues(config.Name)
+	c.gaugeCurrentSequenceNumber = gaugeVecCurrentSequenceNumber.WithLabelValues(config.Name)
+	c.counterBreadcrumbNonBlock = counterVecBreadcrumbNonBlock.WithLabelValues(config.Name)
+	c.counterBreadcrumbBlock = counterVecBreadcrumbBlock.WithLabelValues(config.Name)
+	// No vector version of summary so we use an explicit label.   promutils.GetOrRegister avoids panics in UT
+	// where the same cache is recreated.
+	c.summaryUpdateSize = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "typha_breadcrumb_size",
+		Help: "Number of KVs recorded in each breadcrumb.",
+		ConstLabels: map[string]string{
+			"syncer": config.Name,
+		},
+	}))
+
+	snap := &Breadcrumb{
+		Timestamp:                 time.Now(),
+		nextCond:                  cond,
+		KVs:                       kvs.Clone(),
+		counterBreadcrumbBlock:    c.counterBreadcrumbBlock,
+		counterBreadcrumbNonBlock: c.counterBreadcrumbNonBlock,
+	}
+	c.currentBreadcrumb = (unsafe.Pointer)(snap)
 
 	if config.HealthAggregator != nil {
 		config.HealthAggregator.RegisterReporter(config.Name, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
@@ -343,6 +370,9 @@ func (c *Cache) publishBreadcrumb() {
 		SyncStatus:     oldCrumb.SyncStatus,
 		nextCond:       c.breadcrumbCond,
 		Deltas:         make([]syncproto.SerializedUpdate, 0, len(updates)),
+
+		counterBreadcrumbBlock:    c.counterBreadcrumbBlock,
+		counterBreadcrumbNonBlock: c.counterBreadcrumbNonBlock,
 	}
 	if lastUpdate && c.pendingStatus != newCrumb.SyncStatus {
 		// Only update the status if this is the last message in the batch, otherwise
@@ -353,7 +383,7 @@ func (c *Cache) publishBreadcrumb() {
 	// Update the main trie and record the updates in the new crumb.
 	for _, upd := range updates {
 		// Update stats.
-		counterUpdatesTotal.Inc()
+		c.counterUpdatesTotal.Inc()
 		// Pre-serialise the KV so that we only serialise once per update instead of once
 		// for each client.
 		newUpd, err := syncproto.SerializeUpdate(upd)
@@ -376,7 +406,7 @@ func (c *Cache) publishBreadcrumb() {
 		} else {
 			if exists && newUpd.WouldBeNoOp(oldUpd) {
 				log.WithField("key", newUpd.Key).Debug("Skipping update to unchanged key")
-				counterUpdatesSkipped.Inc()
+				c.counterUpdatesSkipped.Inc()
 				continue
 			}
 			// Since the purpose of the snapshot is to hold the initial set of updates to send to Felix at start-of-day,
@@ -398,7 +428,7 @@ func (c *Cache) publishBreadcrumb() {
 		return
 	}
 
-	summaryUpdateSize.Observe(float64(len(newCrumb.Deltas)))
+	c.summaryUpdateSize.Observe(float64(len(newCrumb.Deltas)))
 	c.gaugeSnapSize.Set(float64(c.kvs.Len()))
 	// Add the new read-only snapshot to the new crumb.
 	newCrumb.KVs = c.kvs.Clone()
@@ -415,7 +445,7 @@ func (c *Cache) publishBreadcrumb() {
 	// while calling Broadcast.
 	log.WithField("seqNo", newCrumb.SequenceNumber).Debug("Broadcasting new Breadcrumb")
 	c.breadcrumbCond.Broadcast()
-	gaugeCurrentSequenceNumber.Set(float64(newCrumb.SequenceNumber))
+	c.gaugeCurrentSequenceNumber.Set(float64(newCrumb.SequenceNumber))
 }
 
 type Breadcrumb struct {
@@ -428,6 +458,9 @@ type Breadcrumb struct {
 
 	nextCond *sync.Cond
 	next     unsafe.Pointer
+
+	counterBreadcrumbNonBlock prometheus.Counter
+	counterBreadcrumbBlock    prometheus.Counter
 }
 
 func (b *Breadcrumb) Next(ctx context.Context) (*Breadcrumb, error) {
@@ -435,7 +468,7 @@ func (b *Breadcrumb) Next(ctx context.Context) (*Breadcrumb, error) {
 	// contention if the next Breadcrumb is already available.
 	next := b.loadNext()
 	if next != nil {
-		counterBreadcrumbNonBlock.Inc()
+		b.counterBreadcrumbNonBlock.Inc()
 		return next, nil
 	}
 
@@ -452,7 +485,7 @@ func (b *Breadcrumb) Next(ctx context.Context) (*Breadcrumb, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	counterBreadcrumbBlock.Inc()
+	b.counterBreadcrumbBlock.Inc()
 	return next, nil
 }
 
