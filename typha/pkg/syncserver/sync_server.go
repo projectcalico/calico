@@ -31,6 +31,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/typha/pkg/promutils"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
@@ -49,6 +51,7 @@ var (
 )
 
 var (
+	// Global Prometheus metrics, not specific to any particular syncer type.
 	counterNumConnectionsAccepted = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "typha_connections_accepted",
 		Help: "Total number of connections accepted over time.",
@@ -57,55 +60,32 @@ var (
 		Name: "typha_connections_dropped",
 		Help: "Total number of connections dropped due to rebalancing.",
 	})
-	counterGracePeriodUsed = prometheus.NewCounter(prometheus.CounterOpts{
+	gaugeNumConnections = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "typha_connections_active",
+		Help: "Number of open client connections, including connections that are still in the handshake.",
+	})
+
+	// Counters with per-syncer-type values.
+	gaugeVecNumConnectionsStreaming = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "typha_connections_streaming",
+		Help: "Number of client connections that completed the handshake and are streaming data.",
+	}, []string{"syncer"})
+	counterVecGracePeriodUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_connections_grace_used",
 		Help: "Total number of connections that made use of the grace period to catch up after sending the initial " +
 			"snapshot.",
-	})
-	gaugeNumConnections = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "typha_connections_active",
-		Help: "Number of open client connections.",
-	})
-	summarySnapshotSendTime = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "typha_client_snapshot_send_secs",
-		Help: "How long it took to send the initial snapshot to each client.",
-	})
-	summaryClientLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "typha_client_latency_secs",
-		Help: "Per-client latency.  I.e. how far behind the current state is each client.",
-		// Reduce the time window so the stat is more useful after a spike.
-		MaxAge:     1 * time.Minute,
-		AgeBuckets: 2,
-	})
-	summaryWriteLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "typha_client_write_latency_secs",
-		Help: "Per-client write.  How long each write call is taking.",
-	})
-	summaryNextCatchupLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "typha_next_breadcrumb_latency_secs",
-		Help: "Time to retrieve next breadcrumb when already behind.",
-	})
-	summaryPingLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "typha_ping_latency",
-		Help: "Round-trip ping latency to client.",
-	})
-	summaryNumKVsPerMsg = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "typha_kvs_per_msg",
-		Help: "Number of KV pairs sent in each message.",
-	})
+	}, []string{"syncer"})
 )
 
 func init() {
 	prometheus.MustRegister(counterNumConnectionsAccepted)
 	prometheus.MustRegister(counterNumConnectionsDropped)
-	prometheus.MustRegister(counterGracePeriodUsed)
 	prometheus.MustRegister(gaugeNumConnections)
-	prometheus.MustRegister(summarySnapshotSendTime)
-	prometheus.MustRegister(summaryClientLatency)
-	prometheus.MustRegister(summaryNextCatchupLatency)
-	prometheus.MustRegister(summaryWriteLatency)
-	prometheus.MustRegister(summaryPingLatency)
-	prometheus.MustRegister(summaryNumKVsPerMsg)
+
+	prometheus.MustRegister(gaugeVecNumConnectionsStreaming)
+	promutils.PreCreateGaugePerSyncer(gaugeVecNumConnectionsStreaming)
+	prometheus.MustRegister(counterVecGracePeriodUsed)
+	promutils.PreCreateCounterPerSyncer(counterVecGracePeriodUsed)
 }
 
 const (
@@ -131,6 +111,8 @@ type Server struct {
 	connTrackingLock sync.Mutex
 	maxConns         int
 	connIDToConn     map[uint64]*connection
+
+	perSyncerConnMetrics map[syncproto.SyncerType]perSyncerConnMetrics
 
 	Finished sync.WaitGroup
 }
@@ -246,13 +228,18 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 	config.ApplyDefaults()
 	log.WithField("config", config).Info("Creating server")
 	s := &Server{
-		config:       config,
-		caches:       caches,
-		maxConnsC:    make(chan int),
-		dropInterval: config.DropInterval,
-		maxConns:     config.MaxConns,
-		connIDToConn: map[uint64]*connection{},
-		listeningC:   make(chan struct{}),
+		config:               config,
+		caches:               caches,
+		maxConnsC:            make(chan int),
+		dropInterval:         config.DropInterval,
+		maxConns:             config.MaxConns,
+		connIDToConn:         map[uint64]*connection{},
+		listeningC:           make(chan struct{}),
+		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
+	}
+
+	for st := range caches {
+		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
 	}
 
 	// Register that we will report liveness.
@@ -410,6 +397,8 @@ func (s *Server) serve(cxt context.Context) {
 
 			encoder: gob.NewEncoder(conn),
 			readC:   make(chan interface{}),
+
+			allMetrics: s.perSyncerConnMetrics,
 		}
 		// Track the connection's lifetime in connIDToConn so we can kill it later if needed.
 		s.recordConnection(connection)
@@ -534,6 +523,11 @@ type connection struct {
 	readC   chan interface{}
 
 	logCxt *log.Entry
+
+	// Similarly to allCaches, allMetrics contains all the metrics relevant to a particular syncer.  We copy one
+	// of them to the unnamed field after the handshake.
+	allMetrics map[syncproto.SyncerType]perSyncerConnMetrics
+	perSyncerConnMetrics
 }
 
 func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
@@ -566,6 +560,8 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	if err = h.doHandshake(); err != nil {
 		return // Error already logged.
 	}
+	h.gaugeNumConnectionsStreaming.Inc()
+	defer h.gaugeNumConnectionsStreaming.Dec()
 
 	// Start a goroutine to stream the snapshot and then the deltas to the client.
 	h.shutDownWG.Add(1)
@@ -598,7 +594,7 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 			case syncproto.MsgPong:
 				h.logCxt.Debug("Pong from client")
 				lastPongReceived = time.Now()
-				summaryPingLatency.Observe(time.Since(msg.PingTimestamp).Seconds())
+				h.summaryPingLatency.Observe(time.Since(msg.PingTimestamp).Seconds())
 			default:
 				h.logCxt.WithField("msg", msg).Error("Unknown message from client")
 				return errors.New("Unknown message type")
@@ -688,6 +684,8 @@ func (h *connection) doHandshake() error {
 		h.logCxt.Info("Client didn't provide a SyncerType, assuming SyncerTypeFelix for back-compatibility.")
 		syncerType = syncproto.SyncerTypeFelix
 	}
+	h.logCxt = h.logCxt.WithField("type", syncerType)
+	h.perSyncerConnMetrics = h.allMetrics[syncerType]
 	desiredSyncerCache := h.allCaches[syncerType]
 	if desiredSyncerCache == nil {
 		h.logCxt.WithField("requestedType", syncerType).Info("Client requested unknown SyncerType.")
@@ -725,7 +723,7 @@ func (h *connection) sendMsg(msg interface{}) error {
 		h.logCxt.WithError(err).Info("Failed to write to client")
 		return err
 	}
-	summaryWriteLatency.Observe(time.Since(startTime).Seconds())
+	h.summaryWriteLatency.Observe(time.Since(startTime).Seconds())
 	return nil
 }
 
@@ -791,7 +789,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 			// Take a peek at the very latest breadcrumb to see how far behind we are...
 			latestCrumb := h.cache.CurrentBreadcrumb()
 			crumbAge := latestCrumb.Timestamp.Sub(breadcrumb.Timestamp)
-			summaryClientLatency.Observe(crumbAge.Seconds())
+			h.summaryClientLatency.Observe(crumbAge.Seconds())
 			logCxt.WithFields(log.Fields{
 				"seqNo":     breadcrumb.SequenceNumber,
 				"timestamp": breadcrumb.Timestamp,
@@ -827,7 +825,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 					}).Warn("Client is a long way behind after sending snapshot; " +
 						"allowing grace period for it to catch up.")
 					loggedClientBehind = true
-					counterGracePeriodUsed.Add(1.0)
+					h.counterGracePeriodUsed.Inc()
 				}
 			} else if loggedClientBehind && time.Now().After(gracePeriodEndTime) {
 				// Client caught up after being behind when we sent it a snapshot.
@@ -850,7 +848,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 			// Either we're already batching up updates or we're behind.  Append the deltas to the
 			// buffer.
 			deltas = append(deltas, breadcrumb.Deltas...)
-			summaryNextCatchupLatency.Observe(timeSpentInNext.Seconds())
+			h.summaryNextCatchupLatency.Observe(timeSpentInNext.Seconds())
 
 			if crumbAge < h.config.MinBatchingAgeThreshold {
 				// Caught up, stop batching.
@@ -861,7 +859,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 		if len(deltas) > 0 {
 			// Send the deltas relative to the previous snapshot.
 			logCxt.WithField("num", len(deltas)).Debug("Sending deltas")
-			summaryNumKVsPerMsg.Observe(float64(len(deltas)))
+			h.summaryNumKVsPerMsg.Observe(float64(len(deltas)))
 			err := h.sendMsg(syncproto.MsgKVs{
 				KVs: deltas,
 			})
@@ -896,7 +894,7 @@ func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapc
 		}
 		logCxt.WithField("numKVs", len(kvs)).Debug("Sending snapshot KVs to client.")
 		numKeys += len(kvs)
-		summaryNumKVsPerMsg.Observe(float64(len(kvs)))
+		h.summaryNumKVsPerMsg.Observe(float64(len(kvs)))
 		err := h.sendMsg(syncproto.MsgKVs{
 			KVs: kvs,
 		})
@@ -931,7 +929,7 @@ func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapc
 		return
 	}
 	logCxt.WithField("numKeys", numKeys).Info("Finished sending snapshot to client")
-	summarySnapshotSendTime.Observe(time.Since(startTime).Seconds())
+	h.summarySnapshotSendTime.Observe(time.Since(startTime).Seconds())
 	return
 }
 
@@ -963,4 +961,60 @@ func (h *connection) sendPingsToClient(logCxt *log.Entry) {
 			return
 		}
 	}
+}
+
+// perSyncerConnMetrics contains a set of Prometheus metrics that each connection needs to update.  There is one
+// set per syncer type.
+type perSyncerConnMetrics struct {
+	counterGracePeriodUsed       prometheus.Counter
+	summarySnapshotSendTime      prometheus.Summary
+	summaryClientLatency         prometheus.Summary
+	summaryWriteLatency          prometheus.Summary
+	summaryNextCatchupLatency    prometheus.Summary
+	summaryPingLatency           prometheus.Summary
+	summaryNumKVsPerMsg          prometheus.Summary
+	gaugeNumConnectionsStreaming prometheus.Gauge
+}
+
+func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetrics {
+	var c perSyncerConnMetrics
+	syncerLabels := map[string]string{
+		"syncer": string(syncerType),
+	}
+	c.summarySnapshotSendTime = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name:        "typha_client_snapshot_send_secs",
+		Help:        "How long it took to send the initial snapshot to each client.",
+		ConstLabels: syncerLabels,
+	}))
+	c.summaryClientLatency = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "typha_client_latency_secs",
+		Help: "Per-client latency.  I.e. how far behind the current state is each client.",
+		// Reduce the time window so the stat is more useful after a spike.
+		MaxAge:      1 * time.Minute,
+		AgeBuckets:  2,
+		ConstLabels: syncerLabels,
+	}))
+	c.summaryWriteLatency = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name:        "typha_client_write_latency_secs",
+		Help:        "Per-client write.  How long each write call is taking.",
+		ConstLabels: syncerLabels,
+	}))
+	c.summaryNextCatchupLatency = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name:        "typha_next_breadcrumb_latency_secs",
+		Help:        "Time to retrieve next breadcrumb when already behind.",
+		ConstLabels: syncerLabels,
+	}))
+	c.summaryPingLatency = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name:        "typha_ping_latency",
+		Help:        "Round-trip ping latency to client.",
+		ConstLabels: syncerLabels,
+	}))
+	c.summaryNumKVsPerMsg = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name:        "typha_kvs_per_msg",
+		Help:        "Number of KV pairs sent in each message.",
+		ConstLabels: syncerLabels,
+	}))
+	c.counterGracePeriodUsed = counterVecGracePeriodUsed.WithLabelValues(string(syncerType))
+	c.gaugeNumConnectionsStreaming = gaugeVecNumConnectionsStreaming.WithLabelValues(string(syncerType))
+	return c
 }
