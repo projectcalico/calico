@@ -38,6 +38,7 @@ for file in /tmp/core_felix* ; do
     sudo chmod a+r "$file"
     out_file="artifacts/$(basename "$file").xz"
     xz < "$file" > "$out_file"
+    sudo rm -f "$file"
   fi
 done
 if [ -s fv/data-races.log ]; then
@@ -45,6 +46,7 @@ if [ -s fv/data-races.log ]; then
   xz < fv/data-races.log > artifacts/data-races.log.xz
 fi
 if ! $skip_binaries; then
-  tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*
+  # Note: need to remove the files as we go to avoid running out of space.
+  tar --remove-files -czf artifacts/binaries.tar.gz bin/calico-felix-*amd64 bin/calico-bpf bin/test-*
 fi
 exit 0
