@@ -115,11 +115,6 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*sn
 		s.lock.Unlock()
 
 		for len(buf) > 0 {
-			const chunkSize = 65536
-			b := buf
-			if len(b) > chunkSize {
-				b = b[:chunkSize]
-			}
 			if time.Until(currentWriteDeadline) < 60*time.Second {
 				newDeadline := time.Now().Add(90 * time.Second)
 				err := w.SetWriteDeadline(newDeadline)
@@ -128,12 +123,18 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*sn
 				}
 				currentWriteDeadline = newDeadline
 			}
-			n, err := w.Write(b)
-			if err != nil {
-				return nil, err
-			}
+			n, err := w.Write(buf)
 			buf = buf[n:]
 			bytesSent += n
+			if err != nil {
+				if err, ok := err.(net.Error); n > 0 && ok && err.Timeout() {
+					// Managed to write _some_ bytes, loop again and reset the write timeout.  If the snapshot was
+					// very large then we might have written a big chunk of it but simply not had enough time to
+					// complete.  Only give up if we see no progress at all.
+					continue
+				}
+				return nil, err
+			}
 		}
 
 		if complete {
@@ -142,6 +143,7 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*sn
 		s.lock.Lock()
 	}
 
+	// Unset the timeout; under normal operation, we rely on a regular round tripped ping/pong message instead.
 	var zeroTime time.Time
 	err := w.SetWriteDeadline(zeroTime)
 	if err != nil {
@@ -236,7 +238,7 @@ func (s *BinarySnapshotCache) writeSnapshot(snap *snapshot) {
 			s.lock.Lock()
 			snap.buf = buf.Buf
 			// Using Signal() instead of Broadcast() so that we only wake up one waiter at a time.  That avoids
-			// having a thundering herd of wake ups, which then starve out this goroutine so that they all block
+			// having a thundering herd of wake-ups, which then starve out this goroutine so that they all block
 			// again, then we wake them all up again. Doing it this way we'll wake them up less frequently but
 			// they'll get to write more data in one shot.
 			snap.cond.Signal()
@@ -249,7 +251,7 @@ func (s *BinarySnapshotCache) writeSnapshot(snap *snapshot) {
 		logrus.WithField("thread", "snapshotter"),
 		snap.crumb,
 		writeMsg,
-		1000, // Allow bigger messages in the snapshot.
+		10000, // Allow bigger messages in the snapshot.
 	)
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
@@ -271,11 +273,12 @@ func (s *BinarySnapshotCache) writeSnapshot(snap *snapshot) {
 		logrus.WithError(err).Panic("Failed to close datastore snapshot.")
 	}
 
+	// One final flush/broadcast to wake up all our waiters.
 	s.lock.Lock()
-	defer s.lock.Unlock()
 	snap.buf = buf.Buf
 	snap.complete = true
 	snap.cond.Broadcast()
+	s.lock.Unlock()
 
 	s.gaugeSnapBytesRaw.Set(float64(progressW.BytesWritten))
 	s.gaugeSnapBytesComp.Set(float64(buf.Len()))
