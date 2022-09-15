@@ -161,6 +161,15 @@ var (
 	}
 )
 
+type NoOpCallbacks struct {
+}
+
+func (n NoOpCallbacks) OnStatusUpdated(status api.SyncStatus) {
+}
+
+func (n NoOpCallbacks) OnUpdates(updates []api.Update) {
+}
+
 // Tests that rely on starting a real Typha syncserver.Server (on a real TCP port) in this process.
 // We drive the server via a real snapshot cache using the snapshot cache's function API.
 var _ = Describe("With an in-process Server", func() {
@@ -188,18 +197,28 @@ var _ = Describe("With an in-process Server", func() {
 		recorder     *StateRecorder
 		syncerType   syncproto.SyncerType
 	}
-	var clientStates []clientState
+	var clientStates, discardingClientStates []clientState
 
-	createClient := func(id interface{}, syncType syncproto.SyncerType) clientState {
+	createClient := func(id interface{}, syncType syncproto.SyncerType, discarding bool) clientState {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
-		recorder := NewRecorder()
+
+		var recorder *StateRecorder
+		var callbacks api.SyncerCallbacks
+		if discarding {
+			callbacks = NoOpCallbacks{}
+		} else {
+			recorder = NewRecorder()
+			go recorder.Loop(clientCxt)
+			callbacks = recorder
+		}
+
 		serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
 		client := syncclient.New(
 			[]discovery.Typha{{Addr: serverAddr}},
 			"test-version",
 			fmt.Sprintf("test-host-%v", id),
 			"test-info",
-			recorder,
+			callbacks,
 			&syncclient.Options{
 				SyncerType: syncType,
 			},
@@ -207,7 +226,6 @@ var _ = Describe("With an in-process Server", func() {
 
 		err := client.Start(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
-		go recorder.Loop(clientCxt)
 
 		cs := clientState{
 			clientCxt:    clientCxt,
@@ -222,8 +240,15 @@ var _ = Describe("With an in-process Server", func() {
 	createClients := func(n int) {
 		clientStates = nil
 		for i := 0; i < n; i++ {
-			cs := createClient(i, syncproto.SyncerTypeFelix)
+			cs := createClient(i, syncproto.SyncerTypeFelix, false)
 			clientStates = append(clientStates, cs)
+		}
+	}
+	createNoOpClients := func(n int) {
+		discardingClientStates = nil
+		for i := 0; i < n; i++ {
+			cs := createClient(i, syncproto.SyncerTypeFelix, true)
+			discardingClientStates = append(discardingClientStates, cs)
 		}
 	}
 
@@ -398,7 +423,7 @@ var _ = Describe("With an in-process Server", func() {
 			// Now, a newly-connecting client should also reach the same state.
 			log.Info("Starting transient client to read snapshot.")
 
-			transientClient := createClient("transient", c.syncerType)
+			transientClient := createClient("transient", c.syncerType, false)
 			defer func() {
 				log.Info("Stopping transient client.")
 				transientClient.clientCancel()
@@ -486,7 +511,7 @@ var _ = Describe("With an in-process Server", func() {
 			var bgpClient clientState
 
 			BeforeEach(func() {
-				bgpClient = createClient("bgp", syncproto.SyncerTypeBGP)
+				bgpClient = createClient("bgp", syncproto.SyncerTypeBGP, false)
 			})
 
 			DescribeTable("should pass through BGP KV pairs",
@@ -606,8 +631,9 @@ var _ = Describe("With an in-process Server", func() {
 	Describe("with big starting snapshot and 10 clients", func() {
 		var expectedEndState map[string]api.Update
 		BeforeEach(func() {
-			expectedEndState = sendNUpdatesThenInSync(100000)
-			createClients(10)
+			expectedEndState = sendNUpdatesThenInSync(500000)
+			createClients(1)
+			createNoOpClients(10)
 		})
 
 		// expectClientState asserts that every client eventually reaches the given state.
