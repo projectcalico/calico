@@ -19,6 +19,7 @@ import (
 	"encoding/gob"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -127,8 +128,8 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*sn
 			buf = buf[n:]
 			bytesSent += n
 			if err != nil {
-				if err, ok := err.(net.Error); n > 0 && ok && err.Timeout() {
-					// Managed to write _some_ bytes, loop again and reset the write timeout.  If the snapshot was
+				if n > 0 && os.IsTimeout(err) {
+					// Managed to write _some_ bytes, loop again to reset the timeout.  If the snapshot was
 					// very large then we might have written a big chunk of it but simply not had enough time to
 					// complete.  Only give up if we see no progress at all.
 					continue
