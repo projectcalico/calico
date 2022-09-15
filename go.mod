@@ -54,9 +54,9 @@ require (
 	github.com/projectcalico/api v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
-	github.com/prometheus/client_golang v1.12.2
+	github.com/prometheus/client_golang v1.13.0
 	github.com/prometheus/client_model v0.2.0
-	github.com/prometheus/common v0.32.1
+	github.com/prometheus/common v0.37.0
 	github.com/rakelkar/gonetsh v0.3.2
 	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
@@ -72,7 +72,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.5
 	go.etcd.io/etcd/client/v3 v3.5.5
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
-	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29
+	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
 	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
 	golang.org/x/text v0.3.7
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
@@ -213,7 +213,7 @@ require (
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/quobyte/api v0.1.8 // indirect
 	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021 // indirect
 	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1 // indirect
@@ -254,7 +254,7 @@ require (
 	golang.zx2c4.com/wireguard v0.0.20200121 // indirect
 	google.golang.org/api v0.81.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.28.0 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 	gopkg.in/gcfg.v1 v1.2.0 // indirect
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
