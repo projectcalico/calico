@@ -154,10 +154,27 @@ def split_endpoint_name(name):
 
 
 class MTUWatcher(object):
-    def __init__(self):
+
+    # -----------------------------------------------------------------
+    # Methods called from DHCP agent's main thread.
+    # -----------------------------------------------------------------
+
+    def __init__(self, agent):
+        self.agent = agent
         self.mtu_by_if_name = {}
-        self.endpoint_name_by_if_name = {}
+        self.port_id_by_if_name = {}
         self.rx = re.compile('[0-9]+: ([a-z0-9-]+).* mtu ([0-9]+) .* state UP')
+
+    def watch_port(self, id, if_name):
+        self.port_id_by_if_name[if_name] = id
+
+    def unwatch_port(id, if_name):
+        if if_name in self.port_id_by_if_name:
+            del self.port_id_by_if_name[if_name]
+
+    # -----------------------------------------------------------------
+    # Methods called from MTU watcher's own thread.
+    # -----------------------------------------------------------------
 
     def start(self):
         process = subprocess.Popen(['ip', 'monitor', 'link'],
@@ -173,7 +190,21 @@ class MTUWatcher(object):
 
     def record_mtu(self, if_name, mtu):
         LOG.debug("MTU for %s is now %d", if_name, mtu)
+        if if_name in self.port_id_by_if_name and mtu != self.mtu_by_if_name.get(if_name):
+            # MTU changing for a watched port.
+            self.change_mtu_for_port(self.port_id_by_if_name[if_name], mtu)
         self.mtu_by_if_name[if_name] = mtu
+
+    def change_mtu_for_port(self, id, mtu):
+        port = self.agent.get_port_by_id(id)
+        if port:
+            mtu_option = {
+                'opt_name': 'mtu',
+                'opt_value': str(mtu),
+                'ip_version': 4,
+            }
+            port.extra_dhcp_opts = [dhcp.DictModel(mtu_option)]
+            self.agent.put_port(port)
 
 
 class DnsmasqUpdater(object):
@@ -261,7 +292,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         self.dnsmasq_updater = DnsmasqUpdater(agent)
 
         # Create MTU watcher.
-        self.mtu_watcher = MTUWatcher()
+        self.mtu_watcher = MTUWatcher(agent)
 
         # Also watch the etcd subnet trees: both the new region-aware
         # one, and the old pre-region one, so as to support a VM
