@@ -136,7 +136,7 @@ st:
 check-copyright:
 	@../hack/check-copyright.sh
 
-GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/$(K8S_VERSION)/hack/lib
+GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/v1.22.5/hack/lib
 
 hack-lib:
 	mkdir -p hack/lib/
