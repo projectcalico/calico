@@ -17,7 +17,6 @@ package tc
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -31,6 +30,7 @@ import (
 	"strings"
 	"sync"
 
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -446,6 +446,7 @@ func CleanUpMaps() {
 			ID      int    `json:"id"`
 		} `json:"xdp"`
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(out, &attached)
 	if err != nil {
 		log.WithError(err).WithField("dump", string(out)).Error("Failed to parse list of attached BPF programs")

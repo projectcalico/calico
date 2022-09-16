@@ -38,6 +38,7 @@ import (
 	"syscall"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -1970,6 +1971,7 @@ func FindJumpMap(progID int, ifaceName string) (mapFD bpf.MapFD, err error) {
 	var prog struct {
 		MapIDs []int `json:"map_ids"`
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(output, &prog)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse bpftool output: %w", err)

@@ -15,11 +15,12 @@
 package numorstring
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 type ASNumber uint32
@@ -50,6 +51,7 @@ func ASNumberFromString(s string) (ASNumber, error) {
 
 // UnmarshalJSON implements the json.Unmarshaller uinterface.
 func (a *ASNumber) UnmarshalJSON(b []byte) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(b, (*uint32)(a)); err == nil {
 		return nil
 	} else {

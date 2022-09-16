@@ -15,8 +15,9 @@
 package net
 
 import (
-	"encoding/json"
 	"net"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Sub class net.HardwareAddr so that we can add JSON marshalling and unmarshalling.
@@ -26,12 +27,14 @@ type MAC struct {
 
 // MarshalJSON interface for a MAC
 func (m MAC) MarshalJSON() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Marshal(m.String())
 }
 
 // UnmarshalJSON interface for a MAC
 func (m *MAC) UnmarshalJSON(b []byte) error {
 	var s string
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}
