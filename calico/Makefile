@@ -74,7 +74,7 @@ _site build: bin/ocp.tgz $(DOCS_SOURCE)
 	cp bin/ocp.tgz _site/manifests
 
 # Creates the tar file used for installing Calico on OpenShift.
-bin/ocp.tgz:
+bin/ocp.tgz: ../manifests/ocp/
 	mkdir -p bin
 	tar czvf $@ -C ../manifests/ ocp
 
