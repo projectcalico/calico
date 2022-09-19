@@ -4489,8 +4489,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -4687,7 +4687,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -4883,8 +4883,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -5081,7 +5081,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -5935,8 +5935,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -6133,7 +6133,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -6329,8 +6329,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -6527,7 +6527,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -7354,8 +7354,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -7552,7 +7552,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -7748,8 +7748,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -7946,7 +7946,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -8656,8 +8656,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -8854,7 +8854,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -9050,8 +9050,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -9248,7 +9248,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -9665,6 +9665,14 @@ spec:
                       type: string
                   type: object
                 type: array
+              fipsMode:
+                description: 'FIPSMode uses images and features only that are using
+                  FIPS 140-2 validated cryptographic modules and standards. Default:
+                  Disabled'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               flexVolumePath:
                 description: FlexVolumePath optionally specifies a custom path for
                   FlexVolume. If not specified, FlexVolume will be enabled by default.
@@ -9708,7 +9716,7 @@ spec:
               kubeletVolumePluginPath:
                 description: 'KubeletVolumePluginPath optionally specifies enablement
                   of Calico CSI plugin. If not specified, CSI will be enabled by default.
-                  If set to "None", CSI will be disabled. Default: /var/lib/kubelet'
+                  If set to ''None'', CSI will be disabled. Default: /var/lib/kubelet'
                 type: string
               kubernetesProvider:
                 description: KubernetesProvider specifies a particular provider of
@@ -9770,7 +9778,7 @@ spec:
                           on any given node can double if the readiness check fails,
                           and so resource intensive daemonsets should take into account
                           that they may cause evictions during disruption. This is
-                          an alpha field and requires enabling DaemonSetUpdateSurge
+                          beta field and enabled/disabled by DaemonSetUpdateSurge
                           feature gate.'
                         x-kubernetes-int-or-string: true
                       maxUnavailable:
@@ -9781,18 +9789,17 @@ spec:
                           be unavailable during the update. Value can be an absolute
                           number (ex: 5) or a percentage of total number of DaemonSet
                           pods at the start of the update (ex: 10%). Absolute number
-                          is calculated from percentage by rounding down to a minimum
-                          of one. This cannot be 0 if MaxSurge is 0 Default value
-                          is 1. Example: when this is set to 30%, at most 30% of the
-                          total number of nodes that should be running the daemon
-                          pod (i.e. status.desiredNumberScheduled) can have their
-                          pods stopped for an update at any given time. The update
-                          starts by stopping at most 30% of those DaemonSet pods and
-                          then brings up new DaemonSet pods in their place. Once the
-                          new pods are available, it then proceeds onto other DaemonSet
-                          pods, thus ensuring that at least 70% of original number
-                          of DaemonSet pods are available at all times during the
-                          update.'
+                          is calculated from percentage by rounding up. This cannot
+                          be 0 if MaxSurge is 0 Default value is 1. Example: when
+                          this is set to 30%, at most 30% of the total number of nodes
+                          that should be running the daemon pod (i.e. status.desiredNumberScheduled)
+                          can have their pods stopped for an update at any given time.
+                          The update starts by stopping at most 30% of those DaemonSet
+                          pods and then brings up new DaemonSet pods in their place.
+                          Once the new pods are available, it then proceeds onto other
+                          DaemonSet pods, thus ensuring that at least 70% of original
+                          number of DaemonSet pods are available at all times during
+                          the update.'
                         x-kubernetes-int-or-string: true
                     type: object
                   type:
@@ -10458,8 +10465,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -10656,7 +10663,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -10852,8 +10859,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -11050,7 +11057,7 @@ spec:
                                                 namespaces list means "this pod's
                                                 namespace". An empty selector ({})
                                                 matches all namespaces. This field
-                                                is alpha-level and is only honored
+                                                is beta-level and is only honored
                                                 when PodAffinityNamespaceSelector
                                                 feature is enabled.
                                               properties:
@@ -11813,7 +11820,7 @@ spec:
                                                         pod's namespace". An empty
                                                         selector ({}) matches all
                                                         namespaces. This field is
-                                                        alpha-level and is only honored
+                                                        beta-level and is only honored
                                                         when PodAffinityNamespaceSelector
                                                         feature is enabled.
                                                       properties:
@@ -12028,8 +12035,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -12240,7 +12247,7 @@ spec:
                                                         pod's namespace". An empty
                                                         selector ({}) matches all
                                                         namespaces. This field is
-                                                        alpha-level and is only honored
+                                                        beta-level and is only honored
                                                         when PodAffinityNamespaceSelector
                                                         feature is enabled.
                                                       properties:
@@ -12455,8 +12462,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -13337,7 +13344,7 @@ spec:
                                                         pod's namespace". An empty
                                                         selector ({}) matches all
                                                         namespaces. This field is
-                                                        alpha-level and is only honored
+                                                        beta-level and is only honored
                                                         when PodAffinityNamespaceSelector
                                                         feature is enabled.
                                                       properties:
@@ -13552,8 +13559,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -13764,7 +13771,7 @@ spec:
                                                         pod's namespace". An empty
                                                         selector ({}) matches all
                                                         namespaces. This field is
-                                                        alpha-level and is only honored
+                                                        beta-level and is only honored
                                                         when PodAffinityNamespaceSelector
                                                         feature is enabled.
                                                       properties:
@@ -13979,8 +13986,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -14741,7 +14748,7 @@ spec:
                                                         pod's namespace". An empty
                                                         selector ({}) matches all
                                                         namespaces. This field is
-                                                        alpha-level and is only honored
+                                                        beta-level and is only honored
                                                         when PodAffinityNamespaceSelector
                                                         feature is enabled.
                                                       properties:
@@ -14956,8 +14963,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -15168,7 +15175,7 @@ spec:
                                                         pod's namespace". An empty
                                                         selector ({}) matches all
                                                         namespaces. This field is
-                                                        alpha-level and is only honored
+                                                        beta-level and is only honored
                                                         when PodAffinityNamespaceSelector
                                                         feature is enabled.
                                                       properties:
@@ -15383,8 +15390,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -15817,6 +15824,14 @@ spec:
                           type: string
                       type: object
                     type: array
+                  fipsMode:
+                    description: 'FIPSMode uses images and features only that are
+                      using FIPS 140-2 validated cryptographic modules and standards.
+                      Default: Disabled'
+                    enum:
+                    - Enabled
+                    - Disabled
+                    type: string
                   flexVolumePath:
                     description: FlexVolumePath optionally specifies a custom path
                       for FlexVolume. If not specified, FlexVolume will be enabled
@@ -15859,8 +15874,9 @@ spec:
                     type: array
                   kubeletVolumePluginPath:
                     description: 'KubeletVolumePluginPath optionally specifies enablement
-                      of Calico CSI plugin. If not specified, CSI will be enabled by default.
-                      If set to "None", CSI will be disabled. Default: /var/lib/kubelet'
+                      of Calico CSI plugin. If not specified, CSI will be enabled
+                      by default. If set to ''None'', CSI will be disabled. Default:
+                      /var/lib/kubelet'
                     type: string
                   kubernetesProvider:
                     description: KubernetesProvider specifies a particular provider
@@ -15923,8 +15939,8 @@ spec:
                               by the daemonset on any given node can double if the
                               readiness check fails, and so resource intensive daemonsets
                               should take into account that they may cause evictions
-                              during disruption. This is an alpha field and requires
-                              enabling DaemonSetUpdateSurge feature gate.'
+                              during disruption. This is beta field and enabled/disabled
+                              by DaemonSetUpdateSurge feature gate.'
                             x-kubernetes-int-or-string: true
                           maxUnavailable:
                             anyOf:
@@ -15935,10 +15951,10 @@ spec:
                               absolute number (ex: 5) or a percentage of total number
                               of DaemonSet pods at the start of the update (ex: 10%).
                               Absolute number is calculated from percentage by rounding
-                              down to a minimum of one. This cannot be 0 if MaxSurge
-                              is 0 Default value is 1. Example: when this is set to
-                              30%, at most 30% of the total number of nodes that should
-                              be running the daemon pod (i.e. status.desiredNumberScheduled)
+                              up. This cannot be 0 if MaxSurge is 0 Default value
+                              is 1. Example: when this is set to 30%, at most 30%
+                              of the total number of nodes that should be running
+                              the daemon pod (i.e. status.desiredNumberScheduled)
                               can have their pods stopped for an update at any given
                               time. The update starts by stopping at most 30% of those
                               DaemonSet pods and then brings up new DaemonSet pods
@@ -16658,7 +16674,7 @@ spec:
                                                         pod's namespace". An empty
                                                         selector ({}) matches all
                                                         namespaces. This field is
-                                                        alpha-level and is only honored
+                                                        beta-level and is only honored
                                                         when PodAffinityNamespaceSelector
                                                         feature is enabled.
                                                       properties:
@@ -16873,8 +16889,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
@@ -17085,7 +17101,7 @@ spec:
                                                         pod's namespace". An empty
                                                         selector ({}) matches all
                                                         namespaces. This field is
-                                                        alpha-level and is only honored
+                                                        beta-level and is only honored
                                                         when PodAffinityNamespaceSelector
                                                         feature is enabled.
                                                       properties:
@@ -17300,8 +17316,8 @@ spec:
                                                     or empty namespaces list means
                                                     "this pod's namespace". An empty
                                                     selector ({}) matches all namespaces.
-                                                    This field is alpha-level and
-                                                    is only honored when PodAffinityNamespaceSelector
+                                                    This field is beta-level and is
+                                                    only honored when PodAffinityNamespaceSelector
                                                     feature is enabled.
                                                   properties:
                                                     matchExpressions:
