@@ -121,6 +121,7 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 	}
 	serverConfig.SecureServing.CipherSuites = cipherSuites
+	serverConfig.SecureServing.MinTLSVersion = tls.VersionTLS12
 
 	if o.PrintSwagger {
 		o.DisableAuth = true

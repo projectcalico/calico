@@ -30,17 +30,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
-
-	"github.com/projectcalico/calico/typha/pkg/promutils"
-
+	"github.com/golang/snappy"
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
+	"github.com/projectcalico/calico/typha/pkg/promutils"
 
 	"github.com/projectcalico/calico/typha/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
@@ -153,6 +152,9 @@ type Config struct {
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
 	DebugLogWrites bool
+
+	// FIPSModeEnabled Enables FIPS 140-2 verified crypto mode.
+	FIPSModeEnabled bool
 }
 
 const (
@@ -318,7 +320,10 @@ func (s *Server) serve(cxt context.Context) {
 	)
 	if s.config.requiringTLS() {
 		pwd, _ := os.Getwd()
-		logCxt.WithField("pwd", pwd).Info("Opening TLS listen socket")
+		logCxt.WithFields(log.Fields{
+			"pwd":             pwd,
+			"fipsModeEnabled": s.config.FIPSModeEnabled,
+		}).Info("Opening TLS listen socket")
 		cert, tlsErr := tls.LoadX509KeyPair(s.config.CertFile, s.config.KeyFile)
 		if tlsErr != nil {
 			logCxt.WithFields(log.Fields{
@@ -326,13 +331,8 @@ func (s *Server) serve(cxt context.Context) {
 				"keyFile":  s.config.KeyFile,
 			}).WithError(tlsErr).Panic("Failed to load certificate and key")
 		}
-		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
-		// Typha API is a private binary API so we can enforce a recent TLS variant without
-		// worrying about back-compatibility with old browsers (for example).
-		tlsConfig.MinVersion = tls.VersionTLS12
-
-		// Set allowed cipher suites.
-		tlsConfig.CipherSuites = s.allowedCiphers()
+		tlsConfig := calicotls.NewTLSConfig(s.config.FIPSModeEnabled)
+		tlsConfig.Certificates = []tls.Certificate{cert}
 
 		// Arrange for server to verify the clients' certificates.
 		logCxt.Info("Will verify client certificates")
@@ -354,7 +354,7 @@ func (s *Server) serve(cxt context.Context) {
 		)
 
 		laddr := fmt.Sprintf("0.0.0.0:%v", s.config.ListenPort())
-		l, err = tls.Listen("tcp", laddr, &tlsConfig)
+		l, err = tls.Listen("tcp", laddr, tlsConfig)
 	} else {
 		logCxt.Info("Opening listen socket")
 		l, err = net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.ListenPort()})
