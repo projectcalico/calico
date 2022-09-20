@@ -18,7 +18,7 @@ import (
 	"crypto/tls"
 )
 
-// NewTLSConfig returns a tls.Config with the recommended default settings for Calico Enterprise components.
+// NewTLSConfig returns a tls.Config with the recommended default settings for Calico.
 // Read more recommendations here:
 // https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/4095
 func NewTLSConfig(fipsMode bool) *tls.Config {
