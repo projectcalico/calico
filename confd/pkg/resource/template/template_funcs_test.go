@@ -6,14 +6,14 @@ import (
 )
 
 var _ = Describe("Template", func() {
-	Describe("validate hashToIPv4 method,", func() {
-		It("should get valid multicast ip address", func() {
+	Describe("to validate hashToIPv4 method,", func() {
+		It("It should validate router_id from the invalid range", func() {
 			expectedRouterId := "207.94.5.27"
 			nodeName := "Testrobin123"
-			actualRouterId := hashToIPv4(nodeName)
+			actualRouterId := hashToIPv4(nodeName) //invalid router_id 239.94.5.27
 			Expect(expectedRouterId).To(Equal(actualRouterId))
 		})
-		It("should get valid ip address", func() {
+		It("It should validate router_id from the valid range", func() {
 			expectedRouterId := "109.174.215.226"
 			nodeName := "nodeTest"
 			actualRouterId := hashToIPv4(nodeName)

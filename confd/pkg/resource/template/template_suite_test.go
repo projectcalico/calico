@@ -11,7 +11,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-func TestCalico(t *testing.T) {
+func TestTemplate(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../../report/template_suite.xml")
