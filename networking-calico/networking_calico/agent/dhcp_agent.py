@@ -190,8 +190,8 @@ class MTUWatcher(object):
         # transitions.
         while not self.ip_monitor_running:
             # Create and delete a dummy interface.
-            os.system("ip link add calico-dhcp-dummy type dummy")
-            os.system("ip link del calico-dhcp-dummy type dummy")
+            os.system("ip link add calico-dhcp-dmy type dummy")
+            os.system("ip link del calico-dhcp-dmy type dummy")
             time.sleep(0.5)
 
         # Now run 'ip link', to find MTU of all pre-existing interfaces.
