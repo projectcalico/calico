@@ -499,8 +499,14 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Add this port into the NetModel.
         self.agent.cache.put_port(dhcp.DictModel(port))
 
-        # Schedule updating Dnsmasq.
-        self._update_dnsmasq(port['network_id'])
+        # If we have seen the TAP interface, schedule updating Dnsmasq;
+        # otherwise wait until we do see the TAP interface, whereupon
+        # _update_dnsmasq will be called again.  Dnsmasq updates can
+        # take a little time, and they run in series, so it's best to
+        # wait if we don't have the information we need yet, to avoid
+        # delaying the correct Dnsmasq update that we really want.
+        if mtu:
+            self._update_dnsmasq(port['network_id'])
 
     def get_mtu_option(self, mtu):
         return dhcp.DictModel({
