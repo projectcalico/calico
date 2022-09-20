@@ -597,6 +597,8 @@ func (buf *EventSequencer) flushIPPoolUpdates() {
 			Pool: &proto.IPAMPool{
 				Cidr:       pool.CIDR.String(),
 				Masquerade: pool.Masquerade,
+				IpipMode:   string(pool.IPIPMode),
+				VxlanMode:  string(pool.VXLANMode),
 			},
 		})
 		buf.sentIPPools.Add(key)
