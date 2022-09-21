@@ -1294,32 +1294,22 @@ allow:
 	if (CALI_F_TO_HEP && !skb_seen(skb) && is_dnat) {
 		struct cali_rt *r = cali_rt_lookup(state->post_nat_ip_dst);
 
-		if (r) {
-			if (cali_rt_flags_local_workload(r->flags)) {
-				state->ct_result.ifindex_fwd = r->if_index;
-				CALI_DEBUG("NP local WL %x:%d on HEP\n",
+		if (r && cali_rt_flags_local_workload(r->flags)) {
+			state->ct_result.ifindex_fwd = r->if_index;
+			CALI_DEBUG("NP local WL %x:%d on HEP\n",
+					bpf_htonl(state->post_nat_ip_dst), state->post_nat_dport);
+			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
+			fib = true; /* Enforce FIB since we want to redirect */
+		} else if (!r || cali_rt_flags_remote_workload(r->flags)) {
+			/* If there is no route, treat it as a remote NP BE */
+			if (CALI_F_LO || CALI_F_MAIN) {
+				state->ct_result.ifindex_fwd = NATIN_IFACE  ;
+				CALI_DEBUG("NP remote WL %x:%d on LO or main HEP\n",
 						bpf_htonl(state->post_nat_ip_dst), state->post_nat_dport);
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
-				fib = true; /* Enforce FIB since we want to redirect */
-			} else if (cali_rt_flags_remote_workload(r->flags)) {
-				if (CALI_F_LO || CALI_F_MAIN) {
-					state->ct_result.ifindex_fwd = NATIN_IFACE  ;
-					CALI_DEBUG("NP remote WL %x:%d on LO or main HEP\n",
-						bpf_htonl(state->post_nat_ip_dst), state->post_nat_dport);
-					ctx->state->flags |= CALI_ST_CT_NP_LOOP;
-				}
-				ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
-				fib = true; /* Enforce FIB since we want to redirect */
 			}
-		} else {
-			/* Did not find a route for a service BE? Should be just
-			 * temporary sync issue, nevertheless, drop it for
-			 * now.
-			 */
-			CALI_DEBUG("No route to %x:%d after DNAT, DROP\n",
-					bpf_htonl(state->post_nat_ip_dst), state->post_nat_dport);
-			DENY_REASON(ctx, CALI_REASON_RT_UNKNOWN);
-			goto deny;
+			ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
+			fib = true; /* Enforce FIB since we want to redirect */
 		}
 	}
 
