@@ -45,6 +45,6 @@ if [ -s fv/data-races.log ]; then
   xz < fv/data-races.log > artifacts/data-races.log.xz
 fi
 if ! $skip_binaries; then
-  tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*
+  tar --remove-files -czf artifacts/binaries.tar.gz bin/calico-felix-*amd64 bin/calico-bpf bin/test-*
 fi
 exit 0
