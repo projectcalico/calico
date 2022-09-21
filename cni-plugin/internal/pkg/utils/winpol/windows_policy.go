@@ -22,10 +22,13 @@ import (
 	"net"
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/hcn"
 )
+
+var jsonc = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type PolicyMarshaller interface {
 	GetHNSEndpointPolicies() []json.RawMessage
@@ -47,7 +50,7 @@ func CalculateEndpointPolicies(
 	for _, inPol := range inputPols {
 		// Decode the raw policy as a dict so we can inspect it without losing any fields.
 		decoded := map[string]interface{}{}
-		err := json.Unmarshal(inPol, &decoded)
+		err := jsonc.Unmarshal(inPol, &decoded)
 		if err != nil {
 			logger.WithError(err).Error("GetHNSEndpointPolicies() returned bad JSON")
 			return nil, nil, err
@@ -74,7 +77,7 @@ func CalculateEndpointPolicies(
 			excList, _ := decoded["ExceptionList"].([]interface{})
 			excList = appendCIDRs(excList, extraNATExceptions)
 			decoded["ExceptionList"] = excList
-			outPol, err = json.Marshal(decoded)
+			outPol, err = jsonc.Marshal(decoded)
 			if err != nil {
 				logger.WithError(err).Error("Failed to add outbound NAT exclusion.")
 				return nil, nil, err
@@ -104,7 +107,7 @@ func CalculateEndpointPolicies(
 			"Type":          "OutBoundNAT",
 			"ExceptionList": exceptions,
 		}
-		encoded, err := json.Marshal(dict)
+		encoded, err := jsonc.Marshal(dict)
 		if err != nil {
 			logger.WithError(err).Error("Failed to add outbound NAT exclusion.")
 			return nil, nil, err
@@ -160,12 +163,12 @@ func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPoli
 	// Remove the Type key from the map, leaving just the policy settings
 	// that we marshall.
 	delete(policy, "Type")
-	policySettings, err := json.Marshal(policy)
+	policySettings, err := jsonc.Marshal(policy)
 	if err != nil {
 		return hcnPolicy, fmt.Errorf("Failed to marshal policy settings.")
 	}
 	hcnPolicy.Type = hcn.EndpointPolicyType(policyType)
-	hcnPolicy.Settings = json.RawMessage(policySettings)
+	hcnPolicy.Settings = policySettings
 	return hcnPolicy, nil
 }
 

@@ -23,7 +23,6 @@ package bpf
 import (
 	"bufio"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -38,6 +37,7 @@ import (
 	"sync"
 	"syscall"
 
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -548,6 +548,8 @@ type ProtoPort struct {
 	Proto labelindex.IPSetPortProtocol
 	Port  uint16
 }
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func getMapStructGeneral(mapDesc []string) (*mapInfo, error) {
 	prog := "bpftool"

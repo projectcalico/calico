@@ -22,7 +22,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log/syslog"
@@ -30,10 +29,13 @@ import (
 	"os/exec"
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/cobra"
 
 	creds "github.com/projectcalico/calico/pod2daemon/flexvol/creds"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // Response is the output of Flex volume driver to the kubelet.
 type Response struct {
@@ -398,7 +400,7 @@ func logToSys(caller, inp, opts string) {
 
 // addCredentialFile is used to create a credential file when a workload with the flex-volume volume mounted is created.
 func addCredentialFile(ninputs *creds.Credentials) error {
-	//Make the directory and then write the ninputs as json to it.
+	// Make the directory and then write the ninputs as json to it.
 	err := os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 0755)
 	if err != nil {
 		return err
@@ -447,7 +449,7 @@ func initConfiguration() {
 		return
 	}
 
-	//fill in if missing configurations
+	// fill in if missing configurations
 	if len(config.NodeAgentManagementHomeDir) == 0 {
 		config.NodeAgentManagementHomeDir = NODEAGENT_HOME
 	}

@@ -15,12 +15,12 @@
 package windataplane
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/hcn"
@@ -161,6 +161,8 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 
 		netPolsToAdd.Add(networkPolicySettings)
 	}
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	// Load what's actually there.
 	netPolsToRemove := set.New[hcn.RemoteSubnetRoutePolicySetting]()
