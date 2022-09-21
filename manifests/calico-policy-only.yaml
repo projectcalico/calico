@@ -2871,7 +2871,7 @@ spec:
                   for internal use only.'
                 type: boolean
               natOutgoing:
-                description: When nat-outgoing is true, packets sent from Calico networked
+                description: When natOutgoing is true, packets sent from Calico networked
                   containers in this pool to destinations outside of this pool will
                   be masqueraded.
                 type: boolean

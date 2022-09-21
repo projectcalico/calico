@@ -3591,7 +3591,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"natOutgoing": {
 						SchemaProps: spec.SchemaProps{
-							Description: "When nat-outgoing is true, packets sent from Calico networked containers in this pool to destinations outside of this pool will be masqueraded.",
+							Description: "When natOutgoing is true, packets sent from Calico networked containers in this pool to destinations outside of this pool will be masqueraded.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
