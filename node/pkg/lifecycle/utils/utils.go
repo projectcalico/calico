@@ -16,7 +16,6 @@ package utils
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -25,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -210,7 +210,7 @@ func SetNodeNetworkUnavailableCondition(clientset kubernetes.Clientset,
 			LastHeartbeatTime:  metav1.Now(),
 		}
 	}
-
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	raw, err := json.Marshal(&[]kapiv1.NodeCondition{condition})
 	if err != nil {
 		return err

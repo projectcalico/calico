@@ -15,7 +15,6 @@
 package driver
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -24,6 +23,7 @@ import (
 	"strings"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -106,6 +106,7 @@ func (d *Driver) Run() error {
 
 func RetrieveConfig() (*ConfigurationOptions, error) {
 	config := ConfigurationOptions{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if _, err := os.Stat(configFile); err == nil {
 		// Read the config from the file.
 		bytes, err := ioutil.ReadFile(configFile)
