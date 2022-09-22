@@ -23,11 +23,12 @@ import (
 	"strings"
 	"time"
 
-	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
+
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
