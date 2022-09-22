@@ -42,6 +42,9 @@ type TyphaConfig struct {
 	CAFile   string
 	CN       string
 	URISAN   string
+
+	// FIPSModeEnabled Enables FIPS 140-2 verified crypto mode.
+	FIPSModeEnabled bool
 }
 
 // ReadTyphaConfig reads the TyphaConfig from environment variables.
@@ -65,6 +68,8 @@ func ReadTyphaConfig(supportedPrefixes []string) TyphaConfig {
 					}
 					duration := time.Duration(seconds * float64(time.Second))
 					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).Set(reflect.ValueOf(duration))
+				} else if field.Type.Name() == "bool" {
+					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).SetBool(value == "true")
 				} else {
 					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).Set(reflect.ValueOf(value))
 				}
