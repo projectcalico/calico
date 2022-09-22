@@ -62,6 +62,9 @@ type EtcdConfig struct {
 	EtcdKey    string `json:"etcdKey" ignored:"true"`
 	EtcdCert   string `json:"etcdCert" ignored:"true"`
 	EtcdCACert string `json:"etcdCACert" ignored:"true"`
+
+	// EtcdFIPSModeEnabled uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
+	EtcdFIPSModeEnabled bool `json:"etcdFIPSModeEnabled" envconfig:"ETCD_FIPS_MODE_ENABLED"`
 }
 
 type KubeConfig struct {
