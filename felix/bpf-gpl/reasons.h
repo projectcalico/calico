@@ -24,6 +24,7 @@ enum calico_reason {
 	CALI_REASON_RT_UNKNOWN,
 	CALI_REASON_ACCEPTED_BY_XDP, // Not used by countres map
 	CALI_REASON_WEP_NOT_READY,
+	CALI_REASON_NATIFACE,
 };
 
 #define DENY_REASON(ctx, res) 	\
