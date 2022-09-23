@@ -54,6 +54,7 @@ from networking_calico import etcdutils
 
 from etcd3gw.exceptions import Etcd3Exception
 
+from eventlet.event import Event
 from eventlet.queue import Empty
 from eventlet.queue import LightQueue
 
@@ -180,35 +181,46 @@ class MTUWatcher(object):
         if if_name in self.port_id_by_if_name:
             del self.port_id_by_if_name[if_name]
 
-    def start_up(self):
-        # Start 'ip monitor link' running on a separate thread.
-        self.ip_monitor_running = False
-        eventlet.spawn(self.process_command, ['ip', 'monitor', 'link'])
+    def run(self):
+        while True:
+            # Start 'ip monitor link' running on a separate thread.
+            running_event = Event()
+            exited_event = Event()
+            eventlet.spawn(self.process_command, ['ip', 'monitor', 'link'],
+                           running_event=running_event,
+                           exited_event=exited_event)
 
-        # Wait until we can be sure that 'ip monitor link' is really
-        # running, and hence that we will see all further link
-        # transitions.
-        while not self.ip_monitor_running:
-            # Create and delete a dummy interface.
-            os.system("ip link add calico-dhcp-dmy type dummy")
-            os.system("ip link del calico-dhcp-dmy type dummy")
-            time.sleep(0.5)
+            # Wait until we can be sure that 'ip monitor link' is really
+            # running (or has exited), and hence that we will see all
+            # further link transitions.
+            while not (running_event.ready() or exited_event.ready()):
+                # Create and delete a dummy interface.
+                os.system("ip link add calico-dhcp-dmy type dummy")
+                os.system("ip link del calico-dhcp-dmy type dummy")
+                time.sleep(0.5)
 
-        # Now run 'ip link', to find MTU of all pre-existing interfaces.
-        self.process_command(['ip', 'link'])
+            if not exited_event.ready():
+                # Now run 'ip link', to find MTU of all pre-existing interfaces.
+                self.process_command(['ip', 'link'])
+
+            # Wait for the 'ip monitor link' thread to exit, so that we
+            # can then restart it.
+            exited_event.wait()
 
     # -----------------------------------------------------------------
     # Methods called from MTU watcher's own thread, or from agent thread.
     # -----------------------------------------------------------------
 
-    def process_command(self, command):
+    def process_command(self, command, running_event=None, exited_event=None):
         process = subprocess.Popen(command, stdout=subprocess.PIPE)
         while True:
             line = process.stdout.readline()
             if not line:
                 LOG.info("command %r exited", command)
                 break
-            self.ip_monitor_running = True
+            if running_event:
+                running_event.send()
+                running_event = None
             match_data = self.rx_up.match(line.decode('utf-8'))
             if match_data:
                 self.record_mtu(match_data.group(1), int(match_data.group(2)))
@@ -216,6 +228,9 @@ class MTUWatcher(object):
             match_data = self.rx_del.match(line.decode('utf-8'))
             if match_data:
                 self.if_deleted(match_data.group(1))
+
+        if exited_event:
+            exited_event.send()
 
     def record_mtu(self, if_name, mtu):
         LOG.debug("MTU for %s is now %d", if_name, mtu)
@@ -342,7 +357,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
     def start(self):
         eventlet.spawn(self.dnsmasq_updater.start)
-        self.mtu_watcher.start_up()
+        eventlet.spawn(self.mtu_watcher.run)
         eventlet.spawn(self.v1_subnet_watcher.start)
         eventlet.spawn(self.subnet_watcher.start)
         super(CalicoEtcdWatcher, self).start()
