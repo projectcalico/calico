@@ -27,7 +27,7 @@
      networking-calico:
       version: master
      flannel:
-      version: v0.15.1
+      version: v0.16.3
      calico/dikastes:
       version: master
      flexvol:
