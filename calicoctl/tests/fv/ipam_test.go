@@ -272,6 +272,9 @@ func TestIPAMCleanup(t *testing.T) {
 		Expect(report.LeakedHandles).To(HaveLen(1))
 		Expect(report.LeakedHandles[0].ID).To(Equal("leaked-handle"))
 		Expect(report.LeakedHandles[0].Revision).ToNot(BeEmpty())
+		if kdd {
+			Expect(report.LeakedHandles[0].UID).ToNot(BeNil())
+		}
 
 		out, err = CalicoctlMayFail(kdd, "ipam", "release", "--from-report=/tmp/ipam_report.json")
 		Expect(err).To(HaveOccurred(), "calicoctl ipam release should fail if datastore is not locked")
