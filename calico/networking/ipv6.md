@@ -77,12 +77,12 @@ metadata:
 spec:
   calicoNetwork:
     # Note: The ipPools section cannot be modified post-install.
-   ipPools:
-   - blockSize: 122
-     cidr: 2001::00/64
-     encapsulation: None
-     natOutgoing: Enabled
-     nodeSelector: all()
+    ipPools:
+      - blockSize: 122
+        cidr: 2001::00/64
+        encapsulation: None
+        natOutgoing: Enabled
+        nodeSelector: all()
 ```
 
 %>
@@ -155,17 +155,17 @@ spec:
   # Configures Calico networking.
   calicoNetwork:
     # Note: The ipPools section cannot be modified post-install.
-  ipPools:
-  - blockSize: 26
-    cidr: 10.48.0.0/21
-    encapsulation: IPIP
-    natOutgoing: Enabled
-    nodeSelector: all()
-  - blockSize: 122
-    cidr: 2001::00/64
-    encapsulation: None
-    natOutgoing: Enabled
-    nodeSelector: all()
+    ipPools:
+      - blockSize: 26
+        cidr: 10.48.0.0/21
+        encapsulation: IPIP
+        natOutgoing: Enabled
+        nodeSelector: all()
+      - blockSize: 122
+        cidr: 2001::00/64
+        encapsulation: None
+        natOutgoing: Enabled
+        nodeSelector: all()
 ```
 
 %>
