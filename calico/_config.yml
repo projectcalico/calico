@@ -36,7 +36,7 @@ imageNames:
   kubeControllers: docker.io/calico/kube-controllers
   calico-upgrade: docker.io/calico/upgrade
   calico/windows: docker.io/calico/windows
-  flannel: quay.io/coreos/flannel
+  flannel: docker.io/flannelcni/flannel
   flannelMigration: docker.io/calico/flannel-migration-controller
   dikastes: docker.io/calico/dikastes
   pilot-webhook: docker.io/calico/pilot-webhook
@@ -89,7 +89,7 @@ defaults:
         calico/kube-controllers: calico/kube-controllers
         calico-upgrade: calico-upgrade
         calico/windows: calico/windows
-        flannel: quay.io/coreos/flannel
+        flannel: docker.io/flannelcni/flannel
         flannelMigration: calico/flannel-migration-controller
         calico/dikastes: calico/dikastes
         pilot-webhook: calico/pilot-webhook
