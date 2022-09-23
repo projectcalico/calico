@@ -69,20 +69,21 @@ type ipamHandleClient struct {
 }
 
 func (c ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {
-	handle := kvpv3.Value.(*libapiv3.IPAMHandle).Spec.HandleID
-	block := kvpv3.Value.(*libapiv3.IPAMHandle).Spec.Block
-	del := kvpv3.Value.(*libapiv3.IPAMHandle).Spec.Deleted
+	v3Handle := kvpv3.Value.(*libapiv3.IPAMHandle)
+	handleID := v3Handle.Spec.HandleID
+	block := v3Handle.Spec.Block
+	del := v3Handle.Spec.Deleted
 	return &model.KVPair{
 		Key: model.IPAMHandleKey{
-			HandleID: handle,
+			HandleID: handleID,
 		},
 		Value: &model.IPAMHandle{
-			HandleID: handle,
+			HandleID: handleID,
 			Block:    block,
 			Deleted:  del,
 		},
 		Revision: kvpv3.Revision,
-		UID:      kvpv3.UID,
+		UID:      &v3Handle.UID,
 	}
 }
 
