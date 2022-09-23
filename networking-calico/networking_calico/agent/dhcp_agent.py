@@ -234,10 +234,11 @@ class MTUWatcher(object):
 
     def record_mtu(self, if_name, mtu):
         LOG.debug("MTU for %s is now %d", if_name, mtu)
-        if if_name in self.port_id_by_if_name and mtu != self.mtu_by_if_name.get(if_name):
+        old_mtu = self.mtu_by_if_name.get(if_name)
+        self.mtu_by_if_name[if_name] = mtu
+        if if_name in self.port_id_by_if_name and mtu != old_mtu:
             # MTU changing for a watched port.
             self.port_handler.on_mtu_change(self.port_id_by_if_name[if_name], mtu)
-        self.mtu_by_if_name[if_name] = mtu
 
     def if_deleted(self, if_name):
         LOG.debug("Interface %s deleted", if_name)
