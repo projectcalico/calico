@@ -16,7 +16,7 @@ package autodetection
 // Default interfaces to exclude for any logic following the first-found
 // auto detect IP method
 var DEFAULT_INTERFACES_TO_EXCLUDE []string = []string{
-	"docker.*", "cbr.*", "dummy.*",
-	"virbr.*", "lxcbr.*", "veth.*", "lo",
-	"cali.*", "tunl.*", "flannel.*", "kube-ipvs.*", "cni.*",
+	"^docker.*", "^cbr.*", "^dummy.*",
+	"^virbr.*", "^lxcbr.*", "^veth.*", "^lo",
+	"^cali.*", "^tunl.*", "^flannel.*", "^kube-ipvs.*", "^cni.*",
 }
