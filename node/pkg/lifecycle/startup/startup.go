@@ -601,7 +601,7 @@ func validateIP(ipn string) {
 
 	// Get a complete list of interfaces with their addresses and check if
 	// the IP address can be found.
-	ifaces, err := autodetection.GetInterfaces(nil, nil, ipAddr.Version())
+	ifaces, err := autodetection.GetInterfaces(net.Interfaces, nil, nil, ipAddr.Version())
 	if err != nil {
 		log.WithError(err).Error("Unable to query host interfaces")
 		utils.Terminate()
