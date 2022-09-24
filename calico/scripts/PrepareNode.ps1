@@ -95,11 +95,43 @@ $global:KubeletArgs = $FileContent.TrimStart(''KUBELET_KUBEADM_ARGS='').Trim(''"
 
 $global:containerRuntime = {{CONTAINER_RUNTIME}}
 
+function Get-LastBootTime()
+{
+    $bootTime = (Get-CimInstance win32_operatingsystem | select @{LABEL=''LastBootUpTime'';EXPRESSION={$_.lastbootuptime}}).LastBootUpTime
+    if (($bootTime -EQ $null) -OR ($bootTime.length -EQ 0))
+    {
+        throw "Failed to get last boot time"
+    }
+ 
+    # This function is used in conjunction with Get-StoredLastBootTime, which
+    # returns a string, so convert the datetime value to a string using the "general" standard format.
+    return $bootTime.ToString("G")
+}
+
+
 if ($global:containerRuntime -eq "Docker") {
     $netId = docker network ls -f name=host --format "{{ .ID }}"
 
     if ($netId.Length -lt 1) {
-    docker network create -d nat host
+        docker network create -d nat host
+    }
+} else {
+    $storedLastBootTime = Get-Content c:\k\last-boot-time.txt -ErrorAction SilentlyContinue
+    $lastBootTime = Get-LastBootTime    
+    if ($lastBootTime -NE $storedLastBootTime) {
+        Set-Content -Path c:\k\last-boot-time.txt -Value $lastBootTime
+
+        Import-Module -DisableNameChecking "c:\k\hns.psm1"
+        if ((Get-HNSNetwork | ? Type -NE nat))
+        {
+            Write-Host "First time Calico has run since boot up, cleaning out any old network state."
+            Get-HNSNetwork | ? Type -NE nat | Remove-HNSNetwork
+            do
+            {
+                Write-Host "Waiting for network deletion to complete."
+                Start-Sleep 1
+            } while ((Get-HNSNetwork | ? Type -NE nat))
+        }
     }
 }
 
