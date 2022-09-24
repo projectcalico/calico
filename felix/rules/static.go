@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1122,7 +1122,6 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 	rawRules = append(rawRules,
 		Rule{
-			Match:  Match().NotDestAddrType(AddrTypeLocal),
 			Action: GotoAction{Target: ChainRawUntrackedFlows},
 		},
 		Rule{
@@ -1153,6 +1152,15 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 					Comment: []string{"MarkSeenSkipFIB Mark"},
 				},
 				Rule{
+					Action:  SetMaskedMarkAction{Mark: tcdefs.MarkSeenSkipFIB, Mask: tcdefs.MarkSeenSkipFIB},
+					Comment: []string{"Mark MarkSeenSkipFIB Mark"},
+				},
+				Rule{
+					Match:   Match().NotDestAddrType(AddrTypeLocal),
+					Action:  ReturnAction{},
+					Comment: []string{"Return if packet is for host"},
+				},
+				Rule{
 					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
 					Action:  ReturnAction{},
 					Comment: []string{"MarkSeenFallThrough Mark"},
@@ -1166,6 +1174,10 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
 					Action:  ReturnAction{},
 					Comment: []string{"MarkSeenNATOutgoing Mark"},
+				},
+				Rule{
+					Action:  ClearMarkAction{Mark: tcdefs.MarkSeenSkipFIB},
+					Comment: []string{"Clear MarkSeenSkipFIB Mark"},
 				},
 				Rule{
 					Action: NoTrackAction{},

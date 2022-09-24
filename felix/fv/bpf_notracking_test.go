@@ -22,12 +22,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/pkg/errors"
+	"github.com/vishvananda/netlink"
+
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	"github.com/vishvananda/netlink"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feature", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
@@ -51,7 +52,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feat
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_BPFENABLED":              "true",
-			"FELIX_BPFHostConntrackBypass":  "false",
+			"FELIX_BPFHostConntrackBypass":  "true",
 			"FELIX_DEBUGDISABLELOGDROPPING": "true"}
 
 		felixes, _ = infrastructure.StartNNodeTopology(2, opts, infra)

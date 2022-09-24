@@ -143,6 +143,8 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
      . . . .  . 1 0 1  . . . .       FALLTHROUGH => SEEN but no BPF CT state; need to check
                                      against Linux CT state
 
+	 . . . .  . . . .  1 . . .		 SKIP_FIB => skip fib and send packet to host
+
      . . . .  1 . . .  . . . .       CT_ESTABLISHED: set by iptables to indicate match
                                      against Linux CT state
 
@@ -188,7 +190,7 @@ enum calico_skb_mark {
 	/* CALI_SKB_MARK_MASQ enforces MASQ on the connection. */
 	CALI_SKB_MARK_MASQ                   = CALI_SKB_MARK_BYPASS  | 0x00600000,
 	/* CALI_SKB_MARK_SKIP_FIB is used for packets that should pass through host IP stack. */
-	CALI_SKB_MARK_SKIP_FIB               = CALI_SKB_MARK_SEEN | 0x00100000,
+	CALI_SKB_MARK_SKIP_FIB               = 0x00100000,
 	/* CT_ESTABLISHED is used by iptables to tell the BPF programs that the packet is part of an
 	 * established Linux conntrack flow. This allows the BPF program to let through pre-existing
 	 * flows at start of day. */
