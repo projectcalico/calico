@@ -1,6 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # Copyright 2015 Metaswitch Networks
-# Copyright 2016, 2018 Tigera, Inc.
+# Copyright 2016, 2018, 2022 Tigera, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -18,8 +18,11 @@
 import logging
 import netaddr
 import os
+import re
 import socket
+import subprocess
 import sys
+import time
 
 import eventlet
 eventlet.monkey_patch()
@@ -50,6 +53,10 @@ from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 
 from etcd3gw.exceptions import Etcd3Exception
+
+from eventlet.event import Event
+from eventlet.queue import Empty
+from eventlet.queue import LightQueue
 
 LOG = logging.getLogger(__name__)
 
@@ -148,6 +155,161 @@ def split_endpoint_name(name):
     return tuple([p.replace('#', '-') for p in parts])
 
 
+class MTUWatcher(object):
+
+    # -----------------------------------------------------------------
+    # Methods called from DHCP agent's main thread.
+    # -----------------------------------------------------------------
+
+    def __init__(self, agent, port_handler):
+        self.agent = agent
+        self.port_handler = port_handler
+        self.mtu_by_if_name = {}
+        self.port_id_by_if_name = {}
+        self.rx_up = re.compile('[0-9]+: (tap[a-z0-9-]+).* mtu ([0-9]+) .* state UP')
+        self.rx_del = re.compile('Deleted [0-9]+: (tap[a-z0-9-]+)')
+
+    def get_mtu(self, if_name):
+        # Note, returns None if we haven't yet seen an MTU for the given
+        # interface name.
+        return self.mtu_by_if_name.get(if_name)
+
+    def watch_port(self, id, if_name):
+        self.port_id_by_if_name[if_name] = id
+
+    def unwatch_port(self, id, if_name):
+        if if_name in self.port_id_by_if_name:
+            del self.port_id_by_if_name[if_name]
+
+    def run(self):
+        while True:
+            # Start 'ip monitor link' running on a separate thread.
+            running_event = Event()
+            exited_event = Event()
+            eventlet.spawn(self.process_command, ['ip', 'monitor', 'link'],
+                           running_event=running_event,
+                           exited_event=exited_event)
+
+            # Wait until we can be sure that 'ip monitor link' is really
+            # running (or has exited), and hence that we will see all
+            # further link transitions.
+            while not (running_event.ready() or exited_event.ready()):
+                # Create and delete a dummy interface.
+                os.system("ip link add calico-dhcp-dmy type dummy")
+                os.system("ip link del calico-dhcp-dmy type dummy")
+                time.sleep(0.5)
+
+            if not exited_event.ready():
+                # Now run 'ip link', to find MTU of all pre-existing interfaces.
+                self.process_command(['ip', 'link'])
+
+            # Wait for the 'ip monitor link' thread to exit, so that we
+            # can then restart it.
+            exited_event.wait()
+
+    # -----------------------------------------------------------------
+    # Methods called from MTU watcher's own thread, or from agent thread.
+    # -----------------------------------------------------------------
+
+    def process_command(self, command, running_event=None, exited_event=None):
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                LOG.info("command %r exited", command)
+                break
+            if running_event:
+                running_event.send()
+                running_event = None
+            match_data = self.rx_up.match(line.decode('utf-8'))
+            if match_data:
+                self.record_mtu(match_data.group(1), int(match_data.group(2)))
+                continue
+            match_data = self.rx_del.match(line.decode('utf-8'))
+            if match_data:
+                self.if_deleted(match_data.group(1))
+
+        if exited_event:
+            exited_event.send()
+
+    def record_mtu(self, if_name, mtu):
+        LOG.debug("MTU for %s is now %d", if_name, mtu)
+        old_mtu = self.mtu_by_if_name.get(if_name)
+        self.mtu_by_if_name[if_name] = mtu
+        if if_name in self.port_id_by_if_name and mtu != old_mtu:
+            # MTU changing for a watched port.
+            self.port_handler.on_mtu_change(self.port_id_by_if_name[if_name], mtu)
+
+    def if_deleted(self, if_name):
+        LOG.debug("Interface %s deleted", if_name)
+        if if_name in self.mtu_by_if_name:
+            del self.mtu_by_if_name[if_name]
+
+
+class DnsmasqUpdater(object):
+    def __init__(self, agent):
+        self.agent = agent
+        self.updates_needed = LightQueue()
+
+        # Cache of the ports that we've asked Dnsmasq to handle, for each
+        # network ID.
+        self._last_dnsmasq_ports = {}
+
+    def update_network(self, network_id):
+        self.updates_needed.put(network_id)
+
+    def start(self):
+        while True:
+            LOG.info("DnsmasqUpdater: wait until updates needed")
+            dirty_network_ids = set()
+            dirty_network_ids.add(self.updates_needed.get())
+            try:
+                while True:
+                    dirty_network_ids.add(self.updates_needed.get_nowait())
+            except Empty:
+                pass
+            LOG.info("DnsmasqUpdater: updating now for %r", dirty_network_ids)
+            for network_id in dirty_network_ids:
+                self.really_update_dnsmasq(network_id)
+
+    def really_update_dnsmasq(self, network_id):
+        # Get NetModel for that network ID.
+        net = self.agent.cache.get_network_by_id(network_id)
+        LOG.debug("Net: %s", net)
+
+        # Compute the set of ports that we need Dnsmasq to handle for this
+        # network ID.
+        ports_needed = [
+            port for port in net.ports if port.device_id.startswith('tap')
+        ]
+        ports_needed.sort(key=lambda port: port.id)
+        for p in ports_needed:
+            LOG.debug("Port %s", p)
+            for edo in p.extra_dhcp_opts:
+                LOG.debug("DHCP option %s", edo)
+
+        # Compare `str(p)` for each needed port, instead of just `p`
+        # (which is really just a pointer), so that we can spot when
+        # DHCP options change within the same port DictModel.
+        ports_needed_as_string = ' //// '.join([str(p) for p in ports_needed])
+
+        # Compare that against what we've last asked Dnsmasq to handle.
+        if ports_needed_as_string != self._last_dnsmasq_ports.get(network_id):
+            # Requirements have changed, so start, restart or stop Dnsmasq for
+            # that network ID.
+            if ports_needed:
+                self.agent.call_driver('restart', net)
+            else:
+                # No ports left, so also remove this network from the cache.
+                _fix_network_cache_port_lookup(self.agent, net.id)
+                self.agent.cache.remove(net)
+                self.agent.call_driver('disable', net)
+
+            # Remember what we've asked Dnsmasq for.
+            self._last_dnsmasq_ports[network_id] = ports_needed_as_string
+        else:
+            LOG.debug("No change")
+
 class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
     def __init__(self, agent, hostname):
@@ -174,6 +336,13 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Networks for which Dnsmasq needs updating.
         self.dirty_networks = set()
 
+        # Use a separate thread for dnsmasq updating, so that we can
+        # also trigger that for MTU changes.
+        self.dnsmasq_updater = DnsmasqUpdater(agent)
+
+        # Create MTU watcher.
+        self.mtu_watcher = MTUWatcher(agent, self)
+
         # Also watch the etcd subnet trees: both the new region-aware
         # one, and the old pre-region one, so as to support a VM
         # renewing its DHCP lease while an upgrade is still in
@@ -184,14 +353,12 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self,
             datamodel_v2.subnet_dir(self.region_string))
 
-        # Cache of the ports that we've asked Dnsmasq to handle, for each
-        # network ID.
-        self._last_dnsmasq_ports = {}
-
         # Cache of current local endpoint IDs.
         self.local_endpoint_ids = set()
 
     def start(self):
+        eventlet.spawn(self.dnsmasq_updater.start)
+        eventlet.spawn(self.mtu_watcher.run)
         eventlet.spawn(self.v1_subnet_watcher.start)
         eventlet.spawn(self.subnet_watcher.start)
         super(CalicoEtcdWatcher, self).start()
@@ -309,16 +476,22 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.warning("Endpoint has no DHCP-served IPs: %s", endpoint)
             return
 
+        extra_dhcp_opts = []
+        mtu = self.mtu_watcher.get_mtu(endpoint['interfaceName'])
+        self.mtu_watcher.watch_port(endpoint_id, endpoint['interfaceName'])
+        if mtu:
+            extra_dhcp_opts.append(self.get_mtu_option(mtu))
+
         port = {'id': endpoint_id,
                 'device_owner': 'calico',
                 'device_id': endpoint['interfaceName'],
                 'fixed_ips': fixed_ips,
                 'mac_address': endpoint['mac'],
-                # FIXME: Calico currently does not pass through extra DHCP
-                # options, but it would be nice if it did.  Perhaps we could
-                # use an endpoint annotation, similarly as we do for the FQDN.
+                # FIXME: Calico currently does not handle extra DHCP
+                # options, other than MTU, but there might be use cases
+                # where it should handle further options.
                 # https://bugs.launchpad.net/networking-calico/+bug/1553348
-                'extra_dhcp_opts': []}
+                'extra_dhcp_opts': extra_dhcp_opts}
         if fqdn:
             port['dns_assignment'] = dns_assignments
 
@@ -342,8 +515,30 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Add this port into the NetModel.
         self.agent.cache.put_port(dhcp.DictModel(port))
 
-        # Schedule updating Dnsmasq.
-        self._update_dnsmasq(port['network_id'])
+        # If we have seen the TAP interface, schedule updating Dnsmasq;
+        # otherwise wait until we do see the TAP interface, whereupon
+        # _update_dnsmasq will be called again.  Dnsmasq updates can
+        # take a little time, and they run in series, so it's best to
+        # wait if we don't have the information we need yet, to avoid
+        # delaying the correct Dnsmasq update that we really want.
+        if mtu:
+            self._update_dnsmasq(port['network_id'])
+
+    def get_mtu_option(self, mtu):
+        return dhcp.DictModel({
+            'opt_name': 'mtu',
+            'opt_value': str(mtu),
+            'ip_version': 4,
+        })
+
+    # Note, on_mtu_change is called from MTU watcher's thread.
+    def on_mtu_change(self, id, mtu):
+        port = self.agent.cache.get_port_by_id(id)
+        if port:
+            LOG.info("MTU changed to %s for %s (%s)", mtu, port.device_id, id)
+            port.extra_dhcp_opts = [self.get_mtu_option(mtu)]
+            self.agent.cache.put_port(port)
+            self._update_dnsmasq(port.network_id)
 
     def _ensure_net_and_subnets(self, port):
         """Ensure that the cache has a NetModel and subnets for PORT."""
@@ -407,33 +602,10 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
             # Add (or update) the NetModel in the cache.
             LOG.debug("Net: %s", net)
-            self._fix_network_cache_port_lookup(net.id)
+            _fix_network_cache_port_lookup(self.agent, net.id)
             self.agent.cache.put(net)
 
         return net.id
-
-    def _fix_network_cache_port_lookup(self, network_id):
-        """Fix NetworkCache before removing or replacing a network.
-
-        neutron.agent.dhcp.agent is bugged in that it adds the DHCP port into
-        the cache without updating the cache's port_lookup dict, but then
-        NetworkCache.remove() barfs if there is a port in network.ports but not
-        in that dict...
-
-        NetworkCache.put() implicitly does a remove() first if there is already
-        a NetModel in the cache with the same ID.  So a put() to update or
-        replace a network also hits this problem.
-
-        This method avoids that problem by ensuring that all of a network's
-        ports are in the port_lookup dict.  A caller should call this
-        immediately before a remove() or a put().
-        """
-
-        # If there is an existing NetModel for this network ID, ensure that all
-        # its ports are in the port_lookup dict.
-        if network_id in self.agent.cache.cache:
-            for port in self.agent.cache.cache[network_id].ports:
-                self.agent.cache.port_lookup[port.id] = network_id
 
     def _update_dnsmasq(self, network_id):
         """Start/stop/restart Dnsmasq for NETWORK_ID."""
@@ -445,31 +617,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self.dirty_networks.add(network_id)
             return
 
-        # Get NetModel for that network ID.
-        net = self.agent.cache.get_network_by_id(network_id)
-        LOG.debug("Net: %s", net)
-
-        # Compute the set of ports that we need Dnsmasq to handle for this
-        # network ID.
-        ports_needed = [
-            port for port in net.ports if port.device_id.startswith('tap')
-        ]
-        ports_needed.sort(key=lambda port: port.id)
-
-        # Compare that against what we've last asked Dnsmasq to handle.
-        if ports_needed != self._last_dnsmasq_ports.get(network_id):
-            # Requirements have changed, so start, restart or stop Dnsmasq for
-            # that network ID.
-            if ports_needed:
-                self.agent.call_driver('restart', net)
-            else:
-                # No ports left, so also remove this network from the cache.
-                self._fix_network_cache_port_lookup(net.id)
-                self.agent.cache.remove(net)
-                self.agent.call_driver('disable', net)
-
-            # Remember what we've asked Dnsmasq for.
-            self._last_dnsmasq_ports[network_id] = ports_needed
+        self.dnsmasq_updater.update_network(network_id)
 
     def on_endpoint_delete(self, response_ignored, name):
         """Handler for endpoint deletion."""
@@ -491,6 +639,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         port = self.agent.cache.get_port_by_id(endpoint_id)
         if port:
             LOG.debug("deleted port: %s", port)
+            self.mtu_watcher.unwatch_port(endpoint_id, port.device_id)
             self.agent.cache.remove_port(port)
             self._update_dnsmasq(port.network_id)
 
@@ -503,7 +652,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         LOG.debug("Reset cache for new snapshot")
         for network_id in list(self.agent.cache.get_network_ids()):
             self.dirty_networks.add(network_id)
-            self._fix_network_cache_port_lookup(network_id)
+            _fix_network_cache_port_lookup(self.agent, network_id)
             self.agent.cache.put(empty_network(network_id))
 
         # Suppress Dnsmasq updates until we've processed the whole snapshot.
@@ -518,6 +667,30 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         for network_id in self.dirty_networks:
             self._update_dnsmasq(network_id)
         self.dirty_networks = set()
+
+
+def _fix_network_cache_port_lookup(agent, network_id):
+    """Fix NetworkCache before removing or replacing a network.
+
+    neutron.agent.dhcp.agent is bugged in that it adds the DHCP port into
+    the cache without updating the cache's port_lookup dict, but then
+    NetworkCache.remove() barfs if there is a port in network.ports but not
+    in that dict...
+
+    NetworkCache.put() implicitly does a remove() first if there is already
+    a NetModel in the cache with the same ID.  So a put() to update or
+    replace a network also hits this problem.
+
+    This method avoids that problem by ensuring that all of a network's
+    ports are in the port_lookup dict.  A caller should call this
+    immediately before a remove() or a put().
+    """
+
+    # If there is an existing NetModel for this network ID, ensure that all
+    # its ports are in the port_lookup dict.
+    if network_id in agent.cache.cache:
+        for port in agent.cache.cache[network_id].ports:
+            agent.cache.port_lookup[port.id] = network_id
 
 
 class SubnetIDNotFound(Exception):
