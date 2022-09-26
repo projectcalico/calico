@@ -234,7 +234,7 @@ func TestFailsafes(t *testing.T) {
 			Expect(res.RetvalStr()).To(Equal(result), fmt.Sprintf("expected program to return %s", result))
 		})
 		if !test.Outbound && test.Allowed {
-			expectMark(tcdefs.MarkSeen)
+			expectMark(tcdefs.MarkSeenSkipFIB)
 		}
 	}
 }
