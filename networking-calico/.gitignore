@@ -54,3 +54,8 @@ ChangeLog
 .*sw?
 venv
 .idea
+
+# Produced as part of packaging build.
+debian/changelog
+debian/files
+rpm/networking-calico.spec
