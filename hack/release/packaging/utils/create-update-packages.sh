@@ -187,7 +187,7 @@ function do_net_cal {
     pushd ${rootdir}/networking-calico
     PKG_NAME=networking-calico \
 	    NAME=networking-calico \
-	    DEB_EPOCH=1: \
+	    DEB_EPOCH=2: \
 	    ${rootdir}/hack/release/packaging/utils/make-packages.sh deb rpm
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' $outputDir \;
@@ -218,10 +218,11 @@ function do_felix {
 	    NAME=Felix \
 	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
+	    DEB_EPOCH=2: \
 	    ${rootdir}/hack/release/packaging/utils/make-packages.sh deb rpm
     git checkout Makefile
 
-    
+
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'felix_*-*' -exec mv '{}' $outputDir \;
     popd
