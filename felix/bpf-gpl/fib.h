@@ -299,7 +299,7 @@ cancel_fib:
 		}
 
 		CALI_DEBUG("Setting mark to 0x%x\n", mark);
-		ctx->skb->mark = mark;
+		skb_set_mark(ctx->skb, mark);
 	}
 
 skip_fib:
@@ -330,7 +330,7 @@ skip_fib:
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,
 		 * which trips up the validator.
 		 */
-		ctx->skb->mark = ctx->fwd.mark; /* make sure that each pkt has SEEN mark */
+		skb_set_mark(ctx->skb, ctx->fwd.mark); /* make sure that each pkt has SEEN mark */
 	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
