@@ -619,11 +619,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		fib = false;
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 		CALI_DEBUG("marking CALI_SKB_MARK_NAT_OUT\n");
-	} else {
-		if (state->flags & CALI_ST_SKIP_FIB) {
-			fib = false;
-			seen_mark |= CALI_SKB_MARK_SKIP_FIB;
-		}
 	}
 
 	/* We check the ttl here to avoid needing complicated handling of
@@ -772,7 +767,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
-			seen_mark |= CALI_SKB_MARK_SKIP_FIB;
 		}
 		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
@@ -1224,13 +1218,6 @@ allow:
 		CALI_DEBUG("Loopback SNAT\n");
 		seen_mark |=  CALI_SKB_MARK_MASQ;
 		CALI_DEBUG("marking CALI_SKB_MARK_MASQ\n");
-		fib = false; /* Disable FIB because we want to drop to iptables */
-	}
-
-	if (state->flags & CALI_ST_SKIP_FIB) {
-		CALI_DEBUG("Skip fib\n");
-		seen_mark |=  CALI_SKB_MARK_SKIP_FIB;
-		CALI_DEBUG("marking CALI_SKB_MARK_SKIP_FIB\n");
 		fib = false; /* Disable FIB because we want to drop to iptables */
 	}
 

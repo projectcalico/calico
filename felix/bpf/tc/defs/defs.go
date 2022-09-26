@@ -28,7 +28,7 @@ const (
 	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | 0x00f00000
 	MarkSeenMASQ                     = MarkSeenBypass | 0x00600000
 	MarkSeenMASQMask                 = MarkSeenBypassMask | 0x00f00000
-	MarkSeenSkipFIB                  = 0x00100000
+	MarkSeenSkipFIB                  = MarkSeen | 0x00100000
 
 	MarkLinuxConntrackEstablished     = 0x08000000
 	MarkLinuxConntrackEstablishedMask = 0x08000000
