@@ -62,7 +62,7 @@ EOF
 		    install_package calico-common
 
 		    # Install networking-calico.
-		    pip_install "${GITDIR['networking-calico']}"
+		    pip_install "${GITDIR['calico']}/networking-calico"
 
 		    ;;
 
@@ -132,7 +132,7 @@ EOF
 		    export ETCDCTL_API=3
 		    export ETCDCTL_ENDPOINTS=http://$SERVICE_HOST:$ETCD_PORT
 		    run_process calico-bird \
-                      "${DEST}/networking-calico/devstack/auto-bird-conf.sh ${HOST_IP} ${ETCD_BIN_DIR}/etcdctl"
+                      "${DEST}/calico/devstack/auto-bird-conf.sh ${HOST_IP} ${ETCD_BIN_DIR}/etcdctl"
 
 		    # Run the Calico DHCP agent.
 		    sudo mkdir /var/log/neutron || true
