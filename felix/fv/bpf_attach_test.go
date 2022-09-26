@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 
 	BeforeEach(func() {
 		infra = getInfra()
-		// opts := infrastructure.DefaultTopologyOptions()
 		opts := infrastructure.TopologyOptions{
 			FelixLogSeverity: "debug",
 			DelayFelixStart:  true,
