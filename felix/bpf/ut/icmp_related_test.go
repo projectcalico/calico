@@ -75,7 +75,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
@@ -143,7 +143,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 
 		natPkt = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	dumpCTMap(ctMap)
 
@@ -180,7 +180,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)
 
