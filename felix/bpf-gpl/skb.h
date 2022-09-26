@@ -162,4 +162,14 @@ static CALI_BPF_INLINE bool skb_is_gso(struct __sk_buff *skb) {
 	return (skb->gso_segs > 1);
 }
 
+static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
+{
+	asm volatile (\
+		"*(u32 *)(%[skb] + %[offset]) = %[mark]" \
+		: /*out*/ : [skb] "r" (skb), [mark] "r" (mark),
+		  [offset] "i" (offsetof(struct __sk_buff, mark)) /*in*/ \
+		: /*clobber*/ \
+	);
+}
+
 #endif /* __SKB_H__ */

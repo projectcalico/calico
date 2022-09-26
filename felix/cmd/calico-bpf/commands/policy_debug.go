@@ -44,7 +44,8 @@ func init() {
 }
 
 var policyDumpCmd = &cobra.Command{
-	Use:   "dump <interface> <hook>",
+	Use: "dump <interface> <hook>\n" +
+		"\n\thook - can be 'ingress', 'egress' or 'all'.",
 	Short: "dumps policy",
 	Run: func(cmd *cobra.Command, args []string) {
 		iface, hook, err := parseArgs(args)
