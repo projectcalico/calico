@@ -239,7 +239,7 @@ skip_fib:
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
 		 */
-		ctx->fwd.mark |=  CALI_SKB_MARK_SEEN;
+		ctx->fwd.mark |= CALI_SKB_MARK_SKIP_FIB;
 		if (ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL\n");
 			ctx->fwd.mark |= EXT_TO_SVC_MARK;
