@@ -164,7 +164,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Source is the local host - should pass
 	tcpSynAck := &layers.TCP{
@@ -205,7 +205,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeenFallThrough)
+	expectMark(tcdefs.MarkSeenFallThrough | tcdefs.MarkSeenSkipFIB)
 
 	// Make space in the CT table
 	err = ctMap.Delete(firstCTKey[:])
@@ -217,7 +217,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeenFallThrough)
+	expectMark(tcdefs.MarkSeenFallThrough | tcdefs.MarkSeenSkipFIB)
 
 	// No conntrack created for non-SYN packet (should fall through to iptables).  We test by
 	// trying to create an entry, which should succeed.

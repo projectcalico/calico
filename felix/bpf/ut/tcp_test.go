@@ -62,7 +62,7 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -100,7 +100,7 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	ct, err = conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -164,7 +164,7 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -204,7 +204,7 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	ct, err = conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())

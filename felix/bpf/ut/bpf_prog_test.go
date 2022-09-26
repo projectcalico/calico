@@ -145,9 +145,8 @@ var retvalToStrXDP = map[int]string{
 
 func expectMark(expect int) {
 	if canTestMarks {
-		maskedMark := skbMark & uint32(expect)
-		ExpectWithOffset(1, maskedMark).To(Equal(uint32(expect)),
-			fmt.Sprintf("skbMark 0x%08x should include mark 0x%08x at %s", skbMark, expect, caller(2)))
+		ExpectWithOffset(1, skbMark).To(Equal(uint32(expect)),
+			fmt.Sprintf("skbMark 0x%08x should be 0x%08x at %s", skbMark, expect, caller(2)))
 	} else {
 		// If we cannot verify the mark, set it to the expected value as the
 		// next stage expects it to be set.

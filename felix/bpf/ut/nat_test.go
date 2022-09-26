@@ -146,7 +146,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	})
 
 	// Leaving node 1
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(natedPkt)
@@ -199,7 +199,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Arriving at workload at node 2
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(natedPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -231,7 +231,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	})
 
 	// Response leaving node 2
-	expectMark(tcdefs.MarkSeenBypass)
+	expectMark(tcdefs.MarkSeenBypass | tcdefs.MarkSeenSkipFIB)
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -267,7 +267,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	dumpCTMap(ctMap)
 
 	// Response arriving at workload at node 1
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		pktExp := gopacket.NewPacket(respPkt, layers.LayerTypeEthernet, gopacket.Default)
 		ipv4L := pktExp.Layer(layers.LayerTypeIPv4)
@@ -537,7 +537,7 @@ func TestNATNodePort(t *testing.T) {
 		recvPkt = res.dataOut
 	})
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	dumpCTMap(ctMap)
 	ct, err = conntrack.LoadMapMem(ctMap)
@@ -1002,7 +1002,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -1039,7 +1039,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 		Expect(res.dataOut).To(Equal(respPkt))
 	})
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Response leaving to original source
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -1456,7 +1456,7 @@ func TestNormalSYNRetryForcePolicy(t *testing.T) {
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	bpfIfaceName = "SYN2"
 	explicitAllow := &polprog.Rules{
@@ -1483,7 +1483,7 @@ func TestNormalSYNRetryForcePolicy(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	bpfIfaceName = "SYN3"
 	changedToDeny := &polprog.Rules{
@@ -1605,7 +1605,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 		Expect(seenOtherIP).To(BeTrue(), "SYNs from varying source ports all went to same backend")
 	})
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Change back to the original SYN packet so that we can test the new policy
 	// with an existing CT entry.
@@ -1701,7 +1701,7 @@ func TestNATAffinity(t *testing.T) {
 		Expect(aff).To(HaveLen(0))
 	})
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// After we set affinity, new entry is acreated in affinity table
 	natKey := nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol))
@@ -1733,7 +1733,7 @@ func TestNATAffinity(t *testing.T) {
 		affEntry = aff[affKey]
 		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP, natPort)))
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 	resetCTMap(ctMap)
 
 	// check that the selection is the same with a new entry to pick and the
@@ -1768,7 +1768,7 @@ func TestNATAffinity(t *testing.T) {
 		Expect(aff).To(HaveKey(affKey))
 		Expect(aff[affKey]).To(Equal(affEntry))
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 	resetCTMap(ctMap)
 
 	// delete the currently selected backend, expire the affinity check and make
@@ -1810,7 +1810,7 @@ func TestNATAffinity(t *testing.T) {
 		affEntry = aff[affKey]
 		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP2, natPort2)))
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 	resetCTMap(ctMap)
 }
 
@@ -2054,7 +2054,7 @@ func TestNATSourceCollision(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Arriving at workload at node 2
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -2081,7 +2081,7 @@ func TestNATSourceCollision(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Response leaving node 2
 	skbMark = tcdefs.MarkSeen
@@ -2128,7 +2128,7 @@ func TestNATSourceCollision(t *testing.T) {
 
 		recvPkt = res.dataOut
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Test random port conflict by sending another SYN packet. To avoid the
 	// complexity of VXLAN encap in the test, send it with a different node IP,
