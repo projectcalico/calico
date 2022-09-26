@@ -897,12 +897,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			}
 		}
 
-		is_dnat = state->ip_dst != state->post_nat_ip_dst;
-
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
 		if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
-			is_dnat = true;
 			if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
 				/* Packet is returning from a NAT tunnel,
 				 * already SNATed, just forward it.
@@ -914,6 +911,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			state->post_nat_ip_dst = state->ct_result.nat_ip;
 			state->post_nat_dport = state->ct_result.nat_port;
 		}
+
+		/* We may not do a true DNAT here if we are resolving service source port
+		 * conflict with host->pod w/o service. See calico_tc_host_ct_conflict().
+		 */
+		is_dnat = state->ip_dst != state->post_nat_ip_dst || state->dport != state->post_nat_dport;
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n",
 				bpf_ntohl(state->post_nat_ip_dst), state->post_nat_dport);
