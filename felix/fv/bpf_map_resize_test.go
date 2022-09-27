@@ -126,12 +126,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		ctMap := conntrack.Map(&bpf.MapContext{})
 
 		felix := felixes[0]
-		Expect(getMapSize(felix, rtMap)).To(Equal((rtMap.(*bpf.PinnedMap)).MaxEntries))
-		Expect(getMapSize(felix, feMap)).To(Equal((feMap.(*bpf.PinnedMap)).MaxEntries))
-		Expect(getMapSize(felix, beMap)).To(Equal((beMap.(*bpf.PinnedMap)).MaxEntries))
-		Expect(getMapSize(felix, affMap)).To(Equal((affMap.(*bpf.PinnedMap)).MaxEntries))
-		Expect(getMapSize(felix, ipsMap)).To(Equal((ipsMap.(*bpf.PinnedMap)).MaxEntries))
-		Expect(getMapSize(felix, ctMap)).To(Equal((ctMap.(*bpf.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, rtMap) }, "10s", "200ms").Should(Equal((rtMap.(*bpf.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, feMap) }, "10s", "200ms").Should(Equal((feMap.(*bpf.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, beMap) }, "10s", "200ms").Should(Equal((beMap.(*bpf.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, affMap) }, "10s", "200ms").Should(Equal((affMap.(*bpf.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, ipsMap) }, "10s", "200ms").Should(Equal((ipsMap.(*bpf.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, ctMap) }, "10s", "200ms").Should(Equal((ctMap.(*bpf.PinnedMap)).MaxEntries))
 
 		By("configuring route map size = 1000, nat fe size = 2000, nat be size = 3000, nat affinity size = 4000")
 		newRtSize := 1000
