@@ -61,6 +61,8 @@ global_job_config:
   prologue:
     commands:
     - checkout
+    - export REPO_DIR="$(pwd)"
+    - mkdir artifacts
     # Semaphore is doing shallow clone on a commit without tags.
     # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
     - git fetch --unshallow
@@ -73,6 +75,14 @@ global_job_config:
     # Free up space on the build machine.
     - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
     - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+    # Disable initramfs update to save space on the Semaphore VM (and we don't need it because we're not going to reboot).
+    - sudo apt-get install -y -u crudini
+    - sudo crudini --set /etc/initramfs-tools/update-initramfs.conf '' update_initramfs no
+    - cat /etc/initramfs-tools/update-initramfs.conf
+  epilogue:
+    commands:
+    - cd "$REPO_DIR"
+    - .semaphore/publish-artifacts
 
 blocks:
 
@@ -518,6 +528,42 @@ blocks:
     - name: "cni-plugin tests"
       commands:
       - make ci
+
+- name: 'networking-calico'
+  run:
+    when: "false or change_in(['/networking-calico/'])"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - cd networking-calico
+    jobs:
+      - name: 'Unit and FV tests (tox)'
+        commands:
+          - ../.semaphore/run-and-monitor tox.log make tox
+      - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
+        commands:
+          - git checkout -b devstack-test
+          - export LIBVIRT_TYPE=qemu
+          - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/ussuri
+          # Use proposed fix at
+          # https://review.opendev.org/c/openstack/requirements/+/810859.  See commit
+          # message for more context.
+          - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
+          - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
+          - export NC_PLUGIN_REPO=$(dirname $(pwd))
+          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
+    epilogue:
+      on_fail:
+        commands:
+          - mkdir logs
+          - sudo journalctl > logs/journalctl.txt
+          - artifact push job --expire-in 1d logs
 
 - name: "Documentation"
   run:

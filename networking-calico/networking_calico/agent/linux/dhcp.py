@@ -190,12 +190,15 @@ class DnsmasqRouted(dhcp.Dnsmasq):
         cmd.remove('--interface=tap*')
         cmd.remove('--bridge-interface=%s,tap*' % self.interface_name)
         bridge_option = '--bridge-interface=%s' % self.interface_name
+        bridge_ports_added = False
         for port in self.network.ports:
             if port.device_id.startswith('tap'):
                 LOG.debug('Listen on %s', port.device_id)
                 cmd.append('--interface=%s' % port.device_id)
                 bridge_option = bridge_option + ',' + port.device_id
-        cmd.append(bridge_option)
+                bridge_ports_added = True
+        if bridge_ports_added:
+            cmd.append(bridge_option)
 
         return cmd
 
