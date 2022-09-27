@@ -61,6 +61,9 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
 
         ns_dummy.link.set_up()
 
+    def set_mtu(self, device_name, mtu, namespace=None, prefix=None):
+        pass
+
     def init_l3(self, device_name, ip_cidrs, namespace=None,
                 preserve_ips=[], gateway=None, extra_subnets=[]):
         """L3 initialization for RoutedInterfaceDriver.
