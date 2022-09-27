@@ -260,7 +260,7 @@ class DnsmasqUpdater(object):
 
     def start(self):
         while True:
-            LOG.info("DnsmasqUpdater: wait until updates needed")
+            LOG.debug("DnsmasqUpdater: wait until updates needed")
             dirty_network_ids = set()
             dirty_network_ids.add(self.updates_needed.get())
             try:
@@ -268,7 +268,7 @@ class DnsmasqUpdater(object):
                     dirty_network_ids.add(self.updates_needed.get_nowait())
             except Empty:
                 pass
-            LOG.info("DnsmasqUpdater: updating now for %r", dirty_network_ids)
+            LOG.debug("DnsmasqUpdater: updating now for %r", dirty_network_ids)
             for network_id in dirty_network_ids:
                 self.really_update_dnsmasq(network_id)
 
@@ -298,11 +298,14 @@ class DnsmasqUpdater(object):
             # Requirements have changed, so start, restart or stop Dnsmasq for
             # that network ID.
             if ports_needed:
+                LOG.info("Restart dnsmasq for network %s with %d port(s)",
+                         network_id, len(ports_needed))
                 self.agent.call_driver('restart', net)
             else:
                 # No ports left, so also remove this network from the cache.
                 _fix_network_cache_port_lookup(self.agent, net.id)
                 self.agent.cache.remove(net)
+                LOG.info("Disable dnsmasq for network %s", network_id)
                 self.agent.call_driver('disable', net)
 
             # Remember what we've asked Dnsmasq for.
