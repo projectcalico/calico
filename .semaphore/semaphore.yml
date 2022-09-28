@@ -625,7 +625,7 @@ blocks:
 - name: 'networking-calico'
   run:
     when: "false or change_in(['/networking-calico/'])"
-  dependencies: []
+  dependencies: ["Prerequisites"]
   task:
     agent:
       machine:
