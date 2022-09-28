@@ -783,7 +783,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (state->flags & CALI_ST_HOST_PSNAT) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_HOST_PSNAT;
 		}
-
 		/* Mark connections that were routed via bpfnatout, but had CT miss at
 		 * HEP. That is because of SNAT happened between bpfnatout and here.
 		 * Returning packets on such a connection must go back via natbpfout

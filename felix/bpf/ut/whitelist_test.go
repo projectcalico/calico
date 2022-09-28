@@ -144,7 +144,7 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
 	})
 
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)

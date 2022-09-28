@@ -180,7 +180,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)
 
