@@ -826,6 +826,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
 		}
+		// To support iptables DNAT from 3rd party iptables managers
+		if (CALI_F_TO_WEP && (ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB)) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
+		}
 		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
 		}
@@ -838,6 +842,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (state->flags & CALI_ST_HOST_PSNAT) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_HOST_PSNAT;
 		}
+
 		/* Mark connections that were routed via bpfnatout, but had CT miss at
 		 * HEP. That is because of SNAT happened between bpfnatout and here.
 		 * Returning packets on such a connection must go back via natbpfout

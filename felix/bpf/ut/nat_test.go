@@ -200,7 +200,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Arriving at workload at node 2
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(natedPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -268,7 +268,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	dumpCTMap(ctMap)
 
 	// Response arriving at workload at node 1
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		pktExp := gopacket.NewPacket(respPkt, layers.LayerTypeEthernet, gopacket.Default)
 		ipv4L := pktExp.Layer(layers.LayerTypeIPv4)
@@ -538,7 +538,7 @@ func TestNATNodePort(t *testing.T) {
 		recvPkt = res.dataOut
 	})
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	dumpCTMap(ctMap)
 	ct, err = conntrack.LoadMapMem(ctMap)
@@ -1003,7 +1003,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -2058,7 +2058,7 @@ func TestNATSourceCollision(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Arriving at workload at node 2
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -2132,7 +2132,7 @@ func TestNATSourceCollision(t *testing.T) {
 
 		recvPkt = res.dataOut
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Test random port conflict by sending another SYN packet. To avoid the
 	// complexity of VXLAN encap in the test, send it with a different node IP,
