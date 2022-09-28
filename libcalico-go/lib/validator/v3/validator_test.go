@@ -250,6 +250,20 @@ func init() {
 			},
 			false,
 		),
+		Entry("should reject WorkloadEndpointSpec with an invalid source spoofing config (m)",
+			libapiv3.WorkloadEndpointSpec{
+				InterfaceName:              "eth0",
+				AllowSpoofedSourcePrefixes: []string{"10.abcd"},
+			},
+			false,
+		),
+		Entry("should accept WorkloadEndpointSpec with an ip or prefix in the source spoofing config (m)",
+			libapiv3.WorkloadEndpointSpec{
+				InterfaceName:              "eth0",
+				AllowSpoofedSourcePrefixes: []string{"10.0.0.1", "192.168.0.0/16"},
+			},
+			true,
+		),
 
 		// (API) HostEndpointSpec.
 		Entry("should accept HostEndpointSpec with a port (m)",
