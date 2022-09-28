@@ -46,7 +46,8 @@ static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k)
 	CALI_VERB("CT-ALL   key B=%x:%d size=%d\n", bpf_ntohl(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
 
-static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct_ctx,
+static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
+							struct ct_create_ctx *ct_ctx,
 							struct calico_ct_key *k)
 {
 	__be32 ip_src = ct_ctx->src;
@@ -200,9 +201,16 @@ create:
 		dst_to_src->whitelisted = 1;
 		CALI_DEBUG("CT-ALL Whitelisted both due to host source port conflict resolution.\n");
 	} else if (CALI_F_FROM_HOST) {
-		/* dst is to the EP, policy whitelisted this side */
-		dst_to_src->whitelisted = 1;
-		CALI_DEBUG("CT-ALL Whitelisted dest side - to EP\n");
+		if (ctx->state->flags & CALI_ST_CT_NP_LOOP) {
+			/* we do not run policy and it should behave like TO_HOST */
+			src_to_dst->whitelisted = 1;
+			CALI_DEBUG("CT-ALL Whitelisted source side - from HEP tun allow_return=%d\n",
+					ct_ctx->allow_return);
+		} else {
+			/* dst is to the EP, policy whitelisted this side */
+			dst_to_src->whitelisted = 1;
+			CALI_DEBUG("CT-ALL Whitelisted dest side - to EP\n");
+		}
 	}
 
 	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
@@ -634,11 +642,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
 		result.flags = ct_value_get_flags(tracking_v);
+		CALI_CT_DEBUG("result.flags 0x%x\n", result.flags);
 
 		if (ct_ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
 			result.nat_ip = tracking_v->orig_ip;
-		} else if (CALI_F_TO_HOST) {
+		} else if (CALI_F_TO_HOST ||
+				(CALI_F_TO_HEP && result.flags & (CALI_CT_FLAG_VIA_NAT_IF |
+								  CALI_CT_FLAG_NP_LOOP |
+								  CALI_CT_FLAG_NP_REMOTE))) {
 			// Since we found a forward NAT entry, we know that it's the destination
 			// that needs to be NATted.
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -704,6 +716,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		snat |= (dnat_return_should_encap() && v->tun_ip);
 		snat |= result.flags & CALI_CT_FLAG_VIA_NAT_IF;
 		snat |= result.flags & CALI_CT_FLAG_HOST_PSNAT;
+		snat |= result.flags & CALI_CT_FLAG_NP_LOOP;
+		snat |= result.flags & CALI_CT_FLAG_NP_REMOTE;
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
@@ -922,7 +936,7 @@ static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_c
 	// Workaround for verifier; make sure verifier sees the skb on all code paths.
 	ct_ctx->skb = ctx->skb;
 
-	err = calico_ct_v4_create_tracking(ct_ctx, &k);
+	err = calico_ct_v4_create_tracking(ctx, ct_ctx, &k);
 	if (err) {
 		CALI_DEBUG("calico_ct_v4_create_tracking err %d\n", err);
 		return err;

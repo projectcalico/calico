@@ -60,13 +60,14 @@ const (
 //    __u16 pre_nat_dport;
 //    __u16 post_nat_dport;
 //    __u8 ip_proto;
-//    __u8 flags;
+//    __u8 __pad;
 //    __be16 ip_size;
 //    __u32 rules_hit;
 //    __u64 rule_ids[MAX_RULE_IDS];
 //    struct calico_ct_result ct_result;
 //    struct calico_nat_dest nat_dest;
 //    __u64 prog_start_time;
+//    __u64 flags;
 // };
 type State struct {
 	SrcAddr             uint32
@@ -96,7 +97,7 @@ type State struct {
 	PreNATDstPort       uint16
 	PostNATDstPort      uint16
 	IPProto             uint8
-	Flags               uint8
+	pad                 uint8
 	IPSize              uint16
 	RulesHit            uint32
 	RuleIDs             [MaxRuleIDs]uint64
@@ -109,9 +110,10 @@ type State struct {
 	_                   uint32
 	NATData             uint64
 	ProgStartTime       uint64
+	Flags               uint64
 }
 
-const expectedSize = 408
+const expectedSize = 416
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})

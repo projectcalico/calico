@@ -110,6 +110,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
 				felix.Exec("ip", "a")
+				if BPFMode() {
+					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
+				}
 			}
 		}
 
