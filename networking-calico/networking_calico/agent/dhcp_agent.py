@@ -270,7 +270,13 @@ class DnsmasqUpdater(object):
                 pass
             LOG.debug("DnsmasqUpdater: updating now for %r", dirty_network_ids)
             for network_id in dirty_network_ids:
-                self.really_update_dnsmasq(network_id)
+                # Handle any exceptions here so that the dnsmasq updater thread
+                # doesn't die.  There aren't any expected exception scenarios,
+                # but better to be more resilient here.
+                try:
+                    self.really_update_dnsmasq(network_id)
+                except Exception as e:
+                    LOG.exception("really_update_dnsmasq")
 
     def really_update_dnsmasq(self, network_id):
         # Get NetModel for that network ID.
@@ -288,15 +294,25 @@ class DnsmasqUpdater(object):
             for edo in p.extra_dhcp_opts:
                 LOG.debug("DHCP option %s", edo)
 
-        # Compare `str(p)` for each needed port, instead of just `p`
-        # (which is really just a pointer), so that we can spot when
-        # DHCP options change within the same port DictModel.
-        ports_needed_as_string = ' //// '.join([str(p) for p in ports_needed])
+        # Compare a description of each needed port that includes all the
+        # information we care about, instead of just `p` (which is really just
+        # a pointer), so that we can spot when DHCP options change within the
+        # same port DictModel.
+        ports_needed_as_string = ''
+        for p in ports_needed:
+            ports_needed_as_string += ':' + p.device_id
+            for edo in p.extra_dhcp_opts:
+                ports_needed_as_string += ";" + edo.opt_name + "," + edo.opt_value + "," + str(edo.ip_version)
+            for fip in p.fixed_ips:
+                ports_needed_as_string += ";" + fip.ip_address
+        LOG.debug("Ports needed: %s", ports_needed_as_string)
 
         # Compare that against what we've last asked Dnsmasq to handle.
         if ports_needed_as_string != self._last_dnsmasq_ports.get(network_id):
             # Requirements have changed, so start, restart or stop Dnsmasq for
             # that network ID.
+            LOG.info("old: %s", self._last_dnsmasq_ports.get(network_id))
+            LOG.info("new: %s", ports_needed_as_string)
             if ports_needed:
                 LOG.info("Restart dnsmasq for network %s with %d port(s)",
                          network_id, len(ports_needed))
