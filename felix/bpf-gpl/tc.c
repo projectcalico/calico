@@ -619,6 +619,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		fib = false;
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 		CALI_DEBUG("marking CALI_SKB_MARK_NAT_OUT\n");
+	} else {
+		if (state->flags & CALI_ST_SKIP_FIB) {
+			fib = false;
+			seen_mark = CALI_SKB_MARK_SKIP_FIB;
+		}
 	}
 
 	/* We check the ttl here to avoid needing complicated handling of

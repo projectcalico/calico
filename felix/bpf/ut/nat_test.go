@@ -146,7 +146,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	})
 
 	// Leaving node 1
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(natedPkt)
@@ -231,7 +231,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	})
 
 	// Response leaving node 2
-	expectMark(tcdefs.MarkSeenBypass | tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeenBypass)
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -1039,7 +1039,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 		Expect(res.dataOut).To(Equal(respPkt))
 	})
 
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	// Response leaving to original source
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -1456,7 +1456,7 @@ func TestNormalSYNRetryForcePolicy(t *testing.T) {
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
 
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	bpfIfaceName = "SYN2"
 	explicitAllow := &polprog.Rules{
@@ -1483,7 +1483,7 @@ func TestNormalSYNRetryForcePolicy(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	bpfIfaceName = "SYN3"
 	changedToDeny := &polprog.Rules{
@@ -1605,7 +1605,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 		Expect(seenOtherIP).To(BeTrue(), "SYNs from varying source ports all went to same backend")
 	})
 
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	// Change back to the original SYN packet so that we can test the new policy
 	// with an existing CT entry.
@@ -1701,7 +1701,7 @@ func TestNATAffinity(t *testing.T) {
 		Expect(aff).To(HaveLen(0))
 	})
 
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	// After we set affinity, new entry is acreated in affinity table
 	natKey := nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol))
@@ -1733,7 +1733,7 @@ func TestNATAffinity(t *testing.T) {
 		affEntry = aff[affKey]
 		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP, natPort)))
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
 
 	// check that the selection is the same with a new entry to pick and the
@@ -1768,7 +1768,7 @@ func TestNATAffinity(t *testing.T) {
 		Expect(aff).To(HaveKey(affKey))
 		Expect(aff[affKey]).To(Equal(affEntry))
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
 
 	// delete the currently selected backend, expire the affinity check and make
@@ -1810,7 +1810,7 @@ func TestNATAffinity(t *testing.T) {
 		affEntry = aff[affKey]
 		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP2, natPort2)))
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
 }
 
@@ -2081,7 +2081,7 @@ func TestNATSourceCollision(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	// Response leaving node 2
 	skbMark = tcdefs.MarkSeen

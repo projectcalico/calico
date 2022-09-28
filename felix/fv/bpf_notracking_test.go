@@ -38,6 +38,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feat
 		return
 	}
 
+	const workloadTargetPort = "80"
 	var (
 		infra          infrastructure.DatastoreInfra
 		felixes        []*infrastructure.Felix
@@ -75,12 +76,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feat
 		}).Should(BeNil())
 
 		for i := range felixes {
-			const portsToOpen = "80"
 			workloads[i] = workload.Run(felixes[i],
 				fmt.Sprintf("host%d-webserver", i),
 				"default",
 				fmt.Sprintf("10.65.%d.2", i),
-				portsToOpen, "tcp")
+				workloadTargetPort, "tcp")
 			workloads[i].ConfigureInInfra(infra)
 		}
 
@@ -102,17 +102,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feat
 	It("should allow 3rd party DNAT to workloads work", func() {
 		expectNormalConnectivity := func() {
 			cc.ResetExpectations()
-			for i := range felixes {
-				cc.ExpectSome(felixes[i], workloads[0].Port(80))
-				cc.ExpectSome(felixes[i], workloads[1].Port(80))
-				cc.ExpectNone(externalClient, workloads[i].Port(80))
-				hostIP := connectivity.TargetIP(felixes[i].IP)
-				cc.ExpectNone(externalClient, hostIP, 8080)
-			}
-			cc.ExpectSome(workloads[1], workloads[0].Port(80))
-			cc.ExpectSome(workloads[0], workloads[1].Port(80))
+			hostIP0 := connectivity.TargetIP(felixes[0].IP)
+			cc.ExpectNone(felixes[1], hostIP0, 8080)
+			cc.ExpectNone(externalClient, hostIP0, 8080)
+			ipipIP0 := connectivity.TargetIP(felixes[0].ExpectedIPIPTunnelAddr)
+			cc.ExpectNone(workloads[1], ipipIP0, 8080)
 			cc.CheckConnectivity()
 		}
+
+		target := fmt.Sprintf("%s:%s", workloads[0].GetIP(), workloadTargetPort)
 
 		By("checking initial connectivity", func() {
 			expectNormalConnectivity()
@@ -124,31 +122,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feat
 
 			felix.Exec(
 				"iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "-m", "tcp",
-				"--dport", "8080", "-j", "DNAT", "--to-destination", "10.65.0.2:80")
+				"--dport", "8080", "-j", "DNAT", "--to-destination", target)
 
 			cc.ResetExpectations()
-			for i := range felixes {
-				cc.ExpectSome(felixes[i], workloads[0].Port(80))
-				cc.ExpectSome(felixes[i], workloads[1].Port(80))
-				cc.ExpectNone(externalClient, workloads[i].Port(80))
-			}
-			cc.ExpectSome(workloads[1], workloads[0].Port(80))
-			cc.ExpectSome(workloads[0], workloads[1].Port(80))
-
 			hostIP0 := connectivity.TargetIP(felixes[0].IP)
 			cc.ExpectSome(felixes[1], hostIP0, 8080)
 			cc.ExpectSome(externalClient, hostIP0, 8080)
-
-			hostIP1 := connectivity.TargetIP(felixes[1].IP)
-			cc.ExpectNone(felixes[1], hostIP1, 8080)
-			cc.ExpectNone(externalClient, hostIP1, 8080)
+			ipipIP0 := connectivity.TargetIP(felixes[0].ExpectedIPIPTunnelAddr)
+			cc.ExpectSome(workloads[1], ipipIP0, 8080)
 			cc.CheckConnectivity()
 		})
 
 		By("removing 3rd party rules and check connectivity is back to normal again", func() {
 			felixes[0].Exec(
 				"iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "-m", "tcp",
-				"--dport", "8080", "-j", "DNAT", "--to-destination", "10.65.0.2:80")
+				"--dport", "8080", "-j", "DNAT", "--to-destination", target)
 
 			expectNormalConnectivity()
 		})

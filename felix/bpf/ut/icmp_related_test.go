@@ -75,7 +75,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
@@ -143,7 +143,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 
 		natPkt = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	dumpCTMap(ctMap)
 

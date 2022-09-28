@@ -75,7 +75,7 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 	})
 
 	// Leaving node 1
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -213,7 +213,7 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
 	})
 
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
