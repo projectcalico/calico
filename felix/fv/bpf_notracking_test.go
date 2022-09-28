@@ -19,10 +19,6 @@ import (
 	"os"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"github.com/pkg/errors"
-	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -50,30 +46,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feat
 	BeforeEach(func() {
 		infra = getInfra()
 
-		opts := infrastructure.DefaultTopologyOptions()
-		opts.ExtraEnvVars = map[string]string{
-			"FELIX_BPFENABLED":              "true",
-			"FELIX_BPFHostConntrackBypass":  "true",
-			"FELIX_DEBUGDISABLELOGDROPPING": "true"}
-
+		opts := infrastructure.TopologyOptions{
+			FelixLogSeverity: "debug",
+			ExtraEnvVars: map[string]string{
+				"FELIX_BPFENABLED":              "true",
+				"FELIX_BPFHostConntrackBypass":  "true",
+				"FELIX_DEBUGDISABLELOGDROPPING": "true",
+			},
+		}
 		felixes, _ = infrastructure.StartNNodeTopology(2, opts, infra)
 		infra.AddDefaultAllow()
 		cc = &connectivity.Checker{}
-
-		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
-		// into the kernel.
-		Eventually(func() error {
-			links, err := netlink.LinkList()
-			if err != nil {
-				return err
-			}
-			for _, link := range links {
-				if link.Attrs().Name == "tunl0" {
-					return nil
-				}
-			}
-			return errors.New("tunl0 wasn't auto-created")
-		}).Should(BeNil())
 
 		for i := range felixes {
 			workloads[i] = workload.Run(felixes[i],
@@ -105,8 +88,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feat
 			hostIP0 := connectivity.TargetIP(felixes[0].IP)
 			cc.ExpectNone(felixes[1], hostIP0, 8080)
 			cc.ExpectNone(externalClient, hostIP0, 8080)
-			ipipIP0 := connectivity.TargetIP(felixes[0].ExpectedIPIPTunnelAddr)
-			cc.ExpectNone(workloads[1], ipipIP0, 8080)
+			cc.ExpectNone(workloads[1], hostIP0, 8080)
 			cc.CheckConnectivity()
 		}
 
@@ -128,8 +110,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf with NOTRACK feat
 			hostIP0 := connectivity.TargetIP(felixes[0].IP)
 			cc.ExpectSome(felixes[1], hostIP0, 8080)
 			cc.ExpectSome(externalClient, hostIP0, 8080)
-			ipipIP0 := connectivity.TargetIP(felixes[0].ExpectedIPIPTunnelAddr)
-			cc.ExpectSome(workloads[1], ipipIP0, 8080)
+			cc.ExpectSome(workloads[1], hostIP0, 8080)
 			cc.CheckConnectivity()
 		})
 

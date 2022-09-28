@@ -118,7 +118,7 @@ create:
 		.orig_port = orig_dport,
 	};
 
-	if (ct_ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB) {
+	if (CALI_F_TO_WEP && (ct_ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB)) {
 		ct_ctx->flags |= CALI_CT_FLAG_SKIP_FIB;
 	}
 
