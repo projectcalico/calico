@@ -118,6 +118,10 @@ create:
 		.orig_port = orig_dport,
 	};
 
+	if (CALI_F_TO_WEP && (ct_ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB)) {
+		ct_ctx->flags |= CALI_CT_FLAG_SKIP_FIB;
+	}
+
 	ct_value_set_flags(&ct_value, ct_ctx->flags);
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value_get_flags(&ct_value));
 
