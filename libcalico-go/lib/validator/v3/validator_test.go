@@ -15,6 +15,7 @@
 package v3_test
 
 import (
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -2722,6 +2723,27 @@ func init() {
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
 		}, false),
+	)
+
+	DescribeTable("SyncLabels Validator",
+		func(input interface{}, dst string, valid bool) {
+			os.Setenv("DATASTORE_TYPE", dst)
+			if valid {
+				Expect(v3.Validate(input)).NotTo(HaveOccurred(),
+					"expected value to be valid")
+			} else {
+				Expect(v3.Validate(input)).To(HaveOccurred(),
+					"expected value to be invalid")
+			}
+			os.Unsetenv("DATASTORE_TYPE")
+		},
+
+		Entry("should accept enabled sync labels for CRD mode",
+			api.NodeControllerConfig{SyncLabels: "Enabled"}, "kubernetes", true,
+		),
+		Entry("should not accept disabled sync labels for CRD mode",
+			api.NodeControllerConfig{SyncLabels: "Disabled"}, "kubernetes", false,
+		),
 	)
 }
 
