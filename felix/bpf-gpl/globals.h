@@ -31,6 +31,7 @@ enum cali_globals_flags {
 
 struct cali_ctlb_globals {
 	__be32 udp_not_seen_timeo;
+	bool exclude_udp;
 };
 
 #endif /* __CALI_GLOBALS_H__ */

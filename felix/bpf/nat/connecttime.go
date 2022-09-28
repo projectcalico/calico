@@ -87,7 +87,8 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	return nil
 }
 
-func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSeen time.Duration, maxEntries map[string]uint32) error {
+func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSeen time.Duration,
+	maxEntries map[string]uint32, excludeUDP bool) error {
 
 	progPinDir := path.Join(bpfMount, "calico_connect4")
 	_ = os.RemoveAll(progPinDir)
@@ -114,7 +115,7 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 		// The values are read only for the BPF programs, but can be set to a value from
 		// userspace before the program is loaded.
 		if m.IsMapInternal() {
-			if err := libbpf.CTLBSetGlobals(m, udpNotSeen); err != nil {
+			if err := libbpf.CTLBSetGlobals(m, udpNotSeen, excludeUDP); err != nil {
 				return fmt.Errorf("error setting globals: %w", err)
 			}
 			continue
@@ -148,7 +149,9 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen time.Duration, bpfMc *bpf.MapContext) error {
+func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen time.Duration, bpfMc *bpf.MapContext,
+	excludeUDP bool) error {
+
 	bpfMount, err := bpf.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
@@ -160,29 +163,31 @@ func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen
 		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
-	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes)
+	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes, excludeUDP)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes)
-	if err != nil {
-		return err
-	}
+	if !excludeUDP {
+		err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes, false)
+		if err != nil {
+			return err
+		}
 
-	err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes)
-	if err != nil {
-		return err
-	}
+		err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes, false)
+		if err != nil {
+			return err
+		}
 
-	err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes)
-	if err != nil {
-		return err
-	}
+		err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes, false)
+		if err != nil {
+			return err
+		}
 
-	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes)
-	if err != nil {
-		return err
+		err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes, false)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

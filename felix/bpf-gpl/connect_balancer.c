@@ -13,18 +13,12 @@
 #include <stdbool.h>
 
 #include "globals.h"
+#include "ctlb.h"
 #include "bpf.h"
 #include "log.h"
 #include "nat_lookup.h"
 
 #include "sendrecv.h"
-
-#if !defined(__BPFTOOL_LOADER__) && (!CALI_F_XDP)
-const volatile struct cali_ctlb_globals __globals;
-#define UDP_NOT_SEEN_TIMEO __globals.udp_not_seen_timeo
-#else
-#define UDP_NOT_SEEN_TIMEO 60 /* for tests */
-#endif
 
 static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, bool connect)
 {
@@ -41,7 +35,7 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 	__u16 dport_he = (__u16)(bpf_ntohl(ctx->user_port)>>16);
 	struct calico_nat_dest *nat_dest;
 	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he, false, &res,
-			proto == IPPROTO_UDP && !connect ? UDP_NOT_SEEN_TIMEO : 0, /* enforce affinity UDP */
+			proto == IPPROTO_UDP && !connect ? CTLB_UDP_NOT_SEEN_TIMEO : 0, /* enforce affinity UDP */
 			proto == IPPROTO_UDP && !connect /* update affinity timer */);
 	if (!nat_dest) {
 		CALI_INFO("NAT miss.\n");
@@ -123,6 +117,9 @@ int calico_connect_v4(struct bpf_sock_addr *ctx)
 		ip_proto = IPPROTO_TCP;
 		break;
 	case SOCK_DGRAM:
+		if (CTLB_EXCLUDE_UDP) {
+			goto out;
+		}
 		CALI_DEBUG("SOCK_DGRAM -> assuming UDP\n");
 		ip_proto = IPPROTO_UDP;
 		break;
@@ -142,6 +139,10 @@ out:
 SEC("cgroup/sendmsg4")
 int calico_sendmsg_v4(struct bpf_sock_addr *ctx)
 {
+	if (CTLB_EXCLUDE_UDP) {
+		goto out;
+	}
+
 	CALI_DEBUG("sendmsg_v4 %x:%d\n",
 			bpf_ntohl(ctx->user_ip4), bpf_ntohl(ctx->user_port)>>16);
 
@@ -159,6 +160,10 @@ out:
 SEC("cgroup/recvmsg4")
 int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 {
+	if (CTLB_EXCLUDE_UDP) {
+		goto out;
+	}
+
 	CALI_DEBUG("recvmsg_v4 %x:%d\n", bpf_ntohl(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
