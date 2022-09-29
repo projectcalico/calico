@@ -166,7 +166,7 @@ class MTUWatcher(object):
         self.port_handler = port_handler
         self.mtu_by_if_name = {}
         self.port_id_by_if_name = {}
-        self.rx_up = re.compile('[0-9]+: (tap[a-z0-9-]+).*: <(?:UP|.+,UP)[,>].* mtu ([0-9]+)')
+        self.rx_up = re.compile('^[0-9]+: (tap[a-z0-9-]+).*:.* mtu ([0-9]+)')
         self.rx_del = re.compile('Deleted [0-9]+: (tap[a-z0-9-]+)')
 
     def get_mtu(self, if_name):
