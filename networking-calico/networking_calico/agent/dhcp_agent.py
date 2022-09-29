@@ -166,7 +166,7 @@ class MTUWatcher(object):
         self.port_handler = port_handler
         self.mtu_by_if_name = {}
         self.port_id_by_if_name = {}
-        self.rx_up = re.compile('[0-9]+: (tap[a-z0-9-]+).* mtu ([0-9]+) .* state UP')
+        self.rx_up = re.compile('[0-9]+: (tap[a-z0-9-]+).*: <(?:UP|.+,UP)[,>].* mtu ([0-9]+)')
         self.rx_del = re.compile('Deleted [0-9]+: (tap[a-z0-9-]+)')
 
     def get_mtu(self, if_name):
@@ -235,6 +235,8 @@ class MTUWatcher(object):
     def record_mtu(self, if_name, mtu):
         LOG.debug("MTU for %s is now %d", if_name, mtu)
         old_mtu = self.mtu_by_if_name.get(if_name)
+        if mtu != old_mtu:
+            LOG.info("MTU for %s changed from %s to %s", if_name, old_mtu, mtu)
         self.mtu_by_if_name[if_name] = mtu
         if if_name in self.port_id_by_if_name and mtu != old_mtu:
             # MTU changing for a watched port.
@@ -243,6 +245,7 @@ class MTUWatcher(object):
     def if_deleted(self, if_name):
         LOG.debug("Interface %s deleted", if_name)
         if if_name in self.mtu_by_if_name:
+            LOG.info("Discard MTU for deleted interface %s", if_name)
             del self.mtu_by_if_name[if_name]
 
 
