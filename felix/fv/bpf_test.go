@@ -3308,6 +3308,64 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 			})
+
+			It("should allow 3rd party DNAT to workloads work", func() {
+				if testOpts.protocol != "tcp" {
+					return
+				}
+
+				hostIP0 := TargetIP(felixes[0].IP)
+				hostPort := uint16(8080)
+				target := fmt.Sprintf("%s:8055", w[0][0].GetIP())
+				//infra.AddDefaultAllow()
+				policy := api.NewNetworkPolicy()
+				policy.Name = "allow-all"
+				policy.Namespace = "default"
+				one := float64(1)
+				policy.Spec.Order = &one
+				policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+				policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
+				policy.Spec.Selector = "all()"
+				_, err := calicoClient.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
+
+				expectNormalConnectivity := func() {
+					cc.ResetExpectations()
+					cc.ExpectNone(felixes[1], hostIP0, hostPort)
+					cc.ExpectNone(externalClient, hostIP0, hostPort)
+					cc.ExpectNone(w[1][0], hostIP0, hostPort)
+					cc.CheckConnectivity()
+					cc.ResetExpectations()
+				}
+
+				By("checking initial connectivity", func() {
+					expectNormalConnectivity()
+				})
+
+				By("installing 3rd party rules", func() {
+					// Install a DNAT in first felix
+					felixes[0].Exec(
+						"iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "-m", "tcp",
+						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
+
+					//time.Sleep(time.Minute * 60)
+					cc.ResetExpectations()
+					cc.ExpectSome(felixes[1], hostIP0, hostPort)
+					cc.ExpectSome(externalClient, hostIP0, hostPort)
+					cc.ExpectSome(w[1][0], hostIP0, hostPort)
+					cc.CheckConnectivity()
+					cc.ResetExpectations()
+				})
+
+				By("removing 3rd party rules and check connectivity is back to normal again", func() {
+					felixes[0].Exec(
+						"iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "-m", "tcp",
+						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
+
+					expectNormalConnectivity()
+				})
+			})
+
 		})
 
 		Describe("with BPF disabled to begin with", func() {

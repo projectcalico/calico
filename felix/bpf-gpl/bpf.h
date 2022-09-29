@@ -147,6 +147,8 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
      . . . .  . 1 0 1  . . . .       FALLTHROUGH => SEEN but no BPF CT state; need to check
                                      against Linux CT state
 
+	 . . . .  . . . .  1 . . .		 SKIP_FIB => skip fib and send packet to host
+
      . . . .  1 . . .  . . . .       CT_ESTABLISHED: set by iptables to indicate match
                                      against Linux CT state
 
