@@ -17,6 +17,7 @@ package v3
 import (
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -159,6 +160,7 @@ func init() {
 	registerFieldValidator("containerID", validateContainerID)
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("labels", validateLabels)
+	registerFieldValidator("syncLabels", validateSyncLabels)
 	registerFieldValidator("ipVersion", validateIPVersion)
 	registerFieldValidator("ipIpMode", validateIPIPMode)
 	registerFieldValidator("vxlanMode", validateVXLANMode)
@@ -441,6 +443,17 @@ func validateLabels(fl validator.FieldLevel) bool {
 		if len(k8svalidation.IsValidLabelValue(v)) != 0 {
 			return false
 		}
+	}
+	return true
+}
+
+func validateSyncLabels(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate SyncLabels: %s", s)
+	dst := os.Getenv("DATASTORE_TYPE")
+	if s == "Disabled" && dst == "kubernetes" {
+		log.Debugf("SyncLabels value cannot be set to disabled with Kubernetes datastore driver.")
+		return false
 	}
 	return true
 }
