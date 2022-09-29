@@ -3236,15 +3236,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
-			It("should allow 3rd party DNAT to workloads work", func() {
-				if testOpts.protocol != "tcp" {
+			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
+				if testOpts.tunnel != "vxlan" {
 					return
 				}
 
 				hostIP0 := TargetIP(felixes[0].IP)
 				hostPort := uint16(8080)
 				target := fmt.Sprintf("%s:8055", w[0][0].GetIP())
-				//infra.AddDefaultAllow()
+
 				policy := api.NewNetworkPolicy()
 				policy.Name = "allow-all"
 				policy.Namespace = "default"
@@ -3272,7 +3272,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				By("installing 3rd party rules", func() {
 					// Install a DNAT in first felix
 					felixes[0].Exec(
-						"iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "-m", "tcp",
+						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "-m", "tcp",
 						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
 
 					//time.Sleep(time.Minute * 60)
