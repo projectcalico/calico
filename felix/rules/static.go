@@ -1124,12 +1124,12 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 		Rule{
 			Match:   Match().DestAddrType(AddrTypeLocal),
 			Action:  SetMaskedMarkAction{Mark: tcdefs.MarkSeenSkipFIB, Mask: tcdefs.MarkSeenSkipFIB},
-			Comment: []string{"To support 3rd party iptables managers"},
+			Comment: []string{"Mark traffic towards the host - it is TRACKed"},
 		},
 		Rule{
 			Match:   Match().NotDestAddrType(AddrTypeLocal),
 			Action:  GotoAction{Target: ChainRawUntrackedFlows},
-			Comment: []string{"Jump to target for packets with not local destination address"},
+			Comment: []string{"Check if forwarded traffic needs to be TRACKed"},
 		},
 		Rule{
 			// Return, i.e. no-op, if bypass mark is not set.
