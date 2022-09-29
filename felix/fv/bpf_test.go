@@ -3237,7 +3237,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 
 			It("should allow 3rd party DNAT to workloads work", func() {
-				if testOpts.tunnel != "wireguard" {
+				if testOpts.protocol != "tcp" {
 					return
 				}
 
