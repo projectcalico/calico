@@ -79,7 +79,7 @@ func TestICMPCTPlain(t *testing.T) {
 			Expect(k.PortB()).To(Equal(uint16(0)))
 		}
 	})
-	expectMark(tcdefs.MarkSeenSkipFIB)
+	expectMark(tcdefs.MarkSeen)
 }
 
 func makeICMPEcho(src, dst net.IP, icmpType uint8) []byte {
