@@ -176,7 +176,7 @@ func runK8sApiserver(etcdIp string) *containers.Container {
 			AutoRemove: true,
 			StopSignal: "SIGKILL",
 		},
-		"-v", os.Getenv("PWD")+"/certs:/home/user/certs", // Mount in location of certificates.
+		"-v", os.Getenv("CERTS_PATH")+":/home/user/certs", // Mount in location of certificates.
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
@@ -202,7 +202,7 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 			AutoRemove: true,
 			StopSignal: "SIGKILL",
 		},
-		"-v", os.Getenv("PWD")+"/certs:/home/user/certs", // Mount in location of certificates.
+		"-v", os.Getenv("CERTS_PATH")+"/:/home/user/certs", // Mount in location of certificates.
 		utils.Config.K8sImage,
 		"kube-controller-manager",
 		fmt.Sprintf("--master=https://%v:6443", apiserverIp),

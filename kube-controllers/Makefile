@@ -114,8 +114,7 @@ fv: tests/fv/fv.test image
 		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
 		CRDS=$(CURDIR)/../libcalico-go/config/crd \
-		CERTS=$(CURDIR)/tests/certs \
-		GO111MODULE=on \
+		CERTS_PATH=$(CERTS_PATH) \
 		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
 
 tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
