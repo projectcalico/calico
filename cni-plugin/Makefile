@@ -189,13 +189,9 @@ config/crd: mod-download
 run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-<<<<<<< HEAD
 	  -v $(CURDIR)/config:/config \
-	  -v $(CURDIR)/tests/certs:/home/user/certs \
-=======
-	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
 	  -v $(CERTS_PATH):/home/user/certs \
->>>>>>> Centralize common test certificates, remove duplicates
+	  -v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
 	  -e KUBECONFIG=/home/user/certs/kubeconfig \
 	  $(CALICO_BUILD) kube-apiserver \
 	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
