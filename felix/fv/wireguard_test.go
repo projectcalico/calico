@@ -169,18 +169,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					routeEntriesV6[0], routeEntriesV6[1] = routeEntriesV6[1], routeEntriesV6[0]
 				}
 				for i := 0; i < nodeCount; i++ {
-					if i > 0 {
-						// Stagger Felix starts to reduce chance of synchronising the Wireguard handshake (which
-						// makes it back off/retry).
-						time.Sleep(2 * time.Second)
-					}
 					wgBootstrapEvents = felixes[i].WatchStdoutFor(
 						regexp.MustCompile(".*(Cleared wireguard public key from datastore|Wireguard public key not set in datastore).+"),
 					)
 					felixes[i].TriggerDelayedStart()
 				}
 
-				cc = &connectivity.Checker{}
+				cc = &connectivity.Checker{
+					// If two nodes send their first packet within a few milliseconds then any on-demand Wireguard
+					// handshake can fail and back off if the handshakes cross on the wire.
+					StaggerStartBy: 100 * time.Millisecond,
+				}
 
 				// Reset the set of tcp dumps between runs.
 				tcpdumps = nil
@@ -1174,15 +1173,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 			felixes[0])
 
 		for i := range felixes {
-			if i > 0 {
-				// Stagger Felix starts to reduce chance of synchronising the Wireguard handshake (which
-				// makes it back off/retry).
-				time.Sleep(2 * time.Second)
-			}
 			felixes[i].TriggerDelayedStart()
 		}
 
-		cc = &connectivity.Checker{}
+		cc = &connectivity.Checker{
+			// If two nodes send their first packet within a few milliseconds then any on-demand Wireguard
+			// handshake can fail and back off if the handshakes cross on the wire.
+			StaggerStartBy: 100 * time.Millisecond,
+		}
 	})
 
 	AfterEach(func() {
@@ -1442,11 +1440,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		externalClient.Exec("ip", "route", "add", wlsByHost[0][0].IP, "via", felixes[0].IP)
 
 		for i := range felixes {
-			if i > 0 {
-				// Stagger Felix starts to reduce chance of synchronising the Wireguard handshake (which
-				// makes it back off/retry).
-				time.Sleep(2 * time.Second)
-			}
 			felixes[i].TriggerDelayedStart()
 		}
 
@@ -1475,7 +1468,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 			tcpdumps = append(tcpdumps, tcpdump)
 		}
 
-		cc = &connectivity.Checker{}
+		cc = &connectivity.Checker{
+			// If two nodes send their first packet within a few milliseconds then any on-demand Wireguard
+			// handshake can fail and back off if the handshakes cross on the wire.
+			StaggerStartBy: 100 * time.Millisecond,
+		}
 
 		// Ping other felix nodes from each node to trigger Wireguard handshakes.
 		for i, felix := range felixes {

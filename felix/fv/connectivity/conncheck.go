@@ -52,6 +52,7 @@ type Checker struct {
 	expectations     []Expectation
 	CheckSNAT        bool
 	RetriesDisabled  bool
+	StaggerStartBy   time.Duration
 
 	// OnFail, if set, will be called instead of ginkgo.Fail().  (Useful for testing the checker itself.)
 	OnFail func(msg string)
@@ -222,6 +223,7 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 
 			responses[i] = res
 		}(i, exp)
+		time.Sleep(c.StaggerStartBy)
 	}
 	wg.Wait()
 	return responses, pretty
