@@ -137,7 +137,7 @@ etcd_ip=$(get_container_ip ${prefix}-etcd)
 # "cluster-admin" role).
 # Enable insecure connection from controller manager to API server port 8080.
 docker run --detach --name ${prefix}-apiserver \
-       -v ${PWD}/fv/certs:/home/user/certs \
+       -v ${CERTS_PATH}:/home/user/certs \
        $FV_K8SIMAGE \
        kube-apiserver \
        --etcd-servers=http://${etcd_ip}:2379 \
@@ -162,7 +162,7 @@ while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/ku
 done
 
 docker run --detach --name ${prefix}-controller-manager \
-          -v ${PWD}/fv/certs:/home/user/certs \
+    -v ${CERTS_PATH}:/home/user/certs \
           $FV_K8SIMAGE \
 	  kube-controller-manager \
             --master=https://${k8s_ip}:6443 \
