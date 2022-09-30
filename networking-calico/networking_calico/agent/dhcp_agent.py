@@ -166,7 +166,7 @@ class MTUWatcher(object):
         self.port_handler = port_handler
         self.mtu_by_if_name = {}
         self.port_id_by_if_name = {}
-        self.rx_up = re.compile('[0-9]+: (tap[a-z0-9-]+).* mtu ([0-9]+) .* state UP')
+        self.rx_up = re.compile('^[0-9]+: (tap[a-z0-9-]+).*:.* mtu ([0-9]+)')
         self.rx_del = re.compile('Deleted [0-9]+: (tap[a-z0-9-]+)')
 
     def get_mtu(self, if_name):
@@ -235,6 +235,8 @@ class MTUWatcher(object):
     def record_mtu(self, if_name, mtu):
         LOG.debug("MTU for %s is now %d", if_name, mtu)
         old_mtu = self.mtu_by_if_name.get(if_name)
+        if mtu != old_mtu:
+            LOG.info("MTU for %s changed from %s to %s", if_name, old_mtu, mtu)
         self.mtu_by_if_name[if_name] = mtu
         if if_name in self.port_id_by_if_name and mtu != old_mtu:
             # MTU changing for a watched port.
@@ -243,6 +245,7 @@ class MTUWatcher(object):
     def if_deleted(self, if_name):
         LOG.debug("Interface %s deleted", if_name)
         if if_name in self.mtu_by_if_name:
+            LOG.info("Discard MTU for deleted interface %s", if_name)
             del self.mtu_by_if_name[if_name]
 
 
@@ -270,7 +273,13 @@ class DnsmasqUpdater(object):
                 pass
             LOG.debug("DnsmasqUpdater: updating now for %r", dirty_network_ids)
             for network_id in dirty_network_ids:
-                self.really_update_dnsmasq(network_id)
+                # Handle any exceptions here so that the dnsmasq updater thread
+                # doesn't die.  There aren't any expected exception scenarios,
+                # but better to be more resilient here.
+                try:
+                    self.really_update_dnsmasq(network_id)
+                except Exception as e:
+                    LOG.exception("really_update_dnsmasq")
 
     def really_update_dnsmasq(self, network_id):
         # Get NetModel for that network ID.
@@ -288,15 +297,25 @@ class DnsmasqUpdater(object):
             for edo in p.extra_dhcp_opts:
                 LOG.debug("DHCP option %s", edo)
 
-        # Compare `str(p)` for each needed port, instead of just `p`
-        # (which is really just a pointer), so that we can spot when
-        # DHCP options change within the same port DictModel.
-        ports_needed_as_string = ' //// '.join([str(p) for p in ports_needed])
+        # Compare a description of each needed port that includes all the
+        # information we care about, instead of just `p` (which is really just
+        # a pointer), so that we can spot when DHCP options change within the
+        # same port DictModel.
+        ports_needed_as_string = ''
+        for p in ports_needed:
+            ports_needed_as_string += ':' + p.device_id
+            for edo in p.extra_dhcp_opts:
+                ports_needed_as_string += ";" + edo.opt_name + "," + edo.opt_value + "," + str(edo.ip_version)
+            for fip in p.fixed_ips:
+                ports_needed_as_string += ";" + fip.ip_address
+        LOG.debug("Ports needed: %s", ports_needed_as_string)
 
         # Compare that against what we've last asked Dnsmasq to handle.
         if ports_needed_as_string != self._last_dnsmasq_ports.get(network_id):
             # Requirements have changed, so start, restart or stop Dnsmasq for
             # that network ID.
+            LOG.info("old: %s", self._last_dnsmasq_ports.get(network_id))
+            LOG.info("new: %s", ports_needed_as_string)
             if ports_needed:
                 LOG.info("Restart dnsmasq for network %s with %d port(s)",
                          network_id, len(ports_needed))
