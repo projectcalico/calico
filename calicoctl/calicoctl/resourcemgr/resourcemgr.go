@@ -596,8 +596,22 @@ func mergeMetadataForUpdate(old, new ResourceObject) ResourceObject {
 
 	// Set the fields that are allowed to be overwritten (Labels and Annotations)
 	// so that they will not be overwritten.
-	sm.SetAnnotations(cm.GetAnnotations())
-	sm.SetLabels(cm.GetLabels())
+	annotations := sm.GetAnnotations()
+	for key, val := range cm.GetAnnotations() {
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+		annotations[key] = val
+	}
+	labels := sm.GetLabels()
+	for key, val := range cm.GetLabels() {
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[key] = val
+	}
+	sm.SetAnnotations(annotations)
+	sm.SetLabels(labels)
 
 	sm.(*v1.ObjectMeta).DeepCopyInto(cm.(*v1.ObjectMeta))
 	return new

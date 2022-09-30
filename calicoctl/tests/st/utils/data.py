@@ -94,6 +94,25 @@ ippool_name1_rev3_v4 = {
     }
 }
 
+ippool_name1_rev4_v4 = {
+    'apiVersion': API_VERSION,
+    'kind': 'IPPool',
+    'metadata': {
+        'name': 'ippool-name1',
+        'labels': {'test-label': 'label-1'},
+        'annotations': {'test-annotation': 'annotation-1'},
+    },
+    'spec': {
+        'cidr': "10.0.1.0/24",
+        'ipipMode': 'Always',
+        'vxlanMode': 'Never',
+        'blockSize': 27,
+        'allowedUses': ["Workload", "Tunnel"],
+        'nodeSelector': "foo == 'bar'",
+        'disabled': True,
+    }
+}
+
 ippool_name1_rev1_split1_v4 = {
     'apiVersion': API_VERSION,
     'kind': 'IPPool',
