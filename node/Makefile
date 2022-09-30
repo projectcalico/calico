@@ -314,12 +314,11 @@ K8ST_IMAGE_TARS=calico-node.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube
 
 ## Run the ginkgo FVs
 fv: run-k8s-apiserver
-	docker run --rm \
-	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	$(DOCKER_RUN) \
+	-v $(CERTS_PATH):/home/user/certs \
+	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/tests/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e GO111MODULE=on \
-	--net=host \
 	-w /go/src/$(PACKAGE_NAME) \
 	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
 
