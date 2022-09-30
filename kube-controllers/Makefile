@@ -123,7 +123,7 @@ fv: remote-deps tests/fv/fv.test image
 		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
 		CRDS=$(CURDIR)/tests/crds \
-		CERTS=$(CURDIR)/tests/certs \
+		CERTS_PATH=$(CERTS_PATH) \
 		GO111MODULE=on \
 		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
 

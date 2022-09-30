@@ -80,7 +80,7 @@ func withConfigGetFreshApiserverServerAndClient(
 		StopCh:             stopCh,
 	}
 	options.RecommendedOptions.SecureServing.BindPort = securePort
-	options.RecommendedOptions.CoreAPI.CoreAPIKubeconfigPath = "../certs/kubeconfig"
+	options.RecommendedOptions.CoreAPI.CoreAPIKubeconfigPath = "/home/user/certs/kubeconfig"
 
 	var err error
 	pcs, err := server.PrepareServer(options)
