@@ -598,10 +598,16 @@ func mergeMetadataForUpdate(old, new ResourceObject) ResourceObject {
 	// so that they will not be overwritten.
 	annotations := sm.GetAnnotations()
 	for key, val := range cm.GetAnnotations() {
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
 		annotations[key] = val
 	}
 	labels := sm.GetLabels()
 	for key, val := range cm.GetLabels() {
+		if labels == nil {
+			labels = make(map[string]string)
+		}
 		labels[key] = val
 	}
 	sm.SetAnnotations(annotations)
