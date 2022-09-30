@@ -3237,7 +3237,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
-				if testOpts.tunnel != "vxlan" {
+				if testOpts.tunnel != "none" {
 					return
 				}
 
@@ -3269,7 +3269,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					expectNormalConnectivity()
 				})
 
-				By("installing 3rd party rules", func() {
+				By("installing 3rd party DNAT rules", func() {
 					// Install a DNAT in first felix
 					felixes[0].Exec(
 						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "-m", "tcp",
