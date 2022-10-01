@@ -131,6 +131,7 @@ if ($global:containerRuntime -eq "Docker") {
                 Write-Host "Waiting for network deletion to complete."
                 Start-Sleep 1
             } while ((Get-HNSNetwork | ? Type -NE nat))
+            Remove-Item c:\etc\cni\net.d\**
         }
     }
 }
