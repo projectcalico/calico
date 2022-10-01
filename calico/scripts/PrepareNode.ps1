@@ -103,9 +103,7 @@ function Get-LastBootTime()
         throw "Failed to get last boot time"
     }
  
-    # This function is used in conjunction with Get-StoredLastBootTime, which
-    # returns a string, so convert the datetime value to a string using the "general" standard format.
-    return $bootTime.ToString("G")
+    return $bootTime.ToUniversalTime().ToString("O")
 }
 
 
