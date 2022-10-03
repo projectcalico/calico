@@ -2084,9 +2084,20 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 		return
 	}
 
-	// XXX It would be great to exclude other than UDP services if
-	// m.ctlbWorkaroundMode == ctlbWorkaroundUDPOnly but ServiceUpdate does
-	// not carry the protocol :(
+	if m.ctlbWorkaroundMode == ctlbWorkaroundUDPOnly {
+		hasUDP := false
+
+		for _, port := range update.Ports {
+			if port.Protocol == "UDP" {
+				hasUDP = true
+				break
+			}
+		}
+
+		if !hasUDP {
+			return // skip services that do not have UDP ports
+		}
+	}
 
 	log.WithFields(log.Fields{
 		"Name":      update.Name,
