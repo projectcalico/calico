@@ -3310,8 +3310,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
-				if testOpts.tunnel != "none" {
-					return
+				protocol := "tcp"
+				if testOpts.protocol == "udp" {
+					protocol = "udp"
 				}
 
 				hostIP0 := TargetIP(felixes[0].IP)
@@ -3345,10 +3346,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				By("installing 3rd party DNAT rules", func() {
 					// Install a DNAT in first felix
 					felixes[0].Exec(
-						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "-m", "tcp",
+						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", protocol, "-m", protocol,
 						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
 
-					//time.Sleep(time.Minute * 60)
 					cc.ResetExpectations()
 					cc.ExpectSome(felixes[1], hostIP0, hostPort)
 					cc.ExpectSome(externalClient, hostIP0, hostPort)
@@ -3359,7 +3359,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				By("removing 3rd party rules and check connectivity is back to normal again", func() {
 					felixes[0].Exec(
-						"iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "-m", "tcp",
+						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-D", "PREROUTING", "-p", protocol, "-m", protocol,
 						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
 
 					expectNormalConnectivity()
