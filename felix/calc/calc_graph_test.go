@@ -43,6 +43,8 @@ var testIP = mustParseIP("10.0.0.1")
 var testIP2 = mustParseIP("10.0.0.2")
 var testIPAs6 = net.IP{IP: testIP.To16()}
 var testIPAs4 = net.IP{IP: testIP.To4()}
+var udpPort = proto.ServicePort{Port: 123, Protocol: "UDP"}
+var tcpPort = proto.ServicePort{Port: 321, Protocol: "TCP"}
 
 var _ = DescribeTable("Calculation graph pass-through tests",
 	func(key model.Key, input interface{}, expUpdate interface{}, expRemove interface{}) {
@@ -179,6 +181,15 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 				ClusterIP:      "10.96.0.1",
 				LoadBalancerIP: "1.1.1.1",
 				ExternalIPs:    []string{"1.2.3.4"},
+				Ports: []kapiv1.ServicePort{
+					{
+						Protocol: kapiv1.ProtocolUDP,
+						Port:     123,
+					},
+					{
+						Port: 321,
+					},
+				},
 			},
 		},
 		proto.ServiceUpdate{
@@ -188,6 +199,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			ClusterIp:      "10.96.0.1",
 			LoadbalancerIp: "1.1.1.1",
 			ExternalIps:    []string{"1.2.3.4"},
+			Ports:          []*proto.ServicePort{&udpPort, &tcpPort},
 		},
 		proto.ServiceRemove{
 			Name:      "svcname",

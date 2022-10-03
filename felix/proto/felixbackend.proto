@@ -626,6 +626,12 @@ message GlobalBGPConfigUpdate {
   repeated string service_loadbalancer_cidrs = 3;
 }
 
+message ServicePort {
+	string Protocol = 1;
+	int32 Port = 2;
+	int32 NodePort = 3;
+}
+
 message ServiceUpdate {
 	string name = 1;
 	string namespace = 2;
@@ -633,6 +639,7 @@ message ServiceUpdate {
 	string cluster_ip = 4;
 	string loadbalancer_ip = 5;
 	repeated string external_ips = 6;
+	repeated ServicePort ports = 7;
 }
 
 message ServiceRemove {
