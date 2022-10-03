@@ -155,7 +155,7 @@ func main() {
 		timeout, err = strconv.Atoi(toval.(string))
 		if err != nil {
 			// panic on error
-			log.WithField("timeout", timeout).Fatal("Invalid duration argument")
+			log.WithField("timeout", timeout).Fatal("Invalid --timeout argument")
 		}
 	}
 
@@ -460,7 +460,7 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout time.Dur
 				fmt.Println("PONG")
 			}
 			retryStart = zeroTime
-		} else if e, ok := err.(net.Error); ok && e.Timeout() {
+		} else if os.IsTimeout(err) {
 			fmt.Printf("receive timeout\n")
 			if timeout > 0 && time.Since(retryStart) > timeout {
 				log.WithError(err).Fatalf("Failed to receive after %+v", timeout)
