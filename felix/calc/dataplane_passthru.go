@@ -141,7 +141,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 }
 
 func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
-	return &proto.ServiceUpdate{
+	up := &proto.ServiceUpdate{
 		Name:           s.Name,
 		Namespace:      s.Namespace,
 		Type:           string(s.Spec.Type),
@@ -149,4 +149,29 @@ func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 		LoadbalancerIp: s.Spec.LoadBalancerIP,
 		ExternalIps:    s.Spec.ExternalIPs,
 	}
+
+	ports := make([]*proto.ServicePort, 0, len(s.Spec.Ports))
+
+	protoGet := func(kp kapiv1.Protocol) string {
+		switch kp {
+		case kapiv1.ProtocolUDP:
+			return "UDP"
+		case kapiv1.ProtocolSCTP:
+			return "SCTP"
+		}
+
+		return "TCP"
+	}
+
+	for _, p := range s.Spec.Ports {
+		ports = append(ports, &proto.ServicePort{
+			Protocol: protoGet(p.Protocol),
+			Port:     p.Port,
+			NodePort: p.NodePort,
+		})
+	}
+
+	up.Ports = ports
+
+	return up
 }
