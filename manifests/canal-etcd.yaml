@@ -570,7 +570,7 @@ spec:
         # Runs the flannel daemon to enable vxlan networking between
         # container hosts.
         - name: flannel
-          image: quay.io/coreos/flannel:v0.15.1
+          image: docker.io/flannelcni/flannel:v0.16.3
           imagePullPolicy: IfNotPresent
           env:
             # The location of the etcd cluster.

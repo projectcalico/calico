@@ -67,7 +67,7 @@ func CalculateEndpointPolicies(
 		if strings.EqualFold(policyType, "OutBoundNAT") {
 			found = true
 			if !natOutgoing {
-				logger.Info("NAT-outgoing disabled for this IP pool, ignoring OutBoundNAT policy from NetConf.")
+				logger.Info("NATOutgoing disabled for this IP pool, ignoring OutBoundNAT policy from NetConf.")
 				continue
 			}
 

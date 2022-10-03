@@ -94,7 +94,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 1. Now that you have an empty cluster configured, you can install the Tigera operator. 
 
    ```bash
-   kubectl apply -f {{site.data.versions.manifests_url}}/manifests/tigera-operator.yaml
+   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
 
 1. Then, you need to configure the {{site.prodname}} installation for the VPP dataplane. The yaml in the link below contains a minimal viable configuration for EKS. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
