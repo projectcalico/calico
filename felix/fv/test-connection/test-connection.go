@@ -45,7 +45,7 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin]
+  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin] [--timeout=<seconds>]
 
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
@@ -58,6 +58,7 @@ Options:
   --sendlen=<bytes>        How many additional bytes to send
   --recvlen=<bytes>        Tell the other side to send this many additional bytes
   --stdin                  Read and send data from stdin
+  --timeout=<seconds>      Exit after timeout if pong not received
 
 If connection is successful, test-connection exits successfully.
 
@@ -148,6 +149,16 @@ func main() {
 		log.WithError(err).Fatal("Invalid --stdin")
 	}
 
+	timeout := 0
+
+	if toval := arguments["--timeout"]; toval != nil {
+		timeout, err = strconv.Atoi(toval.(string))
+		if err != nil {
+			// panic on error
+			log.WithField("timeout", timeout).Fatal("Invalid --timeout argument")
+		}
+	}
+
 	log.Infof("Test connection from namespace %v IP %v port %v to IP %v port %v proto %v "+
 		"max duration %d seconds, logging pongs (%v), stdin %v",
 		namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds, logPongs, stdin)
@@ -168,7 +179,7 @@ func main() {
 		// Test connection from wherever we are already running.
 		if err == nil {
 			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs, stdin)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin, time.Duration(timeout)*time.Second)
 		}
 	} else {
 		// Get the specified network namespace (representing a workload).
@@ -187,7 +198,7 @@ func main() {
 				return e
 			}
 			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs, stdin)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin, time.Duration(timeout)*time.Second)
 		})
 	}
 
@@ -241,6 +252,7 @@ type protocolDriver interface {
 	Send(msg []byte) error
 	Receive() ([]byte, error)
 	Close() error
+	SetReadDeadline(t time.Time) error
 
 	MTU() (int, error)
 }
@@ -338,7 +350,7 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 }
 
 func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol string,
-	seconds int, loopFile string, sendLen, recvLen int, logPongs, stdin bool) error {
+	seconds int, loopFile string, sendLen, recvLen int, logPongs, stdin bool, timeout time.Duration) error {
 
 	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol,
 		time.Duration(seconds)*time.Second, sendLen, recvLen, stdin)
@@ -393,7 +405,7 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	}
 
 	if loopFile != "" {
-		return tc.tryLoopFile(loopFile, logPongs)
+		return tc.tryLoopFile(loopFile, logPongs, timeout)
 	}
 
 	if tc.config.ConnType == connectivity.ConnectionTypePing {
@@ -411,7 +423,7 @@ func (tc *testConn) GetTestMessage(sequence int) connectivity.Request {
 	return req
 }
 
-func (tc *testConn) tryLoopFile(loopFile string, logPongs bool) error {
+func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout time.Duration) error {
 	req := tc.GetTestMessage(0)
 	msg, err := json.Marshal(req)
 	if err != nil {
@@ -420,18 +432,46 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool) error {
 
 	ls := newLoopState(loopFile)
 	var lastResponse connectivity.Response
+
+	var retryStart time.Time
+	var zeroTime time.Time
+
 	for {
 		err = tc.protocol.Send(msg)
 		if err != nil {
 			log.WithError(err).Fatal("Failed to send")
 		}
 		tc.stat.totalReq++
-		respRaw, err := tc.protocol.Receive()
-		if err != nil {
-			log.WithError(err).Fatal("Failed to receive")
+
+		var respRaw []byte
+
+		if timeout > 0 {
+			if err := tc.protocol.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+				return err
+			}
+			if retryStart == zeroTime {
+				retryStart = time.Now()
+			}
 		}
-		if logPongs {
-			fmt.Println("PONG")
+		var err error
+		respRaw, err = tc.protocol.Receive()
+		if err == nil {
+			if logPongs {
+				fmt.Println("PONG")
+			}
+			retryStart = zeroTime
+		} else if os.IsTimeout(err) {
+			fmt.Printf("receive timeout\n")
+			if timeout > 0 && time.Since(retryStart) > timeout {
+				log.WithError(err).Fatalf("Failed to receive after %+v", timeout)
+			}
+			if !ls.Next() {
+				break
+			}
+			continue
+		} else {
+			fmt.Printf("err = %+v\n", err)
+			log.WithError(err).Fatal("Failed to receive")
 		}
 
 		var resp connectivity.Response
@@ -565,8 +605,6 @@ func (tc *testConn) tryConnectWithPacketLoss() error {
 
 	var wg sync.WaitGroup
 
-	conn := tc.protocol.(*connectedUDP).conn
-
 	var lastResponse connectivity.Response
 
 	// Start a reader
@@ -593,7 +631,10 @@ func (tc *testConn) tryConnectWithPacketLoss() error {
 				return
 			default:
 				// Deadline is point of time. Have to set it in the loop for each read.
-				_ = conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+				if err := tc.protocol.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+					log.WithError(err).Warn("Failed to set read deadline.")
+					continue
+				}
 				respRaw, err := tc.protocol.Receive()
 
 				if e, ok := err.(net.Error); ok && e.Timeout() {
@@ -749,6 +790,10 @@ type connectedUDP struct {
 	useReadFrom bool
 }
 
+func (d *connectedUDP) SetReadDeadline(t time.Time) error {
+	return d.conn.SetReadDeadline(t)
+}
+
 func (d *connectedUDP) Close() error {
 	if d.conn == nil {
 		return nil
@@ -858,6 +903,10 @@ func (d *unconnectedUDP) MTU() (int, error) {
 	return 0, nil
 }
 
+func (d *unconnectedUDP) SetReadDeadline(t time.Time) error {
+	return d.conn.SetReadDeadline(t)
+}
+
 // connectedSCTP abstracts an SCTP stream.
 type connectedSCTP struct {
 	sourcePort   string
@@ -928,6 +977,10 @@ func (d *rawIP) MTU() (int, error) {
 	return 0, nil
 }
 
+func (d *rawIP) SetReadDeadline(t time.Time) error {
+	return d.conn.SetReadDeadline(t)
+}
+
 func (d *connectedSCTP) Connect() error {
 	lip, err := net.ResolveIPAddr("ip", "::")
 	if err != nil {
@@ -988,6 +1041,10 @@ func (d *connectedSCTP) MTU() (int, error) {
 	return 0, nil
 }
 
+func (d *connectedSCTP) SetReadDeadline(t time.Time) error {
+	return d.conn.SetReadDeadline(t)
+}
+
 // connectedTCP abstracts an SCTP stream.
 type connectedTCP struct {
 	localAddr  string
@@ -1040,4 +1097,8 @@ func (d *connectedTCP) Close() error {
 
 func (d *connectedTCP) MTU() (int, error) {
 	return utils.ConnMTU(d.conn.(utils.HasSyscallConn))
+}
+
+func (d *connectedTCP) SetReadDeadline(t time.Time) error {
+	return d.conn.SetReadDeadline(t)
 }

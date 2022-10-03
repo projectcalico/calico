@@ -14,6 +14,8 @@
 
 #include "bpf.h"
 #include "log.h"
+#include "globals.h"
+#include "ctlb.h"
 
 #include "sendrecv.h"
 
@@ -28,6 +30,10 @@ int calico_sendmsg_v6(struct bpf_sock_addr *ctx)
 SEC("cgroup/recvmsg6")
 int calico_recvmsg_v6(struct bpf_sock_addr *ctx)
 {
+	if (CTLB_EXCLUDE_UDP) {
+		goto out;
+	}
+
 	__be32 ipv4;
 
 	CALI_DEBUG("recvmsg_v6 ip[0-1] %x%x\n",

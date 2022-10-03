@@ -223,10 +223,11 @@ out:
 	return err;
 }
 
-void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo)
+void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo, bool exclude_udp)
 {
 	struct cali_ctlb_globals data = {
 		.udp_not_seen_timeo = udp_not_seen_timeo,
+		.exclude_udp = exclude_udp,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
