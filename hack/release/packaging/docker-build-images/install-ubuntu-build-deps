@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -x
+set -e
+apt-get update
+DEBIAN_FRONTEND=noninteractive \
+apt-get install -y build-essential  \
+                   devscripts \
+                   debhelper \
+                   dh-systemd \
+                   dh-python \
+                   python-all \
+                   python-setuptools \
+                   python3-all \
+                   python3-setuptools \
+                   libyajl2 \
+                   libdatrie1 \
+                   git \
+                   libnetfilter-conntrack-dev \
+                   libidn11-dev \
+                   libdbus-1-dev \
+                   libgmp-dev \
+                   nettle-dev \
+                   m4 \
+                   texinfo
+apt-get clean -y

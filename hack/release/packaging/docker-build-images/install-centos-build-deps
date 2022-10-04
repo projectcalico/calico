@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -x
+set -e
+
+yum install -y epel-release
+yum install -y rpm-build \
+               make \
+               git \
+               gcc \
+               python-setuptools \
+               python-pbr \
+               python2-devel \
+               python-urllib3 \
+               python3-setuptools \
+               python3-pbr \
+               python3-devel \
+               python3-urllib3 \
+               dbus-devel \
+               libidn-devel
