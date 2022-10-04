@@ -3308,6 +3308,64 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 			})
+
+			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
+				protocol := "tcp"
+				if testOpts.protocol == "udp" {
+					protocol = "udp"
+				}
+
+				hostIP0 := TargetIP(felixes[0].IP)
+				hostPort := uint16(8080)
+				target := fmt.Sprintf("%s:8055", w[0][0].GetIP())
+
+				policy := api.NewNetworkPolicy()
+				policy.Name = "allow-all"
+				policy.Namespace = "default"
+				one := float64(1)
+				policy.Spec.Order = &one
+				policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+				policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
+				policy.Spec.Selector = "all()"
+				_, err := calicoClient.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
+
+				expectNormalConnectivity := func() {
+					cc.ResetExpectations()
+					cc.ExpectNone(felixes[1], hostIP0, hostPort)
+					cc.ExpectNone(externalClient, hostIP0, hostPort)
+					cc.ExpectNone(w[1][0], hostIP0, hostPort)
+					cc.CheckConnectivity()
+					cc.ResetExpectations()
+				}
+
+				By("checking initial connectivity", func() {
+					expectNormalConnectivity()
+				})
+
+				By("installing 3rd party DNAT rules", func() {
+					// Install a DNAT in first felix
+					felixes[0].Exec(
+						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", protocol, "-m", protocol,
+						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
+
+					cc.ResetExpectations()
+					cc.ExpectSome(felixes[1], hostIP0, hostPort)
+					cc.ExpectSome(externalClient, hostIP0, hostPort)
+					cc.ExpectSome(w[1][0], hostIP0, hostPort)
+					cc.CheckConnectivity()
+					cc.ResetExpectations()
+				})
+
+				By("removing 3rd party rules and check connectivity is back to normal again", func() {
+					felixes[0].Exec(
+						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-D", "PREROUTING", "-p", protocol, "-m", protocol,
+						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
+
+					expectNormalConnectivity()
+				})
+			})
+
 		})
 
 		Describe("with BPF disabled to begin with", func() {

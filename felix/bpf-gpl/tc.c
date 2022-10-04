@@ -826,6 +826,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
 		}
+		/* Packets received at WEP with CALI_CT_FLAG_SKIP_FIB mark signal
+		 * that all traffic on this connection must flow via host namespace as it was
+		 * originally meant for host, but got redirected to a WEP by a 3rd party DNAT rule.
+		 */
+		if (CALI_F_TO_WEP && ((ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB) == CALI_SKB_MARK_SKIP_FIB)) {
+			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
+		}
 		if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
 		}
