@@ -34,3 +34,5 @@
       version: master
      csi-driver:
       version: master
+     csi-node-driver-registrar:
+      version: master
