@@ -86,7 +86,7 @@ ownership of the helm resources to the new chart location.
 1. Use the following command to initiate an upgrade.
 
    ```bash
-   kubectl apply -f tigera-operator.yaml
+   kubectl replace -f tigera-operator.yaml
    ```
 
 ## Upgrading an installation that uses manifests and the Kubernetes API datastore
