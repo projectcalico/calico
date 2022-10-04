@@ -33,3 +33,5 @@
       version: v3.24.0
      csi-driver:
       version: v3.24.0
+     csi-node-driver-registrar:
+      version: v3.24.0
