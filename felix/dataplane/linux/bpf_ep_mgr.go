@@ -52,12 +52,14 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -91,10 +93,18 @@ var (
 	})
 )
 
+var (
+	jumpMapV4PolicyKey = make([]byte, 4)
+	jumpMapV6PolicyKey = make([]byte, 4)
+)
+
 func init() {
 	prometheus.MustRegister(bpfEndpointsGauge)
 	prometheus.MustRegister(bpfDirtyEndpointsGauge)
 	prometheus.MustRegister(bpfHappyEndpointsGauge)
+
+	binary.LittleEndian.PutUint32(jumpMapV4PolicyKey, uint32(tcdefs.ProgIndexPolicy))
+	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexV6Policy))
 }
 
 type attachPoint interface {
@@ -229,6 +239,11 @@ type bpfEndpointManager struct {
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
 	dirtyRules        set.Set[polprog.RuleMatchID]
+
+	natInIdx  int
+	natOutIdx int
+
+	arpMap bpf.Map
 }
 
 type serviceKey struct {
@@ -303,6 +318,7 @@ func newBPFEndpointManager(
 		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
 		polNameToMatchIDs:     map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:            set.New[polprog.RuleMatchID](),
+		arpMap:                bpfMapContext.ArpMap,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -883,6 +899,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			defer wg.Done()
 			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
+			if err == nil {
+				err = m.dp.setAcceptLocal(ifaceName, true)
+			}
 			mutex.Lock()
 			errs[ifaceName] = err
 			mutex.Unlock()
@@ -1148,6 +1167,8 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	} else {
 		ap.IntfIP = *ip
 	}
+	ap.NATin = uint32(m.natInIdx)
+	ap.NATout = uint32(m.natOutIdx)
 
 	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
 	if err != nil {
@@ -1225,6 +1246,10 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	// Determine endpoint type.
 	if m.isWorkloadIface(ifaceName) {
 		endpointType = tc.EpTypeWorkload
+	} else if ifaceName == "lo" {
+		endpointType = tc.EpTypeLO
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if ifaceName == "tunl0" {
 		if m.Features.IPIPDeviceIsL3 {
 			endpointType = tc.EpTypeL3Device
@@ -1239,6 +1264,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else {
 		log.Panicf("Unsupported ifaceName %v", ifaceName)
 	}
@@ -1284,7 +1311,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		ap.RPFStrictEnabled = true
 	}
 
-	ap.Features = *m.Features
 	return ap
 }
 
@@ -1390,7 +1416,8 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
-	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev
+	return m.dataIfaceRegex.MatchString(iface) ||
+		(m.ctlbWorkaroundEnabled && (iface == bpfOutDev || iface == "lo"))
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
@@ -1650,24 +1677,32 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		if err != nil {
 			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
 		}
+	}
+	if state := bpfin.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(bpfInDev)
 		if err := netlink.LinkSetUp(bpfin); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfInDev, err)
 		}
-		bpfout, err = netlink.LinkByName(bpfOutDev)
-		if err != nil {
-			return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
-		}
+	}
+	bpfout, err = netlink.LinkByName(bpfOutDev)
+	if err != nil {
+		return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
+	}
+	if state := bpfout.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(bpfOutDev)
 		if err := netlink.LinkSetUp(bpfout); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
 		}
 	}
 
-	if bpfout == nil {
-		bpfout, err = netlink.LinkByName(bpfOutDev)
-		if err != nil {
-			return fmt.Errorf("miss %s after add: %w", bpfOutDev, err)
-		}
-	}
+	m.natInIdx = bpfin.Attrs().Index
+	m.natOutIdx = bpfout.Attrs().Index
+
+	anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
+	_ = m.arpMap.Update(
+		bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
+		bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
+	)
 
 	// Add a permanent ARP entry to point to the other side of the veth to avoid
 	// ARP requests that would not be proxied if .all.rp_filter == 1
@@ -1691,6 +1726,11 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	err = m.ensureQdisc(bpfInDev)
 	if err != nil {
 		return fmt.Errorf("failed to set qdisc on %s: %w", bpfOutDev, err)
+	}
+
+	err = m.ensureQdisc("lo")
+	if err != nil {
+		log.WithError(err).Fatalf("Failed to set qdisc on lo.")
 	}
 
 	// Setup a link local route to a non-existent link local address that would
@@ -1867,7 +1907,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	}
 
 	for _, ipFamily := range ipVersions {
-		insns, err := m.doUpdatePolicyProgram(jumpMapFD, rules, ipFamily)
+		insns, err := m.doUpdatePolicyProgram(ap.IfaceName(), jumpMapFD, rules, ipFamily)
 		perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
@@ -1879,16 +1919,19 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	return nil
 }
 
-func indexOfPolicyProgram(ipFamily proto.IPVersion) uint32 {
+func jumpPolicyKey(ipFamily proto.IPVersion) []byte {
 	if ipFamily == proto.IPVersion_IPV6 {
-		return bpf.ProgIndexV6Policy
+		return jumpMapV6PolicyKey
 	} else {
-		return bpf.ProgIndexPolicy
+		return jumpMapV4PolicyKey
 	}
 }
 
-func (m *bpfEndpointManager) doUpdatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules, ipFamily proto.IPVersion) (asm.Insns, error) {
-	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(), m.bpfMapContext.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
+func (m *bpfEndpointManager) doUpdatePolicyProgram(iface string, jumpMapFD bpf.MapFD, rules polprog.Rules,
+	ipFamily proto.IPVersion) (asm.Insns, error) {
+
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(),
+		m.bpfMapContext.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
 	if ipFamily == proto.IPVersion_IPV6 {
 		pg.EnableIPv6Mode()
 	}
@@ -1900,7 +1943,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(jumpMapFD bpf.MapFD, rules po
 	if rules.ForXDP {
 		progType = unix.BPF_PROG_TYPE_XDP
 	}
-	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", uint32(progType))
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, fmt.Sprintf("pol_%s", iface), "Apache-2.0", uint32(progType))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
 	}
@@ -1912,13 +1955,11 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(jumpMapFD bpf.MapFD, rules po
 		}
 	}()
 
-	k := make([]byte, 4)
-	binary.LittleEndian.PutUint32(k, indexOfPolicyProgram(ipFamily))
 	v := make([]byte, 4)
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
-	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
+	err = bpf.UpdateMapEntry(jumpMapFD, jumpPolicyKey(ipFamily), v)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
+		return nil, fmt.Errorf("failed to update %v=%v in jump map %v: %w", jumpMapV4PolicyKey, v, jumpMapFD, err)
 	}
 
 	return insns, nil
@@ -1941,9 +1982,7 @@ func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD, ap attachP
 }
 
 func (m *bpfEndpointManager) doRemovePolicyProgram(jumpMapFD bpf.MapFD, ipFamily proto.IPVersion) error {
-	k := make([]byte, 4)
-	binary.LittleEndian.PutUint32(k, indexOfPolicyProgram(ipFamily))
-	err := bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	err := bpf.DeleteMapEntryIfExists(jumpMapFD, jumpPolicyKey(ipFamily), 4)
 	if err != nil {
 		return fmt.Errorf("failed to update jump map: %w", err)
 	}
@@ -2037,14 +2076,13 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 		"Namespace": update.Namespace,
 	}).Info("Service Update")
 
-	ips := make([]string, 0, 2+len(update.ExternalIps))
+	ips := make([]string, 0, 2)
 	if update.ClusterIp != "" {
 		ips = append(ips, update.ClusterIp)
 	}
 	if update.LoadbalancerIp != "" {
 		ips = append(ips, update.LoadbalancerIp)
 	}
-	ips = append(ips, update.ExternalIps...)
 
 	key := serviceKey{name: update.Name, namespace: update.Namespace}
 

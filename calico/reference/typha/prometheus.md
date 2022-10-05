@@ -1,40 +1,55 @@
 ---
 title: Prometheus statistics
-description: Review metrics for the Typha component if you are using Prometheus. 
+description: Review metrics for the Typha component if you are using Prometheus.
 canonical_url: '/reference/typha/prometheus'
 ---
 
-Typha can be configured to report a number of metrics through Prometheus.  See the
+Typha can be configured to report a number of metrics through Prometheus. See the
 [configuration reference](configuration) for how to enable metrics reporting.
 
 ## Metric reference
 
 #### Typha specific
 
-Typha exports a number of Prometheus metrics.  The current set is as follows.  Since some metrics
+Typha exports a number of Prometheus metrics. The current set is as follows. Since some metrics
 are tied to particular implementation choices inside Typha we can't make any hard guarantees that
-metrics will persist across releases.  However, we aim not to make any spurious changes to
+metrics will persist across releases. However, we aim not to make any spurious changes to
 existing metrics.
 
-| Name          | Description     |
-| ------------- | --------------- |
-| `typha_breadcrumb_block` | Count of the number of times Typha got the next Breadcrumb after blocking. |
-| `typha_breadcrumb_non_block` | typha_breadcrumb_non_block Count of the number of times Typha got the next Breadcrumb without blocking. |
-| `typha_breadcrumb_seq_number` | Current (server-local) sequence number; number of snapshot deltas processed. |
-| `typha_breadcrumb_size` | Number of KVs recorded in each breadcrumb. |
-| `typha_client_latency_secs` | Per-client latency.  I.e. how far behind the current state is each client. |
-| `typha_client_snapshot_send_secs` | How long it took to send the initial snapshot to each client. |
-| `typha_client_write_latency_secs` | Per-client write.  How long each write call is taking. |
-| `typha_connections_accepted` | Total number of connections accepted over time. |
-| `typha_connections_active` | Number of open client connections. |
-| `typha_connections_dropped` | Total number of connections dropped due to rebalancing. |
-| `typha_kvs_per_msg` | Number of KV pairs sent in each message. |
-| `typha_log_errors` | Number of errors encountered while logging. |
-| `typha_logs_dropped` | Number of logs dropped because the output stream was blocked. |
-| `typha_next_breadcrumb_latency_secs` | Time to retrieve next breadcrumb when already behind. |
-| `typha_ping_latency` | Round-trip ping latency to client. |
-| `typha_updates_skipped` | Total number of updates skipped as duplicates. |
-| `typha_updates_total` | Total number of updates received from the Syncer. |
+##### Terminology
+
+**Syncer:** Many of Typha's metrics are now parameterised by "syncer type"; Typha runs one "syncer" for each
+type of client that it supports. The "syncer" is the component that synchronises Typha's local cache
+of the datastore with the upstream datastore. The syncer type is attached to the metrics via a
+Prometheus label `syncer="..."`.
+
+**Breadcrumb:** Typha's internal cache stores a series of snapshots of the state of the datastore along with
+a list of changes when compared to the previous snapshot.  We call the combination of a snapshot and the list of 
+changes a "breadcrumb".  Breadcrumbs are linked together into a linked list as they are created.  When a client
+connects, Typha sends the snapshot from the most recent breadcrumb to the client; then, it "follows the breadcrumbs"
+on behalf of that client, sending it the change list from each breadcrumb.
+
+| Name                                 | Description                                                                                                                                                             |
+|--------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `typha_cache_size`                   | The total number of key/value pairs in Typha's in-memory cache.                                                                                                         |
+| `typha_breadcrumb_block`             | Count of the number of times Typha got the next Breadcrumb after blocking.                                                                                              |
+| `typha_breadcrumb_non_block`         | typha_breadcrumb_non_block Count of the number of times Typha got the next Breadcrumb without blocking.                                                                 |
+| `typha_breadcrumb_seq_number`        | Current (server-local) sequence number; number of snapshot deltas processed.                                                                                            |
+| `typha_breadcrumb_size`              | Number of KVs recorded in each breadcrumb.                                                                                                                              |
+| `typha_client_latency_secs`          | Per-client latency. I.e. how far behind the current state is each client.                                                                                               |
+| `typha_client_snapshot_send_secs`    | How long it took to send the initial snapshot to each client.                                                                                                           |
+| `typha_client_write_latency_secs`    | Per-client write. How long each write call is taking.                                                                                                                   |
+| `typha_connections_accepted`         | Total number of connections accepted over time.                                                                                                                         |
+| `typha_connections_active`           | Number of open client connections (including connections that have not completed the handshake).                                                                        |
+| `typha_connections_streaming`        | Number of client connections that are actively streaming (i.e. connections that successfully completed the handshake).                                                  |
+| `typha_connections_dropped`          | Total number of connections dropped due to rebalancing.                                                                                                                 |
+| `typha_kvs_per_msg`                  | Number of KV pairs sent in each message.                                                                                                                                |
+| `typha_log_errors`                   | Number of errors encountered while logging.                                                                                                                             |
+| `typha_logs_dropped`                 | Number of logs dropped because the output stream was blocked.                                                                                                           |
+| `typha_next_breadcrumb_latency_secs` | Time to retrieve next breadcrumb when already behind.                                                                                                                   |
+| `typha_ping_latency`                 | Round-trip ping/pong latency to client.  Typha's protocol includes a regular ping/pong keepalive to verify that the connection is still up.                             |
+| `typha_updates_skipped`              | Total number of updates skipped because the datastore change was not relevant. (For example, an update to a Kubernetes Pod field that {{site.prodname}} does not read.) |
+| `typha_updates_total`                | Total number of updates received from the datastore.                                                                                                                    |
 
 Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
 metrics along with their help text and type information.
@@ -57,11 +72,12 @@ typha_breadcrumb_non_block 0
 typha_breadcrumb_seq_number 22215
 ...
 ```
+
 {: .no-select-button}
 
 #### CPU / memory metrics
 
-Typha also exports the default set of metrics that Prometheus makes available.  Currently, those
+Typha also exports the default set of metrics that Prometheus makes available. Currently, those
 include:
 
 | Name          | Description     |

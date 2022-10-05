@@ -22,6 +22,12 @@ $baseDir = "$PSScriptRoot\.."
 ipmo $baseDir\libs\calico\calico.psm1 -Force
 
 Write-Host "Running kubelet service."
+
+# After restart of node network adapter goes to the wrong state. So, CalicoNode service recreates it.
+# But kubelet can start some pods using broken adapter before CalicoNode complete initialization.
+# So, we need to wait for complete Calico initialization.
+Wait-ForCalicoInit
+
 Write-Host "Using configured nodename: $env:NODENAME DNS: $env:DNS_NAME_SERVERS"
 
 Write-Host "Auto-detecting node IP, looking for interface named like '$InterfaceName' ..."

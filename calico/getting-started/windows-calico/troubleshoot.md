@@ -106,7 +106,7 @@ items:
 #### Felix log error: "Failed to create datastore client"
 
 If the error includes 'loading config file "<path-to-kubeconfig>"', follow the instructions in
-[Set environment variables]({{site.baseurl}}/getting-started/windows-calico/standard#install-calico-and-kubernetes-on-windows-nodes) to update the `KUBECONFIG` environment variable to the path of your kubeconfig file.
+[Set environment variables]({{site.baseurl}}/getting-started/windows-calico/kubernetes/standard#install-calico-and-kubernetes-on-windows-nodes) to update the `KUBECONFIG` environment variable to the path of your kubeconfig file.
 
 #### Felix starts, but does not output logs
 

@@ -19,8 +19,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/environment"
 )
 
 type ToOrFromEp string
@@ -38,37 +36,32 @@ const (
 	EpTypeTunnel   EndpointType = "tunnel"
 	EpTypeL3Device EndpointType = "l3dev"
 	EpTypeNAT      EndpointType = "nat"
+	EpTypeLO       EndpointType = "lo"
 )
-
-type ProgName string
-
-var programNames = []ProgName{
-	"calico_tc_norm_pol_tail",
-	"calico_tc_skb_accepted_entrypoint",
-	"calico_tc_skb_send_icmp_replies",
-	"calico_tc_skb_drop",
-	"calico_tc_host_ct_conflict",
-	"calico_tc_v6",
-	"calico_tc_v6_norm_pol_tail",
-	"calico_tc_v6_skb_accepted_entrypoint",
-	"calico_tc_v6_skb_send_icmp_replies",
-	"calico_tc_v6_skb_drop",
-}
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
 }
 
-func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, btf bool, features *environment.Features) string {
+func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, btf bool) string {
 	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
 		// epToHostDrop only makes sense in the from-workload program.
 		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
 		epToHostDrop = false
 	}
-	if fib && (toOrFrom != FromEp) {
-		// FIB lookup only makes sense for traffic towards the host.
-		logrus.Debug("Ignoring fib enabled, doesn't apply to this target")
-		fib = false
+
+	// Should match CALI_FIB_LOOKUP_ENABLED in bpf.h
+	if fib {
+		toHost := (epType == EpTypeWorkload || epType == EpTypeHost || epType == EpTypeLO) && toOrFrom == FromEp
+		toHEP := (epType == EpTypeHost || epType == EpTypeLO) && toOrFrom == ToEp
+
+		realFIB := epType != EpTypeL3Device && (toHost || toHEP)
+
+		if !realFIB {
+			// FIB lookup only makes sense for traffic towards the host.
+			logrus.Debug("Ignoring fib enabled, doesn't apply to this target")
+		}
+		fib = realFIB
 	}
 
 	var hostDropPart string
@@ -99,6 +92,8 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		epTypeShort = "l3"
 	case EpTypeNAT:
 		epTypeShort = "nat"
+	case EpTypeLO:
+		epTypeShort = "lo"
 	}
 	corePart := ""
 	if btf {

@@ -58,7 +58,7 @@ type IPPoolSpec struct {
 	// then this is defaulted to "Never" (i.e. IPIP tunneling is disabled).
 	IPIPMode IPIPMode `json:"ipipMode,omitempty" validate:"omitempty,ipIpMode"`
 
-	// When nat-outgoing is true, packets sent from Calico networked containers in
+	// When natOutgoing is true, packets sent from Calico networked containers in
 	// this pool to destinations outside of this pool will be masqueraded.
 	NATOutgoing bool `json:"natOutgoing,omitempty"`
 

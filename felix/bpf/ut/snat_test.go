@@ -129,7 +129,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	// Out via host iface. We should use a L3 tunnel, but that is not supported
+	// Out via host iface. We should use an L3 tunnel, but that is not supported
 	// by the test infra. Host interface does pretty much the same for what we
 	// need. It creates extra CT entries of type 0.
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -229,7 +229,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(hostConflictPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Or(Equal(resTC_ACT_UNSPEC), Equal(resTC_ACT_REDIRECT)))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -251,7 +251,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(hostConflictPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Or(Equal(resTC_ACT_UNSPEC), Equal(resTC_ACT_REDIRECT)))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)

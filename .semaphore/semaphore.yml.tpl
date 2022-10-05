@@ -54,6 +54,10 @@ promotions:
   pipeline_file: push-images/node.yml
   auto_promote:
     when: "branch =~ 'master|release-'"
+- name: Publish openstack packages
+  pipeline_file: push-images/packaging.yaml
+  auto_promote:
+    when: "branch =~ 'master'"
 
 global_job_config:
   secrets:
@@ -112,7 +116,7 @@ blocks:
 
 - name: "apiserver"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 30
   dependencies: ["Prerequisites"]
@@ -162,7 +166,7 @@ blocks:
 
 - name: "Typha"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
     agent:
@@ -193,7 +197,7 @@ blocks:
 
 - name: "Felix: Build"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
     agent:
@@ -265,7 +269,7 @@ blocks:
 
 - name: "Felix: Windows FV"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -410,7 +414,7 @@ blocks:
 
 - name: "confd: tests"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/confd/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/confd/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
     prologue:
@@ -425,7 +429,7 @@ blocks:
 
 - name: "Node: Tests"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
     agent:
@@ -490,9 +494,13 @@ blocks:
 
 - name: "kube-controllers: Tests"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
     prologue:
       commands:
       - cd kube-controllers
@@ -529,7 +537,7 @@ blocks:
 
 - name: "calicoctl"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/calicoctl/', '/libcalico-go/', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/calicoctl/', '/libcalico-go/', '/api/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
     prologue:
@@ -607,7 +615,7 @@ blocks:
 
 - name: "cni-plugin"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
     prologue:
@@ -623,6 +631,10 @@ blocks:
     when: "${FORCE_RUN} or change_in(['/networking-calico/'])"
   dependencies: ["Prerequisites"]
   task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
     prologue:
       commands:
       - cd networking-calico
@@ -630,18 +642,19 @@ blocks:
       - name: 'Unit and FV tests (tox)'
         commands:
           - ../.semaphore/run-and-monitor tox.log make tox
-      # TODO: Re-enable
-      # - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
-      #   commands:
-      #     - git checkout -b devstack-test
-      #     - export LIBVIRT_TYPE=qemu
-      #     - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/ussuri
-      #     # Use proposed fix at
-      #     # https://review.opendev.org/c/openstack/requirements/+/810859.  See commit
-      #     # message for more context.
-      #     - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
-      #     - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
-      #     - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
+      - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
+        commands:
+          - git checkout -b devstack-test
+          - export LIBVIRT_TYPE=qemu
+          - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/ussuri
+          # Use proposed fix at
+          # https://review.opendev.org/c/openstack/requirements/+/810859.  See commit
+          # message for more context.
+          - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
+          - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
+          - export NC_PLUGIN_REPO=$(dirname $(pwd))
+          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
     epilogue:
       on_fail:
         commands:

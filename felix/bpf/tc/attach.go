@@ -38,7 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
-	"github.com/projectcalico/calico/felix/environment"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
 type AttachPoint struct {
@@ -61,8 +61,9 @@ type AttachPoint struct {
 	PSNATEnd             uint16
 	IPv6Enabled          bool
 	MapSizes             map[string]uint32
-	Features             environment.Features
 	RPFStrictEnabled     bool
+	NATin                uint32
+	NATout               uint32
 }
 
 var tcLock sync.RWMutex
@@ -178,7 +179,7 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 	}
 
 	isHost := false
-	if ap.Type == "host" || ap.Type == "nat" {
+	if ap.Type == "host" || ap.Type == "nat" || ap.Type == "lo" {
 		isHost = true
 	}
 
@@ -364,7 +365,7 @@ func (ap *AttachPoint) ProgramID() (int, error) {
 
 // FileName return the file the AttachPoint will load the program from
 func (ap AttachPoint) FileName() string {
-	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, bpfutils.BTFEnabled, &ap.Features)
+	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, bpfutils.BTFEnabled)
 }
 
 func (ap AttachPoint) IsAttached() (bool, error) {
@@ -632,7 +633,8 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	return libbpf.TcSetGlobals(m, hostIP, intfIP,
 		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP,
-		flags, ap.WgPort)
+		flags, ap.WgPort, ap.NATin, ap.NATout,
+	)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
@@ -648,51 +650,16 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 		ipVersions = append(ipVersions, "IPv6")
 	}
 
-	for _, ipFamily := range ipVersions {
-		// Since in IPv4, we don't add prologue to the jump map, and hence the first
-		// program is policy, the base index should be set to -1 to properly offset the
-		// policy program (base+1) to the first entry in the jump map, i.e. 0. However,
-		// in IPv6, we add the prologue program to the jump map, and the first entry is 4.
-		base := -1
-		if ipFamily == "IPv6" {
-			base = 5
-		}
+	mapName := bpf.JumpMapName()
 
-		// Update prologue program, but only in IPv6. IPv4 prologue program is the start
-		// of execution, and we don't need to add it into the jump map
-		if ipFamily == "IPv6" {
-			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[base]), base)
-			if err != nil {
-				return fmt.Errorf("error updating %v proglogue program: %v", ipFamily, err)
+	for _, ipFamily := range ipVersions {
+		for _, idx := range tcdefs.JumpMapIndexes[ipFamily] {
+			if isHost && (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) {
+				continue
 			}
-		}
-		pIndex := base + 1
-		if !isHost {
-			err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
+			err := obj.UpdateJumpMap(mapName, tcdefs.ProgramNames[idx], idx)
 			if err != nil {
-				return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
-			}
-		}
-		eIndex := base + 2
-		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
-		}
-		iIndex := base + 3
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v icmp program: %v", ipFamily, err)
-		}
-		dIndex := base + 4
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
-		}
-		if ipFamily != "IPv6" {
-			iIndex := base + 5
-			err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[iIndex]), iIndex)
-			if err != nil {
-				return fmt.Errorf("error updating %v host CT conflict program: %v", ipFamily, err)
+				return fmt.Errorf("error updating %v %s program: %w", ipFamily, tcdefs.ProgramNames[idx], err)
 			}
 		}
 	}

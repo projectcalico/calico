@@ -74,7 +74,16 @@ void bpf_attr_setup_map_elem_for_delete(union bpf_attr *attr, __u32 map_fd, void
 
 // bpf_attr_setup_load_prog sets up the bpf_attr union for use with BPF_PROG_LOAD.
 // A C function makes this easier because unions aren't easy to access from Go.
-void bpf_attr_setup_load_prog(union bpf_attr *attr, __u32 prog_type, __u32 insn_count, void *insns, char *license, __u32 log_level, __u32 log_size, void *log_buf) {
+void bpf_attr_setup_load_prog(union bpf_attr *attr,
+			      const char *name,
+			      __u32 prog_type,
+			      __u32 insn_count,
+			      void *insns,
+			      char *license,
+			      __u32 log_level,
+			      __u32 log_size,
+			      void *log_buf)
+{
    attr->prog_type = prog_type;
    attr->insn_cnt = insn_count;
    attr->insns = (__u64)(unsigned long)insns;
@@ -83,7 +92,26 @@ void bpf_attr_setup_load_prog(union bpf_attr *attr, __u32 prog_type, __u32 insn_
    attr->log_size = log_size;
    attr->log_buf = (__u64)(unsigned long)log_buf;
    attr->kern_version = 0;
-   if (log_size > 0) ((char *)log_buf)[0] = 0;
+
+   if (log_size > 0) {
+	   ((char *)log_buf)[0] = 0;
+   }
+
+   if (name) {
+	   int sz = sizeof(attr->prog_name);
+
+	   int i;
+	   for (i = 0; i < sz; i++) {
+		   attr->prog_name[i] = name[i];
+		   if (name[i] == '\0') {
+			   break;
+		   }
+	   }
+
+	   if (i == sz) {
+		   attr->prog_name[sz - 1] = '\0';
+	   }
+   }
 }
 
 // bpf_attr_setup_prog_run sets up the bpf_attr union for use with BPF_PROG_TEST_RUN.
