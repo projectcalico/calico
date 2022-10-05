@@ -86,8 +86,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				"8055,8056,22,68",
 				protos[ii])
 
-			felix.Exec("apt-get", "install", "-y", "hping3")
-
 			hostEp := api.NewHostEndpoint()
 			hostEp.Name = fmt.Sprintf("host-endpoint-%d", ii)
 			hostEp.Labels = map[string]string{
@@ -354,6 +352,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 
 		Context("blocking full IP", func() {
 			BeforeEach(func() {
+				for _, felix := range felixes {
+					felix.Exec("apt-get", "install", "-y", "hping3")
+				}
 				host0HexCIDR = applyGlobalNetworkSets("xdpblacklistudp", hostW[0].IP, "/32", false)
 				host2HexCIDR = applyGlobalNetworkSets("xdpblacklisttcp", hostW[2].IP, "/32", false)
 
@@ -361,6 +362,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			})
 
 			It("should block packets smaller than UDP", func() {
+
 				client, server := clientServerIndexes("tcp")
 
 				err := utils.RunMayFail("docker", "exec", felixes[client].Name, "hping3", "--rawip", "-c", "1", "-H", "254", "-d", "1", hostW[server].IP)
