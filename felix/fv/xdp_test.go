@@ -86,8 +86,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				"8055,8056,22,68",
 				protos[ii])
 
-			felix.Exec("apt-get", "install", "-y", "hping3")
-
 			hostEp := api.NewHostEndpoint()
 			hostEp.Name = fmt.Sprintf("host-endpoint-%d", ii)
 			hostEp.Labels = map[string]string{
@@ -363,6 +361,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			It("should block packets smaller than UDP", func() {
 				client, server := clientServerIndexes("tcp")
 
+				felixes[client].Exec("apt-get", "install", "-y", "hping3")
 				err := utils.RunMayFail("docker", "exec", felixes[client].Name, "hping3", "--rawip", "-c", "1", "-H", "254", "-d", "1", hostW[server].IP)
 				Expect(err).To(HaveOccurred())
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
@@ -395,6 +394,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			It("should block ICMP too", func() {
 				client, server := clientServerIndexes("tcp")
 
+				time.Sleep(time.Second * 5)
 				err := utils.RunMayFail("docker", "exec", felixes[client].Name, "ping", "-c", "1", "-w", "1", hostW[server].IP)
 				Expect(err).To(HaveOccurred())
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
