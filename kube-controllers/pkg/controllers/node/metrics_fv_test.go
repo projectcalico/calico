@@ -96,17 +96,15 @@ var _ = Describe("21wewqj53g", func() {
 		// Wait for the underlying local APIService that backs the CRDs to be created.
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			serverGroups, err := k8sClient.ServerGroups()
+			serverResources, err := k8sClient.ServerResourcesForGroupVersion("crd.projectcalico.org/v1")
+			fmt.Printf("\nResources (%v): %v\n", len(serverResources.APIResources), serverResources.APIResources)
 			if err != nil {
 				return err
+			} else if len(serverResources.APIResources) == 0 {
+				return errors.New("No API Resources found for crd.projectcalico.org/v1")
+			} else {
+				return nil
 			}
-
-			for _, serverGroup := range serverGroups.Groups {
-				if serverGroup.Name == "crd.projectcalico.org" {
-					return nil
-				}
-			}
-			return errors.New("crd.projectcalico.org API group not registered")
 		}, 10*time.Second).Should(BeNil())
 
 		// Make a Calico client and backend client.
