@@ -257,30 +257,27 @@
 /archive/v1.5/getting-started/kubernetes/cloud-config/*          https://calico-legacy.netlify.app/archive/v1.5/getting-started/kubernetes/cloud-config/:splat      200
 /archive/v1.5/getting-started/kubernetes/tutorials/*             https://calico-legacy.netlify.app/archive/v1.5/getting-started/kubernetes/tutorials/:splat         200
 
-http://docs.projectcalico.org/en/0.27/etcd-data-model.html                                                                  https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/1.3.0/opens-upgrade.html                                                                   https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/using.html                                                                          https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/0.27/faq.html                                                                              https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/0.27/addressing.html                                                                       https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/openstack.html                                                                      https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/getting-started/kubernetes/trying-ebpf                                                        https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/getting-started/clis/calicoctl/install                                                        https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/api-proposal.html                                                                   https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/architecture.html                                                                   https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/l2-interconnectFabric.html                                                          https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/getting-started/kubernetes/apiserver-preview                                                  https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/stable/openstack.html                                                                      https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/etcd-data-model.html                                                                https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/l3-interconnectFabric.html                                                          https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/security-model.html                                                                 https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/ipv6.html                                                                           https://projectcalico.docs.tigera.io    301!
-https://projectcalico.docs.tigera.io/v3.13/getting-started/kubernetes/trying-ebpf                                           https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/1.3.0/openstack.html                                                                       https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/arch-felix-and-acl.html                                                             https://projectcalico.docs.tigera.io    301!
-http://www.projectcalico.org/app/uploads/2020/05/Calico-Ecosystem.svg                                                       https://projectcalico.docs.tigera.io    301!
-https://projectcalico.docs.tigera.io/v3.11/networking/dual-stack                                                            https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/en/latest/opens-external-conn.html                                                            https://projectcalico.docs.tigera.io    301!
-http://docs.projectcalico.org/v3.18/reference/kube-controllers/prometheus                                                   https://projectcalico.docs.tigera.io    301!
+# Some specific redirects that were linking to 404s
+/en/0.27/etcd-data-model.html                                    https://projectcalico.docs.tigera.io                                                               301!
+/en/1.3.0/opens-upgrade.html                                     https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/using.html                                            https://projectcalico.docs.tigera.io                                                               301!
+/en/0.27/faq.html                                                https://projectcalico.docs.tigera.io                                                               301!
+/en/0.27/addressing.html                                         https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/openstack.html                                        https://projectcalico.docs.tigera.io                                                               301!
+/getting-started/kubernetes/trying-ebpf                          https://projectcalico.docs.tigera.io                                                               301!
+/getting-started/clis/calicoctl/install                          https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/api-proposal.html                                     https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/architecture.html                                     https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/l2-interconnectFabric.html                            https://projectcalico.docs.tigera.io                                                               301!
+/getting-started/kubernetes/apiserver-preview                    https://projectcalico.docs.tigera.io                                                               301!
+/en/stable/openstack.html                                        https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/etcd-data-model.html                                  https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/l3-interconnectFabric.html                            https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/security-model.html                                   https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/ipv6.html                                             https://projectcalico.docs.tigera.io                                                               301!
+/en/1.3.0/openstack.html                                         https://projectcalico.docs.tigera.io                                                               301!
+/en/latest/arch-felix-and-acl.html                               https://projectcalico.docs.tigera.io                                                               301!
+/v3.18/reference/kube-controllers/prometheus                     https://projectcalico.docs.tigera.io                                                               301!
 
 # blanket forced redirect for content
 /*                                                               https://projectcalico.docs.tigera.io/:splat                                                        301!
