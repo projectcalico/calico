@@ -24,6 +24,8 @@ import (
 	"os"
 	"os/exec"
 
+	aggregator "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -166,6 +168,20 @@ func GetK8sClient(kubeconfig string) (*kubernetes.Clientset, error) {
 	}
 
 	return k8sClientset, nil
+}
+
+func GetK8sAggregatorClient(kubeconfig string) (*aggregator.Clientset, error) {
+	k8sconfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build kubernetes aggregator client config: %s", err)
+	}
+
+	aggregatorClientset, err := aggregator.NewForConfig(k8sconfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build kubernetes aggregator client: %s", err)
+	}
+
+	return aggregatorClientset, nil
 }
 
 func Stop(c *containers.Container) {
