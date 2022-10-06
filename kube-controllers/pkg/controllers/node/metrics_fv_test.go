@@ -16,6 +16,7 @@ package node_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -43,7 +44,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("kube-controllers metrics FV tests", func() {
+var _ = Describe("21wewqj53g", func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -91,6 +92,22 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			return nil
 		}
 		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+
+		// Wait for the underlying local APIService that backs the CRDs to be created.
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			serverGroups, err := k8sClient.ServerGroups()
+			if err != nil {
+				return err
+			}
+
+			for _, serverGroup := range serverGroups.Groups {
+				if serverGroup.Name == "crd.projectcalico.org" {
+					return nil
+				}
+			}
+			return errors.New("crd.projectcalico.org API group not registered")
+		}, 10*time.Second).Should(BeNil())
 
 		// Make a Calico client and backend client.
 		type accessor interface {
