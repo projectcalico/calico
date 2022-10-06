@@ -16,6 +16,7 @@ package node_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -93,11 +94,19 @@ var _ = Describe("21wewqj53g", func() {
 		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
 
 		// Wait for the underlying local APIService that backs the CRDs to be created.
-		k8sAggregatorClient, err := testutils.GetK8sAggregatorClient(kconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
-			_, err := k8sAggregatorClient.ApiregistrationV1().APIServices().Get(context.Background(), "v1.crd.projectcalico.org", metav1.GetOptions{})
-			return err
+			serverGroups, err := k8sClient.ServerGroups()
+			if err != nil {
+				return err
+			}
+
+			for _, serverGroup := range serverGroups.Groups {
+				if serverGroup.Name == "crd.projectcalico.org" {
+					return nil
+				}
+			}
+			return errors.New("crd.projectcalico.org API group not registered")
 		}, 10*time.Second).Should(BeNil())
 
 		// Make a Calico client and backend client.
