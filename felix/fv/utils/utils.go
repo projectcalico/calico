@@ -101,7 +101,7 @@ func run(input []byte, checkNoError bool, command string, args ...string) error 
 		}
 	}
 	if checkNoError {
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v",
+		ExpectWithOffset(2, err).NotTo(HaveOccurred(), fmt.Sprintf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v",
 			command, args, string(outputBytes)))
 	}
 	if err != nil {
