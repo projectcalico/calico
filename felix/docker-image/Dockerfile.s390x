@@ -40,7 +40,8 @@ RUN apt-get update && apt-get install -y \
     # Felix FV tests require these
     wget \
     ethtool \
-    tcpdump
+    tcpdump \
+    hping3
 
 # Copy in wg tool from stage 1.
 COPY --from=wgtool /usr/bin/wg /usr/bin/wg
