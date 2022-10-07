@@ -15,6 +15,8 @@
 package model_test
 
 import (
+	"testing"
+
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 
 	. "github.com/onsi/ginkgo"
@@ -25,6 +27,57 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
+
+func FuzzKeyFromDefaultPath(f *testing.F) {
+	f.Add("/calico/v1/policy/profile/foo%2fbar/rules")
+	f.Add("/calico/v1/policy/profile/foo%2fbar/labels")
+	f.Add("/calico/v1/policy/tier/default/policy/biff%2fbop")
+	f.Add("/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint")
+	f.Add("/calico/v1/netset")
+	f.Add("/calico/v1/Ready")
+	f.Add("/calico/v1/policy/tier")
+	f.Add("/calico/v1/policy/profile")
+	f.Add("/calico/bgp/v1/global")
+	f.Add("/calico/bgp/v1/host")
+	f.Add("/calico/v1/ipam")
+	f.Add("/calico/ipam/v2")
+	f.Add("/calico/felix/v1/host")
+	f.Add("/calico/felix/v1/endpoint")
+	f.Add("/calico/felix/v2/foo/host")
+	f.Add("/calico/resources/v3/projectcalico.org/foo/bar/baz")
+	f.Add("/bar/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint")
+	f.Add("/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint")
+	f.Add("/calico/resources/v3/projectcalico.org/felixconfigurations/default")
+	f.Add("/calico/resources/v3/projectcalico.org/networkpolicies")
+	f.Add("/calico/resources/v3/projectcalico.org/networkpolicies/default/my-network-policy")
+	f.Add("/calico/resources/v3/projectcalico.org/felixconfigurations/default/my-network-policy")
+	f.Fuzz(func(t *testing.T, input string) {
+		out := KeyFromDefaultPath(input)
+		if out == nil {
+			return
+		}
+		serialised, err := KeyToDefaultPath(out)
+		if err != nil {
+			t.Errorf("Failed to reserialise %q -> %v -> %s", input, out, err)
+			return
+		}
+		if len(input) > 0 && input[0] != '/' {
+			serialised = serialised[1:]
+		}
+		out2 := KeyFromDefaultPath(serialised)
+		if out != out2 {
+			t.Errorf("%q -> %v -> %q -> %v", input, out, serialised, out2)
+			return
+		}
+
+		func() {
+			oldKey := OldKeyFromDefaultPath(input)
+			if oldKey != out {
+				t.Errorf("(new output) %v != (old output) %v", out, oldKey)
+			}
+		}()
+	})
+}
 
 var _ = Describe("keys with region component", func() {
 
