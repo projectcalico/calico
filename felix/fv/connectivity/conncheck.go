@@ -871,6 +871,7 @@ type PersistentConnection struct {
 	SourcePort          int
 	MonitorConnectivity bool
 	NamespacePath       string
+	Timeout             time.Duration
 
 	loopFile string
 	runCmd   *exec.Cmd
@@ -927,6 +928,9 @@ func (pc *PersistentConnection) Start() error {
 	if pc.MonitorConnectivity {
 		args = append(args, "--log-pongs")
 	}
+	if pc.Timeout > 0 {
+		args = append(args, fmt.Sprintf("--timeout=%d", pc.Timeout/time.Second))
+	}
 	runCmd := utils.Command(
 		"docker",
 		args...,
@@ -936,8 +940,12 @@ func (pc *PersistentConnection) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to start output logging for %s", logName)
 	}
+	log.WithField("name", logName).Info("Started")
+
 	stdoutReader := bufio.NewReader(stdout)
 	go func() {
+		log.WithField("name", logName).Info("Reader started")
+		defer log.WithField("name", logName).Info("Reader exited")
 		for {
 			line, err := stdoutReader.ReadString('\n')
 			if err != nil {
@@ -984,5 +992,6 @@ func (pc *PersistentConnection) LastPongTime() time.Time {
 func (pc *PersistentConnection) PongCount() int {
 	pc.Lock()
 	defer pc.Unlock()
+	log.WithField("name", pc.Name).Infof("pong count %d", pc.pongCount)
 	return pc.pongCount
 }

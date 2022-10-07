@@ -1828,6 +1828,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					})
 				})
+
 				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
 					var (
 						testSvc          *v1.Service
@@ -2282,7 +2283,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					}
 
-					It("should have connectivity after a backend is gone", func() {
+					It("should have connectivity with affinity after a backend is gone", func() {
 						var (
 							testSvc          *v1.Service
 							testSvcNamespace string
@@ -2359,6 +2360,83 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.CheckConnectivity()
+					})
+
+					ifUDPnoCTLB := func(desc string, body func()) {
+						if testOpts.protocol != "udp" || testOpts.connTimeEnabled {
+							return
+						}
+						It(desc, body)
+					}
+
+					ifUDPnoCTLB("should have connectivity after a backend is replaced by a new one", func() {
+
+						var (
+							testSvc          *v1.Service
+							testSvcNamespace string
+						)
+
+						testSvcName := "test-service"
+
+						By("Setting up the service", func() {
+							testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, 0, testOpts.protocol)
+							testSvcNamespace = testSvc.ObjectMeta.Namespace
+							_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+								"Service endpoints didn't get created? Is controller-manager happy?")
+						})
+
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+
+						By("Syncing with NAT tables", func() {
+							// Sync with NAT tables to prevent creating extra entry when
+							// CTLB misses but regular DNAT hits, but connection fails and
+							// then CTLB succeeds.
+							natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+							Eventually(func() bool {
+								m := dumpNATMap(felixes[0])
+								v, ok := m[natFtKey]
+								if !ok || v.Count() == 0 {
+									return false
+								}
+
+								beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+								be := dumpEPMap(felixes[0])
+								_, ok = be[beKey]
+								return ok
+							}, 5*time.Second).Should(BeTrue())
+						})
+
+						By("starting a persistent connection to the service")
+						pc := w[1][1].StartPersistentConnection(ip, int(port),
+							workload.PersistentConnectionOpts{
+								MonitorConnectivity: true,
+								Timeout:             60 * time.Second,
+							},
+						)
+						defer pc.Stop()
+
+						By("Testing connectivity")
+						prevCount := pc.PongCount()
+						Eventually(pc.PongCount, "5s").Should(BeNumerically(">", prevCount),
+							"Expected to see pong responses on the connection but didn't receive any")
+
+						By("changing the service backend to completely different ones")
+						testSvc2 := k8sService(testSvcName, "10.101.0.10", w[1][0], 80, 8055, 0, testOpts.protocol)
+						k8sUpdateService(k8sClient, testSvcNamespace, testSvcName, testSvc, testSvc2)
+
+						By("Stoping the original backend to make sure it is not reachable")
+						w[0][0].Stop()
+						By("removing the old workload from infra")
+						w[0][0].RemoveFromInfra(infra)
+
+						By("Testing connectivity continues")
+						prevCount = pc.PongCount()
+						Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
+							"Expected to see pong responses on the connection but didn't receive any")
 					})
 				})
 
