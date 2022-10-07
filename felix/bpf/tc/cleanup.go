@@ -15,12 +15,12 @@
 package tc
 
 import (
-	"encoding/json"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -41,6 +41,7 @@ func CleanUpProgramsAndPins() {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(mapsJSON, &maps)
 	if err != nil {
 		log.WithError(err).Info(
