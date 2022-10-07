@@ -16,10 +16,12 @@ package node_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,7 +45,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("kube-controllers metrics FV tests", func() {
+var _ = Describe("21wewqj53g", func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -91,6 +93,29 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			return nil
 		}
 		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+
+		// Wait for the underlying local APIService that backs the CRDs to be created.
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			out, err := apiserver.ExecOutput("sh", "-c", "ls /crds/ | wc -l")
+			if err != nil {
+				return err
+			}
+			crdCount, err := strconv.Atoi(strings.TrimSpace(out))
+			if err != nil {
+				return err
+			}
+
+			serverResources, err := k8sClient.ServerResourcesForGroupVersion("crd.projectcalico.org/v1")
+			fmt.Printf("\nResources (%v): %v\n", len(serverResources.APIResources), serverResources.APIResources)
+			if err != nil {
+				return err
+			} else if len(serverResources.APIResources) != crdCount {
+				return errors.New(fmt.Sprintf("Expected number of crd.projectcalico.org/v1 resources (%v) were not available", crdCount))
+			}
+
+			return nil
+		}, 10*time.Second).Should(BeNil())
 
 		// Make a Calico client and backend client.
 		type accessor interface {
