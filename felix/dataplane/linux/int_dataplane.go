@@ -413,7 +413,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dataplaneFeatures := featureDetector.GetFeatures()
 
 	var iptablesLock sync.Locker
-	if dataplaneFeatures.RestoreSupportsLock {
+	if !dataplaneFeatures.RestoreSupportsLock {
 		log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
 			"iptables-restore will use its own implementation).")
 		iptablesLock = dummyLock{}
