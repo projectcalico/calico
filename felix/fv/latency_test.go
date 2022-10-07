@@ -71,9 +71,6 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		_ = felix.GetFelixPID()
 
-		// Install the hping tool, which we use for latency measurements.
-		felix.Exec("apt-get", "install", "-y", "hping3")
-
 		var err error
 		resultsFile, err = os.OpenFile("latency.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		Expect(err).NotTo(HaveOccurred())
@@ -233,9 +230,9 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 	})
 
 	// Unfortunately, hping3 doesn't support IPv6.
-	//Context("IPv6: Network sets tests with initialized Felix and etcd datastore", func() {
+	// Context("IPv6: Network sets tests with initialized Felix and etcd datastore", func() {
 	//	describeLatencyTests(latencyConfig{ipVersion: 6, generateIPs: generateIPv6s})
-	//})
+	// })
 })
 
 func generateIPv4s(n int) (result []string) {

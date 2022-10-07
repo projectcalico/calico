@@ -40,7 +40,6 @@ import (
 
 const (
 	resyncPeriod = 11 * time.Second
-	applyPeriod  = 5 * time.Second
 )
 
 var bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
@@ -85,8 +84,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				felixes[ii].IP,
 				"8055,8056,22,68",
 				protos[ii])
-
-			felix.Exec("apt-get", "install", "-y", "hping3")
 
 			hostEp := api.NewHostEndpoint()
 			hostEp.Name = fmt.Sprintf("host-endpoint-%d", ii)
@@ -281,6 +278,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			}}
 			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, xdpPolicy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeTrue())
 		})
 
 		AfterEach(func() {
@@ -291,15 +290,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
 		})
 
-		It("should have XDP program attached", func() {
-			Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeTrue())
+		It("should have consistent XDP program attached", func() {
 			id := xdpProgramID(felixes[1], "eth0")
 			Consistently(xdpProgramID_felix1_eth0(), "2s", "100ms").Should(Equal(id))
 		})
 
 		Context("with untracked policies deleted again", func() {
 			BeforeEach(func() {
-				time.Sleep(time.Second)
 				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
 				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
 			})
@@ -356,16 +353,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			BeforeEach(func() {
 				host0HexCIDR = applyGlobalNetworkSets("xdpblacklistudp", hostW[0].IP, "/32", false)
 				host2HexCIDR = applyGlobalNetworkSets("xdpblacklisttcp", hostW[2].IP, "/32", false)
-
-				time.Sleep(applyPeriod)
 			})
 
 			It("should block packets smaller than UDP", func() {
 				client, server := clientServerIndexes("tcp")
 
-				err := utils.RunMayFail("docker", "exec", felixes[client].Name, "hping3", "--rawip", "-c", "1", "-H", "254", "-d", "1", hostW[server].IP)
-				Expect(err).To(HaveOccurred())
+				doHping := func() error {
+					return utils.RunMayFail("docker", "exec", felixes[client].Name, "hping3", "--rawip", "-c", "1", "-H", "254", "-d", "1", hostW[server].IP)
+				}
+				Eventually(doHping, "20s", "100ms").Should(HaveOccurred())
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
+				Expect(doHping()).To(HaveOccurred())
 
 				if !bpfEnabled {
 					output, err := felixes[server].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
@@ -395,9 +393,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			It("should block ICMP too", func() {
 				client, server := clientServerIndexes("tcp")
 
-				err := utils.RunMayFail("docker", "exec", felixes[client].Name, "ping", "-c", "1", "-w", "1", hostW[server].IP)
-				Expect(err).To(HaveOccurred())
+				doPing := func() error {
+					return utils.RunMayFail("docker", "exec", felixes[client].Name, "ping", "-c", "1", "-w", "1", hostW[server].IP)
+				}
+				Eventually(doPing, "20s", "100ms").Should(HaveOccurred())
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
+				Expect(doPing()).To(HaveOccurred())
 
 				if !bpfEnabled {
 					output, err := felixes[server].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
@@ -409,20 +410,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				}
 			})
 
-			It("should have expected an XDP program attached to eth0 on felixes[1]", func() {
-				utils.Run("docker", "exec", felixes[1].Name, "ip", "addr", "show", "eth0")
-				Expect(utils.LastRunOutput).To(ContainSubstring("xdp"))
-			})
-
 			if !bpfEnabled {
 				It("should have expected felixes[UDP client] IP in BPF blacklist", func() {
-					utils.Run("docker", append([]string{"exec", felixes[1].Name, "bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)...)
-					Expect(utils.LastRunOutput).To(ContainSubstring("value:"))
+					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
+					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 
 				It("should have expected felixes[TCP client] IP in BPF blacklist", func() {
-					utils.Run("docker", append([]string{"exec", felixes[1].Name, "bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host2HexCIDR...)...)
-					Expect(utils.LastRunOutput).To(ContainSubstring("value:"))
+					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host2HexCIDR...)
+					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 			}
 
@@ -435,7 +431,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				expectBlacklisted(ccUDP)
 
 				if !bpfEnabled {
-					utils.Run("docker", "exec", felixes[1].Name, "iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-u")
+					felixes[1].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-u")
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 					Expect(utils.LastRunOutput).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
@@ -456,7 +452,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				expectBlacklisted(ccTCP)
 
 				if !bpfEnabled {
-					utils.Run("docker", "exec", felixes[3].Name, "iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
+					felixes[3].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 					Expect(utils.LastRunOutput).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
@@ -477,8 +473,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				_, err = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				time.Sleep(applyPeriod)
-
 				expectAllAllowed(ccUDP)
 				expectAllAllowed(ccTCP)
 			})
@@ -491,37 +485,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				}
 
 				It("resync should've handled the external change of a BPF map", func() {
-					utils.Run("docker", append([]string{"exec", felixes[1].Name, "bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)...)
-					Expect(utils.LastRunOutput).To(ContainSubstring("value:"))
+					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
+					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 
-					err := utils.RunMayFail("docker", append([]string{"exec", felixes[1].Name, "bpftool", "map", "delete", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)...)
-					Expect(err).NotTo(HaveOccurred())
+					felixes[1].Exec(append([]string{"bpftool", "map", "delete", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)...)
 
-					// wait for resync
-					time.Sleep(resyncPeriod)
-
-					utils.Run("docker", append([]string{"exec", felixes[1].Name, "bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)...)
-					Expect(utils.LastRunOutput).To(ContainSubstring("value:"))
+					Eventually(felixes[1].ExecOutputFn(args...), resyncPeriod).Should(ContainSubstring("value:"))
 
 					expectBlacklisted(ccUDP)
 					expectBlacklisted(ccTCP)
 				})
 
 				It("resync should've handled manually detaching a BPF program", func() {
-					err := utils.RunMayFail("docker", "exec", felixes[1].Name, "ip", "link", "set", "dev", "eth0", "xdp", "off")
-					Expect(err).NotTo(HaveOccurred())
+					felixes[1].Exec("ip", "link", "set", "dev", "eth0", "xdp", "off")
 
 					// Note: we can't reliably check the following here, because
 					// resync may have happened _immediately_ following the
 					// previous "xdp off" command.
-					// utils.Run("docker", "exec", felixes[1].Name, "ip", "addr", "show", "eth0")
+					// felixes[1].Exec( "ip", "addr", "show", "eth0")
 					// Expect(utils.LastRunOutput).NotTo(ContainSubstring("xdp"))
 
-					// wait for resync
-					time.Sleep(resyncPeriod)
-
-					utils.Run("docker", "exec", felixes[1].Name, "ip", "addr", "show", "eth0")
-					Expect(utils.LastRunOutput).To(ContainSubstring("xdp"))
+					Eventually(felixes[1].ExecOutputFn("ip", "addr", "show", "eth0"), resyncPeriod).Should(ContainSubstring("xdp"))
 
 					expectBlacklisted(ccUDP)
 					expectBlacklisted(ccTCP)
@@ -533,7 +517,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			BeforeEach(func() {
 				host0HexCIDR = applyGlobalNetworkSets("xdpblacklistudp", hostW[0].IP, "/32", false)
 				host2HexCIDR = applyGlobalNetworkSets("xdpblacklisttcp", hostW[2].IP, "/32", false)
-				time.Sleep(applyPeriod)
 			})
 
 			if bpfEnabled {
@@ -543,18 +526,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			}
 
 			It("should be reflected in the BPF map", func() {
-				utils.Run("docker", append([]string{"exec", felixes[1].Name, "bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)...)
-				Expect(utils.LastRunOutput).To(ContainSubstring("value:"))
+				args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
+				Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 
 				AdditionalHostUDPHexCIDR := applyGlobalNetworkSets("xdpblacklistudp", "1.2.3.4", "/32", true)
+				args = append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostUDPHexCIDR...)
+				Eventually(felixes[1].ExecOutputFn(args...), "5s").Should(ContainSubstring("value:"))
+
 				AdditionalHostTCPHexCIDR := applyGlobalNetworkSets("xdpblacklisttcp", "1.2.3.4", "/32", true)
-				time.Sleep(applyPeriod)
-
-				utils.Run("docker", append([]string{"exec", felixes[1].Name, "bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostUDPHexCIDR...)...)
-				Expect(utils.LastRunOutput).To(ContainSubstring("value:"))
-
-				utils.Run("docker", append([]string{"exec", felixes[3].Name, "bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostTCPHexCIDR...)...)
-				Expect(utils.LastRunOutput).To(ContainSubstring("value:"))
+				args = append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostTCPHexCIDR...)
+				Eventually(felixes[3].ExecOutputFn(args...), "5s").Should(ContainSubstring("value:"))
 			})
 		})
 
@@ -562,18 +543,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			BeforeEach(func() {
 				host0HexCIDR = applyGlobalNetworkSets("xdpblacklistudp", hostW[0].IP+"/8", "", false)
 				host2HexCIDR = applyGlobalNetworkSets("xdpblacklisttcp", hostW[2].IP+"/8", "", false)
-				time.Sleep(applyPeriod)
-			})
 
-			It("should have expected an XDP program attached to eth0 on felixes[1]", func() {
-				utils.Run("docker", "exec", felixes[1].Name, "ip", "addr", "show", "eth0")
-				Expect(utils.LastRunOutput).To(ContainSubstring("xdp"))
+				Eventually(xdpProgramAttached_felix1_eth0, "10s").Should(BeTrue())
 			})
 
 			if !bpfEnabled {
 				It("should have expected felixes[0] CIDR in BPF blacklist", func() {
-					utils.Run("docker", append([]string{"exec", felixes[1].Name, "bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)...)
-					Expect(utils.LastRunOutput).To(ContainSubstring("value:"))
+					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
+					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 			}
 
@@ -581,7 +558,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				expectBlacklisted(ccUDP)
 
 				if !bpfEnabled {
-					utils.Run("docker", "exec", felixes[1].Name, "iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-u")
+					felixes[1].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-u")
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 					Expect(utils.LastRunOutput).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
@@ -602,7 +579,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				expectBlacklisted(ccTCP)
 
 				if !bpfEnabled {
-					utils.Run("docker", "exec", felixes[3].Name, "iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
+					felixes[3].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 					Expect(utils.LastRunOutput).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
