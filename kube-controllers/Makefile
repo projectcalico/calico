@@ -122,7 +122,8 @@ ut fv: $(TEST_BINARIES)
 		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		   CRDS=$(CURDIR)/../libcalico-go/config/crd \
 		   CERTS_PATH=$(CERTS_PATH) \
-		   ./run-uts $(WHAT)
+		   GINKGO_ARGS="-ginkgo.focus=21wewqj53g" \
+		   ./run-uts ./pkg/controllers/node
 
 # Produce test binaries for each package that needs them.
 # ginkgo doesn't let you produce a single test binary with multiple packages.
