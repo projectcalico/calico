@@ -244,10 +244,11 @@ type RuleRenderer interface {
 
 type DefaultRuleRenderer struct {
 	Config
-	inputAcceptActions []iptables.Action
-	filterAllowAction  iptables.Action
-	mangleAllowAction  iptables.Action
-	blockCIDRAction    iptables.Action
+	inputAcceptActions       []iptables.Action
+	filterAllowAction        iptables.Action
+	mangleAllowAction        iptables.Action
+	blockCIDRAction          iptables.Action
+	IptablesFilterDenyAction iptables.Action
 }
 
 func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
@@ -314,6 +315,7 @@ type Config struct {
 	EndpointToHostAction      string
 	IptablesFilterAllowAction string
 	IptablesMangleAllowAction string
+	IptablesFilterDenyAction  string
 
 	FailsafeInboundHostPorts  []config.ProtoPort
 	FailsafeOutboundHostPorts []config.ProtoPort
@@ -372,6 +374,18 @@ func (c *Config) validate() {
 func NewRenderer(config Config) RuleRenderer {
 	log.WithField("config", config).Info("Creating rule renderer.")
 	config.validate()
+
+	// First, what should we do when packets are not accepted.
+	var IptablesFilterDenyAction iptables.Action
+	switch config.IptablesFilterDenyAction {
+	case "REJECT":
+		log.Info("packets that are not passed by any policy or profile will be rejected.")
+		IptablesFilterDenyAction = iptables.RejectAction{}
+	default:
+		log.Info("packets that are not passed by any policy or profile will be dropped.")
+		IptablesFilterDenyAction = iptables.DropAction{}
+	}
+
 	// Convert configured actions to rule slices.
 	// First, what should we do with packets that come from workloads to the host itself.
 	var inputAcceptActions []iptables.Action
@@ -379,6 +393,9 @@ func NewRenderer(config Config) RuleRenderer {
 	case "DROP":
 		log.Info("Workload to host packets will be dropped.")
 		inputAcceptActions = []iptables.Action{iptables.DropAction{}}
+	case "REJECT":
+		log.Info("Workload to host packets will be rejected.")
+		inputAcceptActions = []iptables.Action{iptables.RejectAction{}}
 	case "ACCEPT":
 		log.Info("Workload to host packets will be accepted.")
 		inputAcceptActions = []iptables.Action{iptables.AcceptAction{}}
@@ -420,10 +437,11 @@ func NewRenderer(config Config) RuleRenderer {
 	}
 
 	return &DefaultRuleRenderer{
-		Config:             config,
-		inputAcceptActions: inputAcceptActions,
-		filterAllowAction:  filterAllowAction,
-		mangleAllowAction:  mangleAllowAction,
-		blockCIDRAction:    blockCIDRAction,
+		Config:                   config,
+		inputAcceptActions:       inputAcceptActions,
+		filterAllowAction:        filterAllowAction,
+		mangleAllowAction:        mangleAllowAction,
+		blockCIDRAction:          blockCIDRAction,
+		IptablesFilterDenyAction: IptablesFilterDenyAction,
 	}
 }
