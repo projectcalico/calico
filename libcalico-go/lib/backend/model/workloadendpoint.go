@@ -16,10 +16,8 @@ package model
 
 import (
 	"fmt"
-
-	"regexp"
-
 	"reflect"
+	"regexp"
 
 	log "github.com/sirupsen/logrus"
 
@@ -29,9 +27,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var (
-	matchWorkloadEndpoint = regexp.MustCompile("^/?calico/v1/host/([^/]+)/workload/([^/]+)/([^/]+)/endpoint/([^/]+)$")
-)
+var matchWorkloadEndpoint = regexp.MustCompile("^/?calico/v1/host/([^/]+)/workload/([^/]+)/([^/]+)/endpoint/([^/]+)$")
 
 type WorkloadEndpointKey struct {
 	Hostname       string `json:"-"`
@@ -159,6 +155,8 @@ type WorkloadEndpoint struct {
 	IPv6Nets                   []net.IPNet       `json:"ipv6_nets"`
 	IPv4NAT                    []IPNAT           `json:"ipv4_nat,omitempty"`
 	IPv6NAT                    []IPNAT           `json:"ipv6_nat,omitempty"`
+	Ipv4SNAT                   []IPNAT           `json:"ipv4_snat,omitempty"`
+	Ipv6SNAT                   []IPNAT           `json:"ipv6_snat,omitempty"`
 	Labels                     map[string]string `json:"labels,omitempty"`
 	IPv4Gateway                *net.IP           `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
 	IPv6Gateway                *net.IP           `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`

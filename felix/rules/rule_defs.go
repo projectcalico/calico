@@ -54,6 +54,7 @@ const (
 	ChainNATPostrouting = ChainNamePrefix + "POSTROUTING"
 	ChainNATOutput      = ChainNamePrefix + "OUTPUT"
 	ChainNATOutgoing    = ChainNamePrefix + "nat-outgoing"
+	ChainNATEgress      = ChainNamePrefix + "nat-egress"
 
 	ChainManglePrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainManglePostrouting = ChainNamePrefix + "POSTROUTING"
@@ -237,6 +238,8 @@ type RuleRenderer interface {
 
 	DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*iptables.Chain
+	EgressSNATsToIptablesChains(snats map[string]string, ipVersion uint8) []*iptables.Chain
+
 	BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*iptables.Chain
 
 	WireguardIncomingMarkChain() *iptables.Chain

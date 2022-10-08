@@ -869,6 +869,9 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Cha
 			Action: JumpAction{Target: ChainFIPSnat},
 		},
 		{
+			Action: JumpAction{Target: ChainNATEgress},
+		},
+		{
 			Action: JumpAction{Target: ChainNATOutgoing},
 		},
 	}

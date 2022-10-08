@@ -476,6 +476,58 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.WithField("endpoint", endpoint).Info("Added floatingIPs to endpoint")
 	}
 
+	// Pull out egress SNAT IP annotation
+	egressSNATAnnotation := annot["cni.projectcalico.org/egressSNAT"]
+	if egressSNATAnnotation != "" {
+		// If Egress SNAT is defined, but the feature is not enabled, return an error.
+		// if !conf.FeatureControl.EgressSNAT {
+		// 	releaseIPAM()
+		// 	return nil, fmt.Errorf("requested feature is not enabled: egress_snat")
+		// }
+
+		// Parse Annotation data
+		var ip string
+		err := json.Unmarshal([]byte(egressSNATAnnotation), &ip)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", egressSNATAnnotation, err)
+		}
+
+		// Get IPv4 and IPv6 targets for Egress SNAT
+		var podnetV4, podnetV6 *net.IPNet
+		for _, ipNet := range result.IPs {
+			if ipNet.Address.IP.To4() != nil {
+				podnetV4 = &ipNet.Address
+				netmask, _ := podnetV4.Mask.Size()
+				if netmask != 32 {
+					return nil, fmt.Errorf("PodIP %v is not a valid IPv4: Mask size is %d, not 32", ipNet, netmask)
+				}
+			} else {
+				podnetV6 = &ipNet.Address
+				netmask, _ := podnetV6.Mask.Size()
+				if netmask != 128 {
+					return nil, fmt.Errorf("PodIP %v is not a valid IPv6: Mask size is %d, not 128", ipNet, netmask)
+				}
+			}
+		}
+
+		if strings.Contains(ip, ":") {
+			if podnetV6 != nil {
+				endpoint.Spec.EgressSNAT = libapi.IPNAT{
+					InternalIP: podnetV6.IP.String(),
+					ExternalIP: ip,
+				}
+			}
+		} else {
+			if podnetV4 != nil {
+				endpoint.Spec.EgressSNAT = libapi.IPNAT{
+					InternalIP: podnetV4.IP.String(),
+					ExternalIP: ip,
+				}
+			}
+		}
+		logger.WithField("endpoint", endpoint).Info("Added egress SNAT to endpoint", egressSNATAnnotation)
+	}
+
 	// Write the endpoint object (either the newly created one, or the updated one)
 	// Pass special-case flag through to KDD to let it know what kind of patch to apply to the underlying
 	// Pod resource. (In Enterprise) Felix also modifies the pod through a patch and setting this avoids patching the
@@ -490,7 +542,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	// Add the interface created above to the CNI result.
 	result.Interfaces = append(result.Interfaces, &cniv1.Interface{
-		Name: endpoint.Spec.InterfaceName},
+		Name: endpoint.Spec.InterfaceName,
+	},
 	)
 
 	return result, nil
@@ -657,7 +710,6 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 // to get current.Result and then it unsets the IP field from CNI_ARGS ENV var,
 // so it doesn't pollute the subsequent requests.
 func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
-
 	// Save the original value of the CNI_ARGS ENV var for backup.
 	originalArgs := os.Getenv("CNI_ARGS")
 	logger.Debugf("Original CNI_ARGS=%s", originalArgs)

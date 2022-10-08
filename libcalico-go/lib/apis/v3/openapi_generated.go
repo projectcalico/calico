@@ -3195,6 +3195,13 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref common.ReferenceCa
 							},
 						},
 					},
+					"egressSNAT": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Egress SNAT is a 1:1 NAT mapping to apply for oubtound connections from the endpoint. SNAT is applied to outbound connections whenever the endpoint attempts to connect to addresses outside the calico managed IP pools.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPNAT"),
+						},
+					},
 					"ipv4Gateway": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IPv4Gateway is the gateway IPv4 address for traffic from the workload.",

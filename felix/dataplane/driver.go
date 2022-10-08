@@ -186,6 +186,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		dpConfig := intdataplane.Config{
 			Hostname:           configParams.FelixHostname,
 			FloatingIPsEnabled: strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
+			EgressSNATEnabled:  strings.EqualFold(configParams.EgressSNAT, string(apiv3.EgressSNATEnabled)),
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 				ResyncInterval:    configParams.InterfaceRefreshInterval,

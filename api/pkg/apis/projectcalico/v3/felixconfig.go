@@ -68,6 +68,14 @@ const (
 	FloatingIPsDisabled FloatingIPType = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type EgressSNATType string
+
+const (
+	EgressSNATEnabled  EgressSNATType = "Enabled"
+	EgressSNATDisabled EgressSNATType = "Disabled"
+)
+
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
@@ -494,6 +502,10 @@ type FelixConfigurationSpec struct {
 	//
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
+
+	// EgressSNAT configures whether or not Felix will program Egress SNAT rules.
+	// +optional
+	EgressSNAT *EgressSNATType `json:"egressSNAT,omitempty" validate:"omitempty"`
 }
 
 type RouteTableRange struct {

@@ -1297,6 +1297,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(FloatingIPType)
 		**out = **in
 	}
+	if in.EgressSNAT != nil {
+		in, out := &in.EgressSNAT, &out.EgressSNAT
+		*out = new(EgressSNATType)
+		**out = **in
+	}
 	return
 }
 

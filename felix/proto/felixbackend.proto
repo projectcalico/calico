@@ -384,6 +384,8 @@ message WorkloadEndpoint {
   repeated NatInfo ipv6_nat = 9;
   repeated string allow_spoofed_source_prefixes = 10;
   map<string, string> annotations = 11;
+  repeated NatInfo ipv4_snat = 12;
+  repeated NatInfo ipv6_snat = 13;
 }
 
 message WorkloadEndpointRemove {

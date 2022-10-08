@@ -91,6 +91,8 @@ func (_ WorkloadEndpoint) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVP
 			IPv6Nets:                   ipv6Nets,
 			IPv4NAT:                    ipv4NAT,
 			IPv6NAT:                    ipv6NAT,
+			Ipv4SNAT:                   []model.IPNAT{},
+			Ipv6SNAT:                   []model.IPNAT{},
 			IPv4Gateway:                ah.Spec.IPv4Gateway,
 			IPv6Gateway:                ah.Spec.IPv6Gateway,
 			Ports:                      ports,

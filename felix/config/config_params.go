@@ -301,6 +301,7 @@ type Config struct {
 	// programming of NAT mappings derived from Kubernetes pod annotations.  OpenStack floating
 	// IPs are always programmed, regardless of this setting.
 	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
+	EgressSNAT  string `config:"oneof(Enabled,Disabled);Disabled"`
 
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
 	// from workloads. We always add them unless explicitly requested not to add them.

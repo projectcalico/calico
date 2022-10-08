@@ -943,6 +943,13 @@ spec:
                 type: string
               disableConntrackInvalidCheck:
                 type: boolean
+              egressSNAT:
+                description: EgressSNAT configures whether or not Felix will program
+                  Egress SNAT rules.
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               endpointReportingDelay:
                 type: string
               endpointReportingEnabled:

@@ -34,6 +34,7 @@ type Policy struct {
 type FeatureControl struct {
 	IPAddrsNoIpam bool `json:"ip_addrs_no_ipam"`
 	FloatingIPs   bool `json:"floating_ips"`
+	EgressSNAT    bool `json:"egress_snat"`
 }
 
 // Kubernetes a K8s specific struct to hold config

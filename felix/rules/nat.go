@@ -151,6 +151,32 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 	}}
 }
 
+func (r *DefaultRuleRenderer) EgressSNATsToIptablesChains(snats map[string]string, ipVersion uint8) []*iptables.Chain {
+	ipConf := r.ipSetConfig(ipVersion)
+
+	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
+
+	// Extract and sort map keys so we can program rules in a determined order.
+	sortedIntIps := make([]string, 0, len(snats))
+	for intIp := range snats {
+		sortedIntIps = append(sortedIntIps, intIp)
+	}
+	sort.Strings(sortedIntIps)
+
+	rules := []iptables.Rule{}
+	for _, intIp := range sortedIntIps {
+		extIp := snats[intIp]
+		rules = append(rules, iptables.Rule{
+			Match:  iptables.Match().NotDestIPSet(allIPsSetName).SourceNet(intIp),
+			Action: iptables.SNATAction{ToAddr: extIp},
+		})
+	}
+	return []*iptables.Chain{{
+		Name:  ChainNATEgress,
+		Rules: rules,
+	}}
+}
+
 func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*iptables.Chain {
 	rules := []iptables.Rule{}
 	if r.blockCIDRAction != nil {

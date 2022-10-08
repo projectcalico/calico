@@ -65,6 +65,10 @@ type WorkloadEndpointSpec struct {
 	// to connect one of its own external IPs. Each internal IP must be associated with the same
 	// endpoint via the configured IPNetworks.
 	IPNATs []IPNAT `json:"ipNATs,omitempty" validate:"omitempty,dive"`
+	// Egress SNAT is a 1:1 NAT mapping to apply for oubtound connections from the endpoint.
+	// SNAT is applied to outbound connections whenever the endpoint attempts to connect to
+	// addresses outside the calico managed IP pools.
+	EgressSNAT IPNAT `json:"egressSNAT,omitempty" validate:"omitempty,dive"`
 	// IPv4Gateway is the gateway IPv4 address for traffic from the workload.
 	IPv4Gateway string `json:"ipv4Gateway,omitempty" validate:"omitempty,ipv4"`
 	// IPv6Gateway is the gateway IPv6 address for traffic from the workload.
