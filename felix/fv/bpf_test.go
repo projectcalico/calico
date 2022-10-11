@@ -234,8 +234,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			felixPanicExpected bool
 		)
 
-		ctlbWorkaround := !testOpts.connTimeEnabled
-
 		switch testOpts.protocol {
 		case "tcp":
 			numericProto = 6
@@ -295,7 +293,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 
-			if ctlbWorkaround {
+			if testOpts.connTimeEnabled {
+				options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
+			} else {
 				options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
 			}
 		})
@@ -556,9 +556,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					expJumpMaps := func(numWorkloads int) int {
 						numHostIfaces := 1
 						specialIfaces := 0
-						if ctlbWorkaround {
-							specialIfaces = 2 /* nat + lo */
-						}
+						specialIfaces = 2 /* nat + lo */
 						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
 						return expectedNumMaps
 					}
@@ -2362,14 +2360,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					ifUDPnoCTLB := func(desc string, body func()) {
-						if testOpts.protocol != "udp" || testOpts.connTimeEnabled {
+					ifNotUDP := func(desc string, body func()) {
+						if testOpts.protocol != "udp" {
 							return
 						}
 						It(desc, body)
 					}
 
-					ifUDPnoCTLB("should have connectivity after a backend is replaced by a new one", func() {
+					ifNotUDP("should have connectivity after a backend is replaced by a new one", func() {
 
 						var (
 							testSvc          *v1.Service
@@ -2698,7 +2696,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											felix.Exec("ip", "route")
 										}
 									})
-									if ctlbWorkaround {
+
+									if !testOpts.connTimeEnabled {
 										It("should have connection when via clusterIP starts first", func() {
 											node1IP := felixes[1].IP
 
