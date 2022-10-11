@@ -3040,7 +3040,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				hostIP0 := TargetIP(felixes[0].IP)
 				hostPort := uint16(8080)
-				target := fmt.Sprintf("%s:8055", w[0][0].GetIP())
+				target := fmt.Sprintf("%s:8055", w[0][0].IP)
 
 				policy := api.NewNetworkPolicy()
 				policy.Name = "allow-all"
