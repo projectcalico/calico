@@ -98,7 +98,13 @@ func (m *egressSNATManager) CompleteDeferredWork() error {
 				"IntIP": egressSNAT.IntIp,
 			}).Debug("Egress SNAT mapping")
 
-			snats[egressSNAT.IntIp] = egressSNAT.ExtIp
+			// For the egress SNATs, if multiple external IPs map to the same
+			// workload IP, use the alphabetically earliest external IP.
+			existingExtIP := snats[egressSNAT.IntIp]
+			if existingExtIP == "" || egressSNAT.IntIp < existingExtIP {
+				log.Debug("Wanted Egress SNAT mapping")
+				snats[egressSNAT.IntIp] = egressSNAT.ExtIp
+			}
 		}
 	}
 

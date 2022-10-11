@@ -48,6 +48,8 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 			},
 		},
 		IPv6NAT: []model.IPNAT{},
+		Ipv4SNAT: []model.IPNAT{},
+		Ipv6SNAT: []model.IPNAT{},
 	}, proto.WorkloadEndpoint{
 		State:      "up",
 		Name:       "bill",
@@ -64,6 +66,8 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		},
 		Ipv6Nat:                    []*proto.NatInfo{},
 		AllowSpoofedSourcePrefixes: []string{},
+		Ipv4Snat:                    []*proto.NatInfo{},
+		Ipv6Snat:                    []*proto.NatInfo{},
 	}),
 	Entry("workload endpoint with source IP spoofing configured", model.WorkloadEndpoint{
 		State:                      "up",
@@ -78,6 +82,34 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		Ipv4Nat:                    []*proto.NatInfo{},
 		Ipv6Nat:                    []*proto.NatInfo{},
 		AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32"},
+		Ipv4Snat:                    []*proto.NatInfo{},
+		Ipv6Snat:                    []*proto.NatInfo{},
+	}),
+	Entry("workload endpoint with egress SNAT", model.WorkloadEndpoint{
+		State:                      "up",
+		Name:                       "bill",
+		Ipv4SNAT: []model.IPNAT{
+			{
+				IntIP: mustParseIP("10.28.0.13"),
+				ExtIP: mustParseIP("172.16.1.3"),
+			},
+		},
+	}, proto.WorkloadEndpoint{
+		State:                      "up",
+		Name:                       "bill",
+		Ipv4Nets:                   []string{},
+		Ipv6Nets:                   []string{},
+		Tiers:                      []*proto.TierInfo{},
+		Ipv4Nat:                    []*proto.NatInfo{},
+		Ipv6Nat:                    []*proto.NatInfo{},
+		AllowSpoofedSourcePrefixes: []string{},
+		Ipv4Snat: []*proto.NatInfo{
+			{
+				ExtIp: "172.16.1.3",
+				IntIp: "10.28.0.13",
+			},
+		},
+		Ipv6Snat:                    []*proto.NatInfo{},
 	}),
 )
 

@@ -590,6 +590,7 @@ var _ = Describe("Static", func() {
 					Name: "cali-POSTROUTING",
 					Rules: []Rule{
 						{Action: JumpAction{Target: "cali-fip-snat"}},
+						{Action: JumpAction{Target: "cali-nat-egress"}},
 						{Action: JumpAction{Target: "cali-nat-outgoing"}},
 					},
 				}))
@@ -920,6 +921,7 @@ var _ = Describe("Static", func() {
 						Name: "cali-POSTROUTING",
 						Rules: []Rule{
 							{Action: JumpAction{Target: "cali-fip-snat"}},
+							{Action: JumpAction{Target: "cali-nat-egress"}},
 							{Action: JumpAction{Target: "cali-nat-outgoing"}},
 							{
 								Match: Match().
@@ -946,6 +948,7 @@ var _ = Describe("Static", func() {
 							Name: "cali-POSTROUTING",
 							Rules: []Rule{
 								{Action: JumpAction{Target: "cali-fip-snat"}},
+								{Action: JumpAction{Target: "cali-nat-egress"}},
 								{Action: JumpAction{Target: "cali-nat-outgoing"}},
 								{
 									Match: Match().
@@ -970,6 +973,7 @@ var _ = Describe("Static", func() {
 								Name: "cali-POSTROUTING",
 								Rules: []Rule{
 									{Action: JumpAction{Target: "cali-fip-snat"}},
+									{Action: JumpAction{Target: "cali-nat-egress"}},
 									{Action: JumpAction{Target: "cali-nat-outgoing"}},
 									{
 										Match: Match().
@@ -1005,6 +1009,7 @@ var _ = Describe("Static", func() {
 							Name: "cali-POSTROUTING",
 							Rules: []Rule{
 								{Action: JumpAction{Target: "cali-fip-snat"}},
+								{Action: JumpAction{Target: "cali-nat-egress"}},
 								{Action: JumpAction{Target: "cali-nat-outgoing"}},
 							},
 						},
@@ -1023,6 +1028,7 @@ var _ = Describe("Static", func() {
 								Name: "cali-POSTROUTING",
 								Rules: []Rule{
 									{Action: JumpAction{Target: "cali-fip-snat"}},
+									{Action: JumpAction{Target: "cali-nat-egress"}},
 									{Action: JumpAction{Target: "cali-nat-outgoing"}},
 									{
 										Match: Match().
@@ -1044,6 +1050,7 @@ var _ = Describe("Static", func() {
 						Name: "cali-POSTROUTING",
 						Rules: []Rule{
 							{Action: JumpAction{Target: "cali-fip-snat"}},
+							{Action: JumpAction{Target: "cali-nat-egress"}},
 							{Action: JumpAction{Target: "cali-nat-outgoing"}},
 						},
 					},

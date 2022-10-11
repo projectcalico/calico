@@ -64,6 +64,9 @@ func (_ WorkloadEndpoint) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVP
 		}
 	}
 
+	ipv4SNAT := []model.IPNAT{}
+	ipv6SNAT := []model.IPNAT{}
+
 	var ports []model.EndpointPort
 	for _, port := range ah.Spec.Ports {
 		ports = append(ports, model.EndpointPort{
@@ -91,8 +94,8 @@ func (_ WorkloadEndpoint) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVP
 			IPv6Nets:                   ipv6Nets,
 			IPv4NAT:                    ipv4NAT,
 			IPv6NAT:                    ipv6NAT,
-			Ipv4SNAT:                   []model.IPNAT{},
-			Ipv6SNAT:                   []model.IPNAT{},
+			Ipv4SNAT:                   ipv4SNAT,
+			Ipv6SNAT:                   ipv6SNAT,
 			IPv4Gateway:                ah.Spec.IPv4Gateway,
 			IPv6Gateway:                ah.Spec.IPv6Gateway,
 			Ports:                      ports,
@@ -146,6 +149,13 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 	ipNats := convertIPNATs(wepValue.IPv4NAT)
 	ipNats = append(ipNats, convertIPNATs(wepValue.IPv6NAT)...)
 
+	egressSNATs := convertIPNATs(wepValue.Ipv4SNAT)
+	egressSNATs = append(egressSNATs, convertIPNATs(wepValue.Ipv6SNAT)...)
+	egressSNAT := libapiv3.IPNAT{}
+	if len(egressSNATs) > 0 {
+		egressSNAT = egressSNATs[0]
+	}
+	
 	allowedSources := convertIPNetworks(wepValue.AllowSpoofedSourcePrefixes)
 
 	wep := libapiv3.NewWorkloadEndpoint()
@@ -163,6 +173,7 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 		Endpoint:                   convertName(wepKey.EndpointID),
 		IPNetworks:                 ipNets,
 		IPNATs:                     ipNats,
+		EgressSNAT:                 egressSNAT,
 		Profiles:                   convertProfiles(wepValue.ProfileIDs),
 		InterfaceName:              wepValue.Name,
 		Ports:                      convertPorts(wepValue.Ports),
