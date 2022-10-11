@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1122,14 +1122,20 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 	rawRules = append(rawRules,
 		Rule{
-			Match:  Match().NotDestAddrType(AddrTypeLocal),
-			Action: GotoAction{Target: ChainRawUntrackedFlows},
-		},
-		Rule{
 			// Return, i.e. no-op, if bypass mark is not set.
 			Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenBypass, 0xffffffff),
 			Action:  GotoAction{Target: ChainRawBPFUntrackedPolicy},
 			Comment: []string{"Jump to target for packets with Bypass mark"},
+		},
+		Rule{
+			Match:   Match().DestAddrType(AddrTypeLocal),
+			Action:  SetMaskedMarkAction{Mark: tcdefs.MarkSeenSkipFIB, Mask: tcdefs.MarkSeenSkipFIB},
+			Comment: []string{"Mark traffic towards the host - it is TRACKed"},
+		},
+		Rule{
+			Match:   Match().NotDestAddrType(AddrTypeLocal),
+			Action:  GotoAction{Target: ChainRawUntrackedFlows},
+			Comment: []string{"Check if forwarded traffic needs to be TRACKed"},
 		},
 	)
 
