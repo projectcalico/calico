@@ -943,6 +943,30 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					pol = createPolicy(pol)
 
+					By("allowing to self via MASQ", func() {
+
+						nets := []string{felixes[0].IP + "/32"}
+						switch testOpts.tunnel {
+						case "ipip":
+							nets = []string{felixes[0].ExpectedIPIPTunnelAddr + "/32"}
+						}
+
+						pol := api.NewGlobalNetworkPolicy()
+						pol.Namespace = "fv"
+						pol.Name = "self-snat"
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: nets,
+								},
+							},
+						}
+						pol.Spec.Selector = "name=='" + w[0][0].Name + "'"
+
+						pol = createPolicy(pol)
+					})
+
 					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_ = k8sClient
 				})
@@ -1849,30 +1873,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						By("allowing to self via SNAT", func() {
-
-							nets := []string{felixes[0].IP + "/32"}
-							switch testOpts.tunnel {
-							case "ipip":
-								nets = []string{felixes[0].ExpectedIPIPTunnelAddr + "/32"}
-							}
-
-							pol = api.NewGlobalNetworkPolicy()
-							pol.Namespace = "fv"
-							pol.Name = "self-snat"
-							pol.Spec.Ingress = []api.Rule{
-								{
-									Action: "Allow",
-									Source: api.EntityRule{
-										Nets: nets,
-									},
-								},
-							}
-							pol.Spec.Selector = "name=='" + w[0][0].Name + "'"
-
-							pol = createPolicy(pol)
-						})
-
 						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
 
 						if !testOpts.connTimeEnabled {
@@ -1892,35 +1892,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					if testOpts.connTimeEnabled {
-						It("workload should have connectivity to self via a service", func() {
-							ip := testSvc.Spec.ClusterIP
-							port := uint16(testSvc.Spec.Ports[0].Port)
+					It("should only have connectivity from the local host via a service to workload 0", func() {
+						// Local host is always white-listed (for kubelet health checks).
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
 
-							cc.ExpectSome(w[0][0], TargetIP(ip), port)
-							cc.CheckConnectivity()
-						})
-
-						It("should only have connectivity from the local host via a service to workload 0", func() {
-							// Local host is always white-listed (for kubelet health checks).
-							ip := testSvc.Spec.ClusterIP
-							port := uint16(testSvc.Spec.Ports[0].Port)
-
-							cc.ExpectSome(felixes[0], TargetIP(ip), port)
-							cc.ExpectNone(felixes[1], TargetIP(ip), port)
-							cc.CheckConnectivity()
-						})
-					} else {
-						It("should not have connectivity from the local host via a service to workload 0", func() {
-							// Local host is always white-listed (for kubelet health checks).
-							ip := testSvc.Spec.ClusterIP
-							port := uint16(testSvc.Spec.Ports[0].Port)
-
-							cc.ExpectNone(felixes[0], TargetIP(ip), port)
-							cc.ExpectNone(felixes[1], TargetIP(ip), port)
-							cc.CheckConnectivity()
-						})
-					}
+						cc.ExpectSome(felixes[0], TargetIP(ip), port)
+						cc.ExpectNone(felixes[1], TargetIP(ip), port)
+						cc.CheckConnectivity()
+					})
 
 					if testOpts.connTimeEnabled {
 						Describe("after updating the policy to allow traffic from hosts", func() {
