@@ -591,7 +591,7 @@ func (m *vxlanManager) getParentInterface(localVTEP *proto.VXLANTunnelEndpointUp
 		}
 		for _, addr := range addrs {
 			if addr.IPNet.IP.String() == parentDeviceIP {
-				m.logCtx.Debugf("Found parent interface: %s", link)
+				m.logCtx.Debugf("Found parent interface: %+v", link)
 				return link, nil
 			}
 		}
@@ -692,19 +692,19 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 
 	// Make sure the IP address is configured.
 	if err := m.ensureAddressOnLink(addr, link); err != nil {
-		return fmt.Errorf("failed to ensure address of interface: %s", err)
+		return fmt.Errorf("failed to ensure address of interface: %v", err)
 	}
 
 	// If required, disable checksum offload.
 	if xsumBroken {
 		if err := ethtool.EthtoolTXOff(m.vxlanDevice); err != nil {
-			return fmt.Errorf("failed to disable checksum offload: %s", err)
+			return fmt.Errorf("failed to disable checksum offload: %v", err)
 		}
 	}
 
 	// And the device is up.
 	if err := m.nlHandle.LinkSetUp(link); err != nil {
-		return fmt.Errorf("failed to set interface up: %s", err)
+		return fmt.Errorf("failed to set interface up: %v", err)
 	}
 
 	return nil
@@ -738,7 +738,7 @@ func (m *vxlanManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 		}
 		m.logCtx.WithFields(logrus.Fields{"address": existing, "link": link.Attrs().Name}).Warn("Removing unwanted IP from VXLAN device")
 		if err := m.nlHandle.AddrDel(link, &existing); err != nil {
-			return fmt.Errorf("failed to remove IP address %s", existing)
+			return fmt.Errorf("failed to remove IP address %s: %v", existing.String(), err)
 		}
 	}
 
