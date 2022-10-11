@@ -128,10 +128,5 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 
 func flushInterface(cmd *cobra.Command, iface string) error {
 	bpfCounters := counters.NewCounters(iface)
-	err := bpfCounters.Flush()
-	if err != nil {
-		return fmt.Errorf("Failed to flush bpf counters for interface=%s", iface)
-	}
-	log.Infof("Successfully flushed bpf counters for interface=%s", iface)
-	return nil
+	return bpfCounters.Flush()
 }
