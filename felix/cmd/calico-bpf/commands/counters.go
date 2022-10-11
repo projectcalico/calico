@@ -65,9 +65,7 @@ var countersFlushCmd = &cobra.Command{
 		if iface == "" {
 			doForAllInterfaces(cmd, "flush", flushInterface)
 		} else {
-			if err := flushInterface(cmd, iface); err != nil {
-				log.WithError(err).Error("Failed to flush counter map.")
-			}
+			flushInterface(cmd, iface)
 		}
 	},
 }
@@ -87,11 +85,7 @@ func doForAllInterfaces(cmd *cobra.Command, action string, fn func(cmd *cobra.Co
 		return
 	}
 	for _, i := range interfaces {
-		err = fn(cmd, i.Name)
-		if err != nil {
-			log.Errorf("Failed to %s interface %s", action, i.Name)
-			continue
-		}
+		fn(cmd, i.Name)
 	}
 }
 
@@ -128,10 +122,6 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 
 func flushInterface(cmd *cobra.Command, iface string) error {
 	bpfCounters := counters.NewCounters(iface)
-	err := bpfCounters.Flush()
-	if err != nil {
-		return fmt.Errorf("Failed to flush bpf counters for interface=%s", iface)
-	}
-	log.Infof("Successfully flushed bpf counters for interface=%s", iface)
+	bpfCounters.Flush()
 	return nil
 }
