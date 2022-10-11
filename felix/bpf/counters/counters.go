@@ -164,7 +164,11 @@ func (c Counters) Read() ([][]uint64, error) {
 	for hook, name := range bpf.Hooks {
 		val, err := c.read(c.maps[hook])
 		if err != nil {
-			return values, fmt.Errorf("Failed to read bpf counters. hook=%s err=%v", name, err)
+			if name == bpf.HookXDP {
+				logrus.Infof("Failed to read XDP bpf counters. err=%v", err)
+				continue
+			}
+			return values, fmt.Errorf("Failed to read bpf counters. hook=%s err=%w", name, err)
 		}
 		if len(values[hook]) < MaxCounterNumber {
 			return values, fmt.Errorf("Failed to read enough data from bpf counters. hook=%s", name)
@@ -210,6 +214,10 @@ func (c *Counters) Flush() error {
 	for hook, name := range bpf.Hooks {
 		err := c.flush(c.maps[hook])
 		if err != nil {
+			if name == bpf.HookXDP {
+				logrus.Infof("Failed to flush XDP bpf counters. err=%v", err)
+				continue
+			}
 			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%w", c.iface, name, err)
 		}
 		logrus.Infof("Successfully flushed counters map for interface=%s hook=%s", c.iface, name)
