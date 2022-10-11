@@ -127,10 +127,11 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 	defer aggregator.mutex.Unlock()
 	reporter := aggregator.reporters[name]
 
+	reports := aggregator.reporters[name].reports
 	logCxt := log.WithFields(log.Fields{
-		"name":       name,
-		"newReport":  report,
-		"lastReport": reporter.latest,
+		"name":      name,
+		"newReport": formatReport(&reports, report),
+		"oldReport": formatReport(&reports, &reporter.latest),
 	})
 
 	if reporter.latest != *report {
@@ -139,6 +140,26 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 	}
 	reporter.timestamp = time.Now()
 	return
+}
+
+func formatReport(reports, report *HealthReport) string {
+	var parts []string
+
+	if reports.Live {
+		if report.Live {
+			parts = append(parts, "live")
+		} else {
+			parts = append(parts, "non-live")
+		}
+	}
+	if reports.Ready {
+		if report.Ready {
+			parts = append(parts, "ready")
+		} else {
+			parts = append(parts, "non-ready")
+		}
+	}
+	return strings.Join(parts, ",")
 }
 
 func NewHealthAggregator() *HealthAggregator {
@@ -239,7 +260,7 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	// Summary status has changed so update previous status and log.
 	if aggregator.lastReport == nil || *summary != *aggregator.lastReport {
 		aggregator.lastReport = summary
-		log.WithField("newStatus", summary).Info("Overall health status changed")
+		log.Infof("Overall health status changed: live=%v ready=%v\n%s", summary.Live, summary.Ready, summary.Detail)
 	}
 
 	log.WithField("healthResult", summary).Debug("Calculated health summary")
