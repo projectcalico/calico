@@ -123,6 +123,7 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetCaption(true, fmt.Sprintf("dumped %s counters.", iface))
 	table.SetHeader([]string{"CATEGORY", "TYPE", "INGRESS", "EGRESS", "XDP"})
+
 	var rows [][]string
 	for _, c := range counters.Descriptions() {
 		newRow := []string{c.Category, c.Caption}

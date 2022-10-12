@@ -136,7 +136,7 @@ type Counters struct {
 	iface    string
 	numOfCpu int
 	maps     []bpf.Map
-	key      []byte
+	zeroKey  []byte
 	zeroVal  []byte
 }
 
@@ -146,8 +146,8 @@ func NewCounters(iface string) *Counters {
 		numOfCpu: bpf.NumPossibleCPUs(),
 		maps:     make([]bpf.Map, len(bpf.Hooks)),
 	}
-	// key is the key to the counters map, and it is set to 0 since there is only one entry
-	cntr.key = make([]byte, counterMapKeySize)
+	// zeroKey is the key to the counters map, and it is set to 0 since there is only one entry
+	cntr.zeroKey = make([]byte, counterMapKeySize)
 	cntr.zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*cntr.numOfCpu)
 
 	for index, hook := range bpf.Hooks {
@@ -171,7 +171,7 @@ func (c Counters) Read(index int) ([]uint64, error) {
 		}
 	}()
 
-	values, err := c.maps[index].Get(c.key)
+	values, err := c.maps[index].Get(c.zeroKey)
 	if err != nil {
 		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
 	}
@@ -199,7 +199,7 @@ func (c *Counters) Flush(index int) error {
 		}
 	}()
 
-	err = c.maps[index].Update(c.key, c.zeroVal)
+	err = c.maps[index].Update(c.zeroKey, c.zeroVal)
 	if err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
 	}
