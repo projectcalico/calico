@@ -1874,14 +1874,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
 						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
+						hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+						}
 
-						if !testOpts.connTimeEnabled {
-							hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
-							switch testOpts.tunnel {
-							case "ipip":
-								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
-							}
-
+						if !testOpts.connTimeEnabled || testOpts.protocol == "udp" {
+							w00Expects = append(w00Expects, hostW0SrcIP)
 							w00Expects = append(w00Expects, hostW0SrcIP)
 						}
 
@@ -2790,7 +2790,34 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					}
 
-					if !intLocal {
+					w00Expects := []ExpectationOption{ExpectWithPorts(npPort)}
+					hostW0SrcIP := ExpectWithSrcIPs("0.0.0.0")
+
+					JustBeforeEach(func() {
+						hostW0SrcIP = ExpectWithSrcIPs(felixes[0].IP)
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+						case "wireguard":
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedWireguardTunnelAddr)
+						case "vxlan":
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedVXLANTunnelAddr)
+						}
+
+						if !testOpts.connTimeEnabled || testOpts.protocol == "udp" {
+							w00Expects = append(w00Expects, hostW0SrcIP)
+							w00Expects = append(w00Expects, hostW0SrcIP)
+						}
+
+					})
+
+					if intLocal {
+						It("workload should have connectivity to self via local and not remote node", func() {
+							cc.Expect(None, w[0][0], TargetIP(felixes[1].IP), w00Expects...)
+							cc.Expect(Some, w[0][0], TargetIP(felixes[0].IP), w00Expects...)
+							cc.CheckConnectivity()
+						})
+					} else {
 						It("should have connectivity from a workload via a nodeport on another node to workload 0", func() {
 							ip := felixes[1].IP
 
@@ -2798,12 +2825,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity()
 
 						})
-					}
 
-					if testOpts.connTimeEnabled {
 						It("workload should have connectivity to self via local/remote node", func() {
-							cc.ExpectSome(w[0][0], TargetIP(felixes[1].IP), npPort)
-							cc.ExpectSome(w[0][0], TargetIP(felixes[0].IP), npPort)
+							cc.Expect(Some, w[0][0], TargetIP(felixes[1].IP), w00Expects...)
+							cc.Expect(Some, w[0][0], TargetIP(felixes[0].IP), w00Expects...)
 							cc.CheckConnectivity()
 						})
 					}
