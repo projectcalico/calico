@@ -344,6 +344,29 @@ func (rg *routeGenerator) isAllowedLoadBalancerIP(loadBalancerIP string) bool {
 	return false
 }
 
+// isSingleLoadBalancerIP determines if the given IP is in the list of
+// whitelisted LoadBalancer CIDRs given in the default bgpconfiguration
+// and is a single IP entry (/32 for IPV4 or /128 for IPV6)
+func (rg *routeGenerator) isSingleLoadBalancerIP(loadBalancerIP string) bool {
+
+	ip := net.ParseIP(loadBalancerIP)
+	if ip == nil {
+		log.Errorf("Could not parse service LB IP: %s", loadBalancerIP)
+		return false
+	}
+
+	for _, allowedNet := range rg.client.GetLoadBalancerIPs() {
+		if allowedNet.Contains(ip) {
+			if ones, bits := allowedNet.Mask.Size(); ones == bits {
+				return true
+			}
+		}
+	}
+
+	// Guilty until proven innocent
+	return false
+}
+
 // addFullIPLength returns a new slice, with the full IP length appended onto every item.
 func addFullIPLength(items []string) []string {
 	res := make([]string, 0)
@@ -388,6 +411,12 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
 		logc.Debug("Skipping service with no cluster IP")
 		return false
+	}
+
+	// we need to announce single IPs for services of type LoadBalancer and externalTrafficPolicy Cluster
+	if svc.Spec.Type == v1.ServiceTypeLoadBalancer && svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
+		logc.Debug("Advertising load balancer of type cluster because of single IP definition")
+		return true
 	}
 
 	// we only need to advertise local services, since we advertise the entire cluster IP range.
