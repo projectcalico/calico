@@ -1874,14 +1874,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
 						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
+						hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+						}
 
-						if !testOpts.connTimeEnabled {
-							hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
-							switch testOpts.tunnel {
-							case "ipip":
-								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
-							}
-
+						if !testOpts.connTimeEnabled || testOpts.protocol == "udp" {
+							w00Expects = append(w00Expects, hostW0SrcIP)
 							w00Expects = append(w00Expects, hostW0SrcIP)
 						}
 
@@ -2573,7 +2573,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								switch testOpts.tunnel {
 								case "ipip":
-									if testOpts.connTimeEnabled {
+									if testOpts.connTimeEnabled && testOpts.protocol == "tcp" {
 										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 									}
 									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
@@ -2790,7 +2790,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					}
 
-					if !intLocal {
+					if intLocal {
+						It("workload should have connectivity to self via local and not remote node", func() {
+							w00Expects := []ExpectationOption{ExpectWithPorts(npPort)}
+							hostW0SrcIP := ExpectWithSrcIPs("0.0.0.0")
+
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].IP)
+							switch testOpts.tunnel {
+							case "ipip":
+								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+							}
+
+							if !testOpts.connTimeEnabled || testOpts.protocol == "udp" {
+								w00Expects = append(w00Expects, hostW0SrcIP)
+								w00Expects = append(w00Expects, hostW0SrcIP)
+							}
+
+							cc.Expect(None, w[0][0], TargetIP(felixes[1].IP), w00Expects...)
+							cc.Expect(Some, w[0][0], TargetIP(felixes[0].IP), w00Expects...)
+							cc.CheckConnectivity()
+						})
+					} else {
 						It("should have connectivity from a workload via a nodeport on another node to workload 0", func() {
 							ip := felixes[1].IP
 
@@ -2798,12 +2818,22 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity()
 
 						})
-					}
 
-					if testOpts.connTimeEnabled {
 						It("workload should have connectivity to self via local/remote node", func() {
-							cc.ExpectSome(w[0][0], TargetIP(felixes[1].IP), npPort)
-							cc.ExpectSome(w[0][0], TargetIP(felixes[0].IP), npPort)
+							w00Expects := []ExpectationOption{ExpectWithPorts(npPort)}
+							hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
+							switch testOpts.tunnel {
+							case "ipip":
+								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+							}
+
+							if !testOpts.connTimeEnabled || testOpts.protocol == "udp" {
+								w00Expects = append(w00Expects, hostW0SrcIP)
+								w00Expects = append(w00Expects, hostW0SrcIP)
+							}
+
+							cc.Expect(Some, w[0][0], TargetIP(felixes[1].IP), w00Expects...)
+							cc.Expect(Some, w[0][0], TargetIP(felixes[0].IP), w00Expects...)
 							cc.CheckConnectivity()
 						})
 					}
@@ -3287,7 +3317,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							var matcher string
 
-							if testOpts.connTimeEnabled {
+							if testOpts.connTimeEnabled && testOpts.protocol == "tcp" {
 								matcher = fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
 									tgtWorkload.IP, w[1][1].IP, w[0][0].IP, tgtPort)
 								tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
