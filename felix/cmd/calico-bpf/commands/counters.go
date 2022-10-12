@@ -89,7 +89,7 @@ func doForAllInterfaces(cmd *cobra.Command, action string, fn func(cmd *cobra.Co
 	for _, i := range interfaces {
 		err = fn(cmd, i.Name)
 		if err != nil {
-			log.Errorf("Failed to %s interface %s", action, i.Name)
+			log.WithError(err).Errorf("Failed to %s interface %s", action, i.Name)
 			continue
 		}
 	}
@@ -99,17 +99,30 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	if iface == "" {
 		return fmt.Errorf("empty interface name")
 	}
-
 	bpfCounters := counters.NewCounters(iface)
-	values, err := bpfCounters.Read()
-	if err != nil {
-		return fmt.Errorf("Failed to read bpf counters. iface=%s err=%v", iface, err)
+
+	values := make([][]uint64, len(bpf.Hooks))
+	for i := range values {
+		values[i] = make([]uint64, counters.MaxCounterNumber)
+	}
+	for index, hook := range bpf.Hooks {
+		val, err := bpfCounters.Read(index)
+		if err != nil {
+			if hook == bpf.HookXDP {
+				log.Infof("Failed to read XDP bpf counters. err=%v", err)
+				continue
+			}
+			return fmt.Errorf("Failed to read bpf counters. iface=%v hook=%s err=%w", iface, hook, err)
+		}
+		if len(val) < counters.MaxCounterNumber {
+			return fmt.Errorf("Failed to read enough data from bpf counters. iface=%v hook=%s", iface, hook)
+		}
+		values[index] = val
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetCaption(true, fmt.Sprintf("dumped %s counters.", iface))
 	table.SetHeader([]string{"CATEGORY", "TYPE", "INGRESS", "EGRESS", "XDP"})
-
 	var rows [][]string
 	for _, c := range counters.Descriptions() {
 		newRow := []string{c.Category, c.Caption}
@@ -128,10 +141,13 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 
 func flushInterface(cmd *cobra.Command, iface string) error {
 	bpfCounters := counters.NewCounters(iface)
-	err := bpfCounters.Flush()
-	if err != nil {
-		return fmt.Errorf("Failed to flush bpf counters for interface=%s", iface)
+	for index, hook := range bpf.Hooks {
+		err := bpfCounters.Flush(index)
+		if err != nil {
+			log.Infof("Failed to flush bpf counters for interface=%s hook=%s err=%v", iface, hook, err)
+		} else {
+			log.Infof("Successfully flushed counters map for interface=%s hook=%s", iface, hook)
+		}
 	}
-	log.Infof("Successfully flushed bpf counters for interface=%s", iface)
 	return nil
 }
