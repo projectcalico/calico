@@ -17,7 +17,6 @@ package v3
 import (
 	"fmt"
 	"net"
-	"os"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -135,6 +134,13 @@ func Validate(current interface{}) error {
 	return nil
 }
 
+func ValidateSyncLabels(current interface{}) error {
+	if err := validate.Var(current, "k8sSyncLabels"); err != nil {
+		return convertError(err)
+	}
+	return nil
+}
+
 func convertError(err error) errors.ErrorValidation {
 	verr := errors.ErrorValidation{}
 	for _, f := range err.(validator.ValidationErrors) {
@@ -160,7 +166,7 @@ func init() {
 	registerFieldValidator("containerID", validateContainerID)
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("labels", validateLabels)
-	registerFieldValidator("syncLabels", validateSyncLabels)
+	registerFieldValidator("k8sSyncLabels", validateK8sSyncLabels)
 	registerFieldValidator("ipVersion", validateIPVersion)
 	registerFieldValidator("ipIpMode", validateIPIPMode)
 	registerFieldValidator("vxlanMode", validateVXLANMode)
@@ -447,11 +453,10 @@ func validateLabels(fl validator.FieldLevel) bool {
 	return true
 }
 
-func validateSyncLabels(fl validator.FieldLevel) bool {
+func validateK8sSyncLabels(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
-	log.Debugf("Validate SyncLabels: %s", s)
-	dst := os.Getenv("DATASTORE_TYPE")
-	if s == "Disabled" && dst == "kubernetes" {
+	log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", s)
+	if s == api.Disabled {
 		log.Debugf("SyncLabels value cannot be set to disabled with Kubernetes datastore driver.")
 		return false
 	}
