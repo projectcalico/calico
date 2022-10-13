@@ -15,9 +15,10 @@
 package net
 
 import (
-	"encoding/json"
 	"math/big"
 	"net"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Sub class net.IPNet so that we can add JSON marshalling and unmarshalling.
@@ -27,12 +28,14 @@ type IPNet struct {
 
 // MarshalJSON interface for an IPNet
 func (i IPNet) MarshalJSON() ([]byte, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Marshal(i.String())
 }
 
 // UnmarshalJSON interface for an IPNet
 func (i *IPNet) UnmarshalJSON(b []byte) error {
 	var s string
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}
