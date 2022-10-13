@@ -16,7 +16,6 @@ package model
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	net2 "net"
 	"reflect"
@@ -26,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -358,7 +358,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 	return iface, nil
 }
 
-// Serialize a value in the model to a []byte to stored in the datastore.  This
+// SerializeValue serializes a value in the model to a []byte to be stored in the datastore.  This
 // performs the opposite processing to ParseValue()
 func SerializeValue(d *KVPair) ([]byte, error) {
 	valueType, err := d.Key.valueType()
