@@ -102,12 +102,10 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	bpfCounters := counters.NewCounters(iface)
 
 	values := make([][]uint64, len(bpf.Hooks))
-	xdpOK := true
 	for index, hook := range bpf.Hooks {
 		val, err := bpfCounters.Read(index)
 		if err != nil {
 			if hook == bpf.HookXDP {
-				xdpOK = false
 				log.Infof("Failed to read XDP bpf counters. err=%v", err)
 				continue
 			}
@@ -116,7 +114,6 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 		if len(val) < counters.MaxCounterNumber {
 			return fmt.Errorf("Failed to read enough data from bpf counters. iface=%v hook=%s", iface, hook)
 		}
-		values[index] = make([]uint64, counters.MaxCounterNumber)
 		values[index] = val
 	}
 
