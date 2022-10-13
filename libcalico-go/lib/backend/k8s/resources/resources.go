@@ -15,8 +15,7 @@
 package resources
 
 import (
-	"encoding/json"
-
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -69,6 +68,7 @@ func SetK8sAnnotationsFromCalicoMetadata(k8sRes Resource, calicoRes Resource) {
 	if a == nil {
 		a = make(map[string]string)
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if labels := calicoRes.GetObjectMeta().GetLabels(); len(labels) > 0 {
 		if lann, err := json.Marshal(labels); err != nil {
 			log.WithError(err).Warning("unable to store labels as an annotation")
@@ -105,7 +105,7 @@ func SetCalicoMetadataFromK8sAnnotations(calicoRes Resource, k8sRes Resource) {
 	if a == nil {
 		return
 	}
-
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if lann, ok := a[labelsAnnotation]; ok {
 		var labels map[string]string
 		if err := json.Unmarshal([]byte(lann), &labels); err != nil {
@@ -141,6 +141,7 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.Annotations = nil
 
 	// Marshal the data and store the json representation in the annotations.
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	metadataBytes, err := json.Marshal(romCopy)
 	if err != nil {
 		return nil, err
@@ -184,6 +185,7 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	}
 
 	meta := &metav1.ObjectMeta{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err := json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
 	if err != nil {
 		return err
