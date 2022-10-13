@@ -129,7 +129,7 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 		newRow := []string{c.Category, c.Caption}
 		// Now add value related to each hook, i.e. ingress, egress and XDP
 		for index, hook := range bpf.Hooks {
-			if hook == bpf.HookXDP && !xdpOK {
+			if values[index] == nil {
 				newRow = append(newRow, "N/A")
 			} else {
 				newRow = append(newRow, fmt.Sprintf("%v", values[index][c.Counter]))
