@@ -102,13 +102,12 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	bpfCounters := counters.NewCounters(iface)
 
 	values := make([][]uint64, len(bpf.Hooks))
-	for i := range values {
-		values[i] = make([]uint64, counters.MaxCounterNumber)
-	}
+	xdpOK := true
 	for index, hook := range bpf.Hooks {
 		val, err := bpfCounters.Read(index)
 		if err != nil {
 			if hook == bpf.HookXDP {
+				xdpOK = false
 				log.Infof("Failed to read XDP bpf counters. err=%v", err)
 				continue
 			}
@@ -117,6 +116,7 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 		if len(val) < counters.MaxCounterNumber {
 			return fmt.Errorf("Failed to read enough data from bpf counters. iface=%v hook=%s", iface, hook)
 		}
+		values[index] = make([]uint64, counters.MaxCounterNumber)
 		values[index] = val
 	}
 
@@ -128,8 +128,12 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	for _, c := range counters.Descriptions() {
 		newRow := []string{c.Category, c.Caption}
 		// Now add value related to each hook, i.e. ingress, egress and XDP
-		for index := range bpf.Hooks {
-			newRow = append(newRow, fmt.Sprintf("%v", values[index][c.Counter]))
+		for index, hook := range bpf.Hooks {
+			if hook == bpf.HookXDP && !xdpOK {
+				newRow = append(newRow, "N/A")
+			} else {
+				newRow = append(newRow, fmt.Sprintf("%v", values[index][c.Counter]))
+			}
 		}
 		rows = append(rows, newRow)
 	}
