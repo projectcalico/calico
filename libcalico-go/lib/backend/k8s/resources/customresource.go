@@ -71,6 +71,9 @@ type customK8sResourceClient struct {
 	// versionConverter is an optional hook to convert the returned data from the CRD
 	// from one format to another before returning it to the caller.
 	versionconverter VersionConverter
+
+	// validator used to validate resources.
+	validator Validator
 }
 
 // VersionConverter converts v1 or v3 k8s resources into v3 resources.
@@ -78,6 +81,9 @@ type customK8sResourceClient struct {
 type VersionConverter interface {
 	ConvertFromK8s(Resource) (Resource, error)
 }
+
+// Validator validates a resource.
+type Validator func(re Resource) error
 
 // Create creates a new Custom K8s Resource instance in the k8s API from the supplied KVPair.
 func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -93,6 +99,14 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 	if err != nil {
 		logContext.WithError(err).Debug("Error creating resource")
 		return nil, err
+	}
+
+	// Validate the resource if the validation function exists.
+	if c.validator != nil {
+		if err = c.validator(resIn); err != nil {
+			logContext.WithError(err).Debug("Error creating resource")
+			return nil, err
+		}
 	}
 
 	// Send the update request using the REST interface.
@@ -137,6 +151,14 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 	if err != nil {
 		logContext.WithError(err).Debug("Error updating resource")
 		return nil, err
+	}
+
+	// Validate the resource if the validation function exists.
+	if c.validator != nil {
+		if err = c.validator(resIn); err != nil {
+			logContext.WithError(err).Debug("Error updating resource")
+			return nil, err
+		}
 	}
 
 	// Send the update request using the name.
