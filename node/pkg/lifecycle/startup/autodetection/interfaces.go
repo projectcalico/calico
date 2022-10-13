@@ -32,8 +32,8 @@ type Interface struct {
 // GetInterfaces returns a list of all interfaces, skipping any interfaces whose
 // name matches any of the exclusion list regexes, and including those on the
 // inclusion list.
-func GetInterfaces(includeRegexes []string, excludeRegexes []string, version int) ([]Interface, error) {
-	netIfaces, err := net.Interfaces()
+func GetInterfaces(getSystemInterfaces func() ([]net.Interface, error), includeRegexes []string, excludeRegexes []string, version int) ([]Interface, error) {
+	netIfaces, err := getSystemInterfaces()
 	if err != nil {
 		log.WithError(err).Warnf("Failed to enumerate interfaces")
 		return nil, err
