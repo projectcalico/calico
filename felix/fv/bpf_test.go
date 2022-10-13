@@ -503,6 +503,103 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
+			if testOpts.protocol == "udp" && testOpts.connTimeEnabled {
+				Describe("with BPFConnectTimeLoadBalancingWorkaround=udp", func() {
+					BeforeEach(func() {
+						options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
+					})
+					It("should not program non-udp services", func() {
+						udpsvc := &v1.Service{
+							TypeMeta: typeMetaV1("Service"),
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "udp-service",
+								Namespace: "default",
+							},
+							Spec: v1.ServiceSpec{
+								ClusterIP: "10.101.0.201",
+								Type:      v1.ServiceTypeClusterIP,
+								Ports: []v1.ServicePort{
+									{
+										Protocol: v1.ProtocolUDP,
+										Port:     1234,
+									},
+								},
+							},
+						}
+
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+
+						_, err := k8sClient.CoreV1().Services("default").Create(context.Background(),
+							udpsvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() bool {
+							return checkServiceRoute(felixes[0], udpsvc.Spec.ClusterIP)
+						}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with udp service")
+
+						tcpsvc := &v1.Service{
+							TypeMeta: typeMetaV1("Service"),
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "tcp-service",
+								Namespace: "default",
+							},
+							Spec: v1.ServiceSpec{
+								ClusterIP: "10.101.0.202",
+								Type:      v1.ServiceTypeClusterIP,
+								Ports: []v1.ServicePort{
+									{
+										Protocol: v1.ProtocolTCP,
+										Port:     4321,
+									},
+								},
+							},
+						}
+
+						_, err = k8sClient.CoreV1().Services("default").Create(context.Background(),
+							tcpsvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Consistently(func() bool {
+							return checkServiceRoute(felixes[0], tcpsvc.Spec.ClusterIP)
+						}, 1*time.Second, 300*time.Millisecond).Should(BeFalse(), "Unexpected TCP service")
+
+						tcpudpsvc := &v1.Service{
+							TypeMeta: typeMetaV1("Service"),
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "tcp-udp-service",
+								Namespace: "default",
+							},
+							Spec: v1.ServiceSpec{
+								ClusterIP: "10.101.0.203",
+								Type:      v1.ServiceTypeClusterIP,
+								Ports: []v1.ServicePort{
+									{
+										Name:     "udp",
+										Protocol: v1.ProtocolUDP,
+										Port:     1234,
+									},
+									{
+										Name:     "tcp",
+										Protocol: v1.ProtocolTCP,
+										Port:     4321,
+									},
+								},
+							},
+						}
+
+						_, err = k8sClient.CoreV1().Services("default").Create(context.Background(),
+							tcpudpsvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() bool {
+							return checkServiceRoute(felixes[0], tcpudpsvc.Spec.ClusterIP)
+						}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with tcpudp service")
+
+						Expect(checkServiceRoute(felixes[0], tcpsvc.Spec.ClusterIP)).To(BeFalse())
+					})
+				})
+			}
+
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 
 				mapPath := conntrack.Map(&bpf.MapContext{}).Path()
