@@ -125,7 +125,7 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	for _, c := range counters.Descriptions() {
 		newRow := []string{c.Category, c.Caption}
 		// Now add value related to each hook, i.e. ingress, egress and XDP
-		for index, hook := range bpf.Hooks {
+		for index := range bpf.Hooks {
 			if values[index] == nil {
 				newRow = append(newRow, "N/A")
 			} else {
