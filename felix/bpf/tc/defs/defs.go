@@ -40,7 +40,9 @@ const (
 )
 
 const (
-	ProgIndexPolicy = iota
+	ProgIndexNoDebug = iota
+	ProgIndexDebug
+	ProgIndexPolicy
 	ProgIndexAllowed
 	ProgIndexIcmp
 	ProgIndexDrop
@@ -50,9 +52,13 @@ const (
 	ProgIndexV6Allowed
 	ProgIndexV6Icmp
 	ProgIndexV6Drop
+
+	ProgIndexStart = ProgIndexPolicy
 )
 
 var ProgramNames = []string{
+	"", /* reserved for filter program */
+	"", /* reserved for filter program */
 	"calico_tc_norm_pol_tail",
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
