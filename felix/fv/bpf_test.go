@@ -293,9 +293,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 
-			if testOpts.connTimeEnabled {
-				options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
-			} else {
+			if !testOpts.connTimeEnabled {
 				options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
 			}
 		})
@@ -1880,7 +1878,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 						}
 
-						if !testOpts.connTimeEnabled || testOpts.protocol == "udp" {
+						if !testOpts.connTimeEnabled {
 							w00Expects = append(w00Expects, hostW0SrcIP)
 							w00Expects = append(w00Expects, hostW0SrcIP)
 						}
@@ -1902,32 +1900,30 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					if testOpts.connTimeEnabled {
-						Describe("after updating the policy to allow traffic from hosts", func() {
-							BeforeEach(func() {
-								pol.Spec.Ingress = []api.Rule{
-									{
-										Action: "Allow",
-										Source: api.EntityRule{
-											Selector: "ep-type == 'host'",
-										},
+					Describe("after updating the policy to allow traffic from hosts", func() {
+						BeforeEach(func() {
+							pol.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Selector: "ep-type == 'host'",
 									},
-								}
-								pol = updatePolicy(pol)
-							})
-
-							It("should have connectivity from the hosts via a service to workload 0", func() {
-								ip := testSvc.Spec.ClusterIP
-								port := uint16(testSvc.Spec.Ports[0].Port)
-
-								cc.ExpectSome(felixes[0], TargetIP(ip), port)
-								cc.ExpectSome(felixes[1], TargetIP(ip), port)
-								cc.ExpectNone(w[0][1], TargetIP(ip), port)
-								cc.ExpectNone(w[1][0], TargetIP(ip), port)
-								cc.CheckConnectivity()
-							})
+								},
+							}
+							pol = updatePolicy(pol)
 						})
-					}
+
+						It("should have connectivity from the hosts via a service to workload 0", func() {
+							ip := testSvc.Spec.ClusterIP
+							port := uint16(testSvc.Spec.Ports[0].Port)
+
+							cc.ExpectSome(felixes[0], TargetIP(ip), port)
+							cc.ExpectSome(felixes[1], TargetIP(ip), port)
+							cc.ExpectNone(w[0][1], TargetIP(ip), port)
+							cc.ExpectNone(w[1][0], TargetIP(ip), port)
+							cc.CheckConnectivity()
+						})
+					})
 
 					It("should create sane conntrack entries and clean them up", func() {
 						By("Generating some traffic")
@@ -2801,7 +2797,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 							}
 
-							if !testOpts.connTimeEnabled || testOpts.protocol == "udp" {
+							if !testOpts.connTimeEnabled {
 								w00Expects = append(w00Expects, hostW0SrcIP)
 								w00Expects = append(w00Expects, hostW0SrcIP)
 							}
@@ -2827,7 +2823,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 							}
 
-							if !testOpts.connTimeEnabled || testOpts.protocol == "udp" {
+							if !testOpts.connTimeEnabled {
 								w00Expects = append(w00Expects, hostW0SrcIP)
 								w00Expects = append(w00Expects, hostW0SrcIP)
 							}
