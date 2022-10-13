@@ -48,7 +48,7 @@ func ReachDestination(dest string, version int) (*net.IPNet, error) {
 
 	// Get a full list of interface and IPs and find the CIDR matching the
 	// found IP.
-	ifaces, err := GetInterfaces(nil, nil, version)
+	ifaces, err := GetInterfaces(gonet.Interfaces, nil, nil, version)
 	if err != nil {
 		return nil, err
 	}

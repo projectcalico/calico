@@ -16,7 +16,7 @@ package autodetection
 import (
 	"errors"
 	"fmt"
-	gnet "net"
+	gonet "net"
 
 	log "github.com/sirupsen/logrus"
 
@@ -28,7 +28,7 @@ import (
 //
 // The incl and excl slice of regex strings may be nil.
 func FilteredEnumeration(incl, excl []string, cidrs []net.IPNet, version int) (*Interface, *net.IPNet, error) {
-	interfaces, err := GetInterfaces(incl, excl, version)
+	interfaces, err := GetInterfaces(gonet.Interfaces, incl, excl, version)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -54,7 +54,7 @@ func FilteredEnumeration(incl, excl []string, cidrs []net.IPNet, version int) (*
 
 // matchCIDRs matches an IP address against a list of cidrs.
 // If the list is empty, it always matches.
-func matchCIDRs(ip gnet.IP, cidrs []net.IPNet) bool {
+func matchCIDRs(ip gonet.IP, cidrs []net.IPNet) bool {
 	if len(cidrs) == 0 {
 		return true
 	}
