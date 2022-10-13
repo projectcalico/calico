@@ -125,7 +125,7 @@ func TestFeatureDetection(t *testing.T) {
 				RestoreSupportsLock:   true,
 				SNATFullyRandom:       true,
 				MASQFullyRandom:       true,
-				ChecksumOffloadBroken: false,
+				ChecksumOffloadBroken: true,
 			},
 		},
 	} {
