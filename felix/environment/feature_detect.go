@@ -122,7 +122,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		SNATFullyRandom:       iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
 		MASQFullyRandom:       iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
 		RestoreSupportsLock:   iptV.Compare(v1Dot6Dot2) >= 0,
-		ChecksumOffloadBroken: kerV.Compare(v5Dot7Dot0) < 0,
+		ChecksumOffloadBroken: true, // Was supposed to be fixed in v5.7 but still seems to be broken.
 		IPIPDeviceIsL3:        d.ipipDeviceIsL3(),
 	}
 
