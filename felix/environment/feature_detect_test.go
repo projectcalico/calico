@@ -125,7 +125,7 @@ func TestFeatureDetection(t *testing.T) {
 				RestoreSupportsLock:   true,
 				SNATFullyRandom:       true,
 				MASQFullyRandom:       true,
-				ChecksumOffloadBroken: false,
+				ChecksumOffloadBroken: true,
 			},
 		},
 	} {
@@ -419,28 +419,32 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 5.10.0 - ubuntu",
 			Features{
-				IPIPDeviceIsL3: false,
+				IPIPDeviceIsL3:        false,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 5.14.0 - something else",
 			Features{
-				IPIPDeviceIsL3: true,
+				IPIPDeviceIsL3:        true,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 5.15.0",
 			Features{
-				IPIPDeviceIsL3: true,
+				IPIPDeviceIsL3:        true,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 5.10.0 - Default",
 			Features{
-				IPIPDeviceIsL3: true,
+				IPIPDeviceIsL3:        true,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "true",
@@ -449,7 +453,8 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 5.14.0",
 			Features{
-				IPIPDeviceIsL3: false,
+				IPIPDeviceIsL3:        false,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -458,7 +463,8 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 5.16.0 - Ubuntu",
 			Features{
-				IPIPDeviceIsL3: false,
+				IPIPDeviceIsL3:        false,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
