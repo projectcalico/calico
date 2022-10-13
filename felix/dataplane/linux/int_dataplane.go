@@ -705,8 +705,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.BPFConnTimeLBEnabled {
 			excludeUDP := false
-			if config.FeatureDetectOverrides != nil {
-				switch config.FeatureDetectOverrides["BPFConnectTimeLoadBalancingWorkaround"] {
+			if config.FeatureGates != nil {
+				switch config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] {
 				case "udp":
 					excludeUDP = true
 				}
