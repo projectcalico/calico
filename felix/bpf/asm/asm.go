@@ -99,6 +99,11 @@ const (
 	ALUOpAShiftR = 0b1100_0_000 // 0xc
 	ALUOpEndian  = 0b1101_0_000 // 0xd
 
+	OpEndianToBE   = 0x8
+	OpEndianToLE   = 0x0
+	OpEndianFromBE = OpEndianToBE
+	OpEndianFromLE = OpEndianToLE
+
 	// And one bit for the source.
 	ALUSrcImm = 0b0000_0_000 // 0x0
 	ALUSrcReg = 0b0000_1_000 // 0x8
@@ -279,19 +284,25 @@ const (
 	EndianImm32  OpCode = OpClassALU32 | ALUSrcImm | ALUOpEndian
 )
 
-const insnSize = 8
+var (
+	SkbuffOffsetLen     = FieldOffset{0 * 4, "skb->len"}
+	SkbuffOffsetData    = FieldOffset{19 * 4, "skb->data"}
+	SkbuffOffsetDataEnd = FieldOffset{20 * 4, "skb->data_end"}
+)
+
+const InstructionSize = 8
 
 type Insn struct {
-	Instruction [insnSize]uint8 `json:"inst"`
-	Labels      []string        `json:"labels,omitempty"`
-	Comments    []string        `json:"comments,omitempty"`
-	Annotation  string          `json:"annotation,omitempty"`
+	Instruction [InstructionSize]uint8 `json:"inst"`
+	Labels      []string               `json:"labels,omitempty"`
+	Comments    []string               `json:"comments,omitempty"`
+	Annotation  string                 `json:"annotation,omitempty"`
 }
 
 type Insns []Insn
 
 func (ns Insns) AsBytes() []byte {
-	bs := make([]byte, 0, len(ns)*insnSize)
+	bs := make([]byte, 0, len(ns)*InstructionSize)
 	for _, n := range ns {
 		bs = append(bs, n.Instruction[:]...)
 	}
@@ -355,6 +366,10 @@ type fixUp struct {
 	origInsnIdx int
 }
 
+func (b *Block) FromBE(dst Reg, size int32) {
+	b.add(OpClassALU32|ALUOpEndian|OpEndianFromBE, dst, 0, 0, size, "")
+}
+
 func (b *Block) And32(dst, src Reg) {
 	b.add(And32, dst, src, 0, 0, "")
 }
@@ -396,13 +411,19 @@ func (b *Block) Load16(dst Reg, ptrReg Reg, fo FieldOffset) {
 }
 
 func (b *Block) Load32(dst Reg, ptrReg Reg, fo FieldOffset) {
-	annotation := b.buildAnnotation(LoadReg16, ptrReg, dst, fo, 0)
+	annotation := b.buildAnnotation(LoadReg32, ptrReg, dst, fo, 0)
 	b.add(LoadReg32, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
 func (b *Block) Load64(dst Reg, ptrReg Reg, fo FieldOffset) {
-	annotation := b.buildAnnotation(LoadReg16, ptrReg, dst, fo, 0)
+	annotation := b.buildAnnotation(LoadReg64, ptrReg, dst, fo, 0)
 	b.add(LoadReg64, dst, ptrReg, fo.Offset, 0, annotation)
+}
+
+func (b *Block) Load(dst Reg, ptrReg Reg, fo FieldOffset, size OpCode) {
+	ins := OpClassLoadReg | MemOpModeMem | size
+	annotation := b.buildAnnotation(ins, ptrReg, dst, fo, 0)
+	b.add(ins, dst, ptrReg, fo.Offset, 0, annotation)
 }
 
 func (b *Block) Store8(dst Reg, ptrReg Reg, fo FieldOffset) {
@@ -568,10 +589,18 @@ func (b *Block) add(opcode OpCode, dst, src Reg, offset int16, imm int32, annota
 	return insn
 }
 
+func (b *Block) Instr(opcode OpCode, dst, src Reg, offset int16, imm int32, annotation string) Insn {
+	return b.add(opcode, dst, src, offset, imm, annotation)
+}
+
 func (b *Block) addWithOffsetFixup(opcode OpCode, dst, src Reg, offsetLabel string, imm int32) Insn {
 	insn := MakeInsn(opcode, dst, src, 0, imm)
 	b.addInsnWithOffsetFixup(insn, offsetLabel)
 	return insn
+}
+
+func (b *Block) InstrWithOffsetFixup(opcode OpCode, dst, src Reg, offsetLabel string, imm int32) Insn {
+	return b.addWithOffsetFixup(opcode, dst, src, offsetLabel, imm)
 }
 
 func (b *Block) addInsn(insn Insn) {
