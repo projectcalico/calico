@@ -31,6 +31,12 @@ const (
 	counterMapValueSize int = 8
 )
 
+var (
+	// zeroKey is the key to the counters map, and it is set to 0 as it has only one entry
+	zeroKey = make([]byte, counterMapKeySize)
+	zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*bpf.NumPossibleCPUs())
+)
+
 // The following values are used as index to counters map, and should be kept in sync
 // with constants defined in bpf-gpl/reasons.h.
 const (
@@ -136,8 +142,6 @@ type Counters struct {
 	iface    string
 	numOfCpu int
 	maps     []bpf.Map
-	zeroKey  []byte
-	zeroVal  []byte
 }
 
 func NewCounters(iface string) *Counters {
@@ -146,9 +150,6 @@ func NewCounters(iface string) *Counters {
 		numOfCpu: bpf.NumPossibleCPUs(),
 		maps:     make([]bpf.Map, len(bpf.Hooks)),
 	}
-	// zeroKey is the key to the counters map, and it is set to 0 since there is only one entry
-	cntr.zeroKey = make([]byte, counterMapKeySize)
-	cntr.zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*cntr.numOfCpu)
 
 	for index, hook := range bpf.Hooks {
 		pinPath := bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
@@ -171,7 +172,7 @@ func (c Counters) Read(index int) ([]uint64, error) {
 		}
 	}()
 
-	values, err := c.maps[index].Get(c.zeroKey)
+	values, err := c.maps[index].Get(zeroKey)
 	if err != nil {
 		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
 	}
@@ -199,7 +200,7 @@ func (c *Counters) Flush(index int) error {
 		}
 	}()
 
-	err = c.maps[index].Update(c.zeroKey, c.zeroVal)
+	err = c.maps[index].Update(zeroKey, zeroVal)
 	if err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
 	}
