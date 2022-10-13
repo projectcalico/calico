@@ -16,11 +16,11 @@ package resources
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -195,7 +195,7 @@ func calculateAnnotationPatch(revision string, uid *types.UID, annotations map[s
 		log.WithField("uid", *uid).Debug("Generating patch for specific UID")
 		metadata["uid"] = uid
 	}
-
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Marshal(patch)
 }
 
