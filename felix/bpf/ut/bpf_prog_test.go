@@ -309,9 +309,7 @@ outer:
 		}
 		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
 		defer func() { _ = polProgFD.Close() }()
-		progFDBytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
-		err = jumpMap.Update([]byte{0, 0, 0, 0}, progFDBytes)
+		err = jumpMapUpdate(jumpMap, tcdefs.ProgIndexPolicy, int(polProgFD))
 		Expect(err).NotTo(HaveOccurred())
 	}
 
@@ -480,6 +478,34 @@ func cleanUpMaps() {
 	log.Info("Cleaned up all maps")
 }
 
+func jumpMapUpdatePinned(jm bpf.Map, idx int, val string) error {
+	out, err := bpftool("map", "update", "pinned", jm.Path(),
+		"key", fmt.Sprintf("%d", idx), "0", "0", "0", "value", "pinned", val)
+
+	if err != nil {
+		return fmt.Errorf("%s\n%w", string(out), err)
+	}
+
+	return nil
+}
+
+func jumpMapUpdate(jm bpf.Map, idx int, val int) error {
+	var k, v [4]byte
+
+	binary.LittleEndian.PutUint32(k[:], uint32(idx))
+	binary.LittleEndian.PutUint32(v[:], uint32(val))
+
+	return jm.Update(k[:], v[:])
+}
+
+func jumpMapDelete(jm bpf.Map, idx int) error {
+	var k [4]byte
+
+	binary.LittleEndian.PutUint32(k[:], uint32(idx))
+
+	return jm.Delete(k[:])
+}
+
 func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps ...bpf.Map) error {
 	args := []string{"prog", "loadall", fname, bpfFsDir, "type", "classifier"}
 	if forXDP {
@@ -518,7 +544,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		polProgPath = path.Join(bpfFsDir, polProgPath)
 		_, err = os.Stat(polProgPath)
 		if err == nil {
-			_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0", "value", "pinned", polProgPath)
+			err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexPolicy, polProgPath)
 			if err != nil {
 				return errors.Wrap(err, "failed to update jump map (policy program)")
 			}
@@ -527,27 +553,29 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 			polProgPathv6 := path.Join(bpfFsDir, "classifier_tc_policy_v6")
 			_, err = os.Stat(polProgPathv6)
 			if err == nil {
-				_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0", "value", "pinned", polProgPathv6)
+				err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Policy, polProgPathv6)
 				if err != nil {
 					return errors.Wrap(err, "failed to update jump map (policy_v6 program)")
 				}
 			}
 		}
 	} else {
-		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0")
+		err = jumpMapDelete(jumpMap, tcdefs.ProgIndexPolicy)
 		if err != nil {
 			log.WithError(err).Info("failed to update jump map (deleting policy program)")
 		}
-		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0")
+		err = jumpMapDelete(jumpMap, tcdefs.ProgIndexV6Policy)
 		if err != nil {
 			log.WithError(err).Info("failed to update jump map (deleting policy_v6 program)")
 		}
 	}
-	polProgPath := "xdp_accept"
+
+	acceptedProgPath := "xdp_accept"
 	if !forXDP {
-		polProgPath = "classifier_tc_accept"
+		acceptedProgPath = "classifier_tc_accept"
 	}
-	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "1", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, polProgPath))
+
+	err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexAllowed, path.Join(bpfFsDir, acceptedProgPath))
 	if err != nil {
 		return errors.Wrap(err, "failed to update jump map (allowed program)")
 	}
@@ -556,39 +584,43 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 	if !forXDP {
 		dropProgPath = "classifier_tc_drop"
 	}
-	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "3", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, dropProgPath))
+
+	err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexDrop, path.Join(bpfFsDir, dropProgPath))
 	if err != nil {
 		return errors.Wrap(err, "failed to update jump map (drop program)")
 	}
 
 	if !forXDP {
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "2", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp"))
+		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexIcmp, path.Join(bpfFsDir, "classifier_tc_icmp"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "5", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
+
+		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Prologue, path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (prologue_v6)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "6", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_accept_v6"))
+
+		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Policy, path.Join(bpfFsDir, "classifier_tc_accept_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (accept_v6 program)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "7", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_icmp_v6"))
+
+		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Icmp, path.Join(bpfFsDir, "classifier_tc_icmp_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp_v6 program)")
 		}
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "8", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_drop_v6"))
+
+		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Drop, path.Join(bpfFsDir, "classifier_tc_drop_v6"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (drop_v6 program)")
 		}
 	}
 
 	if !forXDP {
-		out, err := bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
-		if err != nil && !strings.Contains(string(out), "classifier_tc_host_ct_conflict): No such file or directory") {
-			fmt.Printf("err.Error() = %+v\n", err.Error())
-			return errors.Wrap(err, "failed to update jump map (host tc conflict program)")
+		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexHostCtConflict, path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
+		if err != nil && !strings.Contains(err.Error(), "classifier_tc_host_ct_conflict): No such file or directory") {
+			return errors.Wrap(err, "failed to update jump map (icmp program)")
 		}
 	}
 
