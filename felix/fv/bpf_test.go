@@ -2433,14 +2433,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					ifNotUDP := func(desc string, body func()) {
-						if testOpts.protocol != "udp" {
+					ifNotUDPnoCTLB := func(desc string, body func()) {
+						if testOpts.protocol != "udp" || testOpts.connTimeEnabled {
 							return
 						}
 						It(desc, body)
 					}
 
-					ifNotUDP("should have connectivity after a backend is replaced by a new one", func() {
+					ifNotUDPnoCTLB("should have connectivity after a backend is replaced by a new one", func() {
 
 						var (
 							testSvc          *v1.Service
@@ -2666,7 +2666,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								switch testOpts.tunnel {
 								case "ipip":
-									if testOpts.connTimeEnabled && testOpts.protocol == "tcp" {
+									if testOpts.connTimeEnabled {
 										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 									}
 									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
@@ -3410,7 +3410,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							var matcher string
 
-							if testOpts.connTimeEnabled && testOpts.protocol == "tcp" {
+							if testOpts.connTimeEnabled {
 								matcher = fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
 									tgtWorkload.IP, w[1][1].IP, w[0][0].IP, tgtPort)
 								tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
