@@ -4,9 +4,6 @@ description: Common questions that users ask about Calico.
 canonical_url: '/reference/faq'
 ---
 
-* TOC
-{:toc}
-
 ## Why use {{site.prodname}}?
 
 The problem {{site.prodname}} tries to solve is the networking of workloads (VMs,
