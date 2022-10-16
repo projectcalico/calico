@@ -119,6 +119,11 @@ bin_allow_list_patterns=(
   # Needed for eBPF mode to mount the cgroupv2 filesystem on the host.
   mountns
 
+  # This binary links to libraries from openssl-libs. This is the only binary
+  # in this list that links to libssl.so so that it will be kept in the `libs`
+  # list. The additional hmac hidden files are added to `libs_to_keep`.
+  check-fips
+
   # Used by this script.
   '/find$'
   '/ldd$'
@@ -218,6 +223,15 @@ while read -r path; do
   # Well-known plugins, not directly linked.
   if [[ "$path" =~ xtables|netfilter|conntrack|ct_|pam|libnss|libresolv ]] && ! [[ "$path" =~ systemd ]] ; then
     echo "PLUGIN: $path"
+    libs_to_keep[$path]=true
+    continue
+  fi
+  # These hmac files under /usr/lib64 are needed when ubi container is running
+  # in FIPS mode. They are not directly linked by the allowed binaries.
+  # * /usr/lib64/.libcrypto.so.1.1.1k.hmac
+  # * /usr/lib64/.libssl.so.1.1.1k.hmac
+  if [[ "$path" =~ .libcrypto|.libssl ]]; then
+    echo "FIPS HMAC: $path"
     libs_to_keep[$path]=true
     continue
   fi

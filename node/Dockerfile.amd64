@@ -46,7 +46,9 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
     # Install required packages for building rpms. yum-utils is not required but it gives us yum-builddep to easily install build deps.
     yum install --allowerasing -y rpm-build yum-utils make && \
     # Need these to build runit.
-    yum install --allowerasing  -y wget glibc-static gcc && \
+    yum install --allowerasing -y wget glibc-static gcc && \
+    # Need these to build check-fips.
+    yum install --allowerasing -y wget openssl-devel && \
     # Ensure security updates are installed.
     yum -y update-minimal --security --sec-severity=Important --sec-severity=Critical
 
@@ -104,6 +106,10 @@ RUN wget -P /tmp https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_V
     cd /tmp/admin/runit-${RUNIT_VER}/ && \
     package/install
 
+# build check-fips binary to run in the final image to validate all FIPS dependencies are kept.
+COPY check-fips/check-fips.c /tmp/check-fips.c
+RUN gcc -lssl -lcrypto /tmp/check-fips.c -o /usr/bin/check-fips
+
 FROM ${UBI_IMAGE} as ubi
 
 ARG ARCH
@@ -115,6 +121,9 @@ ARG RUNIT_VER
 
 # Update base packages to pick up security updates.  Must do this before adding the centos repo.
 RUN microdnf update
+
+# Copy check-fips binary built in the centco stage.
+COPY --from=centos /usr/bin/check-fips /usr/bin/check-fips
 
 # Copy in runit binaries
 COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
@@ -226,10 +235,14 @@ RUN /clean-up-filesystem.sh
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
 # that have been removed in our later layers.
 FROM scratch
+
 COPY --from=ubi / /
 
 # Add in top-level license file
 COPY LICENSE /licenses
+
+# make sure if this container is running in FIPS mode, all necessary dependencies are ketp.
+RUN /usr/bin/check-fips
 
 CMD ["start_runit"]
 
