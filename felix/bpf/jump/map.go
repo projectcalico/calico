@@ -24,7 +24,7 @@ func MapForTest(mc *bpf.MapContext) bpf.Map {
 		Type:       "prog_array",
 		KeySize:    4,
 		ValueSize:  4,
-		MaxEntries: 16,
+		MaxEntries: 32,
 		Name:       bpf.JumpMapName(),
 	})
 }
