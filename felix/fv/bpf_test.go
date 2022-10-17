@@ -4184,7 +4184,7 @@ func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNam
 	return (startOfPolicy && endOfPolicy && actionMatch)
 }
 
-func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook, policy string) string {
+func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
 	out, err := felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook)
 	Expect(err).NotTo(HaveOccurred())
 	return out
@@ -4193,8 +4193,8 @@ func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook, policy string) stri
 func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, policy string) string {
 	search := fmt.Sprintf("Start of policy %s", policy)
 	out := ""
-	Eventually(func() string {
-		out = bpfDumpPolicy(felix, iface, hook, policy)
+	EventuallyWithOffset(1, func() string {
+		out = bpfDumpPolicy(felix, iface, hook)
 		return out
 	}, "5s", "200ms").Should(ContainSubstring(search))
 
