@@ -116,9 +116,6 @@ ARG RUNIT_VER
 # Update base packages to pick up security updates.  Must do this before adding the centos repo.
 RUN microdnf update
 
-# Copy in runit binaries
-COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
-
 # Copy in our rpms
 COPY --from=centos  /root/rpmbuild/RPMS/${ARCH}/* /tmp/rpms/
 
