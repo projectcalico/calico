@@ -27,12 +27,6 @@ fabric. We will briefly outline those in the rest of this post. That
 said, {{site.prodname}} operates equally well with Ethernet or IP interconnect
 fabrics.
 
-## In this post
-{: .no_toc}
-
-* TOC
-{:toc}
-
 ## Background
 
 ### Basic {{site.prodname}} architecture overview
