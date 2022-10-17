@@ -17,14 +17,13 @@ package resources
 import (
 	"reflect"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-
-	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
+	v3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 const (
@@ -51,8 +50,8 @@ func NewKubeControllersConfigClient(c *kubernetes.Clientset, r *rest.RESTClient)
 }
 
 func validateSyncLabels(re Resource) error {
-	kubeControllersConfiguration := re.(*apiv3.KubeControllersConfiguration)
-	syncLabels := kubeControllersConfiguration.Spec.Controllers.Node.SyncLabels
-	err := validator.ValidateSyncLabels(syncLabels)
-	return err
+	if err := v3.ValidateK8s(re); err != nil {
+		return err
+	}
+	return nil
 }

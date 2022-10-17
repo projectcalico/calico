@@ -121,6 +121,8 @@ var (
 
 	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
 	routeTablesReservedLinux = []int{253, 254, 255}
+
+	k8s = false
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -128,14 +130,16 @@ var (
 func Validate(current interface{}) error {
 	// Perform field-only validation first, that way the struct validators can assume
 	// individual fields are valid format.
+	k8s = false
 	if err := validate.Struct(current); err != nil {
 		return convertError(err)
 	}
 	return nil
 }
 
-func ValidateSyncLabels(current interface{}) error {
-	if err := validate.Var(current, "k8sSyncLabels"); err != nil {
+func ValidateK8s(current interface{}) error {
+	k8s = true
+	if err := validate.Struct(current); err != nil {
 		return convertError(err)
 	}
 	return nil
@@ -166,7 +170,7 @@ func init() {
 	registerFieldValidator("containerID", validateContainerID)
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("labels", validateLabels)
-	registerFieldValidator("k8sSyncLabels", validateK8sSyncLabels)
+	registerFieldValidator("syncLabels", validateSyncLabels)
 	registerFieldValidator("ipVersion", validateIPVersion)
 	registerFieldValidator("ipIpMode", validateIPIPMode)
 	registerFieldValidator("vxlanMode", validateVXLANMode)
@@ -453,12 +457,14 @@ func validateLabels(fl validator.FieldLevel) bool {
 	return true
 }
 
-func validateK8sSyncLabels(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", s)
-	if s == api.Disabled {
-		log.Debugf("SyncLabels value cannot be set to disabled with Kubernetes datastore driver.")
-		return false
+func validateSyncLabels(fl validator.FieldLevel) bool {
+	if k8s {
+		s := fl.Field().String()
+		log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", s)
+		if s == api.Disabled {
+			log.Debugf("SyncLabels value cannot be set to disabled with Kubernetes datastore driver.")
+			return false
+		}
 	}
 	return true
 }

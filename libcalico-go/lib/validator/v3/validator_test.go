@@ -2727,16 +2727,20 @@ func init() {
 	DescribeTable("SyncLabels Validator",
 		func(input interface{}, valid bool) {
 			if valid {
-				Expect(v3.ValidateSyncLabels(input)).NotTo(HaveOccurred(),
+				Expect(v3.ValidateK8s(input)).NotTo(HaveOccurred(),
 					"expected value to be valid")
 			} else {
-				Expect(v3.ValidateSyncLabels(input)).To(HaveOccurred(),
+				Expect(v3.ValidateK8s(input)).To(HaveOccurred(),
 					"expected value to be invalid")
 			}
 		},
 
-		Entry("should accept enabled sync labels for CRD mode", "Enabled", true),
-		Entry("should not accept disabled sync labels for CRD mode", "Disabled", false),
+		Entry("should accept enabled sync labels for CRD mode", api.NodeControllerConfig{
+			SyncLabels: "Enabled",
+		}, true),
+		Entry("should not accept disabled sync labels for CRD mode", api.NodeControllerConfig{
+			SyncLabels: "Disabled",
+		}, false),
 	)
 }
 

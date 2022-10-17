@@ -93,7 +93,7 @@ type NodeControllerConfig struct {
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 
 	// SyncLabels controls whether to copy Kubernetes node labels to Calico nodes. [Default: Enabled]
-	SyncLabels string `json:"syncLabels,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
+	SyncLabels string `json:"syncLabels,omitempty" validate:"omitempty,oneof=Enabled Disabled,syncLabels"`
 
 	// HostEndpoint controls syncing nodes to host endpoints. Disabled by default, set to nil to disable.
 	HostEndpoint *AutoHostEndpointConfig `json:"hostEndpoint,omitempty"`
