@@ -95,3 +95,4 @@ defaults:
         pilot-webhook: calico/pilot-webhook
         flexvol: calico/pod2daemon-flexvol
         csi-driver: calico/csi
+        csi-node-driver-registrar: calico/node-driver-registrar
