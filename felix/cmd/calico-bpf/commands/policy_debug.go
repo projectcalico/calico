@@ -45,7 +45,7 @@ func init() {
 
 var policyDumpCmd = &cobra.Command{
 	Use: "dump <interface> <hook>\n" +
-		"\n\thook - can be 'ingress', 'egress' or 'all'.",
+		"\n\thook - can be 'ingress', 'egress', 'xdp' or 'all'.",
 	Short: "dumps policy",
 	Run: func(cmd *cobra.Command, args []string) {
 		iface, hook, err := parseArgs(args)
@@ -55,7 +55,7 @@ var policyDumpCmd = &cobra.Command{
 		}
 		hooks := []string{}
 		if hook == "all" {
-			hooks = []string{"ingress", "egress"}
+			hooks = []string{"ingress", "egress", "xdp"}
 		} else {
 			hooks = append(hooks, hook)
 		}
