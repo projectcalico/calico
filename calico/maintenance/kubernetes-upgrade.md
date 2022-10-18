@@ -116,7 +116,7 @@ ownership of the helm resources to the new chart location.
    `<manifest-file-name>` with the file name of your {{page.version}} manifest.
 
    ```
-   kubectl apply -f <manifest-file-name>
+   kubectl replace -f <manifest-file-name>
    ```
 
 1. Watch the status of the upgrade as follows.
