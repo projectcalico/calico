@@ -17,17 +17,22 @@ package resources
 import (
 	"reflect"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/go-playground/validator.v9"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 const (
 	KubeControllersConfigResourceName = "KubeControllersConfigurations"
 	KubeControllersConfigCRDName      = "kubecontrollersconfigurations.crd.projectcalico.org"
 )
+
+var validate *validator.Validate
 
 func NewKubeControllersConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &customK8sResourceClient{
@@ -43,5 +48,33 @@ func NewKubeControllersConfigClient(c *kubernetes.Clientset, r *rest.RESTClient)
 		},
 		k8sListType:  reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
 		resourceKind: apiv3.KindKubeControllersConfiguration,
+		validator:    validateSyncLabels,
 	}
+}
+
+func validateSyncLabels(re Resource) error {
+	config := re.(*apiv3.KubeControllersConfiguration)
+	if node := config.Spec.Controllers.Node; node != nil {
+		if label := node.SyncLabels; label != "" {
+			if err := validate.Var(label, "k8sSyncLabels"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func init() {
+	validate = validator.New()
+	validate.RegisterValidation("k8sSyncLabels", validateK8sSyncLabels)
+}
+
+func validateK8sSyncLabels(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", s)
+	if s == apiv3.Disabled {
+		log.Debugf("SyncLabels value cannot be set to disabled with Kubernetes datastore driver.")
+		return false
+	}
+	return true
 }
