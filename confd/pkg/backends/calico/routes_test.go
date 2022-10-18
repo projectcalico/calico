@@ -23,9 +23,8 @@ const (
 	externalIPRange2 = "172.217.3.5/32"
 	externalIP2      = "172.217.3.5"
 
-	// Range and specific IP for loadbalancer IP test.
-	loadBalancerIPRange1 = "172.217.4.10/16"
-	loadBalancerIP1      = "172.217.4.10"
+	// Specific IP for loadbalancer IP test.
+	loadBalancerIP1 = "172.217.4.10"
 )
 
 func addEndpointSubset(ep *v1.Endpoints, nodename string) {
@@ -573,53 +572,48 @@ var _ = Describe("RouteGenerator", func() {
 			})
 
 			// This test simulates a situation where BGPConfiguration has a /32 route that exactly matches
-			// a LoadBalancer with ExternalTrafficPolicy set to Local. Should result in one route advertised.
+			// a LoadBalancer with ExternalTrafficPolicy set to Local. The route should only be advertised
+			// when the Service is created, and not when the BGPConfiguration is created.
 			It("should handle /32 routes for LoadBalancerIPs", func() {
+				// BeforeEach creates a service. Remove it before the test, since we want to start
+				// this test without the service in place. svc3 is a LoadBalancer service with external traffic
+				// policy of Local.
+				err := rg.epIndexer.Delete(ep3)
+				Expect(err).NotTo(HaveOccurred())
+				err = rg.svcIndexer.Delete(svc3)
+				Expect(err).NotTo(HaveOccurred())
 
-				// Create a /32 CIDR for the services loadBalancerIP.
-				loadBalancerIPRangeSingle := fmt.Sprintf("%s/32", loadBalancerIP1)
+				// The key we expect to be used for the LB IP.
 				key := "/calico/staticroutes/" + loadBalancerIP1 + "-32"
 
 				// Trigger programming of valid routes from the route generator for any known services.
-				// We don't have a BGPConfiguration update yet, so we shouldn't receive any routes.
+				// We don't have a BGPConfiguration update or services yet, so we shouldn't receive any routes.
 				By("Resyncing routes at start of test")
 				rg.resyncKnownRoutes()
 				Expect(rg.client.cache[key]).To(Equal(""))
 				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(0))
 
 				// Simulate an event from the syncer which sets the LoadBalancer IP range containing only the service's loadBalancerIP.
+				// We use a /32 route to trigger the situation under test.
+				loadBalancerIPRangeSingle := fmt.Sprintf("%s/32", loadBalancerIP1)
 				By("onLoadBalancerIPsUpdate to include /32 route")
 				rg.client.onLoadBalancerIPsUpdate([]string{loadBalancerIPRangeSingle})
 				rg.resyncKnownRoutes()
 
-				// Expect that we advertise the /32 given to us via BGPConfiguration.
-				Expect(rg.client.cache[key]).To(Equal(loadBalancerIP1 + "/32"))
-				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
+				// No routes should be advertised yet.
+				Expect(rg.client.cache[key]).To(Equal(""))
+				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(0))
 
-				// Trigger programming of routes from the route generator again. This time, the service's loadBalancerIP
-				// will be allowed by BGPConfiguration and so it should be programmed.
+				// Now add the service.
+				err = rg.epIndexer.Add(ep3)
+				Expect(err).NotTo(HaveOccurred())
+				err = rg.svcIndexer.Add(svc3)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Expect that we advertise the /32 LB IP from the Service.
 				By("Resyncing routes from route generator")
 				rg.resyncKnownRoutes()
-
-				// Expect that we continue to advertise the route and the refcount should indicate a route received
-				// from the RouteGenerator only.
 				Expect(rg.client.cache[key]).To(Equal(loadBalancerIP1 + "/32"))
-				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
-
-				// Simulate an event from the syncer which updates the range. It still includes the original IP,
-				// to ensure we don't trigger the route generator to withdraw its route.
-				By("onLoadBalancerIPsUpdate to include /16 route")
-				rg.client.onLoadBalancerIPsUpdate([]string{loadBalancerIPRange1})
-				rg.resyncKnownRoutes()
-
-				// The route should still exist, since the RouteGenerator's route is still valid.
-				Expect(rg.client.cache[key]).To(Equal(loadBalancerIP1 + "/32"))
-				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
-
-				// Revert the BGPConfiguration change.
-				By("onLoadBalancerIPsUpdate to include /32 route again")
-				rg.client.onLoadBalancerIPsUpdate([]string{loadBalancerIPRangeSingle})
-				rg.resyncKnownRoutes()
 				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
 
 				// Finally, remove BGPConfiguration. It should withdraw the route
