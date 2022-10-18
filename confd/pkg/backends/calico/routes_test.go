@@ -23,9 +23,8 @@ const (
 	externalIPRange2 = "172.217.3.5/32"
 	externalIP2      = "172.217.3.5"
 
-	// Range and specific IP for loadbalancer IP test.
-	loadBalancerIPRange1 = "172.217.4.10/16"
-	loadBalancerIP1      = "172.217.4.10"
+	// Specific IP for loadbalancer IP test.
+	loadBalancerIP1 = "172.217.4.10"
 )
 
 func addEndpointSubset(ep *v1.Endpoints, nodename string) {
