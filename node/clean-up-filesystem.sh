@@ -221,6 +221,16 @@ while read -r path; do
     libs_to_keep[$path]=true
     continue
   fi
+  # These libraries and hmac files under /usr/lib64 are needed when ubi container
+  # is running in FIPS mode. They are not directly linked by the allowed binaries.
+  # * /usr/lib64/.libcrypto.so.x.y.z.hmac
+  # * /usr/lib64/.libssl.so.x.y.z.hmac
+  # * /usr/lib64/libssl.so.x.y.z
+  if [[ "$path" =~ .libcrypto|.libssl|libssl ]]; then
+    echo "FIPS PLUGIN: $path"
+    libs_to_keep[$path]=true
+    continue
+  fi
 done < <(find /usr/lib64 \( -type f -or -type l \))
 
 # Now remove all but a keep-list of RPM packages.  Cleaning up packages with rpm itself updates the
