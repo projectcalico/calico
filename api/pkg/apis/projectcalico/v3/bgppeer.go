@@ -100,6 +100,10 @@ type BGPPeerSpec struct {
 	// This removes BGP loop prevention and should only be used if absolutely necesssary.
 	// +optional
 	NumAllowedLocalASNumbers *int32 `json:"numAllowedLocalASNumbers,omitempty"`
+	// TTLSecurity enables the generalized TTL security mechanism (GTSM). The provided value is the number of hops
+	// (edges) between the peers.
+	// +optional
+	TTLSecurity *uint32 `json:"ttlSecurity,omitempty"`
 }
 
 type SourceAddress string
