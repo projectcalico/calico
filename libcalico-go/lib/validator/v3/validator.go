@@ -159,7 +159,6 @@ func init() {
 	registerFieldValidator("containerID", validateContainerID)
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("labels", validateLabels)
-
 	registerFieldValidator("ipVersion", validateIPVersion)
 	registerFieldValidator("ipIpMode", validateIPIPMode)
 	registerFieldValidator("vxlanMode", validateVXLANMode)
