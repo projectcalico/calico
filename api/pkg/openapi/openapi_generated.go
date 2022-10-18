@@ -867,6 +867,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 							Format:      "int32",
 						},
 					},
+					"ttlSecurity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TTLSecurity enables the generalized TTL security mechanism (GTSM). The provided value is the number of hops (edges) between the peers.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 			},
 		},
