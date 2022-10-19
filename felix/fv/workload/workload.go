@@ -297,6 +297,11 @@ func (w *Workload) UseSpoofInterface(spoof bool) {
 	w.Exec("ip", "route", "replace", "default", "via", "169.254.169.254", "dev", iface)
 }
 
+func (w *Workload) AddEgressSNAT(extIP string) {
+	w.WorkloadEndpoint.Spec.EgressSNAT.InternalIP = w.IP
+	w.WorkloadEndpoint.Spec.EgressSNAT.ExternalIP = extIP
+}
+
 // Configure creates a workload endpoint in the datastore.
 // Deprecated: should use ConfigureInInfra.
 func (w *Workload) Configure(client client.Interface) {
@@ -695,7 +700,6 @@ func (p *Port) CanConnectTo(ip, port, protocol string, opts ...connectivity.Chec
 }
 
 func canConnectTo(w *Workload, ip, port, protocol, logSuffix string, opts ...connectivity.CheckOption) *connectivity.Result {
-
 	if protocol == "udp" || protocol == "sctp" {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
 		// to influence the connectivity check.  UDP lacks a sequence number, so conntrack operates

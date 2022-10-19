@@ -480,10 +480,10 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	egressSNATAnnotation := annot["cni.projectcalico.org/egressSNAT"]
 	if egressSNATAnnotation != "" {
 		// If Egress SNAT is defined, but the feature is not enabled, return an error.
-		// if !conf.FeatureControl.EgressSNAT {
-		// 	releaseIPAM()
-		// 	return nil, fmt.Errorf("requested feature is not enabled: egress_snat")
-		// }
+		if !conf.FeatureControl.EgressSNAT {
+			releaseIPAM()
+			return nil, fmt.Errorf("requested feature is not enabled: egress_snat")
+		}
 
 		// Parse Annotation data
 		var ip string
