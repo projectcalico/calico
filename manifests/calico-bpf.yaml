@@ -380,9 +380,9 @@ spec:
                 type: string
               ttlSecurity:
                 description: TTLSecurity enables the generalized TTL security mechanism
-                  (GTSM). The provided value is the number of hops (edges) between
-                  the peers.
-                format: int32
+                  (GTSM) which protects against spoofed packets by ignoring received
+                  packets with a smaller than expected TTL value. The provided value
+                  is the number of hops (edges) between the peers.
                 type: integer
             type: object
         type: object

@@ -461,7 +461,7 @@ type bgpPeer struct {
 	RestartTime     string               `json:"restart_time"`
 	CalicoNode      bool                 `json:"calico_node"`
 	NumAllowLocalAS int32                `json:"num_allow_local_as"`
-	TTLSecurity     uint32               `json:"ttl_security"`
+	TTLSecurity     uint8                `json:"ttl_security"`
 }
 
 type bgpPrefix struct {
@@ -586,7 +586,7 @@ func (c *client) updatePeersV1() {
 					numLocalAS = *v3res.Spec.NumAllowedLocalASNumbers
 				}
 
-				var ttlSecurityHopCount uint32
+				var ttlSecurityHopCount uint8
 				if v3res.Spec.TTLSecurity != nil {
 					ttlSecurityHopCount = *v3res.Spec.TTLSecurity
 				}

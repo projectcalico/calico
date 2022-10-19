@@ -104,7 +104,7 @@ type BGPPeerSpec struct {
 	// ignoring received packets with a smaller than expected TTL value. The provided value is the number of hops
 	// (edges) between the peers.
 	// +optional
-	TTLSecurity *uint32 `json:"ttlSecurity,omitempty"`
+	TTLSecurity *uint8 `json:"ttlSecurity,omitempty"`
 }
 
 type SourceAddress string
