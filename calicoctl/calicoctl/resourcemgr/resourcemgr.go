@@ -296,7 +296,7 @@ func (rh resourceHelper) Patch(ctx context.Context, client client.Interface, res
 		return ro, err
 	}
 
-	resource = mergeMetadataForUpdate(ro, resource)
+	resource = mergeMetadataForPatch(ro, resource)
 
 	// Marshal original obj for comparison
 	original, err := json.Marshal(ro)
@@ -598,6 +598,36 @@ func mergeMetadataForUpdate(old, new ResourceObject) ResourceObject {
 	// so that they will not be overwritten.
 	sm.SetAnnotations(cm.GetAnnotations())
 	sm.SetLabels(cm.GetLabels())
+
+	sm.(*v1.ObjectMeta).DeepCopyInto(cm.(*v1.ObjectMeta))
+	return new
+}
+
+// mergeMetadataForPatch merges the Metadata for a stored ResourceObject and a potential
+// patch non-destructively. The resulting labels and annotations will be the union of
+// the two sets.
+func mergeMetadataForPatch(old, new ResourceObject) ResourceObject {
+	sm := old.GetObjectMeta()
+	cm := new.GetObjectMeta()
+
+	// Set the fields that are allowed to be overwritten (Labels and Annotations)
+	// so that they will not be overwritten.
+	annotations := sm.GetAnnotations()
+	for key, val := range cm.GetAnnotations() {
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+		annotations[key] = val
+	}
+	labels := sm.GetLabels()
+	for key, val := range cm.GetLabels() {
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[key] = val
+	}
+	sm.SetAnnotations(annotations)
+	sm.SetLabels(labels)
 
 	sm.(*v1.ObjectMeta).DeepCopyInto(cm.(*v1.ObjectMeta))
 	return new
