@@ -170,6 +170,7 @@ template bgp bgp_template {
 {{- else if ne "" ($onode_cluster_id)}}# Skipping {{$onode_ip}} ({{.}}) as it is a route reflector with cluster ID {{$onode_cluster_id}}
 {{else if ne "" $onode_ip}}protocol bgp Mesh_{{$id}} from bgp_template {
   multihop;
+  ttl security off;
   neighbor {{$onode_ip}} {{if ne "" $listen_port}}port {{$listen_port}} {{end}}as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
   source address {{$node_ip}};  # The local address we use for the TCP connection
   {{- /*
