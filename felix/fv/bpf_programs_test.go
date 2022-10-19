@@ -96,7 +96,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dataplane", []api
 	})
 
 	It("should not leak bpf programs", func() {
-		noOfBPFPRograms := func() int {
+		noOfBPFPrograms := func() int {
 			out, err := felixes[0].ExecCombinedOutput("bpftool", "prog", "list")
 			Expect(err).NotTo(HaveOccurred())
 			noOfProgs := strings.Count(out, "sched_cls")
@@ -105,37 +105,35 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dataplane", []api
 
 		const noOfWorkloads = 5
 		var wl [noOfWorkloads]*workload.Workload
-		initVal := noOfBPFPRograms()
+		initVal := noOfBPFPrograms()
 		expectedWorkloadPrograms := 2*5 + 2 // 5 programs for each hook + 2 policy programs
 		expectedHostPrograms := 2 * 5       // 5 programs for each hook
 
 		felixes[0].TriggerDelayedStart()
-		Eventually(noOfBPFPRograms, "10s", "100ms").Should(Equal(initVal + expectedHostPrograms))
+		Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(initVal + expectedHostPrograms))
 
 		By("creating workloads")
 		for i := 0; i < noOfWorkloads; i++ {
 			wl[i] = workload.New(felixes[0], fmt.Sprintf("w%d", i), "default", fmt.Sprintf("10.65.0.%d", i+2), "8085", "tcp")
 			wl[i].Start()
 			wl[i].ConfigureInInfra(infra)
-			Eventually(noOfBPFPRograms, "10s", "100ms").Should(Equal(initVal + (i+1)*expectedWorkloadPrograms + expectedHostPrograms))
+			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(initVal + (i+1)*expectedWorkloadPrograms + expectedHostPrograms))
 		}
 
 		By("restarting workloads")
-		totalProgs := noOfBPFPRograms()
+		totalProgs := noOfBPFPrograms()
 		for i := 0; i < noOfWorkloads; i++ {
 			wl[i].Stop()
-			Eventually(noOfBPFPRograms, "10s", "100ms").Should(Equal(totalProgs - expectedWorkloadPrograms))
+			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(totalProgs - expectedWorkloadPrograms))
 			wl[i].Start()
-			Eventually(noOfBPFPRograms, "10s", "100ms").Should(Equal(totalProgs))
+			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(totalProgs))
 		}
 
 		By("removing workloads")
 		for i := 0; i < noOfWorkloads; i++ {
 			wl[i].Stop()
 			wl[i].RemoveFromInfra(infra)
-			Eventually(noOfBPFPRograms, "10s", "100ms").Should(Equal(totalProgs - (i+1)*expectedWorkloadPrograms))
 		}
-
-		Eventually(noOfBPFPRograms, "10s", "100ms").Should(Equal(initVal + expectedHostPrograms))
+		Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(initVal + expectedHostPrograms))
 	})
 })
