@@ -235,7 +235,7 @@ type Config struct {
 	Ipv6Support    bool `config:"bool;true"`
 	BpfIpv6Support bool `config:"bool;false"`
 
-	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);auto"`
+	IptablesBackend                    string            `config:"oneof(legacy,nft);legacy"`
 	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
 	InterfaceRefreshInterval           time.Duration     `config:"seconds;90"`
 	DeviceRouteSourceAddress           net.IP            `config:"ipv4;"`
