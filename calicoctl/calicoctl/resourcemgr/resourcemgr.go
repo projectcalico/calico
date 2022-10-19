@@ -296,7 +296,7 @@ func (rh resourceHelper) Patch(ctx context.Context, client client.Interface, res
 		return ro, err
 	}
 
-	resource = mergeMetadataForUpdate(ro, resource)
+	resource = mergeMetadataForPatch(ro, resource)
 
 	// Marshal original obj for comparison
 	original, err := json.Marshal(ro)
@@ -591,6 +591,22 @@ func (rh resourceHelper) GetTableTemplate(headings []string, printNamespace bool
 // fields by forcing updates to those fields to be handled by internal or more involved
 // processes.
 func mergeMetadataForUpdate(old, new ResourceObject) ResourceObject {
+	sm := old.GetObjectMeta()
+	cm := new.GetObjectMeta()
+
+	// Set the fields that are allowed to be overwritten (Labels and Annotations)
+	// so that they will not be overwritten.
+	sm.SetAnnotations(cm.GetAnnotations())
+	sm.SetLabels(cm.GetLabels())
+
+	sm.(*v1.ObjectMeta).DeepCopyInto(cm.(*v1.ObjectMeta))
+	return new
+}
+
+// mergeMetadataForPatch merges the Metadata for a stored ResourceObject and a potential
+// patch non-destructively. The resulting labels and annotations will be the union of
+// the two sets.
+func mergeMetadataForPatch(old, new ResourceObject) ResourceObject {
 	sm := old.GetObjectMeta()
 	cm := new.GetObjectMeta()
 
