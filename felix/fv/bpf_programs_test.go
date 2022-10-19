@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,17 +15,20 @@
 package fv_test
 
 import (
+	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dataplane", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 
 	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
 		// Non-BPF run.
@@ -39,7 +42,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 
 	BeforeEach(func() {
 		infra = getInfra()
-		// opts := infrastructure.DefaultTopologyOptions()
 		opts := infrastructure.TopologyOptions{
 			FelixLogSeverity: "debug",
 			DelayFelixStart:  true,
@@ -67,7 +69,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		infra.Stop()
 	})
 
-	It("should not reattach bpf programs", func() {
+	It("should not reattach bpf programs after Felix restart", func() {
 		felix := felixes[0]
 
 		// This should not happen at initial execution of felix, since there is no program attached
@@ -91,5 +93,49 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		Eventually(secondRunProg1, "10s", "100ms").Should(BeClosed())
 		Eventually(secondRunProg2, "10s", "100ms").Should(BeClosed())
 		Expect(secondRunBase).NotTo(BeClosed())
+	})
+
+	It("should not leak bpf programs", func() {
+		noOfBPFPrograms := func() int {
+			out, err := felixes[0].ExecCombinedOutput("bpftool", "prog", "list")
+			Expect(err).NotTo(HaveOccurred())
+			noOfProgs := strings.Count(out, "sched_cls")
+			return noOfProgs
+		}
+
+		const noOfWorkloads = 5
+		var wl [noOfWorkloads]*workload.Workload
+		initVal := noOfBPFPrograms()
+		expectedWorkloadPrograms := 2*5 + 2 // 5 programs for each hook + 2 policy programs
+		expectedHostPrograms := 2 * 5       // 5 programs for each hook
+
+		felixes[0].TriggerDelayedStart()
+		Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(initVal + expectedHostPrograms))
+
+		By("creating workloads")
+		for i := 0; i < noOfWorkloads; i++ {
+			wl[i] = workload.New(felixes[0], fmt.Sprintf("w%d", i), "default", fmt.Sprintf("10.65.0.%d", i+2), "8085", "tcp")
+			err := wl[i].Start()
+			Expect(err).ToNot(HaveOccurred())
+			wl[i].ConfigureInInfra(infra)
+			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(initVal + (i+1)*expectedWorkloadPrograms + expectedHostPrograms))
+		}
+
+		By("restarting workloads")
+		totalProgs := noOfBPFPrograms()
+		for i := 0; i < noOfWorkloads; i++ {
+			wl[i].Stop()
+			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(totalProgs - expectedWorkloadPrograms))
+			err := wl[i].Start()
+			Expect(err).ToNot(HaveOccurred())
+			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(totalProgs))
+		}
+
+		By("removing workloads")
+		for i := 0; i < noOfWorkloads; i++ {
+			wl[i].Stop()
+			wl[i].RemoveFromInfra(infra)
+		}
+		Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(initVal + expectedHostPrograms))
 	})
 })
