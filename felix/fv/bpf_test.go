@@ -294,7 +294,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 
 			if !testOpts.connTimeEnabled {
-				options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
+				if testOpts.protocol == "udp" {
+					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
+				} else {
+					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
+				}
 			}
 		})
 
@@ -651,7 +655,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					expJumpMaps := func(numWorkloads int) int {
 						numHostIfaces := 1
 						specialIfaces := 0
-						specialIfaces = 2 /* nat + lo */
+						if !testOpts.connTimeEnabled {
+							specialIfaces = 2 /* nat + lo */
+						}
 						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
 						return expectedNumMaps
 					}
