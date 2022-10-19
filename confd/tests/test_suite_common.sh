@@ -26,6 +26,7 @@ execute_test_suite() {
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
         run_extra_test test_node_mesh_bgp_password
         run_extra_test test_bgp_password_deadlock
+        run_extra_test test_bgp_ttl_security
     fi
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
@@ -35,6 +36,7 @@ execute_test_suite() {
         run_extra_test test_node_deletion
         run_extra_test test_idle_peers
         run_extra_test test_router_id_hash
+        run_extra_test test_bgp_ttl_security
         echo "Extra etcdv3 tests passed"
     fi
 
@@ -1099,5 +1101,266 @@ EOF
     if [ "$password_logs"  ]; then
         echo "ERROR: passwords were logged"
         return 1
+    fi
+}
+
+test_bgp_ttl_security() {
+  test_bgp_ttl_security_explicit_node
+  test_bgp_ttl_security_peer_selector
+  test_bgp_ttl_security_global
+}
+
+test_bgp_ttl_security_explicit_node() {
+
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and peer them with TTL security
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ttl-explicit-peer-1
+spec:
+  node: kube-master
+  peerIP: 10.192.0.3
+  asNumber: 64517
+  ttlSecurity: 1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ttl-explicit-peer-2
+spec:
+  node: kube-master
+  peerIP: 10.192.0.4
+  asNumber: 64517
+  ttlSecurity: 2
+EOF
+
+    test_confd_templates ttl_security/explicit_node
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgppeer ttl-explicit-peer-1
+    $CALICOCTL delete bgppeer ttl-explicit-peer-2
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_ttl_security_peer_selector() {
+
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and peer them using a peer selector with TTL security
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    ttl-security-node: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    ttl-security-node: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ttl-selector-peers
+spec:
+  node: kube-master
+  peerSelector: has(ttl-security-node)
+  ttlSecurity: 1
+EOF
+
+    test_confd_templates ttl_security/peer_selector
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgppeer ttl-selector-peers
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_ttl_security_global() {
+
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and peer them globally with TTL security
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    ttl-security-node: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    ttl-security-node: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    ttl-security-node: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ttl-selector-peers
+spec:
+  peerSelector: has(ttl-security-node)
+  ttlSecurity: 1
+EOF
+
+    test_confd_templates ttl_security/global
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgppeer ttl-selector-peers
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
     fi
 }
