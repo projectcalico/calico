@@ -83,11 +83,18 @@ func (r *ReleaseBuilder) BuildRelease() error {
 	}
 	logrus.WithField("out", out).Info("Current git describe")
 
-	// Determine the release version to use based on the last tag, and then tag the branch.
+	// Determine the release version to use based on the last tag.
 	ver, err := r.determineReleaseVersion(out)
 	if err != nil {
 		return err
 	}
+
+	// Assert that manifests are using the correct version.
+	err = r.assertManifestVersions(ver)
+	if err != nil {
+		return err
+	}
+
 	branch := r.determineBranch()
 	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
 	_, err = r.git("tag", ver)
@@ -469,6 +476,34 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 			break
 		}
 	}
+	return nil
+}
+
+func (r *ReleaseBuilder) assertManifestVersions(ver string) error {
+	// Go through a subset of yaml files in manifests/ and extract the images
+	// that they use. Verify that the images are using the given version.
+	// We also do the manifests/ocp/ yaml to check the calico/ctl image is correct.
+	manifests := []string{"calico.yaml", "manifests/ocp/02-tigera-operator.yaml"}
+
+	for _, m := range manifests {
+		args := []string{"-Po", `image:\K(.*)`, m}
+		out, err := r.runner.RunInDir("manifests", "grep", args, nil)
+		if err != nil {
+			return err
+		}
+		imgs := strings.Split(out, "\n")
+		for _, i := range imgs {
+			if strings.Contains(i, "operator") {
+				// We don't handle the operator image here yet, since
+				// the version is different.
+				continue
+			}
+			if !strings.HasSuffix(i, ver) {
+				return fmt.Errorf("Incorrect image version (expected %s) in manifest %s: %s", ver, m, i)
+			}
+		}
+	}
+
 	return nil
 }
 
