@@ -1159,11 +1159,11 @@ class TestCalicoctlCommands(TestBase):
         self.assertEqual("192.168.0.1",node1_rev1['spec']['bgp']['routeReflectorClusterID'])
 
         # test patching an ippool
-        rc = calicoctl("create", data=ippool_name1_rev1_v4)
+        rc = calicoctl("create", data=ippool_name1_rev4_v4)
         rc.assert_no_error()
 
         rc = calicoctl(
-                "patch ippool %s -p '{\"spec\":{\"natOutgoing\": true}}'" % name(ippool_name1_rev1_v4))
+                "patch ippool %s -p '{\"spec\":{\"natOutgoing\": true}}'" % name(ippool_name1_rev4_v4))
         rc.assert_no_error()
 
         rc = calicoctl(
@@ -1171,6 +1171,9 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         ippool1_rev1 = rc.decoded
         self.assertEqual(True,ippool1_rev1['spec']['natOutgoing'])
+        # Ensure that labels and annotations were merged properly
+        self.assertEqual('label-1',ippool1_rev1['metadata']['labels']['test-label'])
+        self.assertEqual('annotation-1',ippool1_rev1['metadata']['annotations']['test-annotation'])
 
         # test patching invalid networkpolicy
         rc = calicoctl('create', data=networkpolicy_name2_rev1)
