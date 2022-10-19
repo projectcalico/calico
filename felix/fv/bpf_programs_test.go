@@ -115,7 +115,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dataplane", []api
 		By("creating workloads")
 		for i := 0; i < noOfWorkloads; i++ {
 			wl[i] = workload.New(felixes[0], fmt.Sprintf("w%d", i), "default", fmt.Sprintf("10.65.0.%d", i+2), "8085", "tcp")
-			wl[i].Start()
+			err := wl[i].Start()
+			Expect(err).ToNot(HaveOccurred())
 			wl[i].ConfigureInInfra(infra)
 			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(initVal + (i+1)*expectedWorkloadPrograms + expectedHostPrograms))
 		}
@@ -125,7 +126,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dataplane", []api
 		for i := 0; i < noOfWorkloads; i++ {
 			wl[i].Stop()
 			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(totalProgs - expectedWorkloadPrograms))
-			wl[i].Start()
+			err := wl[i].Start()
+			Expect(err).ToNot(HaveOccurred())
 			Eventually(noOfBPFPrograms, "10s", "100ms").Should(Equal(totalProgs))
 		}
 
