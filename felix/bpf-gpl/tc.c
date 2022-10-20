@@ -68,6 +68,26 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_INFO("Final result=ALLOW (%d). Bypass mark set.\n", CALI_REASON_BYPASS);
+		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
+			/* This generates a bit more richer output for logging */
+			struct cali_tc_ctx ctx = {
+				.state = state_get(),
+				.counters = counters_get(),
+				.skb = skb,
+				.fwd = {
+					.res = TC_ACT_UNSPEC,
+					.reason = CALI_REASON_UNKNOWN,
+				},
+				.ipheader_len = IP_SIZE,
+			};
+			if (!ctx.counters) {
+				CALI_DEBUG("Counters map lookup failed: DROP\n");
+				// We don't want to drop packets just because counters initialization fails, but
+				// failing here normally should not happen.
+				return TC_ACT_SHOT;
+			}
+			parse_packet_ip(&ctx);
+		}
 		return TC_ACT_UNSPEC;
 	}
 
