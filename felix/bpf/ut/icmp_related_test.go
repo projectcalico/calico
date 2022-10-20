@@ -32,6 +32,7 @@ import (
 )
 
 var rulesAllowUDP = &polprog.Rules{
+	SuppressNormalHostPolicy: true,
 	Tiers: []polprog.Tier{{
 		Name: "base tier",
 		Policies: []polprog.Policy{{
@@ -173,6 +174,11 @@ func TestICMPRelatedFromHost(t *testing.T) {
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
+
+	rtKey := routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal := routes.NewValue(routes.FlagsLocalHost).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
 
 	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {

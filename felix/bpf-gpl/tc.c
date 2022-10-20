@@ -523,6 +523,16 @@ syn_force_policy:
 
 	if (!dest_rt) {
 		CALI_DEBUG("No route for post DNAT dest %x\n", bpf_ntohl(ctx->state->post_nat_ip_dst));
+		if (CALI_F_FROM_HEP) {
+			/* Disable FIB, let the packet go through the host after it is
+			 * policed. It is ingress into the system and we do not know what
+			 * exactly is the packet's destination. It may be a local VM or
+			 * something similar and we let the host to route it or dump it.
+			 *
+			 * https://github.com/projectcalico/calico/issues/6450
+			 */
+			ctx->state->flags |= CALI_ST_SKIP_FIB;
+		}
 		goto do_policy;
 	}
 
