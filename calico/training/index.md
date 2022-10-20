@@ -1,5 +1,5 @@
 ---
-title: Get training and find resources
+title: Training and resources
 description: Links to Calico resources for onboarding and training.
 canonical_url: '/training/index'
 ---
