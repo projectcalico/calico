@@ -78,7 +78,7 @@ WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
-WINDOWS_NSSM_VERSION=2.24
+WINDOWS_NSSM_VERSION=2.24-103-gdee49fc
 # Explicit list of files that we copy in from the mod cache.  This is required because the copying rules we use are pattern-based
 # and they only work with an explicit rule of the form "$(WINDOWS_MOD_CACHED_FILES): <file path from project root>" (otherwise,
 # make has no way to know that the mod cache target produces the files we need).
@@ -528,7 +528,7 @@ $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
 
 ## Download NSSM.
 windows-packaging/nssm-$(WINDOWS_NSSM_VERSION).zip:
-	wget -O windows-packaging/nssm-$(WINDOWS_NSSM_VERSION).zip https://nssm.cc/release/nssm-$(WINDOWS_NSSM_VERSION).zip
+	wget -O windows-packaging/nssm-$(WINDOWS_NSSM_VERSION).zip https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
 
 build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm-$(WINDOWS_NSSM_VERSION).zip
 	# To be as atomic as possible, we re-do work like unpacking NSSM here.
