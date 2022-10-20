@@ -170,6 +170,14 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	skbMark = 0
 
+	// Insert the reverse route for backend for RPF check.
+	resetRTMap(rtMap)
+	beV4CIDR := ip.CIDRFromNetIP(natIP).(ip.V4CIDR)
+	bertKey := routes.NewKey(beV4CIDR).AsBytes()
+	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMap.Update(bertKey, bertVal)
+	Expect(err).NotTo(HaveOccurred())
+
 	bpfIfaceName = "NAT2"
 	// Arriving at node 2
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -190,14 +198,6 @@ func TestNATPodPodXNode(t *testing.T) {
 	// No NATing, service already resolved
 	Expect(v.Type()).To(Equal(conntrack.TypeNormal))
 	Expect(v.Flags()).To(Equal(uint16(0)))
-
-	// Insert the reverse route for backend for RPF check.
-	resetRTMap(rtMap)
-	beV4CIDR := ip.CIDRFromNetIP(natIP).(ip.V4CIDR)
-	bertKey := routes.NewKey(beV4CIDR).AsBytes()
-	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
-	err = rtMap.Update(bertKey, bertVal)
-	Expect(err).NotTo(HaveOccurred())
 
 	// Arriving at workload at node 2
 	expectMark(tcdefs.MarkSeen)
