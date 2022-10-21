@@ -133,7 +133,6 @@ template bgp bgp_template {
 {{- template "LOGGING"}}
   description "Connection to BGP peer";
   local as {{$node_as_num}};
-  multihop;
   gateway recursive; # This should be the default, but just in case.
   import all;        # Import all routes, since we don't know what the upstream
                      # topology is and therefore have to trust the ToR/RR.
@@ -170,6 +169,8 @@ template bgp bgp_template {
 {{if eq $onode_ip ($node_ip) }}# Skipping ourselves ({{$node_ip}})
 {{- else if ne "" ($onode_cluster_id)}}# Skipping {{$onode_ip}} ({{.}}) as it is a route reflector with cluster ID {{$onode_cluster_id}}
 {{else if ne "" $onode_ip}}protocol bgp Mesh_{{$id}} from bgp_template {
+  multihop;
+  ttl security off;
   neighbor {{$onode_ip}} {{if ne "" $listen_port}}port {{$listen_port}} {{end}}as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
   source address {{$node_ip}};  # The local address we use for the TCP connection
   {{- /*
@@ -208,6 +209,13 @@ template bgp bgp_template {
 # Skipping ourselves ({{$node_ip}})
 {{- else}}
 protocol bgp Global_{{$id}} from bgp_template {
+{{- if $data.ttl_security }}
+  ttl security on;
+  multihop {{ $data.ttl_security }};
+{{- else }}
+  ttl security off;
+  multihop;
+{{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip}};  # The local address we use for the TCP connection
@@ -250,6 +258,13 @@ protocol bgp Global_{{$id}} from bgp_template {
 # Skipping ourselves ({{$node_ip}})
 {{- else}}
 protocol bgp Node_{{$id}} from bgp_template {
+{{- if $data.ttl_security }}
+  ttl security on;
+  multihop {{ $data.ttl_security }};
+{{- else }}
+  ttl security off;
+  multihop;
+{{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip}};  # The local address we use for the TCP connection
