@@ -378,6 +378,12 @@ spec:
                   "UseNodeIP" means to configure the node IP as the source address.  "None"
                   means not to configure a source address.
                 type: string
+              ttlSecurity:
+                description: TTLSecurity enables the generalized TTL security mechanism
+                  (GTSM) which protects against spoofed packets by ignoring received
+                  packets with a smaller than expected TTL value. The provided value
+                  is the number of hops (edges) between the peers.
+                type: integer
             type: object
         type: object
     served: true

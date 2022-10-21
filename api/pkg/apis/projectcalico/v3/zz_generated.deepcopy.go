@@ -273,6 +273,11 @@ func (in *BGPPeerSpec) DeepCopyInto(out *BGPPeerSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.TTLSecurity != nil {
+		in, out := &in.TTLSecurity, &out.TTLSecurity
+		*out = new(byte)
+		**out = **in
+	}
 	return
 }
 
