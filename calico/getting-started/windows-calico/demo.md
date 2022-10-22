@@ -46,7 +46,7 @@ spec:
     imagePullPolicy: Always
     name: busybox
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 
 ---
 
@@ -64,7 +64,7 @@ spec:
     ports:
     - containerPort: 80
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 EOF
 ```
 
@@ -314,7 +314,7 @@ spec:
     imagePullPolicy: Always
     name: busybox
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 
 ---
 
@@ -332,7 +332,7 @@ spec:
     ports:
     - containerPort: 80
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 
 ```
 
