@@ -235,11 +235,11 @@ PuB/TL+u2y+iQUyXxLy3
 	})
 
 	AfterEach(func() {
+		// Cleanup temp directory
+		os.RemoveAll(tempDir)
 		// Cleanup calico-node service account
 		err := createKubernetesClient().CoreV1().ServiceAccounts("kube-system").Delete(context.Background(), "calico-node", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		// Cleanup temp directory
-		os.RemoveAll(tempDir)
 	})
 
 	Context("Install with default values", func() {
