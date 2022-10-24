@@ -24,17 +24,10 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-// egressSNATManager manages the ipsets and iptables chains used to implement the "NAT outgoing" or
-// "masquerade" feature.  The feature adds a boolean flag to each IPAM pool, which controls how
-// outgoing traffic to non-Calico destinations is handled.  If the "masquerade" flag is set,
-// outgoing traffic is source-NATted to appear to come from the host's IP address.
-//
-// The egressSNATManager maintains two CIDR IP sets: one contains the CIDRs for all Calico
-// IPAM pools, the other contains only the NAT-enabled pools.
-//
-// When NAT-enabled pools are present, the egressSNATManager inserts the iptables masquerade rule
-// to trigger NAT of outgoing packets from NAT-enabled pools.  Traffic to any Calico-owned
-// pool is excluded.
+// egressSNATManager adds iptables rules to trigger source NAT for packets with calico IPAM
+// pools as source address towards destinations external to the cluster.
+// The the source-NATted traffic will have a source address as configured in the pod annotation
+// "cni.projectcalico.org/egressSNAT", or in EgressSNAT field in the WorkloadEndpointSpec.
 type egressSNATManager struct {
 	ipVersion        uint8
 	natTable         iptablesTable

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build nattests
+//go:build fvtests
 
 package fv_test
 
@@ -41,7 +41,7 @@ import (
 var _ = infrastructure.DatastoreDescribe("Egress SNAT rule renderer", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra          infrastructure.DatastoreInfra
-		felix          *infrastructure.Felix
+		felixes        []*infrastructure.Felix
 		calicoClient   client.Interface
 		w              *workload.Workload
 		externalServer *infrastructure.ExternalServer
@@ -61,6 +61,9 @@ var _ = infrastructure.DatastoreDescribe("Egress SNAT rule renderer", []apiconfi
 			Expect(err).NotTo(HaveOccurred(), "Failed to update felix configuration")
 		}
 		Expect(err).NotTo(HaveOccurred(), "Failed to create felix configuration")
+		for _, felix := range felixes {
+			ensureBPFProgramsAttached(felix)
+		}
 	}
 
 	disableBPF := func() {
@@ -80,44 +83,68 @@ var _ = infrastructure.DatastoreDescribe("Egress SNAT rule renderer", []apiconfi
 
 	BeforeEach(func() {
 		infra = getInfra()
+		egressIP = "10.67.0.10"
 
-		bpfEnabled := false
 		egressSNATEnabled := api.EgressSNATEnabled
 		fc := api.NewFelixConfiguration()
 		fc.Name = "default"
-		fc.Spec.BPFEnabled = &bpfEnabled
 		fc.Spec.EgressSNAT = &egressSNATEnabled
+		// fc.Spec.NATOutgoingAddress = egressIP
 		options := infrastructure.DefaultTopologyOptions()
 		options.InitialFelixConfiguration = fc
-		felix, calicoClient = infrastructure.StartSingleNodeTopology(options, infra)
+		options.NATOutgoingEnabled = true
+		felixes, calicoClient = infrastructure.StartNNodeTopology(2, options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
 
+		ippool := api.NewIPPool()
+		ippool.Name = "ip-pool-nat-outgoing"
+		ippool.Spec.CIDR = "10.67.0.0/24"
+		ippool.Spec.NATOutgoing = true
+		ippool, err := calicoClient.IPPools().Create(context.Background(), ippool, options2.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
 		// Create workload, using that profile.
-		w = workload.Run(felix, "w0", "default", "10.65.0.10", "9055", "tcp")
-		egressIP = "10.65.0.110"
+		w = workload.Run(felixes[1], "w0", "default", "10.65.0.10", "9055", "tcp")
 		w.AddEgressSNAT(egressIP)
 		w.ConfigureInInfra(infra)
 
 		// We will use this container to model an external server that workloads on
 		// host will connect to.  Create a route in felix for the external server.
-		externalServer = infrastructure.RunExtServer("ext-server", "default", "10.65.1.220", "8055", "tcp")
+		externalServer = infrastructure.RunExtServer("ext-server", "default", "10.66.0.220", "8055", "tcp")
 		externalServer.SetupRoute()
-		externalServer.Exec("ip", "r", "add", "10.65.0.0/24", "via", felix.IP)
-		felix.Exec("ip", "r", "add", "10.65.1.0/24", "via", externalServer.IP)
+		externalServer.Exec("ip", "r", "add", "10.67.0.0/24", "via", felixes[0].IP)
+		for _, felix := range felixes {
+			felix.Exec("ip", "r", "add", "10.66.0.0/24", "via", externalServer.IP)
+			// felix.Exec("ip", "addr", "add", egressIP, "dev", "eth0")
+		}
 	})
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
-			felix.Exec("iptables-save", "-c")
-			felix.Exec("ip", "r")
-			felix.Exec("ip", "a")
+
+			fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
+			bpfEnabled := err == nil && *fc.Spec.BPFEnabled
+			for _, felix := range felixes {
+				felix.Exec("iptables-save", "-c")
+				felix.Exec("ip", "r")
+				felix.Exec("ip", "a")
+
+				if bpfEnabled {
+					felix.Exec("calico-bpf", "routes", "dump")
+					felix.Exec("calico-bpf", "conntrack", "dump")
+					felix.Exec("calico-bpf", "counters", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
+				}
+			}
 		}
 
 		w.Stop()
-		felix.Stop()
+		for _, felix := range felixes {
+			felix.Stop()
+		}
 
 		infra.Stop()
 		externalServer.Stop()
@@ -125,18 +152,16 @@ var _ = infrastructure.DatastoreDescribe("Egress SNAT rule renderer", []apiconfi
 
 	It("Linux: Expect outgoing connections from workload uses the configured external IP as source", func() {
 		By("disabling BPF mode", disableBPF)
-
 		cc := &connectivity.Checker{}
 		cc.ExpectSNAT(w, egressIP, externalServer, 8055)
-		cc.CheckConnectivityWithTimeout(30 * time.Second)
+		cc.CheckConnectivityWithTimeout(3000 * time.Second)
 	})
 
 	It("BPF: Expect outgoing connections from workload uses the configured external IP as source", func() {
 		By("enabling BPF mode", enableBPF)
-
 		cc := &connectivity.Checker{}
 		cc.ExpectSNAT(w, egressIP, externalServer, 8055)
-		cc.CheckConnectivityWithTimeout(30 * time.Second)
+		cc.CheckConnectivityWithTimeout(3000 * time.Second)
 	})
 })
 

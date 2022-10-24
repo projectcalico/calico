@@ -65,7 +65,7 @@ type WorkloadEndpointSpec struct {
 	// to connect one of its own external IPs. Each internal IP must be associated with the same
 	// endpoint via the configured IPNetworks.
 	IPNATs []IPNAT `json:"ipNATs,omitempty" validate:"omitempty,dive"`
-	// Egress SNAT is a 1:1 NAT mapping to apply for oubtound connections from the endpoint.
+	// Egress SNAT is a 1:1 NAT mapping to apply for outbound connections from the endpoint.
 	// SNAT is applied to outbound connections whenever the endpoint attempts to connect to
 	// addresses outside the calico managed IP pools.
 	EgressSNAT IPNAT `json:"egressSNAT,omitempty" validate:"omitempty,dive"`
