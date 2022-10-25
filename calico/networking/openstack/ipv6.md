@@ -49,5 +49,4 @@ OpenStack (not {{site.prodname}}) controls whether a VM gets IPv4, IPv6, or both
    - DHCP enabled
    - IPv6 address mode set to DHCPv6 stateful
 
-
    We suggest that you initially configure both IPv4 and IPv6 subnets in each network. This allows handling VM images that support only IPv4 alongside those that support both IPv4 and IPv6, and allows a VM to be accessed over IPv4 in case this is needed to troubleshoot any issues with its IPv6 configuration. In principle, though, we are not aware of any problems with configuring and using IPv6-only networks in OpenStack.

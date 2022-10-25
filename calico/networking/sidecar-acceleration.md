@@ -20,7 +20,6 @@ This how-to guide uses the following Calico features:
 
 **Felix configuration** with **sidecarAccelerationEnabled** configuration option. 
 
-
 ### Concepts
 
 #### Sidecar acceleration

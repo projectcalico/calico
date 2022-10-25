@@ -67,7 +67,6 @@ wget -q --timeout=5 google.com -O -
 
 It should return the HTML of the google.com home page.
 
-
 ### 2. Deny all ingress traffic
 
 Enable ingress isolation on the namespace by deploying a [default deny all ingress traffic policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic){:target="_blank"}.

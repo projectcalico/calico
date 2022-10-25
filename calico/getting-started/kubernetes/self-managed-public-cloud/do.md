@@ -93,7 +93,6 @@ you generate a {% include open-new-window.html text='gossip' url='https://kops.s
 
 You can further customize the {{site.prodname}} install with {% include open-new-window.html text='options listed in the kops documentation' url='https://kops.sigs.k8s.io/networking/calico' %}. 
 
-
 ### Cleanup
 
 If you wish to remove resources created by this tutorial
