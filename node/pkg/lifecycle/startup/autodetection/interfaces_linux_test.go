@@ -43,16 +43,22 @@ var _ = DescribeTable("GetInterfaces",
 		getInterfaces: net.Interfaces,
 		expectFound:   true,
 	}),
-	Entry("ibmveth", getInterfacesTestCase{
+	Entry("should not skip ibmveth", getInterfacesTestCase{
 		getInterfaces: func() ([]net.Interface, error) {
 			return []net.Interface{{Index: 0, Name: "lo"}, {Index: 1, Name: "ibmvetha"}}, nil
 		},
 		expectFound:         true,
 		expectInterfaceName: "ibmvetha",
 	}),
-	Entry("veth", getInterfacesTestCase{
+	Entry("should skip veth", getInterfacesTestCase{
 		getInterfaces: func() ([]net.Interface, error) {
 			return []net.Interface{{Index: 0, Name: "veth123126312783"}}, nil
 		},
+	}),
+	Entry("should skip vxlan.calico", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "vxlan.calico"}}, nil
+		},
+		expectFound: false,
 	}),
 )
