@@ -21,7 +21,6 @@ the CIDRs from any network sets that match the selector.
 > policy will see the kube-proxy's host's IP as the source instead of the real source.
 {: .alert .alert-danger}
 
-
 ### Sample YAML
 
 ```yaml

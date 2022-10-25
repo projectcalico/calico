@@ -113,11 +113,9 @@ include:
 | `process_start_time_seconds` | Start time of the process since unix epoch in seconds. |
 | `process_virtual_memory_bytes` | Virtual memory size in bytes. |
 
-
 #### Wireguard Metrics
 
 Felix also exports wireguard device stats if found/detected. Can be disabled via Felix configuration.
-
 
 | Name          | Description     |
 | ------------- | --------------- |
