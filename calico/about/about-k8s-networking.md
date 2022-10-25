@@ -134,5 +134,3 @@ as IPv4 or IPv6 addresses.
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Google Cloud'
   url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %}
 
-
-

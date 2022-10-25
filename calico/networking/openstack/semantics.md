@@ -52,7 +52,6 @@ False`, so at the moment - unfortunately - it *still* has to be understood that
 > is not possible because it depends on L2 adjacency.
 {: .alert .alert-info}
 
-
 ## Connectivity between different {{site.prodname}} networks
 
 {{site.prodname}} provides *exactly* the same connectivity between instances on different

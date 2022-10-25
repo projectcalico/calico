@@ -63,7 +63,6 @@ spec:
 |--------------|---------------------------------|------------------|
 | secretKeyRef | Get the password from a secret. | [KeyRef](#keyref) |
 
-
 #### KeyRef
 
 KeyRef tells {{site.prodname}} where to get a BGP password.  The referenced Kubernetes
@@ -73,7 +72,6 @@ secret must be in the same namespace as the {{site.nodecontainer}} pod.
 |----------|-------------------------------------|--------|
 | name     | The name of the secret              | string |
 | key      | The key within the secret           | string |
-
 
 ### Peer scopes
 

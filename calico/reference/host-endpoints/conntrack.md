@@ -4,7 +4,6 @@ description: Workaround for Linux conntrack if Calico policy is not working as i
 canonical_url: '/reference/host-endpoints/conntrack'
 ---
 
-
 {{site.prodname}} uses Linux's connection tracking ('conntrack') as an important
 optimization to its processing.  It generally means that {{site.prodname}} only needs to
 check its policies for the first packet in an allowed flow—between a pair of

@@ -1,6 +1,5 @@
 # Calico documentation style guide
 
-
 ## Overview
 
 We follow [_The Chicago Manual of Style_, 17th Edition](http://chicagomanualofstyle.org/), the [_Yahoo! Style Guide_](https://www.amazon.com/Yahoo-Style-Guide-Ultimate-Sourcebook/dp/031256984X), and the [Merriam-Webster dictionary](https://www.merriam-webster.com/).
@@ -11,7 +10,6 @@ This style guide contains:
 - Clarification on frequent points of confusion
 - Terminology guidelines
 
-
 ## Voice
 
 The passive voice can obscure the actor and result in weak sentences.
@@ -20,7 +18,6 @@ topic, consult the following resources:
 
 - [Purdue Online Writing Lab](https://owl.english.purdue.edu/owl/resource/539/02/)
 - [Grammar Girl](http://www.quickanddirtytips.com/education/grammar/active-voice-versus-passive-voice)
-
 
 ## Pronouns
 
@@ -34,7 +31,6 @@ Use the first person plural to refer to Project Calico.
 - **Correct**: "We recommend five nodes."
 - **Incorrect**: "Five nodes are recommended."
 
-
 ## Anthropomorphism
 
 Avoid personifying software.
@@ -47,11 +43,9 @@ Avoid personifying software.
 - "Kubernetes sees that Calico is installed."
 - "The delimiter tells Calico where to split the string."
 
-
 ## Future features
 
 Avoid documenting future features or products.
-
 
 ## Graphics
 
@@ -70,7 +64,6 @@ sequences, use GIF.
 
 For diagrams and other vector illustrations, we prefer the SVG format.
 
-
 ## Format of source
 
 ### HTML versus Markdown
@@ -80,7 +73,6 @@ We prefer Markdown for readability.
 ### Line wraps
 
 Wrap lines at 80 characters—except [URLs](#line-breaks).
-
 
 ## Punctuation
 
@@ -94,7 +86,6 @@ Use hyphens only when necessary to prevent confusion. Examples include:
 - A prefix ends in the same vowel that the word begins with: "re-entry".
 - Compound modifiers: "You can find Calico easter eggs in read-only memory."
 
-
 ## Capitalization
 
 ### Proper nouns
@@ -105,7 +96,6 @@ Only capitalize proper nouns.
 
 Use [sentence case](https://www.snappysentences.com/sentence-case-v-title-case/)
 for headings.
-
 
 ## Computer interfaces
 
@@ -203,7 +193,6 @@ for detailed instructions.
 
 Do not insert line breaks inside a URL.
 
-
 ## Lists
 
 ### At least two items
@@ -295,7 +284,6 @@ Congratulations to the following winners of the Calico pop quiz:
 - Chris.
 ```
 
-
 ## Procedures
 
 Use numbered lists to indicate a series of steps that should be performed
@@ -303,7 +291,6 @@ in sequence.
 
 Avoid giving the reader more than one way to accomplish a task. Just
 describe the best method.
-
 
 ## Numbers and dates
 
@@ -314,7 +301,6 @@ Spell out dates.
 - **Incorrect**: Jan 1, 1970
 - **Incorrect**: 1/1/1970
 
-
 ## Acronyms and file types
 
 Treat file types as acronyms when used in text. Use all caps.
@@ -324,7 +310,6 @@ Examples:
 
 To pluralize an acronym, add a lowercase "s". Example: "Deploy the VMs in
 a single click."
-
 
 ## Notes
 
@@ -350,7 +335,6 @@ is reserved for the note that appears at the top of the page to let people
 know they are viewing a version of the documentation other than the
 current release.
 
-
 ## Storage, memory, and speed abbreviations
 
 Don't put a space between the number and the abbreviation. Examples: 500Kbps,
@@ -363,7 +347,6 @@ Don't add an "s" after the abbreviation to form a plural.
 
 Repeat the abbreviation in a series. Example: "The device offers 2MB, 4MB,
 or 6MB of storage."
-
 
 ## American conventions
 
@@ -379,7 +362,6 @@ also consult [Merriam-Webster](https://www.merriam-webster.com/).
 Use a comma in whole numbers with four or more digits. Example: 1,200.
 
 Use decimal points. Example, 2.5 pounds.
-
 
 ## Terminology
 
@@ -407,7 +389,6 @@ Use decimal points. Example, 2.5 pounds.
 | tutorial or procedure    | worked example
 | web interface            | GUI, UI
 | web server               | webserver
-
 
 ## Commonly confused
 
@@ -454,7 +435,6 @@ Use it as a mass noun, not a count noun.
 - **Correct**: "less data"
 - **Incorrect**: "fewer data"
 
-
 ### e.g. | i.e.
 
 The abbreviation "e.g." refers to "exempli gratia" in Latin and means "for the sake of example."
@@ -494,6 +474,4 @@ deleted the clause, use "which".
 
 - "Give me the book, which is on the table." There is only one book
   in the room and it happens to be on the table.
-
-
 
