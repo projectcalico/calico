@@ -365,7 +365,6 @@ The basic process is as follows:
    > on the [FelixConfiguration resource](../../reference/resources/felixconfig).
    {: .alert .alert-info}
 
-
 1. Create a network policy that allows access to the {{site.nodecontainer}} Prometheus metrics port.
 
    Now let's create a network policy that allows access to the Prometheus metrics port such that

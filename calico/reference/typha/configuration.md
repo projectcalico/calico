@@ -15,7 +15,6 @@ Typha configuration can not be modified when Calico is installed via the operato
   <label:Manifest>
 <%
 
-
 Configuration for Typha is read from one of two possible locations, in
 order, as follows.
 

@@ -105,7 +105,6 @@ The full list of parameters which can be set is as follows.
 | `EtcdEndpoints`         | `FELIX_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
 | `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | Path to the file containing the private key matching Felix's client certificate. Enables Felix to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/key.pem` (optional) | string |
 
-
 #### Kubernetes API datastore configuration
 
 The Kubernetes API datastore driver reads its configuration from Kubernetes-provided environment variables.
@@ -179,12 +178,10 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-ebpf) for ste
 | ------------------------|----------------------------| ------------ | ------ |
 | `KubeNodePortRanges`    | `FELIX_KUBENODEPORTRANGES` | A list of port ranges that Felix should treat as Kubernetes node ports.  Only when `kube-proxy` is configured to use IPVS mode:  Felix assumes that traffic arriving at the host of one of these ports will ultimately be forwarded instead of being terminated by a host process.  [Default: `30000:32767`] <a id="ipvs-portranges"></a>  | Comma-delimited list of `<min>:<max>` port ranges or single ports. |
 
-
 > **Note**: <a id="ipvs-bits"></a> When using {{site.prodname}} with Kubernetes' `kube-proxy` in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint.
 > For example, the default `IptablesMarkMask` value, `0xffff0000` gives {{site.prodname}} 16 bits, up to 6 of which are used for internal purposes, leaving 10 bits for endpoint IDs.
 > 10 bits is enough for 1024 different values and {{site.prodname}} uses 2 of those for internal purposes, leaving enough for 1022 endpoints on the host.
 {: .alert .alert-info}
-
 
 #### OpenStack-specific configuration
 
@@ -242,7 +239,6 @@ For more information on how to use and set these variables, refer to
 | wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
 | wireguardHostEncryptionEnabled     | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | boolean | false |
 | wireguardKeepAlive                 | WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0] | int | int | 25 |
-
 
 For more information on encrypting in-cluster traffic with WireGuard, refer to
 [Encrypt cluster pod traffic](../../security/encrypt-cluster-pod-traffic)
