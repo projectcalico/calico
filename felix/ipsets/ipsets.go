@@ -359,12 +359,10 @@ func (s *IPSets) ApplyUpdates() {
 func (s *IPSets) tryResync() (numProblems int, err error) {
 	// Log the time spent as we exit the function.
 	resyncStart := time.Now()
-	defer func() {
-		s.logCxt.WithFields(log.Fields{
-			"resyncDuration":          time.Since(resyncStart),
-			"numInconsistenciesFound": numProblems,
-		}).Debug("Finished IPSets resync")
-	}()
+	defer s.logCxt.WithFields(log.Fields{
+		"resyncDuration":          time.Since(resyncStart),
+		"numInconsistenciesFound": numProblems,
+	}).Debug("Finished IPSets resync")
 
 	// Start an 'ipset list' child process, which will emit output of the following form:
 	//

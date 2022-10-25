@@ -659,9 +659,7 @@ func (r *RouteTable) Apply() error {
 
 func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry bool) error {
 	startTime := time.Now()
-	defer func() {
-		perIfaceSyncTime.Observe(r.time.Since(startTime).Seconds())
-	}()
+	defer perIfaceSyncTime.Observe(r.time.Since(startTime).Seconds())
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	logCxt.Debug("Syncing interface routes")
 

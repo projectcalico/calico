@@ -597,9 +597,8 @@ func (s *xdpIPState) getIPSetMembers(setID string, ipsSource ipsetsSource) (set.
 // correct maps, and that maps contain the desired ipsets.
 func (s *xdpIPState) tryResync(common *xdpStateCommon, ipsSource ipsetsSource) error {
 	resyncStart := time.Now()
-	defer func() {
-		s.logCxt.WithField("resyncDuration", time.Since(resyncStart)).Debug("Finished XDP resync.")
-	}()
+	defer s.logCxt.WithField("resyncDuration", time.Since(resyncStart)).Debug("Finished XDP resync.")
+
 	s.ipsetIDsToMembers.Clear()
 	resyncState, err := s.newXDPResyncState(common.bpfLib, ipsSource, common.programTag, common.xdpModes)
 	if err != nil {

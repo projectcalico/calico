@@ -973,9 +973,7 @@ func newConnector(configParams *config.Config,
 }
 
 func (fc *DataplaneConnector) readMessagesFromDataplane() {
-	defer func() {
-		fc.shutDownProcess("Failed to read messages from dataplane")
-	}()
+	defer fc.shutDownProcess("Failed to read messages from dataplane")
 	log.Info("Reading from dataplane driver pipe...")
 	for {
 		payload, err := fc.dataplane.RecvMessage()
@@ -1141,9 +1139,7 @@ func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane() {
 var handledConfigChanges = set.From("CalicoVersion", "ClusterGUID", "ClusterType")
 
 func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
-	defer func() {
-		fc.shutDownProcess("Failed to send messages to dataplane")
-	}()
+	defer fc.shutDownProcess("Failed to send messages to dataplane")
 
 	var config map[string]string
 	for {

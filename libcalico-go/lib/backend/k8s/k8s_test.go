@@ -298,9 +298,7 @@ func (c cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 	return func() interface{} {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
-		defer func() {
-			c.Lock.Unlock()
-		}()
+		defer c.Lock.Unlock()
 		if entry, ok := c.State[key.String()]; ok {
 			return entry.Value
 		}
@@ -319,7 +317,7 @@ func (c cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
 	return func() interface{} {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
-		defer func() { c.Lock.Unlock() }()
+		defer c.Lock.Unlock()
 		_, ok := c.State[key.String()]
 		return ok
 	}
