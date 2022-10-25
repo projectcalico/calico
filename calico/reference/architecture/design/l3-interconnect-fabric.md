@@ -4,7 +4,6 @@ description: Understand considerations for implementing interconnect fabrics wit
 canonical_url: '/reference/architecture/design/l3-interconnect-fabric'
 ---
 
-
 {{site.prodname}} provides an end-to-end IP network that interconnects the
 endpoints [^1] in a scale-out or cloud environment. To do that, it needs
 an *interconnect fabric* to provide the physical networking layer on

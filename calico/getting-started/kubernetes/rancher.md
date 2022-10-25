@@ -36,7 +36,6 @@ The geeky details of what you get:
 
 #### Install {{site.prodname}}
 
-
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions.
 
    ```

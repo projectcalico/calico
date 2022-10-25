@@ -8,7 +8,6 @@ canonical_url: '/reference/legal/alp'
 
 #### **docopt-go (784ddc588536785e7299f7272f39101f7faccc3f)**
 
-
 * Licenses
     * MIT
         * Attribution:
@@ -17,19 +16,12 @@ canonical_url: '/reference/legal/alp'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go (e369490fb7db5f2d42bb0e8ee19b48378dee0ebf)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -62,23 +54,15 @@ canonical_url: '/reference/legal/alp'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* GPL-2.0-only
     * Public-Domain
     * CC-BY-3.0
 
-
-
-
 ---
 ---
 
 #### **app-policy (12beec6d5c8069cb57d5cd7660359474d1350d0f)**
-
 
 * Licenses
     * Apache-2.0
@@ -259,29 +243,14 @@ canonical_url: '/reference/legal/alp'
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
 
-
-
-
-
-
 * Other Licenses
 
-
-
-
 ---
 ---
-
-
-
-
-
 
 ### Deep dependencies
 
-
 #### **data-plane-api (5d8712556c09c4c630e8d3479eddf212e9c88cd5)**
-
 
 * Licenses
     * Apache-2.0
@@ -489,19 +458,12 @@ canonical_url: '/reference/legal/alp'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **googleapis (b23578765ee54ff6bceff57f397d833bf4ca6869)**
-
 
 * Licenses
     * Apache-2.0
@@ -511,19 +473,12 @@ canonical_url: '/reference/legal/alp'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **protobuf (c0656edd0d9eab7c66d1eb0c568f9039345796f7)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -535,20 +490,13 @@ canonical_url: '/reference/legal/alp'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * BSD-2-Clause
-
-
-
 
 ---
 ---
 
 #### **protobuf (b4deda0973fb4c70b50d226b1af49f3da59f5265)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -560,20 +508,13 @@ canonical_url: '/reference/legal/alp'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * MS-PL
-
-
-
 
 ---
 ---
 
 #### **grpc-go (8050b9cbc271307e5a716a9d782803d09b0d6f2d)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -607,20 +548,12 @@ canonical_url: '/reference/legal/alp'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **libcalico-go (ed28b67484d1ecf4cb2c1969d4654c7d4eb95e32)**
-
 
 * Licenses
     * Apache-2.0
@@ -801,21 +734,12 @@ canonical_url: '/reference/legal/alp'
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **logrus (bcd833dfe83d3cebad139e4a29ed79cb2318bf95)**
-
 
 * Licenses
     * MIT
@@ -842,20 +766,12 @@ canonical_url: '/reference/legal/alp'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 		THE SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **crypto (9419663f5a44be8b34ca85f08abc5fe1be11f8a3)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -867,21 +783,14 @@ canonical_url: '/reference/legal/alp'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* Public-Domain
     * **Multi-license:** MIT *OR* BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **net (1c05540f6879653db88113bc4a2b70aec4bd491f)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -893,21 +802,14 @@ canonical_url: '/reference/legal/alp'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* CC-BY-3.0
-
-
-
 
 ---
 ---
 
 #### **sys (ebfc5b4631820b793c9010c87fd8fef0f39eb082)**
 
-
 * Licenses
     * BSD-3-Clause
         * Attribution:
@@ -939,21 +841,13 @@ canonical_url: '/reference/legal/alp'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **text (b19bf474d317b857955b12035d2c5acb57ce8b01)**
 
-
 * Licenses
     * BSD-3-Clause
         * Attribution:
@@ -985,26 +879,13 @@ canonical_url: '/reference/legal/alp'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* CC-BY-SA-4.0
 
-
-
-
 ---
 ---
-
-
-
-
-
 
 ## Licenses
-
 
 ### MIT
 
@@ -1013,7 +894,6 @@ Copyright (c) &lt;year&gt; &lt;copyright holders&gt;
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 
 ### BSD-3-Clause
 
@@ -1044,8 +924,6 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
 
 ### GPL-2.0
 
@@ -1110,11 +988,7 @@ You should also get your employer (if you work as a programmer) or your school, 
 Yoyodyne, Inc., hereby disclaims all copyright interest in the program `Gnomovision&#39; (which makes passes at compilers) written by James Hacker.
 &lt; signature of Ty Coon &gt; , 1 April 1989 Ty Coon, President of Vice
 
-
 ### Public-domain
-
-
-
 
 ### CC-BY-3.0
 
@@ -1165,9 +1039,7 @@ Creative Commons is not a party to this License, and makes no warranty whatsoeve
 Except for the limited purpose of indicating to the public that the Work is licensed under the CCPL, Creative Commons does not authorize the use by either party of the trademark &quot;Creative Commons&quot; or any related trademark or logo of Creative Commons without the prior written consent of Creative Commons. Any permitted use will be in compliance with Creative Commons&#39; then-current trademark usage guidelines, as may be published on its website or otherwise made available upon request from time to time. For the avoidance of doubt, this trademark restriction does not form part of this License.
 Creative Commons may be contacted at http://creativecommons.org/.
 
-
 ###
-
 
                                  Apache License
                            Version 2.0, January 2004
@@ -1344,9 +1216,6 @@ Creative Commons may be contacted at http://creativecommons.org/.
       incurred by, or claims asserted against, such Contributor by reason
       of your accepting any such warranty or additional liability.
 
-
-
-
 ### BSD-2-Clause
 
 Copyright (c) &lt;year&gt; &lt;owner&gt; . All rights reserved.
@@ -1354,7 +1223,6 @@ Redistribution and use in source and binary forms, with or without modification,
    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 
 ### MS-PL
 
@@ -1371,7 +1239,6 @@ This license governs use of the accompanying software. If you use the software, 
       (C) If you distribute any portion of the software, you must retain all copyright, patent, trademark, and attribution notices that are present in the software.
       (D) If you distribute any portion of the software in source code form, you may do so only under this license by including a complete copy of this license with your distribution. If you distribute any portion of the software in compiled or object code form, you may only do so under a license that complies with this license.
       (E) The software is licensed &quot;as-is.&quot; You bear the risk of using it. The contributors give no express warranties, guarantees, or conditions. You may have additional consumer rights under your local laws which this license cannot change. To the extent permitted under your local laws, the contributors exclude the implied warranties of merchantability, fitness for a particular purpose and non-infringement.
-
 
 ### CC-BY-SA-4.0
 

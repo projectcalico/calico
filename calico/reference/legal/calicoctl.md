@@ -4,10 +4,7 @@ description: Dependencies and licenses.
 canonical_url: '/reference/legal/calicoctl'
 ---
 
-
-
 #### **gocloud (3b1ae45394a234c385be014e9a488f2bb6eef821)**
-
 
 * Licenses
     * Apache-2.0
@@ -215,20 +212,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-autorest (1ff28809256a84bb6966640ff3d0371af82ccba4)**
-
 
 * Licenses
     * Apache-2.0
@@ -425,21 +414,13 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
     * MS-RL
-
-
-
 
 ---
 ---
 
 #### **go-spew (782f4967f2dc4564575ca782fe2d04090b5faca8)**
-
 
 * Licenses
     * MIT
@@ -460,20 +441,12 @@ canonical_url: '/reference/legal/calicoctl'
 		ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 		OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **jwt-go (d2709f9f1f31ebcda9651b03077758c1f3a0018c)**
-
 
 * Licenses
     * MIT
@@ -486,39 +459,23 @@ canonical_url: '/reference/legal/calicoctl'
 
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **yaml (73d445a93680fa1a78ae23a5839bad48f32ba1ee)**
 
-
 * Licenses
-
-
-
 
 * Other Licenses
     * BSD-3-Clause
     * MIT
 
-
-
-
 ---
 ---
 
 #### **protobuf (c0656edd0d9eab7c66d1eb0c568f9039345796f7)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -530,20 +487,13 @@ canonical_url: '/reference/legal/calicoctl'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * BSD-2-Clause
-
-
-
 
 ---
 ---
 
 #### **go (e369490fb7db5f2d42bb0e8ee19b48378dee0ebf)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -576,24 +526,16 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * **Multi-license:** GPL-2.0-only *OR* BSD-3-Clause
     * Public-Domain
     * CC-BY-3.0
-
-
-
 
 ---
 ---
 
 #### **gnostic (0c5108395e2debce0d731cf0287ddf7242066aba)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -800,22 +742,13 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **btree (925471ac9e2131377a91e1595defec898166fe49)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -1022,20 +955,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **gophercloud (781450b3c4fcb4f5182bcc5133adb4b2e4a09d1d)**
-
 
 * Licenses
     * Apache-2.0
@@ -1232,20 +1157,12 @@ canonical_url: '/reference/legal/calicoctl'
 
 		   END OF TERMS AND CONDITIONS
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **golang-lru (a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4)**
-
 
 * Licenses
     * MPL-2.0
@@ -1332,19 +1249,12 @@ canonical_url: '/reference/legal/calicoctl'
 		Exhibit B - "Incompatible With Secondary Licenses" Notice
 		This Source Code Form is "Incompatible With Secondary Licenses", as defined by the Mozilla Public License, v. 2.0.<<endOptional>>
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **hcl (65a6292f0157eff210d03ed1bf6c59b190b8b906)**
-
 
 * Licenses
     * MPL-2.0-no-copyleft-exception
@@ -1440,7 +1350,6 @@ canonical_url: '/reference/legal/calicoctl'
 		      otherwise, or (b) ownership of more than fifty percent (50%) of the
 		      outstanding shares or beneficial ownership of such entity.
 
-
 		2\. License Grants and Conditions
 
 		2.1. Grants
@@ -1507,7 +1416,6 @@ canonical_url: '/reference/legal/calicoctl'
 
 		     Sections 3.1, 3.2, 3.3, and 3.4 are conditions of the licenses granted in
 		     Section 2.1.
-
 
 		3\. Responsibilities
 
@@ -1652,7 +1560,6 @@ canonical_url: '/reference/legal/calicoctl'
 		   contract shall be construed against the drafter shall not be used to construe
 		   this License against a Contributor.
 
-
 		10\. Versions of the License
 
 		10.1. New Versions
@@ -1703,21 +1610,12 @@ canonical_url: '/reference/legal/calicoctl'
 		      With Secondary Licenses”, as defined by
 		      the Mozilla Public License, v. 2.0.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **platform (cc1070fc1c2f8011895a041f28b6b8aee028ea71)**
-
 
 * Licenses
     * MIT
@@ -1744,23 +1642,15 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
 * Other Licenses
     * BSD-2-Clause
     * GPL-3.0-only
     * BSD-3-Clause
 
-
-
-
 ---
 ---
 
 #### **go (f2b4162afba35581b6d4a50d3b8f34e33c144682)**
-
 
 * Licenses
     * MIT
@@ -1787,21 +1677,13 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **api (072894a440bdee3a891dea811fe42902311cd2a3)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -2008,21 +1890,13 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **apimachinery (103fd098999dc9c0c88536f5c9ad2e5da39373ae)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -2229,22 +2103,14 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
     * BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **client-go (7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -2451,20 +2317,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **concurrent (bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94)**
-
 
 * Licenses
     * Apache-2.0
@@ -2474,19 +2332,12 @@ canonical_url: '/reference/legal/calicoctl'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **reflect2 (05fbef0ca5da472bbf96c9322b84a53edc03c9fd)**
-
 
 * Licenses
     * Apache-2.0
@@ -2496,19 +2347,12 @@ canonical_url: '/reference/legal/calicoctl'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **calicoctl (93010d0cf1b8140e14e609d3322f32d65691df17)**
-
 
 * Licenses
     * Apache-2.0
@@ -2689,21 +2533,12 @@ canonical_url: '/reference/legal/calicoctl'
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **net (1c05540f6879653db88113bc4a2b70aec4bd491f)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -2715,20 +2550,13 @@ canonical_url: '/reference/legal/calicoctl'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * **Multi-license:** CC-BY-3.0 *OR* BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **oauth2 (a6bd8cefa1811bd24b86f8902872e4e8225f74c4)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -2740,19 +2568,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **text (b19bf474d317b857955b12035d2c5acb57ce8b01)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -2785,21 +2606,13 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * **Multi-license:** CC-BY-SA-4.0 *OR* BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **inf.v0 (3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -2833,28 +2646,14 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
 
-
-
-
 ---
 ---
-
-
-
-
-
 
 ### Deep dependencies
 
-
 #### **go-radix (1a2de0c21c94309923825da3df33a4381872c795)**
-
 
 * Licenses
     * MIT
@@ -2880,36 +2679,21 @@ canonical_url: '/reference/legal/calicoctl'
 		IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 		CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **etcd (33245c6b5b49130ca99280408fadfab01aac0e48)**
 
-
 * Licenses
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **docopt-go (784ddc588536785e7299f7272f39101f7faccc3f)**
-
 
 * Licenses
     * MIT
@@ -2919,19 +2703,12 @@ canonical_url: '/reference/legal/calicoctl'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **channels (47238d5aae8c0fefd518ef2bee46290909cf8263)**
-
 
 * Licenses
     * MIT
@@ -2957,20 +2734,12 @@ canonical_url: '/reference/legal/calicoctl'
 		IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 		CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **queue (093482f3f8ce946c05bcba64badd2c82369e084d)**
-
 
 * Licenses
     * MIT
@@ -2980,19 +2749,12 @@ canonical_url: '/reference/legal/calicoctl'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **fsnotify (ccc981bf80385c528a65fbfdd49bf2d8da22aa23)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -3026,20 +2788,12 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **glog (44145f04b68cf362d9c4df2182967c2275eaefed)**
-
 
 * Licenses
     * Apache-2.0
@@ -3236,20 +2990,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **protobuf (b4deda0973fb4c70b50d226b1af49f3da59f5265)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -3261,20 +3007,13 @@ canonical_url: '/reference/legal/calicoctl'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * MS-PL
-
-
-
 
 ---
 ---
 
 #### **gofuzz (44d81051d367757e1c7c6a5a86423ece9afcf63c)**
-
 
 * Licenses
     * Apache-2.0
@@ -3482,20 +3221,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-genproto (09f6ed296fc66555a25fe4ce95173148778dfa85)**
-
 
 * Licenses
     * Apache-2.0
@@ -3505,19 +3236,12 @@ canonical_url: '/reference/legal/calicoctl'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **httpcache (787624de3eb7bd915c329cba748687a3b22666a6)**
-
 
 * Licenses
     * MIT
@@ -3527,19 +3251,12 @@ canonical_url: '/reference/legal/calicoctl'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **grpc-go (5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e)**
-
 
 * Licenses
     * Apache-2.0
@@ -3747,20 +3464,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **mergo (6633656539c1639d9d78127b7d47c622b5d7b6dc)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -3772,19 +3481,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **envconfig (dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1)**
-
 
 * Licenses
     * MIT
@@ -3809,20 +3511,12 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **properties (c2353362d570a7bfa228149c62842019201cfb71)**
-
 
 * Licenses
     * BSD-2-Clause
@@ -3853,21 +3547,13 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 		SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **go-runewidth (b20a3daf6a39840c202fd42cc23d53607162b045)**
-
 
 * Licenses
     * MIT
@@ -3894,20 +3580,12 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-version (6d5863ca60fa6fe914b5fd43ed8533d7567c5b0b)**
-
 
 * Licenses
     * MIT
@@ -3932,20 +3610,12 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 		THE SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **mapstructure (3536a929edddb9a5b34bd6861dc4a9647cb459fe)**
-
 
 * Licenses
     * MIT
@@ -3972,20 +3642,12 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 		THE SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **tablewriter (e6d60cf7ba1f42d86d54cdf5508611c4aafb3970)**
-
 
 * Licenses
     * MIT
@@ -4010,20 +3672,12 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 		THE SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **uuid (ca53cad383cad2479bbba7f7a1a05797ec1386e4)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -4035,19 +3689,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-toml (81a861c69d25a841d0c4394f0e6f84bc8c5afae0)**
-
 
 * Licenses
     * MIT
@@ -4074,20 +3721,12 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **diskv (5f041e8faa004a95c88a202771f4cc3e991971e6)**
-
 
 * Licenses
     * MIT
@@ -4097,19 +3736,12 @@ canonical_url: '/reference/legal/calicoctl'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-json (6219dc7339ba20ee4c57df0a8baac62317d19cb1)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -4142,20 +3774,12 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-yaml (955bc3e451ef0c9df8b9113bf2e341139cdafab2)**
-
 
 * Licenses
     * Apache-2.0
@@ -4174,21 +3798,13 @@ canonical_url: '/reference/legal/calicoctl'
 		See the License for the specific language governing permissions and
 		limitations under the License.
 
-
-
-
-
 * Other Licenses
     *
-
-
-
 
 ---
 ---
 
 #### **go-yaml-wrapper (598e54215bee41a19677faa4f0c32acd2a87eb56)**
-
 
 * Licenses
     * **Multi-license:** MIT
@@ -4220,7 +3836,6 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
 		Copyright (c) 2012 The Go Authors. All rights reserved.
 
 		Redistribution and use in source and binary forms, with or without
@@ -4249,21 +3864,13 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **libcalico-go (ed28b67484d1ecf4cb2c1969d4654c7d4eb95e32)**
-
 
 * Licenses
     * Apache-2.0
@@ -4444,21 +4051,12 @@ canonical_url: '/reference/legal/calicoctl'
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go.uuid (f58768cc1a7a7e77a3bd49e98cdd21419399b6a3)**
-
 
 * Licenses
     * MIT
@@ -4468,19 +4066,12 @@ canonical_url: '/reference/legal/calicoctl'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **gopsutil (48177ef5f8809fc72b716c414435f2d4cff8e24d)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -4513,11 +4104,8 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 		SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
 		-------
 		internal/common/binary.go in the gopsutil is copied and modified from golang/encoding/binary.go.
-
-
 
 		Copyright (c) 2009 The Go Authors. All rights reserved.
 
@@ -4547,19 +4135,12 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **logrus (d682213848ed68c0a260ca37d6dd5ace8423f5ba)**
-
 
 * Licenses
     * MIT
@@ -4569,20 +4150,13 @@ canonical_url: '/reference/legal/calicoctl'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
     * BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **afero (d40851caa0d747393da1ffb28f7f9d8b4eeffebd)**
-
 
 * Licenses
     * Apache-2.0
@@ -4762,21 +4336,13 @@ canonical_url: '/reference/legal/calicoctl'
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **cast (8c9545af88b134710ab1cd196795e7f2388358d7)**
 
-
 * Licenses
     * MIT
         * Attribution:
@@ -4802,20 +4368,13 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **jwalterweatherman (94f6ae3ed3bceceafa716478c5fbf8d29ca601a1)**
 
-
 * Licenses
     * MIT
         * Attribution:
@@ -4841,19 +4400,12 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **pflag (583c0c0531f06d5278b7d917446061adc344b5cd)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -4865,19 +4417,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **viper (ae103d7e593e371c69e832d5eb3347e2b80cbbc9)**
-
 
 * Licenses
     * MIT
@@ -4904,38 +4449,23 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-shutil (bcacb06fecaeec8dc42af03c87c6949f4a05c74c)**
 
-
 * Licenses
     *
         * Attribution:
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **netlink (fe3b5664d23a11b52ba59bece4ff29c52772a56b)**
-
 
 * Licenses
     * Apache-2.0
@@ -4945,19 +4475,12 @@ canonical_url: '/reference/legal/calicoctl'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **netns (13995c7128ccc8e51e9a6bd2b551020a27180abd)**
-
 
 * Licenses
     * Apache-2.0
@@ -5155,20 +4678,12 @@ canonical_url: '/reference/legal/calicoctl'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **crypto (9419663f5a44be8b34ca85f08abc5fe1be11f8a3)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -5180,22 +4695,15 @@ canonical_url: '/reference/legal/calicoctl'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * **Multi-license:** Public-Domain *OR* BSD-3-Clause
     * **Multi-license:** BSD-3-Clause *OR* MIT
-
-
-
 
 ---
 ---
 
 #### **sys (ebfc5b4631820b793c9010c87fd8fef0f39eb082)**
 
-
 * Licenses
     * BSD-3-Clause
         * Attribution:
@@ -5227,21 +4735,13 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **time (c06e80d9300e4443158a03817b8a8cb37d230320)**
 
-
 * Licenses
     * BSD-3-Clause
         * Attribution:
@@ -5273,20 +4773,12 @@ canonical_url: '/reference/legal/calicoctl'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **validator.v8 (5f1438d3fca68893a817e4a66806cea46a9e4ebf)**
-
 
 * Licenses
     * MIT
@@ -5313,21 +4805,12 @@ canonical_url: '/reference/legal/calicoctl'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **tomb.v2 (d5d1b5820637886def9eef33e03a27a9f166942c)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -5362,20 +4845,12 @@ canonical_url: '/reference/legal/calicoctl'
 		NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 		SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **yaml.v2 (670d4cfef0544295bc27a114dbac37980d83185a)**
-
 
 * Licenses
     * Apache-2.0
@@ -5385,28 +4860,15 @@ canonical_url: '/reference/legal/calicoctl'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
     * Custom License File
 
-
-
-
 ---
 ---
-
-
-
-
-
 
 ## Licenses
 
-
 ### Apache-2.0
-
 
                                  Apache License
                            Version 2.0, January 2004
@@ -5610,8 +5072,6 @@ canonical_url: '/reference/legal/calicoctl'
    See the License for the specific language governing permissions and
    limitations under the License.
 
-
-
 ###
 
 Microsoft Reciprocal License (Ms-RL)
@@ -5632,7 +5092,6 @@ This license governs use of the accompanying software. If you use the software, 
       (E) If you distribute any portion of the software in source code form, you may do so only under this license by including a complete copy of this license with your distribution. If you distribute any portion of the software in compiled or object code form, you may only do so under a license that complies with this license.
       (F) The software is licensed &quot;as-is.&quot; You bear the risk of using it. The contributors give no express warranties, guarantees, or conditions. You may have additional consumer rights under your local laws which this license cannot change. To the extent permitted under your local laws, the contributors exclude the implied warranties of merchantability, fitness for a particular purpose and non-infringement.
 
-
 ### MIT-style
 
 ISC License
@@ -5651,8 +5110,6 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-
-
 ### BSD
 
 Copyright (c) &lt;year&gt; &lt;owner&gt; . All rights reserved.
@@ -5662,7 +5119,6 @@ Redistribution and use in source and binary forms, with or without modification,
    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
 ### BSD-2-Clause
 
 Copyright (c) &lt;year&gt; &lt;owner&gt; . All rights reserved.
@@ -5670,7 +5126,6 @@ Redistribution and use in source and binary forms, with or without modification,
    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 
 ### GPL-2.0
 
@@ -5735,11 +5190,7 @@ You should also get your employer (if you work as a programmer) or your school, 
 Yoyodyne, Inc., hereby disclaims all copyright interest in the program `Gnomovision&#39; (which makes passes at compilers) written by James Hacker.
 &lt; signature of Ty Coon &gt; , 1 April 1989 Ty Coon, President of Vice
 
-
 ### Public-domain
-
-
-
 
 ### CC-BY-3.0
 
@@ -5789,7 +5240,6 @@ Creative Commons Notice
 Creative Commons is not a party to this License, and makes no warranty whatsoever in connection with the Work. Creative Commons will not be liable to You or any party on any legal theory for any damages whatsoever, including without limitation any general, special, incidental or consequential damages arising in connection to this license. Notwithstanding the foregoing two (2) sentences, if Creative Commons has expressly identified itself as the Licensor hereunder, it shall have all rights and obligations of Licensor.
 Except for the limited purpose of indicating to the public that the Work is licensed under the CCPL, Creative Commons does not authorize the use by either party of the trademark &quot;Creative Commons&quot; or any related trademark or logo of Creative Commons without the prior written consent of Creative Commons. Any permitted use will be in compliance with Creative Commons&#39; then-current trademark usage guidelines, as may be published on its website or otherwise made available upon request from time to time. For the avoidance of doubt, this trademark restriction does not form part of this License.
 Creative Commons may be contacted at http://creativecommons.org/.
-
 
 ### MPL-2.0
 
@@ -5875,7 +5325,6 @@ If it is not possible or desirable to put the notice in a particular file, then 
 You may add additional accurate notices of copyright ownership.
 Exhibit B - &quot;Incompatible With Secondary Licenses&quot; Notice
 This Source Code Form is &quot;Incompatible With Secondary Licenses&quot;, as defined by the Mozilla Public License, v. 2.0.
-
 
 ###
 
@@ -5970,7 +5419,6 @@ Mozilla Public License, version 2.0
       otherwise, or (b) ownership of more than fifty percent (50%) of the
       outstanding shares or beneficial ownership of such entity.
 
-
 2. License Grants and Conditions
 
 2.1. Grants
@@ -6037,7 +5485,6 @@ Mozilla Public License, version 2.0
 
      Sections 3.1, 3.2, 3.3, and 3.4 are conditions of the licenses granted in
      Section 2.1.
-
 
 3. Responsibilities
 
@@ -6182,7 +5629,6 @@ Mozilla Public License, version 2.0
    contract shall be construed against the drafter shall not be used to construe
    this License against a Contributor.
 
-
 10. Versions of the License
 
 10.1. New Versions
@@ -6232,9 +5678,6 @@ Exhibit B - “Incompatible With Secondary Licenses” Notice
       This Source Code Form is “Incompatible
       With Secondary Licenses”, as defined by
       the Mozilla Public License, v. 2.0.
-
-
-
 
 ###
 
@@ -6365,7 +5808,6 @@ The hypothetical commands `show w&#39; and `show c&#39; should show the appropri
 You should also get your employer (if you work as a programmer) or school, if any, to sign a &quot;copyright disclaimer&quot; for the program, if necessary. For more information on this, and how to apply and follow the GNU GPL, see &lt;http s ://www.gnu.org/licenses/&gt;.
 The GNU General Public License does not permit incorporating your program into proprietary programs. If your program is a subroutine library, you may consider it more useful to permit linking proprietary applications with the library. If this is what you want to do, use the GNU Lesser General Public License instead of this License. But first, please read &lt;http s ://www.gnu.org/philosophy/why-not-lgpl.html&gt;.
 
-
 ### CC-BY-SA-4.0
 
 Creative Commons Attribution-ShareAlike 4.0 International Creative Commons Corporation (&quot;Creative Commons&quot;) is not a law firm and does not provide legal services or legal advice. Distribution of Creative Commons public licenses does not create a lawyer-client or other relationship. Creative Commons makes its licenses and related information available on an &quot;as-is&quot; basis. Creative Commons gives no warranties regarding its licenses, any material licensed under their terms and conditions, or any related information. Creative Commons disclaims all liability for damages resulting from their use to the fullest extent possible.
@@ -6453,7 +5895,6 @@ Section 8 – Interpretation.
    d. Nothing in this Public License constitutes or may be interpreted as a limitation upon, or waiver of, any privileges and immunities that apply to the Licensor or You, including from the legal processes of any jurisdiction or authority.
 Creative Commons is not a party to its public licenses. Notwithstanding, Creative Commons may elect to apply one of its public licenses to material it publishes and in those instances will be considered the &quot;Licensor.&quot; The text of the Creative Commons public licenses is dedicated to the public domain under the CC0 Public Domain Dedication. Except for the limited purpose of indicating that material is shared under a Creative Commons public license or as otherwise permitted by the Creative Commons policies published at creativecommons.org/policies, Creative Commons does not authorize the use of the trademark &quot;Creative Commons&quot; or any other trademark or logo of Creative Commons without its prior written consent including, without limitation, in connection with any unauthorized modifications to any of its public licenses or any other arrangements, understandings, or agreements concerning use of licensed material. For the avoidance of doubt, this paragraph does not form part of the public licenses.
 Creative Commons may be contacted at creativecommons.org.
-
 
 ### MS-PL
 
