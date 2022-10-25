@@ -24,7 +24,6 @@ As part of the {{site.prodname}} bootstrap infrastructure, Typha must be availab
 pod networking begins and uses host networking instead. It opens a port on the node it is
 scheduled on. By default, it can get scheduled to any node and opens TCP 5473.
 
-
 ### How to
 
 #### Tell if you have installed Typha

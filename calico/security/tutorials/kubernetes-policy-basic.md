@@ -55,9 +55,7 @@ We'll use Kubernetes `Deployment` objects to easily create pods in the namespace
    wget -q nginx -O -
    ```
 
-
    You should see a response from `nginx`.  Great! Our service is accessible.  You can exit the pod now.
-
 
 ### Enable isolation
 

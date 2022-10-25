@@ -16,7 +16,6 @@ system, and then how to see {{site.prodname}} connectivity in action.
 > script does.
 {: .alert .alert-info}
 
-
 Single (or first) node setup
 ----------------------------
 
@@ -42,8 +41,6 @@ and compute functions running on the same node:
        sysctl -w net.ipv4.ip_forward=1
        sysctl -w net.ipv6.conf.all.forwarding=1
 
-
-
 Multi-node setup
 ----------------
 
@@ -64,7 +61,6 @@ additional compute node:
 
 - follow the steps above, except for the network and subnet creations, to
   install and set up DevStack with {{site.prodname}} on that node.
-
 
 Demonstrating {{site.prodname}} connectivity
 ---------------------------------
