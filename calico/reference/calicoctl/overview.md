@@ -61,7 +61,6 @@ Description:
 ```
 {: .no-select-button}
 
-
 > **Note:** In a multi cluster environment if you have a {% include open-new-window.html url="https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/" text="kubeconfig" %} file with multiple cluster contexts it is possible to directly change the context using calicoctl `--context` argument.
 {: .alert .alert-info}
 

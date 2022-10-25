@@ -45,7 +45,6 @@ routed there.
 >
 {: .alert .alert-info}
 
-
 When are host routes useful with {{site.prodname}}?
 ----------------------------------------
 

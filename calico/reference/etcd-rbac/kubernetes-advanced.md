@@ -15,7 +15,6 @@ This document does not apply to operator installations of Calico.
   <label:Manifest>
 <%
 
-
 This document describes advanced segmentation of the etcd roles to limit
 access of individual {{site.prodname}} components or to limit calicoctl user access.
 It assumes you have followed [this guide](kubernetes) for initial etcd

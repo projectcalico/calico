@@ -4,7 +4,6 @@ description: To protect a host interface, start by creating a host endpoint obje
 canonical_url: '/reference/host-endpoints/objects'
 ---
 
-
 For each host endpoint that you want {{site.prodname}} to secure, you'll need to
 create a host endpoint object in etcd.  Use the `calicoctl create` command
 to create a host endpoint resource (`HostEndpoint`).

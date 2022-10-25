@@ -134,7 +134,6 @@ nodeport-external-ingress: true
 
 Then, use **nodeport-external-ingress: true** as the selector of the **allow-nodeport** policy, instead of **has(kubernetes-host)**.
 
-
 ### Above and beyond
 
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)

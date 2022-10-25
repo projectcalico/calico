@@ -16,7 +16,6 @@ for a full list of calicoctl commands.
 > for details about each resource type.
 {: .alert .alert-info}
 
-
 ## Displaying the help text for 'calicoctl get' command
 
 Run `calicoctl get --help` to display the following help menu for the
@@ -34,7 +33,6 @@ Examples:
 
   # List specific policies in YAML format
   calicoctl get -o yaml policy my-policy-1 my-policy-2
-
 
 Options:
   -h --help                    Show this screen.
@@ -67,7 +65,6 @@ Description:
   stdin format.
 
   Valid resource types are:
-
 
     * bgpConfiguration
     * bgpPeer
