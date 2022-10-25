@@ -4,7 +4,6 @@ description: Apply ordered policies to endpoints that match specific label selec
 canonical_url: '/reference/host-endpoints/selector'
 ---
 
-
 We recommend using selector-based security policy with
 host endpoints. This allows ordered policy to be applied to
 endpoints that match particular label selectors.

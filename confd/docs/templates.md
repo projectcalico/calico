@@ -101,7 +101,6 @@ export HOSTNAME=`hostname`
 hostname: {{getenv "HOSTNAME"}}
 ```
 
-
 #### With a default value
 
 ```

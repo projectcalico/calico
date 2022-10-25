@@ -15,7 +15,6 @@ This document does not apply to operator installations of Calico.
   <label:Manifest>
 <%
 
-
 When using etcd with RBAC, all components that access etcd must be configured
 with the proper certificates. This document describes the users and roles
 needed to segment etcd so that Kubernetes and {{site.prodname}} can only read and write

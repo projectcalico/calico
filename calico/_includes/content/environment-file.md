@@ -35,7 +35,6 @@ For a Kubernetes datastore (default) set the following:
 {: .alert .alert-info}
 {% endif %}
 
-
 %>
   <label: etcd datastore>
   <%
@@ -67,7 +66,6 @@ For either datastore set the following:
 | CALICO_AS | If not specified, {{site.prodname}} uses the currently configured value for the AS Number for the node BGP client—this can be configured through the Node resource. If the Node resource value is not set, Calico inherits the AS Number from the global default value. If you set a value through this environment variable, it reconfigures any value currently set through the Node resource. |
 | NO_DEFAULT_POOLS | Set to true to prevent {{site.prodname}} from creating a default pool if one does not exist. Pools are used for workload endpoints and not required for non-cluster hosts. |
 | CALICO_NETWORKING_BACKEND | The networking backend to use. In `bird` mode, Calico will provide BGP networking using the BIRD BGP daemon; VXLAN networking can also be used. In `vxlan` mode, only VXLAN networking is provided; BIRD and BGP are disabled. If you want to run Calico for policy only, set to `none`. |
-
 
 Sample `EnvironmentFile` - save to `/etc/calico/calico.env`
 

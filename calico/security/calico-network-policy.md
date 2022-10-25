@@ -80,14 +80,12 @@ Each network policy rule applies to either **ingress** or **egress** traffic. Fr
 
 You can specify whether policy applies to ingress, egress, or both using the **types** field. If you do not use the types field, Calico defaults to the following values.
 
-
 | Ingress rule present? | Egress rule present?  |      Value      |
 | :-------------------: | :-------------------: | :-------------: |
 |          No           |          No           |     Ingress     |
 |          Yes          |          No           |     Ingress     |
 |          No           |          Yes          |     Egress      |
 |          Yes          |          Yes          | Ingress, Egress |
-
 
 #### Network traffic behaviors: deny and allow
 
@@ -112,7 +110,6 @@ For compatibility with Kubernetes, **Calico network policy** follows the same be
 - [Control traffic to/from endpoints using IP addresses or CIDR ranges](#control-traffic-tofrom-endpoints-using-ip-addresses-or-cidr-ranges)
 - [Apply network policies in specific order](#apply-network-policies-in-specific-order)
 - [Generate logs for specific traffic](#generate-logs-for-specific-traffic)
-
 
 #### Control traffic to/from endpoints in a namespace
 
