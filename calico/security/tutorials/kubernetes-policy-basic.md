@@ -54,12 +54,8 @@ We'll use Kubernetes `Deployment` objects to easily create pods in the namespace
    ```bash
    wget -q nginx -O -
    ```
-
-
-   You should see a response from `nginx`.  Great! Our service is accessible.  You can exit the pod now.
-
-
-### Enable isolation
+/n   You should see a response from `nginx`.  Great! Our service is accessible.  You can exit the pod now.
+/n### Enable isolation
 
 Let's turn on isolation in our `policy-demo` namespace.  {{site.prodname}} will then prevent connections to pods in this namespace.
 

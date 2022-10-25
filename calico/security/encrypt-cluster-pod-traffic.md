@@ -80,9 +80,7 @@ AKS cluster nodes run Ubuntu with a kernel that has WireGuard installed already,
 <label:OpenShift>
 <%
 To install WireGuard for OpenShift v4.8:
-
-
-   1. Install requirements:
+/n   1. Install requirements:
       - {% include open-new-window.html text='CoreOS Butane' url='https://coreos.github.io/butane/getting-started/' %}
       - {% include open-new-window.html text='Openshift CLI' url='https://docs.openshift.com/container-platform/4.2/cli_reference/openshift_cli/getting-started-cli.html' %}
 

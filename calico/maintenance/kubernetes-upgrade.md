@@ -12,9 +12,7 @@ procedure varies by datastore type and install method.
 If you are using {{site.prodname}} in etcd mode on a Kubernetes cluster, we recommend upgrading to the Kubernetes API datastore [as discussed here]({{site.baseurl}}/maintenance/datastore-migration).
 
 If you have installed {{site.prodname}} using the `calico.yaml` manifest, we recommend upgrading to the {{site.prodname}} operator, [as discussed here]({{site.baseurl}}/maintenance/operator-migration).
-
-
-- [Upgrading an installation that was installed using Helm](#upgrading-an-installation-that-was-installed-using-helm)
+/n- [Upgrading an installation that was installed using Helm](#upgrading-an-installation-that-was-installed-using-helm)
 
 - [Upgrading an installation that uses the operator](#upgrading-an-installation-that-uses-the-operator)
 
@@ -152,9 +150,7 @@ ownership of the helm resources to the new chart location.
    add any global network policies needed to allow traffic, and delete the temporary network policy **allow-all-upgrade**.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
-
-
-## Upgrading an installation that uses an etcd datastore
+/n## Upgrading an installation that uses an etcd datastore
 
 1. Download the {{page.version}} manifest that corresponds to your original installation method.
 
@@ -198,9 +194,7 @@ ownership of the helm resources to the new chart location.
 
    > **Tip**: The {{site.noderunning}} pods will report `1/2` in the `READY` column, as shown.
    {: .alert .alert-success}
-
-
-1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../maintenance/clis/calicoctl/install)
+/n1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../maintenance/clis/calicoctl/install)
    and [configure it to connect to your datastore](../maintenance/clis/calicoctl/configure/overview).
 
 1. Use the following command to check the {{site.prodname}} version number.

@@ -28,9 +28,7 @@ To enable {{site.prodname}} network policy enforcement, follow these step-by-ste
 - [Windows dataplane]({{ site.baseurl }}/getting-started/windows-calico) is not supported.
 - [eBPF dataplane]({{ site.baseurl }}/maintenance/ebpf/use-cases-ebpf) is not supported.
 - [VPP dataplane](https://github.com/projectcalico/vpp-dataplane) is not supported.
-
-
-The geeky details of what you get:
+/nThe geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
 1. Create an Azure AKS cluster with no Kubernetes CNI pre-installed. Please refer to [Bring your own CNI with AKS](https://docs.microsoft.com/en-us/azure/aks/use-byo-cni?tabs=azure-cli) for details.
@@ -87,9 +85,7 @@ The geeky details of what you get:
    ```
 
    Wait until each pod has the `STATUS` of `Running`.
- 
-
-### Next steps
+/n### Next steps
 
 **Recommended**
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Azure' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-azure/' %}

@@ -15,9 +15,7 @@ for a full list of calicoctl commands.
 > [Resources section]({{ site.baseurl }}/reference/resources/overview)
 > for details about each resource type.
 {: .alert .alert-info}
-
-
-## Displaying the help text for 'calicoctl get' command
+/n## Displaying the help text for 'calicoctl get' command
 
 Run `calicoctl get --help` to display the following help menu for the
 command.
@@ -34,9 +32,7 @@ Examples:
 
   # List specific policies in YAML format
   calicoctl get -o yaml policy my-policy-1 my-policy-2
-
-
-Options:
+/nOptions:
   -h --help                    Show this screen.
   -f --filename=<FILENAME>     Filename to use to get the resource.  If set to
                                "-" loads from stdin. If filename is a directory, this command is
@@ -67,9 +63,7 @@ Description:
   stdin format.
 
   Valid resource types are:
-
-
-    * bgpConfiguration
+/n    * bgpConfiguration
     * bgpPeer
     * felixConfiguration
     * globalNetworkPolicy

@@ -79,17 +79,13 @@ Calico network policies and Calico global network policies are applied using cal
 Each network policy rule applies to either **ingress** or **egress** traffic. From the point of view of an endpoint (pod, VM, host interface), **ingress** is incoming traffic to the endpoint, and **egress** is outgoing traffic from the endpoint. In a Calico network policy, you create ingress and egress rules independently (egress, ingress, or both). 
 
 You can specify whether policy applies to ingress, egress, or both using the **types** field. If you do not use the types field, Calico defaults to the following values.
-
-
-| Ingress rule present? | Egress rule present?  |      Value      |
+/n| Ingress rule present? | Egress rule present?  |      Value      |
 | :-------------------: | :-------------------: | :-------------: |
 |          No           |          No           |     Ingress     |
 |          Yes          |          No           |     Ingress     |
 |          No           |          Yes          |     Egress      |
 |          Yes          |          Yes          | Ingress, Egress |
-
-
-#### Network traffic behaviors: deny and allow
+/n#### Network traffic behaviors: deny and allow
 
 The Kubernetes network policy specification defines the following behavior:
 
@@ -112,9 +108,7 @@ For compatibility with Kubernetes, **Calico network policy** follows the same be
 - [Control traffic to/from endpoints using IP addresses or CIDR ranges](#control-traffic-tofrom-endpoints-using-ip-addresses-or-cidr-ranges)
 - [Apply network policies in specific order](#apply-network-policies-in-specific-order)
 - [Generate logs for specific traffic](#generate-logs-for-specific-traffic)
-
-
-#### Control traffic to/from endpoints in a namespace
+/n#### Control traffic to/from endpoints in a namespace
 
 In the following example, ingress traffic to endpoints in the **namespace: production** with label **color: red** is allowed, only if it comes from a pod in the same namespace with **color: blue**, on port **6379**.
 

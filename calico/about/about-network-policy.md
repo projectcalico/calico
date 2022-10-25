@@ -221,12 +221,4 @@ for each tier can be defined to restrict who can interact with each tier. This c
 multiple teams.
 
 ![Example tiers]({{site.baseurl}}/images/example-tiers.svg)
-
-
-
-
-
-
-
-
-
+/n

@@ -15,15 +15,9 @@ sudo calicoctl node diags
 To view logs, use the following command:
 
 `kubectl logs -n calico-system <pod_name>`
-
-
-To view debug logs on some Calico components, set the `LogSeverityScreen` through the associated environment variable. 
-
-
-To report a problem, please [open an issue in GitHub](https://github.com/projectcalico/calico/issues){:target="_blank"}.
-
-
-#### Check BGP peer status
+/nTo view debug logs on some Calico components, set the `LogSeverityScreen` through the associated environment variable. 
+/nTo report a problem, please [open an issue in GitHub](https://github.com/projectcalico/calico/issues){:target="_blank"}.
+/n#### Check BGP peer status
 
 If you have connectivity between containers on the same host, and between
 containers and the Internet, but not between containers on different hosts, it

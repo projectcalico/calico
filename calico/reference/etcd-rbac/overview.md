@@ -14,9 +14,7 @@ This document does not apply to operator installations of Calico.
 
   <label:Manifest>
 <%
-
-
-When using etcd it is a good idea to protect the data stored there. This is
+/nWhen using etcd it is a good idea to protect the data stored there. This is
 even more true when you have multiple components using a common etcd cluster.
 This set of tutorials guides you through the process of locking down and
 segmenting access to the data in your etcd datastore.

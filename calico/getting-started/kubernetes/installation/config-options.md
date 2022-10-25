@@ -253,9 +253,7 @@ The following table outlines the remaining supported `ConfigMap` options.
 | cni_network_config     | The CNI Network config to install on each node.  Supports templating as described below. |
 
 ### CNI network configuration template
-
-
-The `cni_network_config` configuration option supports the following template fields, which will
+/nThe `cni_network_config` configuration option supports the following template fields, which will
 be filled in automatically by the `calico/cni` container:
 
 | Field                                 | Substituted with
@@ -268,9 +266,7 @@ be filled in automatically by the `calico/cni` container:
 | `__ETCD_KEY_FILE__`                   | The path to the etcd key file installed to the host. Empty if no key is present.
 | `__ETCD_CERT_FILE__`                  | The path to the etcd certificate file installed to the host, empty if no cert present.
 | `__ETCD_CA_CERT_FILE__`               | The path to the etcd certificate authority file installed to the host. Empty if no certificate authority is present.
-
-
-### About customizing application layer policy manifests
+/n### About customizing application layer policy manifests
 
 Instead of installing from our pre-modified Istio manifests, you may wish to
 customize your Istio install or use a different Istio version.  This section

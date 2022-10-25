@@ -15,9 +15,7 @@ for a full list of calicoctl commands.
 > [Resources section]({{ site.baseurl }}/reference/resources/overview)
 > for details about each resource type.
 {: .alert .alert-info}
-
-
-## Displaying the help text for 'calicoctl apply' command
+/n## Displaying the help text for 'calicoctl apply' command
 
 Run `calicoctl apply --help` to display the following help menu for the
 command.

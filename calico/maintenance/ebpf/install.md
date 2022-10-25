@@ -340,9 +340,7 @@ watch kubectl get tigerastatus
 In eBPF mode, to avoid conflicts with `kube-proxy` it's necessary to either disable `kube-proxy` or to configure 
 {{ site.prodname }} not to clean up `kube-proxy`'s iptables rules.  If you didn't disable `kube-proxy` when starting 
 your cluster then follow the steps below to avoid conflicts:
-
-
-{% tabs tab-group:grp1 %}
+/n{% tabs tab-group:grp1 %}
 <label:Generic or kubeadm,active:true>
 <%
 

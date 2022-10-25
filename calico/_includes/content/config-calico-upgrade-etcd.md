@@ -40,9 +40,7 @@ The full list of possible configuration file options and environment variables f
 >   `CALICO_APIV1_DATASTORE_TYPE`, `CALICO_APIV1_ETCD_ENDPOINTS`. You may find this
 >   useful if the non-prefixed names clash with existing environment variables.
 {: .alert .alert-info}
-
-
-### Configuring calico-upgrade to connect to the etcdv3 cluster
+/n### Configuring calico-upgrade to connect to the etcdv3 cluster
 
 You can use either configuration files or environment variables to configure
 `calico-upgrade`. It checks these in the following order of precedence.

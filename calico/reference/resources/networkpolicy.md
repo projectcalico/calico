@@ -56,9 +56,7 @@ spec:
 |-----------|--------------------------------------------------------------------|-----------------------------------------------------|--------|-----------|
 | name      | The name of the network policy. Required.                          | Alphanumeric string with optional `.`, `_`, or `-`. | string |           |
 | namespace | Namespace provides an additional qualification to a resource name. |                                                     | string | "default" |
-
-
-#### Spec
+/n#### Spec
 
 | Field    | Description                                                                                         | Accepted Values | Schema                | Default |
 |----------|-----------------------------------------------------------------------------------------------------|-----------------|-----------------------|---------|
@@ -77,9 +75,7 @@ spec:
  | Yes                   | No                   | `Ingress`           |
  | No                    | Yes                  | `Egress`            |
  | Yes                   | Yes                  | `Ingress, Egress`   |
-
-
-#### Rule
+/n#### Rule
 
 {% include content/rule.md %}
 

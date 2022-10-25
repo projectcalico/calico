@@ -14,5 +14,4 @@
    ```
    
 1. Congratulations! You've installed `calico-upgrade`. Continue to [Configuring calico-upgrade](#configuring-calico-upgrade).
-
-
+/n

@@ -141,9 +141,4 @@ provides even load balancing independent of topology, with reduced CPU and laten
   url='https://www.projectcalico.org/introducing-the-calico-ebpf-dataplane/' %}
 - {% include open-new-window.html text='Blog: Hands on with Calico eBPF native service handling'
   url='https://www.projectcalico.org/hands-on-with-calicos-ebpf-service-handling/' %}
-
-
-
-
-
-
+/n

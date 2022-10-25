@@ -7,31 +7,19 @@ canonical_url: '/reference/legal/alp'
 ### Direct dependencies
 
 #### **docopt-go (784ddc588536785e7299f7272f39101f7faccc3f)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2018, docopt-go Contributors
 		Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go (e369490fb7db5f2d42bb0e8ee19b48378dee0ebf)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -61,26 +49,15 @@ canonical_url: '/reference/legal/alp'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* GPL-2.0-only
     * Public-Domain
     * CC-BY-3.0
-
-
-
-
----
+/n---
 ---
 
 #### **app-policy (12beec6d5c8069cb57d5cd7660359474d1350d0f)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -258,32 +235,12 @@ canonical_url: '/reference/legal/alp'
 		      defend, and hold each Contributor harmless for any liability
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
-
-
-
-
-
-
-* Other Licenses
-
-
-
-
+/n* Other Licenses
+/n---
 ---
----
-
-
-
-
-
-
-### Deep dependencies
-
-
-#### **data-plane-api (5d8712556c09c4c630e8d3479eddf212e9c88cd5)**
-
-
-* Licenses
+/n### Deep dependencies
+/n#### **data-plane-api (5d8712556c09c4c630e8d3479eddf212e9c88cd5)**
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -488,44 +445,24 @@ canonical_url: '/reference/legal/alp'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **googleapis (b23578765ee54ff6bceff57f397d833bf4ca6869)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright owner or entity authorized by
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **protobuf (c0656edd0d9eab7c66d1eb0c568f9039345796f7)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, protobuf Contributors . All rights reserved.
@@ -534,23 +471,13 @@ canonical_url: '/reference/legal/alp'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * BSD-2-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **protobuf (b4deda0973fb4c70b50d226b1af49f3da59f5265)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2010 The Go Authors . All rights reserved.
@@ -559,23 +486,13 @@ canonical_url: '/reference/legal/alp'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * MS-PL
-
-
-
-
----
+/n---
 ---
 
 #### **grpc-go (8050b9cbc271307e5a716a9d782803d09b0d6f2d)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright 2014, Google Inc.
@@ -606,23 +523,12 @@ canonical_url: '/reference/legal/alp'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **libcalico-go (ed28b67484d1ecf4cb2c1969d4654c7d4eb95e32)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -800,24 +706,12 @@ canonical_url: '/reference/legal/alp'
 		      defend, and hold each Contributor harmless for any liability
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
-
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **logrus (bcd833dfe83d3cebad139e4a29ed79cb2318bf95)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         The MIT License (MIT)
@@ -841,23 +735,12 @@ canonical_url: '/reference/legal/alp'
 		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 		THE SOFTWARE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **crypto (9419663f5a44be8b34ca85f08abc5fe1be11f8a3)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2012 The Go Authors . All rights reserved.
@@ -866,24 +749,14 @@ canonical_url: '/reference/legal/alp'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* Public-Domain
     * **Multi-license:** MIT *OR* BSD-3-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **net (1c05540f6879653db88113bc4a2b70aec4bd491f)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, net Contributors . All rights reserved.
@@ -892,23 +765,13 @@ canonical_url: '/reference/legal/alp'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* CC-BY-3.0
-
-
-
-
----
+/n---
 ---
 
 #### **sys (ebfc5b4631820b793c9010c87fd8fef0f39eb082)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -938,23 +801,12 @@ canonical_url: '/reference/legal/alp'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **text (b19bf474d317b857955b12035d2c5acb57ce8b01)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -984,38 +836,19 @@ canonical_url: '/reference/legal/alp'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* CC-BY-SA-4.0
-
-
-
-
+/n---
 ---
----
-
-
-
-
-
-
-## Licenses
-
-
-### MIT
+/n## Licenses
+/n### MIT
 
 MIT License
 Copyright (c) &lt;year&gt; &lt;copyright holders&gt;
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-### BSD-3-Clause
+/n### BSD-3-Clause
 
 Copyright (c) 2009 The Go Authors. All rights reserved.
 
@@ -1044,10 +877,7 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-### GPL-2.0
+/n### GPL-2.0
 
 GNU GENERAL PUBLIC LICENSE
 Version 2, June 1991
@@ -1109,14 +939,8 @@ The hypothetical commands `show w&#39; and `show c&#39; should show the appropri
 You should also get your employer (if you work as a programmer) or your school, if any, to sign a &quot;copyright disclaimer&quot; for the program, if necessary. Here is a sample; alter the names:
 Yoyodyne, Inc., hereby disclaims all copyright interest in the program `Gnomovision&#39; (which makes passes at compilers) written by James Hacker.
 &lt; signature of Ty Coon &gt; , 1 April 1989 Ty Coon, President of Vice
-
-
-### Public-domain
-
-
-
-
-### CC-BY-3.0
+/n### Public-domain
+/n### CC-BY-3.0
 
 Creative Commons Attribution 3.0 Unported CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE LEGAL SERVICES. DISTRIBUTION OF THIS LICENSE DOES NOT CREATE AN ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS INFORMATION ON AN &quot;AS-IS&quot; BASIS. CREATIVE COMMONS MAKES NO WARRANTIES REGARDING THE INFORMATION PROVIDED, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM ITS USE.
 License
@@ -1164,12 +988,8 @@ Creative Commons Notice
 Creative Commons is not a party to this License, and makes no warranty whatsoever in connection with the Work. Creative Commons will not be liable to You or any party on any legal theory for any damages whatsoever, including without limitation any general, special, incidental or consequential damages arising in connection to this license. Notwithstanding the foregoing two (2) sentences, if Creative Commons has expressly identified itself as the Licensor hereunder, it shall have all rights and obligations of Licensor.
 Except for the limited purpose of indicating to the public that the Work is licensed under the CCPL, Creative Commons does not authorize the use by either party of the trademark &quot;Creative Commons&quot; or any related trademark or logo of Creative Commons without the prior written consent of Creative Commons. Any permitted use will be in compliance with Creative Commons&#39; then-current trademark usage guidelines, as may be published on its website or otherwise made available upon request from time to time. For the avoidance of doubt, this trademark restriction does not form part of this License.
 Creative Commons may be contacted at http://creativecommons.org/.
-
-
-###
-
-
-                                 Apache License
+/n###
+/n                                 Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
 
@@ -1343,20 +1163,14 @@ Creative Commons may be contacted at http://creativecommons.org/.
       defend, and hold each Contributor harmless for any liability
       incurred by, or claims asserted against, such Contributor by reason
       of your accepting any such warranty or additional liability.
-
-
-
-
-### BSD-2-Clause
+/n### BSD-2-Clause
 
 Copyright (c) &lt;year&gt; &lt;owner&gt; . All rights reserved.
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-### MS-PL
+/n### MS-PL
 
 Microsoft Public License (Ms-PL)
 This license governs use of the accompanying software. If you use the software, you accept this license. If you do not accept the license, do not use the software.
@@ -1371,9 +1185,7 @@ This license governs use of the accompanying software. If you use the software, 
       (C) If you distribute any portion of the software, you must retain all copyright, patent, trademark, and attribution notices that are present in the software.
       (D) If you distribute any portion of the software in source code form, you may do so only under this license by including a complete copy of this license with your distribution. If you distribute any portion of the software in compiled or object code form, you may only do so under a license that complies with this license.
       (E) The software is licensed &quot;as-is.&quot; You bear the risk of using it. The contributors give no express warranties, guarantees, or conditions. You may have additional consumer rights under your local laws which this license cannot change. To the extent permitted under your local laws, the contributors exclude the implied warranties of merchantability, fitness for a particular purpose and non-infringement.
-
-
-### CC-BY-SA-4.0
+/n### CC-BY-SA-4.0
 
 Creative Commons Attribution-ShareAlike 4.0 International Creative Commons Corporation (&quot;Creative Commons&quot;) is not a law firm and does not provide legal services or legal advice. Distribution of Creative Commons public licenses does not create a lawyer-client or other relationship. Creative Commons makes its licenses and related information available on an &quot;as-is&quot; basis. Creative Commons gives no warranties regarding its licenses, any material licensed under their terms and conditions, or any related information. Creative Commons disclaims all liability for damages resulting from their use to the fullest extent possible.
 Using Creative Commons Public Licenses

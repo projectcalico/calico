@@ -60,9 +60,7 @@ Description:
   See 'calicoctl <command> --help' to read about a specific subcommand.
 ```
 {: .no-select-button}
-
-
-> **Note:** In a multi cluster environment if you have a {% include open-new-window.html url="https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/" text="kubeconfig" %} file with multiple cluster contexts it is possible to directly change the context using calicoctl `--context` argument.
+/n> **Note:** In a multi cluster environment if you have a {% include open-new-window.html url="https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/" text="kubeconfig" %} file with multiple cluster contexts it is possible to directly change the context using calicoctl `--context` argument.
 {: .alert .alert-info}
 
 > **Note:** The versions for Calico and calicoctl should be the same and calls to calicoctl will fail if the versions do not match. If needed, this can be overridden by using the `--allow-version-mismatch` argument.

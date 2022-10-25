@@ -15,9 +15,7 @@ for a full list of calicoctl commands.
 > [Resources section]({{ site.baseurl }}/reference/resources/overview)
 > for details about each resource type.
 {: .alert .alert-info}
-
-
-## Displaying the help text for 'calicoctl delete' command
+/n## Displaying the help text for 'calicoctl delete' command
 
 Run `calicoctl delete --help` to display the following help menu for the
 command.
@@ -31,9 +29,7 @@ Usage:
 Examples:
   # Delete a policy using the type and name specified in policy.yaml.
   calicoctl delete -f ./policy.yaml
-
-
-  # Delete a policy based on the type and name in the YAML passed into stdin.
+/n  # Delete a policy based on the type and name in the YAML passed into stdin.
   cat policy.yaml | calicoctl delete -f -
 
   # Delete policies with names "foo" and "bar"

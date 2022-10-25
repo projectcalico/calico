@@ -42,10 +42,7 @@ ROOT_CALICO_REPOS_DIR=~/calico_all/ BUILD_CALICO=true ./kind-local-up.sh
 echo "play with your cluster for a while"
 kind delete cluster calico-test
 ```
-
-
-
-=======
+/n=======
 Example:
 
 ```

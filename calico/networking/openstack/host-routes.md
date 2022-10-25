@@ -44,9 +44,7 @@ routed there.
 > gateway, in the generally understood sense.
 >
 {: .alert .alert-info}
-
-
-When are host routes useful with {{site.prodname}}?
+/nWhen are host routes useful with {{site.prodname}}?
 ----------------------------------------
 
 Host routes are useful with {{site.prodname}} when an instance has multiple NICs and you

@@ -51,9 +51,7 @@ False`, so at the moment - unfortunately - it *still* has to be understood that
 > Multicast IP support is on our roadmap but not yet implemented. Broadcast IP
 > is not possible because it depends on L2 adjacency.
 {: .alert .alert-info}
-
-
-## Connectivity between different {{site.prodname}} networks
+/n## Connectivity between different {{site.prodname}} networks
 
 {{site.prodname}} provides *exactly* the same connectivity between instances on different
 {{site.prodname}} networks, as it does between instances on the same {{site.prodname}} network.

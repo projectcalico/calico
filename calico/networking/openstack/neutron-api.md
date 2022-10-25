@@ -146,14 +146,10 @@ desired, we recommend expressing that through security group rules.
 
 Load Balancer as a Service (LBaaS) does not function in a {{site.prodname}} network. Any
 attempt to create one will fail.
-
-
-> **Note**: It is possible that in a future version of {{site.prodname}} LBaaS may be
+/n> **Note**: It is possible that in a future version of {{site.prodname}} LBaaS may be
 > functional. Watch this space.
 {: .alert .alert-info}
-
-
-## Horizon
+/n## Horizon
 
 Horizon makes many provisioning actions available that mirror options on
 the Neutron API. This section lists them, and indicates whether they can

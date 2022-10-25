@@ -111,9 +111,7 @@ vpp# show buffers   # You should have non zero free buffers, otherwise traffic w
 ````
 
 ### Tracing packets
-
-
-#### Internal network layout
+/n#### Internal network layout
 
 For starters, here is a small schematic of how the network looks like:
 ![k8-calico-vpp]({{site.baseurl}}/images/vpp-tracing-net.svg)
@@ -136,9 +134,7 @@ tun3                              5      up           0/0/0/0       rx packets  
                                                                     tx packets                     5
                                                                     tx bytes                     387
                                                                     ip4                            5
-
-
-# Show the route for address 11.0.166.132
+/n# Show the route for address 11.0.166.132
 vpp# show ip fib 11.0.166.132
 ipv4-VRF:0, fib_index:0, flow hash:[src dst sport dport symmetric ] epoch:0 flags:none locks:[adjacency:1, default-route:1, ]
 11.0.166.132/32 fib:0 index:19 locks:5

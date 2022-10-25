@@ -3,10 +3,7 @@ title: Summary
 description: How different host endpoint rules affect packet flows. 
 canonical_url: '/reference/host-endpoints/summary'
 ---
-
-
-
-## When do host endpoint policies apply?
+/n## When do host endpoint policies apply?
 
 Normal host endpoint policies apply to traffic that arrives on
 and/or is sent to a host interface, but the rules for applying untracked and

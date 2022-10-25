@@ -35,9 +35,7 @@ The geeky details of what you get:
 - [Install {{site.prodname}}](#install-calico)
 
 #### Install {{site.prodname}}
-
-
-1. Install the Tigera {{site.prodname}} operator and custom resource definitions.
+/n1. Install the Tigera {{site.prodname}} operator and custom resource definitions.
 
    ```
    kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml

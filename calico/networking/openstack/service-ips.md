@@ -188,9 +188,7 @@ We begin by creating a test VM that will be the target of the service IP.
    {: .no-select-button}
 
 ## Adding a service IP to the Neutron port as an extra fixed IP
-
-
-Now we want to set up a service IP - let's say `10.28.0.23` - that
+/nNow we want to set up a service IP - let's say `10.28.0.23` - that
 initially points to that VM, `testvm1`.  
 
 1. One way to do that is to add the service IP as a second 'fixed IP' on the Neutron port.
@@ -397,9 +395,7 @@ initially points to that VM, `testvm1`.
    +--------------------------------------+---------+----------------------------------------------------------------------+
    ```
    {: .no-select-button}
-
-
-## Moving the service IP to another VM
+/n## Moving the service IP to another VM
 
 Service IPs are often used for HA, so need to be moved to target a different VM
 if the first one fails for some reason (or if the HA system just decides to

@@ -516,9 +516,7 @@ EOF
 ```
 
 Check your cluster pods to assure pod creation was successful and prometheus pod is `Running`.
-
-
-```bash
+/n```bash
 kubectl get pods prometheus-pod -n calico-monitoring
 ```
 It should return something like the following.

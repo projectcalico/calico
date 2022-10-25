@@ -62,9 +62,7 @@ spec:
 | Field        | Description                     | Schema           |
 |--------------|---------------------------------|------------------|
 | secretKeyRef | Get the password from a secret. | [KeyRef](#keyref) |
-
-
-#### KeyRef
+/n#### KeyRef
 
 KeyRef tells {{site.prodname}} where to get a BGP password.  The referenced Kubernetes
 secret must be in the same namespace as the {{site.nodecontainer}} pod.
@@ -73,9 +71,7 @@ secret must be in the same namespace as the {{site.nodecontainer}} pod.
 |----------|-------------------------------------|--------|
 | name     | The name of the secret              | string |
 | key      | The key within the secret           | string |
-
-
-### Peer scopes
+/n### Peer scopes
 
 BGP Peers can exist at either global or node-specific scope. A peer's scope
 determines which `{{site.nodecontainer}}`s will attempt to establish a BGP session with that peer.

@@ -3,9 +3,7 @@ title: Failsafe rules
 description: Avoid cutting off connectivity to hosts because of incorrect network policies.
 canonical_url: '/reference/host-endpoints/failsafe'
 ---
-
-
-To avoid completely cutting off a host via incorrect or malformed
+/nTo avoid completely cutting off a host via incorrect or malformed
 policy, {{site.prodname}} has a failsafe mechanism that keeps various pinholes open
 in the firewall.
 
@@ -23,9 +21,7 @@ By default, {{site.prodname}} keeps the following ports open on *all* host endpo
 |   6443 |   TCP    |  Inbound & Outbound |             Kubernetes API server access       |
 |   6666 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
 |   6667 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
-
-
-The lists of failsafe ports can be configured via the configuration parameters
+/nThe lists of failsafe ports can be configured via the configuration parameters
 `FailsafeInboundHostPorts` and `FailsafeOutboundHostPorts`
 described in [Configuring
 Felix]({{ site.baseurl }}/reference/felix/configuration).  They

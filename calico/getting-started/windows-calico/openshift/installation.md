@@ -74,9 +74,7 @@ openshift-install create manifests
 #### Configure VXLAN
 
 Edit the Installation custom resource manifest `manifests/01-cr-installation.yaml` so that it configures an OpenShift {{site.prodname}} cluster with VXLAN enabled and BGP disabled:
-
-
-```
+/n```
 apiVersion: operator.tigera.io/v1
 kind: Installation
 metadata:

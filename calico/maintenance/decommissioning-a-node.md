@@ -19,9 +19,7 @@ of the following reasons.
 - Readiness checks are failing due to unreachable peers that are no longer in the
   cluster.
 - Hosts are regularly added and removed from your cluster.
-
-
-### Purpose of this page
+/n### Purpose of this page
 
 Provide guidance on how to remove a host that is part of a {{site.prodname}} cluster
 and clean up the associated [Node resource][Node resource reference]
@@ -48,9 +46,7 @@ associated with that Node.
 > - Any configuration specific to the node will be removed. This would be
   configuration like node BGP peerings or custom Felix configs.
 {: .alert .alert-danger}
-
-
-### Removing a single node resource
+/n### Removing a single node resource
 
 See the example below for how to remove a node with the calicoctl command.
 
