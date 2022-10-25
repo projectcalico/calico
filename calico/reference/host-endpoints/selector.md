@@ -3,9 +3,7 @@ title: Selector-based policies
 description: Apply ordered policies to endpoints that match specific label selectors.
 canonical_url: '/reference/host-endpoints/selector'
 ---
-
-
-We recommend using selector-based security policy with
+/nWe recommend using selector-based security policy with
 host endpoints. This allows ordered policy to be applied to
 endpoints that match particular label selectors.
 

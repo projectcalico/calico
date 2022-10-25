@@ -15,9 +15,7 @@ system, and then how to see {{site.prodname}} connectivity in action.
 > briefly review the script's code, so that you will understand what the
 > script does.
 {: .alert .alert-info}
-
-
-Single (or first) node setup
+/nSingle (or first) node setup
 ----------------------------
 
 To prepare a single node DevStack/{{site.prodname}} system, that is with all controller
@@ -41,10 +39,7 @@ and compute functions running on the same node:
 
        sysctl -w net.ipv4.ip_forward=1
        sysctl -w net.ipv6.conf.all.forwarding=1
-
-
-
-Multi-node setup
+/nMulti-node setup
 ----------------
 
 This plugin also supports additional compute-only nodes.  So, in the system as
@@ -64,9 +59,7 @@ additional compute node:
 
 - follow the steps above, except for the network and subnet creations, to
   install and set up DevStack with {{site.prodname}} on that node.
-
-
-Demonstrating {{site.prodname}} connectivity
+/nDemonstrating {{site.prodname}} connectivity
 ---------------------------------
 
 Then, to see {{site.prodname}} connectivity in action:

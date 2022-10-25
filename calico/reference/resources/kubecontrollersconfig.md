@@ -44,9 +44,7 @@ spec:
 | name  | Unique name to describe this resource instance. Required. | Must be `default` | string |
 
 - {{site.prodname}} automatically creates a resource named `default` containing the configuration settings, only the name `default` is used and only one object of this type is allowed. You can use [calicoctl]({{ site.baseurl }}/reference/calicoctl/overview) to view and edit these settings
-
-
-#### Spec
+/n#### Spec
 
 | Field                  | Description                                               | Accepted Values                    | Schema | Default    |
 |------------------------|-----------------------------------------------------------|------------------------------------|--------|------------|

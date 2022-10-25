@@ -9,9 +9,7 @@ canonical_url: '/reference/vpp/technical-details'
 The VPP dataplane integration is split in two components, `vpp-manager` which handles the VPP startup configuration and lifecycle; and `calico-vpp-agent` which is responsible for all the runtime configuration of VPP for {{ site.prodname }}. Both processes run in separate containers in the calico-vpp-node pod, which runs in the host's root network namespace.
 
 ![Implementation architecture]({{ site.baseurl }}/images/vpp-soft-arch.svg)
-
-
-#### vpp-manager
+/n#### vpp-manager
 
 VPP Manager is a very light process responsible for the bootstrap of VPP, including uplink interface addressing and routing configuration. It also restores the Linux configuration on shutdown. The code can be found in this directory: [https://github.com/projectcalico/vpp-dataplane/tree/{{page.vppbranch}}/vpp-manager](https://github.com/projectcalico/vpp-dataplane/tree/{{page.vppbranch}}/vpp-manager).
 
@@ -24,9 +22,7 @@ Once it is running, vpp-manager forwards all received Unix signals to VPP to han
 When VPP stops, either in reaction to a received signal or in case of a crash, vpp-manager restores the configuration of the Linux interface so that the host recovers its connectivity to the outside through the original uplink interface.
 
 vpp-manager is voluntarily kept as simple as possible, in order to minimize the risk of bugs, as these could leave the host without connectivity, requiring a reboot.
-
-
-#### calico-vpp-agent
+/n#### calico-vpp-agent
 
 The {{ site.prodname }} VPP agent is the process responsible for all the {{ site.prodname }}-specific configuration in VPP. Its code lives in this directory: [https://github.com/projectcalico/vpp-dataplane/tree/{{page.vppbranch}}/calico-vpp-agent](https://github.com/projectcalico/vpp-dataplane/tree/{{page.vppbranch}}/calico-vpp-agent).
 
@@ -51,9 +47,7 @@ This component is the equivalent of kube-proxy for VPP, i.e. it configures NAT l
 **Policies manager**
 
 This component implements {{ site.prodname }} policies in VPP. Felix ({{ site.prodname }}'s policy agent) is configured to use a lightweight proxy as its dataplane. This proxy relays all the configuration messages sent by Felix to the `calico-vpp-agent`, and status updates the other way. The VPP agent then uses a custom plugin in VPP to implement policies.
-
-
-### Network architecture
+/n### Network architecture
 
 #### Primary interface configuration
 

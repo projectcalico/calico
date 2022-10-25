@@ -17,9 +17,7 @@ The API server provides a REST API for Calico, and allows management of `project
 > **Note:** Starting in Calico v3.20.0, new operator-based installations of Calico include the API server component by default, so the instructions 
 > in this document are not required.
 {:.alert .alert-info}
-
-
-### Before you begin
+/n### Before you begin
 
 - Make sure you have a cluster with Calico installed using the Kubernetes API data store. If not, you can [migrate from etcd]({{site.baseurl}}/maintenance/datastore-migration).
 

@@ -128,9 +128,7 @@ Issuing a delete command will destroy the cluster that you created in this tutor
 ```bash
 minikube delete
 ```
-
-
-### Next steps
+/n### Next steps
 
 **Required**
 - [Install and configure calicoctl]({{site.basurl}}/maintenance/clis/calicoctl/install)

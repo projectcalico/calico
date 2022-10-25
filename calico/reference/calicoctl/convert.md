@@ -15,9 +15,7 @@ for a full list of calicoctl commands.
 > [Resources section]({{ site.baseurl }}/reference/resources/overview)
 > for details about each resource type.
 {: .alert .alert-info}
-
-
-## Displaying the help text for 'calicoctl convert' command
+/n## Displaying the help text for 'calicoctl convert' command
 
 Run `calicoctl convert --help` to display the following help menu for the
 command.
@@ -41,9 +39,7 @@ Options:
   -o --output=<OUTPUT FORMAT>   Output format. One of: yaml or json.
                                 [Default: yaml]
   --ignore-validation           Skip validation on the converted manifest.
-
-
-Description:
+/nDescription:
   Convert config files from Calico v1 or Kubernetes to Calico v3 API versions. Both YAML and JSON formats are accepted.
 
   The default output will be printed to stdout in YAML format.
@@ -80,9 +76,7 @@ Description:
 --ignore-validation           Skip validation on the converted manifest.
 ```
 {: .no-select-button}
-
-
-## See also
+/n## See also
 
 -  [Installing calicoctl]({{ site.baseurl }}/maintenance/clis/calicoctl/install)
 -  [Resources]({{ site.baseurl }}/reference/resources/overview) for details on all valid resources, including file format

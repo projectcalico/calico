@@ -364,9 +364,7 @@ The basic process is as follows:
    > be adjusted using the `failsafeInboundHostPorts` and `failsafeOutboundHostPorts` options
    > on the [FelixConfiguration resource](../../reference/resources/felixconfig).
    {: .alert .alert-info}
-
-
-1. Create a network policy that allows access to the {{site.nodecontainer}} Prometheus metrics port.
+/n1. Create a network policy that allows access to the {{site.nodecontainer}} Prometheus metrics port.
 
    Now let's create a network policy that allows access to the Prometheus metrics port such that
    only endpoints with the label `calico-prometheus-access: true` can access the metrics.

@@ -19,9 +19,7 @@ Istio directs all application network traffic through an Envoy sidecar in each p
 This how-to guide uses the following Calico features:
 
 **Felix configuration** with **sidecarAccelerationEnabled** configuration option. 
-
-
-### Concepts
+/n### Concepts
 
 #### Sidecar acceleration
 

@@ -78,9 +78,7 @@ The BGP client is responsible for:
 **Main task**: Monitors {{site.prodname}} datastore for changes to BGP configuration and global defaults such as AS number, logging levels, and IPAM information. Open source, lightweight configuration management tool.
 
 Confd dynamically generates BIRD configuration files based on the updates to data in the datastore. When the configuration file changes, confd triggers BIRD to load the new files. [Configure confd]({{site.baseurl}}/reference/node/configuration#content-main), and {% include open-new-window.html text='confd project' url='https://github.com/kelseyhightower/confd' %}.
-
-
-### Dikastes
+/n### Dikastes
 
 **Main task**: Enforces network policy for Istio service mesh. Runs on a cluster as a sidecar proxy to Istio Envoy.
 
@@ -94,9 +92,7 @@ Confd dynamically generates BIRD configuration files based on the updates to dat
 
 The {{site.prodname}} binary that presents this API to Kubernetes is called the CNI plugin, and must be installed on every node in the Kubernetes cluster. The {{site.prodname}} CNI plugin allows you to use {{site.prodname}} networking for any orchestrator that makes use of the CNI networking specification. Configured through the standard {% include open-new-window.html text='CNI configuration mechanism'
 url='https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration' %}, and [{{site.prodname}} CNI plugin]({{site.baseurl}}/reference/cni-plugin/configuration).
-
-
-### Datastore plugin
+/n### Datastore plugin
 
 **Main task**: Increases scale by reducing each node’s impact on the datastore. It is one of the {{site.prodname}} [CNI plugins]({{site.baseurl}}/reference/cni-plugin/configuration).
 
@@ -121,9 +117,7 @@ url='https://github.com/containernetworking/cni/blob/master/SPEC.md#network-conf
 ### IPAM plugin
 
 **Main task**: Uses {{site.prodname}}’s IP pool resource to control how IP addresses are allocated to pods within the cluster. It is the default plugin used by most {{site.prodname}} installations. It is one of the {{site.prodname}} [CNI plugins]({{site.baseurl}}/reference/cni-plugin/configuration).
-
-
-### kube-controllers
+/n### kube-controllers
 
 **Main task**: Monitors the Kubernetes API and performs actions based on cluster state. [kube-controllers]({{site.baseurl}}/reference/kube-controllers/configuration).
 

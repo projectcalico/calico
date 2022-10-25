@@ -149,9 +149,7 @@ policy is always accelerated, using the best available BPF technology.
 | port     | The exact port match | 0-65535                              | int    |
 | protocol | The protocol match   | tcp, udp, sctp                       | string |
 | net      | The CIDR match       | any valid CIDR (e.g. 192.168.0.0/16) | string |
-
-
-#### RouteTableRange
+/n#### RouteTableRange
 The `RouteTableRange` option is now deprecated in favor of [RouteTableRanges](#routetableranges).
 
 | Field    | Description          | Accepted Values   | Schema |

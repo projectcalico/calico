@@ -3,15 +3,9 @@ title: Typha attributions
 description: Dependencies and licenses.
 canonical_url: '/reference/legal/typha'
 ---
-
-
-### Direct Dependencies
-
-
-#### **gocloud (3b1ae45394a234c385be014e9a488f2bb6eef821)**
-
-
-* Licenses
+/n### Direct Dependencies
+/n#### **gocloud (3b1ae45394a234c385be014e9a488f2bb6eef821)**
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -216,23 +210,12 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **gophercloud (781450b3c4fcb4f5182bcc5133adb4b2e4a09d1d)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2012-2013 Rackspace, Inc.
@@ -426,23 +409,12 @@ canonical_url: '/reference/legal/typha'
 		      of your accepting any such warranty or additional liability.
 
 		   END OF TERMS AND CONDITIONS
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **felix (54d97f66bbeaab605ea6a16fd624ff18b98c13ff)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -620,26 +592,14 @@ canonical_url: '/reference/legal/typha'
 		      defend, and hold each Contributor harmless for any liability
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
-
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * GPL-3.0-only
     * **Multi-license:** LGPL-3.0-only *OR* BSD-3-Clause *OR* MPL-2.0 *OR* MIT *OR* Apache-2.0
-
-
-
-
----
+/n---
 ---
 
 #### **node (9df939f461fe565cff4e428c5c9ecb379cd58965)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Apache License
@@ -843,12 +803,7 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** MPL-2.0 *OR* GPL-2.0-only *OR* LGPL-3.0-only *OR* MIT *OR* Apache-2.0
     * BSD-3-Clause
     * MIT
@@ -860,17 +815,11 @@ canonical_url: '/reference/legal/typha'
     * MPL-2.0-no-copyleft-exception
     * Python-2.0
     * WTFPL
-
-
-
-
----
+/n---
 ---
 
 #### **net (1c05540f6879653db88113bc4a2b70aec4bd491f)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, net Contributors . All rights reserved.
@@ -879,31 +828,13 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** CC-BY-3.0 *OR* BSD-3-Clause
-
-
-
-
+/n---
 ---
----
-
-
-
-
-
-
-### Deep Dependencies
-
-
-#### **go-autorest (1ff28809256a84bb6966640ff3d0371af82ccba4)**
-
-
-* Licenses
+/n### Deep Dependencies
+/n#### **go-autorest (1ff28809256a84bb6966640ff3d0371af82ccba4)**
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -1097,102 +1028,51 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * MS-RL
-
-
-
-
----
+/n---
 ---
 
 #### **perks (3a771d992973f24aa725d07868b467d1ddfceafb)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2018, perks Contributors
 		Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **toml (3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005)**
-
-
-* Licenses
-
-
-
-
-* Other Licenses
+/n* Licenses
+/n* Other Licenses
     * MIT
     * BSD-3-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **etcd (33245c6b5b49130ca99280408fadfab01aac0e48)**
-
-
-* Licenses
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Licenses
+/n* Other Licenses
+/n---
 ---
 
 #### **go-semver (e214231b295a8ea9479f11b70b35d5acf3556d9b)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, go-semver Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go-spew (782f4967f2dc4564575ca782fe2d04090b5faca8)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         ISC License
@@ -1210,23 +1090,12 @@ canonical_url: '/reference/legal/typha'
 		WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 		ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 		OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **jwt-go (01aeca54ebda6e0fbfafd0a524d234159c05ec20)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2012 Dave Grijalva
@@ -1236,42 +1105,20 @@ canonical_url: '/reference/legal/typha'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **yaml (73d445a93680fa1a78ae23a5839bad48f32ba1ee)**
-
-
-* Licenses
-
-
-
-
-* Other Licenses
+/n* Licenses
+/n* Other Licenses
     * BSD-3-Clause
     * MIT
-
-
-
-
----
+/n---
 ---
 
 #### **protobuf (c0656edd0d9eab7c66d1eb0c568f9039345796f7)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, protobuf Contributors . All rights reserved.
@@ -1280,23 +1127,13 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * BSD-2-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **ini (9c8236e659b76e87bf02044d06fde8683008ff3e)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Apache License
@@ -1490,23 +1327,12 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **glog (44145f04b68cf362d9c4df2182967c2275eaefed)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Apache License
@@ -1700,23 +1526,12 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go (e369490fb7db5f2d42bb0e8ee19b48378dee0ebf)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -1746,26 +1561,15 @@ canonical_url: '/reference/legal/typha'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** GPL-2.0-only *OR* BSD-3-Clause
     * Public-Domain
     * CC-BY-3.0
-
-
-
-
----
+/n---
 ---
 
 #### **protobuf (b4deda0973fb4c70b50d226b1af49f3da59f5265)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2010 The Go Authors . All rights reserved.
@@ -1774,23 +1578,13 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * MS-PL
-
-
-
-
----
+/n---
 ---
 
 #### **gnostic (0c5108395e2debce0d731cf0287ddf7242066aba)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -1995,24 +1789,12 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **btree (7d79101e329e5a3adf994758c578dab82b90c017)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -2217,23 +1999,12 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **gofuzz (44d81051d367757e1c7c6a5a86423ece9afcf63c)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -2438,67 +2209,36 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go-genproto (09f6ed296fc66555a25fe4ce95173148778dfa85)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright owner or entity authorized by
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **httpcache (787624de3eb7bd915c329cba748687a3b22666a6)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2018, httpcache Contributors
 		Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **grpc-go (5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -2703,23 +2443,12 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **golang-lru (a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4)**
-
-
-* Licenses
+/n* Licenses
     * MPL-2.0
         * Attribution:
         1\. Definitions
@@ -2803,22 +2532,12 @@ canonical_url: '/reference/legal/typha'
 		You may add additional accurate notices of copyright ownership.
 		Exhibit B - "Incompatible With Secondary Licenses" Notice
 		This Source Code Form is "Incompatible With Secondary Licenses", as defined by the Mozilla Public License, v. 2.0.<<endOptional>>
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go-version (b5a281d3160aa11950a6182bd9a9dc2cb1e02d50)**
-
-
-* Licenses
+/n* Licenses
     * MPL-2.0-no-copyleft-exception
         * Attribution:
         Mozilla Public License, version 2.0
@@ -2911,9 +2630,7 @@ canonical_url: '/reference/legal/typha'
 		      the direction or management of such entity, whether by contract or
 		      otherwise, or (b) ownership of more than fifty percent (50%) of the
 		      outstanding shares or beneficial ownership of such entity.
-
-
-		2\. License Grants and Conditions
+/n		2\. License Grants and Conditions
 
 		2.1. Grants
 
@@ -2979,9 +2696,7 @@ canonical_url: '/reference/legal/typha'
 
 		     Sections 3.1, 3.2, 3.3, and 3.4 are conditions of the licenses granted in
 		     Section 2.1.
-
-
-		3\. Responsibilities
+/n		3\. Responsibilities
 
 		3.1. Distribution of Source Form
 
@@ -3123,9 +2838,7 @@ canonical_url: '/reference/legal/typha'
 		   enforceable. Any law or regulation which provides that the language of a
 		   contract shall be construed against the drafter shall not be used to construe
 		   this License against a Contributor.
-
-
-		10\. Versions of the License
+/n		10\. Versions of the License
 
 		10.1. New Versions
 
@@ -3174,24 +2887,12 @@ canonical_url: '/reference/legal/typha'
 		      This Source Code Form is “Incompatible
 		      With Secondary Licenses”, as defined by
 		      the Mozilla Public License, v. 2.0.
-
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **mergo (6633656539c1639d9d78127b7d47c622b5d7b6dc)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, mergo Contributors . All rights reserved.
@@ -3200,22 +2901,12 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go (f2b4162afba35581b6d4a50d3b8f34e33c144682)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         MIT License
@@ -3239,23 +2930,12 @@ canonical_url: '/reference/legal/typha'
 		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **osext (ae77be60afb1dcacde03767a8c37337fad28ac14)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, osext Contributors . All rights reserved.
@@ -3264,22 +2944,12 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **envconfig (dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2013 Kelsey Hightower
@@ -3301,23 +2971,12 @@ canonical_url: '/reference/legal/typha'
 		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **memkv (892bfd468afa0fa476556e7bd7734a087cda08b3)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2014 Kelsey Hightower
@@ -3339,24 +2998,13 @@ canonical_url: '/reference/legal/typha'
 		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * BSD-3-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **api (072894a440bdee3a891dea811fe42902311cd2a3)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -3561,23 +3209,12 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **apimachinery (103fd098999dc9c0c88536f5c9ad2e5da39373ae)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -3782,24 +3419,13 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * BSD-3-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **client-go (7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -4004,45 +3630,24 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **golang_protobuf_extensions (c12348ce28de40eed0136aa2b644d0ee0650e56c)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, golang_protobuf_extensions Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **rfw (6f0a6f3266ba1058df9ef0c94cda1cecd2e62852)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         The MIT License (MIT)
@@ -4066,67 +3671,36 @@ canonical_url: '/reference/legal/typha'
 		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 		THE SOFTWARE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **concurrent (bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, concurrent Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **reflect2 (05fbef0ca5da472bbf96c9322b84a53edc03c9fd)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, reflect2 Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **uuid (ca53cad383cad2479bbba7f7a1a05797ec1386e4)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, uuid Contributors . All rights reserved.
@@ -4135,44 +3709,24 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **diskv (5f041e8faa004a95c88a202771f4cc3e991971e6)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2018, diskv Contributors
 		Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go-json (6219dc7339ba20ee4c57df0a8baac62317d19cb1)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -4202,23 +3756,12 @@ canonical_url: '/reference/legal/typha'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go-yaml (955bc3e451ef0c9df8b9113bf2e341139cdafab2)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2011-2016 Canonical Ltd.
@@ -4234,24 +3777,13 @@ canonical_url: '/reference/legal/typha'
 		WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		See the License for the specific language governing permissions and
 		limitations under the License.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     *
-
-
-
-
----
+/n---
 ---
 
 #### **go-yaml-wrapper (598e54215bee41a19677faa4f0c32acd2a87eb56)**
-
-
-* Licenses
+/n* Licenses
     * **Multi-license:** MIT
         * Attribution:
         Copyright (c) 2014 Sam Ghods
@@ -4280,9 +3812,7 @@ canonical_url: '/reference/legal/typha'
 		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
-
-
-		Copyright (c) 2012 The Go Authors. All rights reserved.
+/n		Copyright (c) 2012 The Go Authors. All rights reserved.
 
 		Redistribution and use in source and binary forms, with or without
 		modification, are permitted provided that the following conditions are
@@ -4309,24 +3839,13 @@ canonical_url: '/reference/legal/typha'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * BSD-3-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **libcalico-go (ed28b67484d1ecf4cb2c1969d4654c7d4eb95e32)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -4504,24 +4023,12 @@ canonical_url: '/reference/legal/typha'
 		      defend, and hold each Contributor harmless for any liability
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
-
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **pod2daemon (df2b9c8d2744ebce544742f7f765b59c5e88db0d)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
                                          Apache License
@@ -4725,23 +4232,12 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **typha (6915c7a2b8d3d57b182da8d2c9cf811a7096da7a)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
 
@@ -4919,25 +4415,13 @@ canonical_url: '/reference/legal/typha'
 		      defend, and hold each Contributor harmless for any liability
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
-
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* MIT *OR* MPL-2.0 *OR* LGPL-3.0-only *OR* Apache-2.0
-
-
-
-
----
+/n---
 ---
 
 #### **client_golang (773f5027234d0b08adf766be34f55df2f312abf7)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
                                          Apache License
@@ -5141,135 +4625,74 @@ canonical_url: '/reference/legal/typha'
 		   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* Apache-2.0
-
-
-
-
----
+/n---
 ---
 
 #### **client_model (6f3806018612930941127f2a7c6c453ba2c527d2)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, client_model Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **common (e3fb1a1acd7605367a2b378bc2e2f893c05174b7)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, common Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **procfs (a6e9df898b1336106c743392c48ee0b71f5c4efa)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, procfs Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go.uuid (f58768cc1a7a7e77a3bd49e98cdd21419399b6a3)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2013-2018 by Maxim Bublis
 		Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **logrus (d682213848ed68c0a260ca37d6dd5ace8423f5ba)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2018, logrus Contributors
 		Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * BSD-3-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **pflag (583c0c0531f06d5278b7d917446061adc344b5cd)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors . All rights reserved.
@@ -5278,88 +4701,48 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **go (bdcc60b419d136a85cdf2e7cbcac34b3f1cd6e57)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         Copyright (c) 2018, go Contributors
 		Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **netlink (f07d9d5231b9cd05ddf2e5a8ef6582f385bc1770)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright owner or entity authorized by
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **netns (54f0e4339ce73702a0607f49922aaa1e749b418d)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, netns Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **crypto (94eea52f7b742c7cbe0b03b22f0c4c8631ece122)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -5389,25 +4772,14 @@ canonical_url: '/reference/legal/typha'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** public-domain *OR* BSD-3-Clause
     * **Multi-license:** MIT *OR* BSD-3-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **oauth2 (a6bd8cefa1811bd24b86f8902872e4e8225f74c4)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, oauth2 Contributors . All rights reserved.
@@ -5416,22 +4788,12 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **sys (1b2967e3c290b7c545b3db0deeda16e9be4f98a2)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -5491,23 +4853,12 @@ canonical_url: '/reference/legal/typha'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **text (b19bf474d317b857955b12035d2c5acb57ce8b01)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -5537,24 +4888,13 @@ canonical_url: '/reference/legal/typha'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * **Multi-license:** CC-BY-SA-4.0 *OR* BSD-3-Clause
-
-
-
-
----
+/n---
 ---
 
 #### **time (f51c12702a4d776e4c1fa9b0fabab841babae631)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2018, time Contributors . All rights reserved.
@@ -5563,22 +4903,12 @@ canonical_url: '/reference/legal/typha'
 		   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **validator.v8 (5f1438d3fca68893a817e4a66806cea46a9e4ebf)**
-
-
-* Licenses
+/n* Licenses
     * MIT
         * Attribution:
         The MIT License (MIT)
@@ -5602,24 +4932,12 @@ canonical_url: '/reference/legal/typha'
 		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
-
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **inf.v0 (3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4)**
-
-
-* Licenses
+/n* Licenses
     * BSD-3-Clause
         * Attribution:
         Copyright (c) 2012 Péter Surányi. Portions Copyright (c) 2009 The Go
@@ -5650,54 +4968,25 @@ canonical_url: '/reference/legal/typha'
 		THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-
-
-* Other Licenses
-
-
-
-
----
+/n* Other Licenses
+/n---
 ---
 
 #### **yaml.v2 (670d4cfef0544295bc27a114dbac37980d83185a)**
-
-
-* Licenses
+/n* Licenses
     * Apache-2.0
         * Attribution:
         Copyright 2018, yaml.v2 Contributors
 		Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-
-
-
-* Other Licenses
+/n* Other Licenses
     * Custom License File
-
-
-
-
+/n---
 ---
----
-
-
-
-
-
-
-## Licenses
-
-
-### Apache-2.0
-
-
-                                 Apache License
+/n## Licenses
+/n### Apache-2.0
+/n                                 Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
 
@@ -5898,10 +5187,7 @@ canonical_url: '/reference/legal/typha'
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-
-
-
-###
+/n###
 
 GNU GENERAL PUBLIC LICENSE
 Version 3, 29 June 2007
@@ -6029,9 +5315,7 @@ This is free software, and you are welcome to redistribute it under certain cond
 The hypothetical commands `show w&#39; and `show c&#39; should show the appropriate parts of the General Public License. Of course, your program&#39;s commands might be different; for a GUI interface, you would use an &quot;about box&quot;.
 You should also get your employer (if you work as a programmer) or school, if any, to sign a &quot;copyright disclaimer&quot; for the program, if necessary. For more information on this, and how to apply and follow the GNU GPL, see &lt;http s ://www.gnu.org/licenses/&gt;.
 The GNU General Public License does not permit incorporating your program into proprietary programs. If your program is a subroutine library, you may consider it more useful to permit linking proprietary applications with the library. If this is what you want to do, use the GNU Lesser General Public License instead of this License. But first, please read &lt;http s ://www.gnu.org/philosophy/why-not-lgpl.html&gt;.
-
-
-###
+/n###
 
 GNU LESSER GENERAL PUBLIC LICENSE
 Version 3, 29 June 2007
@@ -6078,9 +5362,7 @@ This version of the GNU Lesser General Public License incorporates the terms and
    The Free Software Foundation may publish revised and/or new versions of the GNU Lesser General Public License from time to time. Such new versions will be similar in spirit to the present version, but may differ in detail to address new problems or concerns.
    Each version is given a distinguishing version number. If the Library as you received it specifies that a certain numbered version of the GNU Lesser General Public License &quot;or any later version&quot; applies to it, you have the option of following the terms and conditions either of that published version or of any later version published by the Free Software Foundation. If the Library as you received it does not specify a version number of the GNU Lesser General Public License, you may choose any version of the GNU Lesser General Public License ever published by the Free Software Foundation.
    If the Library as you received it specifies that a proxy can decide whether future versions of the GNU Lesser General Public License shall apply, that proxy&#39;s public statement of acceptance of any version is permanent authorization for you to choose that version for the Library.
-
-
-###
+/n###
 
 Copyright (c) &lt;year&gt; &lt;owner&gt; . All rights reserved.
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -6088,9 +5370,7 @@ Redistribution and use in source and binary forms, with or without modification,
    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-###
+/n###
 
 Mozilla Public License Version 2.0
    1. Definitions
@@ -6174,18 +5454,14 @@ If it is not possible or desirable to put the notice in a particular file, then 
 You may add additional accurate notices of copyright ownership.
 Exhibit B - &quot;Incompatible With Secondary Licenses&quot; Notice
 This Source Code Form is &quot;Incompatible With Secondary Licenses&quot;, as defined by the Mozilla Public License, v. 2.0.
-
-
-###
+/n###
 
 MIT License
 Copyright (c) &lt;year&gt; &lt;copyright holders&gt;
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-###
+/n###
 
 GNU GENERAL PUBLIC LICENSE
 Version 2, June 1991
@@ -6247,18 +5523,14 @@ The hypothetical commands `show w&#39; and `show c&#39; should show the appropri
 You should also get your employer (if you work as a programmer) or your school, if any, to sign a &quot;copyright disclaimer&quot; for the program, if necessary. Here is a sample; alter the names:
 Yoyodyne, Inc., hereby disclaims all copyright interest in the program `Gnomovision&#39; (which makes passes at compilers) written by James Hacker.
 &lt; signature of Ty Coon &gt; , 1 April 1989 Ty Coon, President of Vice
-
-
-###
+/n###
 
 Copyright (c) &lt;year&gt; &lt;owner&gt; . All rights reserved.
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-###
+/n###
 
 Eclipse Public License - v 1.0
 THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS ECLIPSE PUBLIC LICENSE (&quot;AGREEMENT&quot;). ANY USE, REPRODUCTION OR DISTRIBUTION OF THE PROGRAM CONSTITUTES RECIPIENT&#39;S ACCEPTANCE OF THIS AGREEMENT.
@@ -6304,9 +5576,7 @@ THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS ECLIPSE PUBLIC LICE
    All Recipient&#39;s rights under this Agreement shall terminate if it fails to comply with any of the material terms or conditions of this Agreement and does not cure such failure in a reasonable period of time after becoming aware of such noncompliance. If all Recipient&#39;s rights under this Agreement terminate, Recipient agrees to cease use and distribution of the Program as soon as reasonably practicable. However, Recipient&#39;s obligations under this Agreement and any licenses granted by Recipient relating to the Program shall continue and survive.
    Everyone is permitted to copy and distribute copies of this Agreement, but in order to avoid inconsistency the Agreement is copyrighted and may only be modified in the following manner. The Agreement Steward reserves the right to publish new versions (including revisions) of this Agreement from time to time. No one other than the Agreement Steward has the right to modify this Agreement. The Eclipse Foundation is the initial Agreement Steward. The Eclipse Foundation may assign the responsibility to serve as the Agreement Steward to a suitable separate entity. Each new version of the Agreement will be given a distinguishing version number. The Program (including Contributions) may always be distributed subject to the version of the Agreement under which it was received. In addition, after a new version of the Agreement is published, Contributor may elect to distribute the Program (including its Contributions) under the new version. Except as expressly stated in Sections 2(a) and 2(b) above, Recipient receives no rights or licenses to the intellectual property of any Contributor under this Agreement, whether expressly, by implication, estoppel or otherwise. All rights in the Program not expressly granted under this Agreement are reserved.
    This Agreement is governed by the laws of the State of New York and the intellectual property laws of the United States of America. No party to this Agreement will bring a legal action under this Agreement more than one year after the cause of action arose. Each party waives its rights to a jury trial in any resulting litigation.
-
-
-###
+/n###
 
 Mozilla Public License Version 2.0
    1. Definitions
@@ -6390,9 +5660,7 @@ If it is not possible or desirable to put the notice in a particular file, then 
 You may add additional accurate notices of copyright ownership.
 Exhibit B - &quot;Incompatible With Secondary Licenses&quot; Notice
 This Source Code Form is &quot;Incompatible With Secondary Licenses&quot;, as defined by the Mozilla Public License, v. 2.0.
-
-
-###
+/n###
 
 PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
    1. This LICENSE AGREEMENT is between the Python Software Foundation (&quot;PSF&quot;), and the Individual or Organization (&quot;Licensee&quot;) accessing and otherwise using this software (&quot;Python&quot;) in source or binary form and its associated documentation.
@@ -6424,9 +5692,7 @@ BY CLICKING ON &quot;ACCEPT&quot; WHERE INDICATED BELOW, OR BY COPYING, INSTALLI
 Copyright (c) 1991 - 1995, Stichting Mathematisch Centrum Amsterdam, The Netherlands. All rights reserved.
 Permission to use, copy, modify, and distribute this software and its documentation for any purpose and without fee is hereby granted, provided that the above copyright notice appear in all copies and that both that copyright notice and this permission notice appear in supporting documentation, and that the name of Stichting Mathematisch Centrum or CWI not be used in advertising or publicity pertaining to distribution of the software without specific, written prior permission.
 STICHTING MATHEMATISCH CENTRUM DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL STICHTING MATHEMATISCH CENTRUM BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
-
-###
+/n###
 
 DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
 Version 2, December 2004
@@ -6435,9 +5701,7 @@ Everyone is permitted to copy and distribute verbatim or modified copies of this
 DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
 TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
    0. You just DO WHAT THE FUCK YOU WANT TO.
-
-
-### CC-BY-3.0
+/n### CC-BY-3.0
 
 Creative Commons Attribution 3.0 Unported CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE LEGAL SERVICES. DISTRIBUTION OF THIS LICENSE DOES NOT CREATE AN ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS INFORMATION ON AN &quot;AS-IS&quot; BASIS. CREATIVE COMMONS MAKES NO WARRANTIES REGARDING THE INFORMATION PROVIDED, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM ITS USE.
 License
@@ -6485,9 +5749,7 @@ Creative Commons Notice
 Creative Commons is not a party to this License, and makes no warranty whatsoever in connection with the Work. Creative Commons will not be liable to You or any party on any legal theory for any damages whatsoever, including without limitation any general, special, incidental or consequential damages arising in connection to this license. Notwithstanding the foregoing two (2) sentences, if Creative Commons has expressly identified itself as the Licensor hereunder, it shall have all rights and obligations of Licensor.
 Except for the limited purpose of indicating to the public that the Work is licensed under the CCPL, Creative Commons does not authorize the use by either party of the trademark &quot;Creative Commons&quot; or any related trademark or logo of Creative Commons without the prior written consent of Creative Commons. Any permitted use will be in compliance with Creative Commons&#39; then-current trademark usage guidelines, as may be published on its website or otherwise made available upon request from time to time. For the avoidance of doubt, this trademark restriction does not form part of this License.
 Creative Commons may be contacted at http://creativecommons.org/.
-
-
-###
+/n###
 
 Microsoft Reciprocal License (Ms-RL)
 This license governs use of the accompanying software. If you use the software, you accept this license. If you do not accept the license, do not use the software.
@@ -6506,14 +5768,8 @@ This license governs use of the accompanying software. If you use the software, 
       (D) If you distribute any portion of the software, you must retain all copyright, patent, trademark, and attribution notices that are present in the software.
       (E) If you distribute any portion of the software in source code form, you may do so only under this license by including a complete copy of this license with your distribution. If you distribute any portion of the software in compiled or object code form, you may only do so under a license that complies with this license.
       (F) The software is licensed &quot;as-is.&quot; You bear the risk of using it. The contributors give no express warranties, guarantees, or conditions. You may have additional consumer rights under your local laws which this license cannot change. To the extent permitted under your local laws, the contributors exclude the implied warranties of merchantability, fitness for a particular purpose and non-infringement.
-
-
-### Public-domain
-
-
-
-
-### MS-PL
+/n### Public-domain
+/n### MS-PL
 
 Microsoft Public License (Ms-PL)
 This license governs use of the accompanying software. If you use the software, you accept this license. If you do not accept the license, do not use the software.
@@ -6528,14 +5784,8 @@ This license governs use of the accompanying software. If you use the software, 
       (C) If you distribute any portion of the software, you must retain all copyright, patent, trademark, and attribution notices that are present in the software.
       (D) If you distribute any portion of the software in source code form, you may do so only under this license by including a complete copy of this license with your distribution. If you distribute any portion of the software in compiled or object code form, you may only do so under a license that complies with this license.
       (E) The software is licensed &quot;as-is.&quot; You bear the risk of using it. The contributors give no express warranties, guarantees, or conditions. You may have additional consumer rights under your local laws which this license cannot change. To the extent permitted under your local laws, the contributors exclude the implied warranties of merchantability, fitness for a particular purpose and non-infringement.
-
-
-###
-
-
-
-
-### CC-BY-SA-4.0
+/n###
+/n### CC-BY-SA-4.0
 
 Creative Commons Attribution-ShareAlike 4.0 International Creative Commons Corporation (&quot;Creative Commons&quot;) is not a law firm and does not provide legal services or legal advice. Distribution of Creative Commons public licenses does not create a lawyer-client or other relationship. Creative Commons makes its licenses and related information available on an &quot;as-is&quot; basis. Creative Commons gives no warranties regarding its licenses, any material licensed under their terms and conditions, or any related information. Creative Commons disclaims all liability for damages resulting from their use to the fullest extent possible.
 Using Creative Commons Public Licenses

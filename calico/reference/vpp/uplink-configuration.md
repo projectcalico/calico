@@ -3,9 +3,7 @@ title: Primary interface configuration
 description: Configuration parameters for the primary interface in VPP.
 canonical_url: '/reference/vpp/uplink-configuration'
 ---
-
-
-You can choose different ways to consume the host's primary interface with VPP, usually with a tradeoff between performance and simplicity of configuration. Here are the main supported configurations.
+/nYou can choose different ways to consume the host's primary interface with VPP, usually with a tradeoff between performance and simplicity of configuration. Here are the main supported configurations.
 
 * `virtio` the interface is consumed with a native VPP driver. Performance is good and set up is simple, but only virtio interfaces are supported
 * `avf` we create a virtual function and consume it with a native VPP driver. Performance is good and setup simple, but only intel AVF interfaces are supported

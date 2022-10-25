@@ -55,9 +55,7 @@ For step-by-step instructions, refer to the section that corresponds to your des
 {% else %}
 {% assign url = "https://github.com/projectcalico/calico/releases/download/" | append: site.data.versions.first.components.calicoctl.version %}
 {% endif %}
-
-
-### How to
+/n### How to
 
 > **Note**: Make sure you always install the version of `calicoctl` that matches the version of {{site.prodname}} running on your cluster.
 {: .alert .alert-info}
@@ -346,9 +344,7 @@ docker pull {{page.registry}}{{page.imageNames["calicoctl"]}}:{{site.data.versio
 ```
 
 #### Install calicoctl as a Kubernetes pod
-
-
-Use the YAML that matches your datastore type to deploy the `calicoctl` container to your nodes.
+/nUse the YAML that matches your datastore type to deploy the `calicoctl` container to your nodes.
 
 - **etcd**
 

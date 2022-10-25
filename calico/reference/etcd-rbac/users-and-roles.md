@@ -3,9 +3,7 @@ title: Creating users and roles
 description: Provide role-based access control to etcd datastore.
 canonical_url: '/reference/etcd-rbac/users-and-roles'
 ---
-
-
-{% tabs %}
+/n{% tabs %}
   <label:Operator,active:true>
 <%
 
@@ -20,18 +18,14 @@ Providing role based access control within etcd requires the following:
 -  Creation of etcd roles which provide appropriate access to the specific set
    of etcd keys required by the role
 -  Creation of etcd users who are assigned roles
-
-
-> **Note**: The etcd release 3.x+ supports both v2 and v3 of its API. The etcd server
+/n> **Note**: The etcd release 3.x+ supports both v2 and v3 of its API. The etcd server
 > keeps the roles and users separate, this means that if a user/role is created
 > with the v2 API it will not appear in the v3 API. When adding roles and users
 > they must be added through the API version that matches the version the
 > component will be using. This concern can be ignored if all roles and users
 > are added through both API versions.
 {: .alert .alert-info}
-
-
-## Users and Roles creation guides
+/n## Users and Roles creation guides
 
 Use the following guides to setup your users, roles, and assignment of roles
 to users. Since this document assumes that you have configured your etcd cluster

@@ -265,9 +265,7 @@ Example with valid IP address on interface eth0, eth1, eth2 etc.:
 IP_AUTODETECTION_METHOD=interface=eth.*
 IP6_AUTODETECTION_METHOD=interface=eth.*
 ```
-
-
-#### skip-interface=INTERFACE-REGEX
+/n#### skip-interface=INTERFACE-REGEX
 
 The `skip-interface` method uses the supplied interface [regular expression](https://pkg.go.dev/regexp){:target="_blank"}
 to exclude interfaces and to return the first IP address on the first
@@ -311,15 +309,11 @@ Substitute `[flag]` with one or more of the following.
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
 in the cluster, see [decommissioning a node]({{site.baseurl}}/maintenance/decommissioning-a-node).
-
-
-### Setting `CALICO_ROUTER_ID` for IPv6 only system
+/n### Setting `CALICO_ROUTER_ID` for IPv6 only system
 
 Setting CALICO_ROUTER_ID to value `hash` will use a hash of the configured nodename for the router ID.  This should only be used in IPv6-only systems with no IPv4 address to use for the router ID.  Since each node chooses its own router ID in isolation, it is possible for two nodes to pick the same ID resulting in a clash.  The probability of such a clash grows with cluster size so this feature should not be used in a large cluster (500+ nodes).
 
 %>
 
 {% endtabs %}
-
-
-[installation]: {{site.baseurl}}/reference/installation/api
+/n[installation]: {{site.baseurl}}/reference/installation/api
