@@ -83,7 +83,9 @@ type VersionConverter interface {
 }
 
 // Validator validates a resource.
-type Validator func(re Resource) error
+type Validator interface {
+	Validate(Resource) error
+}
 
 // Create creates a new Custom K8s Resource instance in the k8s API from the supplied KVPair.
 func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -101,9 +103,9 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 		return nil, err
 	}
 
-	// Validate the resource if the validation function exists.
+	// Validate the resource if the Validator is defined.
 	if c.validator != nil {
-		if err = c.validator(resIn); err != nil {
+		if err = c.validator.Validate(resIn); err != nil {
 			logContext.WithError(err).Debug("Error creating resource")
 			return nil, err
 		}
@@ -153,9 +155,9 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 		return nil, err
 	}
 
-	// Validate the resource if the validation function exists.
+	// Validate the resource if the Validator is defined.
 	if c.validator != nil {
-		if err = c.validator(resIn); err != nil {
+		if err = c.validator.Validate(resIn); err != nil {
 			logContext.WithError(err).Debug("Error updating resource")
 			return nil, err
 		}

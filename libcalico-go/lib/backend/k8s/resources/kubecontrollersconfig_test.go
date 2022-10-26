@@ -17,13 +17,11 @@ package resources
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
-var _ = Describe("k8s sync label validation tests)", func() {
+var _ = Describe("k8s sync label validation tests", func() {
 	client := NewKubeControllersConfigClient(nil, nil).(*customK8sResourceClient)
-
 	It("should accept enabled sync labels", func() {
 		res := &apiv3.KubeControllersConfiguration{
 			Spec: apiv3.KubeControllersConfigurationSpec{
@@ -34,7 +32,7 @@ var _ = Describe("k8s sync label validation tests)", func() {
 				},
 			},
 		}
-		err := client.validator(res)
+		err := client.validator.Validate(res)
 		Expect(err).To(BeNil())
 	})
 
@@ -48,7 +46,7 @@ var _ = Describe("k8s sync label validation tests)", func() {
 				},
 			},
 		}
-		err := client.validator(res)
+		err := client.validator.Validate(res)
 		Expect(err).To(HaveOccurred())
 	})
 })

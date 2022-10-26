@@ -32,8 +32,6 @@ const (
 	KubeControllersConfigCRDName      = "kubecontrollersconfigurations.crd.projectcalico.org"
 )
 
-var validate *validator.Validate
-
 func NewKubeControllersConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
@@ -48,33 +46,23 @@ func NewKubeControllersConfigClient(c *kubernetes.Clientset, r *rest.RESTClient)
 		},
 		k8sListType:  reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
 		resourceKind: apiv3.KindKubeControllersConfiguration,
-		validator:    validateSyncLabels,
+		validator:    kubeControllersConfigValidator{},
 	}
 }
 
-func validateSyncLabels(re Resource) error {
-	config := re.(*apiv3.KubeControllersConfiguration)
+type kubeControllersConfigValidator struct{}
+
+func (v kubeControllersConfigValidator) Validate(res Resource) error {
+	config := res.(*apiv3.KubeControllersConfiguration)
 	if node := config.Spec.Controllers.Node; node != nil {
 		if label := node.SyncLabels; label != "" {
-			if err := validate.Var(label, "k8sSyncLabels"); err != nil {
+			validate := validator.New()
+			log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", label)
+			if err := validate.VarWithValue(label, apiv3.Enabled, "eqfield"); err != nil {
+				log.Debugf("SyncLabels value must be set to enabled with Kubernetes datastore driver.")
 				return err
 			}
 		}
 	}
 	return nil
-}
-
-func init() {
-	validate = validator.New()
-	validate.RegisterValidation("k8sSyncLabels", validateK8sSyncLabels)
-}
-
-func validateK8sSyncLabels(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", s)
-	if s == apiv3.Disabled {
-		log.Debugf("SyncLabels value cannot be set to disabled with Kubernetes datastore driver.")
-		return false
-	}
-	return true
 }
