@@ -51,14 +51,18 @@ func TestFilter(t *testing.T) {
 		make([]byte, 36),
 	)
 
-	tests := []struct {
+	type testCase struct {
 		expression string
 		match      bool
-	}{
-		{"", true},
+	}
+
+	tests := []testCase{
+		// L2
 		{"ip", true},
 		{"ip6", false},
 		{"ip and tcp", false},
+		// L2 + L3
+		{"", true},
 		{"udp", true},
 		{"host 1.2.3.4 or host 5.6.7.8", true},
 		{"host 1.2.3.4 and host 5.6.7.8", false},
@@ -74,25 +78,37 @@ func TestFilter(t *testing.T) {
 		{"portrange 700-800", false},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.expression, func(t *testing.T) {
+	links := []struct {
+		level string
+		typ   layers.LinkType
+		data  []byte
+		tests []testCase
+	}{
+		{"L2", layers.LinkTypeEthernet, bytes, tests},
+		{"L3", layers.LinkTypeIPv4, bytes[14:], tests[3:]},
+	}
 
-			insns, err := filter.NewStandAlone(64, tc.expression)
-			Expect(err).NotTo(HaveOccurred())
-			fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "GPL", unix.BPF_PROG_TYPE_SCHED_CLS)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(fd).NotTo(BeZero())
-			defer func() {
-				Expect(fd.Close()).NotTo(HaveOccurred())
-			}()
+	for _, link := range links {
+		for _, tc := range link.tests {
+			t.Run(link.level+"_"+tc.expression, func(t *testing.T) {
 
-			rc, err := bpf.RunBPFProgram(fd, bytes, 1)
-			Expect(err).NotTo(HaveOccurred())
-			erc := -1
-			if !tc.match {
-				erc = 2
-			}
-			Expect(rc.RC).To(BeNumerically("==", erc))
-		})
+				insns, err := filter.NewStandAlone(link.typ, 64, tc.expression)
+				Expect(err).NotTo(HaveOccurred())
+				fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "GPL", unix.BPF_PROG_TYPE_SCHED_CLS)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fd).NotTo(BeZero())
+				defer func() {
+					Expect(fd.Close()).NotTo(HaveOccurred())
+				}()
+
+				rc, err := bpf.RunBPFProgram(fd, link.data, 1)
+				Expect(err).NotTo(HaveOccurred())
+				erc := -1
+				if !tc.match {
+					erc = 2
+				}
+				Expect(rc.RC).To(BeNumerically("==", erc))
+			})
+		}
 	}
 }
