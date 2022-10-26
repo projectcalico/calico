@@ -26,25 +26,31 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
-func New(minLen int, expression string, jumpMapFD bpf.MapFD) (asm.Insns, error) {
-	return newFilter(minLen, expression, jumpMapFD, false)
+func New(linkType layers.LinkType, minLen int, expression string, jumpMapFD bpf.MapFD) (asm.Insns, error) {
+	return newFilter(linkType, minLen, expression, jumpMapFD, false)
 }
 
-func NewStandAlone(minLen int, expression string) (asm.Insns, error) {
-	return newFilter(minLen, expression, 0, true)
+func NewStandAlone(linkType layers.LinkType, minLen int, expression string) (asm.Insns, error) {
+	return newFilter(linkType, minLen, expression, 0, true)
 }
 
-func newFilter(minLen int, expression string, jumpMapFD bpf.MapFD, standAlone bool) (asm.Insns, error) {
+func newFilter(
+	linkType layers.LinkType,
+	minLen int,
+	expression string,
+	jumpMapFD bpf.MapFD,
+	standAlone bool) (asm.Insns, error) {
+
 	b := asm.NewBlock(true)
 
-	insns, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, minLen, expression)
+	insns, err := pcap.CompileBPFFilter(linkType, minLen, expression)
 	if err != nil {
 		return nil, fmt.Errorf("pcap compile filter: %w", err)
 	}
 
 	programHeader(b, minLen)
 
-	err = cBPF2eBPF(b, insns)
+	err = cBPF2eBPF(b, insns, linkType)
 	if err != nil {
 		return nil, fmt.Errorf("cbpf to ebpf conversion: %w", err)
 	}
@@ -163,7 +169,7 @@ func fromBE(b *asm.Block, size uint8) {
 	b.FromBE(asm.R1, sz)
 }
 
-func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction) error {
+func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkType) error {
 	for i, cbpf := range pcap {
 		code := uint8(cbpf.Code)
 
@@ -220,11 +226,14 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction) error {
 			}
 		case bpfClassLdx:
 			if cbpf.Code == uint16(bpfClassLdx|bpfModeMSH|bpfSizeB) {
-				if K == 14 {
+				switch {
+				case linkType == layers.LinkTypeEthernet && K == 14:
+					fallthrough
+				case linkType == layers.LinkTypeIPv4 && K == 0:
 					// We assume reading IP header size and we would assume that
 					// the size is fixed without IP options.
 					b.LoadImm64(asm.R2, 20)
-				} else {
+				default:
 					b.AddComment(fmt.Sprintf("Loadx 4 * (pkt[%d] & 0xf)", K))
 					b.Mov64(asm.R3 /* tmp */, asm.R1 /* A */)                                               // Save A
 					b.Load8(asm.R1 /* A */, asm.R7 /* pkt */, asm.FieldOffset{Offset: int16(K), Field: ""}) // Load pkt[K] to A
