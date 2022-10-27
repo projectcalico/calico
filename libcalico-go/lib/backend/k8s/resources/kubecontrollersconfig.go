@@ -15,11 +15,10 @@
 package resources
 
 import (
+	"errors"
 	"reflect"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/go-playground/validator.v9"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -55,13 +54,10 @@ type kubeControllersConfigValidator struct{}
 func (v kubeControllersConfigValidator) Validate(res Resource) error {
 	config := res.(*apiv3.KubeControllersConfiguration)
 	if node := config.Spec.Controllers.Node; node != nil {
-		if label := node.SyncLabels; label != "" {
-			validate := validator.New()
-			log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", label)
-			if err := validate.VarWithValue(label, apiv3.Enabled, "eqfield"); err != nil {
-				log.Debugf("SyncLabels value must be set to enabled with Kubernetes datastore driver.")
-				return err
-			}
+		log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", node.SyncLabels)
+		if node.SyncLabels == apiv3.Disabled {
+			log.Debugf("SyncLabels value cannot be set to disabled with Kubernetes datastore driver.")
+			return errors.New("invalid SyncLabels value")
 		}
 	}
 	return nil
