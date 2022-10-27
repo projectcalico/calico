@@ -286,16 +286,16 @@ func NewValueNATReverseSNAT(created, lastSeen time.Duration, flags uint16, legA,
 }
 
 type Leg struct {
-	Bytes       uint64
-	Packets     uint32
-	Seqno       uint32
-	SynSeen     bool
-	AckSeen     bool
-	FinSeen     bool
-	RstSeen     bool
-	Whitelisted bool
-	Opener      bool
-	Ifindex     uint32
+	Bytes    uint64
+	Packets  uint32
+	Seqno    uint32
+	SynSeen  bool
+	AckSeen  bool
+	FinSeen  bool
+	RstSeen  bool
+	Approved bool
+	Opener   bool
+	Ifindex  uint32
 }
 
 const legSize int = 24
@@ -318,7 +318,7 @@ func (leg Leg) AsBytes() []byte {
 	setBit(&bits, 1, leg.AckSeen)
 	setBit(&bits, 2, leg.FinSeen)
 	setBit(&bits, 3, leg.RstSeen)
-	setBit(&bits, 4, leg.Whitelisted)
+	setBit(&bits, 4, leg.Approved)
 	setBit(&bits, 5, leg.Opener)
 
 	binary.LittleEndian.PutUint64(bytes[0:8], leg.Bytes)
@@ -344,7 +344,7 @@ func (leg Leg) Flags() uint32 {
 	if leg.RstSeen {
 		flags |= 1 << 3
 	}
-	if leg.Whitelisted {
+	if leg.Approved {
 		flags |= 1 << 4
 	}
 	if leg.Opener {
@@ -360,16 +360,16 @@ func bitSet(bits uint32, bit uint8) bool {
 func readConntrackLeg(b []byte) Leg {
 	bits := binary.LittleEndian.Uint32(b[legExtra+4 : legExtra+8])
 	return Leg{
-		Bytes:       binary.LittleEndian.Uint64(b[0:8]),
-		Packets:     binary.LittleEndian.Uint32(b[8:12]),
-		Seqno:       binary.BigEndian.Uint32(b[legExtra+0 : legExtra+4]),
-		SynSeen:     bitSet(bits, 0),
-		AckSeen:     bitSet(bits, 1),
-		FinSeen:     bitSet(bits, 2),
-		RstSeen:     bitSet(bits, 3),
-		Whitelisted: bitSet(bits, 4),
-		Opener:      bitSet(bits, 5),
-		Ifindex:     binary.LittleEndian.Uint32(b[legExtra+8 : legExtra+12]),
+		Bytes:    binary.LittleEndian.Uint64(b[0:8]),
+		Packets:  binary.LittleEndian.Uint32(b[8:12]),
+		Seqno:    binary.BigEndian.Uint32(b[legExtra+0 : legExtra+4]),
+		SynSeen:  bitSet(bits, 0),
+		AckSeen:  bitSet(bits, 1),
+		FinSeen:  bitSet(bits, 2),
+		RstSeen:  bitSet(bits, 3),
+		Approved: bitSet(bits, 4),
+		Opener:   bitSet(bits, 5),
+		Ifindex:  binary.LittleEndian.Uint32(b[legExtra+8 : legExtra+12]),
 	}
 }
 

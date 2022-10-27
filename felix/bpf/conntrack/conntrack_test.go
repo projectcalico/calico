@@ -45,16 +45,16 @@ var (
 	timeouts = conntrack.DefaultTimeouts()
 
 	genericJustCreated    = makeValue(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
-	genericAlmostTimedOut = makeValue(now-(20*time.Minute), now-(599*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
-	genericTimedOut       = makeValue(now-(20*time.Minute), now-(601*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+	genericAlmostTimedOut = makeValue(now-(20*time.Minute), now-(599*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	genericTimedOut       = makeValue(now-(20*time.Minute), now-(601*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
 
 	udpJustCreated    = makeValue(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
-	udpAlmostTimedOut = makeValue(now-(2*time.Minute), now-(59*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
-	udpTimedOut       = makeValue(now-(2*time.Minute), now-(61*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+	udpAlmostTimedOut = makeValue(now-(2*time.Minute), now-(59*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	udpTimedOut       = makeValue(now-(2*time.Minute), now-(61*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
 
 	icmpJustCreated    = makeValue(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
-	icmpAlmostTimedOut = makeValue(now-(2*time.Minute), now-(4*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
-	icmpTimedOut       = makeValue(now-(2*time.Minute), now-(6*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+	icmpAlmostTimedOut = makeValue(now-(2*time.Minute), now-(4*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	icmpTimedOut       = makeValue(now-(2*time.Minute), now-(6*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
 
 	tcpJustCreated        = makeValue(now-1, now-1, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
 	tcpHandshakeTimeout   = makeValue(now-22*time.Second, now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{})

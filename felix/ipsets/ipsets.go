@@ -575,8 +575,7 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		return
 	}
 
-	// Scan for IP sets that need to be cleaned up.  Create a whitelist containing the IP sets
-	// that we expect to be there.
+	// Scan for IP sets that need to be cleaned up.  Create list containing the IP sets that we expect to be there.
 	expectedIPSets := set.NewBoxed[string]()
 	for _, ipSet := range s.ipSetIDToIPSet {
 		if !s.ipSetNeeded(ipSet.SetID) {
@@ -586,7 +585,7 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		s.logCxt.WithFields(log.Fields{
 			"ID":       ipSet.SetID,
 			"mainName": ipSet.MainIPSetName,
-		}).Debug("Whitelisting IP sets.")
+		}).Debug("Marking IP set as expected.")
 	}
 
 	// Include any pending deletions in the whitelist; this is mainly to separate cleanup logs
