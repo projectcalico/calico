@@ -387,7 +387,6 @@ iptables -t nat -A PREROUTING -j expose-ports
 
 iptables -t nat -A expose-ports -p tcp --destination 192.0.2.1 --dport 80 -j DNAT --to 192.168.7.4:8080
 ```
-{: .alert .alert-success}
 
 The commands will need to be run each time the host is restarted.
 
