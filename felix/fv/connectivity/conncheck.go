@@ -935,7 +935,7 @@ func (pc *PersistentConnection) Start() error {
 		"docker",
 		args...,
 	)
-	logName := fmt.Sprintf("permanent connection %s", n)
+	logName := fmt.Sprintf("persistent connection %s", n)
 	stdout, err := runCmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to start output logging for %s", logName)
