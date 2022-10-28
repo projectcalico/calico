@@ -96,8 +96,7 @@ blocks:
     jobs:
     - name: "Check generated files"
       commands:
-      - make generate
-      - make check-dirty
+      - make ci-preflight-checks
 
 - name: "API"
   run:

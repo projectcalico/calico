@@ -455,7 +455,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
 				})
 
-				It("should have no connectivity from third felix and expected number of IPs in whitelist", func() {
+				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
 					Eventually(func() int {
 						return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
 					}, "5s", "200ms").Should(Equal(len(felixes) - 2))
@@ -470,15 +470,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				})
 			})
 
-			// Explicitly verify that the VXLAN whitelist IP set is doing its job (since Felix makes multiple dataplane
-			// changes when the BGP IP disappears and we want to make sure that its the whitelist that's causing the
+			// Explicitly verify that the VXLAN allow-list IP set is doing its job (since Felix makes multiple dataplane
+			// changes when the BGP IP disappears, and we want to make sure that it's the rule that's causing the
 			// connectivity to drop).
 			Context("after removing BGP address from third node, all felixes paused", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
-					// Check we initially have the expected number of whitelist entries.
+					// Check we initially have the expected number of entries.
 					for _, f := range felixes {
-						// Wait for Felix to set up the whitelist.
+						// Wait for Felix to set up the allow list.
 						Eventually(func() int {
 							return getNumIPSetMembers(f.Container, "cali40all-vxlan-net")
 						}, "5s", "200ms").Should(Equal(len(felixes) - 1))
@@ -499,7 +499,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				})
 
 				if vxlanMode == api.VXLANModeAlways {
-					It("after manually removing third node from whitelist should have expected connectivity", func() {
+					It("after manually removing third node from allow list should have expected connectivity", func() {
 						felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
 
 						cc.ExpectSome(w[0], w[1])

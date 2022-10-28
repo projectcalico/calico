@@ -363,7 +363,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 					cc.ExpectSome(nw[2], nw[3])
 					cc.ExpectNone(nw[3], nw[0])
 					cc.ExpectNone(nw[3], nw[1])
-					cc.ExpectSome(nw[3], nw[2]) // now allowed because all sources are white listed
+					cc.ExpectSome(nw[3], nw[2]) // now allowed because all sources are allowed
 					cc.CheckConnectivity()
 				})
 
@@ -782,7 +782,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 					cc.ExpectSome(w[2], w[3])
 					cc.ExpectNone(w[3], w[0])
 					cc.ExpectNone(w[3], w[1])
-					cc.ExpectSome(w[3], w[2]) // now allowed because all sources are white listed
+					cc.ExpectSome(w[3], w[2]) // now allowed because all sources are allowed
 					cc.CheckConnectivity()
 				})
 
