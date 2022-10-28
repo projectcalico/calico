@@ -804,7 +804,7 @@ func (s *xdpIPState) fixupBlocklistContents(resyncState *xdpResyncState) {
 			"mapCreate": createMap,
 		}).Debug("Resync - fixing map contents.")
 		if createMap {
-			s.fixupBlacklistContentsFreshMap(iface)
+			s.fixupBlocklistContentsFreshMap(iface)
 		} else {
 			if _, ok := resyncState.ifacesWithMaps[iface]; !ok {
 				s.logCxt.WithField("iface", iface).Panic("Resync - iface missing from ifaces with maps in resync state!")
@@ -829,7 +829,7 @@ func (s *xdpIPState) fixupBlocklistContents(resyncState *xdpResyncState) {
 	}
 }
 
-func (s *xdpIPState) fixupBlacklistContentsFreshMap(iface string) {
+func (s *xdpIPState) fixupBlocklistContentsFreshMap(iface string) {
 	setIDToRefCount := s.getSetIDToRefCountFromNewState(iface)
 	s.bpfActions.AddToMap[iface] = setIDToRefCount
 	delete(s.bpfActions.RemoveFromMap, iface)
@@ -1821,7 +1821,7 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 	}
 
 	a.RemoveMap.Iter(func(iface string) error {
-		logCxt.WithField("iface", iface).Debug("Removing BPF blacklist map.")
+		logCxt.WithField("iface", iface).Debug("Removing BPF blocklist map.")
 		if err := memberCache.bpfLib.RemoveCIDRMap(iface, memberCache.GetFamily()); err != nil {
 			opErr = err
 			return set.StopIteration

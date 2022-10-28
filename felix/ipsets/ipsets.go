@@ -588,7 +588,7 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		}).Debug("Marking IP set as expected.")
 	}
 
-	// Include any pending deletions in the whitelist; this is mainly to separate cleanup logs
+	// Include any pending deletions in the expected set; this is mainly to separate cleanup logs
 	// from explicit deletion logs.
 	s.pendingIPSetDeletions.Iter(func(item string) error {
 		expectedIPSets.Add(item)
