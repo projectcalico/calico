@@ -453,6 +453,10 @@ if ((Get-Service -exclude 'CalicoUpgrade' | where Name -Like 'Calico*' | where S
 Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
 Write-Host "Unzip Calico for Windows release..."
 Expand-Archive -Force $CalicoZip c:\
+# This is a temporary fix to make sure nssm binary is in the correct path.
+$nssmDir = Get-ChildItem $RootDir -filter "nssm*" -Directory
+mv $nssmDir.fullname $RootDir\nssm-2.24
+
 ipmo -force $RootDir\libs\calico\calico.psm1
 
 # This comes after we import calico.psm1
