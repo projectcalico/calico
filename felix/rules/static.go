@@ -482,7 +482,7 @@ func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *Ch
 	}
 
 	if table == "raw" {
-		// We're in the raw table, before conntrack, so we need to whitelist response traffic.
+		// We're in the raw table, before conntrack, so we need to allow response traffic.
 		// Otherwise, it could fall through to some doNotTrack policy and half of the connection
 		// would get untracked.  If we ACCEPT here then the traffic falls through to the filter
 		// table, where it'll only be accepted if there's a conntrack entry.
