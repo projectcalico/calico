@@ -47,7 +47,7 @@ struct calico_ct_leg {
 	__u32 fin_seen:1;
 	__u32 rst_seen:1;
 
-	__u32 whitelisted:1;
+	__u32 approved:1;
 
 	__u32 opener:1;
 

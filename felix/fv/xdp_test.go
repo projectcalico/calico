@@ -146,7 +146,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		cc.ResetExpectations()
 	}
 
-	expectBlacklisted := func(cc *connectivity.Checker) {
+	expectBlocked := func(cc *connectivity.Checker) {
 		client, server := clientServerIndexes(cc.Protocol)
 		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
 		cc.ExpectNone(felixes[client], hostW[server].Port(8056))
@@ -172,7 +172,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		cc.ResetExpectations()
 	}
 
-	expectTCPSourceFailsafePortBlacklisted := func(cc *connectivity.Checker) {
+	expectTCPSourceFailsafePortBlocked := func(cc *connectivity.Checker) {
 		client, server := clientServerIndexes(cc.Protocol)
 
 		fsPort := &workload.Port{
@@ -223,7 +223,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		})
 	})
 
-	Context("with XDP blacklist on felix[1] blocking felixes[0]", func() {
+	Context("with XDP blocklist on felix[1] blocking felixes[0]", func() {
 		BeforeEach(func() {
 			order := float64(20)
 
@@ -257,7 +257,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			xdpPolicy.Spec.Ingress = []api.Rule{{
 				Action: api.Deny,
 				Source: api.EntityRule{
-					Selector: "xdpblacklist-set=='true'",
+					Selector: "xdpblocklist-set=='true'",
 				},
 			}}
 			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, xdpPolicy, utils.NoOptions)
@@ -273,7 +273,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			xdpPolicy.Spec.Ingress = []api.Rule{{
 				Action: api.Deny,
 				Source: api.EntityRule{
-					Selector: "xdpblacklist-set=='true'",
+					Selector: "xdpblocklist-set=='true'",
 				},
 			}}
 			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, xdpPolicy, utils.NoOptions)
@@ -284,8 +284,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 
 		AfterEach(func() {
 			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "allow-all", options.DeleteOptions{})
-			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblacklistudp", options.DeleteOptions{})
-			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblacklisttcp", options.DeleteOptions{})
+			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblocklistudp", options.DeleteOptions{})
+			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblocklisttcp", options.DeleteOptions{})
 			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
 			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
 		})
@@ -323,7 +323,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				srcNS.Name = name
 				srcNS.Spec.Nets = []string{ip}
 				srcNS.Labels = map[string]string{
-					"xdpblacklist-set": "true",
+					"xdpblocklist-set": "true",
 				}
 				_, err = client.GlobalNetworkSets().Create(utils.Ctx, srcNS, utils.NoOptions)
 			}
@@ -338,21 +338,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			BeforeEach(func() {
 				_, udpServer := clientServerIndexes("udp")
 				_, tcpServer := clientServerIndexes("tcp")
-				_ = applyGlobalNetworkSets("xdpblacklistudp", hostW[udpServer].IP, "/32", false)
-				_ = applyGlobalNetworkSets("xdpblacklisttcp", hostW[tcpServer].IP, "/32", false)
+				_ = applyGlobalNetworkSets("xdpblocklistudp", hostW[udpServer].IP, "/32", false)
+				_ = applyGlobalNetworkSets("xdpblocklisttcp", hostW[tcpServer].IP, "/32", false)
 			})
 
 			It("should allow connections from other IPs to the server", func() {
 				expectAllAllowed(ccTCP)
 				expectAllAllowed(ccUDP)
 			})
-			// NJ: this is odd; no blacklist testing here.
+			// NJ: this is odd; no blocklist testing here.
 		})
 
 		Context("blocking full IP", func() {
 			BeforeEach(func() {
-				host0HexCIDR = applyGlobalNetworkSets("xdpblacklistudp", hostW[0].IP, "/32", false)
-				host2HexCIDR = applyGlobalNetworkSets("xdpblacklisttcp", hostW[2].IP, "/32", false)
+				host0HexCIDR = applyGlobalNetworkSets("xdpblocklistudp", hostW[0].IP, "/32", false)
+				host2HexCIDR = applyGlobalNetworkSets("xdpblocklisttcp", hostW[2].IP, "/32", false)
 			})
 
 			It("should block packets smaller than UDP", func() {
@@ -386,7 +386,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				// likely it will be replaced with the new XDP as used in BPF mode.
 			} else {
 				It("should block connections even if the source port is a failsafe port", func() {
-					expectTCPSourceFailsafePortBlacklisted(ccTCP)
+					expectTCPSourceFailsafePortBlocked(ccTCP)
 				})
 			}
 
@@ -411,24 +411,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			})
 
 			if !bpfEnabled {
-				It("should have expected felixes[UDP client] IP in BPF blacklist", func() {
+				It("should have expected felixes[UDP client] IP in BPF blocklist", func() {
 					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
 					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 
-				It("should have expected felixes[TCP client] IP in BPF blacklist", func() {
+				It("should have expected felixes[TCP client] IP in BPF blocklist", func() {
 					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host2HexCIDR...)
 					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 			}
 
-			It("should have expected no connectivity from felixes[0] with XDP blacklist", func() {
-				expectBlacklisted(ccUDP)
-				expectBlacklisted(ccTCP)
+			It("should have expected no connectivity from felixes[0] with XDP blocklist", func() {
+				expectBlocked(ccUDP)
+				expectBlocked(ccTCP)
 			})
 
 			It("should have expected no dropped packets in iptables in UDP", func() {
-				expectBlacklisted(ccUDP)
+				expectBlocked(ccUDP)
 
 				if !bpfEnabled {
 					felixes[1].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-u")
@@ -449,7 +449,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 					return
 				}
 
-				expectBlacklisted(ccTCP)
+				expectBlocked(ccTCP)
 
 				if !bpfEnabled {
 					felixes[3].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
@@ -458,14 +458,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				}
 			})
 
-			It("should have expected failsafe port 22 (TCP) and port 68 (UDP) to be open on felix[1] with XDP blacklist", func() {
+			It("should have expected failsafe port 22 (TCP) and port 68 (UDP) to be open on felix[1] with XDP blocklist", func() {
 				expectUDPFailsafePortsOpen(ccUDP)
 				expectTCPFailsafePortsOpen(ccTCP)
 			})
 
 			It("should have expected connectivity after removing the policy", func() {
-				expectBlacklisted(ccUDP)
-				expectBlacklisted(ccTCP)
+				expectBlocked(ccUDP)
+				expectBlocked(ccTCP)
 
 				_, err := client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -492,8 +492,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 
 					Eventually(felixes[1].ExecOutputFn(args...), resyncPeriod).Should(ContainSubstring("value:"))
 
-					expectBlacklisted(ccUDP)
-					expectBlacklisted(ccTCP)
+					expectBlocked(ccUDP)
+					expectBlocked(ccTCP)
 				})
 
 				It("resync should've handled manually detaching a BPF program", func() {
@@ -507,16 +507,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 
 					Eventually(felixes[1].ExecOutputFn("ip", "addr", "show", "eth0"), resyncPeriod).Should(ContainSubstring("xdp"))
 
-					expectBlacklisted(ccUDP)
-					expectBlacklisted(ccTCP)
+					expectBlocked(ccUDP)
+					expectBlocked(ccTCP)
 				})
 			})
 		})
 
 		Context("changing GlobalNetworkSets", func() {
 			BeforeEach(func() {
-				host0HexCIDR = applyGlobalNetworkSets("xdpblacklistudp", hostW[0].IP, "/32", false)
-				host2HexCIDR = applyGlobalNetworkSets("xdpblacklisttcp", hostW[2].IP, "/32", false)
+				host0HexCIDR = applyGlobalNetworkSets("xdpblocklistudp", hostW[0].IP, "/32", false)
+				host2HexCIDR = applyGlobalNetworkSets("xdpblocklisttcp", hostW[2].IP, "/32", false)
 			})
 
 			if bpfEnabled {
@@ -529,11 +529,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
 				Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 
-				AdditionalHostUDPHexCIDR := applyGlobalNetworkSets("xdpblacklistudp", "1.2.3.4", "/32", true)
+				AdditionalHostUDPHexCIDR := applyGlobalNetworkSets("xdpblocklistudp", "1.2.3.4", "/32", true)
 				args = append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostUDPHexCIDR...)
 				Eventually(felixes[1].ExecOutputFn(args...), "5s").Should(ContainSubstring("value:"))
 
-				AdditionalHostTCPHexCIDR := applyGlobalNetworkSets("xdpblacklisttcp", "1.2.3.4", "/32", true)
+				AdditionalHostTCPHexCIDR := applyGlobalNetworkSets("xdpblocklisttcp", "1.2.3.4", "/32", true)
 				args = append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostTCPHexCIDR...)
 				Eventually(felixes[3].ExecOutputFn(args...), "5s").Should(ContainSubstring("value:"))
 			})
@@ -541,21 +541,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 
 		Context("blocking CIDR", func() {
 			BeforeEach(func() {
-				host0HexCIDR = applyGlobalNetworkSets("xdpblacklistudp", hostW[0].IP+"/8", "", false)
-				host2HexCIDR = applyGlobalNetworkSets("xdpblacklisttcp", hostW[2].IP+"/8", "", false)
+				host0HexCIDR = applyGlobalNetworkSets("xdpblocklistudp", hostW[0].IP+"/8", "", false)
+				host2HexCIDR = applyGlobalNetworkSets("xdpblocklisttcp", hostW[2].IP+"/8", "", false)
 
 				Eventually(xdpProgramAttached_felix1_eth0, "10s").Should(BeTrue())
 			})
 
 			if !bpfEnabled {
-				It("should have expected felixes[0] CIDR in BPF blacklist", func() {
+				It("should have expected felixes[0] CIDR in BPF blocklist", func() {
 					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
 					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 			}
 
 			It("should have expected no dropped packets in iptables in UDP", func() {
-				expectBlacklisted(ccUDP)
+				expectBlocked(ccUDP)
 
 				if !bpfEnabled {
 					felixes[1].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-u")
@@ -576,7 +576,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 					return
 				}
 
-				expectBlacklisted(ccTCP)
+				expectBlocked(ccTCP)
 
 				if !bpfEnabled {
 					felixes[3].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
@@ -585,7 +585,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				}
 			})
 
-			It("should have expected failsafe port 22 (TCP) and port 68 (UDP) to be open on felix[1] with XDP blacklist", func() {
+			It("should have expected failsafe port 22 (TCP) and port 68 (UDP) to be open on felix[1] with XDP blocklist", func() {
 				expectUDPFailsafePortsOpen(ccUDP)
 				expectTCPFailsafePortsOpen(ccTCP)
 			})

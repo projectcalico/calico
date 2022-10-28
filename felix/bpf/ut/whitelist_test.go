@@ -29,9 +29,9 @@ import (
 )
 
 // Usually a packet passes through 2 programs, HEP->WEP, WEP->HEP or WEP->WEP. These test
-// make sure that both programs whitelist the traffic if their policies allow it.
+// make sure that both programs allow the traffic if their policies allow it.
 
-func TestWhitelistFromWorkloadExitHost(t *testing.T) {
+func TestAllowFromWorkloadExitHost(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "WHwl"
@@ -68,10 +68,10 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 
 		ctr := ct[ctKey]
 
-		// Whitelisted by WEP
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		// Not whitelisted by HEP yet
-		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
+		// Approved by WEP
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		// Not approved by HEP yet
+		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 	})
 
 	// Leaving node 1
@@ -88,13 +88,13 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 
 		ctr := ct[ctKey]
 
-		// Whitelisted by both WEP and HEP
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved by both WEP and HEP
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 }
 
-func TestWhitelistEnterHostToWorkload(t *testing.T) {
+func TestAllowEnterHostToWorkload(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "HWwl"
@@ -138,10 +138,10 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 
 		ctr := ct[ctKey]
 
-		// Whitelisted by HEP
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		// NOt whitelisted by WEP yet
-		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
+		// Approved by HEP
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		// NOt approved by WEP yet
+		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 	})
 
 	expectMark(tcdefs.MarkSeen)
@@ -157,13 +157,13 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 
 		ctr := ct[ctKey]
 
-		// Still whitelisted both by HEP and WEP
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
+		// Still approved both by HEP and WEP
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
 	})
 }
 
-func TestWhitelistWorkloadToWorkload(t *testing.T) {
+func TestAllowWorkloadToWorkload(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "WWwl"
@@ -207,10 +207,10 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 
 		ctr := ct[ctKey]
 
-		// Whitelisted by the first WEP (on egress from WEP)
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		// Not whitelisted by the second WEP yet
-		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
+		// Approved by the first WEP (on egress from WEP)
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		// Not approved by the second WEP yet
+		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 	})
 
 	expectMark(tcdefs.MarkSeen)
@@ -226,13 +226,13 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 
 		ctr := ct[ctKey]
 
-		// Whitelisted by both WEPs
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved by both WEPs
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 }
 
-func TestWhitelistFromHostExitHost(t *testing.T) {
+func TestAllowFromHostExitHost(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "WHhs"
@@ -283,9 +283,9 @@ func TestWhitelistFromHostExitHost(t *testing.T) {
 
 		ctr := ct[ctKey]
 
-		// Whitelisted by HEP
-		Expect(ctr.Data().A2B.Whitelisted).To(BeFalse())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved by HEP
+		Expect(ctr.Data().A2B.Approved).To(BeFalse())
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 
 	// Return
@@ -307,8 +307,8 @@ func TestWhitelistFromHostExitHost(t *testing.T) {
 
 		ctr := ct[ctKey]
 
-		// Whitelisted by HEP
-		Expect(ctr.Data().A2B.Whitelisted).To(BeFalse())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved by HEP
+		Expect(ctr.Data().A2B.Approved).To(BeFalse())
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 }
