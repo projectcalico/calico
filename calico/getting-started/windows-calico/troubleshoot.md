@@ -123,7 +123,6 @@ kubectl describe pod -n calico-system <calico-node-pod>
 >**Note**: Use namespace `kube-system` instead of `calico-system` if your Calico installation is non operator-managed.
 {: .alert .alert-info}
 
-
 If the health check reports a BGP peer failure, check the IP address of the peer is either an
 expected IP of a node or an external BGP peer. If the IP of the failed peering is a Windows node:
 

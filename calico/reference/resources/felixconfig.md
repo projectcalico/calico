@@ -150,7 +150,6 @@ policy is always accelerated, using the best available BPF technology.
 | protocol | The protocol match   | tcp, udp, sctp                       | string |
 | net      | The CIDR match       | any valid CIDR (e.g. 192.168.0.0/16) | string |
 
-
 #### RouteTableRange
 The `RouteTableRange` option is now deprecated in favor of [RouteTableRanges](#routetableranges).
 

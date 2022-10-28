@@ -4,7 +4,6 @@ description: Install Calico with the VPP dataplane on a Kubernetes cluster.
 canonical_url: '/getting-started/kubernetes/vpp/getting-started'
 ---
 
-
 ### Big picture
 
 Install {{site.prodname}} and enable the beta release of the VPP dataplane.
@@ -28,7 +27,6 @@ In addition, the VPP dataplane offers some specific features for network-intensi
 
 Trying out the beta will give you a taste of these benefits and an opportunity to give feedback to the VPP dataplane team.
 
-
 ### Features
 
 This how-to guide uses the following {{site.prodname}} features:
@@ -48,7 +46,6 @@ This guide uses the Tigera operator to install {{site.prodname}}. The operator p
 exposed via the Kubernetes API defined as a custom resource definition. While it is also technically possible to install {{site.prodname}}
 and configure it for VPP using manifests directly, only operator based installations are supported at this stage.
 
-
 ### How to
 
 This guide details two ways to install {{site.prodname}} with the VPP dataplane:
@@ -59,8 +56,6 @@ This guide details two ways to install {{site.prodname}} with the VPP dataplane:
 In all cases, here are the details of what you will get:
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}
-
-
 
 {% tabs %}
 <label:Install on EKS,active:true>
@@ -87,7 +82,6 @@ Before you get started, make sure you have downloaded and configured the {% incl
    ```bash
    kubectl delete daemonset -n kube-system aws-node
    ```
-
 
 #### Install and configure Calico with the VPP dataplane
 
@@ -122,7 +116,6 @@ Before you get started, make sure you have downloaded and configured the {% incl
    > **Tip**: The --max-pods-per-node option above, ensures that EKS does not limit the {% include open-new-window.html text='number of pods based on node-type' url='https://github.com/awslabs/amazon-eks-ami/blob/master/files/eni-max-pods.txt' %}. For the full set of node group options, see `eksctl create nodegroup --help`.
    {: .alert .alert-success}
 
-
 %>
 
 <label:Install on EKS with DPDK>
@@ -133,7 +126,6 @@ Before you get started, make sure you have downloaded and configured the {% incl
 #### Requirements
 
 DPDK provides better performance compared to the standard install but it requires some additional customisations (hugepages, for instance) in the EKS worker instances. We have a bash script, `init_eks.sh`, which takes care of applying the required customizations and we make use of the `preBootstrapCommands` property of `eksctl` {% include open-new-window.html text='configuration file' url='https://eksctl.io/usage/schema' %} to execute the script during the worker node creation. These instructions require the latest version of `eksctl`.
-
 
 #### Provision the cluster
 
@@ -148,7 +140,6 @@ DPDK provides better performance compared to the standard install but it require
    ```bash
    kubectl delete daemonset -n kube-system aws-node
    ```
-
 
 #### Install and configure Calico with the VPP dataplane
 
@@ -175,7 +166,6 @@ DPDK provides better performance compared to the standard install but it require
    ```
 
 4. Finally, time to add nodes to the cluster. Since we need to customize the nodes for DPDK, we will use an `eksctl` config file with the `preBootstrapCommands` property to create the worker nodes. The following command will create a managed nodegroup with 2 t3.large worker nodes in the cluster:
-
 
    ```
    cat <<EOF | eksctl create nodegroup -f -
@@ -318,9 +308,6 @@ This will install all the resources required by the VPP dataplane in your cluste
 
 %>
 {% endtabs %}
-
-
-
 
 ### Next steps
 

@@ -133,7 +133,6 @@ in order to use the following match criteria.
 >  * Rules must have the action `Allow` if they contain application layer policy match clauses.
 {: .alert .alert-info}
 
-
 #### HTTPMatch
 
 {% include content/httpmatch.md %}

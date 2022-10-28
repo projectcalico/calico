@@ -20,7 +20,6 @@ of the following reasons.
   cluster.
 - Hosts are regularly added and removed from your cluster.
 
-
 ### Purpose of this page
 
 Provide guidance on how to remove a host that is part of a {{site.prodname}} cluster
@@ -48,7 +47,6 @@ associated with that Node.
 > - Any configuration specific to the node will be removed. This would be
   configuration like node BGP peerings or custom Felix configs.
 {: .alert .alert-danger}
-
 
 ### Removing a single node resource
 

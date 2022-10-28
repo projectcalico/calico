@@ -16,7 +16,6 @@ for a full list of calicoctl commands.
 > for details about each resource type.
 {: .alert .alert-info}
 
-
 ## Displaying the help text for 'calicoctl apply' command
 
 Run `calicoctl apply --help` to display the following help menu for the
