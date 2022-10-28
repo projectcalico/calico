@@ -18,7 +18,7 @@ param
 )
 
 $baseDir = "$PSScriptRoot\.."
-$NSSMPath = "$baseDir\nssm-2.24\win64\nssm.exe"
+$NSSMPath = "$baseDir\nssm\win64\nssm.exe"
 
 $ErrorActionPreference = 'SilentlyContinue'
 
