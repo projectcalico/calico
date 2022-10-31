@@ -249,7 +249,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 	return nil, errors.Errorf("unrecognized map type %T", m)
 }
 
-//IterPerCpuMapCmdOutput iterates over the output of the dump of per-cpu map
+// IterPerCpuMapCmdOutput iterates over the output of the dump of per-cpu map
 func IterPerCpuMapCmdOutput(output []byte, f IterCallback) error {
 	var mp perCpuMapEntry
 	var v []byte
@@ -374,7 +374,7 @@ func (b *PinnedMap) Delete(k []byte) error {
 	valueSize := b.ValueSize
 	if b.perCPU {
 		valueSize = b.ValueSize * NumPossibleCPUs()
-		logrus.Infof("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
+		logrus.Debugf("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
 	}
 	return DeleteMapEntry(b.fd, k, valueSize)
 }
