@@ -790,8 +790,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             endpoint_should_already_exist = port_bound(original)
 
             # Check for migration so that we can reliably delete the
-            # WorkloadEndpoint on the old host.
-            if original['binding:host_id'] != port['binding:host_id']:
+            # WorkloadEndpoint on the old host. That happens when the host
+            # formerly had a binding, and it doesn't match the current one.
+            if original['binding:host_id'] and \
+                    original['binding:host_id'] != port['binding:host_id']:
                 LOG.info("Migration, delete WorkloadEndpoint on old host %s",
                          original['binding:host_id'])
                 self.endpoint_syncer.delete_endpoint(original)
