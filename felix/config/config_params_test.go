@@ -292,6 +292,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("IptablesMangleAllowAction", "IptablesMangleAllowAction",
 		"RETURN", "RETURN"),
 
+	Entry("IptablesFilterDenyAction", "IptablesFilterDenyAction", "DROP", "DROP"),
+	Entry("IptablesFilterDenyAction", "IptablesFilterDenyAction", "REJECT", "REJECT"),
+
 	Entry("LogFilePath", "LogFilePath", "/tmp/felix.log", "/tmp/felix.log"),
 
 	Entry("LogSeverityFile", "LogSeverityFile", "debug", "DEBUG"),
