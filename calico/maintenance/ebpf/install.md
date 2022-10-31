@@ -134,7 +134,7 @@ kubeadm init --skip-phases=addon/kube-proxy
 requirements, `kops`-provisioned clusters are supported.
 
 Since `kube-proxy` is not required in eBPF mode, you may wish to disable `kube-proxy` at install time.  With `kops` you
-can do that by setting the follwing in your `kops` configuration:
+can do that by setting the following in your `kops` configuration:
 
 ```
   kubeProxy:
@@ -240,7 +240,6 @@ kubectl cluster-info
 which should give output similar to the following:
 ```
 Kubernetes master is running at https://60F939227672BC3D5A1B3EC9744B2B21.gr7.us-west-2.eks.amazonaws.com
-...
 ```
 In this example, you would use `60F939227672BC3D5A1B3EC9744B2B21.gr7.us-west-2.eks.amazonaws.com` for
 `KUBERNETES_SERVICE_HOST` and `443` for `KUBERNETES_SERVICE_PORT` when creating the config map.
@@ -282,7 +281,7 @@ When the main install guide tells you to apply the `custom-resources.yaml`, typi
 the URL of the file directly, you should instead download the file, so that you can edit it:
 
 ```bash
-curl -o custom-resources.yaml <url of the file from the main install guide>
+curl -o custom-resources.yaml {{site.data.versions.first.manifests_url}}/manifests/custom-resources.yaml
 ```
 
 Edit the file in your editor of choice and find the `Installation` resource, which should be at the top of the file.
@@ -293,8 +292,8 @@ as shown below.
 For example:
 
 ```yaml
-# This section includes base Calico Enterprise installation configuration.
-# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.Installation
+# This section includes base {{site.prodname}} installation configuration.
+# For more information, see: {{ site.baseurl }}/reference/installation/api#operator.tigera.io/v1.Installation
 apiVersion: operator.tigera.io/v1
 kind: Installation
 metadata:
@@ -307,10 +306,18 @@ spec:
   # EKS with Bottlerocket as node image only:
   # flexVolumePath: /var/lib/kubelet/plugins
     
-  # Install Calico Enterprise
-  variant: TigeraSecureEnterprise
-  
-  # ... remainder of the Installation resource varies by platform ...
+  # Install Calico Opensource
+  variant: Calico
+---
+
+# This section configures the Calico API server.
+# For more information, see: {{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.APIServer
+apiVersion: operator.tigera.io/v1
+kind: APIServer 
+metadata: 
+  name: default 
+spec: {}
+
 ```
 
 Then apply the edited file:
@@ -392,7 +399,7 @@ the Felix configuration parameter `bpfKubeProxyIptablesCleanupEnabled` to false.
 `kubectl` as follows:
 
 ```
-kubectl patch felixconfiguration.p default --type merge --patch='{"spec": {"bpfKubeProxyIptablesCleanupEnabled": false}}'
+kubectl patch felixconfiguration default --type merge --patch='{"spec": {"bpfKubeProxyIptablesCleanupEnabled": false}}'
 ```
 
 %>
@@ -415,4 +422,3 @@ Then, should you want to start `kube-proxy` again, you can simply remove the nod
 **Recommended**
 
 - [Learn more about eBPF]({{site.baseurl}}/maintenance/ebpf/use-cases-ebpf)
-
