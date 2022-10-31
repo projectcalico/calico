@@ -613,10 +613,6 @@ type OffsetFixer func(origInsn Insn) Insn
 func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
 	insnLabel := strings.Join(b.insnIdxToLabels[len(b.insns)], ",")
 	if !b.nextInsnReachble() {
-		if targetLabel == "allow" {
-			log.Infof("Asm: %v UU:    %v [UNREACHABLE]", insnLabel, insn)
-		}
-
 		log.Debugf("Asm: %v UU:    %v [UNREACHABLE]", insnLabel, insn)
 		for _, l := range b.insnIdxToLabels[len(b.insns)] {
 			delete(b.labelToInsnIdx, l)
