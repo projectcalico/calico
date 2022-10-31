@@ -178,12 +178,7 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 		return -1, fmt.Errorf("error loading program: %w", err)
 	}
 
-	isHost := false
-	if ap.Type == "host" || ap.Type == "nat" || ap.Type == "lo" {
-		isHost = true
-	}
-
-	err = updateJumpMap(obj, isHost, ap.IPv6Enabled)
+	err = ap.updateJumpMap(obj)
 	if err != nil {
 		logCxt.Warn("Failed to update jump map")
 		return -1, fmt.Errorf("error updating jump map %v", err)
@@ -644,9 +639,27 @@ func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
 	return nil
 }
 
-func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
+func (ap AttachPoint) hasPolicyProg() bool {
+	switch ap.Type {
+	case EpTypeHost, EpTypeNAT, EpTypeLO:
+		return false
+	}
+
+	return true
+}
+
+func (ap AttachPoint) hasHostConflictProg() bool {
+	switch ap.Type {
+	case EpTypeWorkload:
+		return false
+	}
+
+	return ap.ToOrFrom == ToEp
+}
+
+func (ap AttachPoint) updateJumpMap(obj *libbpf.Obj) error {
 	ipVersions := []string{"IPv4"}
-	if ipv6Enabled {
+	if ap.IPv6Enabled {
 		ipVersions = append(ipVersions, "IPv6")
 	}
 
@@ -654,7 +667,10 @@ func updateJumpMap(obj *libbpf.Obj, isHost bool, ipv6Enabled bool) error {
 
 	for _, ipFamily := range ipVersions {
 		for _, idx := range tcdefs.JumpMapIndexes[ipFamily] {
-			if isHost && (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) {
+			if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !ap.hasPolicyProg() {
+				continue
+			}
+			if idx == tcdefs.ProgIndexHostCtConflict && !ap.hasHostConflictProg() {
 				continue
 			}
 			err := obj.UpdateJumpMap(mapName, tcdefs.ProgramNames[idx], idx)
