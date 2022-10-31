@@ -61,4 +61,22 @@ var _ = DescribeTable("GetInterfaces",
 		},
 		expectFound: false,
 	}),
+	Entry("should skip vxlan-v6.calico", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "vxlan-v6.calico"}}, nil
+		},
+		expectFound: false,
+	}),
+	Entry("should skip wireguard.cali", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "wireguard.cali"}}, nil
+		},
+		expectFound: false,
+	}),
+	Entry("should skip wg-v6.cali", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "wg-v6.cali"}}, nil
+		},
+		expectFound: false,
+	}),
 )
