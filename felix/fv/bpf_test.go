@@ -158,26 +158,24 @@ func withUDPConnectedRecvMsg() bpfTestOpt {
 const expectedRouteDump = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
-10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
-FELIX_0/32: local host idx -
+FELIX_0/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
 const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
-10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
-FELIX_0/32: local host idx -
+FELIX_0/32: local host
 FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
@@ -3235,6 +3233,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						BeforeEach(func() {
+							deadWorkload.ConfigureInInfra(infra)
 							tgtPort = 8057
 							tgtWorkload = deadWorkload
 						})
