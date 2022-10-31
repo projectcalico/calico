@@ -292,8 +292,8 @@ as shown below.
 For example:
 
 ```yaml
-# This section includes base Calico installation configuration.
-# For more information, see: https://projectcalico.docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.Installation
+# This section includes base {{site.prodname}} installation configuration.
+# For more information, see: {{ site.baseurl }}/reference/installation/api#operator.tigera.io/v1.Installation
 apiVersion: operator.tigera.io/v1
 kind: Installation
 metadata:
@@ -311,7 +311,7 @@ spec:
 ---
 
 # This section configures the Calico API server.
-# For more information, see: https://projectcalico.docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.APIServer
+# For more information, see: {{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.APIServer
 apiVersion: operator.tigera.io/v1
 kind: APIServer 
 metadata: 
