@@ -158,26 +158,24 @@ func withUDPConnectedRecvMsg() bpfTestOpt {
 const expectedRouteDump = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
-10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
-FELIX_0/32: local host idx -
+FELIX_0/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
 const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
-10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
-FELIX_0/32: local host idx -
+FELIX_0/32: local host
 FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
@@ -714,15 +712,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				w := workload.New(felixes[ii], wName, "default",
 					wIP, strconv.Itoa(port), testOpts.protocol)
-				if run {
-					w.Start()
-				}
 
 				labels["name"] = w.Name
 				labels["workload"] = "regular"
 
 				w.WorkloadEndpoint.Labels = labels
-				w.ConfigureInInfra(infra)
+				if run {
+					err := w.Start()
+					Expect(err).NotTo(HaveOccurred())
+					w.ConfigureInInfra(infra)
+				}
 				if options.UseIPPools {
 					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
 					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
@@ -757,7 +756,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					testOpts.protocol)
 
 				hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
-				hostW[ii].ConfigureInInfra(infra)
 
 				// Two workloads on each host so we can check the same host and other host cases.
 				w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
@@ -2225,14 +2223,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.ExpectSome(w[0][1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 
-							_, v1 := affKV()
+							_, val1 := affKV()
 
 							cc.CheckConnectivity()
 
 							_, v2 := affKV()
 
 							// This should happen consistently, but that may take quite some time.
-							Expect(v1.Backend()).To(Equal(v2.Backend()))
+							Expect(val1.Backend()).To(Equal(v2.Backend()))
 
 							cc.ResetExpectations()
 
@@ -2243,7 +2241,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity()
 
 							mkey, mVal := affKV()
-							Expect(v1.Backend()).To(Equal(mVal.Backend()))
+							Expect(val1.Backend()).To(Equal(mVal.Backend()))
 
 							netIP := net.ParseIP(ip)
 							Expect(mkey.FrontendAffinityKey().AsBytes()).
@@ -3040,12 +3038,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											Protocol:      testOpts.protocol,
 											InterfaceName: "eth20",
 										}
-										eth20.Start()
+										err := eth20.Start()
+										Expect(err).NotTo(HaveOccurred())
 
 										// assign address to eth20 and add route to the .20 network
 										felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
 										felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
-										_, err := eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
+										_, err = eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
 										Expect(err).NotTo(HaveOccurred())
 										// Add a route to felix[1] to be able to reach the nodeport
 										_, err = eth20.RunCmd("ip", "route", "add", felixes[1].IP+"/32", "via", "10.0.0.20")
@@ -3234,6 +3233,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						BeforeEach(func() {
+							deadWorkload.ConfigureInInfra(infra)
 							tgtPort = 8057
 							tgtWorkload = deadWorkload
 						})
@@ -3496,7 +3496,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			expectPongs := func() {
 				count := pc.PongCount()
-				EventuallyWithOffset(1, pc.PongCount, "5s").Should(
+				EventuallyWithOffset(1, pc.PongCount, "60s").Should(
 					BeNumerically(">", count),
 					"Expected to see pong responses on the connection but didn't receive any")
 				log.Info("Pongs received")
@@ -3507,6 +3507,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					By("Starting persistent connection")
 					pc = from.StartPersistentConnection(to.IP, 8055, workload.PersistentConnectionOpts{
 						MonitorConnectivity: true,
+						Timeout:             60 * time.Second,
 					})
 
 					By("having initial connectivity", expectPongs)
@@ -3883,10 +3884,10 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 		epslen           int
 	)
 	if w != nil {
-		testSvc = k8sLBService(name, clusterIP, w.Name, 80, tgtPort, protocol, externalIPs, srcRange)
+		testSvc = k8sLBService(name, clusterIP, w.Name, port, tgtPort, protocol, externalIPs, srcRange)
 		epslen = 1
 	} else {
-		testSvc = k8sLBService(name, clusterIP, "nobackend", 80, tgtPort, protocol, externalIPs, srcRange)
+		testSvc = k8sLBService(name, clusterIP, "nobackend", port, tgtPort, protocol, externalIPs, srcRange)
 		epslen = 0
 	}
 	testSvcNamespace = testSvc.ObjectMeta.Namespace
@@ -3900,9 +3901,9 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 func checkNodeConntrack(felixes []*infrastructure.Felix) error {
 
 	for i, felix := range felixes {
-		conntrack, err := felix.ExecOutput("conntrack", "-L")
+		conntrackOut, err := felix.ExecOutput("conntrack", "-L")
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "conntrack -L failed")
-		lines := strings.Split(conntrack, "\n")
+		lines := strings.Split(conntrackOut, "\n")
 	lineLoop:
 		for _, line := range lines {
 			line = strings.Trim(line, " ")
@@ -3970,7 +3971,7 @@ func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
 
 	for _, felix := range felixes {
 		wg.Add(1)
-		go func() {
+		go func(felix *infrastructure.Felix) {
 			defer wg.Done()
 			Eventually(func() error {
 				// N.B. we only support environment with not so strict RPF - can be
@@ -3999,7 +4000,7 @@ func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
 
 				return nil
 			}, "5s", "200ms").Should(Succeed())
-		}()
+		}(felix)
 	}
 
 	wg.Wait()
