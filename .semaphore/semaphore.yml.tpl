@@ -94,10 +94,9 @@ blocks:
   dependencies: []
   task:
     jobs:
-    - name: "Check generated files"
+    - name: "Pre-flight checks"
       commands:
-      - make generate
-      - make check-dirty
+      - make ci-preflight-checks
 
 - name: "API"
   run:

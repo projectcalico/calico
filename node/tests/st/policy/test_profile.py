@@ -284,7 +284,7 @@ class MultiHostMainline(TestBase):
                                  pass_list=self.n2_workloads[:1],
                                  fail_list=self.n1_workloads + self.n2_workloads[1:])
 
-        # Add a destination whitelist to n2 that allows pods within it to reach other pods in n2.
+        # Add a destination allow to n2 that allows pods within it to reach other pods in n2.
         n2_ips = [str(workload.ip) + "/32" for workload in self.n2_workloads]
         rule = {'action': 'Allow',
                 'destination': {'nets': n2_ips}}
