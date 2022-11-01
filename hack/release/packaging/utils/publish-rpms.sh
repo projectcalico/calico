@@ -6,7 +6,7 @@
 # binaries.projectcalico.org.  (We also build el6 RPMs but do not
 # publish these.)
 
-REPO_NAME=${REPO_NAME:-master}
+blocklist=${REPO_NAME:-master}
 
 # Get the location of this script and include common function library.
 scriptdir=$(dirname $(readlink -f $0))
