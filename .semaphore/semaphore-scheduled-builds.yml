@@ -397,6 +397,7 @@ blocks:
       - export REPO_NAME=$(basename $(pwd))
       - export NUM_FV_BATCHES=8
       - mkdir artifacts
+      - mkdir report
       - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
     - name: UT/FV tests on new kernel
@@ -410,6 +411,7 @@ blocks:
         - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
         - ./.semaphore/publish-artifacts
         - ./.semaphore/clean-up-vms ${VM_PREFIX}
+        - for b in report/*; do test-results publish /home/semaphore/calico/felix/report/$b/fv_suite.xml --name "felix-new-kern-$b" || true; done
     secrets:
     - name: google-service-account-for-gce
 
