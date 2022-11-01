@@ -47,12 +47,14 @@ The following list are the most common platforms and tools used with {{site.prod
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy  |
 
+
 ### EKS
 
 | {{site.prodname}} version | EKS and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+
 
 ### Flannel
 
@@ -61,12 +63,14 @@ The following list are the most common platforms and tools used with {{site.prod
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
 
+
 ### GCE
 
 | {{site.prodname}} version | GCE and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
+
 
 ### GKE
 
@@ -75,12 +79,14 @@ The following list are the most common platforms and tools used with {{site.prod
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
 
+
 ### IKS
 
 | {{site.prodname}} version | IKS and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy  |
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
+
 
 ### K3s
 
@@ -104,6 +110,7 @@ The following list are the most common platforms and tools used with {{site.prod
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy|
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
+
 
 ### Micro K8s
 
@@ -143,6 +150,7 @@ The following list are the most common platforms and tools used with {{site.prod
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
 | 3.24                   | OpenStack Ussuri or later  | - {{site.prodname}} CNI with network policy |
 | 3.23                    | OpenStack Ussuri or later  | - {{site.prodname}} CNI with network policy |
+
 
 
 ### RKE
