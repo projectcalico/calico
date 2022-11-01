@@ -14,7 +14,7 @@ canonical_url: /getting-started/compatibility
 
 ### Platforms
 
-The following list shows the platforms supported in this release. The tables provide a platform version history starting with {{site.prodname}} 3.23. 
+The following list shows the platforms supported in this release. Other platforms may work as well but are not tested. The tables provide a platform version history starting with {{site.prodname}} 3.23. 
 
 - [AKS](#aks)
 - [DigitalOcean](#digitalocean)
@@ -28,7 +28,7 @@ The following list shows the platforms supported in this release. The tables pro
 - [Micro K8s](#micro-k8s)
 - [Microsoft Azure](#microsoft-azure)
 - [OpenShift](#openshift)
-- [OpenStack]
+- [OpenStack](#openstack)
 - [RKE](#rke)
 
 ### AKS
@@ -54,7 +54,6 @@ The following list shows the platforms supported in this release. The tables pro
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
 
-
 ### EKS
 
 | {{site.prodname}} version | EKS and Kubernetes versions | {{site.prodname}} support                                    |
@@ -64,10 +63,10 @@ The following list shows the platforms supported in this release. The tables pro
 
 ### Flannel
 
-| {{site.prodname}} version | Flanne and Kubernetes versions | {{site.prodname}} support                                    |
+| {{site.prodname}} version | Flannel and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
 
 ### GCE
 
@@ -110,8 +109,8 @@ The following list shows the platforms supported in this release. The tables pro
 
 | {{site.prodname}} version | GKE and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy|
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
 
 
 ### OpenShift
@@ -126,8 +125,8 @@ The following list shows the platforms supported in this release. The tables pro
 
 | {{site.prodname}} version | OpenStack versions for Kubernetes | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | OpenStack Ussuri or later, | - {{site.prodname}} CNI with network policy |
-| 3.23                    | OpenStack Ussuri or later, | - {{site.prodname}} CNI with network policy |
+| 3.24                   | OpenStack Ussuri or later  | - {{site.prodname}} CNI with network policy |
+| 3.23                    | OpenStack Ussuri or later  | - {{site.prodname}} CNI with network policy |
 
 
 ### RKE
