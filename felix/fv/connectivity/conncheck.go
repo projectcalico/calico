@@ -681,7 +681,8 @@ type CheckCmd struct {
 	ipSource   string
 	portSource string
 
-	duration time.Duration
+	duration time.Duration // Duration for long running stream tests
+	timeout  time.Duration // Timeout for one-off pings.
 
 	sendLen int
 	recvLen int
@@ -702,6 +703,7 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 		fmt.Sprintf("--duration=%d", int(cmd.duration.Seconds())),
 		fmt.Sprintf("--sendlen=%d", cmd.sendLen),
 		fmt.Sprintf("--recvlen=%d", cmd.recvLen),
+		fmt.Sprintf("--timeout=%f", cmd.timeout.Seconds()),
 		cmd.nsPath, cmd.ip, cmd.port,
 	}
 
@@ -799,14 +801,22 @@ func WithRecvLen(l int) CheckOption {
 	}
 }
 
+func WithTimeout(t time.Duration) CheckOption {
+	return func(c *CheckCmd) {
+		c.timeout = t
+	}
+}
+
 // Check executes the connectivity check
 func Check(cName, logMsg, ip, port, protocol string, opts ...CheckOption) *Result {
 
+	const defaultPingTimeout = 2 * time.Second
 	cmd := CheckCmd{
 		nsPath:   "-",
 		ip:       ip,
 		port:     port,
 		protocol: protocol,
+		timeout:  defaultPingTimeout,
 	}
 
 	for _, opt := range opts {
