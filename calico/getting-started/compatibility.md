@@ -40,7 +40,7 @@ The following list are the most common platforms and tools used with {{site.prod
 | 3.23                      | 1.21, 1.22, 1.23            | - {{site.prodname}} CNI with network policy<br />- Azure CNI with {{site.prodname}} network policy |
 
 
-### Digital Ocean (DO)
+### DigitalOcean
 
 | {{site.prodname}} version | DO and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
@@ -126,7 +126,7 @@ The following list are the most common platforms and tools used with {{site.prod
 | {{site.prodname}} version | Minikube and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy|
-| 3.23   
+| 3.23   |1.21, 1.22, 1.23|- {{site.prodname}} CNI with network policy|
 
 
 ### OpenShift
