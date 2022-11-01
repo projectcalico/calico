@@ -14,7 +14,7 @@ canonical_url: /getting-started/compatibility
 
 ### Platforms
 
-The following list shows the platforms supported in this release. Other platforms may work as well but are not tested. The tables provide a platform version history starting with {{site.prodname}} 3.23. 
+The following list are the most common platforms and tools used with {{site.prodname}}. Other platforms may work, but are not tested. The tables provide a platform version history starting with {{site.prodname}} 3.23. 
 
 - [AKS](#aks)
 - [DigitalOcean](#digitalocean)
@@ -27,6 +27,7 @@ The following list shows the platforms supported in this release. Other platform
 - [IKS](#iks)
 - [Micro K8s](#micro-k8s)
 - [Microsoft Azure](#microsoft-azure)
+- [Minikube](#minikube)
 - [OpenShift](#openshift)
 - [OpenStack](#openstack)
 - [RKE](#rke)
@@ -39,20 +40,12 @@ The following list shows the platforms supported in this release. Other platform
 | 3.23                      | 1.21, 1.22, 1.23            | - {{site.prodname}} CNI with network policy<br />- Azure CNI with {{site.prodname}} network policy |
 
 
-### Microsoft Azure
-
-| {{site.prodname}} version | Azure and Kubernetes versions | {{site.prodname}} support                                    |
-| ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-
-
 ### Digital Ocean (DO)
 
-| {{site.prodname}} version | EKS and Kubernetes versions | {{site.prodname}} support                                    |
+| {{site.prodname}} version | DO and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy  |
 
 ### EKS
 
@@ -72,29 +65,29 @@ The following list shows the platforms supported in this release. Other platform
 
 | {{site.prodname}} version | GCE and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
 
 ### GKE
 
 | {{site.prodname}} version | GKE and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
 
 ### IKS
 
 | {{site.prodname}} version | IKS and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy  |
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
 
 ### K3s
 
 | {{site.prodname}} version | K3s and Kubernetes versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
-| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
-| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy |
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
 
 
 ### kOps on AWS
@@ -107,10 +100,33 @@ The following list shows the platforms supported in this release. Other platform
 
 ### Kubernetes-kubeadm
 
-| {{site.prodname}} version | GKE and Kubernetes versions | {{site.prodname}} support                                    |
+| {{site.prodname}} version | Kubernetes/kubeadm versions | {{site.prodname}} support                                    |
 | ------------------------- | ---------------- | ------------------------------------------------------------ |
 | 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy|
 | 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
+
+### Micro K8s
+
+| {{site.prodname}} version | Micro K8s and Kubernetes versions | {{site.prodname}} support                                    |
+| ------------------------- | ---------------- | ------------------------------------------------------------ |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy|
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy |
+
+
+### Microsoft Azure
+
+| {{site.prodname}} version | Azure and Kubernetes versions | {{site.prodname}} support                                    |
+| ------------------------- | ---------------- | ------------------------------------------------------------ |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+| 3.23                    | 1.21, 1.22, 1.23 | - {{site.prodname}} CNI with network policy<br />- AWS CNI with {{site.prodname}} network policy |
+
+
+### Minikube
+
+| {{site.prodname}} version | Minikube and Kubernetes versions | {{site.prodname}} support                                    |
+| ------------------------- | ---------------- | ------------------------------------------------------------ |
+| 3.24                   | 1.22 , 1.23, 1.24 | - {{site.prodname}} CNI with network policy|
+| 3.23   
 
 
 ### OpenShift
