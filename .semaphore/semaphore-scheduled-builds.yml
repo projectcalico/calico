@@ -410,6 +410,7 @@ blocks:
         - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
         - ./.semaphore/publish-artifacts
         - ./.semaphore/clean-up-vms ${VM_PREFIX}
+        - for b in report/*; do test-results publish /home/semaphore/calico/felix/report/$b/fv_suite.xml --name "felix-new-kern-$b" || true; done
     secrets:
     - name: google-service-account-for-gce
 
