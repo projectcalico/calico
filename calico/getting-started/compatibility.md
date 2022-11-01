@@ -14,7 +14,7 @@ canonical_url: /getting-started/compatibility
 
 ### Platforms
 
-The following list are the most common platforms and tools used with {{site.prodname}}. Other platforms may work, but are not tested. The tables provide a platform version history starting with {{site.prodname}} 3.23. 
+The following platforms and tools are the most commonly used with {{site.prodname}}. Other platforms may work, but are not tested. The tables provide a platform version history starting with {{site.prodname}} 3.23. 
 
 - [AKS](#aks)
 - [DigitalOcean](#digitalocean)
