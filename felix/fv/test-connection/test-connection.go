@@ -149,19 +149,20 @@ func main() {
 		log.WithError(err).Fatal("Invalid --stdin")
 	}
 
-	timeout := 0
+	var timeout time.Duration
 
 	if toval := arguments["--timeout"]; toval != nil {
-		timeout, err = strconv.Atoi(toval.(string))
+		timeoutSecs, err := strconv.ParseFloat(toval.(string), 64)
 		if err != nil {
 			// panic on error
 			log.WithField("timeout", timeout).Fatal("Invalid --timeout argument")
 		}
+		timeout = time.Duration(timeoutSecs * float64(time.Second))
 	}
 
 	log.Infof("Test connection from namespace %v IP %v port %v to IP %v port %v proto %v "+
-		"max duration %d seconds, logging pongs (%v), stdin %v",
-		namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds, logPongs, stdin)
+		"max duration %d seconds, timeout %v logging pongs (%v), stdin %v",
+		namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds, timeout, logPongs, stdin)
 
 	if loopFile == "" {
 		// I found that configuring the timeouts on all the network calls was a bit fiddly.  Since
@@ -179,7 +180,7 @@ func main() {
 		// Test connection from wherever we are already running.
 		if err == nil {
 			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs, stdin, time.Duration(timeout)*time.Second)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout)
 		}
 	} else {
 		// Get the specified network namespace (representing a workload).
@@ -198,7 +199,7 @@ func main() {
 				return e
 			}
 			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs, stdin, time.Duration(timeout)*time.Second)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout)
 		})
 	}
 
@@ -409,7 +410,7 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	}
 
 	if tc.config.ConnType == connectivity.ConnectionTypePing {
-		return tc.tryConnectOnceOff()
+		return tc.tryConnectOnceOff(timeout)
 	}
 
 	return tc.tryConnectWithPacketLoss()
@@ -514,8 +515,22 @@ func (tc *testConn) sendErrorResp(err error) {
 	res.PrintToStdout()
 }
 
-func (tc *testConn) tryConnectOnceOff() error {
+func (tc *testConn) tryConnectOnceOff(timeout time.Duration) error {
 	log.Info("Doing single-shot test...")
+	if timeout != 0 {
+		done := make(chan struct{})
+		defer func() {
+			close(done)
+		}()
+		go func() {
+			select {
+			case <-done:
+				return
+			case <-time.After(timeout):
+				log.Fatalf("Timed out after %.1fs", timeout.Seconds())
+			}
+		}()
+	}
 
 	if tc.stdin {
 		var buf bytes.Buffer

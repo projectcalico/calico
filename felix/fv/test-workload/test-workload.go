@@ -352,10 +352,19 @@ func main() {
 					}
 				}
 
+				seenSrc := "<unknown>"
+				seenLocal := "<unknown>"
+				if conn.RemoteAddr() != nil {
+					seenSrc = conn.RemoteAddr().String()
+				}
+				if conn.LocalAddr() != nil {
+					seenLocal = conn.LocalAddr().String()
+				}
+
 				response := connectivity.Response{
 					Timestamp:  time.Now(),
-					SourceAddr: conn.RemoteAddr().String(),
-					ServerAddr: conn.LocalAddr().String(),
+					SourceAddr: seenSrc,
+					ServerAddr: seenLocal,
 					Request:    request,
 				}
 
