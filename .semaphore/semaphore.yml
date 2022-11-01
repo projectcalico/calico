@@ -394,7 +394,6 @@ blocks:
       - export ZONE=europe-west3-c
       - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-
       - echo VM_PREFIX=${VM_PREFIX}
-      - export REPO_NAME=$(basename $(pwd))
       - export NUM_FV_BATCHES=8
       - mkdir artifacts
       - ./.semaphore/create-test-vms ${VM_PREFIX}
@@ -410,6 +409,7 @@ blocks:
         - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
         - ./.semaphore/publish-artifacts
         - ./.semaphore/clean-up-vms ${VM_PREFIX}
+        - for b in report/*; do [ -d report/$b ] || continue; test-results publish /home/semaphore/calico/felix/report/$b/fv_suite.xml --name "felix-new-kern-$b" || true; done
     secrets:
     - name: google-service-account-for-gce
 

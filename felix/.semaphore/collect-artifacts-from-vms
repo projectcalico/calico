@@ -40,8 +40,9 @@ for batch in "${batches[@]}"; do
     if [ $batch != 1 ]; then
       args="--skip-binaries"
     fi
-    VM_NAME=$vm_name $my_dir/on-test-vm ${REPO_NAME}/.semaphore/collect-artifacts $args || echo "Failed to collect artifacts from ${vm_name}."
-    gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${REPO_NAME}/artifacts" ./ --recurse || echo "Failed to SCP from ${vm_name}"
+    VM_NAME=$vm_name $my_dir/on-test-vm calico/felix/.semaphore/collect-artifacts $args || echo "Failed to collect artifacts from ${vm_name}."
+    gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:calico/felix/artifacts" ./ --recurse || echo "Failed to SCP from ${vm_name}"
+    gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:calico/felix/report" "./report/${batch}" || echo "Failed to SCP from ${vm_name}"
   ) >& "$log_file" &
   pid=$!
   pids+=( $pid )
