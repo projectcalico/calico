@@ -2,6 +2,8 @@ title: "Install Calico"
 path: /getting-started/
 order: 1
 section:
+- title: Support and compatibility
+  path: /getting-started/compatibility  
 - title: Kubernetes
   path: /getting-started/kubernetes/
   section:
