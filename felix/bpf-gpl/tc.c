@@ -45,6 +45,8 @@
 #include "bpf_helpers.h"
 #include "rule_counters.h"
 
+#define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
+
 #if !defined(__BPFTOOL_LOADER__)
 const volatile struct cali_tc_globals __globals;
 #endif
@@ -262,7 +264,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
 
-	if (CALI_F_TO_HEP &&
+	if (HAS_HOST_CONFLICT_PROG &&
 			(ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) &&
 			!(ctx->skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
 		CALI_DEBUG("Host source SNAT conflict\n");
@@ -1405,6 +1407,7 @@ deny:
 	return TC_ACT_SHOT;
 }
 
+#if HAS_HOST_CONFLICT_PROG
 SEC("classifier/tc/host_ct_conflict")
 int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 {
@@ -1478,6 +1481,7 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 deny:
 	return TC_ACT_SHOT;
 }
+#endif /* HAS_HOST_CONFLICT_PROG */
 
 SEC("classifier/tc/drop")
 int calico_tc_skb_drop(struct __sk_buff *skb)

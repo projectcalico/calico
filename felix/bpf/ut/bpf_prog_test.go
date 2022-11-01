@@ -585,9 +585,10 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 	}
 
 	if !forXDP {
-		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
-		if err != nil {
-			return errors.Wrap(err, "failed to update jump map (icmp program)")
+		out, err := bpftool("map", "update", "pinned", jumpMap.Path(), "key", "4", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
+		if err != nil && !strings.Contains(string(out), "classifier_tc_host_ct_conflict): No such file or directory") {
+			fmt.Printf("err.Error() = %+v\n", err.Error())
+			return errors.Wrap(err, "failed to update jump map (host tc conflict program)")
 		}
 	}
 
