@@ -82,9 +82,9 @@ rules:
       - services
       - nodes
     verbs:
-      # Used to discover service IPs for advertisement.
       - watch
       - list
+      - get
   - apiGroups: ["networking.k8s.io"]
     resources:
       - networkpolicies
