@@ -294,7 +294,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 
 			if ctlbWorkaround {
-				options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
+				if testOpts.protocol == "udp" {
+					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
+				} else {
+					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
+				}
 			}
 		})
 
@@ -502,6 +506,103 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.CheckConnectivity(conntrackChecks(felixes)...)
 				})
 			})
+
+			if testOpts.protocol == "udp" && testOpts.connTimeEnabled {
+				Describe("with BPFConnectTimeLoadBalancingWorkaround=udp", func() {
+					BeforeEach(func() {
+						options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
+					})
+					It("should not program non-udp services", func() {
+						udpsvc := &v1.Service{
+							TypeMeta: typeMetaV1("Service"),
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "udp-service",
+								Namespace: "default",
+							},
+							Spec: v1.ServiceSpec{
+								ClusterIP: "10.101.0.201",
+								Type:      v1.ServiceTypeClusterIP,
+								Ports: []v1.ServicePort{
+									{
+										Protocol: v1.ProtocolUDP,
+										Port:     1234,
+									},
+								},
+							},
+						}
+
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+
+						_, err := k8sClient.CoreV1().Services("default").Create(context.Background(),
+							udpsvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() bool {
+							return checkServiceRoute(felixes[0], udpsvc.Spec.ClusterIP)
+						}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with udp service")
+
+						tcpsvc := &v1.Service{
+							TypeMeta: typeMetaV1("Service"),
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "tcp-service",
+								Namespace: "default",
+							},
+							Spec: v1.ServiceSpec{
+								ClusterIP: "10.101.0.202",
+								Type:      v1.ServiceTypeClusterIP,
+								Ports: []v1.ServicePort{
+									{
+										Protocol: v1.ProtocolTCP,
+										Port:     4321,
+									},
+								},
+							},
+						}
+
+						_, err = k8sClient.CoreV1().Services("default").Create(context.Background(),
+							tcpsvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Consistently(func() bool {
+							return checkServiceRoute(felixes[0], tcpsvc.Spec.ClusterIP)
+						}, 1*time.Second, 300*time.Millisecond).Should(BeFalse(), "Unexpected TCP service")
+
+						tcpudpsvc := &v1.Service{
+							TypeMeta: typeMetaV1("Service"),
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "tcp-udp-service",
+								Namespace: "default",
+							},
+							Spec: v1.ServiceSpec{
+								ClusterIP: "10.101.0.203",
+								Type:      v1.ServiceTypeClusterIP,
+								Ports: []v1.ServicePort{
+									{
+										Name:     "udp",
+										Protocol: v1.ProtocolUDP,
+										Port:     1234,
+									},
+									{
+										Name:     "tcp",
+										Protocol: v1.ProtocolTCP,
+										Port:     4321,
+									},
+								},
+							},
+						}
+
+						_, err = k8sClient.CoreV1().Services("default").Create(context.Background(),
+							tcpudpsvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() bool {
+							return checkServiceRoute(felixes[0], tcpudpsvc.Spec.ClusterIP)
+						}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with tcpudp service")
+
+						Expect(checkServiceRoute(felixes[0], tcpsvc.Spec.ClusterIP)).To(BeFalse())
+					})
+				})
+			}
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 
@@ -942,6 +1043,30 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					pol.Spec.Selector = "workload=='regular'"
 
 					pol = createPolicy(pol)
+
+					By("allowing to self via MASQ", func() {
+
+						nets := []string{felixes[0].IP + "/32"}
+						switch testOpts.tunnel {
+						case "ipip":
+							nets = []string{felixes[0].ExpectedIPIPTunnelAddr + "/32"}
+						}
+
+						pol := api.NewGlobalNetworkPolicy()
+						pol.Namespace = "fv"
+						pol.Name = "self-snat"
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: nets,
+								},
+							},
+						}
+						pol.Spec.Selector = "name=='" + w[0][0].Name + "'"
+
+						pol = createPolicy(pol)
+					})
 
 					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_ = k8sClient
@@ -1849,39 +1974,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						By("allowing to self via SNAT", func() {
-
-							nets := []string{felixes[0].IP + "/32"}
-							switch testOpts.tunnel {
-							case "ipip":
-								nets = []string{felixes[0].ExpectedIPIPTunnelAddr + "/32"}
-							}
-
-							pol = api.NewGlobalNetworkPolicy()
-							pol.Namespace = "fv"
-							pol.Name = "self-snat"
-							pol.Spec.Ingress = []api.Rule{
-								{
-									Action: "Allow",
-									Source: api.EntityRule{
-										Nets: nets,
-									},
-								},
-							}
-							pol.Spec.Selector = "name=='" + w[0][0].Name + "'"
-
-							pol = createPolicy(pol)
-						})
-
 						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
+						hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+						}
 
 						if !testOpts.connTimeEnabled {
-							hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
-							switch testOpts.tunnel {
-							case "ipip":
-								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
-							}
-
+							w00Expects = append(w00Expects, hostW0SrcIP)
 							w00Expects = append(w00Expects, hostW0SrcIP)
 						}
 
@@ -1892,62 +1993,40 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					if testOpts.connTimeEnabled {
-						It("workload should have connectivity to self via a service", func() {
-							ip := testSvc.Spec.ClusterIP
-							port := uint16(testSvc.Spec.Ports[0].Port)
+					It("should only have connectivity from the local host via a service to workload 0", func() {
+						// Local host is always allowed (for kubelet health checks).
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
 
-							cc.ExpectSome(w[0][0], TargetIP(ip), port)
-							cc.CheckConnectivity()
+						cc.ExpectSome(felixes[0], TargetIP(ip), port)
+						cc.ExpectNone(felixes[1], TargetIP(ip), port)
+						cc.CheckConnectivity()
+					})
+
+					Describe("after updating the policy to allow traffic from hosts", func() {
+						BeforeEach(func() {
+							pol.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Selector: "ep-type == 'host'",
+									},
+								},
+							}
+							pol = updatePolicy(pol)
 						})
 
-						It("should only have connectivity from the local host via a service to workload 0", func() {
-							// Local host is always allowed (for kubelet health checks).
+						It("should have connectivity from the hosts via a service to workload 0", func() {
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
 							cc.ExpectSome(felixes[0], TargetIP(ip), port)
-							cc.ExpectNone(felixes[1], TargetIP(ip), port)
+							cc.ExpectSome(felixes[1], TargetIP(ip), port)
+							cc.ExpectNone(w[0][1], TargetIP(ip), port)
+							cc.ExpectNone(w[1][0], TargetIP(ip), port)
 							cc.CheckConnectivity()
 						})
-					} else {
-						It("should not have connectivity from the local host via a service to workload 0", func() {
-							// Local host is always allowed (for kubelet health checks).
-							ip := testSvc.Spec.ClusterIP
-							port := uint16(testSvc.Spec.Ports[0].Port)
-
-							cc.ExpectNone(felixes[0], TargetIP(ip), port)
-							cc.ExpectNone(felixes[1], TargetIP(ip), port)
-							cc.CheckConnectivity()
-						})
-					}
-
-					if testOpts.connTimeEnabled {
-						Describe("after updating the policy to allow traffic from hosts", func() {
-							BeforeEach(func() {
-								pol.Spec.Ingress = []api.Rule{
-									{
-										Action: "Allow",
-										Source: api.EntityRule{
-											Selector: "ep-type == 'host'",
-										},
-									},
-								}
-								pol = updatePolicy(pol)
-							})
-
-							It("should have connectivity from the hosts via a service to workload 0", func() {
-								ip := testSvc.Spec.ClusterIP
-								port := uint16(testSvc.Spec.Ports[0].Port)
-
-								cc.ExpectSome(felixes[0], TargetIP(ip), port)
-								cc.ExpectSome(felixes[1], TargetIP(ip), port)
-								cc.ExpectNone(w[0][1], TargetIP(ip), port)
-								cc.ExpectNone(w[1][0], TargetIP(ip), port)
-								cc.CheckConnectivity()
-							})
-						})
-					}
+					})
 
 					It("should create sane conntrack entries and clean them up", func() {
 						By("Generating some traffic")
@@ -2809,7 +2888,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					}
 
-					if !intLocal {
+					if intLocal {
+						It("workload should have connectivity to self via local and not remote node", func() {
+							w00Expects := []ExpectationOption{ExpectWithPorts(npPort)}
+							hostW0SrcIP := ExpectWithSrcIPs("0.0.0.0")
+
+							hostW0SrcIP = ExpectWithSrcIPs(felixes[0].IP)
+							switch testOpts.tunnel {
+							case "ipip":
+								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+							}
+
+							if !testOpts.connTimeEnabled {
+								w00Expects = append(w00Expects, hostW0SrcIP)
+								w00Expects = append(w00Expects, hostW0SrcIP)
+							}
+
+							cc.Expect(None, w[0][0], TargetIP(felixes[1].IP), w00Expects...)
+							cc.Expect(Some, w[0][0], TargetIP(felixes[0].IP), w00Expects...)
+							cc.CheckConnectivity()
+						})
+					} else {
 						It("should have connectivity from a workload via a nodeport on another node to workload 0", func() {
 							ip := felixes[1].IP
 
@@ -2817,12 +2916,22 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity()
 
 						})
-					}
 
-					if testOpts.connTimeEnabled {
 						It("workload should have connectivity to self via local/remote node", func() {
-							cc.ExpectSome(w[0][0], TargetIP(felixes[1].IP), npPort)
-							cc.ExpectSome(w[0][0], TargetIP(felixes[0].IP), npPort)
+							w00Expects := []ExpectationOption{ExpectWithPorts(npPort)}
+							hostW0SrcIP := ExpectWithSrcIPs(felixes[0].IP)
+							switch testOpts.tunnel {
+							case "ipip":
+								hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+							}
+
+							if !testOpts.connTimeEnabled {
+								w00Expects = append(w00Expects, hostW0SrcIP)
+								w00Expects = append(w00Expects, hostW0SrcIP)
+							}
+
+							cc.Expect(Some, w[0][0], TargetIP(felixes[1].IP), w00Expects...)
+							cc.Expect(Some, w[0][0], TargetIP(felixes[0].IP), w00Expects...)
 							cc.CheckConnectivity()
 						})
 					}
@@ -3911,6 +4020,10 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) error {
 				// Whether traffic is generated in host namespace, or involves NAT, each
 				// contrack entry should be related to node's address
 				if strings.Contains(line, felix.IP) {
+					continue lineLoop
+				}
+				// Ignore DHCP
+				if strings.Contains(line, "sport=67 dport=68") {
 					continue lineLoop
 				}
 				// Ignore any flows that come from the host itself.  For example, some programs send
