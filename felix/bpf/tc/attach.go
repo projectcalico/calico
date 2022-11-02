@@ -71,7 +71,7 @@ var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
 var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
-func (ap AttachPoint) Log() *log.Entry {
+func (ap *AttachPoint) Log() *log.Entry {
 	return log.WithFields(log.Fields{
 		"iface": ap.Iface,
 		"type":  ap.Type,
@@ -79,11 +79,11 @@ func (ap AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap AttachPoint) loadLogging() bool {
+func (ap *AttachPoint) loadLogging() bool {
 	return strings.ToLower(ap.LogLevel) != "off"
 }
 
-func (ap AttachPoint) AlreadyAttached(object string) (int, bool) {
+func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	logCxt := log.WithField("attachPoint", ap)
 	progID, err := ap.ProgramID()
 	if err != nil {
@@ -110,7 +110,7 @@ func (ap AttachPoint) AlreadyAttached(object string) (int, bool) {
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func (ap AttachPoint) AttachProgram() (int, error) {
+func (ap *AttachPoint) AttachProgram() (int, error) {
 	logCxt := log.WithField("attachPoint", ap)
 
 	tempDir, err := ioutil.TempDir("", "calico-tc")
@@ -238,7 +238,7 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 	return progId, nil
 }
 
-func (ap AttachPoint) patchLogPrefix(logCtx *log.Entry, ifile, ofile string) error {
+func (ap *AttachPoint) patchLogPrefix(logCtx *log.Entry, ifile, ofile string) error {
 	b, err := bpf.BinaryFromFile(ifile)
 	if err != nil {
 		return fmt.Errorf("failed to read pre-compiled BPF binary: %w", err)
@@ -253,7 +253,7 @@ func (ap AttachPoint) patchLogPrefix(logCtx *log.Entry, ifile, ofile string) err
 	return nil
 }
 
-func (ap AttachPoint) DetachProgram() error {
+func (ap *AttachPoint) DetachProgram() error {
 	// We never detach TC programs, so this should not be called.
 	ap.Log().Panic("DetachProgram is not implemented for TC")
 	return nil
@@ -310,7 +310,7 @@ type attachedProg struct {
 	handle string
 }
 
-func (ap AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
+func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 	out, err := ExecTC("filter", "show", "dev", ap.Iface, string(ap.Hook))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
@@ -336,7 +336,7 @@ func (ap AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 }
 
 // ProgramName returns the name of the program associated with this AttachPoint
-func (ap AttachPoint) ProgramName() string {
+func (ap *AttachPoint) ProgramName() string {
 	return SectionName(ap.Type, ap.ToOrFrom)
 }
 
@@ -369,11 +369,11 @@ func (ap *AttachPoint) ProgramID() (int, error) {
 }
 
 // FileName return the file the AttachPoint will load the program from
-func (ap AttachPoint) FileName() string {
+func (ap *AttachPoint) FileName() string {
 	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, bpfutils.BTFEnabled)
 }
 
-func (ap AttachPoint) IsAttached() (bool, error) {
+func (ap *AttachPoint) IsAttached() (bool, error) {
 	hasQ, err := HasQdisc(ap.Iface)
 	if err != nil {
 		return false, err
@@ -588,19 +588,19 @@ func RemoveQdisc(ifaceName string) error {
 
 // Return a key that uniquely identifies this attach point, amongst all of the possible attach
 // points associated with a single given interface.
-func (ap AttachPoint) JumpMapFDMapKey() string {
+func (ap *AttachPoint) JumpMapFDMapKey() string {
 	return string(ap.Hook)
 }
 
-func (ap AttachPoint) IfaceName() string {
+func (ap *AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
-func (ap AttachPoint) HookName() bpf.Hook {
+func (ap *AttachPoint) HookName() bpf.Hook {
 	return ap.Hook
 }
 
-func (ap AttachPoint) Config() string {
+func (ap *AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
 
@@ -649,7 +649,7 @@ func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
 	return nil
 }
 
-func (ap AttachPoint) hasPolicyProg() bool {
+func (ap *AttachPoint) hasPolicyProg() bool {
 	switch ap.Type {
 	case EpTypeHost, EpTypeNAT, EpTypeLO:
 		return false
@@ -658,7 +658,7 @@ func (ap AttachPoint) hasPolicyProg() bool {
 	return true
 }
 
-func (ap AttachPoint) hasHostConflictProg() bool {
+func (ap *AttachPoint) hasHostConflictProg() bool {
 	switch ap.Type {
 	case EpTypeWorkload:
 		return false
@@ -667,7 +667,7 @@ func (ap AttachPoint) hasHostConflictProg() bool {
 	return ap.ToOrFrom == ToEp
 }
 
-func (ap AttachPoint) updateJumpMap(obj *libbpf.Obj) error {
+func (ap *AttachPoint) updateJumpMap(obj *libbpf.Obj) error {
 	ipVersions := []string{"IPv4"}
 	if ap.IPv6Enabled {
 		ipVersions = append(ipVersions, "IPv6")
