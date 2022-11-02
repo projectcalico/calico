@@ -22,8 +22,9 @@ vm_name_prefix=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
-repo_dir="."
-artifacts_dir="$repo_dir/artifacts"
+felix_dir="${my_dir}/.."
+calico_dir="${felix_dir}/.."
+artifacts_dir="$calico_dir/artifacts"
 
 echo "Collecting artifacts..."
 
@@ -35,13 +36,17 @@ for batch in "${batches[@]}"; do
   log_files+=( $log_file )
   echo "Collecting artifacts from $vm_name. Logging to $log_file."
   (
+    set -x
     args=""
     # Only collect binaries once since they're large to copy and should be identical.
     if [ $batch != 1 ]; then
       args="--skip-binaries"
     fi
-    VM_NAME=$vm_name $my_dir/on-test-vm ${REPO_NAME}/.semaphore/collect-artifacts $args || echo "Failed to collect artifacts from ${vm_name}."
-    gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${REPO_NAME}/artifacts" ./ --recurse || echo "Failed to SCP from ${vm_name}"
+    VM_NAME=$vm_name $my_dir/on-test-vm calico/felix/.semaphore/collect-artifacts $args || echo "Failed to collect artifacts from ${vm_name}."
+    gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:calico/artifacts" "${calico_dir}" --recurse || echo "Failed to SCP from ${vm_name}"
+    ls "${calico_dir}/artifacts"
+    gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:calico/felix/report" "${calico_dir}/report/${batch}" --recurse || echo "Failed to SCP from ${vm_name}"
+    ls "${calico_dir}/report/${batch}"
   ) >& "$log_file" &
   pid=$!
   pids+=( $pid )
