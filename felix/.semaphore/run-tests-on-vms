@@ -22,8 +22,9 @@ vm_name_prefix=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
-repo_dir="."
-artifacts_dir="$repo_dir/artifacts"
+felix_dir="${my_dir}/.."
+calico_dir="${felix_dir}/.."
+artifacts_dir="$calico_dir/artifacts"
 
 echo
 echo "===== Starting tests ====="
@@ -41,7 +42,7 @@ for batch in "${batches[@]}"; do
     pid=$!
     pids+=( $pid )
   else
-    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=calico/felix fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=8 FV_BATCHES_TO_RUN="$batch" >& "$log_file" &
+    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=calico/felix fv-bpf GINKGO_FOCUS=repinning FV_NUM_BATCHES=8 FV_BATCHES_TO_RUN="$batch" >& "$log_file" &
     pid=$!
     pids+=( $pid )
   fi
