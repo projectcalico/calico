@@ -79,6 +79,10 @@ func (ap AttachPoint) Log() *log.Entry {
 	})
 }
 
+func (ap AttachPoint) loadLogging() bool {
+	return strings.ToLower(ap.LogLevel) != "off"
+}
+
 func (ap AttachPoint) AlreadyAttached(object string) (int, bool) {
 	logCxt := log.WithField("attachPoint", ap)
 	progID, err := ap.ProgramID()
@@ -119,12 +123,18 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 
 	filename := ap.FileName()
 	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
-	tempBinary := path.Join(tempDir, filename)
+	binaryToLoad := preCompiledBinary
 
-	err = ap.patchLogPrefix(logCxt, preCompiledBinary, tempBinary)
-	if err != nil {
-		logCxt.WithError(err).Error("Failed to patch binary")
-		return -1, err
+	if ap.loadLogging() {
+		tempBinary := path.Join(tempDir, filename)
+
+		err = ap.patchLogPrefix(logCxt, preCompiledBinary, tempBinary)
+		if err != nil {
+			logCxt.WithError(err).Error("Failed to patch binary")
+			return -1, err
+		}
+
+		binaryToLoad = tempBinary
 	}
 
 	// Using the RLock allows multiple attach calls to proceed in parallel unless
@@ -138,7 +148,7 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	obj, err := libbpf.OpenObject(tempBinary)
+	obj, err := libbpf.OpenObject(binaryToLoad)
 	if err != nil {
 		return -1, err
 	}
