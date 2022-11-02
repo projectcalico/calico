@@ -4,14 +4,6 @@ description: Lists versions of Calico and Kubernetes for each platform.
 canonical_url: /getting-started/compatibility
 ---
 
-### Supported browsers
-
-{{site.prodname}} supports the latest version plus "latest minus one" versions of the following browsers:
-
-- Chrome
-- Firefox
-- Safari
-
 ### Platforms
 
 The following platforms and tools are the most commonly used with {{site.prodname}}. Other platforms may work, but are not tested. The tables provide a platform version history starting with {{site.prodname}} 3.23. 
