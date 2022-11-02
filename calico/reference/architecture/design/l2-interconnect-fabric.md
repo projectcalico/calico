@@ -4,7 +4,6 @@ description: Understand the interconnect fabric options in a Calico network.
 canonical_url: '/reference/architecture/design/l2-interconnect-fabric'
 ---
 
-
 This is the first of a few *tech notes* that I will be authoring that
 will discuss some of the various interconnect fabric options in a {{site.prodname}}
 network.

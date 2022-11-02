@@ -49,7 +49,6 @@ a bad thing):
 -  Details of your OS.
 -  Environment details such as GCE, bare metal, VirtualBox.
 
-
 ## Contributing code and documentation
 
 For contributing code and documentation we follow the GitHub pull request

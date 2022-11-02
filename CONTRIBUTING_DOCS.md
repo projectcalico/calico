@@ -186,19 +186,16 @@ The naming and layout of the side navigation bar is stored in `_data/$VERSION/na
 
 > **Note**: Sidebar paths to index files (see [next section](#linking-content)) should end in a `/` in the yaml file. Sidebar paths to actual files should not end in a `/` in the yaml file.
 
-
 ## Link syntax
 
 ### Closing slashes
 
 To link to a page not named `index.md`, omit the closing slash. To link to a page named `index.md`, include a closing slash. See the following table for some examples.
 
-
 | URL                                           | File path                                         |
 |-----------------------------------------------|---------------------------------------------------|
 | `/getting-started/kubernetes/`                | `/getting-started/kubernetes/index.md`            |
 | `/getting-started/kubernetes/troubleshooting` | `/getting-started/kubernetes/troubleshooting.md`  |
-
 
 ### `site.url`, `site.baseurl`, and `absolute_url`
 

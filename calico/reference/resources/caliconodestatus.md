@@ -210,4 +210,3 @@ status:
 | sourceType         | Type of the source where a route is learned from. | string | Kernel, Static, Direct, NodeMesh, BGPPeer |
 | peerIP             | If sourceType is NodeMesh or BGPPeer, IP address of the router that sent us this route. | `ip` |  |
 
-

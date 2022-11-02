@@ -6,9 +6,7 @@ canonical_url: '/reference/legal/kube-controllers'
 
 ### Direct Dependencies
 
-
 #### **gocloud (3b1ae45394a234c385be014e9a488f2bb6eef821)**
-
 
 * Licenses
     * Apache-2.0
@@ -216,20 +214,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **gophercloud (781450b3c4fcb4f5182bcc5133adb4b2e4a09d1d)**
-
 
 * Licenses
     * Apache-2.0
@@ -426,20 +416,12 @@ canonical_url: '/reference/legal/kube-controllers'
 
 		   END OF TERMS AND CONDITIONS
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **apiserver (f1dab8c342623e75f0484f20b150183d9e73f406)**
-
 
 * Licenses
     * Apache-2.0
@@ -647,21 +629,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
     * **Multi-license:** MIT *OR* Apache-2.0
-
-
-
 
 ---
 ---
 
 #### **kube-controllers (9716ae7e6880c22998c58051e3a452b21c1e4270)**
-
 
 * Licenses
     * Apache-2.0
@@ -868,20 +842,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **libcalico-go (ed28b67484d1ecf4cb2c1969d4654c7d4eb95e32)**
-
 
 * Licenses
     * Apache-2.0
@@ -1062,21 +1028,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		      incurred by, or claims asserted against, such Contributor by reason
 		      of your accepting any such warranty or additional liability.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **pflag (e57e3eeb33f795204c1ca35f56c44f83227c6e66)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -1088,19 +1045,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **net (66aacef3dd8a676686c7ae3716979581e8b03c47)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -1112,31 +1062,15 @@ canonical_url: '/reference/legal/kube-controllers'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * **Multi-license:** CC-BY-3.0 *OR* BSD-3-Clause
 
-
-
-
 ---
 ---
-
-
-
-
-
 
 ### Deep Dependencies
 
-
-
-
-
 #### **go-autorest (1ff28809256a84bb6966640ff3d0371af82ccba4)**
-
 
 * Licenses
     * Apache-2.0
@@ -1333,21 +1267,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
     * MS-RL
-
-
-
 
 ---
 ---
 
 #### **perks (3ac7bf7a47d159a033b107610db8a1b6575507a4)**
-
 
 * Licenses
     * MIT
@@ -1373,36 +1299,21 @@ canonical_url: '/reference/legal/kube-controllers'
 		OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 		WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **etcd (33245c6b5b49130ca99280408fadfab01aac0e48)**
 
-
 * Licenses
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-spew (782f4967f2dc4564575ca782fe2d04090b5faca8)**
-
 
 * Licenses
     * MIT
@@ -1423,20 +1334,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 		OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **jwt-go (d2709f9f1f31ebcda9651b03077758c1f3a0018c)**
-
 
 * Licenses
     * MIT
@@ -1449,39 +1352,23 @@ canonical_url: '/reference/legal/kube-controllers'
 
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **yaml (0ca9ea5df5451ffdf184b4428c902747c2c11cd7)**
 
-
 * Licenses
-
-
-
 
 * Other Licenses
     * BSD-3-Clause
     * MIT
 
-
-
-
 ---
 ---
 
 #### **protobuf (342cbe0a04158f6dcb03ca0079991a51a4248c02)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -1493,20 +1380,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * BSD-2-Clause
-
-
-
 
 ---
 ---
 
 #### **glog (44145f04b68cf362d9c4df2182967c2275eaefed)**
-
 
 * Licenses
     * Apache-2.0
@@ -1703,20 +1583,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go (e369490fb7db5f2d42bb0e8ee19b48378dee0ebf)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -1749,23 +1621,15 @@ canonical_url: '/reference/legal/kube-controllers'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * **Multi-license:** GPL-2.0-only *OR* BSD-3-Clause
     * Public-Domain
     * CC-BY-3.0
 
-
-
-
 ---
 ---
 
 #### **protobuf (1e59b77b52bf8e4b449a57e6f79f21226d571845)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -1777,20 +1641,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **gnostic (0c5108395e2debce0d731cf0287ddf7242066aba)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -1997,22 +1854,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **btree (925471ac9e2131377a91e1595defec898166fe49)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -2219,21 +2067,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **gofuzz (44d81051d367757e1c7c6a5a86423ece9afcf63c)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -2440,20 +2280,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-genproto (09f6ed296fc66555a25fe4ce95173148778dfa85)**
-
 
 * Licenses
     * Apache-2.0
@@ -2463,19 +2295,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **httpcache (787624de3eb7bd915c329cba748687a3b22666a6)**
-
 
 * Licenses
     * MIT
@@ -2485,19 +2310,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **grpc-go (5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e)**
-
 
 * Licenses
     * Apache-2.0
@@ -2705,20 +2523,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **golang-lru (a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4)**
-
 
 * Licenses
     * MPL-2.0
@@ -2805,19 +2615,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		Exhibit B - "Incompatible With Secondary Licenses" Notice
 		This Source Code Form is "Incompatible With Secondary Licenses", as defined by the Mozilla Public License, v. 2.0.<<endOptional>>
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **mergo (9316a62528ac99aaecb4e47eadd6dc8aa6533d58)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -2851,20 +2654,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go (f2b4162afba35581b6d4a50d3b8f34e33c144682)**
-
 
 * Licenses
     * MIT
@@ -2891,20 +2686,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **envconfig (dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1)**
-
 
 * Licenses
     * MIT
@@ -2929,21 +2716,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **api (072894a440bdee3a891dea811fe42902311cd2a3)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -3150,21 +2929,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **apimachinery (103fd098999dc9c0c88536f5c9ad2e5da39373ae)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -3371,22 +3142,14 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
     * BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **client-go (7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65)**
 
-
 * Licenses
     * Apache-2.0
         * Attribution:
@@ -3593,20 +3356,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **golang_protobuf_extensions (c12348ce28de40eed0136aa2b644d0ee0650e56c)**
-
 
 * Licenses
     * Apache-2.0
@@ -3616,19 +3371,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **concurrent (bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94)**
-
 
 * Licenses
     * Apache-2.0
@@ -3638,19 +3386,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **reflect2 (94122c33edd36123c84d5368cfb2b69df93a0ec8)**
-
 
 * Licenses
     * Apache-2.0
@@ -3857,20 +3598,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   See the License for the specific language governing permissions and
 		   limitations under the License.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-cache (5633e0862627c011927fa39556acae8b1f1df58a)**
-
 
 * Licenses
     * MIT
@@ -3895,20 +3628,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 		THE SOFTWARE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **uuid (ca53cad383cad2479bbba7f7a1a05797ec1386e4)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -3920,19 +3645,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **diskv (5f041e8faa004a95c88a202771f4cc3e991971e6)**
-
 
 * Licenses
     * MIT
@@ -3942,19 +3660,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-json (6219dc7339ba20ee4c57df0a8baac62317d19cb1)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -3987,20 +3698,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go-yaml (955bc3e451ef0c9df8b9113bf2e341139cdafab2)**
-
 
 * Licenses
     * Apache-2.0
@@ -4019,21 +3722,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		See the License for the specific language governing permissions and
 		limitations under the License.
 
-
-
-
-
 * Other Licenses
     *
-
-
-
 
 ---
 ---
 
 #### **go-yaml-wrapper (598e54215bee41a19677faa4f0c32acd2a87eb56)**
-
 
 * Licenses
     * **Multi-license:** MIT
@@ -4065,7 +3760,6 @@ canonical_url: '/reference/legal/kube-controllers'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
 		Copyright (c) 2012 The Go Authors. All rights reserved.
 
 		Redistribution and use in source and binary forms, with or without
@@ -4094,21 +3788,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **client_golang (5cec1d0429b02e4323e042eb04dafdb079ddf568)**
-
 
 * Licenses
     * Apache-2.0
@@ -4118,20 +3804,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
     * **Multi-license:** BSD-3-Clause *OR* Apache-2.0
-
-
-
 
 ---
 ---
 
 #### **client_model (6f3806018612930941127f2a7c6c453ba2c527d2)**
-
 
 * Licenses
     * Apache-2.0
@@ -4141,19 +3820,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **common (e3fb1a1acd7605367a2b378bc2e2f893c05174b7)**
-
 
 * Licenses
     * Apache-2.0
@@ -4163,19 +3835,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **procfs (a6e9df898b1336106c743392c48ee0b71f5c4efa)**
-
 
 * Licenses
     * Apache-2.0
@@ -4185,19 +3850,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **go.uuid (f58768cc1a7a7e77a3bd49e98cdd21419399b6a3)**
-
 
 * Licenses
     * MIT
@@ -4207,19 +3865,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **logrus (f006c2ac4710855cf0f916dd6b77acf6b048dc6e)**
-
 
 * Licenses
     * MIT
@@ -4229,20 +3880,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 * Other Licenses
     * BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **crypto (9419663f5a44be8b34ca85f08abc5fe1be11f8a3)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -4254,21 +3898,14 @@ canonical_url: '/reference/legal/kube-controllers'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
     * **Multi-license:** Public-Domain *OR* BSD-3-Clause
     * **Multi-license:** BSD-3-Clause *OR* MIT
-
-
-
 
 ---
 ---
 
 #### **oauth2 (a6bd8cefa1811bd24b86f8902872e4e8225f74c4)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -4280,20 +3917,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **sys (ebfc5b4631820b793c9010c87fd8fef0f39eb082)**
 
-
 * Licenses
     * BSD-3-Clause
         * Attribution:
@@ -4325,21 +3955,13 @@ canonical_url: '/reference/legal/kube-controllers'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **text (b19bf474d317b857955b12035d2c5acb57ce8b01)**
 
-
 * Licenses
     * BSD-3-Clause
         * Attribution:
@@ -4371,22 +3993,14 @@ canonical_url: '/reference/legal/kube-controllers'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
     * **Multi-license:** CC-BY-SA-4.0 *OR* BSD-3-Clause
-
-
-
 
 ---
 ---
 
 #### **time (c06e80d9300e4443158a03817b8a8cb37d230320)**
 
-
 * Licenses
     * BSD-3-Clause
         * Attribution:
@@ -4418,20 +4032,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **validator.v8 (5f1438d3fca68893a817e4a66806cea46a9e4ebf)**
-
 
 * Licenses
     * MIT
@@ -4458,21 +4064,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 		SOFTWARE.
 
-
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **inf.v0 (3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4)**
-
 
 * Licenses
     * BSD-3-Clause
@@ -4506,20 +4103,12 @@ canonical_url: '/reference/legal/kube-controllers'
 		(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-
-
 * Other Licenses
-
-
-
 
 ---
 ---
 
 #### **yaml.v2 (cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b)**
-
 
 * Licenses
     * Apache-2.0
@@ -4529,28 +4118,15 @@ canonical_url: '/reference/legal/kube-controllers'
 		http://www.apache.org/licenses/LICENSE-2.0
 		Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-
-
-
 * Other Licenses
     * Custom License File
 
-
-
-
 ---
 ---
-
-
-
-
-
 
 ## Licenses
 
-
 ### Apache-2.0
-
 
                                  Apache License
                            Version 2.0, January 2004
@@ -4754,8 +4330,6 @@ canonical_url: '/reference/legal/kube-controllers'
    See the License for the specific language governing permissions and
    limitations under the License.
 
-
-
 ###
 
 MIT License
@@ -4763,7 +4337,6 @@ Copyright (c) &lt;year&gt; &lt;copyright holders&gt;
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 
 ### BSD-3-Clause
 
@@ -4773,7 +4346,6 @@ Redistribution and use in source and binary forms, with or without modification,
    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 
 ### CC-BY-3.0
 
@@ -4824,7 +4396,6 @@ Creative Commons is not a party to this License, and makes no warranty whatsoeve
 Except for the limited purpose of indicating to the public that the Work is licensed under the CCPL, Creative Commons does not authorize the use by either party of the trademark &quot;Creative Commons&quot; or any related trademark or logo of Creative Commons without the prior written consent of Creative Commons. Any permitted use will be in compliance with Creative Commons&#39; then-current trademark usage guidelines, as may be published on its website or otherwise made available upon request from time to time. For the avoidance of doubt, this trademark restriction does not form part of this License.
 Creative Commons may be contacted at http://creativecommons.org/.
 
-
 ###
 
 Microsoft Reciprocal License (Ms-RL)
@@ -4845,7 +4416,6 @@ This license governs use of the accompanying software. If you use the software, 
       (E) If you distribute any portion of the software in source code form, you may do so only under this license by including a complete copy of this license with your distribution. If you distribute any portion of the software in compiled or object code form, you may only do so under a license that complies with this license.
       (F) The software is licensed &quot;as-is.&quot; You bear the risk of using it. The contributors give no express warranties, guarantees, or conditions. You may have additional consumer rights under your local laws which this license cannot change. To the extent permitted under your local laws, the contributors exclude the implied warranties of merchantability, fitness for a particular purpose and non-infringement.
 
-
 ### BSD-2-Clause
 
 Copyright (c) &lt;year&gt; &lt;owner&gt; . All rights reserved.
@@ -4853,7 +4423,6 @@ Redistribution and use in source and binary forms, with or without modification,
    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 
 ### GPL-2.0
 
@@ -4918,11 +4487,7 @@ You should also get your employer (if you work as a programmer) or your school, 
 Yoyodyne, Inc., hereby disclaims all copyright interest in the program `Gnomovision&#39; (which makes passes at compilers) written by James Hacker.
 &lt; signature of Ty Coon &gt; , 1 April 1989 Ty Coon, President of Vice
 
-
 ### Public-domain
-
-
-
 
 ### MPL-2.0
 
@@ -5008,7 +4573,6 @@ If it is not possible or desirable to put the notice in a particular file, then 
 You may add additional accurate notices of copyright ownership.
 Exhibit B - &quot;Incompatible With Secondary Licenses&quot; Notice
 This Source Code Form is &quot;Incompatible With Secondary Licenses&quot;, as defined by the Mozilla Public License, v. 2.0.
-
 
 ### CC-BY-SA-4.0
 
