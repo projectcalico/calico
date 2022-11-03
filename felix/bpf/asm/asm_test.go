@@ -20,6 +20,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const insnSize = InstructionSize
+
 func TestBlock_Mov64(t *testing.T) {
 	RegisterTestingT(t)
 	b := NewBlock(false)
