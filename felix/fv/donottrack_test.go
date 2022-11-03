@@ -25,7 +25,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -45,7 +44,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		hostW          [2]*workload.Workload
 		client         client.Interface
 		cc             *connectivity.Checker
-		dumpedDiags    bool
 		externalClient *containers.Container
 	)
 
@@ -53,7 +51,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		var err error
 		infra = getInfra()
 
-		dumpedDiags = false
 		options := infrastructure.DefaultTopologyOptions()
 		felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
 		cc = &connectivity.Checker{}
@@ -83,29 +80,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		Expect(err).To(BeNil())
 	})
 
-	// Utility function to dump diags if the test failed.  Should be called in the inner-most
-	// AfterEach() to dump diags before the test is torn down.  Only the first call for a given
-	// test has any effect.
-	dumpDiags := func() {
-		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
-			return
-		}
-		for ii := range felixes {
-			iptSave, err := felixes[ii].ExecOutput("iptables-save", "-c")
-			if err == nil {
-				log.WithField("felix", ii).Info("iptables-save:\n" + iptSave)
-			}
-			ipR, err := felixes[ii].ExecOutput("ip", "r")
-			if err == nil {
-				log.WithField("felix", ii).Info("ip route:\n" + ipR)
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			for _, felix := range felixes {
+				felix.Exec("iptables-save", "-c")
+				felix.Exec("ip", "r")
+				felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
 			}
 		}
-		infra.DumpErrorData()
-
-	}
+	})
 
 	AfterEach(func() {
-		dumpDiags()
 		for _, f := range felixes {
 			f.Stop()
 		}
@@ -158,7 +143,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		})
 
 		AfterEach(func() {
-			dumpDiags()
 			cancel()
 		})
 
