@@ -111,4 +111,34 @@ func TestFilter(t *testing.T) {
 			})
 		}
 	}
+
+	link := links[0]
+
+	for _, tc := range link.tests {
+		if tc.expression == "" {
+			continue
+		}
+
+		neg := "not ( " + tc.expression + " )"
+
+		t.Run(link.level+"_"+neg, func(t *testing.T) {
+
+			insns, err := filter.NewStandAlone(layers.LinkTypeEthernet, 64, neg)
+			Expect(err).NotTo(HaveOccurred())
+			fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fd).NotTo(BeZero())
+			defer func() {
+				Expect(fd.Close()).NotTo(HaveOccurred())
+			}()
+
+			rc, err := bpf.RunBPFProgram(fd, link.data, 1)
+			Expect(err).NotTo(HaveOccurred())
+			erc := 2
+			if !tc.match {
+				erc = -1
+			}
+			Expect(rc.RC).To(BeNumerically("==", erc))
+		})
+	}
 }
