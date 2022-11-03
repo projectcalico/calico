@@ -86,7 +86,7 @@ func parseArgs(args []string) (string, string, error) {
 		return "", "", fmt.Errorf("Insufficient arguments")
 	}
 	switch bpf.Hook(args[1]) {
-	case bpf.HookIngress, bpf.HookEgress, bpf.HookXDP:
+	case bpf.HookIngress, bpf.HookEgress, bpf.HookXDP, "all":
 	default:
 		return "", "", fmt.Errorf("Invalid argument")
 	}
