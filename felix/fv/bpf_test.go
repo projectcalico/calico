@@ -2487,7 +2487,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}, 5*time.Second).Should(BeTrue())
 						})
 
-						By("starting a persistent connection to the service")
+						By("Making sure that backend is ready")
+						cc.Expect(Some, w[1][1], w[0][0], ExpectWithPorts(8055))
+						cc.CheckConnectivity()
+
+						By("Starting a persistent connection to the service")
 						pc := w[1][1].StartPersistentConnection(ip, int(port),
 							workload.PersistentConnectionOpts{
 								MonitorConnectivity: true,
