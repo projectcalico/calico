@@ -993,6 +993,7 @@ var payloadDefault = []byte("ABCDEABCDEXXXXXXXXXXXX")
 var srcIP = net.IPv4(1, 1, 1, 1)
 var dstIP = net.IPv4(2, 2, 2, 2)
 var srcV4CIDR = ip.CIDRFromNetIP(srcIP).(ip.V4CIDR)
+var dstV4CIDR = ip.CIDRFromNetIP(dstIP).(ip.V4CIDR)
 
 var ipv4Default = &layers.IPv4{
 	Version:  4,
