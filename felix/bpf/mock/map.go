@@ -133,6 +133,20 @@ func (m *Map) ContainsKey(k []byte) bool {
 	return ok
 }
 
+func (m *Map) ContainsKV(k, v []byte) bool {
+	val, ok := m.Contents[string(k)]
+
+	if !ok {
+		return false
+	}
+
+	return val == string(v)
+}
+
+func (m *Map) IsEmpty() bool {
+	return len(m.Contents) == 0
+}
+
 func (*Map) ErrIsNotExists(err error) bool {
 	return bpf.IsNotExists(err)
 }
