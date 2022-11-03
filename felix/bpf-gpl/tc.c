@@ -237,6 +237,25 @@ deny:
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 {
+	/*
+	 * CALI_SKB_MARK_MASQ in the direction of a WEP signals that a pod tried
+	 * to access service and ended up talking to self. We allow this traffic
+	 * to match iptables dp and not require to have a special policy that
+	 * allows traffic based on its host IP which is hard to express when
+	 * pods start and go.
+	 * */
+	if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ && rt_addr_is_local_host(ip_hdr(ctx)->saddr)) {
+		struct cali_rt *rt = cali_rt_lookup(ip_hdr(ctx)->daddr);
+		/* Check that it is for us */
+		if (rt) {
+			if (cali_rt_is_local(rt) && cali_rt_is_workload(rt) &&
+				rt->if_index == ctx->skb->ifindex) {
+			CALI_DEBUG("Allowing svc->self\n");
+			goto allow;
+			}
+		}
+	}
+
 	/* Now we've got as far as the UDP header, check if this is one of our VXLAN packets, which we
 	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&

@@ -1044,30 +1044,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					pol = createPolicy(pol)
 
-					By("allowing to self via MASQ", func() {
-
-						nets := []string{felixes[0].IP + "/32"}
-						switch testOpts.tunnel {
-						case "ipip":
-							nets = []string{felixes[0].ExpectedIPIPTunnelAddr + "/32"}
-						}
-
-						pol := api.NewGlobalNetworkPolicy()
-						pol.Namespace = "fv"
-						pol.Name = "self-snat"
-						pol.Spec.Ingress = []api.Rule{
-							{
-								Action: "Allow",
-								Source: api.EntityRule{
-									Nets: nets,
-								},
-							},
-						}
-						pol.Spec.Selector = "name=='" + w[0][0].Name + "'"
-
-						pol = createPolicy(pol)
-					})
-
 					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_ = k8sClient
 				})
