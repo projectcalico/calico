@@ -26,15 +26,15 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
-type ProgName string
-
-var programNames = []ProgName{
-	"calico_xdp_norm_pol_tail",
-	"calico_xdp_accepted_entrypoint",
-	"", // This is a placeholder for icmp program, and only defined to align indexes with TC
-	"calico_xdp_drop",
+var JumpMapIndexes = map[string]map[int]string{
+	"IPv4": map[int]string{
+		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
+		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
+		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
+	},
 }
 
 const DetachedID = 0
@@ -275,22 +275,14 @@ func updateJumpMap(obj *libbpf.Obj) error {
 	ipVersions := []string{"IPv4"}
 
 	for _, ipFamily := range ipVersions {
-		pIndex := 0
-		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
-		}
+		progs := JumpMapIndexes[ipFamily]
+		mapName := bpf.JumpMapName()
 
-		eIndex := 1
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
-		}
-
-		dIndex := 3
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
+		for idx, name := range progs {
+			err := obj.UpdateJumpMap(mapName, name, idx)
+			if err != nil {
+				return fmt.Errorf("failed to update %s program '%s' at index %d: %w", ipFamily, name, idx, err)
+			}
 		}
 	}
 
