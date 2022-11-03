@@ -94,7 +94,7 @@ func TestFilter(t *testing.T) {
 
 				insns, err := filter.NewStandAlone(link.typ, 64, tc.expression)
 				Expect(err).NotTo(HaveOccurred())
-				fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "GPL", unix.BPF_PROG_TYPE_SCHED_CLS)
+				fd, err := bpf.LoadBPFProgramFromInsns(insns, "filter", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(fd).NotTo(BeZero())
 				defer func() {

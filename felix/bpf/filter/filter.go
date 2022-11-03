@@ -134,8 +134,6 @@ func programFooterStandAlone(b *asm.Block) {
 func programFooter(b *asm.Block, fd bpf.MapFD, expression string) {
 	b.LabelNextInsn("hit")
 
-	printk(b, `matches: "`+expression+`"`)
-
 	// Execute the tail call to log program
 	b.Mov64(asm.R1, asm.R6)                   // First arg is the context.
 	b.LoadMapFD(asm.R2, uint32(fd))           // Second arg is the map.
