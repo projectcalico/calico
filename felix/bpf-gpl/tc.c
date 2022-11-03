@@ -68,6 +68,26 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_INFO("Final result=ALLOW (%d). Bypass mark set.\n", CALI_REASON_BYPASS);
+		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
+			/* This generates a bit more richer output for logging */
+			struct cali_tc_ctx ctx = {
+				.state = state_get(),
+				.counters = counters_get(),
+				.skb = skb,
+				.fwd = {
+					.res = TC_ACT_UNSPEC,
+					.reason = CALI_REASON_UNKNOWN,
+				},
+				.ipheader_len = IP_SIZE,
+			};
+			if (!ctx.counters) {
+				CALI_DEBUG("Counters map lookup failed: DROP\n");
+				// We don't want to drop packets just because counters initialization fails, but
+				// failing here normally should not happen.
+				return TC_ACT_SHOT;
+			}
+			parse_packet_ip(&ctx);
+		}
 		return TC_ACT_UNSPEC;
 	}
 
@@ -505,6 +525,16 @@ syn_force_policy:
 
 	if (!dest_rt) {
 		CALI_DEBUG("No route for post DNAT dest %x\n", bpf_ntohl(ctx->state->post_nat_ip_dst));
+		if (CALI_F_FROM_HEP) {
+			/* Disable FIB, let the packet go through the host after it is
+			 * policed. It is ingress into the system and we do not know what
+			 * exactly is the packet's destination. It may be a local VM or
+			 * something similar and we let the host to route it or dump it.
+			 *
+			 * https://github.com/projectcalico/calico/issues/6450
+			 */
+			ctx->state->flags |= CALI_ST_SKIP_FIB;
+		}
 		goto do_policy;
 	}
 
