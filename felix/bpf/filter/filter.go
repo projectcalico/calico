@@ -70,7 +70,7 @@ func newFilter(
 	return ebpf, nil
 }
 
-func printk(b *asm.Block, msg string) {
+func Printk(b *asm.Block, msg string) {
 	l := len(msg) + 8 - (len(msg) % 8)
 	bytes := []byte(msg)
 	bytes = append(bytes, []byte{0, 0, 0, 0, 0, 0, 0, 0}...)
@@ -133,8 +133,6 @@ func programFooterStandAlone(b *asm.Block) {
 
 func programFooter(b *asm.Block, fd bpf.MapFD, expression string) {
 	b.LabelNextInsn("hit")
-
-	printk(b, `matches: "`+expression+`"`)
 
 	// Execute the tail call to log program
 	b.Mov64(asm.R1, asm.R6)                   // First arg is the context.
