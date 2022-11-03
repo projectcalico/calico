@@ -144,11 +144,12 @@ type bpfInterface struct {
 
 type bpfInterfaceInfo struct {
 	ifIndex    int
+	isUP       bool
 	endpointID *proto.WorkloadEndpointID
 }
 
 func (i bpfInterfaceInfo) ifaceIsUp() bool {
-	return i.ifIndex != 0
+	return i.isUP
 }
 
 type bpfInterfaceState struct {
@@ -583,16 +584,19 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 				m.hostIfaceToEpMap[update.Name] = m.wildcardHostEndpoint
 			}
 			iface.info.ifIndex = update.Index
+			iface.info.isUP = true
+			m.updateIfaceStateMap(update.Name, iface)
 		} else {
 			if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
 				log.Debugf("Unmap host-* endpoint for %v", update.Name)
 				m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
-			iface.info.ifIndex = 0
 			iface.dpState.isReady = false
+			iface.info.isUP = false
+			m.updateIfaceStateMap(update.Name, iface)
+			iface.info.ifIndex = 0
 		}
-		m.updateIfaceStateMap(update.Name, iface)
 		return true // Force interface to be marked dirty in case we missed a transition during a resync.
 	})
 }
