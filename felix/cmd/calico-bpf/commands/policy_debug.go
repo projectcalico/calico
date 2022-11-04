@@ -45,7 +45,7 @@ func init() {
 
 var policyDumpCmd = &cobra.Command{
 	Use: "dump <interface> <hook>\n" +
-		"\n\thook - can be 'ingress', 'egress' or 'all'.",
+		"\n\thook - can be 'ingress', 'egress', 'xdp' or 'all'.",
 	Short: "dumps policy",
 	Run: func(cmd *cobra.Command, args []string) {
 		iface, hook, err := parseArgs(args)
@@ -53,11 +53,16 @@ var policyDumpCmd = &cobra.Command{
 			log.WithError(err).Error("Failed to dump policy info.")
 			return
 		}
-		hooks := []string{}
-		if hook == "all" {
-			hooks = []string{"ingress", "egress"}
-		} else {
-			hooks = append(hooks, hook)
+		var hooks []bpf.Hook
+		switch hook {
+		case "all":
+			hooks = bpf.Hooks
+		case "egress":
+			hooks = []bpf.Hook{bpf.HookEgress}
+		case "ingress":
+			hooks = []bpf.Hook{bpf.HookIngress}
+		case "xdp":
+			hooks = []bpf.Hook{bpf.HookXDP}
 		}
 
 		rmap := counters.PolicyMap(&bpf.MapContext{})
@@ -80,7 +85,9 @@ func parseArgs(args []string) (string, string, error) {
 	if len(args) != 2 {
 		return "", "", fmt.Errorf("Insufficient arguments")
 	}
-	if (args[1] != "ingress" && args[1] != "egress" && args[1] != "xdp" && args[1] != "all") || args[0] == "" {
+	switch bpf.Hook(args[1]) {
+	case bpf.HookIngress, bpf.HookEgress, bpf.HookXDP, "all":
+	default:
 		return "", "", fmt.Errorf("Invalid argument")
 	}
 	return args[0], args[1], nil
@@ -108,9 +115,9 @@ func getRuleMatchID(comment string) uint64 {
 	return id
 }
 
-func dumpPolicyInfo(cmd *cobra.Command, iface, hook string, m counters.PolicyMapMem) error {
+func dumpPolicyInfo(cmd *cobra.Command, iface string, hook bpf.Hook, m counters.PolicyMapMem) error {
 	var policyDbg bpf.PolicyDebugInfo
-	filename := bpf.PolicyDebugJSONFileName(iface, hook, proto.IPVersion_IPV4)
+	filename := bpf.PolicyDebugJSONFileName(iface, string(hook), proto.IPVersion_IPV4)
 	_, err := os.Stat(filename)
 	if err != nil {
 		return err
