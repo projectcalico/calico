@@ -18,6 +18,7 @@ package intdataplane
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash/fnv"
 	"regexp"
 	"strconv"
@@ -708,6 +709,164 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
+		})
+	})
+
+	Describe("ifstate", func() {
+		checkIfState := func(idx int, name string, flags uint32) {
+			k := ifstate.NewKey(uint32(idx))
+			v := ifstate.NewValue(flags, name)
+			vb, err := ifStateMap.Get(k.AsBytes())
+			if err != nil {
+				Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
+			}
+			if string(v.AsBytes()) != string(vb) {
+				vv := ifstate.ValueFromBytes(vb)
+				Fail(fmt.Sprintf("Ifstate key %s value %s does not match expected %s", k, vv, v), 1)
+			}
+		}
+
+		It("should clean up", func() {
+			_ = ifStateMap.Update(
+				ifstate.NewKey(123).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123").AsBytes(),
+			)
+			_ = ifStateMap.Update(
+				ifstate.NewKey(124).AsBytes(),
+				ifstate.NewValue(0, "eth124").AsBytes(),
+			)
+			_ = ifStateMap.Update(
+				ifstate.NewKey(125).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125").AsBytes(),
+			)
+			_ = ifStateMap.Update(
+				ifstate.NewKey(126).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP, "eth123").AsBytes(),
+			)
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ifStateMap.IsEmpty()).To(BeTrue())
+		})
+
+		It("should clean up with update", func() {
+			_ = ifStateMap.Update(
+				ifstate.NewKey(123).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123").AsBytes(),
+			)
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("iface up -> wl", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("iface up -> defer -> wl", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+
+			genWLUpdate("cali12345")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("wl -> iface up", func() {
+			genWLUpdate("cali12345")()
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("wl -> defer -> iface up", func() {
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(15)).AsBytes())).To(BeFalse())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("iface up -> wl -> iface down", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
+		})
+
+		It("iface up -> wl -> iface down, up, down", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
+		})
+
+		It("iface up -> wl -> iface down -> iface up", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
 		})
 	})
 })
