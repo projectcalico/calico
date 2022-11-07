@@ -85,4 +85,9 @@ var _ = DescribeTable("GetInterfaces",
 		},
 		expectFound: false,
 	}),
+	Entry("should skip podman", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "podman"}}, nil
+		},
+	}),
 )
