@@ -19,7 +19,7 @@ $rootDir = "c:\CalicoWindows"
 Write-Host "Uninstalling any existing Calico install before proceeding with installation..."
 if ((Get-Service | where Name -Like 'Calico*') -NE $null) {
     Write-Host "Calico services running. Executing $rootDir\uninstall-calico.ps1..."
-    & "$rootDir\uninstall-calico.ps1"
+    & "$rootDir\uninstall-calico.ps1" -CleanupForHostProcessInstall $true
 }
 # If this is a hostprocess install, and the root install dir exists, try
 # removing any Calico CNI config install
