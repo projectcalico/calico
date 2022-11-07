@@ -1079,7 +1079,7 @@ spec:
                 type: string
               iptablesBackend:
                 description: IptablesBackend specifies which backend of iptables will
-                  be used. The default is legacy.
+                  be used. The default is auto.
                 type: string
               iptablesFilterAllowAction:
                 type: string
