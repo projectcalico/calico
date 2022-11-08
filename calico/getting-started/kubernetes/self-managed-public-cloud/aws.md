@@ -20,6 +20,12 @@ Kubernetes Operations (kops) is a cluster management tool that handles provision
 - Install {% include open-new-window.html text='kubectl' url='https://kubernetes.io/docs/tasks/tools/install-kubectl/' %}
 - Install {% include open-new-window.html text='AWS CLI tools' url='https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html' %}
 
+
+> **Note**: {{site.prodname}} makes use of the Kubernetes Container Storage Interface (CSI) to support various types of volumes. The necessary drivers required for CSI
+> to function correctly in EKS clusters will no longer be present by default in clusters running Kubernetes 1.23. Please see the following link to ensure your cluster
+> is configured correctly based on the version of Kubernetes being used in your cluster: {% include open-new-window.html text='AWS EBS CSI driver' url='https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html' %}
+{: .alert .alert-warning }
+
 ### How to
 
 There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Operations (kops) is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
