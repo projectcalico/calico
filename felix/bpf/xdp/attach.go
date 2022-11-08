@@ -45,23 +45,23 @@ type AttachPoint struct {
 	Modes    []bpf.XDPMode
 }
 
-func (ap AttachPoint) IfaceName() string {
+func (ap *AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
-func (ap AttachPoint) HookName() bpf.Hook {
+func (ap *AttachPoint) HookName() bpf.Hook {
 	return bpf.HookXDP
 }
 
-func (ap AttachPoint) Config() string {
+func (ap *AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
 
-func (ap AttachPoint) JumpMapFDMapKey() string {
+func (ap *AttachPoint) JumpMapFDMapKey() string {
 	return string(bpf.HookXDP)
 }
 
-func (ap AttachPoint) FileName() string {
+func (ap *AttachPoint) FileName() string {
 	logLevel := strings.ToLower(ap.LogLevel)
 	if logLevel == "off" {
 		logLevel = "no_log"
@@ -69,11 +69,11 @@ func (ap AttachPoint) FileName() string {
 	return "xdp_" + logLevel + ".o"
 }
 
-func (ap AttachPoint) ProgramName() string {
+func (ap *AttachPoint) ProgramName() string {
 	return "xdp_calico_entry"
 }
 
-func (ap AttachPoint) Log() *log.Entry {
+func (ap *AttachPoint) Log() *log.Entry {
 	return log.WithFields(log.Fields{
 		"iface":    ap.Iface,
 		"modes":    ap.Modes,
@@ -106,7 +106,7 @@ func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	return -1, false
 }
 
-func (ap AttachPoint) AttachProgram() (int, error) {
+func (ap *AttachPoint) AttachProgram() (int, error) {
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
 		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
@@ -193,7 +193,7 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 	return progID, nil
 }
 
-func (ap AttachPoint) DetachProgram() error {
+func (ap *AttachPoint) DetachProgram() error {
 	// Get the current XDP program ID, if any.
 	progID, err := ap.ProgramID()
 	if err != nil {
@@ -258,7 +258,7 @@ func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
 	return nil
 }
 
-func (ap AttachPoint) IsAttached() (bool, error) {
+func (ap *AttachPoint) IsAttached() (bool, error) {
 	_, err := ap.ProgramID()
 	return err == nil, err
 }
