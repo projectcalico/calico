@@ -1100,7 +1100,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	ap.IntfIP = calicoRouterIP
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 
-	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
+	jumpMapFD, err := m.dp.ensureProgramAttached(ap)
 	if err != nil {
 		return err
 	}
@@ -1137,7 +1137,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return m.dp.updatePolicyProgram(jumpMapFD, rules, polDirection.RuleDir(), &ap)
+	return m.dp.updatePolicyProgram(jumpMapFD, rules, polDirection.RuleDir(), ap)
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -1187,7 +1187,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	ap.NATin = uint32(m.natInIdx)
 	ap.NATout = uint32(m.natOutIdx)
 
-	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
+	jumpMapFD, err := m.dp.ensureProgramAttached(ap)
 	if err != nil {
 		return err
 	}
@@ -1208,14 +1208,14 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 }
 
 func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint) error {
-	ap := xdp.AttachPoint{
+	ap := &xdp.AttachPoint{
 		Iface:    ifaceName,
 		LogLevel: m.bpfLogLevel,
 		Modes:    m.xdpModes,
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
-		jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
+		jumpMapFD, err := m.dp.ensureProgramAttached(ap)
 		if err != nil {
 			return err
 		}
@@ -1229,7 +1229,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		ap.Log().Debugf("Rules: %v", rules)
 		return m.dp.updatePolicyProgram(jumpMapFD, rules, string(bpf.HookXDP), ap)
 	} else {
-		return m.dp.ensureNoProgram(&ap)
+		return m.dp.ensureNoProgram(ap)
 	}
 }
 
@@ -1256,8 +1256,11 @@ func (polDirection PolDirection) Inverse() PolDirection {
 	return PolDirnIngress
 }
 
-func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection, ifaceName string) tc.AttachPoint {
-	var ap tc.AttachPoint
+func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection, ifaceName string) *tc.AttachPoint {
+	ap := &tc.AttachPoint{
+		Iface: ifaceName,
+	}
+
 	var endpointType tc.EndpointType
 
 	// Determine endpoint type.
@@ -1311,7 +1314,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		toOrFrom = tc.ToEp
 	}
 
-	ap.Iface = ifaceName
 	ap.Type = endpointType
 	ap.ToOrFrom = toOrFrom
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
