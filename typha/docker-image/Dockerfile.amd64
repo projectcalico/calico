@@ -46,20 +46,21 @@ COPY --from=ubi /usr/include /usr/include
 COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 COPY --from=ubi /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
-COPY --from=ubi /lib64/libnss_dns.so.2 /lib64/libnss_dns.so.2
 COPY --from=ubi /lib64/libresolv.so.2 /lib64/libresolv.so.2
+# These two libnss_* files are referenced in our local nsswitch.conf
+# They depend on some of the previous libs
+COPY --from=ubi /lib64/libnss_dns.so.2 /lib64/libnss_dns.so.2
+COPY --from=ubi /lib64/libnss_files.so.2 /lib64/libnss_files.so.2
 
-# Copy hostname configuration files from the UBI image so glibc hostname lookups work.
+# Copy hostname configuration files so glibc hostname lookups work.
 COPY --from=ubi /etc/host.conf /etc/host.conf
-COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
+# But we skip 'myhostname' because it depends on too many libraries.
+ADD nsswitch.conf /etc/nsswitch.conf
 
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the build artefacts from the container.
 ADD bin/calico-typha-amd64 /code/calico-typha
 ADD typha.cfg /etc/calico/typha.cfg
-
-# Add nsswitch.conf so that we correctly resolve localhost based on /etc/hosts.
-ADD nsswitch.conf /etc/nsswitch.conf
 
 WORKDIR /code
 ENV PATH="$PATH:/code"
