@@ -2473,7 +2473,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							// then CTLB succeeds.
 							natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
 							Eventually(func() bool {
-								m := dumpNATMap(felixes[0])
+								m := dumpNATMap(felixes[1])
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
 									return false
@@ -2481,7 +2481,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								beKey := nat.NewNATBackendKey(v.ID(), 0)
 
-								be := dumpEPMap(felixes[0])
+								be := dumpEPMap(felixes[1])
 								_, ok = be[beKey]
 								return ok
 							}, 5*time.Second).Should(BeTrue())
