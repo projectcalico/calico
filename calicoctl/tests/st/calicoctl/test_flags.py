@@ -64,11 +64,11 @@ class TestCalicoctlCLIFlags(TestBase):
 
         # CalicoVersion is correct in the cluster, expect no error
         rc = calicoctl("replace", data=node_name1_rev1, allowVersionMismatch=False)
-        output.assert_no_error()
+        rc.assert_no_error()
 
         # Set an incorrect CalicoVersion in the cluster
-        output = set_cluster_version("v0.0.0.1.2.3")
-        output.assert_no_error()
+        rc = set_cluster_version("v0.0.0.1.2.3")
+        rc.assert_no_error()
 
         # CalicoVersion is incorrect in the cluster, expect error
         rc = calicoctl("replace", data=node_name1_rev1, allowVersionMismatch=False)
