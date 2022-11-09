@@ -222,6 +222,9 @@ var _ = Describe("With an in-process Server", func() {
 	}
 
 	BeforeEach(func() {
+		// Default to debug but some more aggressive tests override this below.
+		log.SetLevel(log.DebugLevel)
+
 		// Set up a pipeline:
 		//
 		//    This goroutine -> callback -chan-> validation -> snapshot -> server
@@ -535,8 +538,39 @@ var _ = Describe("With an in-process Server", func() {
 		})
 	})
 
+	Describe("with 5 client connections", func() {
+		const numClients = 5
+
+		BeforeEach(func() {
+			log.SetLevel(log.InfoLevel) // Debug too verbose for this test.
+			createClients(numClients)
+		})
+
+		It("should shut down gracefully", func() {
+			Eventually(server.NumActiveConnections).Should(Equal(numClients))
+
+			server.ShutDownGracefully()
+			finishedC := make(chan struct{})
+			go func() {
+				defer close(finishedC)
+				server.Finished.Wait()
+			}()
+
+			for n := numClients - 1; n >= 0; n-- {
+				if n > 0 {
+					Expect(finishedC).ToNot(BeClosed())
+				}
+				Eventually(server.NumActiveConnections, "1500ms", "10ms").Should(BeNumerically("==", n))
+				Consistently(server.NumActiveConnections, "500ms", "10ms").Should(BeNumerically("==", n))
+			}
+
+			Eventually(finishedC).Should(BeClosed())
+		})
+	})
+
 	Describe("with 100 client connections", func() {
 		BeforeEach(func() {
+			log.SetLevel(log.InfoLevel) // Debug too verbose with 100 clients.
 			createClients(100)
 		})
 
@@ -998,6 +1032,9 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 	)
 
 	BeforeEach(func() {
+		// Debug logs slow these tests down too much.
+		log.SetLevel(log.InfoLevel)
+
 		cache = snapcache.New(snapcache.Config{
 			// Set the batch size small so we can force new Breadcrumbs easily.
 			MaxBatchSize: 10,
