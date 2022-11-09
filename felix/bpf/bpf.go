@@ -500,12 +500,14 @@ func (b *BPFLib) RemoveCIDRMap(ifName string, family IPFamily) error {
 	return os.Remove(mapPath)
 }
 
-type mapInfo struct {
-	Id        int    `json:"id"`
-	Type      string `json:"type"`
-	KeySize   int    `json:"bytes_key"`
-	ValueSize int    `json:"bytes_value"`
-	Err       string `json:"error"`
+type MapInfo struct {
+	Id         int    `json:"id"`
+	Type       string `json:"type"`
+	TypeInt    int
+	KeySize    int    `json:"bytes_key"`
+	ValueSize  int    `json:"bytes_value"`
+	MaxEntries int    `json:"max_entries"`
+	Err        string `json:"error"`
 }
 
 type getnextEntry struct {
@@ -528,7 +530,8 @@ type perCpuMapEntry []struct {
 	} `json:"values"`
 }
 
-type progInfo struct {
+type ProgInfo struct {
+	Name   string `json:"name"`
 	Id     int    `json:"id"`
 	Type   string `json:"type"`
 	Tag    string `json:"tag"`
@@ -549,7 +552,7 @@ type ProtoPort struct {
 	Port  uint16
 }
 
-func getMapStructGeneral(mapDesc []string) (*mapInfo, error) {
+func getMapStructGeneral(mapDesc []string) (*MapInfo, error) {
 	prog := "bpftool"
 	args := []string{
 		"--json",
@@ -564,7 +567,7 @@ func getMapStructGeneral(mapDesc []string) (*mapInfo, error) {
 		return nil, fmt.Errorf("failed to show map (%v): %s\n%s", mapDesc, err, output)
 	}
 
-	m := mapInfo{}
+	m := MapInfo{}
 	err = json.Unmarshal(output, &m)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -575,7 +578,7 @@ func getMapStructGeneral(mapDesc []string) (*mapInfo, error) {
 	return &m, nil
 }
 
-func getMapStruct(mapPath string) (*mapInfo, error) {
+func getMapStruct(mapPath string) (*MapInfo, error) {
 	return getMapStructGeneral([]string{"pinned", mapPath})
 }
 
@@ -624,6 +627,41 @@ func (b *BPFLib) DumpFailsafeMap() ([]ProtoPort, error) {
 	}
 
 	return pp, nil
+}
+
+func DumpJumpMap(id int) ([]int, error) {
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"map",
+		"dump",
+		"id",
+		strconv.Itoa(id)}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to dump map (%d): %w\n%s", id, err, output)
+	}
+
+	l := []mapEntry{}
+	err = json.Unmarshal(output, &l)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse json output: %w\n%s", err, output)
+	}
+
+	out := []int{}
+	for _, entry := range l {
+		idb, err := hexStringsToBytes(entry.Value)
+		if err != nil {
+			return nil, err
+		}
+		id := int(binary.LittleEndian.Uint32(idb))
+		out = append(out, id)
+	}
+
+	return out, nil
 }
 
 func (b *BPFLib) GetCIDRMapID(ifName string, family IPFamily) (int, error) {
@@ -1096,7 +1134,7 @@ func (b *BPFLib) GetXDPTag(ifName string) (string, error) {
 		return "", fmt.Errorf("failed to show XDP program (%s): %s\n%s", progPath, err, output)
 	}
 
-	p := progInfo{}
+	p := ProgInfo{}
 	err = json.Unmarshal(output, &p)
 	if err != nil {
 		return "", fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1186,7 +1224,7 @@ func (b *BPFLib) GetMapsFromXDP(ifName string) ([]int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to show XDP program (%s): %s\n%s", progPath, err, output)
 	}
-	p := progInfo{}
+	p := ProgInfo{}
 	err = json.Unmarshal(output, &p)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1602,7 +1640,7 @@ func (b *BPFLib) getSkMsgID() (int, error) {
 	return -1, nil
 }
 
-func getAllProgs() ([]progInfo, error) {
+func GetAllProgs(typ string) ([]ProgInfo, error) {
 	prog := "bpftool"
 	args := []string{
 		"--json",
@@ -1617,13 +1655,59 @@ func getAllProgs() ([]progInfo, error) {
 		return nil, fmt.Errorf("failed to get progs: %s\n%s", err, output)
 	}
 
-	var progs []progInfo
+	var progs, out []ProgInfo
 	err = json.Unmarshal(output, &progs)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
 	}
 
-	return progs, nil
+	if typ == "" {
+		return progs, nil
+	}
+
+	for _, p := range progs {
+		if p.Type == typ {
+			out = append(out, p)
+		}
+	}
+
+	return out, nil
+}
+
+func getAllProgs() ([]ProgInfo, error) {
+	return GetAllProgs("")
+}
+
+var voidProgInfo = ProgInfo{}
+
+func GetProgramByID(progID int) (ProgInfo, error) {
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"prog",
+		"show",
+		"id",
+		fmt.Sprintf("%d", progID),
+	}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return voidProgInfo, fmt.Errorf("failed to get prog id %d: %w\n%s", progID, err, output)
+	}
+
+	var p ProgInfo
+	err = json.Unmarshal(output, &p)
+	if err != nil {
+		return voidProgInfo, fmt.Errorf("cannot parse json output: %w\n%s", err, output)
+	}
+
+	if p.Err != "" {
+		return voidProgInfo, fmt.Errorf("%s", p.Err)
+	}
+
+	return p, nil
 }
 
 func (b *BPFLib) getAttachedSockopsID() (int, error) {
@@ -1656,41 +1740,57 @@ func (b *BPFLib) getAttachedSockopsID() (int, error) {
 	return -1, nil
 }
 
-func (b *BPFLib) getSockMapID(progID int) (int, error) {
-	prog := "bpftool"
-	args := []string{
-		"--json",
-		"--pretty",
-		"prog",
-		"show",
-		"id",
-		fmt.Sprintf("%d", progID)}
-
-	printCommand(prog, args...)
-	output, err := exec.Command(prog, args...).CombinedOutput()
+func GetMapFD(progID int, typ int) (MapFD, error) {
+	p, err := GetProgramByID(progID)
 	if err != nil {
-		return -1, fmt.Errorf("failed to get sockmap ID for prog %d: %s\n%s", progID, err, output)
-	}
-
-	p := progInfo{}
-	err = json.Unmarshal(output, &p)
-	if err != nil {
-		return -1, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
-	}
-	if p.Err != "" {
-		return -1, fmt.Errorf("%s", p.Err)
+		return 0, err
 	}
 
 	for _, mapID := range p.MapIds {
-		mapInfo, err := getMapStructGeneral([]string{"id", fmt.Sprintf("%d", mapID)})
+		mapFD, err := GetMapFDByID(mapID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get map FD from ID: %w", err)
+		}
+		mapInfo, err := GetMapInfo(mapFD)
+		if err != nil {
+			err = mapFD.Close()
+			if err != nil {
+				log.WithError(err).Panic("Failed to close FD.")
+			}
+			return 0, fmt.Errorf("failed to get map info: %w", err)
+		}
+		if mapInfo.TypeInt == typ {
+			return mapFD, nil
+		}
+		err = mapFD.Close()
+		if err != nil {
+			log.WithError(err).Panic("Failed to close FD.")
+		}
+	}
+
+	return 0, fmt.Errorf("%d map for prog %d not found", typ, progID)
+}
+
+func GetMapID(progID int, typ string) (int, error) {
+	p, err := GetProgramByID(progID)
+	if err != nil {
+		return -1, err
+	}
+
+	for _, mapID := range p.MapIds {
+		MapInfo, err := getMapStructGeneral([]string{"id", fmt.Sprintf("%d", mapID)})
 		if err != nil {
 			return -1, err
 		}
-		if mapInfo.Type == "sockhash" {
+		if MapInfo.Type == typ {
 			return mapID, nil
 		}
 	}
-	return -1, fmt.Errorf("sockhash map for prog %d not found", progID)
+	return -1, fmt.Errorf("%s map for prog %d not found", typ, progID)
+}
+
+func (b *BPFLib) getSockMapID(progID int) (int, error) {
+	return GetMapID(progID, "sockhash")
 }
 
 func jsonKeyToArgs(jsonKey []string) []string {
@@ -1771,7 +1871,7 @@ func (b *BPFLib) RemoveSockmap(mode FindObjectMode) error {
 	return nil
 }
 
-func (b *BPFLib) getAllMaps() ([]mapInfo, error) {
+func (b *BPFLib) getAllMaps() ([]MapInfo, error) {
 	prog := "bpftool"
 	args := []string{
 		"--json",
@@ -1785,7 +1885,7 @@ func (b *BPFLib) getAllMaps() ([]mapInfo, error) {
 		return nil, fmt.Errorf("failed to get all maps: %s\n%s", err, output)
 	}
 
-	var maps []mapInfo
+	var maps []MapInfo
 	err = json.Unmarshal(output, &maps)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1793,7 +1893,7 @@ func (b *BPFLib) getAllMaps() ([]mapInfo, error) {
 	return maps, nil
 }
 
-func (b *BPFLib) getSockMap() (*mapInfo, error) {
+func (b *BPFLib) getSockMap() (*MapInfo, error) {
 	maps, err := b.getAllMaps()
 	if err != nil {
 		return nil, err
@@ -2290,7 +2390,7 @@ func CountersMapName() string {
 	return fmt.Sprintf("cali_counters%d", countersMapVersion)
 }
 
-func MapPinPath(typ int, name, iface string, hook Hook) string {
+func MapPinPath(typ int, name, iface string, hook Hook, debug bool) string {
 	PinBaseDir := path.Join(DefaultBPFfsPath, "tc")
 	subDir := "globals"
 	// We need one jump map and one counter map for each program, thus we need to pin those
@@ -2303,11 +2403,15 @@ func MapPinPath(typ int, name, iface string, hook Hook) string {
 		case HookXDP:
 			subDir = ifName + "_xdp"
 		case HookIngress:
-			subDir = ifName + "_igr/"
+			subDir = ifName + "_igr"
 		case HookEgress:
 			subDir = ifName + "_egr"
 		default:
 			panic("Invalid hook")
+		}
+
+		if debug && typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, JumpMapName()) {
+			subDir += "_debug"
 		}
 	}
 	return path.Join(PinBaseDir, subDir, name)
