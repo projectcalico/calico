@@ -101,16 +101,16 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 									IntfIP:     net.ParseIP("10.0.0.2"),
 								}
 
-								t.Run(ap.FileName(), func(t *testing.T) {
+								t.Run(ap.FileName(true), func(t *testing.T) {
 									RegisterTestingT(t)
-									logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
+									logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName(true))
 
 									vethName, veth := createVeth()
 									defer deleteLink(veth)
 									ap.Iface = vethName
 									err := tc.EnsureQdisc(ap.Iface)
 									Expect(err).NotTo(HaveOccurred())
-									opts, err := ap.AttachProgram()
+									opts, err := ap.AttachPrograms()
 									Expect(err).NotTo(HaveOccurred())
 									Expect(opts).NotTo(Equal(nil))
 								})
@@ -140,7 +140,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 			vethName, veth := createVeth()
 			defer deleteLink(veth)
 			ap.Iface = vethName
-			opts, err := ap.AttachProgram()
+			opts, err := ap.AttachPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(opts).NotTo(Equal(nil))
 		})
