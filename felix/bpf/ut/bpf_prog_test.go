@@ -279,6 +279,7 @@ outer:
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
+	bin.PatchFlags(uint32(1))
 	// XXX for now we both path the mark here and include it in the context as
 	// well. This needs to be done for as long as we want to run the tests on
 	// older kernels.
