@@ -107,10 +107,11 @@ type Server struct {
 	chosenPort int
 	listeningC chan struct{}
 
-	dropInterval     time.Duration
-	connTrackingLock sync.Mutex
-	maxConns         int
-	connIDToConn     map[uint64]*connection
+	lock sync.Mutex
+
+	shuttingDown bool
+	shutdownC    chan struct{}
+	connIDToConn map[uint64]*connection
 
 	perSyncerConnMetrics map[syncproto.SyncerType]perSyncerConnMetrics
 
@@ -130,6 +131,7 @@ type Config struct {
 	PingInterval                   time.Duration
 	PongTimeout                    time.Duration
 	DropInterval                   time.Duration
+	ShutdownDropInterval           time.Duration
 	MaxConns                       int
 	HealthAggregator               *health.HealthAggregator
 	KeyFile                        string
@@ -195,6 +197,13 @@ func (c *Config) ApplyDefaults() {
 		}).Info("Defaulting DropInterval.")
 		c.DropInterval = defaultDropInterval
 	}
+	if c.ShutdownDropInterval <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.ShutdownDropInterval,
+			"default": defaultDropInterval,
+		}).Info("Defaulting ShutdownDropInterval.")
+		c.ShutdownDropInterval = defaultDropInterval
+	}
 	if c.MaxConns <= 0 {
 		log.WithFields(log.Fields{
 			"value":   c.MaxConns,
@@ -231,8 +240,7 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 		config:               config,
 		caches:               caches,
 		maxConnsC:            make(chan int),
-		dropInterval:         config.DropInterval,
-		maxConns:             config.MaxConns,
+		shutdownC:            make(chan struct{}),
 		connIDToConn:         map[uint64]*connection{},
 		listeningC:           make(chan struct{}),
 		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
@@ -255,9 +263,11 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 }
 
 func (s *Server) Start(cxt context.Context) {
-	s.Finished.Add(2)
+	s.Finished.Add(3)
+	cxt, cancelFn := context.WithCancel(cxt)
 	go s.serve(cxt)
 	go s.governNumberOfConnections(cxt)
+	go s.handleGracefulShutDown(cxt, cancelFn)
 }
 
 func (s *Server) SetMaxConns(numConns int) {
@@ -330,14 +340,25 @@ func (s *Server) serve(cxt context.Context) {
 
 	s.Finished.Add(1)
 	go func() {
-		<-cxt.Done()
+		select {
+		case <-cxt.Done():
+			log.Info("Context finished, closing listen socket.")
+		case <-s.shutdownC:
+			log.Info("Graceful shutdown triggered, closing listen socket.")
+		}
 		err := l.Close()
 		if err != nil {
 			log.WithError(err).Warn("Ignoring error from socket Close during shut-down.")
 		}
 		s.Finished.Done()
 	}()
-	s.chosenPort = l.Addr().(*net.TCPAddr).Port
+
+	chosenPort := l.Addr().(*net.TCPAddr).Port
+
+	s.lock.Lock()
+	s.chosenPort = chosenPort
+	s.lock.Unlock()
+
 	logCxt = log.WithField("port", s.chosenPort)
 	close(s.listeningC)
 	for {
@@ -346,6 +367,11 @@ func (s *Server) serve(cxt context.Context) {
 		if err != nil {
 			if cxt.Err() != nil {
 				logCxt.WithError(cxt.Err()).Info("Shutting down...")
+				return
+			}
+			if s.ShuttingDown() {
+				logCxt.Info("Listen socket closed, waiting for shut down to complete.")
+				<-cxt.Done()
 				return
 			}
 			logCxt.WithError(err).Panic("Failed to accept connection")
@@ -420,22 +446,23 @@ func (s *Server) serve(cxt context.Context) {
 }
 
 func (s *Server) recordConnection(conn *connection) {
-	s.connTrackingLock.Lock()
+	s.lock.Lock()
 	s.connIDToConn[conn.ID] = conn
-	s.connTrackingLock.Unlock()
+	s.lock.Unlock()
 }
 
 func (s *Server) discardConnection(conn *connection) {
-	s.connTrackingLock.Lock()
+	s.lock.Lock()
 	delete(s.connIDToConn, conn.ID)
-	s.connTrackingLock.Unlock()
+	s.lock.Unlock()
 }
 
 func (s *Server) governNumberOfConnections(cxt context.Context) {
 	defer s.Finished.Done()
 	logCxt := log.WithField("thread", "numConnsGov")
-	maxConns := s.maxConns
-	ticker := jitter.NewTicker(s.dropInterval, s.dropInterval/10)
+	maxConns := s.config.MaxConns
+	dropInterval := s.config.DropInterval
+	ticker := jitter.NewTicker(dropInterval, dropInterval/10)
 	healthTicks := time.NewTicker(healthInterval).C
 	s.reportHealth()
 	for {
@@ -444,40 +471,83 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 			if newMax == maxConns {
 				continue
 			}
-			s.connTrackingLock.Lock()
-			currentNum := len(s.connIDToConn)
-			s.connTrackingLock.Unlock()
 			logCxt.WithFields(log.Fields{
 				"oldMax":     maxConns,
 				"newMax":     newMax,
-				"currentNum": currentNum,
+				"currentNum": s.NumActiveConnections(),
 			}).Info("New target number of connections")
 			maxConns = newMax
-			s.connTrackingLock.Lock()
-			s.maxConns = maxConns
-			s.connTrackingLock.Unlock()
 		case <-ticker.C:
-			s.connTrackingLock.Lock()
-			numConns := len(s.connIDToConn)
+			numConns := s.NumActiveConnections()
 			if numConns > maxConns {
-				for connID, conn := range s.connIDToConn {
-					logCxt.WithFields(log.Fields{
-						"max":     maxConns,
-						"current": numConns,
-						"connID":  connID,
-					}).Warn("Currently have too many connections, terminating one at random.")
-					conn.cancelCxt()
-					counterNumConnectionsDropped.Inc()
-					break
-				}
+				logCxt := logCxt.WithFields(log.Fields{
+					"max":     maxConns,
+					"current": numConns,
+				})
+				s.TerminateRandomConnection(logCxt, "re-balance load with other Typha instances")
 			}
-			s.connTrackingLock.Unlock()
 		case <-cxt.Done():
 			logCxt.Info("Context asked us to stop")
 			return
 		case <-healthTicks:
 			s.reportHealth()
 		}
+	}
+}
+
+func (s *Server) handleGracefulShutDown(cxt context.Context, serverCancelFn context.CancelFunc) {
+	defer s.Finished.Done()
+	logCxt := log.WithField("thread", "gracefulShutdown")
+	dropInterval := s.config.ShutdownDropInterval
+	ticker := jitter.NewTicker(dropInterval, dropInterval/10)
+	var tickerC <-chan time.Time
+	shutdownC := s.shutdownC
+	for {
+		select {
+		case <-shutdownC:
+			logCxt.Info("Graceful shutdown triggered, starting to close connections...")
+			tickerC = ticker.C
+			shutdownC = nil
+		case <-tickerC:
+			numConns := s.NumActiveConnections()
+			logCxt := logCxt.WithField("remainingConns", numConns)
+			s.TerminateRandomConnection(logCxt, "graceful shutdown in progress")
+			if numConns <= 1 {
+				logCxt.Info("Finished closing connections, completing shut down...")
+				// Note: we release the lock between NumActiveConnections and TerminateRandomConnection so,
+				// in theory, if we haven't yet closed the listen socket, a new connection could just have been added.
+				// We don't need to worry about that because serverCancelFn will shut down all remaining connections
+				// by canceling their parent context.
+				serverCancelFn()
+				break
+			}
+		case <-cxt.Done():
+			logCxt.Info("Context asked us to stop")
+			return
+		}
+	}
+}
+
+func (s *Server) NumActiveConnections() int {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return len(s.connIDToConn)
+}
+
+func (s *Server) ShuttingDown() bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.shuttingDown
+}
+
+func (s *Server) TerminateRandomConnection(logCtx *log.Entry, reason string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	for connID, conn := range s.connIDToConn {
+		logCtx.WithField("connID", connID).Infof("Closing connection; reason: %s.", reason)
+		conn.cancelCxt()
+		counterNumConnectionsDropped.Inc()
+		break
 	}
 }
 
@@ -498,6 +568,18 @@ func (s *Server) reportHealth() {
 	if s.config.HealthAggregator != nil {
 		s.config.HealthAggregator.Report(healthName, &health.HealthReport{Live: true})
 	}
+}
+
+func (s *Server) ShutDownGracefully() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if s.shuttingDown {
+		log.Info("Asked to shut down but shutdown already in progress.")
+		return
+	}
+	log.Info("Starting graceful shutdown...")
+	s.shuttingDown = true
+	close(s.shutdownC)
 }
 
 type connection struct {
