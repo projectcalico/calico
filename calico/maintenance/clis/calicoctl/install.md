@@ -119,7 +119,8 @@ you want to install the binary.
 
    > **Note**: If you are faced with `cannot be opened because the developer cannot be verified` error when using `caicoctl` for the first time.
    > go to `Applications > System Prefences > Security & Privacy` in the `General` tab at the bottom of the window click `Allow anyway`.
-   >
+   {: .alert .alert-info}
+   
    > **Note**: If the location of `calicoctl` is not already in your `PATH`, move the file
    > to one that is or add its location to your `PATH`. This will allow you to invoke it
    > without having to prepend its location.
