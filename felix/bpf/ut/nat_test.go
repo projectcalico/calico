@@ -1711,7 +1711,7 @@ func TestNATAffinity(t *testing.T) {
 	natKey := nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol))
 	err = natMap.Update(
 		natKey.AsBytes(),
-		nat.NewNATValue(0, 1, 0, 1 /* second */).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 60 /* seconds */).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1747,7 +1747,7 @@ func TestNATAffinity(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 2, 0, 1 /* second */).AsBytes(),
+		nat.NewNATValue(0, 2, 0, 60 /* seconds */).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1779,7 +1779,7 @@ func TestNATAffinity(t *testing.T) {
 	// sure that a new selection in made
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1, 0, 1 /* second */).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 60 /* seconds */).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
