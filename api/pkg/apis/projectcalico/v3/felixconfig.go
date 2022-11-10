@@ -134,7 +134,7 @@ type FelixConfigurationSpec struct {
 	// disable iptables refresh. [Default: 90s]
 	IpsetsRefreshInterval *metav1.Duration `json:"ipsetsRefreshInterval,omitempty" configv1timescale:"seconds"`
 	MaxIpsetSize          *int             `json:"maxIpsetSize,omitempty"`
-	// IptablesBackend specifies which backend of iptables will be used. The default is auto.
+	// IptablesBackend specifies which backend of iptables will be used. The default is Auto.
 	IptablesBackend *IptablesBackend `json:"iptablesBackend,omitempty" validate:"omitempty,iptablesBackend"`
 
 	// XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no
