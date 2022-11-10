@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/google/gopacket"
@@ -185,6 +186,16 @@ type testLogger interface {
 func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rules,
 	runFn func(progName string), opts ...testOption) {
 
+	bpfLogCollection := true
+	cmd := exec.Command("/usr/bin/bpftool", "prog", "tracelog")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Start()
+	if err != nil {
+		log.Debugf("Failed to start bpf log collection")
+		bpfLogCollection = false
+	}
+
 	topts := testOpts{
 		subtests:  true,
 		logLevel:  log.DebugLevel,
@@ -268,6 +279,7 @@ outer:
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
+	bin.PatchFlags(uint32(1))
 	// XXX for now we both path the mark here and include it in the context as
 	// well. This needs to be done for as long as we want to run the tests on
 	// older kernels.
@@ -314,6 +326,17 @@ outer:
 	}
 
 	runFn(bpfFsDir + "/" + section)
+	if bpfLogCollection {
+		err = cmd.Process.Signal(syscall.SIGTERM)
+		if err != nil {
+			log.Infof("Failed to send SIGTERM to bpftool")
+			return
+		}
+		err = cmd.Wait()
+		if err != nil {
+			log.Infof("Failed to wait for bpftool")
+		}
+	}
 }
 
 func caller(skip int) string {
