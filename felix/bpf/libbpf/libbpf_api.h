@@ -39,34 +39,43 @@ void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
 }
 
-struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, int isIngress) {
+struct bpf_tc_opts bpf_tc_program_attach_fd(int prog_fd, int ifindex, bool ingress)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
+			.ifindex = ifindex,
+	);
+	DECLARE_LIBBPF_OPTS(bpf_tc_opts, attach,
+			.prog_fd = prog_fd,
+	);
 
-	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS);
-	DECLARE_LIBBPF_OPTS(bpf_tc_opts, attach);
-
-	if (isIngress) {
-		hook.attach_point = BPF_TC_INGRESS;
-	}
-
-	attach.prog_fd = bpf_program__fd(bpf_object__find_program_by_name(obj, secName));
-	if (attach.prog_fd < 0) {
-		errno = -attach.prog_fd;
-		return attach;
-	}
-	hook.ifindex = ifIndex;
 	set_errno(bpf_tc_attach(&hook, &attach));
+
 	return attach;
 }
 
-int bpf_tc_query_iface (int ifIndex, struct bpf_tc_opts opts, int isIngress) {
-
-	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS);
-	if (isIngress) {
-		hook.attach_point = BPF_TC_INGRESS;
+struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secname, int ifindex, bool ingress)
+{
+	int prog_fd = bpf_program__fd(bpf_object__find_program_by_name(obj, secname));
+	if (prog_fd < 0) {
+		struct bpf_tc_opts x = {};
+		errno = -prog_fd;
+		return x;
 	}
-	hook.ifindex = ifIndex;
+
+	return bpf_tc_program_attach_fd(prog_fd, ifindex, ingress);
+}
+
+int bpf_tc_query_iface (int ifIndex, struct bpf_tc_opts opts, bool ingress)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
+			.ifindex = ifIndex,
+	);
+
 	opts.prog_fd = opts.prog_id = opts.flags = 0;
 	set_errno(bpf_tc_query(&hook, &opts));
+
 	return opts.prog_id;
 }
 
@@ -83,23 +92,54 @@ void bpf_tc_remove_qdisc (int ifIndex) {
         return;
 }
 
-int bpf_update_jump_map(struct bpf_object *obj, char* mapName, char *progName, int progIndex) {
-	struct bpf_program *prog_name = bpf_object__find_program_by_name(obj, progName);
-	if (prog_name == NULL) {
+int bpf_get_jump_map_fd(struct bpf_object *obj, char* mapName) {
+	int map_fd = bpf_object__find_map_fd_by_name(obj, mapName);
+	if (map_fd < 0) {
+		errno = -map_fd;
+	}
+
+	return map_fd;
+}
+
+int bpf_get_program_fd(struct bpf_object *obj, char *prog_name)
+{
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, prog_name);
+	if (prog == NULL) {
 		errno = ENOENT;
 		return -1;
 	}
-	int prog_fd = bpf_program__fd(prog_name);
+	int prog_fd = bpf_program__fd(prog);
 	if (prog_fd < 0) {
 		errno = -prog_fd;
-		return prog_fd;
 	}
+
+	return prog_fd;
+}
+
+int bpf_update_jump_map(struct bpf_object *obj, char* mapName, char *prog_name, int idx)
+{
+	int prog_fd = bpf_get_program_fd(obj, prog_name);
+	if (prog_fd < 0) {
+		return -1; /* errno is set */
+	}
+
 	int map_fd = bpf_object__find_map_fd_by_name(obj, mapName);
 	if (map_fd < 0) {
 		errno = -map_fd;
 		return map_fd;
 	}
-	return bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
+
+	return bpf_map_update_elem(map_fd, &idx, &prog_fd, 0);
+}
+
+int bpf_update_jump_map_fd(struct bpf_object *obj, char* mapName, int prog_fd, int idx)
+{
+	int map_fd = bpf_object__find_map_fd_by_name(obj, mapName);
+	if (map_fd < 0) {
+		errno = -map_fd;
+		return map_fd;
+	}
+	return bpf_map_update_elem(map_fd, &idx, &prog_fd, 0);
 }
 
 int bpf_link_destroy(struct bpf_link *link) {
