@@ -95,6 +95,7 @@ const (
 	defaultBatchingAgeThreshold           = 100 * time.Millisecond
 	defaultPingInterval                   = 10 * time.Second
 	defaultDropInterval                   = 1 * time.Second
+	defaultShutdownTimeout                = 300 * time.Second
 	defaultMaxConns                       = math.MaxInt32
 	PortRandom                            = -1
 )
@@ -131,7 +132,8 @@ type Config struct {
 	PingInterval                   time.Duration
 	PongTimeout                    time.Duration
 	DropInterval                   time.Duration
-	ShutdownDropInterval           time.Duration
+	ShutdownTimeout                time.Duration
+	ShutdownMaxDropInterval        time.Duration
 	MaxConns                       int
 	HealthAggregator               *health.HealthAggregator
 	KeyFile                        string
@@ -197,12 +199,19 @@ func (c *Config) ApplyDefaults() {
 		}).Info("Defaulting DropInterval.")
 		c.DropInterval = defaultDropInterval
 	}
-	if c.ShutdownDropInterval <= 0 {
+	if c.ShutdownMaxDropInterval <= 0 {
 		log.WithFields(log.Fields{
-			"value":   c.ShutdownDropInterval,
+			"value":   c.ShutdownMaxDropInterval,
 			"default": defaultDropInterval,
-		}).Info("Defaulting ShutdownDropInterval.")
-		c.ShutdownDropInterval = defaultDropInterval
+		}).Info("Defaulting ShutdownMaxDropInterval.")
+		c.ShutdownMaxDropInterval = defaultDropInterval
+	}
+	if c.ShutdownTimeout <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.ShutdownTimeout,
+			"default": defaultShutdownTimeout,
+		}).Info("Defaulting ShutdownTimeout.")
+		c.ShutdownTimeout = defaultShutdownTimeout
 	}
 	if c.MaxConns <= 0 {
 		log.WithFields(log.Fields{
@@ -498,17 +507,35 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 func (s *Server) handleGracefulShutDown(cxt context.Context, serverCancelFn context.CancelFunc) {
 	defer s.Finished.Done()
 	logCxt := log.WithField("thread", "gracefulShutdown")
-	dropInterval := s.config.ShutdownDropInterval
-	ticker := jitter.NewTicker(dropInterval, dropInterval/10)
-	var tickerC <-chan time.Time
-	shutdownC := s.shutdownC
+
+	select {
+	case <-s.shutdownC:
+		logCxt.Info("Graceful shutdown triggered, starting to close connections...")
+	case <-cxt.Done():
+		logCxt.Info("Context asked us to stop")
+		return
+	}
+
+	numConns := s.NumActiveConnections()
+	// Aim to close connections within 95% of the allotted time.
+	dropInterval := s.config.ShutdownTimeout * 95 / 100 / time.Duration(numConns)
+	logCtx := log.WithFields(log.Fields{
+		"activeConnections":   numConns,
+		"shutdownTimeout":     s.config.ShutdownTimeout,
+		"maximumDropInterval": s.config.ShutdownMaxDropInterval,
+	})
+	if dropInterval > s.config.ShutdownMaxDropInterval {
+		// We have a long time to shut down (say 5 minutes) but only a few connections.  Cap the delay between
+		// dropping connections.
+		dropInterval = s.config.ShutdownMaxDropInterval
+		logCtx.Info("Using maximum shutdown drop interval.")
+	} else {
+		logCxt.WithField("dropInterval", dropInterval).Info("Calculated drop interval from shutdown timeout.")
+	}
+	ticker := jitter.NewTicker(dropInterval*95/100, dropInterval*10/100)
 	for {
 		select {
-		case <-shutdownC:
-			logCxt.Info("Graceful shutdown triggered, starting to close connections...")
-			tickerC = ticker.C
-			shutdownC = nil
-		case <-tickerC:
+		case <-ticker.C:
 			numConns := s.NumActiveConnections()
 			logCxt := logCxt.WithField("remainingConns", numConns)
 			s.TerminateRandomConnection(logCxt, "graceful shutdown in progress")
