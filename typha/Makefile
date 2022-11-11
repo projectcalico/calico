@@ -156,7 +156,7 @@ cd: cd-common
 fv: k8sfv-test
 
 k8sfv-test: image
-	$(MAKE) -C ../felix JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=$(TYPHA_IMAGE):latest TYPHA_VERSION=latest k8sfv-test
+	$(MAKE) -C ../felix JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=$(TYPHA_IMAGE):latest-$(ARCH) TYPHA_VERSION=latest k8sfv-test
 
 st:
 	@echo "No STs available."
