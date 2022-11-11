@@ -27,7 +27,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -109,17 +108,19 @@ func init() {
 
 type attachPoint interface {
 	IfaceName() string
-	JumpMapFDMapKey() string
+	JumpMapFDMapKey(int, bool) string
 	HookName() bpf.Hook
 	IsAttached() (bool, error)
-	AttachProgram() (int, error)
-	DetachProgram() error
+	AttachPrograms() ([]bpf.MapFD, error)
+	DetachPrograms() error
 	Log() *log.Entry
+	ExpectedJumpMaps([]bpf.MapFD) bool
+	Debug() bool
 }
 
 type bpfDataplane interface {
 	ensureStarted()
-	ensureProgramAttached(ap attachPoint) (bpf.MapFD, error)
+	ensureProgramAttached(ap attachPoint) ([]bpf.MapFD, error)
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) error
 	ensureBPFDevices() error
@@ -183,6 +184,7 @@ type bpfEndpointManager struct {
 	dirtyIfaceNames set.Set[string]
 
 	bpfLogLevel             string
+	logFilters              map[string]string
 	hostname                string
 	hostIP                  net.IP
 	fibLookupEnabled        bool
@@ -290,7 +292,8 @@ func newBPFEndpointManager(
 		policiesToWorkloads:     map[proto.PolicyID]set.Set[any]{},
 		profilesToWorkloads:     map[proto.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
-		bpfLogLevel:             config.BPFLogLevel,
+		bpfLogLevel:             strings.ToLower(config.BPFLogLevel),
+		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
 		fibLookupEnabled:        fibLookupEnabled,
 		dataIfaceRegex:          config.BPFDataIfacePattern,
@@ -358,6 +361,11 @@ func newBPFEndpointManager(
 		case "udp":
 			m.ctlbWorkaroundMode = ctlbWorkaroundUDPOnly
 		}
+
+	}
+
+	if m.logFilters != nil && m.bpfLogLevel == "debug" {
+		m.bpfLogLevel = "debug-filters"
 	}
 
 	if m.ctlbWorkaroundMode != ctlbWorkaroundDisabled {
@@ -1100,7 +1108,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	ap.IntfIP = calicoRouterIP
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 
-	jumpMapFD, err := m.dp.ensureProgramAttached(ap)
+	jumpMapFDs, err := m.dp.ensureProgramAttached(ap)
 	if err != nil {
 		return err
 	}
@@ -1137,7 +1145,18 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return m.dp.updatePolicyProgram(jumpMapFD, rules, polDirection.RuleDir(), ap)
+	for _, fd := range jumpMapFDs {
+		if fd == 0 {
+			continue
+		}
+		ap.Log().Debugf("updatePolicyProgram fd %d", fd)
+		if err := m.dp.updatePolicyProgram(fd, rules, polDirection.RuleDir(), ap); err != nil {
+			ap.Log().Debugf("updatePolicyProgram failed fd %d", fd)
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -1187,7 +1206,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	ap.NATin = uint32(m.natInIdx)
 	ap.NATout = uint32(m.natOutIdx)
 
-	jumpMapFD, err := m.dp.ensureProgramAttached(ap)
+	jumpMapFDs, err := m.dp.ensureProgramAttached(ap)
 	if err != nil {
 		return err
 	}
@@ -1197,13 +1216,22 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 			ForHostInterface: true,
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules, polDirection.RuleDir(), ap)
+		for _, fd := range jumpMapFDs {
+			if fd == 0 {
+				continue
+			}
+			if err := m.dp.updatePolicyProgram(fd, rules, polDirection.RuleDir(), ap); err != nil {
+				return err
+			}
+		}
+	} else {
+		for _, fd := range jumpMapFDs {
+			if err := m.dp.removePolicyProgram(fd, ap); err != nil {
+				return err
+			}
+		}
 	}
 
-	err = m.dp.removePolicyProgram(jumpMapFD, ap)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -1215,19 +1243,19 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
-		jumpMapFD, err := m.dp.ensureProgramAttached(ap)
+		jumpMapFDs, err := m.dp.ensureProgramAttached(ap)
 		if err != nil {
 			return err
 		}
 
-		ap.Log().Debugf("Building program for untracked policy hep=%v jumpMapFD=%v", ep.Name, jumpMapFD)
+		ap.Log().Debugf("Building program for untracked policy hep=%v jumpMapFDs=%v", ep.Name, jumpMapFDs)
 		rules := polprog.Rules{
 			ForHostInterface: true,
 			HostNormalTiers:  m.extractTiers(ep.UntrackedTiers[0], PolDirnIngress, false),
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules, string(bpf.HookXDP), ap)
+		return m.dp.updatePolicyProgram(jumpMapFDs[0], rules, string(bpf.HookXDP), ap)
 	} else {
 		return m.dp.ensureNoProgram(ap)
 	}
@@ -1254,6 +1282,33 @@ func (polDirection PolDirection) Inverse() PolDirection {
 		return PolDirnEgress
 	}
 	return PolDirnIngress
+}
+
+func (m *bpfEndpointManager) apLogFilter(ap *tc.AttachPoint, iface string) (string, string) {
+	if m.logFilters == nil {
+		return m.bpfLogLevel, ""
+	}
+
+	exp, ok := m.logFilters[iface]
+	if !ok {
+		if ap.Type == tc.EpTypeWorkload {
+			if exp, ok := m.logFilters["weps"]; ok {
+				return m.bpfLogLevel, exp
+			}
+		}
+		if ap.Type == tc.EpTypeHost {
+			if exp, ok := m.logFilters["heps"]; ok {
+				return m.bpfLogLevel, exp
+			}
+		}
+		if exp, ok := m.logFilters["all"]; ok {
+			return m.bpfLogLevel, exp
+		}
+
+		return "off", ""
+	}
+
+	return m.bpfLogLevel, exp
 }
 
 func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection, ifaceName string) *tc.AttachPoint {
@@ -1319,7 +1374,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
 	ap.FIB = m.fibLookupEnabled
 	ap.DSR = m.dsrEnabled
-	ap.LogLevel = m.bpfLogLevel
+	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
 	ap.VXLANPort = m.vxlanPort
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
@@ -1770,42 +1825,52 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) error {
 }
 
 // Ensure TC/XDP program is attached to the specified interface and return its jump map FD.
-func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error) {
-	jumpMapFD := m.getJumpMapFD(ap)
-	if jumpMapFD != 0 {
-		ap.Log().Debugf("Known jump map fd=%v", jumpMapFD)
+func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) ([]bpf.MapFD, error) {
+	jumpMapFDs := m.getJumpMapFDs(ap, 4)
+	if jumpMapFDs != nil {
+		ap.Log().Debugf("Known jump maps fd=%v", jumpMapFDs)
 		if attached, err := ap.IsAttached(); err != nil {
-			return jumpMapFD, fmt.Errorf("failed to check if interface %s had BPF program; %w", ap.IfaceName(), err)
-		} else if !attached {
+			return jumpMapFDs, fmt.Errorf("failed to check if interface %s had BPF program; %w", ap.IfaceName(), err)
+		} else if !attached || !ap.ExpectedJumpMaps(jumpMapFDs) {
 			// BPF program is missing; maybe we missed a notification of the interface being recreated?
 			// Close the now-defunct jump map.
 			log.WithField("iface", ap.IfaceName()).Info(
 				"Detected that BPF program no longer attached to interface.")
-			err := jumpMapFD.Close()
-			if err != nil {
-				log.WithError(err).Warn("Failed to close jump map FD. Ignoring.")
+			for _, fd := range jumpMapFDs {
+				if fd == 0 {
+					continue
+				}
+				err := fd.Close()
+				if err != nil {
+					log.WithError(err).Warn("Failed to close jump map FD. Ignoring.")
+				}
 			}
-			m.setJumpMapFD(ap, 0)
-			jumpMapFD = 0 // Trigger program to be re-added below.
+			m.setJumpMapFD(ap, 4, false, 0)
+			m.setJumpMapFD(ap, 4, true, 0)
+			jumpMapFDs = nil // Trigger program to be re-added below.
 		}
 	}
 
-	if jumpMapFD == 0 {
+	if jumpMapFDs == nil {
 		ap.Log().Info("Need to attach program")
 		// We don't have a program attached to this interface yet, attach one now.
-		progID, err := ap.AttachProgram()
+		var err error
+		jumpMapFDs, err = ap.AttachPrograms()
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 
-		jumpMapFD, err = FindJumpMap(progID, ap.IfaceName())
-		if err != nil {
-			return 0, fmt.Errorf("failed to look up jump map: %w", err)
+		for i, fd := range jumpMapFDs {
+			debugPath := false
+			if i == tc.JumpFDDebugV4 {
+				debugPath = true
+			}
+			m.setJumpMapFD(ap, 4, debugPath, fd)
 		}
-		m.setJumpMapFD(ap, jumpMapFD)
 	}
 
-	return jumpMapFD, nil
+	ap.Log().Debugf("ensureProgramAttached jumpMapFDs %v", jumpMapFDs)
+	return jumpMapFDs, nil
 }
 
 // Ensure that the specified interface does not have our XDP program, in any mode, but avoid
@@ -1813,34 +1878,53 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, e
 func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 
 	// Clean up jump map FD if there is one.
-	jumpMapFD := m.getJumpMapFD(ap)
-	if jumpMapFD != 0 {
-		// Close the jump map FD.
-		if err := jumpMapFD.Close(); err == nil {
-			m.setJumpMapFD(ap, 0)
-		} else {
-			// Return error so as to trigger a retry.
-			return fmt.Errorf("Failed to close jump map FD %v: %w", jumpMapFD, err)
+	jumpMapFDs := m.getJumpMapFDs(ap, 4)
+
+	// Close the jump map FDs
+	for i, fd := range jumpMapFDs {
+		if fd == 0 {
+			continue
 		}
+		if err := fd.Close(); err != nil && err != unix.EBADF {
+			// Return error so as to trigger a retry.
+			return fmt.Errorf("Failed to close jump map FD %v: %w", fd, err)
+		}
+
+		debug := false
+		if i == 1 {
+			debug = true
+		}
+		m.setJumpMapFD(ap, 4, debug, 0)
 	}
 
 	// Ensure interface does not have our XDP program attached in any mode.
-	return ap.DetachProgram()
+	return ap.DetachPrograms()
 }
 
-func (m *bpfEndpointManager) getJumpMapFD(ap attachPoint) (fd bpf.MapFD) {
+func (m *bpfEndpointManager) getJumpMapFDs(ap attachPoint, family int) []bpf.MapFD {
+	var fds []bpf.MapFD
+
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
+
 	m.withIface(ap.IfaceName(), func(iface *bpfInterface) bool {
 		if iface.dpState.jumpMapFDs != nil {
-			fd = iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey()]
+			fd1 := iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey(family, false)]
+			fd2 := iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey(family, true)]
+
+			if fd1 != 0 || fd2 != 0 {
+				fds = []bpf.MapFD{fd1, fd2}
+			}
 		}
 		return false
 	})
-	return
+
+	ap.Log().Debugf("getJumpMapFDs %v", fds)
+
+	return fds
 }
 
-func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
+func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, family int, debugPath bool, fd bpf.MapFD) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
@@ -1849,9 +1933,9 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 			if iface.dpState.jumpMapFDs == nil {
 				iface.dpState.jumpMapFDs = make(map[string]bpf.MapFD)
 			}
-			iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey()] = fd
+			iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey(family, debugPath)] = fd
 		} else if iface.dpState.jumpMapFDs != nil {
-			delete(iface.dpState.jumpMapFDs, ap.JumpMapFDMapKey())
+			delete(iface.dpState.jumpMapFDs, ap.JumpMapFDMapKey(family, debugPath))
 			if len(iface.dpState.jumpMapFDs) == 0 {
 				iface.dpState.jumpMapFDs = nil
 			}
@@ -1933,7 +2017,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 			log.WithError(perr).Warn("error writing policy debug information")
 		}
 		if err != nil {
-			return fmt.Errorf("failed to update policy program v%d: %w", ipFamily, err)
+			return fmt.Errorf("failed to update policy program %d jumpMapFD %d: %w", ipFamily, jumpMapFD, err)
 		}
 	}
 	return nil
@@ -1982,7 +2066,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(progName string, jumpMapFD bp
 	}
 	progFD, err := bpf.LoadBPFProgramFromInsns(insns, progName, "Apache-2.0", uint32(progType))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
+		return nil, fmt.Errorf("failed to load BPF policy program %v: %w", ipFamily, err)
 	}
 	defer func() {
 		// Once we've put the program in the map, we don't need its FD any more.
@@ -2024,53 +2108,6 @@ func (m *bpfEndpointManager) doRemovePolicyProgram(jumpMapFD bpf.MapFD, ipFamily
 		return fmt.Errorf("failed to update jump map: %w", err)
 	}
 	return nil
-}
-
-func FindJumpMap(progID int, ifaceName string) (mapFD bpf.MapFD, err error) {
-	logCtx := log.WithField("progID", progID).WithField("iface", ifaceName)
-	logCtx.Debugf("Looking up jump map")
-	bpftool := exec.Command("bpftool", "prog", "show", "id",
-		fmt.Sprintf("%d", progID), "--json")
-	output, err := bpftool.Output()
-	if err != nil {
-		// We can hit this case if the interface was deleted underneath us; check that it's still there.
-		if _, err := os.Stat(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s", ifaceName)); os.IsNotExist(err) {
-			return 0, tc.ErrDeviceNotFound
-		}
-		return 0, fmt.Errorf("failed to get map metadata: %w out=\n%v", err, string(output))
-	}
-	var prog struct {
-		MapIDs []int `json:"map_ids"`
-	}
-	err = json.Unmarshal(output, &prog)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse bpftool output: %w", err)
-	}
-
-	for _, mapID := range prog.MapIDs {
-		mapFD, err := bpf.GetMapFDByID(mapID)
-		if err != nil {
-			return 0, fmt.Errorf("failed to get map FD from ID: %w", err)
-		}
-		mapInfo, err := bpf.GetMapInfo(mapFD)
-		if err != nil {
-			err = mapFD.Close()
-			if err != nil {
-				log.WithError(err).Panic("Failed to close FD.")
-			}
-			return 0, fmt.Errorf("failed to get map info: %w", err)
-		}
-		if mapInfo.Type == unix.BPF_MAP_TYPE_PROG_ARRAY {
-			logCtx.WithField("fd", mapFD).Debug("Found jump map")
-			return mapFD, nil
-		}
-		err = mapFD.Close()
-		if err != nil {
-			log.WithError(err).Panic("Failed to close FD.")
-		}
-	}
-
-	return 0, fmt.Errorf("failed to find jump map for iface=%s progID=%d", ifaceName, progID)
 }
 
 func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
