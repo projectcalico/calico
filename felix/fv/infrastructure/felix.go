@@ -123,9 +123,12 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// Collect the volumes for this container.
 	wd, err := os.Getwd()
 	Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
+
+	arch := utils.GetSysArch()
+
 	fvBin := os.Getenv("FV_BINARY")
 	if fvBin == "" {
-		fvBin = "bin/calico-felix-amd64"
+		fvBin = fmt.Sprintf("bin/calico-felix-%s", arch)
 	}
 	volumes := map[string]string{
 		path.Join(wd, "..", "bin"):        "/usr/local/bin",
