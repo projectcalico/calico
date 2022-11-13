@@ -124,11 +124,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	wd, err := os.Getwd()
 	Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
 
-	arch := os.Getenv("ARCH")
-	if len(arch) == 0 {
-		log.Info("ARCH env not defined, set it to amd64")
-                arch = "amd64"
-        }
+	arch := utils.GetSysArch()
 
 	fvBin := os.Getenv("FV_BINARY")
 	if fvBin == "" {

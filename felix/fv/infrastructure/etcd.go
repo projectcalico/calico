@@ -16,7 +16,6 @@ package infrastructure
 
 import (
 	"fmt"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -33,11 +32,7 @@ func RunEtcd() *containers.Container {
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
 		"--listen-client-urls", "http://0.0.0.0:2379"}
-	arch := os.Getenv("ARCH")
-	if len(arch) == 0 {
-		log.Info("ARCH env is not defined, set it to amd64")
-		arch = "amd64"
-	}
+	arch := utils.GetSysArch()
 	if arch != "amd64" {
 		args = append([]string{"-e", fmt.Sprintf("ETCD_UNSUPPORTED_ARCH=%s", arch)},
 			args...)
