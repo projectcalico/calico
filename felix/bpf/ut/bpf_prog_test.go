@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/google/gopacket"
@@ -182,9 +183,35 @@ type testLogger interface {
 	Logf(format string, args ...interface{})
 }
 
+func startBPFLogging() *exec.Cmd {
+	cmd := exec.Command("/usr/bin/bpftool", "prog", "tracelog")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Start()
+	if err != nil {
+		log.WithError(err).Warn("Failed to start bpf log collection")
+		return nil
+	}
+	return cmd
+}
+
+func stopBPFLogging(cmd *exec.Cmd) {
+	if cmd == nil {
+		return
+	}
+	err := cmd.Process.Signal(syscall.SIGTERM)
+	if err != nil {
+		log.WithError(err).Warn("Failed to send SIGTERM to bpftool")
+		return
+	}
+	err = cmd.Wait()
+	if err != nil {
+		log.WithError(err).Warn("Failed to wait for bpftool")
+	}
+}
+
 func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rules,
 	runFn func(progName string), opts ...testOption) {
-
 	topts := testOpts{
 		subtests:  true,
 		logLevel:  log.DebugLevel,
@@ -268,6 +295,7 @@ outer:
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
 	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
+	bin.PatchFlags(uint32(1))
 	// XXX for now we both path the mark here and include it in the context as
 	// well. This needs to be done for as long as we want to run the tests on
 	// older kernels.
