@@ -189,7 +189,7 @@ func startBPFLogging() *exec.Cmd {
 	cmd.Stderr = os.Stderr
 	err := cmd.Start()
 	if err != nil {
-		log.Infof("Failed to start bpf log collection")
+		log.WithError(err).Warn("Failed to start bpf log collection")
 		return nil
 	}
 	return cmd
@@ -201,12 +201,12 @@ func stopBPFLogging(cmd *exec.Cmd) {
 	}
 	err := cmd.Process.Signal(syscall.SIGTERM)
 	if err != nil {
-		log.Infof("Failed to send SIGTERM to bpftool %s", err)
+		log.WithError(err).Warn("Failed to send SIGTERM to bpftool")
 		return
 	}
 	err = cmd.Wait()
 	if err != nil {
-		log.Infof("Failed to wait for bpftool")
+		log.WithError(err).Warn("Failed to wait for bpftool")
 	}
 }
 
