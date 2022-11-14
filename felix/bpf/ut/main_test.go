@@ -24,7 +24,9 @@ import (
 func TestMain(m *testing.M) {
 	initMapsOnce()
 	cleanUpMaps()
+	cmd := startBPFLogging()
 	rc := m.Run()
 	cleanUpMaps()
+	stopBPFLogging(cmd)
 	os.Exit(rc)
 }
