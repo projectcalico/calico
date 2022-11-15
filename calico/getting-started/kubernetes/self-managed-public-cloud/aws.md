@@ -22,8 +22,10 @@ Kubernetes Operations (kops) is a cluster management tool that handles provision
 
 
 > **Note**: {{site.prodname}} makes use of the Kubernetes Container Storage Interface (CSI) to support various types of volumes. The necessary drivers required for CSI
-> to function correctly in EKS clusters will no longer be present by default in clusters running Kubernetes 1.23. Please see the following link to ensure your cluster
-> is configured correctly based on the version of Kubernetes being used in your cluster: {% include open-new-window.html text='AWS EBS CSI driver' url='https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html' %}
+> to function correctly in AWS clusters using EBS volumes may no longer be present by default in clusters running Kubernetes 1.23. Please check the documentation for the installer
+> being used to ensure the necessary CSI drivers are installed.
+> 
+> If using Kubernetes Operations (kops) as further down on this page please use the relevant linked kops documentation to ensure your cluster has the necessary configuration.
 {: .alert .alert-warning }
 
 ### How to
@@ -44,6 +46,7 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
      ```
      export KOPS_STATE_STORE=s3://name-of-your-state-store-bucket
      ```
+1. {% include open-new-window.html text='Verify CSI driver installation configuration as per your particular cluster and volumes' url='https://kops.sigs.k8s.io/addons/#self-managed-aws-ebs-csi-driver' %}
 1. Configure kops to use {{site.prodname}} for networking.  
    The easiest way to do this is to pass `--networking calico` to kops when creating the cluster. For example:
 
