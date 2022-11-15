@@ -1825,7 +1825,12 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	}
 
 	// Ensure interface does not have our XDP program attached in any mode.
-	return ap.DetachProgram()
+	err := ap.DetachProgram()
+
+	// Forget the policy debug info
+	m.removePolicyDebugInfo(ap.IfaceName(), 4, bpf.HookXDP)
+
+	return err
 }
 
 func (m *bpfEndpointManager) getJumpMapFD(ap attachPoint) (fd bpf.MapFD) {
