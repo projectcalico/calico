@@ -58,6 +58,7 @@ type Checker struct {
 	OnFail func(msg string)
 
 	description string
+	init        func()       // called before testing starts
 	beforeRetry func()       // called when a test fails and before it is retried
 	finalTest   func() error // called after connectivity test, if it is successful, may fail the test.
 }
@@ -69,6 +70,13 @@ type CheckerOpt func(*Checker)
 func CheckWithDescription(desc string) CheckerOpt {
 	return func(c *Checker) {
 		c.description = desc
+	}
+}
+
+func CheckWithInit(f func()) CheckerOpt {
+	return func(c *Checker) {
+		log.Debug("CheckWithInit set")
+		c.init = f
 	}
 }
 
@@ -300,6 +308,10 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 	var actualConn []*Result
 	var actualConnPretty []string
 	var finalErr error
+
+	if c.init != nil {
+		c.init()
+	}
 
 	for {
 		checkStartTime := time.Now()
