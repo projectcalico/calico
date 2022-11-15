@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build fvtests
+
 package fv_test
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -42,18 +43,28 @@ const (
 	resyncPeriod = 11 * time.Second
 )
 
-var bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+var (
+	_ = describeXDPTests("tcp")
+	_ = describeXDPTests("udp")
+)
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized Felix", []apiconfig.DatastoreType{apiconfig.EtcdV3 /*, apiconfig.Kubernetes*/}, func(getInfra infrastructure.InfraFactory) {
+func describeXDPTests(proto string) bool {
+	return infrastructure.DatastoreDescribe(
+		fmt.Sprintf("_BPF-SAFE_ XDP tests with initialized Felix proto=%s", proto),
+		[]apiconfig.DatastoreType{apiconfig.EtcdV3 /*, apiconfig.Kubernetes*/},
+		func(getInfra infrastructure.InfraFactory) {
+			xdpTest(getInfra, proto)
+		})
+}
+
+func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 	var (
-		infra        infrastructure.DatastoreInfra
-		felixes      []*infrastructure.Felix
-		hostW        [4]*workload.Workload
-		client       client.Interface
-		ccTCP        *connectivity.Checker
-		ccUDP        *connectivity.Checker
-		host0HexCIDR []string
-		host2HexCIDR []string
+		infra       infrastructure.DatastoreInfra
+		felixes     []*infrastructure.Felix
+		hostW       [4]*workload.Workload
+		client      client.Interface
+		cc          *connectivity.Checker
+		hostHexCIDR []string
 	)
 
 	BeforeEach(func() {
@@ -67,29 +78,31 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			"FELIX_GENERICXDPENABLED":  "1",
 			"FELIX_XDPREFRESHINTERVAL": "10",
 			"FELIX_LOGSEVERITYSCREEN":  "debug",
+			"FELIX_FAILSAFEINBOUNDHOSTPORTS": "tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, " +
+				"tcp:5473, tcp:6443, tcp:6666, tcp:6667, " + proto + ":1234", // defaults + 1234
 		}
-		felixes, client = infrastructure.StartNNodeTopology(4, opts, infra)
+
+		roles := []string{"client", "server"}
+		felixes, client = infrastructure.StartNNodeTopology(len(roles), opts, infra)
 
 		err := infra.AddAllowToDatastore("host-endpoint=='true'")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start a host-networked workload on each host so we have something to connect to.
-		protos := []string{"udp", "udp", "tcp", "tcp"}
-		roles := []string{"client", "server", "client", "server"}
 		for ii, felix := range felixes {
 			hostW[ii] = workload.Run(
 				felixes[ii],
 				fmt.Sprintf("host%d", ii),
 				"",
 				felixes[ii].IP,
-				"8055,8056,22,68",
-				protos[ii])
+				"8055,8056,1234",
+				proto)
 
 			hostEp := api.NewHostEndpoint()
 			hostEp.Name = fmt.Sprintf("host-endpoint-%d", ii)
 			hostEp.Labels = map[string]string{
 				"host-endpoint": "true",
-				"proto":         protos[ii],
+				"proto":         proto,
 				"role":          roles[ii],
 			}
 			hostEp.Spec.Node = felix.Hostname
@@ -99,13 +112,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		ccTCP = &connectivity.Checker{Protocol: "tcp"}
-		ccUDP = &connectivity.Checker{Protocol: "udp"}
+		cc = &connectivity.Checker{Protocol: proto}
 	})
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
+			for _, felix := range felixes {
+				felix.Exec("iptables-save", "-c")
+			}
 		}
 
 		for _, wl := range hostW {
@@ -118,76 +133,53 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		infra.Stop()
 	})
 
-	clientServerIndexes := func(proto string) (client, server int) {
-		if proto == "udp" {
-			return 0, 1
-		} else if proto == "tcp" {
-			return 2, 3
-		} else {
-			return -1, -1
-		}
-	}
+	clnt, srvr := 0, 1
 
 	expectNoConnectivity := func(cc *connectivity.Checker) {
-		client, server := clientServerIndexes(cc.Protocol)
-		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
-		cc.ExpectNone(felixes[server], hostW[client].Port(8055))
-		cc.ExpectNone(felixes[client], hostW[server].Port(8056))
-		cc.ExpectNone(felixes[server], hostW[client].Port(8056))
+		cc.ExpectNone(felixes[clnt], hostW[srvr].Port(8055))
+		cc.ExpectNone(felixes[srvr], hostW[clnt].Port(8055))
+		cc.ExpectNone(felixes[clnt], hostW[srvr].Port(8056))
+		cc.ExpectNone(felixes[srvr], hostW[clnt].Port(8056))
 		cc.CheckConnectivityOffset(1)
 		cc.ResetExpectations()
 	}
 
 	expectAllAllowed := func(cc *connectivity.Checker) {
-		client, server := clientServerIndexes(cc.Protocol)
-		cc.ExpectSome(felixes[client], hostW[server].Port(8055))
-		cc.ExpectSome(felixes[client], hostW[server].Port(8056))
+		cc.ExpectSome(felixes[clnt], hostW[srvr].Port(8055))
+		cc.ExpectSome(felixes[clnt], hostW[srvr].Port(8056))
 		cc.CheckConnectivityOffset(1)
 		cc.ResetExpectations()
 	}
 
 	expectBlocked := func(cc *connectivity.Checker) {
-		client, server := clientServerIndexes(cc.Protocol)
-		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
-		cc.ExpectNone(felixes[client], hostW[server].Port(8056))
+		cc.ExpectNone(felixes[clnt], hostW[srvr].Port(8055))
+		cc.ExpectNone(felixes[clnt], hostW[srvr].Port(8056))
 		cc.CheckConnectivityOffset(1)
 		cc.ResetExpectations()
 	}
 
-	expectTCPFailsafePortsOpen := func(cc *connectivity.Checker) {
-		client, server := clientServerIndexes(cc.Protocol)
-		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
-		cc.ExpectNone(felixes[client], hostW[server].Port(8056))
-		cc.ExpectSome(felixes[client], hostW[server].Port(22))
+	expectFailsafePortsOpen := func(cc *connectivity.Checker) {
+		cc.ExpectNone(felixes[clnt], hostW[srvr].Port(8055))
+		cc.ExpectNone(felixes[clnt], hostW[srvr].Port(8056))
+		cc.ExpectSome(felixes[clnt], hostW[srvr].Port(1234))
 		cc.CheckConnectivityOffset(1)
 		cc.ResetExpectations()
 	}
 
-	expectUDPFailsafePortsOpen := func(cc *connectivity.Checker) {
-		client, server := clientServerIndexes(cc.Protocol)
-		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
-		cc.ExpectNone(felixes[client], hostW[server].Port(8056))
-		cc.ExpectSome(felixes[client], hostW[server].Port(68))
-		cc.CheckConnectivityOffset(1)
-		cc.ResetExpectations()
-	}
-
-	expectTCPSourceFailsafePortBlocked := func(cc *connectivity.Checker) {
-		client, server := clientServerIndexes(cc.Protocol)
+	expectSourceFailsafePortBlocked := func(cc *connectivity.Checker) {
 
 		fsPort := &workload.Port{
-			Workload: hostW[client],
-			Port:     2379, // a source failsafe port
+			Workload: hostW[clnt],
+			Port:     1234, // a source failsafe port
 		}
 
-		ccTCP.ExpectNone(fsPort, hostW[server], 8055)
-		ccTCP.CheckConnectivityOffset(1)
-		ccTCP.ResetExpectations()
+		cc.ExpectNone(fsPort, hostW[srvr], 8055)
+		cc.CheckConnectivityOffset(1)
+		cc.ResetExpectations()
 	}
 
 	It("should have expected no connectivity at first", func() {
-		expectNoConnectivity(ccUDP)
-		expectNoConnectivity(ccTCP)
+		expectNoConnectivity(cc)
 	})
 
 	xdpProgramID := func(felix *infrastructure.Felix, iface string) int {
@@ -207,23 +199,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		return xdpProgramID(felix, iface) != 0
 	}
 
-	xdpProgramAttached_felix1_eth0 := func() bool {
-		return xdpProgramAttached(felixes[1], "eth0")
+	xdpProgramAttached_server_eth0 := func() bool {
+		return xdpProgramAttached(felixes[srvr], "eth0")
 	}
 
-	xdpProgramID_felix1_eth0 := func() int {
-		return xdpProgramID(felixes[1], "eth0")
+	xdpProgramID_server_eth0 := func() int {
+		return xdpProgramID(felixes[srvr], "eth0")
 	}
 
 	Context("with no untracked policy", func() {
 
 		It("should not have XDP program attached", func() {
-			Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeFalse())
-			Consistently(xdpProgramAttached_felix1_eth0, "2s", "1s").Should(BeFalse())
+			Eventually(xdpProgramAttached_server_eth0, "10s", "1s").Should(BeFalse())
+			Consistently(xdpProgramAttached_server_eth0, "2s", "1s").Should(BeFalse())
 		})
 	})
 
-	Context("with XDP blocklist on felix[1] blocking felixes[0]", func() {
+	Context("with XDP blocklist on felix[srvr] blocking felixes[clnt]", func() {
 		BeforeEach(func() {
 			order := float64(20)
 
@@ -241,15 +233,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, allowAllPolicy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 
-			expectAllAllowed(ccUDP)
-			expectAllAllowed(ccTCP)
+			expectAllAllowed(cc)
 
 			order = float64(10)
 
-			// apply XDP policy to felix[1] blocking felixes[0] by IP
-			serverSelector := "proto == 'udp' && role=='server'"
+			// apply XDP policy to felix[srvr] blocking felixes[clnt] by IP
+			serverSelector := "role=='server'"
 			xdpPolicy := api.NewGlobalNetworkPolicy()
-			xdpPolicy.Name = "xdp-filter-u" // keep name short, so it matches with the iptables chain name
+			xdpPolicy.Name = "xdp-filter" // keep name short, so it matches with the iptables chain name
 			xdpPolicy.Spec.Order = &order
 			xdpPolicy.Spec.DoNotTrack = true
 			xdpPolicy.Spec.ApplyOnForward = true
@@ -263,52 +254,33 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, xdpPolicy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 
-			serverSelector = "proto == 'tcp' && role=='server'"
-			xdpPolicy = api.NewGlobalNetworkPolicy()
-			xdpPolicy.Name = "xdp-filter-t" // keep name short, so it matches with the iptables chain name
-			xdpPolicy.Spec.Order = &order
-			xdpPolicy.Spec.DoNotTrack = true
-			xdpPolicy.Spec.ApplyOnForward = true
-			xdpPolicy.Spec.Selector = serverSelector
-			xdpPolicy.Spec.Ingress = []api.Rule{{
-				Action: api.Deny,
-				Source: api.EntityRule{
-					Selector: "xdpblocklist-set=='true'",
-				},
-			}}
-			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, xdpPolicy, utils.NoOptions)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeTrue())
+			Eventually(xdpProgramAttached_server_eth0, "10s", "1s").Should(BeTrue())
 		})
 
 		AfterEach(func() {
 			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "allow-all", options.DeleteOptions{})
-			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblocklistudp", options.DeleteOptions{})
-			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblocklisttcp", options.DeleteOptions{})
-			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
-			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
+			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblocklist", options.DeleteOptions{})
+			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter", options.DeleteOptions{})
 		})
 
 		It("should have consistent XDP program attached", func() {
-			id := xdpProgramID(felixes[1], "eth0")
-			Consistently(xdpProgramID_felix1_eth0(), "2s", "100ms").Should(Equal(id))
+			id := xdpProgramID(felixes[srvr], "eth0")
+			Consistently(xdpProgramID_server_eth0(), "2s", "100ms").Should(Equal(id))
 		})
 
 		Context("with untracked policies deleted again", func() {
 			BeforeEach(func() {
-				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
-				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
+				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter", options.DeleteOptions{})
 			})
 
 			It("should not have XDP program attached", func() {
-				Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeFalse())
-				Consistently(xdpProgramAttached_felix1_eth0, "2s", "1s").Should(BeFalse())
+				Eventually(xdpProgramAttached_server_eth0, "10s", "1s").Should(BeFalse())
+				Consistently(xdpProgramAttached_server_eth0, "2s", "1s").Should(BeFalse())
 			})
 		})
 
 		applyGlobalNetworkSets := func(name string, ip string, cidrToHexSuffix string, update bool) (hexCIDR []string) {
-			// create GlobalNetworkSet with IP of felixes[0]
+			// create GlobalNetworkSet with IP of felixes[clnt]
 			var srcNS *api.GlobalNetworkSet
 			var err error
 			if update {
@@ -336,37 +308,30 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 
 		Context("blocking server IP", func() {
 			BeforeEach(func() {
-				_, udpServer := clientServerIndexes("udp")
-				_, tcpServer := clientServerIndexes("tcp")
-				_ = applyGlobalNetworkSets("xdpblocklistudp", hostW[udpServer].IP, "/32", false)
-				_ = applyGlobalNetworkSets("xdpblocklisttcp", hostW[tcpServer].IP, "/32", false)
+				_ = applyGlobalNetworkSets("xdpblocklist", hostW[srvr].IP, "/32", false)
 			})
 
 			It("should allow connections from other IPs to the server", func() {
-				expectAllAllowed(ccTCP)
-				expectAllAllowed(ccUDP)
+				expectAllAllowed(cc)
 			})
 			// NJ: this is odd; no blocklist testing here.
 		})
 
 		Context("blocking full IP", func() {
 			BeforeEach(func() {
-				host0HexCIDR = applyGlobalNetworkSets("xdpblocklistudp", hostW[0].IP, "/32", false)
-				host2HexCIDR = applyGlobalNetworkSets("xdpblocklisttcp", hostW[2].IP, "/32", false)
+				hostHexCIDR = applyGlobalNetworkSets("xdpblocklist", hostW[clnt].IP, "/32", false)
 			})
 
 			It("should block packets smaller than UDP", func() {
-				client, server := clientServerIndexes("tcp")
-
 				doHping := func() error {
-					return utils.RunMayFail("docker", "exec", felixes[client].Name, "hping3", "--rawip", "-c", "1", "-H", "254", "-d", "1", hostW[server].IP)
+					return utils.RunMayFail("docker", "exec", felixes[clnt].Name, "hping3", "--rawip", "-c", "1", "-H", "254", "-d", "1", hostW[srvr].IP)
 				}
 				Eventually(doHping, "20s", "100ms").Should(HaveOccurred())
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
 				Expect(doHping()).To(HaveOccurred())
 
-				if !bpfEnabled {
-					output, err := felixes[server].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
+				if !BPFMode() {
+					output, err := felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter")
 					// the only rule that refers to a cali40-prefixed ipset should
 					// have 0 packets/bytes because the raw small packets should've been
 					// blocked by XDP
@@ -375,7 +340,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				}
 			})
 
-			if bpfEnabled {
+			if BPFMode() {
 				// The following test case only works for the old iptables-mode XDP
 				// implementation of untracked ingress deny policy.  The BPF mode
 				// and iptables chain implementations of untracked ingress policy
@@ -386,22 +351,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				// likely it will be replaced with the new XDP as used in BPF mode.
 			} else {
 				It("should block connections even if the source port is a failsafe port", func() {
-					expectTCPSourceFailsafePortBlocked(ccTCP)
+					expectSourceFailsafePortBlocked(cc)
 				})
 			}
 
 			It("should block ICMP too", func() {
-				client, server := clientServerIndexes("tcp")
-
 				doPing := func() error {
-					return utils.RunMayFail("docker", "exec", felixes[client].Name, "ping", "-c", "1", "-w", "1", hostW[server].IP)
+					return utils.RunMayFail("docker", "exec", felixes[clnt].Name, "ping", "-c", "1", "-w", "1", hostW[srvr].IP)
 				}
 				Eventually(doPing, "20s", "100ms").Should(HaveOccurred())
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
 				Expect(doPing()).To(HaveOccurred())
 
-				if !bpfEnabled {
-					output, err := felixes[server].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
+				if !BPFMode() {
+					output, err := felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter")
 					// the only rule that refers to a cali40-prefixed ipset should
 					// have 0 packets/bytes because the icmp packets should've been
 					// blocked by XDP
@@ -410,185 +373,154 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				}
 			})
 
-			if !bpfEnabled {
-				It("should have expected felixes[UDP client] IP in BPF blocklist", func() {
-					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
-					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
-				})
-
-				It("should have expected felixes[TCP client] IP in BPF blocklist", func() {
-					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host2HexCIDR...)
-					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
+			if !BPFMode() {
+				It("should have expected felixes[clnt] IP in BPF blocklist", func() {
+					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)
+					Eventually(felixes[srvr].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 			}
 
-			It("should have expected no connectivity from felixes[0] with XDP blocklist", func() {
-				expectBlocked(ccUDP)
-				expectBlocked(ccTCP)
+			It("should have expected no connectivity from felixes[clnt] with XDP blocklist", func() {
+				expectBlocked(cc)
 			})
 
-			It("should have expected no dropped packets in iptables in UDP", func() {
-				expectBlocked(ccUDP)
-
-				if !bpfEnabled {
-					felixes[1].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-u")
-					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
-					Expect(utils.LastRunOutput).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
-				}
-			})
-
-			It("should have expected no dropped packets in iptables in TCP", func() {
+			It("should have expected no dropped packets in iptables", func() {
 				versionReader, err := environment.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
 				kernelVersion, err := environment.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(environment.MustParseVersion("4.19.0")) < 0 {
+				if proto == "tcp" && kernelVersion.Compare(environment.MustParseVersion("4.19.0")) < 0 {
 					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}
 
-				expectBlocked(ccTCP)
+				expectBlocked(cc)
 
-				if !bpfEnabled {
-					felixes[3].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
+				if !BPFMode() {
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
-					Expect(utils.LastRunOutput).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
+					Eventually(func() string {
+						out, _ := felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
+							"cali-pi-default.xdp-filter")
+						return out
+
+					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
 			})
 
-			It("should have expected failsafe port 22 (TCP) and port 68 (UDP) to be open on felix[1] with XDP blocklist", func() {
-				expectUDPFailsafePortsOpen(ccUDP)
-				expectTCPFailsafePortsOpen(ccTCP)
+			It("should have expected failsafe port 1234 to be open on felix[srvr] with XDP blocklist", func() {
+				expectFailsafePortsOpen(cc)
 			})
 
 			It("should have expected connectivity after removing the policy", func() {
-				expectBlocked(ccUDP)
-				expectBlocked(ccTCP)
+				expectBlocked(cc)
 
-				_, err := client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
+				_, err := client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter", options.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				expectAllAllowed(ccUDP)
-				expectAllAllowed(ccTCP)
+				expectAllAllowed(cc)
 			})
 
 			Context("messing up with BPF maps", func() {
 
-				if bpfEnabled {
+				if BPFMode() {
 					// BPF mode's use of XDP doesn't resync in the ways expected by the following tests.
 					return
 				}
 
 				It("resync should've handled the external change of a BPF map", func() {
-					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
-					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
+					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)
+					Eventually(felixes[srvr].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 
-					felixes[1].Exec(append([]string{"bpftool", "map", "delete", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)...)
+					felixes[srvr].Exec(append([]string{"bpftool", "map", "delete", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)...)
 
-					Eventually(felixes[1].ExecOutputFn(args...), resyncPeriod).Should(ContainSubstring("value:"))
+					Eventually(felixes[srvr].ExecOutputFn(args...), resyncPeriod).Should(ContainSubstring("value:"))
 
-					expectBlocked(ccUDP)
-					expectBlocked(ccTCP)
+					expectBlocked(cc)
 				})
 
 				It("resync should've handled manually detaching a BPF program", func() {
-					felixes[1].Exec("ip", "link", "set", "dev", "eth0", "xdp", "off")
+					felixes[srvr].Exec("ip", "link", "set", "dev", "eth0", "xdp", "off")
 
 					// Note: we can't reliably check the following here, because
 					// resync may have happened _immediately_ following the
 					// previous "xdp off" command.
-					// felixes[1].Exec( "ip", "addr", "show", "eth0")
+					// felixes[srvr].Exec( "ip", "addr", "show", "eth0")
 					// Expect(utils.LastRunOutput).NotTo(ContainSubstring("xdp"))
 
-					Eventually(felixes[1].ExecOutputFn("ip", "addr", "show", "eth0"), resyncPeriod).Should(ContainSubstring("xdp"))
+					Eventually(felixes[srvr].ExecOutputFn("ip", "addr", "show", "eth0"), resyncPeriod).Should(ContainSubstring("xdp"))
 
-					expectBlocked(ccUDP)
-					expectBlocked(ccTCP)
+					expectBlocked(cc)
 				})
 			})
 		})
 
 		Context("changing GlobalNetworkSets", func() {
 			BeforeEach(func() {
-				host0HexCIDR = applyGlobalNetworkSets("xdpblocklistudp", hostW[0].IP, "/32", false)
-				host2HexCIDR = applyGlobalNetworkSets("xdpblocklisttcp", hostW[2].IP, "/32", false)
+				hostHexCIDR = applyGlobalNetworkSets("xdpblocklist", hostW[clnt].IP, "/32", false)
 			})
 
-			if bpfEnabled {
+			if BPFMode() {
 				// The following are whitebox tests that aren't valid for the
 				// BPF-mode use of XDP.
 				return
 			}
 
 			It("should be reflected in the BPF map", func() {
-				args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
-				Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
+				args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)
+				Eventually(felixes[srvr].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 
-				AdditionalHostUDPHexCIDR := applyGlobalNetworkSets("xdpblocklistudp", "1.2.3.4", "/32", true)
-				args = append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostUDPHexCIDR...)
-				Eventually(felixes[1].ExecOutputFn(args...), "5s").Should(ContainSubstring("value:"))
-
-				AdditionalHostTCPHexCIDR := applyGlobalNetworkSets("xdpblocklisttcp", "1.2.3.4", "/32", true)
-				args = append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostTCPHexCIDR...)
-				Eventually(felixes[3].ExecOutputFn(args...), "5s").Should(ContainSubstring("value:"))
+				AdditionalHostHexCIDR := applyGlobalNetworkSets("xdpblocklist", "1.2.3.4", "/32", true)
+				args = append([]string{"bpftool", "map", "lookup", "pinned",
+					"/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostHexCIDR...)
+				Eventually(felixes[srvr].ExecOutputFn(args...), "5s").Should(ContainSubstring("value:"))
 			})
 		})
 
 		Context("blocking CIDR", func() {
 			BeforeEach(func() {
-				host0HexCIDR = applyGlobalNetworkSets("xdpblocklistudp", hostW[0].IP+"/8", "", false)
-				host2HexCIDR = applyGlobalNetworkSets("xdpblocklisttcp", hostW[2].IP+"/8", "", false)
+				hostHexCIDR = applyGlobalNetworkSets("xdpblocklist", hostW[clnt].IP+"/8", "", false)
 
-				Eventually(xdpProgramAttached_felix1_eth0, "10s").Should(BeTrue())
+				Eventually(xdpProgramAttached_server_eth0, "10s").Should(BeTrue())
 			})
 
-			if !bpfEnabled {
-				It("should have expected felixes[0] CIDR in BPF blocklist", func() {
-					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, host0HexCIDR...)
-					Eventually(felixes[1].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
+			if !BPFMode() {
+				It("should have expected felixes[clnt] CIDR in BPF blocklist", func() {
+					args := append([]string{"bpftool", "map", "lookup", "pinned",
+						"/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)
+					Eventually(felixes[srvr].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 			}
 
-			It("should have expected no dropped packets in iptables in UDP", func() {
-				expectBlocked(ccUDP)
-
-				if !bpfEnabled {
-					felixes[1].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-u")
-					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
-					Expect(utils.LastRunOutput).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
-				}
-			})
-
-			It("should have expected no dropped packets in iptables in TCP", func() {
+			It("should have expected no dropped packets in iptables", func() {
 				versionReader, err := environment.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
 				kernelVersion, err := environment.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(environment.MustParseVersion("4.19.0")) < 0 {
+				if proto == "tcp" && kernelVersion.Compare(environment.MustParseVersion("4.19.0")) < 0 {
 					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}
 
-				expectBlocked(ccTCP)
+				expectBlocked(cc)
 
-				if !bpfEnabled {
-					felixes[3].Exec("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
+				if !BPFMode() {
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
-					Expect(utils.LastRunOutput).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
+					Eventually(func() string {
+						out, _ := felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
+							"cali-pi-default.xdp-filter")
+						return out
+
+					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
 			})
 
-			It("should have expected failsafe port 22 (TCP) and port 68 (UDP) to be open on felix[1] with XDP blocklist", func() {
-				expectUDPFailsafePortsOpen(ccUDP)
-				expectTCPFailsafePortsOpen(ccTCP)
+			It("should have expected failsafe port 1234 to be open on felix[srvr] with XDP blocklist", func() {
+				expectFailsafePortsOpen(cc)
 			})
 		})
 	})
-})
+}
