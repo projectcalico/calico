@@ -66,7 +66,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_GENERICXDPENABLED":  "1",
 			"FELIX_XDPREFRESHINTERVAL": "10",
-			"FELIX_LOGSEVERITYSCREEN":  "debug",
+			"FELIX_LOGSEVERITYSCREEN":  "Info",
+			"FELIX_BPFLOGLEVEL":        "Off",
 		}
 		felixes, client = infrastructure.StartNNodeTopology(4, opts, infra)
 
@@ -103,11 +104,28 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		ccUDP = &connectivity.Checker{Protocol: "udp"}
 	})
 
-	AfterEach(func() {
+	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
-		}
 
+			for _, felix := range felixes {
+				felix.Exec("iptables-save", "-c")
+
+				felix.Exec("bpftool", "-jp", "net")
+				felix.Exec("bpftool", "-jp", "prog", "show")
+				felix.Exec("bpftool", "-jp", "map", "show")
+
+				if BPFMode() {
+					felix.Exec("calico-bpf", "ipsets", "dump")
+					felix.Exec("calico-bpf", "counters", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
+					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
+				}
+			}
+		}
+	})
+
+	AfterEach(func() {
 		for _, wl := range hostW {
 			wl.Stop()
 		}
@@ -329,6 +347,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			}
 			Expect(err).NotTo(HaveOccurred())
 
+			if BPFMode() {
+				bpfWaitForPolicy(felixes[1], "eth0", "xdp", "default.xdp-filter-u")
+				bpfWaitForIPSets(felixes[1], false)
+				bpfWaitForPolicy(felixes[3], "eth0", "xdp", "default.xdp-filter-t")
+				bpfWaitForIPSets(felixes[3], false)
+			}
+
 			hexCIDR, err = bpf.CidrToHex(ip + cidrToHexSuffix)
 			Expect(err).NotTo(HaveOccurred())
 			return hexCIDR
@@ -473,6 +498,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				_, err = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
+				if BPFMode() {
+					bpfWaitForPolicyNotExists(felixes[1], "eth0", "xdp", "default.xdp-filter-u")
+					bpfWaitForPolicyNotExists(felixes[3], "eth0", "xdp", "default.xdp-filter-t")
+				}
+
 				expectAllAllowed(ccUDP)
 				expectAllAllowed(ccTCP)
 			})
@@ -592,3 +622,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		})
 	})
 })
+
+func bpfWaitForIPSets(felix *infrastructure.Felix, empty bool) {
+	test := func() string {
+		output, err := felix.ExecOutput("calico-bpf", "ipsets", "dump")
+		Expect(err).NotTo(HaveOccurred())
+		return output
+	}
+
+	if empty {
+		Eventually(test, "30s", "1s").Should(ContainSubstring("No IP sets found"))
+	} else {
+		Eventually(test, "30s", "1s").ShouldNot(ContainSubstring("No IP sets found"))
+	}
+}
