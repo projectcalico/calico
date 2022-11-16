@@ -4233,3 +4233,14 @@ func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, policy string) s
 
 	return out
 }
+
+func bpfWaitForPolicyNotExists(felix *infrastructure.Felix, iface, hook, policy string) string {
+	search := fmt.Sprintf("Start of policy %s", policy)
+	out := ""
+	EventuallyWithOffset(1, func() string {
+		out = bpfDumpPolicy(felix, iface, hook)
+		return out
+	}, "5s", "200ms").ShouldNot(ContainSubstring(search))
+
+	return out
+}
