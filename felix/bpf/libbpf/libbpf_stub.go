@@ -118,3 +118,7 @@ func (m *Map) SetMapSize(size uint32) error {
 func NumPossibleCPUs() (int, error) {
 	return runtime.NumCPU(), nil
 }
+
+func (o *Obj) GetJumpMapFd(mapName string) (int, error) {
+	panic("LIBBPF syscall stub")
+}
