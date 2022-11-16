@@ -699,3 +699,8 @@ endif
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 	done ;
+
+# Override the default golangci-lint target from the library makefile with a version that uses the right CGO
+# argument for Felix.
+golangci-lint: $(GENERATED_FILES) $(LIBBPF_A)
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
