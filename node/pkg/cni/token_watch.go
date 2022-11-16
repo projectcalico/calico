@@ -206,9 +206,19 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 		logrus.WithError(err).Error("Failed to unmarshal service account token claims")
 		return TokenUpdate{}, err
 	}
+
+	// Versions of Kubernetes before v1.22 automatically created credentials for accessing the Kubernetes API. This older mechanism was based on creating token Secrets that could then be mounted into running Pods. The token will never expire, and there is no exp in claimMap.
+	expClaim, found := claimMap["exp"]
+	if !found {
+		return TokenUpdate{
+			Token:          token,
+			ExpirationTime: time.Unix(1<<63-1, 0),
+		}, nil
+	}
+
 	return TokenUpdate{
 		Token:          token,
-		ExpirationTime: time.Unix(int64(claimMap["exp"].(float64)), 0),
+		ExpirationTime: time.Unix(int64(expClaim.(float64)), 0),
 	}, nil
 }
 
