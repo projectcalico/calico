@@ -530,7 +530,7 @@ type perCpuMapEntry []struct {
 	} `json:"values"`
 }
 
-type progInfo struct {
+type ProgInfo struct {
 	Id     int    `json:"id"`
 	Type   string `json:"type"`
 	Tag    string `json:"tag"`
@@ -1098,7 +1098,7 @@ func (b *BPFLib) GetXDPTag(ifName string) (string, error) {
 		return "", fmt.Errorf("failed to show XDP program (%s): %s\n%s", progPath, err, output)
 	}
 
-	p := progInfo{}
+	p := ProgInfo{}
 	err = json.Unmarshal(output, &p)
 	if err != nil {
 		return "", fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1188,7 +1188,7 @@ func (b *BPFLib) GetMapsFromXDP(ifName string) ([]int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to show XDP program (%s): %s\n%s", progPath, err, output)
 	}
-	p := progInfo{}
+	p := ProgInfo{}
 	err = json.Unmarshal(output, &p)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1604,7 +1604,11 @@ func (b *BPFLib) getSkMsgID() (int, error) {
 	return -1, nil
 }
 
-func getAllProgs() ([]progInfo, error) {
+func GetAllProgs() ([]ProgInfo, error) {
+	return getAllProgs()
+}
+
+func getAllProgs() ([]ProgInfo, error) {
 	prog := "bpftool"
 	args := []string{
 		"--json",
@@ -1619,7 +1623,7 @@ func getAllProgs() ([]progInfo, error) {
 		return nil, fmt.Errorf("failed to get progs: %s\n%s", err, output)
 	}
 
-	var progs []progInfo
+	var progs []ProgInfo
 	err = json.Unmarshal(output, &progs)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1674,7 +1678,7 @@ func (b *BPFLib) getSockMapID(progID int) (int, error) {
 		return -1, fmt.Errorf("failed to get sockmap ID for prog %d: %s\n%s", progID, err, output)
 	}
 
-	p := progInfo{}
+	p := ProgInfo{}
 	err = json.Unmarshal(output, &p)
 	if err != nil {
 		return -1, fmt.Errorf("cannot parse json output: %v\n%s", err, output)

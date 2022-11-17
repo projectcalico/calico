@@ -139,6 +139,19 @@ func TestReattachPrograms(t *testing.T) {
 	Expect(bpf.RuntimeJSONFilename(ap2.IfaceName(), "egress")).To(BeARegularFile())
 	Expect(bpf.RuntimeJSONFilename(ap3.IfaceName(), "xdp")).To(BeARegularFile())
 
+	list, err := bpf.ListCalicoAttached()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(list).To(HaveLen(3))
+	Expect(list).To(HaveKey(vethName1))
+	Expect(list[vethName1].TCId).NotTo(Equal(0))
+	Expect(list[vethName1].XDPId).To(Equal(0))
+	Expect(list).To(HaveKey(vethName2))
+	Expect(list[vethName2].TCId).NotTo(Equal(0))
+	Expect(list[vethName2].XDPId).To(Equal(0))
+	Expect(list).To(HaveKey(vethName3))
+	Expect(list[vethName3].TCId).To(Equal(0))
+	Expect(list[vethName3].XDPId).NotTo(Equal(0))
+
 	// Clean up maps, but nothing should change
 	t.Log("Cleaning up, should remove the first map")
 	bpf.CleanUpMaps()
