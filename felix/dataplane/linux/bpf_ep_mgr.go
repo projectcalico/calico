@@ -752,7 +752,7 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID,
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	// Do one-off initialisation.
-	m.dp.ensureStarted()
+	m.startupOnce.Do(m.dp.ensureStarted())
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
@@ -1679,10 +1679,8 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 }
 
 func (m *bpfEndpointManager) ensureStarted() {
-	m.startupOnce.Do(func() {
-		log.Info("Starting map cleanup runner.")
-		m.mapCleanupRunner.Start(context.Background())
-	})
+	log.Info("Starting map cleanup runner.")
+	m.mapCleanupRunner.Start(context.Background())
 }
 
 func (m *bpfEndpointManager) ensureBPFDevices() error {
