@@ -111,8 +111,17 @@ protocol device {
   scan time 2;    # Scan interfaces every 2 seconds
 }
 
+{{- $ignored_interfaces := ""}}
+{{- $node_ignored_interfaces_key := printf "/host/%s/ignored_interfaces" (getenv "NODENAME")}}
+{{- if exists $node_ignored_interfaces_key }}{{$ignored_interfaces = getv $node_ignored_interfaces_key}}
+{{- else if exists "/global/ignored_interfaces" }}{{$ignored_interfaces = getv "/global/ignored_interfaces"}}
+{{- end}}
+
 protocol direct {
 {{- template "LOGGING"}}
+{{- if ne "" $ignored_interfaces}}{{$ifaces := split $ignored_interfaces ","}}
+  interface {{range $ifaces}}-"{{.}}", {{end}}-"cali*", -"kube-ipvs*", "*";
+{{- else}}
   interface -"cali*", -"kube-ipvs*", "*"; # Exclude cali* and kube-ipvs* but
                                           # include everything else.  In
                                           # IPVS-mode, kube-proxy creates a
@@ -122,6 +131,7 @@ protocol direct {
                                           # cluster IP. We use static routes
                                           # for when we legitimately want to
                                           # export cluster IPs.
+{{- end}}
 }
 
 {{if eq "" ($node_ip)}}# IPv4 disabled on this node.
