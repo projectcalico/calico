@@ -178,7 +178,9 @@ const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
 FELIX_0/32: local host
 FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
-FELIX_2/32: remote host`
+FELIX_1_TNL/32: remote host in-pool nat-out tunneled
+FELIX_2/32: remote host
+FELIX_2_TNL/32: remote host in-pool nat-out tunneled`
 
 const extIP = "10.1.2.3"
 
@@ -950,14 +952,22 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			It("should have correct routes", func() {
 				tunnelAddr := ""
+				tunnelAddrFelix1 := ""
+				tunnelAddrFelix2 := ""
 				expectedRoutes := expectedRouteDump
 				switch {
 				case felixes[0].ExpectedIPIPTunnelAddr != "":
 					tunnelAddr = felixes[0].ExpectedIPIPTunnelAddr
+					tunnelAddrFelix1 = felixes[1].ExpectedIPIPTunnelAddr
+					tunnelAddrFelix2 = felixes[2].ExpectedIPIPTunnelAddr
 				case felixes[0].ExpectedVXLANTunnelAddr != "":
 					tunnelAddr = felixes[0].ExpectedVXLANTunnelAddr
+					tunnelAddrFelix1 = felixes[1].ExpectedVXLANTunnelAddr
+					tunnelAddrFelix2 = felixes[2].ExpectedVXLANTunnelAddr
 				case felixes[0].ExpectedWireguardTunnelAddr != "":
 					tunnelAddr = felixes[0].ExpectedWireguardTunnelAddr
+					tunnelAddrFelix1 = felixes[1].ExpectedWireguardTunnelAddr
+					tunnelAddrFelix2 = felixes[2].ExpectedWireguardTunnelAddr
 				}
 
 				if tunnelAddr != "" {
@@ -984,6 +994,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						l = idxRE.ReplaceAllLiteralString(l, "idx -")
 						if tunnelAddr != "" {
 							l = strings.ReplaceAll(l, tunnelAddr+"/32", "FELIX_0_TNL/32")
+						}
+						if tunnelAddrFelix1 != "" {
+							l = strings.ReplaceAll(l, tunnelAddrFelix1+"/32", "FELIX_1_TNL/32")
+						}
+						if tunnelAddrFelix2 != "" {
+							l = strings.ReplaceAll(l, tunnelAddrFelix2+"/32", "FELIX_2_TNL/32")
 						}
 						filteredLines = append(filteredLines, l)
 					}
