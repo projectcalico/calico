@@ -170,6 +170,10 @@ type bpfEndpointManager struct {
 	ifacesLock  sync.Mutex
 	nameToIface map[string]bpfInterface
 
+	// Using the RLock allows multiple attach calls to proceed in parallel unless
+	// CleanUpMaps() (which takes the writer lock) is running.
+	cleanupLock sync.RWMutex
+
 	allWEPs        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	happyWEPs      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	happyWEPsDirty bool
@@ -311,14 +315,10 @@ func newBPFEndpointManager(
 			)),
 		ruleRenderer:        iptablesRuleRenderer,
 		iptablesFilterTable: iptablesFilterTable,
-		mapCleanupRunner: ratelimited.NewRunner(mapCleanupInterval, func(ctx context.Context) {
-			log.Debug("TC maps cleanup triggered.")
-			tc.CleanUpMaps()
-		}),
-		onStillAlive:     livenessCallback,
-		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
-		ifaceToIpMap:     map[string]net.IP{},
-		opReporter:       opReporter,
+		onStillAlive:        livenessCallback,
+		hostIfaceToEpMap:    map[string]proto.HostEndpoint{},
+		ifaceToIpMap:        map[string]net.IP{},
+		opReporter:          opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
@@ -350,6 +350,17 @@ func newBPFEndpointManager(
 	if m.dp == nil {
 		m.dp = m
 	}
+
+	m.mapCleanupRunner = ratelimited.NewRunner(mapCleanupInterval, func(ctx context.Context) {
+		log.Debug("TC maps cleanup triggered.")
+		// So that we serialise with AttachProgram()
+		log.Debug("CleanUpMaps waiting for lock...")
+		m.cleanupLock.Lock()
+		defer m.cleanupLock.Unlock()
+		log.Debug("CleanUpMaps got lock, cleaning up...")
+
+		bpf.CleanUpMaps()
+	})
 
 	if config.FeatureGates != nil {
 		switch config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] {
@@ -1793,7 +1804,14 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, e
 	if jumpMapFD == 0 {
 		ap.Log().Info("Need to attach program")
 		// We don't have a program attached to this interface yet, attach one now.
+
+		ap.Log().Debug("AttachProgram waiting for lock...")
+		m.cleanupLock.RLock()
+		ap.Log().Debug("AttachProgram got lock.")
+
 		progID, err := ap.AttachProgram()
+		m.cleanupLock.RUnlock()
+
 		if err != nil {
 			return 0, err
 		}
