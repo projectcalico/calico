@@ -295,33 +295,38 @@ const (
 	GlobalsRPFStrictEnabled uint32 = C.CALI_GLOBALS_RPF_STRICT_ENABLED
 )
 
+type TcGlobalData struct {
+	HostIP       uint32
+	IntfIP       uint32
+	ExtToSvcMark uint32
+	Tmtu         uint16
+	VxlanPort    uint16
+	PSNatStart   uint16
+	PSNatLen     uint16
+	HostTunnelIP uint32
+	Flags        uint32
+	WgPort       uint16
+	NatIn        uint32
+	NatOut       uint32
+}
+
 func TcSetGlobals(
 	m *Map,
-	hostIP uint32,
-	intfIP uint32,
-	extToSvcMark uint32,
-	tmtu uint16,
-	vxlanPort uint16,
-	psNatStart uint16,
-	psNatLen uint16,
-	hostTunnelIP uint32,
-	flags uint32,
-	wgPort uint16,
-	natin, natout uint32,
+	globalData *TcGlobalData,
 ) error {
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
-		C.uint(hostIP),
-		C.uint(intfIP),
-		C.uint(extToSvcMark),
-		C.ushort(tmtu),
-		C.ushort(vxlanPort),
-		C.ushort(psNatStart),
-		C.ushort(psNatLen),
-		C.uint(hostTunnelIP),
-		C.uint(flags),
-		C.ushort(wgPort),
-		C.uint(natin),
-		C.uint(natout),
+		C.uint(globalData.HostIP),
+		C.uint(globalData.IntfIP),
+		C.uint(globalData.ExtToSvcMark),
+		C.ushort(globalData.Tmtu),
+		C.ushort(globalData.VxlanPort),
+		C.ushort(globalData.PSNatStart),
+		C.ushort(globalData.PSNatLen),
+		C.uint(globalData.HostTunnelIP),
+		C.uint(globalData.Flags),
+		C.ushort(globalData.WgPort),
+		C.uint(globalData.NatIn),
+		C.uint(globalData.NatOut),
 	)
 
 	return err

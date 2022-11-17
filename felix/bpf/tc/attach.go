@@ -605,41 +605,46 @@ func (ap *AttachPoint) Config() string {
 }
 
 func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
-	hostIP, err := convertIPToUint32(ap.HostIP)
+	globalData := libbpf.TcGlobalData{ExtToSvcMark: ap.ExtToServiceConnmark,
+		VxlanPort:  ap.VXLANPort,
+		Tmtu:       ap.TunnelMTU,
+		PSNatStart: ap.PSNATStart,
+		PSNatLen:   ap.PSNATEnd,
+		WgPort:     ap.WgPort,
+		NatIn:      ap.NATin,
+		NatOut:     ap.NATout,
+	}
+	var err error
+	globalData.HostIP, err = convertIPToUint32(ap.HostIP)
 	if err != nil {
 		return err
 	}
-	vxlanPort := ap.VXLANPort
-	if vxlanPort == 0 {
-		vxlanPort = 4789
+	if globalData.VxlanPort == 0 {
+		globalData.VxlanPort = 4789
 	}
 
-	intfIP, err := convertIPToUint32(ap.IntfIP)
+	globalData.IntfIP, err = convertIPToUint32(ap.IntfIP)
 	if err != nil {
 		return err
 	}
 
-	var flags uint32
 	if ap.IPv6Enabled {
-		flags |= libbpf.GlobalsIPv6Enabled
+		globalData.Flags |= libbpf.GlobalsIPv6Enabled
 	}
 	if ap.RPFStrictEnabled {
-		flags |= libbpf.GlobalsRPFStrictEnabled
+		globalData.Flags |= libbpf.GlobalsRPFStrictEnabled
 	}
 
-	hostTunnelIP := hostIP
+	globalData.HostTunnelIP = globalData.HostIP
 
 	if ap.HostTunnelIP != nil {
-		hostTunnelIP, err = convertIPToUint32(ap.HostTunnelIP)
+		globalData.HostTunnelIP, err = convertIPToUint32(ap.HostTunnelIP)
 		if err != nil {
 			return err
 		}
 	}
 
-	return libbpf.TcSetGlobals(m, hostIP, intfIP,
-		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd, hostTunnelIP,
-		flags, ap.WgPort, ap.NATin, ap.NATout,
-	)
+	return libbpf.TcSetGlobals(m, &globalData)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {

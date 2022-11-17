@@ -103,7 +103,10 @@ const (
 	GlobalsRPFStrictEnabled uint32 = 16
 )
 
-func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16, _, _ uint32, _ uint16, _, _ uint32) error {
+type TcGlobalData struct {
+}
+
+func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {
 	panic("LIBBPF syscall stub")
 }
 
