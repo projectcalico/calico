@@ -15,6 +15,7 @@
 package infrastructure
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path"
@@ -227,6 +228,25 @@ func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+}
+
+func (f *Felix) SetEvn(env map[string]string) {
+	fn := "extra-env.sh"
+
+	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	Expect(err).NotTo(HaveOccurred())
+
+	fw := bufio.NewWriter(file)
+
+	for k, v := range env {
+		fmt.Fprintf(fw, "export %s=%v\n", k, v)
+	}
+
+	fw.Flush()
+	file.Close()
+
+	err = f.CopyFileIntoContainer("./"+fn, "/"+fn)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 // AttachTCPDump returns tcpdump attached to the container
