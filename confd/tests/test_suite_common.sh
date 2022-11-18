@@ -27,6 +27,7 @@ execute_test_suite() {
         run_extra_test test_node_mesh_bgp_password
         run_extra_test test_bgp_password_deadlock
         run_extra_test test_bgp_ttl_security
+        run_extra_test test_bgp_ignored_interfaces
     fi
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
@@ -37,6 +38,7 @@ execute_test_suite() {
         run_extra_test test_idle_peers
         run_extra_test test_router_id_hash
         run_extra_test test_bgp_ttl_security
+        run_extra_test test_bgp_ignored_interfaces
         echo "Extra etcdv3 tests passed"
     fi
 
@@ -1359,6 +1361,76 @@ EOF
       $CALICOCTL delete node kube-node-2
     fi
 
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_ignored_interfaces() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Specify additional interfaces need to be ignored
+    $CALICOCTL apply -f - <<EOF
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  logSeverityScreen: Info
+  nodeToNodeMeshEnabled: true
+  ignoredInterfaces:
+  - iface-1
+  - iface-2
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+EOF
+
+    test_confd_templates ignored_interfaces
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
     # For KDD, kill Typha.
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
         kill_typha
