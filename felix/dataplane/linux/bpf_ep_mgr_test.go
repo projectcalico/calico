@@ -53,6 +53,8 @@ type mockDataplane struct {
 	fds    map[string]uint32
 	state  map[uint32]polprog.Rules
 	routes map[ip.V4CIDR]struct{}
+
+	ensureStartedFn func()
 }
 
 func newMockDataplane() *mockDataplane {
@@ -65,6 +67,9 @@ func newMockDataplane() *mockDataplane {
 }
 
 func (m *mockDataplane) ensureStarted() {
+	if m.ensureStartedFn != nil {
+		m.ensureStartedFn()
+	}
 }
 
 func (m *mockDataplane) ensureBPFDevices() error {
@@ -140,6 +145,12 @@ func (m *mockDataplane) setAndReturn(vari **polprog.Rules, key string) func() *p
 	}
 }
 
+func (m *mockDataplane) programAttached(key string) bool {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.fds[key] != 0
+}
+
 func (m *mockDataplane) setRoute(cidr ip.V4CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -168,7 +179,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
-		l3IfacePattern       string
 		workloadIfaceRegex   string
 		ipSetIDAllocator     *idalloc.IDAllocator
 		vxlanMTU             int
@@ -183,8 +193,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	BeforeEach(func() {
 		fibLookupEnabled = true
 		endpointToHostAction = "DROP"
-		dataIfacePattern = "^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|wireguard.cali$)"
-		l3IfacePattern = "^(wireguard.cali$)"
+		dataIfacePattern = "^eth0"
 		workloadIfaceRegex = "cali"
 		ipSetIDAllocator = idalloc.New()
 		vxlanMTU = 0
@@ -225,7 +234,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
 				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),
-				BPFL3IfacePattern:     regexp.MustCompile(l3IfacePattern),
 				VXLANMTU:              vxlanMTU,
 				VXLANPort:             rrConfigNormal.VXLANPort,
 				BPFNodePortDSREnabled: nodePortDSR,
@@ -255,8 +263,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bpfEpMgr.OnUpdate(&ifaceUpdate{Name: name, State: state, Index: index})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			if state == ifacemonitor.StateUp {
-				Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(index)).AsBytes())).To(BeTrue())
+			if state == ifacemonitor.StateUp && (bpfEpMgr.isDataIface(name) || bpfEpMgr.isWorkloadIface(name)) {
+				ExpectWithOffset(1, ifStateMap.ContainsKey(ifstate.NewKey(uint32(index)).AsBytes())).To(BeTrue())
 			}
 		}
 	}
@@ -413,6 +421,75 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		JustBeforeEach(func() {
 			genPolicy("default", "mypolicy")()
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+		})
+
+		It("should attach to eth0", func() {
+			Expect(dp.programAttached("eth0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("eth0:egress")).To(BeTrue())
+		})
+
+		Context("with dataIfacePattern changed to eth1", func() {
+			JustBeforeEach(func() {
+				dataIfacePattern = "^eth1"
+				newBpfEpMgr()
+
+				dp.ensureStartedFn = func() {
+					bpfEpMgr.initAttaches = map[string]bpf.EPAttachInfo{
+						"eth0": {TCId: 12345},
+					}
+				}
+
+			})
+
+			It("should detach from eth0 when eth0 up before first CompleteDeferredWork()", func() {
+				Expect(dp.programAttached("eth0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth0:egress")).To(BeTrue())
+
+				genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+				genIfaceUpdate("eth1", ifacemonitor.StateUp, 11)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// We inherited dp from the previous bpfEpMgr and it has eth0
+				// attached. This should clean it up.
+				Expect(dp.programAttached("eth0:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth0:egress")).To(BeFalse())
+
+				Expect(dp.programAttached("eth1:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth1:egress")).To(BeTrue())
+			})
+
+			It("should detach from eth0 when eth0 up after first CompleteDeferredWork()", func() {
+				Expect(dp.programAttached("eth0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth0:egress")).To(BeTrue())
+
+				genIfaceUpdate("eth1", ifacemonitor.StateUp, 11)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// We inherited dp from the previous bpfEpMgr and it has eth0
+				// attached. We should see it.
+				Expect(dp.programAttached("eth0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth0:egress")).To(BeTrue())
+
+				Expect(dp.programAttached("eth1:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth1:egress")).To(BeTrue())
+
+				genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// We inherited dp from the previous bpfEpMgr and it has eth0
+				// attached. This should clean it up.
+				Expect(dp.programAttached("eth0:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth0:egress")).To(BeFalse())
+
+				Expect(dp.programAttached("eth1:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth1:egress")).To(BeTrue())
+			})
 		})
 
 		Context("with eth0 host endpoint", func() {

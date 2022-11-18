@@ -209,9 +209,8 @@ type EPAttachInfo struct {
 	XDPMode string
 }
 
-// ListCalicoAttached list all programs that are calico attached to TC or XDP
-// and are rlated to Calico. That is, they have jumpmap pinned in our dir
-// hierarchy.
+// ListCalicoAttached list all programs that are attached to TC or XDP and are
+// related to Calico. That is, they have jumpmap pinned in our dir hierarchy.
 func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 	aTC, aXDP, err := ListTcXDPAttachedProgs()
 	if err != nil {
