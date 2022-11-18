@@ -187,30 +187,8 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 	logCxt.Info("Program attached to TC.")
 
-	var progErrs []error
-	for _, p := range progsToClean {
-		log.WithField("prog", p).Debug("Cleaning up old calico program")
-		attemptCleanup := func() error {
-			_, err := ExecTC("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
-			return err
-		}
-		err = attemptCleanup()
-		if errors.Is(err, ErrInterrupted) {
-			// This happens if the interface is deleted in the middle of calling tc.
-			log.Debug("First cleanup hit 'Dump was interrupted', retrying (once).")
-			err = attemptCleanup()
-		}
-		if errors.Is(err, ErrDeviceNotFound) {
-			continue
-		}
-		if err != nil {
-			log.WithError(err).WithField("prog", p).Warn("Failed to clean up old calico program.")
-			progErrs = append(progErrs, err)
-		}
-	}
-
-	if len(progErrs) != 0 {
-		return -1, fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
+	if err := ap.detachPrograms(progsToClean); err != nil {
+		return -1, err
 	}
 
 	// Store information of object in a json file so in future we can skip reattaching it.
@@ -240,8 +218,41 @@ func (ap *AttachPoint) patchLogPrefix(logCtx *log.Entry, ifile, ofile string) er
 }
 
 func (ap *AttachPoint) DetachProgram() error {
-	// We never detach TC programs, so this should not be called.
-	ap.Log().Panic("DetachProgram is not implemented for TC")
+	progsToClean, err := ap.listAttachedPrograms()
+	if err != nil {
+		return err
+	}
+
+	return ap.detachPrograms(progsToClean)
+}
+
+func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
+	var progErrs []error
+	for _, p := range progsToClean {
+		log.WithField("prog", p).Debug("Cleaning up old calico program")
+		attemptCleanup := func() error {
+			_, err := ExecTC("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
+			return err
+		}
+		err := attemptCleanup()
+		if errors.Is(err, ErrInterrupted) {
+			// This happens if the interface is deleted in the middle of calling tc.
+			log.Debug("First cleanup hit 'Dump was interrupted', retrying (once).")
+			err = attemptCleanup()
+		}
+		if errors.Is(err, ErrDeviceNotFound) {
+			continue
+		}
+		if err != nil {
+			log.WithError(err).WithField("prog", p).Warn("Failed to clean up old calico program.")
+			progErrs = append(progErrs, err)
+		}
+	}
+
+	if len(progErrs) != 0 {
+		return fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
+	}
+
 	return nil
 }
 

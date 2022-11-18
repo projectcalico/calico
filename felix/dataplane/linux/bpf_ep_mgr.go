@@ -166,6 +166,9 @@ const (
 )
 
 type bpfEndpointManager struct {
+	initAttaches      map[string]bpf.EPAttachInfo
+	initUnknownIfaces set.Set[string]
+
 	// Main store of information about interfaces; indexed on interface name.
 	ifacesLock  sync.Mutex
 	nameToIface map[string]bpfInterface
@@ -284,6 +287,7 @@ func newBPFEndpointManager(
 		livenessCallback = func() {}
 	}
 	m := &bpfEndpointManager{
+		initUnknownIfaces:       set.New[string](),
 		dp:                      dp,
 		allWEPs:                 map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPs:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
@@ -555,6 +559,38 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 	}
 }
 
+func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo) error {
+	if ai.XDPId != 0 {
+		ap := xdp.AttachPoint{
+			Iface: iface,
+			// Try all modes in this order
+			Modes: []bpf.XDPMode{bpf.XDPGeneric, bpf.XDPDriver, bpf.XDPOffload},
+		}
+
+		if err := m.dp.ensureNoProgram(&ap); err != nil {
+			return fmt.Errorf("xdp: %w", err)
+		}
+	}
+	if ai.TCId != 0 {
+		ap := tc.AttachPoint{
+			Iface: iface,
+			Hook:  bpf.HookEgress,
+		}
+
+		if err := m.dp.ensureNoProgram(&ap); err != nil {
+			return fmt.Errorf("tc egress: %w", err)
+		}
+
+		ap.Hook = bpf.HookIngress
+
+		if err := m.dp.ensureNoProgram(&ap); err != nil {
+			return fmt.Errorf("tc ingress: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
 	// Should be safe without the lock since there shouldn't be any active background threads
@@ -569,6 +605,18 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	}
 
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
+		if update.State == ifacemonitor.StateUp {
+			if ai, ok := m.initAttaches[update.Name]; ok {
+				if err := m.cleanupOldAttach(update.Name, ai); err != nil {
+					log.WithError(err).Warnf("Failed to detach old programs from now unused device '%s'", update.Name)
+				} else {
+					delete(m.initAttaches, update.Name)
+				}
+			}
+		}
+		if m.initUnknownIfaces != nil {
+			m.initUnknownIfaces.Add(update.Name)
+		}
 		log.WithField("update", update).Debug("Ignoring interface that's neither data nor workload nor L3.")
 		return
 	}
@@ -579,6 +627,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 		// For specific host endpoints OnHEPUpdate doesn't depend on iface state, and has
 		// already stored and mapped as needed.
 		if ifaceIsUp {
+			delete(m.initAttaches, update.Name)
 			// We require host interfaces to be in non-strict RPF mode so that
 			// packets can return straight to host for services bypassing CTLB.
 			switch update.Name {
@@ -752,7 +801,23 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID,
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	// Do one-off initialisation.
-	m.startupOnce.Do(m.dp.ensureStarted())
+	m.startupOnce.Do(func() {
+		m.dp.ensureStarted()
+
+		m.initUnknownIfaces.Iter(func(iface string) error {
+			if ai, ok := m.initAttaches[iface]; ok {
+				if err := m.cleanupOldAttach(iface, ai); err != nil {
+					log.WithError(err).Warnf("Failed to detach old programs from now unused device '%s'", iface)
+				} else {
+					delete(m.initAttaches, iface)
+					return set.RemoveItem
+				}
+			}
+			return nil
+		})
+
+		m.initUnknownIfaces = nil
+	})
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
@@ -1681,6 +1746,13 @@ func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
 func (m *bpfEndpointManager) ensureStarted() {
 	log.Info("Starting map cleanup runner.")
 	m.mapCleanupRunner.Start(context.Background())
+
+	var err error
+
+	m.initAttaches, err = bpf.ListCalicoAttached()
+	if err != nil {
+		log.WithError(err).Warn("Failed to list previously attached programs. We may not clean up some.")
+	}
 }
 
 func (m *bpfEndpointManager) ensureBPFDevices() error {
@@ -1840,11 +1912,11 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 		}
 	}
 
-	// Ensure interface does not have our XDP program attached in any mode.
+	// Ensure interface does not have our program attached.
 	err := ap.DetachProgram()
 
 	// Forget the policy debug info
-	m.removePolicyDebugInfo(ap.IfaceName(), 4, bpf.HookXDP)
+	m.removePolicyDebugInfo(ap.IfaceName(), 4, ap.HookName())
 
 	return err
 }
