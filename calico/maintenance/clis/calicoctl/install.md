@@ -136,7 +136,7 @@ you want to install the binary.
    {: .alert .alert-success}
 
 ```
-Invoke-WebRequest -Uri "{{ url }}/calicoctl-windows-amd64.exe -OutFile "calicoctl.exe" 
+Invoke-WebRequest -Uri "{{ url }}/calicoctl-windows-amd64.exe" -OutFile calicoctl.exe 
 ```
 
 %>
