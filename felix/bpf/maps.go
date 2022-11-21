@@ -17,7 +17,6 @@ package bpf
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -785,7 +784,7 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 func (b *PinnedMap) getOldMapVersion() (int, error) {
 	oldVersion := 0
 	name := b.Name
-	files, err := ioutil.ReadDir(b.pinDir())
+	files, err := os.ReadDir(b.pinDir())
 	if err != nil {
 		return 0, fmt.Errorf("error reading pin path %w", err)
 	}

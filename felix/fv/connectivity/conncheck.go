@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -751,12 +751,12 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 
 	go func() {
 		defer wg.Done()
-		wOut, outErr = ioutil.ReadAll(outPipe)
+		wOut, outErr = io.ReadAll(outPipe)
 	}()
 
 	go func() {
 		defer wg.Done()
-		wErr, errErr = ioutil.ReadAll(errPipe)
+		wErr, errErr = io.ReadAll(errPipe)
 	}()
 
 	wg.Wait()
