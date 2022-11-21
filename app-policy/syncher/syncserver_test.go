@@ -15,7 +15,6 @@ package syncher
 
 import (
 	"context"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -845,7 +844,7 @@ func (s *testSyncServer) listen() {
 const ListenerSocket = "policysync.sock"
 
 func makeTmpListenerDir() string {
-	dirPath, err := ioutil.TempDir("/tmp", "felixut")
+	dirPath, err := os.MkdirTemp("/tmp", "felixut")
 	Expect(err).ToNot(HaveOccurred())
 	return dirPath
 }
