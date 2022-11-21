@@ -68,7 +68,3 @@ spec:
   cidr: 10.0.0.0/8
   disabled: true
 ```
-
-### Above and beyond
-
-To learn about inbound connectivity, see [External connectivity]({{site.baseurl}}/networking/external-connectivity)
