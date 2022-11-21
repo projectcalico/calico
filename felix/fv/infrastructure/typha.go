@@ -16,7 +16,6 @@ package infrastructure
 
 import (
 	"crypto/x509"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,7 +93,7 @@ func EnsureTLSCredentials() {
 
 	// Generate credentials needed for Felix-Typha TLS.
 	var err error
-	CertDir, err = ioutil.TempDir("", "felixfv")
+	CertDir, err = os.MkdirTemp("", "felixfv")
 	tlsutils.PanicIfErr(err)
 
 	// Trusted CA.
