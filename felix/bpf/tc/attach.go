@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -113,7 +112,7 @@ func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 func (ap *AttachPoint) AttachProgram() (int, error) {
 	logCxt := log.WithField("attachPoint", ap)
 
-	tempDir, err := ioutil.TempDir("", "calico-tc")
+	tempDir, err := os.MkdirTemp("", "calico-tc")
 	if err != nil {
 		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
 	}

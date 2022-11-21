@@ -17,7 +17,6 @@ package environment
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"strconv"
@@ -133,7 +132,7 @@ func GetDistFromString(s string) string {
 }
 
 func GetKernelVersion(reader io.Reader) (*Version, error) {
-	kernVersion, err := ioutil.ReadAll(reader)
+	kernVersion, err := io.ReadAll(reader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to read kernel version from reader")
 		return nil, err
@@ -148,7 +147,7 @@ func GetDistributionName() string {
 		log.WithError(err).Warn("Failed to get kernel version reader")
 		return DefaultDistro
 	}
-	kernVersion, err := ioutil.ReadAll(reader)
+	kernVersion, err := io.ReadAll(reader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to read kernel version from reader")
 		return DefaultDistro

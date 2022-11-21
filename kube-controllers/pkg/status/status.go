@@ -16,7 +16,6 @@ package status
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,7 +132,7 @@ func (s *Status) writeStatus() error {
 	}
 
 	// Write the file.
-	err = ioutil.WriteFile(s.statusFile, b, 0644)
+	err = os.WriteFile(s.statusFile, b, 0644)
 	if err != nil {
 		logrus.Errorf("Failed to write readiness file: %s", err)
 		return err
@@ -145,7 +144,7 @@ func (s *Status) writeStatus() error {
 // ReadStatusFile reads in the status file as written by WriteStatus.
 func ReadStatusFile(file string) (*Status, error) {
 	st := &Status{}
-	contents, err := ioutil.ReadFile(file)
+	contents, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
