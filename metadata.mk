@@ -3,6 +3,7 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
+
 GO_BUILD_VER = v0.78
 
 # Version of Kubernetes to use for tests.
