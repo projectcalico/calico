@@ -41,8 +41,7 @@ One limitation when using Kubernetes Network Policy to restrict access to specif
 resources need to be specified as IP addresses (or IP address ranges) within the policy rules. If the IP addresses
 associated with an external resource change, then every policy that referenced those IP addresses needs to be updated with
 the new IP addresses. This limitation can be circumvented using Calico [Network
-Sets]({{site.baseurl}}/security/external-ips-policy), or Calico Enterprise's support for [domain
-names]({{site.baseurl}}/security/calico-enterprise/egress-access-controls) in policy rules.
+Sets]({{site.baseurl}}/security/external-ips-policy), or Calico Enterprise's support for domain names in policy rules.
 
 In addition to using network policy, service meshes typically allow you to configure which external services each pod
 can access. In the case of Istio, {{site.prodname}} can be integrated to enforce network policy at the service mesh
