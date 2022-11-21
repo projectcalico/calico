@@ -155,7 +155,7 @@ run-kubernetes-server: run-k8s-controller-manager
 		--rm \
 		-v  $(CURDIR):/manifests \
 		-v $(CERTS_PATH):/home/user/certs \
-		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+		bitnami/kubectl:$(subst v,,$(KUBECTL_VERSION)) \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/mock-node.yaml
 
@@ -166,7 +166,7 @@ run-kubernetes-server: run-k8s-controller-manager
 		--rm \
 		-v  $(CURDIR):/manifests \
 		-v $(CERTS_PATH):/home/user/certs \
-		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+		bitnami/kubectl:$(subst v,,$(KUBECTL_VERSION)) \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/namespaces.yaml
 
