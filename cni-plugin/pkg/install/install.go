@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -152,7 +151,7 @@ func Install() error {
 			return err
 		}
 
-		c.ServiceAccountToken, err = ioutil.ReadFile(serviceAccountTokenFile)
+		c.ServiceAccountToken, err = os.ReadFile(serviceAccountTokenFile)
 		if err != nil {
 			return err
 		}
@@ -199,7 +198,7 @@ func Install() error {
 		}
 
 		// Iterate through each binary we might want to install.
-		files, err := ioutil.ReadDir("/opt/cni/bin/")
+		files, err := os.ReadDir("/opt/cni/bin/")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -273,7 +272,7 @@ func Install() error {
 				select {
 				case <-watcher.Events:
 					logrus.Infoln("Updating installed secrets at:", time.Now().String())
-					files, err := ioutil.ReadDir(c.TLSAssetsDir)
+					files, err := os.ReadDir(c.TLSAssetsDir)
 					if err != nil {
 						logrus.Warn(err)
 					}
@@ -339,7 +338,7 @@ func writeCNIConfig(c config) {
 	if c.CNINetworkConfigFile != "" {
 		log.Info("Using CNI config template from CNI_NETWORK_CONFIG_FILE")
 		var err error
-		netconfBytes, err := ioutil.ReadFile(c.CNINetworkConfigFile)
+		netconfBytes, err := os.ReadFile(c.CNINetworkConfigFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -401,12 +400,12 @@ func writeCNIConfig(c config) {
 	// Write out the file.
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")
 	path := fmt.Sprintf("/host/etc/cni/net.d/%s", name)
-	err = ioutil.WriteFile(path, []byte(netconf), 0644)
+	err = os.WriteFile(path, []byte(netconf), 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	content, err := ioutil.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -504,7 +503,7 @@ current-context: calico-context`
 		data = strings.Replace(data, "__TLS_CFG__", ca, -1)
 	}
 
-	if err := ioutil.WriteFile("/host/etc/cni/net.d/calico-kubeconfig", []byte(data), 0600); err != nil {
+	if err := os.WriteFile("/host/etc/cni/net.d/calico-kubeconfig", []byte(data), 0600); err != nil {
 		log.Fatal(err)
 	}
 }
