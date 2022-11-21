@@ -18,7 +18,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"path"
@@ -480,7 +480,7 @@ func (b *MockBPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []
 		return err
 	}
 
-	bytez, err := ioutil.ReadAll(f)
+	bytez, err := io.ReadAll(f)
 	if err != nil {
 		return err
 	}

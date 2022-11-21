@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -252,7 +251,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 
 	// Read in all the files in the host-local directory.
 	log.Info("reading files from host-local IPAM data dir...")
-	files, err := ioutil.ReadDir(ipAllocPath)
+	files, err := os.ReadDir(ipAllocPath)
 	if err != nil {
 		return fmt.Errorf("failed to read path %s: %s", ipAllocPath, err)
 	}
@@ -286,7 +285,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 		}
 
 		// The contents are the container ID.
-		b, err := ioutil.ReadFile(fname)
+		b, err := os.ReadFile(fname)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %s", fname, err)
 		}
