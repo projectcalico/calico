@@ -279,8 +279,6 @@ If a host's containers are connected to the `docker0` bridge interface, {{site.p
 would be unable to enforce security rules between workloads on the same host;
 all containers on the bridge would be able to communicate with one other.
 
-You can securely configure port mapping by following [External connectivity]({{ site.baseurl }}/networking/external-connectivity).
-
 ## Can {{site.prodname}} containers use any IP address within a pool, even subnet network/broadcast addresses?
 
 Yes! {{site.prodname}} is fully routed, so all IP address within a {{site.prodname}} pool are usable as
