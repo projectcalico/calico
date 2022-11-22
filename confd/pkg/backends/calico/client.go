@@ -1351,11 +1351,11 @@ func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key in
 }
 
 func (c *client) getIgnoredInterfacesKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
-	ignoredInterfaces := getBGPConfigKey("ignored_interfaces", key)
+	ignoredIfacesKey := getBGPConfigKey("ignored_interfaces", key)
 	if v3res != nil && v3res.Spec.IgnoredInterfaces != nil {
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ignoredInterfaces, strings.Join(v3res.Spec.IgnoredInterfaces, ",")))
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ignoredIfacesKey, strings.Join(v3res.Spec.IgnoredInterfaces, ",")))
 	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ignoredInterfaces))
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ignoredIfacesKey))
 	}
 }
 

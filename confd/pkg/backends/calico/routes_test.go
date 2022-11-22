@@ -634,7 +634,7 @@ var _ = Describe("RouteGenerator", func() {
 var _ = Describe("Update BGP Config Cache", func() {
 	c := &client{cache: make(map[string]string)}
 
-	It("should update cache value when IgnoredInterfaces set in BGPConfiguration", func() {
+	It("should update cache value when IgnoredInterfaces is set in BGPConfiguration", func() {
 		By("No value cached")
 		Expect(c.cache["/calico/bgp/v1/global/ignored_interfaces"]).To(BeEmpty())
 
