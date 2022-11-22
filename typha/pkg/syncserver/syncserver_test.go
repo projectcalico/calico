@@ -40,6 +40,8 @@ var _ = Describe("With zero config", func() {
 			PingInterval:                   10 * time.Second,
 			PongTimeout:                    60 * time.Second,
 			DropInterval:                   time.Second,
+			ShutdownTimeout:                300 * time.Second,
+			ShutdownMaxDropInterval:        time.Second,
 			MaxConns:                       math.MaxInt32,
 			Port:                           5473,
 		}))
