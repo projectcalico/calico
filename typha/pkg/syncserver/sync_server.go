@@ -493,7 +493,11 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 					"max":     maxConns,
 					"current": numConns,
 				})
-				s.TerminateRandomConnection(logCxt, "re-balance load with other Typha instances")
+				dropped := s.TerminateRandomConnection(logCxt, "re-balance load with other Typha instances")
+				if dropped {
+					// Only increment the counter if we dropped a connection.
+					counterNumConnectionsDropped.Inc()
+				}
 			}
 		case <-cxt.Done():
 			logCxt.Info("Context asked us to stop")
@@ -538,8 +542,8 @@ func (s *Server) handleGracefulShutDown(cxt context.Context, serverCancelFn cont
 		case <-ticker.C:
 			numConns := s.NumActiveConnections()
 			logCxt := logCxt.WithField("remainingConns", numConns)
-			s.TerminateRandomConnection(logCxt, "graceful shutdown in progress")
-			if numConns <= 1 {
+			dropped := s.TerminateRandomConnection(logCxt, "graceful shutdown in progress")
+			if numConns <= 1 || !dropped {
 				logCxt.Info("Finished closing connections, completing shut down...")
 				// Note: we release the lock between NumActiveConnections and TerminateRandomConnection so,
 				// in theory, if we haven't yet closed the listen socket, a new connection could just have been added.
@@ -567,15 +571,17 @@ func (s *Server) ShuttingDown() bool {
 	return s.shuttingDown
 }
 
-func (s *Server) TerminateRandomConnection(logCtx *log.Entry, reason string) {
+// TerminateRandomConnection tries to drop a connection at random.  On success, returns true.  If there are no
+// connections returns false.
+func (s *Server) TerminateRandomConnection(logCtx *log.Entry, reason string) bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	for connID, conn := range s.connIDToConn {
 		logCtx.WithField("connID", connID).Infof("Closing connection; reason: %s.", reason)
 		conn.cancelCxt()
-		counterNumConnectionsDropped.Inc()
-		break
+		return true
 	}
+	return false
 }
 
 // allowedCiphers returns the set of allowed cipher suites for the server.
