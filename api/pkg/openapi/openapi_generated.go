@@ -2009,7 +2009,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"iptablesBackend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IptablesBackend specifies which backend of iptables will be used. The default is legacy.",
+							Description: "IptablesBackend specifies which backend of iptables will be used. The default is Auto.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

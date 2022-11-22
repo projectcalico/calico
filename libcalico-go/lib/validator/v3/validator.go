@@ -380,7 +380,7 @@ func validateMAC(fl validator.FieldLevel) bool {
 func validateIptablesBackend(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Iptables Backend: %s", s)
-	return s == "" || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
+	return s == "" || s == api.IptablesBackendAuto || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
 }
 
 func validateLogLevel(fl validator.FieldLevel) bool {
