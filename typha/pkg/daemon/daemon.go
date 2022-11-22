@@ -395,6 +395,8 @@ func (t *TyphaDaemon) CreateServer() {
 			PingInterval:                   t.ConfigParams.ServerPingIntervalSecs,
 			PongTimeout:                    t.ConfigParams.ServerPongTimeoutSecs,
 			DropInterval:                   t.ConfigParams.ConnectionDropIntervalSecs,
+			ShutdownTimeout:                t.ConfigParams.ShutdownTimeoutSecs,
+			ShutdownMaxDropInterval:        t.ConfigParams.ShutdownConnectionDropIntervalMaxSecs,
 			MaxConns:                       t.ConfigParams.MaxConnectionsUpperLimit,
 			Port:                           t.ConfigParams.ServerPort,
 			HealthAggregator:               t.healthAggregator,
@@ -446,16 +448,24 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 	signal.Notify(usr1SignalChan, syscall.SIGUSR1)
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGTERM)
+	serverFinished := make(chan struct{})
+	go func() {
+		defer close(serverFinished)
+		t.Server.Finished.Wait()
+	}()
 	for {
 		select {
 		case <-termChan:
-			log.Fatal("Received SIGTERM, shutting down")
+			log.Warn("Received SIGTERM, shutting down")
+			t.Server.ShutDownGracefully()
 		case <-usr1SignalChan:
 			log.Info("Received SIGUSR1, emitting heap profile")
 			dumpHeapMemoryProfile(t.ConfigParams)
 		case <-cxt.Done():
 			log.Info("Context asked us to stop.")
 			return
+		case <-serverFinished:
+			log.Fatal("Server has shut down.")
 		}
 	}
 }
