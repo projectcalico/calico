@@ -15,9 +15,10 @@
 package net
 
 import (
-	"encoding/json"
 	"math/big"
 	"net"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/json"
 )
 
 // Sub class net.IPNet so that we can add JSON marshalling and unmarshalling.
