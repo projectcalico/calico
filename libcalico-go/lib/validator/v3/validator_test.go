@@ -84,6 +84,11 @@ func init() {
 	awsCheckbadVal = api.AWSSrcDstCheckOption("badVal")
 	awsCheckenable = api.AWSSrcDstCheckOption("enable")
 
+	iptablesBackendLegacy := api.IptablesBackend(api.IptablesBackendLegacy)
+	iptablesBackendNFTables := api.IptablesBackend(api.IptablesBackendNFTables)
+	iptablesBackendAuto := api.IptablesBackend(api.IptablesBackendAuto)
+	iptablesBackendbadVal := api.IptablesBackend("badVal")
+
 	// longLabelsValue is 63 and 64 chars long
 	maxAnnotationsLength := 256 * (1 << 10)
 	longValue := make([]byte, maxAnnotationsLength)
@@ -665,6 +670,10 @@ func init() {
 		Entry("should reject : in an interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Invalid:Intface"}, false),
 
 		// (API) FelixConfiguration.
+		Entry("should accept a valid IptablesBackend value 'Legacy'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendLegacy}, true),
+		Entry("should accept a valid IptablesBackend value 'NFT'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendNFTables}, true),
+		Entry("should accept a valid IptablesBackend value 'Auto'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendAuto}, true),
+		Entry("should reject an invalid IptablesBackend value 'badVal'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendbadVal}, false),
 		Entry("should accept a valid DefaultEndpointToHostAction value", api.FelixConfigurationSpec{DefaultEndpointToHostAction: "Drop"}, true),
 		Entry("should reject an invalid DefaultEndpointToHostAction value 'drop' (lower case)", api.FelixConfigurationSpec{DefaultEndpointToHostAction: "drop"}, false),
 		Entry("should accept a valid IptablesFilterAllowAction value 'Accept'", api.FelixConfigurationSpec{IptablesFilterAllowAction: "Accept"}, true),
