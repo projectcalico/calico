@@ -100,6 +100,10 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 	}
 	cidrStr := strings.Replace(r[0][2], "-", "/", 1)
 	_, cidr, _ := net.ParseCIDR(cidrStr)
+	if cidr == nil {
+		log.Debugf("Failed to parse CIDR in block affinity path: %q", path)
+		return nil
+	}
 	host := r[0][1]
 
 	if options.Host != "" && options.Host != host {
