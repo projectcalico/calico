@@ -867,6 +867,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 							Format:      "int32",
 						},
 					},
+					"ttlSecurity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TTLSecurity enables the generalized TTL security mechanism (GTSM) which protects against spoofed packets by ignoring received packets with a smaller than expected TTL value. The provided value is the number of hops (edges) between the peers.",
+							Type:        []string{"integer"},
+							Format:      "byte",
+						},
+					},
 				},
 			},
 		},
@@ -2002,7 +2009,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"iptablesBackend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IptablesBackend specifies which backend of iptables will be used. The default is legacy.",
+							Description: "IptablesBackend specifies which backend of iptables will be used. The default is Auto.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3591,7 +3598,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"natOutgoing": {
 						SchemaProps: spec.SchemaProps{
-							Description: "When nat-outgoing is true, packets sent from Calico networked containers in this pool to destinations outside of this pool will be masqueraded.",
+							Description: "When natOutgoing is true, packets sent from Calico networked containers in this pool to destinations outside of this pool will be masqueraded.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},

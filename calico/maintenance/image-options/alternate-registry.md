@@ -88,7 +88,6 @@ To install images from your registry, you must first pull the images from Tigera
 
 #### Run the operator using images from your registry
 
-
 Before applying `tigera-operator.yaml`, modify registry references to use your custom registry:
 
 **For OpenShift**

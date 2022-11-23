@@ -7,7 +7,6 @@ Referenced by bird_ipam.toml and bird6_ipam.toml.
 These templates write out the route filters based on IPAM configuration.  This
 is inherited by the main BIRD configuration file.
 
-
 ### bird.cfg.template / bird6.cfg.template
 
 Referenced by the confd-generated bird.toml and bird6.toml files.

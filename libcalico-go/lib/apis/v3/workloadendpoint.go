@@ -81,7 +81,7 @@ type WorkloadEndpointSpec struct {
 	Ports []WorkloadEndpointPort `json:"ports,omitempty" validate:"dive,omitempty"`
 	// AllowSpoofedSourcePrefixes is a list of CIDRs that the endpoint should be able to send traffic from,
 	// bypassing the RPF check.
-	AllowSpoofedSourcePrefixes []string `json:"allowSpoofedSourcePrefixes,omitempty" validate:"omitempty,dive,ip"`
+	AllowSpoofedSourcePrefixes []string `json:"allowSpoofedSourcePrefixes,omitempty" validate:"omitempty,dive,cidr"`
 }
 
 // WorkloadEndpointPort represents one endpoint's named or mapped port

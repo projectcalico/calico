@@ -262,7 +262,7 @@ function GetCalicoKubeConfig()
             $server = "server: https://{0}:{1}" -f $k8sHost, $k8sPort
             Write-Host "Using KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT env variables for kubeconfig. $server"
         } elseif (Test-Path $KubeConfigPath) {
-            $server=findstr https:// $KubeConfigPath
+            $server=(Get-ChildItem $KubeConfigPath | Select-String https).Line
             Write-Host ("Using existing kubeconfig at $KubeConfigPath for API server host and port. {0}" -f $server.Trim())
         } else {
             Write-Host "Cannot determine API server host and port. Add KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to calico-windows-config in calico-system namespace"
@@ -287,7 +287,7 @@ function GetCalicoKubeConfig()
         $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$secretName -o jsonpath='{.data.token}' -n $CalicoNamespace
         $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
 
-        $server=findstr https:// $KubeConfigPath
+        $server=(Get-ChildItem $KubeConfigPath | Select-String https).Line
     }
 
     (Get-Content $RootDir\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content $RootDir\calico-kube-config -Force

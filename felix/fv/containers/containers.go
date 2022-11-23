@@ -672,6 +672,12 @@ func (c *Container) ExecOutput(args ...string) (string, error) {
 	return string(out), nil
 }
 
+func (c *Container) ExecOutputFn(args ...string) func() (string, error) {
+	return func() (string, error) {
+		return c.ExecOutput(args...)
+	}
+}
+
 func (c *Container) ExecCombinedOutput(args ...string) (string, error) {
 	arg := []string{"exec", c.Name}
 	arg = append(arg, args...)

@@ -52,6 +52,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/counters"
@@ -143,17 +144,26 @@ type bpfInterface struct {
 
 type bpfInterfaceInfo struct {
 	ifIndex    int
+	isUP       bool
 	endpointID *proto.WorkloadEndpointID
 }
 
 func (i bpfInterfaceInfo) ifaceIsUp() bool {
-	return i.ifIndex != 0
+	return i.isUP
 }
 
 type bpfInterfaceState struct {
 	jumpMapFDs map[string]bpf.MapFD
 	isReady    bool
 }
+
+type ctlbWorkaroundMode int
+
+const (
+	ctlbWorkaroundDisabled = iota
+	ctlbWorkaroundEnabled
+	ctlbWorkaroundUDPOnly
+)
 
 type bpfEndpointManager struct {
 	// Main store of information about interfaces; indexed on interface name.
@@ -227,7 +237,7 @@ type bpfEndpointManager struct {
 	rpfStrictModeEnabled string
 
 	// Service routes
-	ctlbWorkaroundEnabled bool
+	ctlbWorkaroundMode ctlbWorkaroundMode
 
 	bpfPolicyDebugEnabled bool
 
@@ -238,6 +248,11 @@ type bpfEndpointManager struct {
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
 	dirtyRules        set.Set[polprog.RuleMatchID]
+
+	natInIdx  int
+	natOutIdx int
+
+	arpMap bpf.Map
 }
 
 type serviceKey struct {
@@ -312,6 +327,7 @@ func newBPFEndpointManager(
 		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
 		polNameToMatchIDs:     map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:            set.New[polprog.RuleMatchID](),
+		arpMap:                bpfMapContext.ArpMap,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -336,11 +352,16 @@ func newBPFEndpointManager(
 	}
 
 	if config.FeatureGates != nil {
-		m.ctlbWorkaroundEnabled = config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] == "enabled"
+		switch config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] {
+		case "enabled":
+			m.ctlbWorkaroundMode = ctlbWorkaroundEnabled
+		case "udp":
+			m.ctlbWorkaroundMode = ctlbWorkaroundUDPOnly
+		}
 	}
 
-	if m.ctlbWorkaroundEnabled {
-		log.Info("BPFConnectTimeLoadBalancingWorkaround is enabled")
+	if m.ctlbWorkaroundMode != ctlbWorkaroundDisabled {
+		log.Infof("BPFConnectTimeLoadBalancingWorkaround is %d", m.ctlbWorkaroundMode)
 		m.routeTable = routetable.New(
 			[]string{bpfInDev},
 			4,
@@ -563,16 +584,19 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 				m.hostIfaceToEpMap[update.Name] = m.wildcardHostEndpoint
 			}
 			iface.info.ifIndex = update.Index
+			iface.info.isUP = true
+			m.updateIfaceStateMap(update.Name, iface)
 		} else {
 			if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
 				log.Debugf("Unmap host-* endpoint for %v", update.Name)
 				m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
-			iface.info.ifIndex = 0
 			iface.dpState.isReady = false
+			iface.info.isUP = false
+			m.updateIfaceStateMap(update.Name, iface)
+			iface.info.ifIndex = 0
 		}
-		m.updateIfaceStateMap(update.Name, iface)
 		return true // Force interface to be marked dirty in case we missed a transition during a resync.
 	})
 }
@@ -728,7 +752,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
 
-	if m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundMode != ctlbWorkaroundDisabled {
 		// Update all existing IPs of dirty services
 		m.dirtyServices.Iter(func(svc serviceKey) error {
 			for _, ip := range m.services[svc] {
@@ -892,6 +916,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			defer wg.Done()
 			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
+			if err == nil {
+				err = m.dp.setAcceptLocal(ifaceName, true)
+			}
 			mutex.Lock()
 			errs[ifaceName] = err
 			mutex.Unlock()
@@ -1073,7 +1100,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	ap.IntfIP = calicoRouterIP
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 
-	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
+	jumpMapFD, err := m.dp.ensureProgramAttached(ap)
 	if err != nil {
 		return err
 	}
@@ -1110,7 +1137,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return m.dp.updatePolicyProgram(jumpMapFD, rules, polDirection.RuleDir(), &ap)
+	return m.dp.updatePolicyProgram(jumpMapFD, rules, polDirection.RuleDir(), ap)
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -1157,8 +1184,10 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	} else {
 		ap.IntfIP = *ip
 	}
+	ap.NATin = uint32(m.natInIdx)
+	ap.NATout = uint32(m.natOutIdx)
 
-	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
+	jumpMapFD, err := m.dp.ensureProgramAttached(ap)
 	if err != nil {
 		return err
 	}
@@ -1179,14 +1208,14 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 }
 
 func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint) error {
-	ap := xdp.AttachPoint{
+	ap := &xdp.AttachPoint{
 		Iface:    ifaceName,
 		LogLevel: m.bpfLogLevel,
 		Modes:    m.xdpModes,
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
-		jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
+		jumpMapFD, err := m.dp.ensureProgramAttached(ap)
 		if err != nil {
 			return err
 		}
@@ -1200,7 +1229,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		ap.Log().Debugf("Rules: %v", rules)
 		return m.dp.updatePolicyProgram(jumpMapFD, rules, string(bpf.HookXDP), ap)
 	} else {
-		return m.dp.ensureNoProgram(&ap)
+		return m.dp.ensureNoProgram(ap)
 	}
 }
 
@@ -1227,13 +1256,20 @@ func (polDirection PolDirection) Inverse() PolDirection {
 	return PolDirnIngress
 }
 
-func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection, ifaceName string) tc.AttachPoint {
-	var ap tc.AttachPoint
+func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection, ifaceName string) *tc.AttachPoint {
+	ap := &tc.AttachPoint{
+		Iface: ifaceName,
+	}
+
 	var endpointType tc.EndpointType
 
 	// Determine endpoint type.
 	if m.isWorkloadIface(ifaceName) {
 		endpointType = tc.EpTypeWorkload
+	} else if ifaceName == "lo" {
+		endpointType = tc.EpTypeLO
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if ifaceName == "tunl0" {
 		if m.Features.IPIPDeviceIsL3 {
 			endpointType = tc.EpTypeL3Device
@@ -1248,6 +1284,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else {
 		log.Panicf("Unsupported ifaceName %v", ifaceName)
 	}
@@ -1276,7 +1314,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		toOrFrom = tc.ToEp
 	}
 
-	ap.Iface = ifaceName
 	ap.Type = endpointType
 	ap.ToOrFrom = toOrFrom
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
@@ -1398,7 +1435,8 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
-	return m.dataIfaceRegex.MatchString(iface) || iface == bpfOutDev
+	return m.dataIfaceRegex.MatchString(iface) ||
+		(m.ctlbWorkaroundMode != ctlbWorkaroundDisabled && (iface == bpfOutDev || iface == "lo"))
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
@@ -1637,7 +1675,7 @@ func (m *bpfEndpointManager) ensureStarted() {
 }
 
 func (m *bpfEndpointManager) ensureBPFDevices() error {
-	if !m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundMode == ctlbWorkaroundDisabled {
 		return nil
 	}
 
@@ -1658,24 +1696,32 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		if err != nil {
 			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
 		}
+	}
+	if state := bpfin.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(bpfInDev)
 		if err := netlink.LinkSetUp(bpfin); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfInDev, err)
 		}
-		bpfout, err = netlink.LinkByName(bpfOutDev)
-		if err != nil {
-			return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
-		}
+	}
+	bpfout, err = netlink.LinkByName(bpfOutDev)
+	if err != nil {
+		return fmt.Errorf("missing %s after add: %w", bpfOutDev, err)
+	}
+	if state := bpfout.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(bpfOutDev)
 		if err := netlink.LinkSetUp(bpfout); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
 		}
 	}
 
-	if bpfout == nil {
-		bpfout, err = netlink.LinkByName(bpfOutDev)
-		if err != nil {
-			return fmt.Errorf("miss %s after add: %w", bpfOutDev, err)
-		}
-	}
+	m.natInIdx = bpfin.Attrs().Index
+	m.natOutIdx = bpfout.Attrs().Index
+
+	anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
+	_ = m.arpMap.Update(
+		bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
+		bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
+	)
 
 	// Add a permanent ARP entry to point to the other side of the veth to avoid
 	// ARP requests that would not be proxied if .all.rp_filter == 1
@@ -1699,6 +1745,11 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	err = m.ensureQdisc(bpfInDev)
 	if err != nil {
 		return fmt.Errorf("failed to set qdisc on %s: %w", bpfOutDev, err)
+	}
+
+	err = m.ensureQdisc("lo")
+	if err != nil {
+		log.WithError(err).Fatalf("Failed to set qdisc on lo.")
 	}
 
 	// Setup a link local route to a non-existent link local address that would
@@ -1774,7 +1825,12 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	}
 
 	// Ensure interface does not have our XDP program attached in any mode.
-	return ap.DetachProgram()
+	err := ap.DetachProgram()
+
+	// Forget the policy debug info
+	m.removePolicyDebugInfo(ap.IfaceName(), 4, bpf.HookXDP)
+
+	return err
 }
 
 func (m *bpfEndpointManager) getJumpMapFD(ap attachPoint) (fd bpf.MapFD) {
@@ -1875,7 +1931,8 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	}
 
 	for _, ipFamily := range ipVersions {
-		insns, err := m.doUpdatePolicyProgram(ap.IfaceName(), jumpMapFD, rules, ipFamily)
+		progName := policyProgramName(ap.IfaceName(), polDir, ipFamily)
+		insns, err := m.doUpdatePolicyProgram(progName, jumpMapFD, rules, ipFamily)
 		perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
@@ -1895,7 +1952,24 @@ func jumpPolicyKey(ipFamily proto.IPVersion) []byte {
 	}
 }
 
-func (m *bpfEndpointManager) doUpdatePolicyProgram(iface string, jumpMapFD bpf.MapFD, rules polprog.Rules,
+func policyProgramName(iface, polDir string, ipFamily proto.IPVersion) string {
+	version := "4"
+	if ipFamily == proto.IPVersion_IPV6 {
+		version = "6"
+	}
+	var hook string
+	switch strings.ToLower(polDir) {
+	case string(bpf.HookIngress):
+		hook = "i"
+	case string(bpf.HookEgress):
+		hook = "e"
+	case string(bpf.HookXDP):
+		hook = "x"
+	}
+	return fmt.Sprintf("p%v%s_%s", version, hook, iface)
+}
+
+func (m *bpfEndpointManager) doUpdatePolicyProgram(progName string, jumpMapFD bpf.MapFD, rules polprog.Rules,
 	ipFamily proto.IPVersion) (asm.Insns, error) {
 
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(),
@@ -1911,7 +1985,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(iface string, jumpMapFD bpf.M
 	if rules.ForXDP {
 		progType = unix.BPF_PROG_TYPE_XDP
 	}
-	progFD, err := bpf.LoadBPFProgramFromInsns(insns, fmt.Sprintf("pol_%s", iface), "Apache-2.0", uint32(progType))
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, progName, "Apache-2.0", uint32(progType))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
 	}
@@ -2035,8 +2109,23 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 }
 
 func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
-	if !m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundMode == ctlbWorkaroundDisabled {
 		return
+	}
+
+	if m.ctlbWorkaroundMode == ctlbWorkaroundUDPOnly {
+		hasUDP := false
+
+		for _, port := range update.Ports {
+			if port.Protocol == "UDP" {
+				hasUDP = true
+				break
+			}
+		}
+
+		if !hasUDP {
+			return // skip services that do not have UDP ports
+		}
 	}
 
 	log.WithFields(log.Fields{
@@ -2044,14 +2133,13 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 		"Namespace": update.Namespace,
 	}).Info("Service Update")
 
-	ips := make([]string, 0, 2+len(update.ExternalIps))
+	ips := make([]string, 0, 2)
 	if update.ClusterIp != "" {
 		ips = append(ips, update.ClusterIp)
 	}
 	if update.LoadbalancerIp != "" {
 		ips = append(ips, update.LoadbalancerIp)
 	}
-	ips = append(ips, update.ExternalIps...)
 
 	key := serviceKey{name: update.Name, namespace: update.Namespace}
 
@@ -2086,7 +2174,7 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 }
 
 func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
-	if !m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundMode == ctlbWorkaroundDisabled {
 		return
 	}
 
@@ -2125,7 +2213,7 @@ func (m *bpfEndpointManager) delRoute(cidr ip.V4CIDR) {
 }
 
 func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	if !m.ctlbWorkaroundEnabled {
+	if m.ctlbWorkaroundMode == ctlbWorkaroundDisabled {
 		return nil
 	}
 

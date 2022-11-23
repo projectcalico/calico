@@ -1,6 +1,6 @@
 ---
 title: Configure outgoing NAT
-description: Configure {{site.prodname}} networking to perform outbound NAT for connections from pods to outside of the cluster.
+description: Configure networking to perform outbound NAT for connections from pods to outside of the cluster.
 canonical_url: '/networking/workloads-outside-cluster'
 ---
 
@@ -33,7 +33,7 @@ A common use case for enabling NAT outgoing, is to allow pods in an overlay netw
 If you choose to implement {{site.prodname}} networking with [BGP peered with your physical network infrastructure]({{site.baseurl}}/networking/bgp), you can use your own infrastructure to NAT traffic from pods to the internet. In this case, you should disable the {{site.prodname}} `natOutgoing` option. For example, if you want your pods to have public internet IPs, you should:
 
 - Configure {{site.prodname}} to peer with your physical network infrastructure
-- Create an IP pool with public IP addresses for those pods that are routed to your network with NAT disabled (`nat-outgoing: false`)
+- Create an IP pool with public IP addresses for those pods that are routed to your network with NAT disabled (`natOutgoing: false`)
 - Verify that other network equipment does not NAT the pod traffic
 
 ### How to
@@ -68,7 +68,3 @@ spec:
   cidr: 10.0.0.0/8
   disabled: true
 ```
-
-### Above and beyond
-
-To learn about inbound connectivity, see [External connectivity]({{site.baseurl}}/networking/external-connectivity)

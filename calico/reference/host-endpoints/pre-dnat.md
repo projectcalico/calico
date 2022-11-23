@@ -4,7 +4,6 @@ description: Apply rules in a host endpoint policy before any DNAT.
 canonical_url: '/reference/host-endpoints/pre-dnat'
 ---
 
-
 Policy for host endpoints can be marked as `preDNAT`.  This means that rules in
 that policy should be applied before any DNAT (Destination Network Address
 Translation), which is useful if it is more convenient to specify {{site.prodname}} policy

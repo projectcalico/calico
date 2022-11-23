@@ -86,7 +86,6 @@ If a pod on `Node B` wants to talk to the api-server on `Node A`, the packet flo
 * In `Node B`, standard routing happens (`sh ip fib <someip>` will give details on this node)
 * When reaching `Node A`, we're in the same situation as previously
 
-
 If a pod on `Node A` wants to talk to the api-server on `Node A`, let's say the packet is `src=10.0.0.1,dst=192.168.0.1` with `10.0.0.1` being the pod address, then:
 * Things happen exactly the same way as if the packet was coming from the uplink
 * This time packets come into vpp through `tunN` corresponding to the pod interface, and is then punted to `tap0` towards the host

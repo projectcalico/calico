@@ -239,7 +239,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		c.syncer.Start()
 	}
 
-	if len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 {
+	if len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 || len(lbCIDRs) != 0 {
 		// Create and start route generator, if configured to do so. This can either be through
 		// environment variable, or the data store via BGPConfiguration.
 		// We only turn it on if configured to do so, to avoid needing to watch services / endpoints.
@@ -461,6 +461,7 @@ type bgpPeer struct {
 	RestartTime     string               `json:"restart_time"`
 	CalicoNode      bool                 `json:"calico_node"`
 	NumAllowLocalAS int32                `json:"num_allow_local_as"`
+	TTLSecurity     uint8                `json:"ttl_security"`
 }
 
 type bgpPrefix struct {
@@ -551,7 +552,7 @@ func (c *client) updatePeersV1() {
 			var peers []*bgpPeer
 			if v3res.Spec.PeerSelector != "" {
 				for _, peerNodeName := range c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector) {
-					peers = append(peers, c.nodeAsBGPPeers(peerNodeName, true, true)...)
+					peers = append(peers, c.nodeAsBGPPeers(peerNodeName, true, true, v3res)...)
 				}
 			} else {
 				// Separate port from Ip if it uses <ip>:<port> format
@@ -585,6 +586,11 @@ func (c *client) updatePeersV1() {
 					numLocalAS = *v3res.Spec.NumAllowedLocalASNumbers
 				}
 
+				var ttlSecurityHopCount uint8
+				if v3res.Spec.TTLSecurity != nil {
+					ttlSecurityHopCount = *v3res.Spec.TTLSecurity
+				}
+
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
@@ -592,6 +598,7 @@ func (c *client) updatePeersV1() {
 					Port:            port,
 					KeepNextHop:     v3res.Spec.KeepOriginalNextHop,
 					CalicoNode:      isCalicoNode,
+					TTLSecurity:     ttlSecurityHopCount,
 					NumAllowLocalAS: numLocalAS,
 				})
 			}
@@ -668,7 +675,7 @@ func (c *client) updatePeersV1() {
 
 		var peers []*bgpPeer
 		for _, peerNodeName := range peerNodeNames {
-			peers = append(peers, c.nodeAsBGPPeers(peerNodeName, includeV4, includeV6)...)
+			peers = append(peers, c.nodeAsBGPPeers(peerNodeName, includeV4, includeV6, v3res)...)
 		}
 		if len(peers) == 0 {
 			continue
@@ -770,7 +777,7 @@ func (c *client) globalAS() string {
 	return c.cache[asKey]
 }
 
-func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool) (peers []*bgpPeer) {
+func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3.BGPPeer) (peers []*bgpPeer) {
 	ipv4Str, ipv6Str, asNum, rrClusterID := c.nodeToBGPFields(nodeName)
 	versions := map[string]string{}
 	if v4 {
@@ -791,6 +798,10 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool) (peers []*bgp
 			continue
 		}
 		peer.PeerIP = *ip
+
+		if v3Peer.Spec.TTLSecurity != nil {
+			peer.TTLSecurity = *v3Peer.Spec.TTLSecurity
+		}
 
 		// If peer node has listenPort set in BGPConfiguration, use that.
 		if port, ok := c.nodeListenPorts[nodeName]; ok {
@@ -1368,7 +1379,21 @@ func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
 }
 
 func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
-	if err := c.updateGlobalRoutes(lbIPs, c.LoadBalancerIPRouteIndex); err == nil {
+	// We advertise the given LB IP ranges from every node in order to satisfy services with external traffic policy of "cluster".
+	// However, we don't want to advertise single IPs in this way because it breaks any "local" type services the user creates,
+	// which should instead be advertised from only a subset of nodes.
+	// So, we handle advertisement of any single-addresses found in the config on a per-service basis from within the routeGenerator.
+	var globalLbIPs []string
+	for _, lbIP := range lbIPs {
+		if strings.Contains(lbIP, ":") {
+			if !strings.HasSuffix(lbIP, "/128") {
+				globalLbIPs = append(globalLbIPs, lbIP)
+			}
+		} else if !strings.HasSuffix(lbIP, "/32") {
+			globalLbIPs = append(globalLbIPs, lbIP)
+		}
+	}
+	if err := c.updateGlobalRoutes(globalLbIPs, c.LoadBalancerIPRouteIndex); err == nil {
 		c.loadBalancerIPs = lbIPs
 		c.loadBalancerIPNets = parseIPNets(c.loadBalancerIPs)
 		log.Infof("Updated with new Loadbalancer IP CIDRs: %s", lbIPs)
@@ -1781,6 +1806,7 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 }
 
 func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv3.BGPPeer) {
+
 	// Get the password, if one is configured.
 	password := c.getPassword(v3res)
 

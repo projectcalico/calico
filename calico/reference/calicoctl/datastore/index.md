@@ -1,4 +1,5 @@
 ---
+title: datastore
 description: calicoctl datastore commands.
 show_read_time: false
 show_toc: false

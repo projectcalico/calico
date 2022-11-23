@@ -61,8 +61,6 @@ and in particular, pushing the networking capabilities of the latest Linux kerne
   - RKE: eBPF mode cannot be enabled at install time because RKE doesn't provide
     a stable address for the API server.  However, by following [these instructions](../../maintenance/ebpf/enabling-ebpf),
     it can be enabled as a post-install step.
-  
-  - Mirantis Kubernetes Engine (MKE): eBPF mode is incompatible with MKE at this time. The Tigera team is investigating the issue.
 
 - Clusters with some eBPF nodes and some standard dataplane and/or Windows nodes.
 - IPv6.
@@ -340,7 +338,6 @@ watch kubectl get tigerastatus
 In eBPF mode, to avoid conflicts with `kube-proxy` it's necessary to either disable `kube-proxy` or to configure 
 {{ site.prodname }} not to clean up `kube-proxy`'s iptables rules.  If you didn't disable `kube-proxy` when starting 
 your cluster then follow the steps below to avoid conflicts:
-
 
 {% tabs tab-group:grp1 %}
 <label:Generic or kubeadm,active:true>

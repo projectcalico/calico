@@ -78,7 +78,7 @@ WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
-WINDOWS_NSSM_VERSION=2.24
+WINDOWS_NSSM_VERSION=2.24-103-gdee49fc
 # Explicit list of files that we copy in from the mod cache.  This is required because the copying rules we use are pattern-based
 # and they only work with an explicit rule of the form "$(WINDOWS_MOD_CACHED_FILES): <file path from project root>" (otherwise,
 # make has no way to know that the mod cache target produces the files we need).
@@ -189,6 +189,7 @@ clean-windows:
 	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
 	-rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
+	-rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.zip
 	-rm -f $(WINDOWS_INSTALL_SCRIPT)
 	-rm -rf "$(WINDOWS_DIST)"
 	-rm -rf "$(WINDOWS_UPGRADE_DIST)"
@@ -527,19 +528,20 @@ $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
 	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
 
 ## Download NSSM.
-windows-packaging/nssm-$(WINDOWS_NSSM_VERSION).zip:
-	wget -O windows-packaging/nssm-$(WINDOWS_NSSM_VERSION).zip https://nssm.cc/release/nssm-$(WINDOWS_NSSM_VERSION).zip
+windows-packaging/nssm.zip:
+	wget -O windows-packaging/nssm.zip https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
 
-build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm-$(WINDOWS_NSSM_VERSION).zip
+build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
 	# To be as atomic as possible, we re-do work like unpacking NSSM here.
 	-rm -f "$(WINDOWS_ARCHIVE)"
-	-rm -rf $(WINDOWS_ARCHIVE_ROOT)/nssm-$(WINDOWS_NSSM_VERSION)
+	-rm -rf $(WINDOWS_ARCHIVE_ROOT)/nssm
 	mkdir -p dist
 	cd windows-packaging && \
 	sha256sum --check nssm.sha256sum && \
 	cd CalicoWindows && \
-	unzip  ../nssm-$(WINDOWS_NSSM_VERSION).zip \
+	unzip  ../nssm.zip \
 	       -x 'nssm-$(WINDOWS_NSSM_VERSION)/src/*' && \
+	mv nssm-$(WINDOWS_NSSM_VERSION) nssm && \
 	cd .. && \
 	zip -r "../$(WINDOWS_ARCHIVE)" CalicoWindows -x '*.git*'
 	@echo

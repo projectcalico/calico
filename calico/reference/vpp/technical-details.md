@@ -10,7 +10,6 @@ The VPP dataplane integration is split in two components, `vpp-manager` which ha
 
 ![Implementation architecture]({{ site.baseurl }}/images/vpp-soft-arch.svg)
 
-
 #### vpp-manager
 
 VPP Manager is a very light process responsible for the bootstrap of VPP, including uplink interface addressing and routing configuration. It also restores the Linux configuration on shutdown. The code can be found in this directory: [https://github.com/projectcalico/vpp-dataplane/tree/{{page.vppbranch}}/vpp-manager](https://github.com/projectcalico/vpp-dataplane/tree/{{page.vppbranch}}/vpp-manager).
@@ -24,7 +23,6 @@ Once it is running, vpp-manager forwards all received Unix signals to VPP to han
 When VPP stops, either in reaction to a received signal or in case of a crash, vpp-manager restores the configuration of the Linux interface so that the host recovers its connectivity to the outside through the original uplink interface.
 
 vpp-manager is voluntarily kept as simple as possible, in order to minimize the risk of bugs, as these could leave the host without connectivity, requiring a reboot.
-
 
 #### calico-vpp-agent
 
@@ -51,7 +49,6 @@ This component is the equivalent of kube-proxy for VPP, i.e. it configures NAT l
 **Policies manager**
 
 This component implements {{ site.prodname }} policies in VPP. Felix ({{ site.prodname }}'s policy agent) is configured to use a lightweight proxy as its dataplane. This proxy relays all the configuration messages sent by Felix to the `calico-vpp-agent`, and status updates the other way. The VPP agent then uses a custom plugin in VPP to implement policies.
-
 
 ### Network architecture
 

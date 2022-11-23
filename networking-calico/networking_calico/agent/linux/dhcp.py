@@ -190,12 +190,15 @@ class DnsmasqRouted(dhcp.Dnsmasq):
         cmd.remove('--interface=tap*')
         cmd.remove('--bridge-interface=%s,tap*' % self.interface_name)
         bridge_option = '--bridge-interface=%s' % self.interface_name
+        bridge_ports_added = False
         for port in self.network.ports:
             if port.device_id.startswith('tap'):
                 LOG.debug('Listen on %s', port.device_id)
                 cmd.append('--interface=%s' % port.device_id)
                 bridge_option = bridge_option + ',' + port.device_id
-        cmd.append(bridge_option)
+                bridge_ports_added = True
+        if bridge_ports_added:
+            cmd.append(bridge_option)
 
         return cmd
 
@@ -217,21 +220,31 @@ class CalicoDeviceManager(dhcp.DeviceManager):
         pass
 
     def fill_dhcp_udp_checksums(self, *args, **kwargs):
-        retries = 10
-        while retries > 0:
-            try:
-                super(CalicoDeviceManager, self).fill_dhcp_udp_checksums(
-                    *args, **kwargs)
-            except RuntimeError:
-                # fill_dhcp_udp_checksums() can fail transiently if iptables
-                # is modified concurrently, especially with an aggressive
-                # iptables writer such as Felix running.
-                LOG.exception("Failed to insert checksum rule, may retry...")
-                time.sleep(0.1)
-                retries -= 1
-            else:
-                LOG.debug("Inserted DHCP checksum rule.")
-                break
-        else:
-            LOG.error("Failed to insert DHCP checksum rule. Exiting...")
-            sys.exit(1)
+        # NOTE(tstachecki): Very old versions of isc-dhcp-client broke when
+        # UDP packets had a checksum field not properly filled in as part of
+        # GSO/checksum offload support being introduced for virtio_net:
+        # https://lwn.net/Articles/373209/
+        #
+        # The missing/incorrect checksum in the UDP header was problematic for
+        # isc-dhcp-client (and possibly other DHCP clients) because they use
+        # raw sockets, and were unaware of how to handle
+        # TP_STATUS_CSUMNOTREADY.
+        #
+        # OpenStack has historically worked around this by adding an iptables
+        # mangle rule to always rewrite the UDP header for DHCP packets. But,
+        # isc-dhcp-client has also been patched to account for this since 2014,
+        # and likewise has qemu (for virtio_net) since 2009:
+        # https://git.qemu.org/?p=qemu.git;a=commit;h=1d41b0c
+        #
+        # The consequence of patching the mangle rule in iptables is that the
+        # underlying OpenStack mechanisms tend to add the rules in an order
+        # that upsets Felix. When Felix sees this (often during live-migration,
+        # when the VM has no networking), it can spend a fair amount of time
+        # resyncing the rules... thus leaving a live-migrating instance with
+        # no networking for an appreciable amount of time.
+        #
+        # As this should not be needed for any Linux distribution in the last
+        # decade and it can perturb Felix, simply do not add in an iptables
+        # rule to fill in DHCP UDP checksums here with the assumption that it
+        # it has been fixed/is being done elsewhere.
+        pass

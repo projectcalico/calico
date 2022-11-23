@@ -187,6 +187,17 @@ var _ = Describe("Config override empty", func() {
 			Expect(cp.BPFEnabled).To(BeFalse())
 		})
 	})
+
+	It("should have correct initial IptablesBackend value 'auto'", func() {
+		Expect(cp.IptablesBackend).To(Equal("auto"))
+	})
+
+	It("should allow IptablesBackend value 'Auto' read from FelixConfiguration resource", func() {
+		changed, err := cp.UpdateFrom(map[string]string{"IptablesBackend": "Auto"}, config.DatastorePerHost)
+		Expect(changed).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cp.IptablesBackend).To(Equal("auto"))
+	})
 })
 
 var t bool = true

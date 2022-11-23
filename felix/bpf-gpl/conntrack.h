@@ -46,7 +46,8 @@ static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k)
 	CALI_VERB("CT-ALL   key B=%x:%d size=%d\n", bpf_ntohl(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
 
-static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct_ctx,
+static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
+							struct ct_create_ctx *ct_ctx,
 							struct calico_ct_key *k)
 {
 	__be32 ip_src = ct_ctx->src;
@@ -88,18 +89,18 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct
 			ct_value->a_to_b.seqno = seq;
 			ct_value->a_to_b.syn_seen = syn;
 			if (CALI_F_TO_HOST) {
-				ct_value->a_to_b.whitelisted = 1;
+				ct_value->a_to_b.approved = 1;
 			} else {
-				ct_value->b_to_a.whitelisted = 1;
+				ct_value->b_to_a.approved = 1;
 			}
 		} else  {
 			CALI_VERB("CT-ALL update src_to_dst B->A\n");
 			ct_value->b_to_a.seqno = seq;
 			ct_value->b_to_a.syn_seen = syn;
 			if (CALI_F_TO_HOST) {
-				ct_value->b_to_a.whitelisted = 1;
+				ct_value->b_to_a.approved = 1;
 			} else {
-				ct_value->a_to_b.whitelisted = 1;
+				ct_value->a_to_b.approved = 1;
 			}
 		}
 
@@ -179,30 +180,37 @@ create:
 	dst_to_src->ifindex = CT_INVALID_IFINDEX;
 
 	if (CALI_F_FROM_WEP) {
-		/* src is the from the WEP, policy whitelisted this side */
-		src_to_dst->whitelisted = 1;
-		CALI_DEBUG("CT-ALL Whitelisted source side - from WEP\n");
+		/* src is the from the WEP, policy approved this side */
+		src_to_dst->approved = 1;
+		CALI_DEBUG("CT-ALL approved source side - from WEP\n");
 	} else if (CALI_F_FROM_HEP) {
-		/* src is the from the HEP, policy whitelisted this side */
-		src_to_dst->whitelisted = 1;
+		/* src is the from the HEP, policy approved this side */
+		src_to_dst->approved = 1;
 
 		if (ct_ctx->allow_return) {
 			/* When we do NAT and forward through the tunnel, we go through
 			 * a single policy, what we forward we also accept back,
-			 * whitelist both sides.
+			 * approve both sides.
 			 */
-			dst_to_src->whitelisted = 1;
+			dst_to_src->approved = 1;
 		}
-		CALI_DEBUG("CT-ALL Whitelisted source side - from HEP tun allow_return=%d\n",
+		CALI_DEBUG("CT-ALL approved source side - from HEP tun allow_return=%d\n",
 				ct_ctx->allow_return);
 	} else if (CALI_F_TO_HEP && !skb_seen(ct_ctx->skb) && (ct_ctx->type == CALI_CT_TYPE_NAT_REV)) {
-		src_to_dst->whitelisted = 1;
-		dst_to_src->whitelisted = 1;
-		CALI_DEBUG("CT-ALL Whitelisted both due to host source port conflict resolution.\n");
+		src_to_dst->approved = 1;
+		dst_to_src->approved = 1;
+		CALI_DEBUG("CT-ALL approved both due to host source port conflict resolution.\n");
 	} else if (CALI_F_FROM_HOST) {
-		/* dst is to the EP, policy whitelisted this side */
-		dst_to_src->whitelisted = 1;
-		CALI_DEBUG("CT-ALL Whitelisted dest side - to EP\n");
+		if (ctx->state->flags & CALI_ST_CT_NP_LOOP) {
+			/* we do not run policy and it should behave like TO_HOST */
+			src_to_dst->approved = 1;
+			CALI_DEBUG("CT-ALL approved source side - from HEP tun allow_return=%d\n",
+					ct_ctx->allow_return);
+		} else {
+			/* dst is to the EP, policy approved this side */
+			dst_to_src->approved = 1;
+			CALI_DEBUG("CT-ALL approved dest side - to EP\n");
+		}
 	}
 
 	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
@@ -634,11 +642,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
 		result.flags = ct_value_get_flags(tracking_v);
+		CALI_CT_DEBUG("result.flags 0x%x\n", result.flags);
 
 		if (ct_ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
 			result.nat_ip = tracking_v->orig_ip;
-		} else if (CALI_F_TO_HOST) {
+		} else if (CALI_F_TO_HOST ||
+				(CALI_F_TO_HEP && result.flags & (CALI_CT_FLAG_VIA_NAT_IF |
+								  CALI_CT_FLAG_NP_LOOP |
+								  CALI_CT_FLAG_NP_REMOTE))) {
 			// Since we found a forward NAT entry, we know that it's the destination
 			// that needs to be NATted.
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -655,7 +667,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			ct_result_set_flag(result.rc, CT_RES_TUN_SRC_CHANGED);
 		}
 
-		if (tracking_v->a_to_b.whitelisted && tracking_v->b_to_a.whitelisted) {
+		if (tracking_v->a_to_b.approved && tracking_v->b_to_a.approved) {
 			ct_result_set_flag(result.rc, CT_RES_CONFIRMED);
 		}
 
@@ -704,6 +716,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		snat |= (dnat_return_should_encap() && v->tun_ip);
 		snat |= result.flags & CALI_CT_FLAG_VIA_NAT_IF;
 		snat |= result.flags & CALI_CT_FLAG_HOST_PSNAT;
+		snat |= result.flags & CALI_CT_FLAG_NP_LOOP;
+		snat |= result.flags & CALI_CT_FLAG_NP_REMOTE;
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
@@ -718,7 +732,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
 
-		if (v->a_to_b.whitelisted && v->b_to_a.whitelisted) {
+		if (v->a_to_b.approved && v->b_to_a.approved) {
 			ct_result_set_flag(result.rc, CT_RES_CONFIRMED);
 		}
 
@@ -740,7 +754,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_VERB("A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
 			CALI_CT_VERB("A-to-B: rst_seen %d.\n", v->a_to_b.rst_seen);
 		}
-		CALI_CT_VERB("A: whitelisted %d.\n", v->a_to_b.whitelisted);
+		CALI_CT_VERB("A: approved %d.\n", v->a_to_b.approved);
 		if (tcp_header) {
 			CALI_CT_VERB("B-to-A: seqno %u.\n", bpf_ntohl(v->b_to_a.seqno));
 			CALI_CT_VERB("B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
@@ -748,9 +762,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_VERB("B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
 			CALI_CT_VERB("B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
 		}
-		CALI_CT_VERB("B: whitelisted %d.\n", v->b_to_a.whitelisted);
+		CALI_CT_VERB("B: approved %d.\n", v->b_to_a.approved);
 
-		if (v->a_to_b.whitelisted && v->b_to_a.whitelisted) {
+		if (v->a_to_b.approved && v->b_to_a.approved) {
 			result.rc = CALI_CT_ESTABLISHED_BYPASS;
 			ct_result_set_flag(result.rc, CT_RES_CONFIRMED);
 		} else {
@@ -774,7 +788,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	int ret_from_tun = CALI_F_FROM_HEP &&
 				tc_ctx->state->tun_ip &&
 				ct_result_rc(result.rc) == CALI_CT_ESTABLISHED_DNAT &&
-				src_to_dst->whitelisted &&
+				src_to_dst->approved &&
 				result.flags & CALI_CT_FLAG_NP_FWD;
 
 	if (related) {
@@ -793,30 +807,30 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	if (ret_from_tun) {
 		CALI_DEBUG("Packet returned from tunnel %x\n", bpf_ntohl(tc_ctx->state->tun_ip));
 	} else if (CALI_F_TO_HOST || (skb_from_host(tc_ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
-		/* Source of the packet is the endpoint, so check the src whitelist. */
-		if (src_to_dst->whitelisted) {
-			CALI_CT_VERB("Packet whitelisted by this workload's policy.\n");
+		/* Source of the packet is the endpoint, so check the src approval flag. */
+		if (src_to_dst->approved) {
+			CALI_CT_VERB("Packet approved by this workload's policy.\n");
 		} else {
-			/* Only whitelisted by the other side (so far)?  Unlike
+			/* Only approved by the other side (so far)?  Unlike
 			 * TCP we have no way to distinguish packets that open a
 			 * new connection so we have to return NEW here in order
 			 * to invoke policy.
 			 */
-			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (TH).\n");
+			CALI_CT_DEBUG("Packet not allowed by ingress/egress approval flags (TH).\n");
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	} else if (CALI_F_FROM_HOST) {
-		/* Dest of the packet is the endpoint, so check the dest whitelist. */
-		if (dst_to_src->whitelisted) {
-			// Packet was whitelisted by the policy attached to this endpoint.
-			CALI_CT_VERB("Packet whitelisted by this workload's policy.\n");
+		/* Dest of the packet is the endpoint, so check the dest approval flag. */
+		if (dst_to_src->approved) {
+			// Packet was approved by the policy attached to this endpoint.
+			CALI_CT_VERB("Packet approved by this workload's policy.\n");
 		} else {
-			/* Only whitelisted by the other side (so far)?  Unlike
+			/* Only approved by the other side (so far)?  Unlike
 			 * TCP we have no way to distinguish packets that open a
 			 * new connection so we have to return NEW here in order
 			 * to invoke policy.
 			 */
-			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (FH).\n");
+			CALI_CT_DEBUG("Packet not allowed by ingress/egress approval flags (FH).\n");
 			result.rc = (tcp_header && !syn) ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	}
@@ -922,7 +936,7 @@ static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_c
 	// Workaround for verifier; make sure verifier sees the skb on all code paths.
 	ct_ctx->skb = ctx->skb;
 
-	err = calico_ct_v4_create_tracking(ct_ctx, &k);
+	err = calico_ct_v4_create_tracking(ctx, ct_ctx, &k);
 	if (err) {
 		CALI_DEBUG("calico_ct_v4_create_tracking err %d\n", err);
 		return err;

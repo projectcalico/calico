@@ -103,11 +103,26 @@ const (
 	GlobalsRPFStrictEnabled uint32 = 16
 )
 
-func TcSetGlobals(_ *Map, _, _, _ uint32, _, _, _, _ uint16, _, _ uint32, _ uint16) error {
+type TcGlobalData struct {
+	HostIP       uint32
+	IntfIP       uint32
+	ExtToSvcMark uint32
+	Tmtu         uint16
+	VxlanPort    uint16
+	PSNatStart   uint16
+	PSNatLen     uint16
+	HostTunnelIP uint32
+	Flags        uint32
+	WgPort       uint16
+	NatIn        uint32
+	NatOut       uint32
+}
+
+func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {
 	panic("LIBBPF syscall stub")
 }
 
-func CTLBSetGlobals(_ *Map, _ time.Duration) error {
+func CTLBSetGlobals(_ *Map, _ time.Duration, _ bool) error {
 	panic("LIBBPF syscall stub")
 }
 

@@ -15,14 +15,12 @@ This document does not apply to operator installations of Calico.
   <label:Manifest>
 <%
 
-
 The paths listed here are the key or path prefixes that a particular {{site.prodname}}
 component needs access to in etcd to function successfully.
 
 > **Note**: The path prefixes listed here may change in the future and at that point anything
 > referencing them (like etcd roles) would need to be updated appropriately.
 {: .alert .alert-info}
-
 
 ## {{site.nodecontainer}}
 
@@ -77,7 +75,6 @@ component needs access to in etcd to function successfully.
 > on your etcd cluster and
 > [disable `calico/kube-controllers` periodic compaction](/reference/kube-controllers/configuration).
 {: .alert .alert-info}
-
 
 ## OpenStack Calico driver for Neutron
 

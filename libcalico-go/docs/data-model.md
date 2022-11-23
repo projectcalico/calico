@@ -89,7 +89,6 @@ The following illustrates the directory structure calico uses in etcd.
 
 ## Objects
 
-
 Calico focuses on the following major object types, stored in etcd:
 
 #### endpoints
@@ -342,7 +341,6 @@ consists of a series of explicitly ordered "policies".  Each policy has
 a Boolean selector expression that decides whether it applies to a 
 given endpoint. Selector expressions match against an endpoint's labels.
 
-
 Each policy must do one of the following:
 
 -   Match the packet and apply an "allow" action; this immediately
@@ -591,7 +589,6 @@ this policy. These tags can be referred to by rules, as shown above.
 A single tag may be associated with multiple security profiles, in which
 case it expands to reference all endpoints in all of those profiles.
 
-
 ### IP pool configuration
 
 The IP pool configuration stored at
@@ -680,7 +677,6 @@ where
 -  *block* - A dictionary mapping Allocation Block CIDRs with the count of
    allocations within that block associated with this handle.
 
-
 ### JSON node-to-node mesh configuration
 
 The configuration controlling whether a full node-to-node BGP mesh is set up
@@ -714,7 +710,6 @@ The configuration for the global BGP peers is stored at
 and
 
     /calico/v1/config/bgp_peer_v6/<BGP peer IPv6 address>
-
 
 The configuration for the host node specific BGP peers is stored at
 

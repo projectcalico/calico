@@ -89,13 +89,13 @@ enum xdp_action prefilter(struct xdp_md* xdp)
 
 	ip4val_to_lpm(&sip, 32, ihdr->saddr);
 
-	// Drop the packet if source IP matches a blacklist entry.
+	// Drop the packet if source IP matches a blocklist entry.
 	if (NULL != bpf_map_lookup_elem(&calico_prefilter_v4, &sip)) {
-		// In blacklist - "thou shall not XDP_PASS!"
+		// In blocklist - "thou shall not XDP_PASS!"
 		return XDP_DROP;
 	}
 
-	// Not in blacklist - pass.
+	// Not in blocklist - pass.
 	return XDP_PASS;
 }
 

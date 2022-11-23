@@ -31,6 +31,12 @@ const (
 	counterMapValueSize int = 8
 )
 
+var (
+	// zeroKey is the key to the counters map, and it is set to 0 as it has only one entry
+	zeroKey = make([]byte, counterMapKeySize)
+	zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*bpf.NumPossibleCPUs())
+)
+
 // The following values are used as index to counters map, and should be kept in sync
 // with constants defined in bpf-gpl/reasons.h.
 const (
@@ -151,46 +157,22 @@ func NewCounters(iface string) *Counters {
 		cntr.maps[index] = Map(&bpf.MapContext{}, pinPath)
 		logrus.Debugf("%s counter map pin path: %v", hook, pinPath)
 	}
-
 	return &cntr
 }
 
-func (c Counters) Read() ([][]uint64, error) {
-	values := make([][]uint64, len(bpf.Hooks))
-	for i := range values {
-		values[i] = make([]uint64, MaxCounterNumber)
-	}
-
-	for hook, name := range bpf.Hooks {
-		val, err := c.read(c.maps[hook])
-		if err != nil {
-			return values, fmt.Errorf("Failed to read bpf counters. hook=%s err=%v", name, err)
-		}
-		if len(values[hook]) < MaxCounterNumber {
-			return values, fmt.Errorf("Failed to read enough data from bpf counters. hook=%s", name)
-		}
-
-		values[hook] = val
-	}
-
-	return values, nil
-}
-
-func (c Counters) read(cMap bpf.Map) ([]uint64, error) {
-	err := cMap.Open()
+func (c Counters) Read(index int) ([]uint64, error) {
+	err := c.maps[index].Open()
 	if err != nil {
 		return []uint64{}, fmt.Errorf("failed to open counters map. err=%w", err)
 	}
 	defer func() {
-		err := cMap.Close()
+		err := c.maps[index].Close()
 		if err != nil {
 			logrus.WithError(err).Errorf("failed to close counters map.")
 		}
 	}()
 
-	// k is the key to the counters map, and it is set to 0 since there is only one entry
-	k := make([]byte, counterMapKeySize)
-	values, err := cMap.Get(k)
+	values, err := c.maps[index].Get(zeroKey)
 	if err != nil {
 		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
 	}
@@ -206,33 +188,19 @@ func (c Counters) read(cMap bpf.Map) ([]uint64, error) {
 	return bpfCounters, nil
 }
 
-func (c *Counters) Flush() error {
-	for hook, name := range bpf.Hooks {
-		err := c.flush(c.maps[hook])
-		if err != nil {
-			return fmt.Errorf("Failed to flush bpf counters for interface=%s hook=%s. err=%w", c.iface, name, err)
-		}
-		logrus.Infof("Successfully flushed counters map for interface=%s hook=%s", c.iface, name)
-	}
-	return nil
-}
-
-func (c *Counters) flush(cMap bpf.Map) error {
-	err := cMap.Open()
+func (c *Counters) Flush(index int) error {
+	err := c.maps[index].Open()
 	if err != nil {
 		return fmt.Errorf("failed to open counters map. err=%v", err)
 	}
 	defer func() {
-		err := cMap.Close()
+		err := c.maps[index].Close()
 		if err != nil {
 			logrus.WithError(err).Errorf("failed to close counters map.")
 		}
 	}()
 
-	// k is the key to the counters map, and it is set to 0 since there is only one entry
-	k := make([]byte, counterMapKeySize)
-	v := make([]byte, counterMapValueSize*MaxCounterNumber*c.numOfCpu)
-	err = cMap.Update(k, v)
+	err = c.maps[index].Update(zeroKey, zeroVal)
 	if err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
 	}

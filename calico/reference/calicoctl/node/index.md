@@ -1,4 +1,5 @@
 ---
+title: node
 description: calicoctl node commands.
 show_read_time: false
 show_toc: false

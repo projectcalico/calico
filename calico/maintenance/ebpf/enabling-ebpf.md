@@ -162,7 +162,6 @@ The best way to do that varies by Kubernetes distribution:
   * Then, follow the instructions in [Avoiding conflicts with kube-proxy](#avoiding-conflicts-with-kube-proxy) below, 
     or connectivity will fail when eBPF mode is enabled.
 
-
 **The next step depends on whether you installed {{site.prodname}} using the operator, or a manifest:**
 
 {% tabs tab-group:grp1 %}
@@ -188,7 +187,6 @@ watch kubectl get pods -n calico-system
 ```
 
 If you do not see the pods restart then it's possible that the `ConfigMap` wasn't picked up (sometimes Kubernetes is slow to propagate `ConfigMap`s (see Kubernetes [issue #30189](https://github.com/kubernetes/kubernetes/issues/30189){:target="_blank"})). You can try restarting the operator.
-
 
 %>
 <label:Manifest>

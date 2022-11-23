@@ -29,7 +29,6 @@ To enable {{site.prodname}} network policy enforcement, follow these step-by-ste
 - [eBPF dataplane]({{ site.baseurl }}/maintenance/ebpf/use-cases-ebpf) is not supported.
 - [VPP dataplane](https://github.com/projectcalico/vpp-dataplane) is not supported.
 
-
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
@@ -87,7 +86,6 @@ The geeky details of what you get:
    ```
 
    Wait until each pod has the `STATUS` of `Running`.
- 
 
 ### Next steps
 
