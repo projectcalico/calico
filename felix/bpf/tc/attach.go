@@ -15,9 +15,7 @@
 package tc
 
 import (
-	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -25,15 +23,11 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
@@ -66,7 +60,6 @@ type AttachPoint struct {
 	NATout               uint32
 }
 
-var tcLock sync.RWMutex
 var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
 var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
@@ -137,13 +130,6 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		binaryToLoad = tempBinary
 	}
 
-	// Using the RLock allows multiple attach calls to proceed in parallel unless
-	// CleanUpMaps() (which takes the writer lock) is running.
-	logCxt.Debug("AttachProgram waiting for lock...")
-	tcLock.RLock()
-	defer tcLock.RUnlock()
-	logCxt.Debug("AttachProgram got lock.")
-
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
 		return -1, err
@@ -201,30 +187,8 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 	logCxt.Info("Program attached to TC.")
 
-	var progErrs []error
-	for _, p := range progsToClean {
-		log.WithField("prog", p).Debug("Cleaning up old calico program")
-		attemptCleanup := func() error {
-			_, err := ExecTC("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
-			return err
-		}
-		err = attemptCleanup()
-		if errors.Is(err, ErrInterrupted) {
-			// This happens if the interface is deleted in the middle of calling tc.
-			log.Debug("First cleanup hit 'Dump was interrupted', retrying (once).")
-			err = attemptCleanup()
-		}
-		if errors.Is(err, ErrDeviceNotFound) {
-			continue
-		}
-		if err != nil {
-			log.WithError(err).WithField("prog", p).Warn("Failed to clean up old calico program.")
-			progErrs = append(progErrs, err)
-		}
-	}
-
-	if len(progErrs) != 0 {
-		return -1, fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
+	if err := ap.detachPrograms(progsToClean); err != nil {
+		return -1, err
 	}
 
 	// Store information of object in a json file so in future we can skip reattaching it.
@@ -254,8 +218,41 @@ func (ap *AttachPoint) patchLogPrefix(logCtx *log.Entry, ifile, ofile string) er
 }
 
 func (ap *AttachPoint) DetachProgram() error {
-	// We never detach TC programs, so this should not be called.
-	ap.Log().Panic("DetachProgram is not implemented for TC")
+	progsToClean, err := ap.listAttachedPrograms()
+	if err != nil {
+		return err
+	}
+
+	return ap.detachPrograms(progsToClean)
+}
+
+func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
+	var progErrs []error
+	for _, p := range progsToClean {
+		log.WithField("prog", p).Debug("Cleaning up old calico program")
+		attemptCleanup := func() error {
+			_, err := ExecTC("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
+			return err
+		}
+		err := attemptCleanup()
+		if errors.Is(err, ErrInterrupted) {
+			// This happens if the interface is deleted in the middle of calling tc.
+			log.Debug("First cleanup hit 'Dump was interrupted', retrying (once).")
+			err = attemptCleanup()
+		}
+		if errors.Is(err, ErrDeviceNotFound) {
+			continue
+		}
+		if err != nil {
+			log.WithError(err).WithField("prog", p).Warn("Failed to clean up old calico program.")
+			progErrs = append(progErrs, err)
+		}
+	}
+
+	if len(progErrs) != 0 {
+		return fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
+	}
+
 	return nil
 }
 
@@ -386,159 +383,6 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 		return false, err
 	}
 	return len(progs) > 0, nil
-}
-
-// tcDirRegex matches tc's and xdp's auto-created directory names, directories created when using libbpf
-// so we can clean them up when removing maps without accidentally removing other user-created dirs..
-var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr|xdp))`)
-
-// CleanUpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
-// our BPF programs.
-func CleanUpMaps() {
-	// So that we serialise with AttachProgram()
-	log.Debug("CleanUpMaps waiting for lock...")
-	tcLock.Lock()
-	defer tcLock.Unlock()
-	log.Debug("CleanUpMaps got lock, cleaning up...")
-
-	// Find the maps we care about by walking the BPF filesystem.
-	mapIDToPath := make(map[int]string)
-	err := filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) ||
-			strings.HasPrefix(info.Name(), bpf.CountersMapName()) {
-			log.WithField("path", p).Debug("Examining map")
-
-			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
-			if err != nil {
-				log.WithError(err).Panic("Failed to show map")
-			}
-			log.WithField("dump", string(out)).Debug("Map show before deletion")
-			idStr := string(bytes.Split(out, []byte(":"))[0])
-			id, err := strconv.Atoi(idStr)
-			if err != nil {
-				log.WithError(err).WithField("dump", string(out)).Error("Failed to parse bpftool output.")
-				return err
-			}
-			mapIDToPath[id] = p
-		}
-		return nil
-	})
-	if os.IsNotExist(err) {
-		log.WithError(err).Warn("tc directory missing from BPF file system?")
-		return
-	}
-	if err != nil {
-		log.WithError(err).Error("Error while looking for maps.")
-	}
-
-	// Find all the programs that are attached to interfaces.
-	out, err := exec.Command("bpftool", "net", "-j").Output()
-	if err != nil {
-		log.WithError(err).Panic("Failed to list attached bpf programs")
-	}
-	log.WithField("dump", string(out)).Debug("Attached BPF programs")
-
-	var attached []struct {
-		TC []struct {
-			DevName string `json:"devname"`
-			ID      int    `json:"id"`
-		} `json:"tc"`
-		XDP []struct {
-			DevName string `json:"devname"`
-			IfIndex int    `json:"ifindex"`
-			Mode    string `json:"mode"`
-			ID      int    `json:"id"`
-		} `json:"xdp"`
-	}
-	err = json.Unmarshal(out, &attached)
-	if err != nil {
-		log.WithError(err).WithField("dump", string(out)).Error("Failed to parse list of attached BPF programs")
-	}
-	attachedProgs := set.New[int]()
-	for _, prog := range attached[0].TC {
-		log.WithField("prog", prog).Debug("Adding TC prog to attached set")
-		attachedProgs.Add(prog.ID)
-	}
-	for _, prog := range attached[0].XDP {
-		log.WithField("prog", prog).Debug("Adding XDP prog to attached set")
-		attachedProgs.Add(prog.ID)
-	}
-
-	// Find all the maps that the attached programs refer to and remove them from consideration.
-	progsJSON, err := exec.Command("bpftool", "prog", "list", "--json").Output()
-	if err != nil {
-		log.WithError(err).Info("Failed to list BPF programs, assuming there's nothing to clean up.")
-		return
-	}
-	var progs []struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-		Maps []int  `json:"map_ids"`
-	}
-	err = json.Unmarshal(progsJSON, &progs)
-	if err != nil {
-		log.WithError(err).Info("Failed to parse bpftool output.  Assuming nothing to clean up.")
-		return
-	}
-	for _, p := range progs {
-		if !attachedProgs.Contains(p.ID) {
-			log.WithField("prog", p).Debug("Prog is not in the attached set, skipping")
-			continue
-		}
-		for _, id := range p.Maps {
-			log.WithField("mapID", id).WithField("prog", p).Debugf("Map is still in use: %v", mapIDToPath[id])
-			delete(mapIDToPath, id)
-		}
-	}
-
-	// Remove the pins.
-	for id, p := range mapIDToPath {
-		log.WithFields(log.Fields{"id": id, "path": p}).Debug("Removing stale BPF map pin.")
-		err := os.Remove(p)
-		if err != nil {
-			log.WithError(err).Warn("Removed stale BPF map pin.")
-		}
-		log.WithFields(log.Fields{"id": id, "path": p}).Info("Removed stale BPF map pin.")
-	}
-
-	// Look for empty dirs.
-	emptyAutoDirs := set.New[string]()
-	err = filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() && tcDirRegex.MatchString(info.Name()) {
-			p := path.Clean(p)
-			log.WithField("path", p).Debug("Found tc auto-created dir.")
-			emptyAutoDirs.Add(p)
-		} else {
-			dirPath := path.Clean(path.Dir(p))
-			if emptyAutoDirs.Contains(dirPath) {
-				log.WithField("path", dirPath).Debug("tc dir is not empty.")
-				emptyAutoDirs.Discard(dirPath)
-			}
-		}
-		return nil
-	})
-	if os.IsNotExist(err) {
-		log.WithError(err).Warn("tc directory missing from BPF file system?")
-		return
-	}
-	if err != nil {
-		log.WithError(err).Error("Error while looking for maps.")
-	}
-
-	emptyAutoDirs.Iter(func(p string) error {
-		log.WithField("path", p).Debug("Removing empty dir.")
-		err := os.Remove(p)
-		if err != nil {
-			log.WithError(err).Error("Error while removing empty dir.")
-		}
-		return nil
-	})
 }
 
 // EnsureQdisc makes sure that qdisc is attached to the given interface
