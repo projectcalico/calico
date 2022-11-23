@@ -15,16 +15,138 @@
 package model_test
 
 import (
-	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"reflect"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+
+	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
+
+// interestingPaths contains seed data for the KeyFromDefaultPath fuzzer.
+var interestingPaths = []string{
+	"/calico/v1/config/foobar",
+	"/calico/v1/config/foobar/bazz",
+	"/calico/v1/policy/profile/foo%2fbar/rules",
+	"/calico/v1/policy/profile/foo%2fbar/labels",
+	"/calico/v1/policy/tier/default/policy/biff%2fbop",
+	"/calico/v1/policy/tier",
+	"/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
+	"/calico/v1/host/foobar/endpoint",
+	"/calico/v1/host/foobar/endpoint/biff",
+	"/calico/v1/host/foobar/metadata",
+	"/calico/v1/host/foobar/wireguard",
+	"/calico/v1/host/foobar/config/biff/bopp",
+	"/calico/v1/host/foobar/bird_ip",
+	"/calico/v1/host/foobar",
+	"/calico/v1/netset",
+	"/calico/v1/netset/foo",
+	"/calico/v1/Ready",
+	"/calico/v1/Ready/garbage",
+	"/calico/v1/policy/tier",
+	"/calico/v1/policy/tier/foo",
+	"/calico/v1/policy/tier/foo/policy",
+	"/calico/v1/policy/tier/foo/policy/bar",
+	"/calico/v1/policy/profile",
+	"/calico/bgp/v1/global",
+	"/calico/bgp/v1/global/peer_v4",
+	"/calico/bgp/v1/global/peer_v4/name",
+	"/calico/bgp/v1/global/peer_v4/name",
+	"/calico/bgp/v1/global/peer_v4/10.0.0.5",
+	"/calico/bgp/v1/global/peer_v4/10.0.0.5-500",
+	"/calico/bgp/v1/global/peer_v6",
+	"/calico/bgp/v1/global/peer_v6/name",
+	"/calico/bgp/v1/host",
+	"/calico/bgp/v1/host/peer_v4",
+	"/calico/bgp/v1/host/peer_v4/name",
+	"/calico/bgp/v1/host/peer_v6",
+	"/calico/bgp/v1/host/peer_v6/name",
+	"/calico/bgp/v1/host/random-node-2/peer_v6/aabb:aabb::ffff-123",
+	"/calico/v1",
+	"/calico/v1/ipam",
+	"/calico/ipam/v2/assignment/ipv4/1.2.3.4-26",
+	"/calico/ipam/v2/handle/foobar",
+	"/calico/ipam/v2/handle/foobar/baz",
+	"/calico/ipam/v2",
+	"/calico/ipam/v2/host/foobar/ipv4/block/1.2.3.4-5",
+	"calico/ipam/v2/host/0/ipv0/block/0",
+	"/calico/felix/v1/host",
+	"/calico/felix/v1/host/foo/endpoint/bar",
+	"/calico/felix/v1/endpoint",
+	"/calico/felix/v2/foo/host",
+	"/calico/felix/v2//foo/host",
+	"/calico/felix/v2/region-Europe/host/h1/status",
+	"/calico/resources/v3/projectcalico.org/foo/bar/baz",
+	"/bar/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
+	"/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
+	"/calico/resources/v3/projectcalico.org/felixconfigurations/default",
+	"/calico/resources/v3/projectcalico.org/networkpolicies",
+	"/calico/resources/v3/projectcalico.org/networkpolicies/default/my-network-policy",
+	"/calico/resources/v3/projectcalico.org/felixconfigurations/default/my-network-policy",
+	"/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1",
+}
+
+// FuzzKeyFromDefaultPath fuzzes KeyFromDefaultPath, comparing its output and behaviour with the
+// older implementation.
+func FuzzKeyFromDefaultPath(f *testing.F) {
+	for _, k := range interestingPaths {
+		f.Add(k)
+		f.Add(k[1:])
+		f.Add(k + "/")
+		f.Add("/" + k + "//")
+		f.Add("/cluster/cluster-1" + k)
+	}
+	f.Fuzz(func(t *testing.T, path string) {
+		oldKey := OldKeyFromDefaultPath(path)
+		newKey := KeyFromDefaultPath(path)
+		if oldKey == nil {
+			// Old version couldn't parse this, so we don't care if the new one can.
+			return
+		}
+		if newKey == nil {
+			t.Errorf("Old KeyFromDefaultPath(%q)=%v but new KeyFromDefaultPath() returned nil", path, oldKey)
+			return
+		}
+
+		func() {
+			if !safeKeysEqual(oldKey, newKey) {
+				t.Errorf("%q -> (new output) %v != (old output) %v", path, newKey, oldKey)
+			}
+		}()
+
+		serialised, err := KeyToDefaultPath(newKey)
+		if err != nil {
+			t.Errorf("Failed to reserialise %q -> %v -> %s", path, newKey, err)
+			return
+		}
+		if len(path) > 0 && path[0] != '/' {
+			serialised = serialised[1:]
+		}
+		newKey2 := KeyFromDefaultPath(serialised)
+		oldKey2 := OldKeyFromDefaultPath(serialised)
+		if !safeKeysEqual(newKey2, oldKey2) {
+			t.Errorf("%q -> (new output) %v != (old output) %v", serialised, newKey2, oldKey2)
+		}
+		if !safeKeysEqual(newKey, newKey2) {
+			t.Errorf("%q -> %v but %q -> %v", path, newKey, serialised, newKey2)
+			return
+		}
+	})
+}
+
+func safeKeysEqual(a, b Key) bool {
+	if !reflect.ValueOf(a).Type().Comparable() || !reflect.ValueOf(b).Type().Comparable() {
+		return reflect.DeepEqual(a, b)
+	}
+	return a == b
+}
 
 var _ = Describe("keys with region component", func() {
 
@@ -334,4 +456,54 @@ func mustParseCIDR(s string) net.IPNet {
 		panic(err)
 	}
 	return *ipNet
+}
+
+var benchResult any
+var _ = benchResult
+var benchKeys = []Key{
+	WorkloadEndpointKey{
+		Hostname:       "ip-12-23-24-52.cloud.foo.bar.baz",
+		OrchestratorID: "kubernetes",
+		WorkloadID:     "some-pod-name-12346",
+		EndpointID:     "eth0",
+	},
+	WireguardKey{NodeName: "ip-12-23-24-53.cloud.foo.bar.baz"},
+	HostEndpointKey{
+		Hostname:   "ip-12-23-24-52.cloud.foo.bar.baz",
+		EndpointID: "eth0",
+	},
+	ResourceKey{
+		Name:      "projectcalico-default-allow",
+		Namespace: "default",
+		Kind:      apiv3.KindNetworkPolicy,
+	},
+}
+
+func BenchmarkOldKeyFromDefaultPath(b *testing.B) {
+	benchmarkKeyFromDefaultPathImpl(b, OldKeyFromDefaultPath)
+}
+
+func BenchmarkKeyFromDefaultPath(b *testing.B) {
+	benchmarkKeyFromDefaultPathImpl(b, KeyFromDefaultPath)
+}
+
+func benchmarkKeyFromDefaultPathImpl(b *testing.B, keyFromDefaultPath func(path string) Key) {
+	var benchPaths []string
+	for _, k := range benchKeys {
+		p, err := KeyToDefaultPath(k)
+		if err != nil {
+			b.Fatal("Failed to parse keys:", err)
+		}
+		benchPaths = append(benchPaths, p)
+	}
+	defer logrus.SetLevel(logrus.GetLevel())
+	logrus.SetLevel(logrus.PanicLevel)
+
+	b.ResetTimer()
+	var key any
+	for i := 0; i <= b.N; i++ {
+		p := benchPaths[i%len(benchPaths)]
+		key = keyFromDefaultPath(p)
+	}
+	benchResult = key
 }
