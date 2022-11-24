@@ -4,7 +4,7 @@ description: Understand considerations for implementing interconnect fabrics wit
 canonical_url: '/reference/architecture/design/l3-interconnect-fabric'
 ---
 
-{{site.prodname}} provides an end-to-end IP network that interconnects the endpoints [See note 1](#note-1) in a scale-out or cloud environment. To do that, it needs an *interconnect fabric* to provide the physical networking layer on which {{site.prodname}} operates [See note-2](#note-2.
+{{site.prodname}} provides an end-to-end IP network that interconnects the endpoints ([note 1](#note-1)) in a scale-out or cloud environment. To do that, it needs an *interconnect fabric* to provide the physical networking layer on which {{site.prodname}} operates ([note-2](#note-2)).
 
 Although {{site.prodname}} is designed to work with any underlying interconnect fabric that can support IP traffic, the fabric that has the least considerations attached to its implementation is an Ethernet fabric as
 discussed in [Calico over Ethernet fabrics]({{site.baseurl}}/reference/architecture/design/l2-interconnect-fabric).
@@ -35,13 +35,13 @@ Access control lists (ACLs) enforce security (and other) policy as directed by w
 
 There are two approaches to building an IP fabric for a scale-out infrastructure. However, all of them, to date, have assumed that the edge router in the infrastructure is the top of rack (TOR) switch. In the {{site.prodname}} model, that function is pushed to the compute server itself.
 
-Furthermore, in most current virtualized environments, the actual endpoint is not addressed by the fabric. If it is a VM, it is usually encapsulated in an overlay, and if it is a container, it may be encapsulated in an overlay, or NATed by some form of proxy, such as is done in the {% include open-new-window.html text='weave' url='http://www.weave.works/' %} project network model, or the router in standard {% include open-new-window.html text='docker' url='http://www.docker.io/' %} networking.
+Furthermore, in most current virtualized environments, the actual endpoint is not addressed by the fabric. If it is a VM, it is usually encapsulated in an overlay, and if it is a container, it may be encapsulated in an overlay, or NATed by some form of proxy, such as is done in the {% include open-new-window.html text='Weave' url='http://www.weave.works/' %} project network model, or the router in standard {% include open-new-window.html text='docker' url='http://www.docker.io/' %} networking.
 
 The two approaches are: 
 
 **Routing infrastructure is based on some form of IGP** 
 
-Due to the limitations in scale of IGP networks ({% include open-new-window.html text='why BGP post' url='https://www.projectcalico.org/why-bgp/' %}for discussion of this topic), the {{site.prodname}} team does not believe that using an IGP to distribute endpoint reachability information will adequately scale in a {{site.prodname}} environment. However, it is possible to use a combination of IGP and BGP in the interconnect fabric, where an IGP communicates the path to the *next-hop* router (in {{site.prodname}}, this is often the destination compute server) and BGP is used to distribute the actual next-hop for a given endpoint. This is a valid model, and, in fact is the most common approach in a widely distributed IP network (say a carrier's backbone network). The design of these networks is somewhat complex though, and will not be addressed further in this technical note. [See note 3](#note-3).
+Due to the limitations in scale of IGP networks, the {{site.prodname}} team does not believe that using an IGP to distribute endpoint reachability information will adequately scale in a {{site.prodname}} environment. However, it is possible to use a combination of IGP and BGP in the interconnect fabric, where an IGP communicates the path to the *next-hop* router (in {{site.prodname}}, this is often the destination compute server) and BGP is used to distribute the actual next-hop for a given endpoint. This is a valid model, and, in fact is the most common approach in a widely distributed IP network (say a carrier's backbone network). The design of these networks is somewhat complex though, and will not be addressed further in this technical note. ([note 3](#note-3)).
 
 **Routing infrastructure is based entirely on BGP**
 
@@ -66,7 +66,7 @@ Another model is where each spine switch is a unique AS, and each TOR switch BGP
 
 #### BGP network design considerations
 
-Contrary to popular opinion, BGP is actually a fairly simple protocol. For example, the BGP configuration on a {{site.prodname}} compute server is approximately sixty lines long, not counting comments. The perceived complexity is due to the things that you can *do* with BGP. Many uses of BGP involve complex policy rules, where the behavior of BGP can be modified to meet technical (or business, financial, political, etc.) requirements. A default {{site.prodname}} network does not venture into those areas, [See note 4](#note-4) and therefore is fairly straight forward.
+Contrary to popular opinion, BGP is actually a fairly simple protocol. For example, the BGP configuration on a {{site.prodname}} compute server is approximately sixty lines long, not counting comments. The perceived complexity is due to the things that you can *do* with BGP. Many uses of BGP involve complex policy rules, where the behavior of BGP can be modified to meet technical (or business, financial, political, etc.) requirements. A default {{site.prodname}} network does not venture into those areas, ([note 4](#note-4)) and therefore is fairly straight forward.
 
 That said, there are a few design rules for BGP that need to be kept in mind when designing an IP fabric that will interconnect nodes in a {{site.prodname}} network. These BGP design requirements *can* be worked around, if necessary, but doing so takes the designer out of the standard BGP *envelope* and should only be done by an implementer who is *very* comfortable with advanced BGP design.
 
@@ -141,7 +141,7 @@ The diagram above shows the *AS per compute server model* where the ToR switches
 As can be seen in these diagrams, there are still the same two variants as in the *AS per rack* model, one where the spine switches provide a set of independent Ethernet planes to interconnect the ToR switches, and the other where that is done by a set of independent routers.
 
 The real difference in this model, is that the compute servers as well as the ToR switches are all independent autonomous systems. To make this work at scale, the use of four byte AS numbers as discussed in {% include open-new-window.html text='RFC 4893' url='http://www.faqs.org/rfcs/rfc4893.html "RFC 4893"' %}. Without
-using four byte AS numbering, the total number of ToRs and compute servers in a {{site.prodname}} fabric would be limited to the approximately five thousand available private AS [See note 5](#note-5) numbers. If four byte AS numbers are used, there are approximately ninety-two million private AS numbers available. This should be sufficient for any given {{site.prodname}} fabric.
+using four byte AS numbering, the total number of ToRs and compute servers in a {{site.prodname}} fabric would be limited to the approximately five thousand available private AS ([note 5](#note-5)) numbers. If four byte AS numbers are used, there are approximately ninety-two million private AS numbers available. This should be sufficient for any given {{site.prodname}} fabric.
 
 The other difference in this model *vs.* the AS per rack model, is that there are no route reflectors used, as all BGP peerings are eBGP. In this case, each compute server in a given rack peers with its ToR switch which is also acting as an eBGP router. For two servers within the same rack to communicate, they will be routed through the ToR. Therefore, each server will have one peering to each ToR it is connected to, and each ToR will have a peering with each compute server that it is connected to (normally, all the compute servers in the rack).
 
@@ -149,7 +149,7 @@ The inter-ToR connectivity considerations are the same in scale and scope as in 
 
 #### The Downward Default model
 
-The final model is a bit different. Whereas, in the previous models, all of the routers in the infrastructure carry full routing tables, and leave their AS paths intact, this model [See note 6](#note-6) removes the AS numbers at
+The final model is a bit different. Whereas, in the previous models, all of the routers in the infrastructure carry full routing tables, and leave their AS paths intact, this model ([note 6](#note-6)) removes the AS numbers at
 each stage of the routing path. This is to prevent routes from other nodes in the network from not being installed due to it coming from the *local* AS (since they share the source and dest of the route share the same AS).
 
 The following diagram will show the AS relationships in this model.
@@ -212,10 +212,10 @@ Another corollary of that rule is that a BGP router will not propagate a route t
 
 Another consideration is based on the differences between iBGP and eBGP. BGP operates in two modes, if two routers are BGP peers, but share the same AS number, then they are considered to be in an *internal* BGP (or iBGP) peering relationship. If they are members of different AS's, then they are in an *external* or eBGP relationship.
 
-BGP's original design model was that all BGP routers within a given AS would know how to get to one another (via static routes, IGP [See note 7](#note-7) routing protocols, or the like), and that routers in different ASs would
+BGP's original design model was that all BGP routers within a given AS would know how to get to one another (via static routes, IGP ([note 7](#note-7)) routing protocols, or the like), and that routers in different ASs would
 not know how to reach one another unless they were directly connected.
 
-Based on that design point, routers in an iBGP peering relationship assume that they do not transit traffic for other iBGP routers in a given AS (i.e. A can communicate with C, and therefore will not need to route through B), and therefore, do not change the *next hop* attribute in BGP [See note 8](#note-8).
+Based on that design point, routers in an iBGP peering relationship assume that they do not transit traffic for other iBGP routers in a given AS (i.e. A can communicate with C, and therefore will not need to route through B), and therefore, do not change the *next hop* attribute in BGP ([note 8](#note-8)).
 
 A router with an eBGP peering, on the other hand, assumes that its eBGP peer will not know how to reach the next hop route, and then will substitute its own address in the next hop field. This is often referred
 to as *next hop self*.
@@ -233,8 +233,7 @@ As mentioned above, BGP expects that all of the iBGP routers in a network can se
 have to configure the peering to that new router on each of the 99 existing routers. Not only is this a problem at configuration time, it means that each router is maintaining 100 protocol adjacencies, which can start being a drain on constrained resources in a router. While this might be *interesting* at 100 routers, it becomes an impossible task
 with 1000's or 10,000's of routers (the potential size of a {{site.prodname}} network).
 
-Conveniently, large scale/Internet scale networks solved this problem almost 20 years ago by deploying BGP route reflection as described in {% include open-new-window.html text='RFC 1966' url='http://www.faqs.org/rfcs/rfc1966.html "RFC 1966"' %}. This is a technique supported by almost all BGP routers today. In a large network, a number of route reflectors [See note 9](#note-9) are evenly distributed and each iBGProuter is *peered* with one or more route reflectors (usually 2 or 3). Each route reflector can handle 10's or 100's of route reflector clients (in {{site.prodname}}'s case, the compute server), depending on the route reflector being used. Those route reflectors are, in turn, peered with each other.
-This means that there are an order of magnitude less route reflectors that need to be completely meshed, and each route reflector client is only configured to peer to 2 or 3 route reflectors. This is much easier to manage.
+Conveniently, large scale/Internet scale networks solved this problem almost 20 years ago by deploying BGP route reflection as described in {% include open-new-window.html text='RFC 1966' url='http://www.faqs.org/rfcs/rfc1966.html "RFC 1966"' %}. This is a technique supported by almost all BGP routers today. In a large network, a number of route reflectors ([note 9](#note-9)) are evenly distributed and each iBGProuter is *peered* with one or more route reflectors (usually 2 or 3). Each route reflector can handle 10's or 100's of route reflector clients (in {{site.prodname}}'s case, the compute server), depending on the route reflector being used. Those route reflectors are, in turn, peered with each other. This means that there are an order of magnitude less route reflectors that need to be completely meshed, and each route reflector client is only configured to peer to 2 or 3 route reflectors. This is much easier to manage.
 
 Other route reflector architectures are possible, but those are beyond the scope of this document.
 
@@ -246,6 +245,8 @@ destination IP address in the packet, which, in {{site.prodname}}'s case, is the
 However, unlike a compute server which has a relatively unconstrained amount of memory, a physical switch is either memory constrained, or quite expensive. This means that the physical switch has a limit on how many *routes* it can handle. The current industry standard for modern commodity switches is in the range of 128,000 routes. This means that,
 without other routing *tricks*, such as aggregation, a {{site.prodname}} installation that uses an IP fabric will be limited to the routing table size of its constituent network hardware, with a reasonable upper limit
 today of 128,000 endpoints.
+
+### Foot notes
 
 #### Note 1
 

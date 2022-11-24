@@ -10,9 +10,9 @@ The focus of this article is on Ethernet as the interconnect network. Most at-sc
 
 ### Concerns over Ethernet at scale
 
-It has been acknowledged by the industry for years that, beyond a certain size, classical Ethernet networks are unsuitable for production deployment. Although there have been {% include open-new-window.html text='multiple]' url='https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering' %} {% include open-new-window.html text='attempts' url='https://web.archive.org/web/20150923231827/https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html' %} {% include open-new-window.html text='to address' url='https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service' %} these issues, the scale-out networking community has largely abandoned Ethernet for anything other than providing physical point-to-point links in the networking fabric. The principle reasons for Ethernet failures at large scale are:
+It has been acknowledged by the industry for years that, beyond a certain size, classical Ethernet networks are unsuitable for production deployment. Although there have been {% include open-new-window.html text='multiple' url='https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering' %} {% include open-new-window.html text='attempts' url='https://web.archive.org/web/20150923231827/https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html' %} {% include open-new-window.html text='to address' url='https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service' %} these issues, the scale-out networking community has largely abandoned Ethernet for anything other than providing physical point-to-point links in the networking fabric. The principle reasons for Ethernet failures at large scale are:
 
-- Large numbers of *endpoints* [See note 1](#note-1)
+- Large numbers of *endpoints* ([note 1](#note-1))
 
   Each switch in an Ethernet network must learn the path to all Ethernet endpoints that are connected to the Ethernet network. Learning this amount of state can become a substantial task when we are talking about hundreds of thousands of *endpoints*.
 
