@@ -4,7 +4,7 @@ description: Understand considerations for implementing interconnect fabrics wit
 canonical_url: '/reference/architecture/design/l3-interconnect-fabric'
 ---
 
-{{site.prodname}} provides an end-to-end IP network that interconnects the endpoints ([note 1](#note-1)) in a scale-out or cloud environment. To do that, it needs an *interconnect fabric* to provide the physical networking layer on which {{site.prodname}} operates ([note-2](#note-2)).
+{{site.prodname}} provides an end-to-end IP network that interconnects the endpoints ([note 1](#note-1)) in a scale-out or cloud environment. To do that, it needs an *interconnect fabric* to provide the physical networking layer on which {{site.prodname}} operates ([note 2](#note-2)).
 
 Although {{site.prodname}} is designed to work with any underlying interconnect fabric that can support IP traffic, the fabric that has the least considerations attached to its implementation is an Ethernet fabric as
 discussed in [Calico over Ethernet fabrics]({{site.baseurl}}/reference/architecture/design/l2-interconnect-fabric).
@@ -26,7 +26,7 @@ In a {{site.prodname}} network, each compute server acts as a router for all of 
 plane by a BGP protocol server, and management plane by {{site.prodname}}'s on-server agent, *Felix*.
 
 Each endpoint can only communicate through its local vRouter, and the first and last *hop* in any {{site.prodname}} packet flow is an IP router hop through a vRouter. Each vRouter announces all of the endpoints it is attached to to all the other vRouters and other routers on the infrastructure fabric, using BGP, usually with BGP route reflectors to
-increase scale. A discussion of why we use BGP can be found in the {% include open-new-window.html text='Why
+increase scale. A discussion of why we use BGP can be found in {% include open-new-window.html text='Why
 BGP?' url='https://www.projectcalico.org/why-bgp/' %}.
 
 Access control lists (ACLs) enforce security (and other) policy as directed by whatever cloud orchestrator is in use. There are other components in the {{site.prodname}} architecture, but they are irrelevant to the interconnect network fabric discussion.
@@ -233,7 +233,7 @@ As mentioned above, BGP expects that all of the iBGP routers in a network can se
 have to configure the peering to that new router on each of the 99 existing routers. Not only is this a problem at configuration time, it means that each router is maintaining 100 protocol adjacencies, which can start being a drain on constrained resources in a router. While this might be *interesting* at 100 routers, it becomes an impossible task
 with 1000's or 10,000's of routers (the potential size of a {{site.prodname}} network).
 
-Conveniently, large scale/Internet scale networks solved this problem almost 20 years ago by deploying BGP route reflection as described in {% include open-new-window.html text='RFC 1966' url='http://www.faqs.org/rfcs/rfc1966.html "RFC 1966"' %}. This is a technique supported by almost all BGP routers today. In a large network, a number of route reflectors ([note 9](#note-9)) are evenly distributed and each iBGProuter is *peered* with one or more route reflectors (usually 2 or 3). Each route reflector can handle 10's or 100's of route reflector clients (in {{site.prodname}}'s case, the compute server), depending on the route reflector being used. Those route reflectors are, in turn, peered with each other. This means that there are an order of magnitude less route reflectors that need to be completely meshed, and each route reflector client is only configured to peer to 2 or 3 route reflectors. This is much easier to manage.
+Conveniently, large scale/Internet scale networks solved this problem almost 20 years ago by deploying BGP route reflection as described in {% include open-new-window.html text='RFC 1966' url='http://www.faqs.org/rfcs/rfc1966.html' %}. This is a technique supported by almost all BGP routers today. In a large network, a number of route reflectors ([note 9](#note-9)) are evenly distributed and each iBGProuter is *peered* with one or more route reflectors (usually 2 or 3). Each route reflector can handle 10's or 100's of route reflector clients (in {{site.prodname}}'s case, the compute server), depending on the route reflector being used. Those route reflectors are, in turn, peered with each other. This means that there are an order of magnitude less route reflectors that need to be completely meshed, and each route reflector client is only configured to peer to 2 or 3 route reflectors. This is much easier to manage.
 
 Other route reflector architectures are possible, but those are beyond the scope of this document.
 
