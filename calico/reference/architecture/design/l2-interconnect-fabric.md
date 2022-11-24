@@ -79,10 +79,10 @@ post' url='https://code.facebook.com/posts/360346274145943/introducing-data-cent
 
 The diagram does not show the endpoints in this diagram, and the endpoints would be unaware of anything in the fabric (as noted above).
 
-In this diagram, each ToR is segmented into four logical switches (possibly by using 'port VLANs'), [See note 2](#note-2) and each compute server has a connection to each of those logical switches. We will identify those logical switches by their color. Each ToR would then have a blue, green, orange, and red logical switch. Those 'colors' would be members of a given *plane*, so there would be a blue plane, a green plane, an orange plane, and a red plane. Each plane would have a dedicated spine switch. and each ToR in a given spine would be connected to its spine, and only its spine.
+In this diagram, each ToR is segmented into four logical switches (possibly by using 'port VLANs'), ([note 2](#note-2)) and each compute server has a connection to each of those logical switches. We will identify those logical switches by their color. Each ToR would then have a blue, green, orange, and red logical switch. Those 'colors' would be members of a given *plane*, so there would be a blue plane, a green plane, an orange plane, and a red plane. Each plane would have a dedicated spine switch. and each ToR in a given spine would be connected to its spine, and only its spine.
 
 Each plane would constitute an IP network, so the blue plane would be 2001:db8:1000::/36, the green would be 2001:db8:2000::/36, and the orange and red planes would be 2001:db8:3000::/36 and 2001:db8:4000::/36
-respectively. [See note 3](#note-3).
+respectively. ([note 3](#note-3)).
 
 Each IP network (plane) requires it's own BGP route reflectors. Those route reflectors need to be peered with each other within the plane, but the route reflectors in each plane do not need to be peered with one another. Therefore, a fabric of four planes would have four route reflector meshes. Each compute server, border router, *etc.* would need
 to be a route reflector client of at least one route reflector in each plane, and very preferably two or more in each plane.
