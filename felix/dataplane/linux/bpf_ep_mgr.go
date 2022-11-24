@@ -1308,7 +1308,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules, string(bpf.HookXDP), ap)
+		return m.dp.updatePolicyProgram(jumpMapFD, rules, "xdp", ap)
 	} else {
 		return m.dp.ensureNoProgram(ap)
 	}
@@ -1979,7 +1979,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, ipFamily pr
 	if !m.bpfPolicyDebugEnabled {
 		return
 	}
-	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook), ipFamily)
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, hook.String(), ipFamily)
 	err := os.Remove(filename)
 	if err != nil {
 		log.WithError(err).Debugf("Failed to remove the policy debug file %v. Ignoring", filename)
@@ -2001,7 +2001,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 
 	var policyDebugInfo = bpf.PolicyDebugInfo{
 		IfaceName:  ifaceName,
-		Hook:       "tc " + string(hook),
+		Hook:       "tc " + hook.String(),
 		PolicyInfo: insns,
 		Error:      errStr,
 	}
@@ -2053,16 +2053,8 @@ func policyProgramName(iface, polDir string, ipFamily proto.IPVersion) string {
 	if ipFamily == proto.IPVersion_IPV6 {
 		version = "6"
 	}
-	var hook string
-	switch strings.ToLower(polDir) {
-	case string(bpf.HookIngress):
-		hook = "i"
-	case string(bpf.HookEgress):
-		hook = "e"
-	case string(bpf.HookXDP):
-		hook = "x"
-	}
-	return fmt.Sprintf("p%v%s_%s", version, hook, iface)
+
+	return fmt.Sprintf("p%v%c_%s", version, polDir[0], iface)
 }
 
 func (m *bpfEndpointManager) doUpdatePolicyProgram(progName string, jumpMapFD bpf.MapFD, rules polprog.Rules,
