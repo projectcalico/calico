@@ -186,7 +186,7 @@ func CleanAttachedProgDir() {
 // attached program. The filename is [iface name]_[hook].json, for
 // example, eth0_egress.json
 func RuntimeJSONFilename(iface string, hook Hook) string {
-	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, string(hook)))
+	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, hook))
 }
 
 func sha256OfFile(name string) (string, error) {
