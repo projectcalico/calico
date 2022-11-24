@@ -140,7 +140,7 @@ that is possible with today's designs.
 
 A more in-depth discussion is possible, so if you'd like, please make a
 request, and I will put up a post or white paper. In the meantime, it
-may be interesting to venture over to {% include open-new-window.html text='Facebook's blog
+may be interesting to venture over to this {% include open-new-window.html text='Facebook blog
 post' url='https://code.facebook.com/posts/360346274145943/introducing-data-center-fabric-the-next-generation-facebook-data-center-network/' %} 
 on their fabric approach. A graphic to visualize the idea is shown
 below.
