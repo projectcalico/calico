@@ -153,7 +153,7 @@ func (i bpfInterfaceInfo) ifaceIsUp() bool {
 }
 
 type bpfInterfaceState struct {
-	jumpMapFDs map[string]bpf.MapFD
+	jumpMapFDs [bpf.HookCount]bpf.MapFD
 	isReady    bool
 }
 
@@ -994,12 +994,15 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string, isReady *bool) erro
 		endpointID = iface.info.endpointID
 		if !ifaceUp {
 			log.WithField("iface", ifaceName).Debug("Interface is down/gone, closing jump maps.")
-			for _, fd := range iface.dpState.jumpMapFDs {
+			for i, fd := range iface.dpState.jumpMapFDs {
+				if fd == 0 {
+					continue
+				}
 				if err := fd.Close(); err != nil {
 					log.WithError(err).Error("Failed to close jump map.")
 				}
+				iface.dpState.jumpMapFDs[i] = 0
 			}
-			iface.dpState.jumpMapFDs = nil
 		}
 		return false
 	})
@@ -1837,9 +1840,7 @@ func (m *bpfEndpointManager) getJumpMapFD(ap attachPoint) (fd bpf.MapFD) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 	m.withIface(ap.IfaceName(), func(iface *bpfInterface) bool {
-		if iface.dpState.jumpMapFDs != nil {
-			fd = iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey()]
-		}
+		fd = iface.dpState.jumpMapFDs[ap.HookName()]
 		return false
 	})
 	return
@@ -1851,15 +1852,9 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 
 	m.withIface(ap.IfaceName(), func(iface *bpfInterface) bool {
 		if fd > 0 {
-			if iface.dpState.jumpMapFDs == nil {
-				iface.dpState.jumpMapFDs = make(map[string]bpf.MapFD)
-			}
-			iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey()] = fd
-		} else if iface.dpState.jumpMapFDs != nil {
-			delete(iface.dpState.jumpMapFDs, ap.JumpMapFDMapKey())
-			if len(iface.dpState.jumpMapFDs) == 0 {
-				iface.dpState.jumpMapFDs = nil
-			}
+			iface.dpState.jumpMapFDs[ap.HookName()] = fd
+		} else {
+			iface.dpState.jumpMapFDs[ap.HookName()] = 0
 		}
 		ap.Log().Debugf("Jump map now %v fd=%v", iface.dpState.jumpMapFDs, fd)
 		return false
