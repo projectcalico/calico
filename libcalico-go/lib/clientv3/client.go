@@ -178,6 +178,11 @@ func (c client) BlockAffinities() BlockAffinityInterface {
 	return blockAffinities{client: c}
 }
 
+// BGPFilter returns an interface for managing the BGPFilter resource.
+func (c client) BGPFilter() BGPFilterInterface {
+	return BGPFilter{client: c}
+}
+
 type poolAccessor struct {
 	client *client
 }

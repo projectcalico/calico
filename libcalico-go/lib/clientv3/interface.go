@@ -145,5 +145,11 @@ type BlockAffinitiesClient interface {
 	BlockAffinities() BlockAffinityInterface
 }
 
+type BGPFilterClient interface {
+	// BGPFilter returns an interface for managing BGPFilter resources.
+	BGPFilter() BGPFilterInterface
+
+}
+
 // Compile-time assertion that our client implements its interface.
 var _ Interface = (*client)(nil)
