@@ -161,7 +161,15 @@ $(LIBBPF_A): $(shell find bpf-gpl/include/libbpf -type f ! -name "*.a")
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/include/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO_ARGS=$(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS)
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(DOCKER_GO_BUILD_CGO_ARGS) $(CALICO_BUILD)
+
+DOCKER_GO_BUILD_CGO_PRIV=$(DOCKER_RUN) $(DOCKER_GO_BUILD_CGO_ARGS) \
+		    --privileged \
+		    -e RUN_AS_ROOT=true \
+		    -v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
+		    $(CALICO_BUILD)
+
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
 bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
@@ -267,7 +275,10 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) build-bpf
 	@echo Running Go UTs.
-	$(DOCKER_GO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD_CGO_PRIV) \
+		sh -c ' \
+		mount bpffs /sys/fs/bpf -t bpf && \
+		./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
 
 ###############################################################################
 # FV Tests
@@ -493,7 +504,10 @@ release-build: .release-$(VERSION).created
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD_CGO_PRIV) \
+		sh -c ' \
+		mount bpffs /sys/fs/bpf -t bpf && \
+		ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)'
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)

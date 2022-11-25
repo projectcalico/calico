@@ -172,7 +172,6 @@ func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) po
 }
 
 var _ = Describe("BPF Endpoint Manager", func() {
-
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
