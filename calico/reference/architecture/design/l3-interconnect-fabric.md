@@ -26,8 +26,7 @@ In a {{site.prodname}} network, each compute server acts as a router for all of 
 plane by a BGP protocol server, and management plane by {{site.prodname}}'s on-server agent, *Felix*.
 
 Each endpoint can only communicate through its local vRouter, and the first and last *hop* in any {{site.prodname}} packet flow is an IP router hop through a vRouter. Each vRouter announces all of the endpoints it is attached to to all the other vRouters and other routers on the infrastructure fabric, using BGP, usually with BGP route reflectors to
-increase scale. A discussion of why we use BGP can be found in {% include open-new-window.html text='Why
-BGP?' url='https://www.projectcalico.org/why-bgp/' %}.
+increase scale. A discussion of why we use BGP can be found in {% include open-new-window.html text='Why BGP?' url='https://www.tigera.io/blog/why-bgp/' %}.
 
 Access control lists (ACLs) enforce security (and other) policy as directed by whatever cloud orchestrator is in use. There are other components in the {{site.prodname}} architecture, but they are irrelevant to the interconnect network fabric discussion.
 
@@ -35,7 +34,7 @@ Access control lists (ACLs) enforce security (and other) policy as directed by w
 
 There are two approaches to building an IP fabric for a scale-out infrastructure. However, all of them, to date, have assumed that the edge router in the infrastructure is the top of rack (TOR) switch. In the {{site.prodname}} model, that function is pushed to the compute server itself.
 
-Furthermore, in most current virtualized environments, the actual endpoint is not addressed by the fabric. If it is a VM, it is usually encapsulated in an overlay, and if it is a container, it may be encapsulated in an overlay, or NATed by some form of proxy, such as is done in the {% include open-new-window.html text='Weave' url='http://www.weave.works/' %} project network model, or the router in standard {% include open-new-window.html text='docker' url='http://www.docker.io/' %} networking.
+Furthermore, in most current virtualized environments, the actual endpoint is not addressed by the fabric. If it is a VM, it is usually encapsulated in an overlay, and if it is a container, it may be encapsulated in an overlay, or NATed by some form of proxy, such as is done in the {% include open-new-window.html text='Weave' url='http://www.weave.works/' %} project network model, or the router in standard {% include open-new-window.html text='Docker' url='http://www.docker.io/' %} networking.
 
 The two approaches are: 
 
@@ -92,7 +91,7 @@ A deeper discussion of these considerations can be found in the [IP Fabric Desig
 
 The designs discussed below address these considerations.
 
-#### The *AS Per Rack* model
+#### The AS Per Rack model
 
 This model is the closest to the model suggested by {% include open-new-window.html text='IETF RFC 7938' url='https://datatracker.ietf.org/doc/html/rfc7938' %}.
 
@@ -168,7 +167,7 @@ network, this matches reality. The same happens between the ToR switches and the
 Even if we were to host 200 endpoints per {{site.prodname}} node, and stuff 80 {{site.prodname}} nodes in each rack, that would still limit the routing table on the ToR to a maximum of 16,000 entries (well within the capabilities of
 even the most modest of switches).
 
-Because the default is originated by the Spine (originally) there is no chance for a downward announced route to originate from the recipient's AS, preventing the *AS puddling* problem.
+Because the default is originated by the Spine (originally) there is no chance for a downward announced route to originate from the recipient's AS, preventing the **AS puddling** problem.
 
 There is one (minor) drawback to this model, in that all traffic that is destined for an invalid destination (the destination IP does not exist) will be forwarded to the spine switches before they are dropped.
 
@@ -246,7 +245,7 @@ However, unlike a compute server which has a relatively unconstrained amount of 
 without other routing *tricks*, such as aggregation, a {{site.prodname}} installation that uses an IP fabric will be limited to the routing table size of its constituent network hardware, with a reasonable upper limit
 today of 128,000 endpoints.
 
-### Foot notes
+### Footnotes
 
 #### Note 1
 
@@ -270,7 +269,7 @@ The two byte AS space reserves approximately the last five thousand AS numbers f
 
 #### Note 6 
 
-We first saw this design in a customer's lab, and thought it innovative enough to share (we asked them first, of course). Similar *AS Path Stripping* approaches are used in ISP networks, however.
+We first saw this design in a customer's lab, and thought it innovative enough to share (we asked them first, of course). Similar **AS Path Stripping** approaches are used in ISP networks, however.
 
 #### Note 7
 
