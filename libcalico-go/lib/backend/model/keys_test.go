@@ -31,6 +31,15 @@ import (
 )
 
 // interestingPaths contains seed data for the KeyFromDefaultPath fuzzer.
+//
+// Some of these inputs are junk (they test that bad keys are ignored and that nothing panics) and
+// some are not really valid in the "global" sense.  For example, we include strings with percent
+// encoding even though the objects they describe have other naming validation that should prevent
+// that. The parser was intended to be generic and to support a range of possible orchestrator
+// environments where we may need to be more permissive.
+//
+// Note: go test will run the Fuzz target as an ordinary unit test feeding in these inputs, so we don't
+// need to duplicate all of these as extra UTs.
 var interestingPaths = []string{
 	"/calico/v1/config/foobar",
 	"/calico/v1/config/foobar/bazz",
@@ -84,6 +93,8 @@ var interestingPaths = []string{
 	"/calico/felix/v2//foo/host",
 	"/calico/felix/v2/region-Europe/host/h1/status",
 	"/calico/resources/v3/projectcalico.org/foo/bar/baz",
+	// Note: using % encoding in some areas where we don't really expect it here, but the parser
+	// does handle it, and it helps to prime the fuzzer.
 	"/bar/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
 	"/calico/v1/host/foobar/workload/open%2fstack/work%2fload/endpoint/end%2fpoint",
 	"/calico/resources/v3/projectcalico.org/felixconfigurations/default",
@@ -93,8 +104,13 @@ var interestingPaths = []string{
 	"/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1",
 }
 
-// FuzzKeyFromDefaultPath fuzzes KeyFromDefaultPath, comparing its output and behaviour with the
-// older implementation.
+// FuzzKeyFromDefaultPath fuzzes KeyFromDefaultPath, makings sure it doesn't panic and comparing its
+// output and behaviour with the older implementation.
+//
+// Note: once we're sure of the new implementation we might want to remove the old implementation
+// next time we need to touch path parsing (or if the old impl panics in fuzzing, and we want to stop
+// maintaining it!).  If we do that, we should keep the test so that it continues to check the new
+// implementation doesn't panic with garbage input.
 func FuzzKeyFromDefaultPath(f *testing.F) {
 	for _, k := range interestingPaths {
 		f.Add(k)
@@ -104,42 +120,52 @@ func FuzzKeyFromDefaultPath(f *testing.F) {
 		f.Add("/cluster/cluster-1" + k)
 	}
 	f.Fuzz(func(t *testing.T, path string) {
+		// Parse with old and new, neither should panic!
 		oldKey := OldKeyFromDefaultPath(path)
 		newKey := KeyFromDefaultPath(path)
 		if oldKey == nil {
-			// Old version couldn't parse this, so we don't care if the new one can.
+			// Ignoring keys that the old parser couldn't handle.  The new parser is a little more permissive
+			// and consistent in some areas of escaping.
 			return
 		}
-		if newKey == nil {
-			t.Errorf("Old KeyFromDefaultPath(%q)=%v but new KeyFromDefaultPath() returned nil", path, oldKey)
-			return
-		}
-
+		// If the old can parse it the new should parse it too (and get the same Key).
 		if !safeKeysEqual(oldKey, newKey) {
-			t.Errorf("%q -> (new output) %v != (old output) %v", path, newKey, oldKey)
+			t.Fatalf("%q -> (new output) %v != (old output) %v", path, newKey, oldKey)
 		}
 
+		// Any key that we get out should support conversion back to a path.
 		serialised, err := KeyToDefaultPath(newKey)
 		if err != nil {
-			t.Errorf("Failed to reserialise %q -> %v -> %s", path, newKey, err)
-			return
+			t.Fatalf("Failed to reserialise %q -> %v -> %s", path, newKey, err)
 		}
-		if len(path) > 0 && path[0] != '/' {
+
+		// All our canonical paths start with a / but some key types are permissive to a missing leading
+		// slash (for historical reasons around supporting older etcd versions).  Check that old and new
+		// are equally permissive by removing the slash and parsing the key again.
+		if len(path) > 0 && path[0] == '/' {
 			serialised = serialised[1:]
 		}
 		newKey2 := KeyFromDefaultPath(serialised)
 		oldKey2 := OldKeyFromDefaultPath(serialised)
 		if !safeKeysEqual(newKey2, oldKey2) {
-			t.Errorf("%q -> (new output) %v != (old output) %v", serialised, newKey2, oldKey2)
+			t.Fatalf("%q -> (new output) %v != (old output) %v", serialised, newKey2, oldKey2)
 		}
-		if !safeKeysEqual(newKey, newKey2) {
-			t.Errorf("%q -> %v but %q -> %v", path, newKey, serialised, newKey2)
+		if newKey2 != nil && !safeKeysEqual(newKey, newKey2) {
+			t.Fatalf("%q -> %v but %q -> %v", path, newKey, serialised, newKey2)
 			return
 		}
 	})
 }
 
 func safeKeysEqual(a, b Key) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if (a == nil) != (b == nil) {
+		return false
+	}
+
+	// Due to an unfortunate historical mistake some of our keys embed non-comparable types net.IP and friends.
 	if !reflect.ValueOf(a).Type().Comparable() || !reflect.ValueOf(b).Type().Comparable() {
 		return reflect.DeepEqual(a, b)
 	}

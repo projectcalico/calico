@@ -277,7 +277,7 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 				Name: unescapeName(parts[3]),
 			}
 		case "Ready":
-			if len(parts) > 3 {
+			if len(parts) > 3 || path[0] != '/' {
 				return nil
 			}
 			return ReadyFlagKey{}
