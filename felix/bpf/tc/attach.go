@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
-	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -70,43 +69,29 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
+func (ap *AttachPoint) AlreadyAttached(currentID int, object string) bool {
 	logCxt := log.WithField("attachPoint", ap)
-	progID, err := ap.ProgramID()
-	if err != nil {
-		logCxt.WithError(err).Debugf("Couldn't get the attached TC program ID.")
-		return -1, false
+
+	if currentID == -1 {
+		return false
 	}
 
-	progsToClean, err := ap.listAttachedPrograms()
-	if err != nil {
-		logCxt.WithError(err).Debugf("Couldn't get the list of already attached TC programs")
-		return -1, false
-	}
-
-	isAttached, err := bpf.AlreadyAttachedProg(ap, object, progID)
+	isAttached, err := bpf.AlreadyAttachedProg(ap, object, currentID)
 	if err != nil {
 		logCxt.WithError(err).Debugf("Failed to check if BPF program was already attached.")
-		return -1, false
+		return false
 	}
 
-	if isAttached && len(progsToClean) == 1 {
-		return progID, true
-	}
-	return -1, false
+	return isAttached
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func (ap *AttachPoint) AttachProgram() (int, error) {
-	logCxt := log.WithField("attachPoint", ap)
+func (ap *AttachPoint) AttachProgram(currentID int) (int, error) {
+	logCxt := log.WithFields(log.Fields{"attachPoint": ap, "currentID": currentID})
 
 	filename := ap.FileName()
 	binaryToLoad := path.Join(bpf.ObjectDir, filename)
 
-	progsToClean, err := ap.listAttachedPrograms()
-	if err != nil {
-		return -1, err
-	}
 	obj, err := libbpf.OpenObject(binaryToLoad)
 	if err != nil {
 		return -1, err
@@ -135,12 +120,17 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 
 	// Check if the bpf object is already attached, and we should skip
 	// re-attaching it if the binary and its configuration are the same.
-	progID, isAttached := ap.AlreadyAttached(binaryToLoad)
-	if isAttached {
+	if ap.AlreadyAttached(currentID, binaryToLoad) {
 		logCxt.Infof("Program already attached to TC, skip reattaching %s", filename)
-		return progID, nil
+		return currentID, nil
 	}
+
 	logCxt.Debugf("Continue with attaching BPF program %s", filename)
+
+	progsToClean, err := ap.listAttachedPrograms()
+	if err != nil {
+		logCxt.WithError(err).Warnf("Couldn't get the list of already attached TC programs")
+	}
 
 	if err := obj.Load(); err != nil {
 		logCxt.Warn("Failed to load program")
@@ -188,15 +178,11 @@ func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
 	var progErrs []error
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
-		attemptCleanup := func() error {
-			_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", p.pref, "handle", p.handle, "bpf")
-			return err
-		}
-		err := attemptCleanup()
+		err := ap.attemptCleanup(p)
 		if errors.Is(err, ErrInterrupted) {
 			// This happens if the interface is deleted in the middle of calling tc.
 			log.Debug("First cleanup hit 'Dump was interrupted', retrying (once).")
-			err = attemptCleanup()
+			err = ap.attemptCleanup(p)
 		}
 		if errors.Is(err, ErrDeviceNotFound) {
 			continue
@@ -290,6 +276,11 @@ func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 	return progsToClean, nil
 }
 
+func (ap *AttachPoint) attemptCleanup(p attachedProg) error {
+	_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", p.pref, "handle", p.handle, "bpf")
+	return err
+}
+
 // ProgramName returns the name of the program associated with this AttachPoint
 func (ap *AttachPoint) ProgramName() string {
 	return SectionName(ap.Type, ap.ToOrFrom)
@@ -297,50 +288,9 @@ func (ap *AttachPoint) ProgramName() string {
 
 var ErrNoTC = errors.New("no TC program attached")
 
-// TODO: we should try to not get the program ID via 'tc' binary and rather
-// we should use libbpf to obtain it.
-func (ap *AttachPoint) ProgramID() (int, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.IfaceName(), ap.Hook.String())
-	if err != nil {
-		return -1, fmt.Errorf("Failed to check interface %s program ID: %w", ap.Iface, err)
-	}
-
-	s := strings.Fields(string(out))
-	for i := range s {
-		// Example of output:
-		//
-		// filter protocol all pref 49152 bpf chain 0
-		// filter protocol all pref 49152 bpf chain 0 handle 0x1 calico_from_hos:[61] direct-action not_in_hw id 61 tag 4add0302745d594c jited
-		if s[i] == "id" && len(s) > i+1 {
-			progID, err := strconv.Atoi(s[i+1])
-			if err != nil {
-				return -1, fmt.Errorf("Couldn't parse ID in 'tc filter' command err=%w out=\n%v", err, string(out))
-			}
-
-			return progID, nil
-		}
-	}
-	return -1, fmt.Errorf("Couldn't find 'id <ID> in 'tc filter' command out=\n%v err=%w", string(out), ErrNoTC)
-}
-
 // FileName return the file the AttachPoint will load the program from
 func (ap *AttachPoint) FileName() string {
 	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, bpfutils.BTFEnabled)
-}
-
-func (ap *AttachPoint) IsAttached() (bool, error) {
-	hasQ, err := HasQdisc(ap.Iface)
-	if err != nil {
-		return false, err
-	}
-	if !hasQ {
-		return false, nil
-	}
-	progs, err := ap.listAttachedPrograms()
-	if err != nil {
-		return false, err
-	}
-	return len(progs) > 0, nil
 }
 
 // EnsureQdisc makes sure that qdisc is attached to the given interface
