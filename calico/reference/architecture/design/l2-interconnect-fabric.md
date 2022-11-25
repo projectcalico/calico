@@ -12,7 +12,7 @@ The focus of this article is on Ethernet as the interconnect network. Most at-sc
 
 It has been acknowledged by the industry for years that, beyond a certain size, classical Ethernet networks are unsuitable for production deployment. Although there have been {% include open-new-window.html text='multiple' url='https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering' %} {% include open-new-window.html text='attempts' url='https://web.archive.org/web/20150923231827/https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html' %} {% include open-new-window.html text='to address' url='https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service' %} these issues, the scale-out networking community has largely abandoned Ethernet for anything other than providing physical point-to-point links in the networking fabric. The principle reasons for Ethernet failures at large scale are:
 
-- Large numbers of *endpoints* [note 1](#note-1)
+- Large numbers of *endpoints* ([note 1](#note-1))
 
    Each switch in an Ethernet network must learn the path to all Ethernet endpoints that are connected to the Ethernet network. Learning this amount of state can become a substantial task when we are talking about hundreds of thousands of *endpoints*.
 
@@ -83,7 +83,7 @@ post' url='https://code.facebook.com/posts/360346274145943/introducing-data-cent
 
 The diagram does not show the endpoints in this diagram, and the endpoints would be unaware of anything in the fabric (as noted above).
 
-In this diagram, each ToR is segmented into four logical switches (possibly by using 'port VLANs'), [note 2](#note-2) and each compute server has a connection to each of those logical switches. We will identify those logical switches by their color. Each ToR would then have a blue, green, orange, and red logical switch. Those 'colors' would be members of a given *plane*, so there would be a blue plane, a green plane, an orange plane, and a red plane. Each plane would have a dedicated spine switch. and each ToR in a given spine would be connected to its spine, and only its spine.
+In this diagram, each ToR is segmented into four logical switches (possibly by using 'port VLANs'), ([note 2](#note-2)) and each compute server has a connection to each of those logical switches. We will identify those logical switches by their color. Each ToR would then have a blue, green, orange, and red logical switch. Those 'colors' would be members of a given *plane*, so there would be a blue plane, a green plane, an orange plane, and a red plane. Each plane would have a dedicated spine switch. and each ToR in a given spine would be connected to its spine, and only its spine.
 
 Each plane would constitute an IP network, so the blue plane would be 2001:db8:1000::/36, the green would be 2001:db8:2000::/36, and the orange and red planes would be 2001:db8:3000::/36 and 2001:db8:4000::/36 respectively ([note 3](#note-3)).
 

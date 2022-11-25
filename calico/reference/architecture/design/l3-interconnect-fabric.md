@@ -40,13 +40,13 @@ The two approaches are:
 
 **Routing infrastructure is based on some form of IGP** 
 
-Due to the limitations in scale of IGP networks, the {{site.prodname}} team does not believe that using an IGP to distribute endpoint reachability information will adequately scale in a {{site.prodname}} environment. However, it is possible to use a combination of IGP and BGP in the interconnect fabric, where an IGP communicates the path to the *next-hop* router (in {{site.prodname}}, this is often the destination compute server) and BGP is used to distribute the actual next-hop for a given endpoint. This is a valid model, and, in fact is the most common approach in a widely distributed IP network (say a carrier's backbone network). The design of these networks is somewhat complex though, and will not be addressed further in this technical note. ([note 3](#note-3)).
+Due to the limitations in scale of IGP networks, the {{site.prodname}} team does not believe that using an IGP to distribute endpoint reachability information will adequately scale in a {{site.prodname}} environment. However, it is possible to use a combination of IGP and BGP in the interconnect fabric, where an IGP communicates the path to the *next-hop* router (in {{site.prodname}}, this is often the destination compute server) and BGP is used to distribute the actual next-hop for a given endpoint. This is a valid model, and, in fact is the most common approach in a widely distributed IP network (say a carrier's backbone network). The design of these networks is somewhat complex though, and will not be addressed further in this article. ([note 3](#note-3)).
 
 **Routing infrastructure is based entirely on BGP**
 
  In this model, the IP network is "tight enough" or has a small enough diameter that BGP can be used to distribute endpoint routes, and the paths to the next-hops for those routes is known to all of the routers in the network (in a {{site.prodname}} network this includes the compute servers). This is the network model that this note will address.
 
-In this article, we will cover the second option, as it is more common in the scale-out world. If there is interest in the first approach, please contact {{site.prodname}}, and we can discuss, and if there is enough interest, maybe we will do another technical note on that approach. If you know of other approaches in use, we would be happy to host a guest technical note.    
+In this article, we will cover the second option because it is more common in the scale-out world. 
 
 #### BGP-only interconnect fabrics
 
@@ -99,11 +99,11 @@ As mentioned earlier, there are two versions of this model, one with an set of E
 
 ![]({{site.baseurl}}/images/l3-fabric-diagrams-as-rack-l2-spine.png)
 
-The diagram above shows the *AS per rack model* where the ToR switches are physically meshed via a set of Ethernet switching planes.
+The diagram above shows the **AS per rack model** where the ToR switches are physically meshed via a set of Ethernet switching planes.
 
 ![]({{site.baseurl}}/images/l3-fabric-diagrams-as-rack-l3-spine.png)
 
-The diagram above shows the *AS per rack model* where the ToR switches are physically meshed via a set of discrete BGP spine routers, each in their own AS.
+The diagram above shows the **AS per rack model** where the ToR switches are physically meshed via a set of discrete BGP spine routers, each in their own AS.
 
 In this approach, every ToR-ToR or ToR-Spine (in the case of an AS per spine) link is an eBGP peering which means that there is no route-reflection possible (using standard BGP route reflectors) *north* of the ToR switches.
 
@@ -188,7 +188,7 @@ If you are interested in the AS per compute server, the {{site.prodname}} team w
 
 ### Other options
 
-The way the physical and logical connectivity is laid out in this note, and the [Ethernet fabric note]({{site.baseurl}}/reference/architecture/design/l2-interconnect-fabric), the next hop router for a given route is always directly connected to the router receiving that route. This makes the need for another protocol to distribute the next hop routes unnecessary.
+The way the physical and logical connectivity is laid out in this article, and the [Ethernet fabric]({{site.baseurl}}/reference/architecture/design/l2-interconnect-fabric), the next hop router for a given route is always directly connected to the router receiving that route. This makes the need for another protocol to distribute the next hop routes unnecessary.
 
 However, in many (or most) WAN BGP networks, the routers within a given AS may not be directly adjacent. Therefore, a router may receive a route with a next hop address that it is not directly adjacent to. In those cases, an IGP, such as OSPF or IS-IS, is used by the routers within a given AS to determine the path to the BGP next hop route.
 
@@ -223,7 +223,7 @@ In the {{site.prodname}} [Ethernet fabric]({{site.baseurl}}/reference/architectu
 model, all of the compute servers (the routers in a {{site.prodname}} network) are directly connected over one or more Ethernet network(s) and therefore are directly reachable. In this case, a router in the {{site.prodname}} network
 does not need to set *next hop self* within the {{site.prodname}} fabric.
 
-The models we present in this technical note insure that all routes that may traverse a non-{{site.prodname}} router are eBGP routes, and therefore *next hop self* is automatically set correctly. If a deployment of {{site.prodname}} in
+The models we present in this article ensure that all routes that may traverse a non-{{site.prodname}} router are eBGP routes, and therefore *next hop self* is automatically set correctly. If a deployment of {{site.prodname}} in
 an IP interconnect fabric does not satisfy that constraint, then *next hop self* must be appropriately configured.
 
 **Route reflection**
