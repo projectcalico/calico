@@ -58,7 +58,7 @@ func (m *Map) NextMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 

@@ -87,7 +87,7 @@ func TestReattachPrograms(t *testing.T) {
 	ap1.IntfIP = net.ParseIP("10.0.0.2")
 	err = tc.EnsureQdisc(ap1.Iface)
 	Expect(err).NotTo(HaveOccurred())
-	ap1ProgIdOld, err := ap1.AttachProgram()
+	ap1ProgIdOld, err := ap1.AttachProgram(-1)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
 	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
@@ -96,7 +96,7 @@ func TestReattachPrograms(t *testing.T) {
 
 	// Reattach the same TC program
 	t.Log("Replacing program should not add another map and dir")
-	ap1ProgIdNew, err := ap1.AttachProgram()
+	ap1ProgIdNew, err := ap1.AttachProgram(ap1ProgIdOld)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(ap1ProgIdOld).To(Equal(ap1ProgIdNew)) // no change, no reload
 	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
@@ -108,7 +108,7 @@ func TestReattachPrograms(t *testing.T) {
 	ap1.HostIP = net.ParseIP("10.0.0.3")
 	ap1.IntfIP = net.ParseIP("10.0.0.4")
 	ap1ProgIdOld = ap1ProgIdNew
-	ap1ProgIdNew, err = ap1.AttachProgram()
+	ap1ProgIdNew, err = ap1.AttachProgram(ap1ProgIdOld)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(ap1ProgIdOld).NotTo(Equal(ap1ProgIdNew)) // because we changed configuration, so reloaded
 
@@ -118,7 +118,7 @@ func TestReattachPrograms(t *testing.T) {
 	ap2.IntfIP = net.ParseIP("10.0.1.2")
 	err = tc.EnsureQdisc(ap2.Iface)
 	Expect(err).NotTo(HaveOccurred())
-	_, err = ap2.AttachProgram()
+	_, err = ap2.AttachProgram(-1)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+2), "unexpected number of jump maps")
 	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+2), "unexpected number of TC dirs")
@@ -130,7 +130,7 @@ func TestReattachPrograms(t *testing.T) {
 	t.Log("Adding another program (XDP), should add one dir and one map")
 	ap2.HostIP = net.ParseIP("10.0.3.1")
 	ap2.IntfIP = net.ParseIP("10.0.3.2")
-	_, err = ap3.AttachProgram()
+	oldXdpId, err := ap3.AttachProgram(-1)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+3), "unexpected number of jump maps")
 	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+3), "unexpected number of TC dirs")
@@ -167,7 +167,7 @@ func TestReattachPrograms(t *testing.T) {
 	t.Log("Reattaching the same XDP program, should not add any dir or map")
 	ap2.HostIP = net.ParseIP("10.0.3.3")
 	ap2.IntfIP = net.ParseIP("10.0.3.4")
-	_, err = ap3.AttachProgram()
+	_, err = ap3.AttachProgram(oldXdpId)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
 	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
