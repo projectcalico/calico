@@ -245,7 +245,7 @@ However, unlike a compute server which has a relatively unconstrained amount of 
 without other routing *tricks*, such as aggregation, a {{site.prodname}} installation that uses an IP fabric will be limited to the routing table size of its constituent network hardware, with a reasonable upper limit
 today of 128,000 endpoints.
 
-### Footnotes
+#### Footnotes
 
 #### Note 1
 
