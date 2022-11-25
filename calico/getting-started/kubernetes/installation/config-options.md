@@ -254,7 +254,6 @@ The following table outlines the remaining supported `ConfigMap` options.
 
 ### CNI network configuration template
 
-
 The `cni_network_config` configuration option supports the following template fields, which will
 be filled in automatically by the `calico/cni` container:
 
@@ -268,7 +267,6 @@ be filled in automatically by the `calico/cni` container:
 | `__ETCD_KEY_FILE__`                   | The path to the etcd key file installed to the host. Empty if no key is present.
 | `__ETCD_CERT_FILE__`                  | The path to the etcd certificate file installed to the host, empty if no cert present.
 | `__ETCD_CA_CERT_FILE__`               | The path to the etcd certificate authority file installed to the host. Empty if no certificate authority is present.
-
 
 ### About customizing application layer policy manifests
 

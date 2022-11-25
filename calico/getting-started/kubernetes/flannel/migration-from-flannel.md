@@ -132,7 +132,6 @@ kubectl logs -n kube-system -l k8s-app=flannel-migration-controller
 
 If you need to revert a cluster from {{site.prodname}} back to flannel, follow these steps.
 
-
 1. Remove the migration controller and {{site.prodname}}.
 
    ```

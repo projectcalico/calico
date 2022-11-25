@@ -40,7 +40,6 @@ Cluster IPs were originally designed for use within the Kubernetes cluster. {{si
 
 {{site.prodname}} implements [Kubernetes service external traffic policy](https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip){:target="_blank"}, which controls whether external traffic is routed to node-local or cluster-wide endpoints. The following table summarizes key differences between these settings. The default is **cluster mode**.
 
-
 | **Service setting**                         | **Traffic is load balanced...**                     | **Pros and cons**                                            | **Required service type**                                    |
 | ------------------------------------------- | --------------------------------------------------- | :----------------------------------------------------------- | ------------------------------------------------------------ |
 | **externalTrafficPolicy: Cluster**(default) | Across all nodes in the cluster                     | Equal distribution of traffic among all pods running a service. <br /><br />Possible unnecessary network hops between nodes for ingress external traffic.When packets are rerouted to pods on another node, traffic is SNAT’d (source network address translation). <br /><br />Destination pod can see the proxying node’s IP address rather than the actual client IP. | **ClusterIP**                                                |

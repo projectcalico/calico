@@ -70,7 +70,6 @@ To interact directly with the {{site.prodname}} datastore, use the `calicoctl` c
 
    On most systems, kubeconfig is located at `~/.kube/config`. You may wish to add the `export` lines to your `~/.bashrc` so they will persist when you log in next time.
 
-
 ### Test
 
 Verify `calicoctl` can reach your datastore by running
@@ -102,7 +101,6 @@ You should see an empty result
 
 ```
 NAME   CIDR   SELECTOR
-
 
 ```
 
