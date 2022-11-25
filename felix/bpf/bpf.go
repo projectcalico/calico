@@ -49,12 +49,41 @@ import (
 
 // Hook is the hook to which a BPF program should be attached. This is relative to
 // the host namespace so workload PolDirnIngress policy is attached to the HookEgress.
-type Hook string
+type Hook int
+
+func (h Hook) String() string {
+	switch h {
+	case HookIngress:
+		return "ingress"
+	case HookEgress:
+		return "egress"
+	case HookXDP:
+		return "xdp"
+	}
+
+	return "unknown"
+}
+
+func StringToHook(s string) Hook {
+	switch s {
+	case "ingress":
+		return HookIngress
+	case "egress":
+		return HookEgress
+	case "xdp":
+		return HookXDP
+	}
+
+	return HookBad
+}
 
 const (
-	HookIngress Hook = "ingress"
-	HookEgress  Hook = "egress"
-	HookXDP     Hook = "xdp"
+	HookIngress Hook = iota
+	HookEgress
+	HookXDP
+	HookCount
+
+	HookBad Hook = -1
 )
 
 var Hooks = []Hook{HookIngress, HookEgress, HookXDP}
