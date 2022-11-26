@@ -52,6 +52,8 @@ var (
 		&IPAMConfigurationList{},
 		&BlockAffinity{},
 		&BlockAffinityList{},
+		&BGPFilter{},
+		&BGPFilterList{},
 	}
 )
 
