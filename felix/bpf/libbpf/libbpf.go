@@ -121,6 +121,12 @@ func (m *Map) NextMap() (*Map, error) {
 	return &Map{bpfMap: bpfMap, bpfObj: m.bpfObj}, nil
 }
 
+func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
+	_, err := C.bpf_tc_program_detach(C.int(ifindex), C.int(handle), C.int(pref), C.bool(ingress))
+
+	return err
+}
+
 func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
