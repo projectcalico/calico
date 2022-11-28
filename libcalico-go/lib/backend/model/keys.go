@@ -16,7 +16,6 @@ package model
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	net2 "net"
 	"reflect"
@@ -26,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -135,10 +135,6 @@ func KeyToDefaultDeletePath(key Key) (string, error) {
 	return key.defaultDeletePath()
 }
 
-func KeyToValueType(key Key) (reflect.Type, error) {
-	return key.valueType()
-}
-
 // KeyToDefaultDeleteParentPaths returns a slice of '/'-delimited
 // paths which are used to delete parent entries that may be auto-created
 // by directory-based KV stores (e.g. etcd v3).  These paths should also be
@@ -193,25 +189,26 @@ func IsListOptionsLastSegmentPrefix(listOptions ListInterface) bool {
 // of our <Type>Key structs.  Returns nil if the string doesn't match one of
 // our key types.
 func KeyFromDefaultPath(path string) Key {
-	parts := strings.Split(path, "/")
-	startsWithSlash := false
-	if len(parts) > 1 && parts[0] == "" {
-		parts = parts[1:]
-		startsWithSlash = true
+	// "v3" resource keys strictly require a leading slash but older "v1" keys were permissive.
+	// For ease of parsing, strip the slash off now but pass it down to keyFromDefaultPathInner so
+	// it can check for it later.
+	normalizedPath := path
+	if strings.HasPrefix(normalizedPath, "/") {
+		normalizedPath = normalizedPath[1:]
 	}
 
+	parts := strings.Split(normalizedPath, "/")
 	if len(parts) < 3 {
+		// After removing the optional `/` prefix, should have at least 3 segments.
 		return nil
 	}
 
+	return keyFromDefaultPathInner(path, parts)
+}
+
+func keyFromDefaultPathInner(path string, parts []string) Key {
 	if parts[0] != "calico" {
 		return nil
-	}
-
-	for _, p := range parts {
-		if p == "" {
-			return nil
-		}
 	}
 
 	switch parts[1] {
@@ -232,7 +229,7 @@ func KeyFromDefaultPath(path string) Key {
 					return nil
 				}
 				return WorkloadEndpointKey{
-					Hostname:       hostname,
+					Hostname:       unescapeName(hostname),
 					OrchestratorID: unescapeName(parts[5]),
 					WorkloadID:     unescapeName(parts[6]),
 					EndpointID:     unescapeName(parts[8]),
@@ -242,7 +239,7 @@ func KeyFromDefaultPath(path string) Key {
 					return nil
 				}
 				return HostEndpointKey{
-					Hostname:   hostname,
+					Hostname:   unescapeName(hostname),
 					EndpointID: unescapeName(parts[5]),
 				}
 			case "config":
@@ -251,14 +248,23 @@ func KeyFromDefaultPath(path string) Key {
 					Name:     strings.Join(parts[5:], "/"),
 				}
 			case "metadata":
+				if len(parts) != 5 {
+					return nil
+				}
 				return HostMetadataKey{
 					Hostname: hostname,
 				}
 			case "bird_ip":
+				if len(parts) != 5 {
+					return nil
+				}
 				return HostIPKey{
 					Hostname: hostname,
 				}
 			case "wireguard":
+				if len(parts) != 5 {
+					return nil
+				}
 				return WireguardKey{
 					NodeName: hostname,
 				}
@@ -271,7 +277,7 @@ func KeyFromDefaultPath(path string) Key {
 				Name: unescapeName(parts[3]),
 			}
 		case "Ready":
-			if len(parts) > 3 {
+			if len(parts) > 3 || path[0] != '/' {
 				return nil
 			}
 			return ReadyFlagKey{}
@@ -281,11 +287,17 @@ func KeyFromDefaultPath(path string) Key {
 			}
 			switch parts[3] {
 			case "tier":
-				if len(parts) != 7 || parts[4] != "default" || parts[5] != "policy" {
+				if len(parts) < 6 {
 					return nil
 				}
-				return PolicyKey{
-					Name: unescapeName(parts[6]),
+				switch parts[5] {
+				case "policy":
+					if len(parts) != 7 {
+						return nil
+					}
+					return PolicyKey{
+						Name: unescapeName(parts[6]),
+					}
 				}
 			case "profile":
 				pk := unescapeName(parts[4])
@@ -305,28 +317,12 @@ func KeyFromDefaultPath(path string) Key {
 			}
 			switch parts[3] {
 			case "global":
-				switch parts[4] {
-				case "peer_v4", "peer_v6":
-					if len(parts) < 6 {
-						return nil
-					}
-					return GlobalBGPPeerListOptions{}.KeyFromDefaultPath(path)
-				default:
-					return GlobalBGPConfigListOptions{}.KeyFromDefaultPath(path)
-				}
+				return GlobalBGPConfigListOptions{}.KeyFromDefaultPath(path)
 			case "host":
 				if len(parts) < 6 {
 					return nil
 				}
-				switch parts[5] {
-				case "peer_v4", "peer_v6":
-					if len(parts) < 6 {
-						return nil
-					}
-					return NodeBGPPeerListOptions{}.KeyFromDefaultPath(path)
-				default:
-					return NodeBGPConfigListOptions{}.KeyFromDefaultPath(path)
-				}
+				return NodeBGPConfigListOptions{}.KeyFromDefaultPath(path)
 			}
 		}
 	case "ipam":
@@ -339,6 +335,9 @@ func KeyFromDefaultPath(path string) Key {
 			case "assignment":
 				return BlockListOptions{}.KeyFromDefaultPath(path)
 			case "handle":
+				if len(parts) > 5 {
+					return nil
+				}
 				return IPAMHandleKey{
 					HandleID: parts[4],
 				}
@@ -349,7 +348,8 @@ func KeyFromDefaultPath(path string) Key {
 	case "resources":
 		switch parts[2] {
 		case "v3":
-			if len(parts) < 6 || parts[3] != "projectcalico.org" || !startsWithSlash {
+			// v3 resource keys strictly require the leading slash.
+			if len(parts) < 6 || parts[3] != "projectcalico.org" || path[0] != '/' {
 				return nil
 			}
 			switch len(parts) {
@@ -387,14 +387,20 @@ func KeyFromDefaultPath(path string) Key {
 			}
 		}
 	case "felix":
+		if len(parts) < 4 {
+			return nil
+		}
 		switch parts[2] {
 		case "v1":
-			if len(parts) != 7 || parts[3] != "host" || parts[5] != "endpoint" {
-				return nil
-			}
-			return HostEndpointStatusKey{
-				Hostname:   parts[4],
-				EndpointID: unescapeName(parts[6]),
+			switch parts[3] {
+			case "host":
+				if len(parts) != 7 || parts[5] != "endpoint" {
+					return nil
+				}
+				return HostEndpointStatusKey{
+					Hostname:   parts[4],
+					EndpointID: unescapeName(parts[6]),
+				}
 			}
 		case "v2":
 			if len(parts) < 7 {
@@ -414,19 +420,18 @@ func KeyFromDefaultPath(path string) Key {
 		}
 	}
 	log.Debugf("Path is unknown: %v", path)
-
-	// Not a key we know about.
 	return nil
 }
 
-// KeyFromDefaultPath parses the default path representation of a key into one
+// OldKeyFromDefaultPath is the old, (slower) implementation of KeyFromDefaultPath.  It is kept to allow
+// fuzzing the new version against it.  Parses the default path representation of a key into one
 // of our <Type>Key structs.  Returns nil if the string doesn't match one of
 // our key types.
 func OldKeyFromDefaultPath(path string) Key {
 	if m := matchWorkloadEndpoint.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a workload endpoint: %v", path)
 		return WorkloadEndpointKey{
-			Hostname:       m[1],
+			Hostname:       unescapeName(m[1]),
 			OrchestratorID: unescapeName(m[2]),
 			WorkloadID:     unescapeName(m[3]),
 			EndpointID:     unescapeName(m[4]),
@@ -434,7 +439,7 @@ func OldKeyFromDefaultPath(path string) Key {
 	} else if m := matchHostEndpoint.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a host endpoint: %v", path)
 		return HostEndpointKey{
-			Hostname:   m[1],
+			Hostname:   unescapeName(m[1]),
 			EndpointID: unescapeName(m[2]),
 		}
 	} else if m := matchNetworkSet.FindStringSubmatch(path); m != nil {
@@ -596,7 +601,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 	return iface, nil
 }
 
-// Serialize a value in the model to a []byte to stored in the datastore.  This
+// SerializeValue serializes a value in the model to a []byte to be stored in the datastore.  This
 // performs the opposite processing to ParseValue()
 func SerializeValue(d *KVPair) ([]byte, error) {
 	valueType, err := d.Key.valueType()

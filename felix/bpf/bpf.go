@@ -22,6 +22,7 @@ package bpf
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -45,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // Hook is the hook to which a BPF program should be attached. This is relative to
@@ -528,7 +530,7 @@ type perCpuMapEntry []struct {
 	} `json:"values"`
 }
 
-type progInfo struct {
+type ProgInfo struct {
 	Id     int    `json:"id"`
 	Type   string `json:"type"`
 	Tag    string `json:"tag"`
@@ -1096,7 +1098,7 @@ func (b *BPFLib) GetXDPTag(ifName string) (string, error) {
 		return "", fmt.Errorf("failed to show XDP program (%s): %s\n%s", progPath, err, output)
 	}
 
-	p := progInfo{}
+	p := ProgInfo{}
 	err = json.Unmarshal(output, &p)
 	if err != nil {
 		return "", fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1186,7 +1188,7 @@ func (b *BPFLib) GetMapsFromXDP(ifName string) ([]int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to show XDP program (%s): %s\n%s", progPath, err, output)
 	}
-	p := progInfo{}
+	p := ProgInfo{}
 	err = json.Unmarshal(output, &p)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1602,7 +1604,11 @@ func (b *BPFLib) getSkMsgID() (int, error) {
 	return -1, nil
 }
 
-func getAllProgs() ([]progInfo, error) {
+func GetAllProgs() ([]ProgInfo, error) {
+	return getAllProgs()
+}
+
+func getAllProgs() ([]ProgInfo, error) {
 	prog := "bpftool"
 	args := []string{
 		"--json",
@@ -1617,7 +1623,7 @@ func getAllProgs() ([]progInfo, error) {
 		return nil, fmt.Errorf("failed to get progs: %s\n%s", err, output)
 	}
 
-	var progs []progInfo
+	var progs []ProgInfo
 	err = json.Unmarshal(output, &progs)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1672,7 +1678,7 @@ func (b *BPFLib) getSockMapID(progID int) (int, error) {
 		return -1, fmt.Errorf("failed to get sockmap ID for prog %d: %s\n%s", progID, err, output)
 	}
 
-	p := progInfo{}
+	p := ProgInfo{}
 	err = json.Unmarshal(output, &p)
 	if err != nil {
 		return -1, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -2311,4 +2317,175 @@ func MapPinPath(typ int, name, iface string, hook Hook) string {
 		}
 	}
 	return path.Join(PinBaseDir, subDir, name)
+}
+
+type TcList []struct {
+	DevName string `json:"devname"`
+	ID      int    `json:"id"`
+}
+
+type XDPList []struct {
+	DevName string `json:"devname"`
+	IfIndex int    `json:"ifindex"`
+	Mode    string `json:"mode"`
+	ID      int    `json:"id"`
+}
+
+// ListTcXDPAttachedProgs returns all programs attached to TC or XDP hooks.
+func ListTcXDPAttachedProgs() (TcList, XDPList, error) {
+	// Find all the programs that are attached to interfaces.
+	out, err := exec.Command("bpftool", "net", "-j").Output()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list attached bpf programs: %w", err)
+	}
+
+	var attached []struct {
+		TC  TcList  `json:"tc"`
+		XDP XDPList `json:"xdp"`
+	}
+
+	err = json.Unmarshal(out, &attached)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse list of attached BPF programs: %w\n%s", err, out)
+	}
+
+	return attached[0].TC, attached[0].XDP, nil
+}
+
+func ListPerEPMaps() (map[int]string, error) {
+	mapIDToPath := make(map[int]string)
+	err := filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(info.Name(), JumpMapName()) ||
+			strings.HasPrefix(info.Name(), CountersMapName()) {
+			log.WithField("path", p).Debug("Examining map")
+
+			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
+			if err != nil {
+				log.WithError(err).Panic("Failed to show map")
+			}
+			log.WithField("dump", string(out)).Debug("Map show before deletion")
+			idStr := string(bytes.Split(out, []byte(":"))[0])
+			id, err := strconv.Atoi(idStr)
+			if err != nil {
+				log.WithError(err).WithField("dump", string(out)).Error("Failed to parse bpftool output.")
+				return err
+			}
+			mapIDToPath[id] = p
+		}
+		return nil
+	})
+
+	return mapIDToPath, err
+}
+
+// pinDirRegex matches tc's and xdp's auto-created directory names, directories created when using libbpf
+// so we can clean them up when removing maps without accidentally removing other user-created dirs..
+var pinDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr|xdp))`)
+
+// CleanUpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
+// our BPF programs.
+func CleanUpMaps() {
+	// Find the maps we care about by walking the BPF filesystem.
+	mapIDToPath, err := ListPerEPMaps()
+	if os.IsNotExist(err) {
+		log.WithError(err).Warn("tc directory missing from BPF file system?")
+		return
+	}
+	if err != nil {
+		log.WithError(err).Error("Error while looking for maps.")
+		return
+	}
+
+	aTc, aXdp, err := ListTcXDPAttachedProgs()
+	if err != nil {
+		log.WithError(err).Warn("Failed to list attached programs.")
+		return
+	}
+	log.WithFields(log.Fields{"tc": aTc, "xdp": aXdp}).Debug("Attached BPF programs")
+
+	attachedProgs := set.New[int]()
+	for _, prog := range aTc {
+		log.WithField("prog", prog).Debug("Adding TC prog to attached set")
+		attachedProgs.Add(prog.ID)
+	}
+	for _, prog := range aXdp {
+		log.WithField("prog", prog).Debug("Adding XDP prog to attached set")
+		attachedProgs.Add(prog.ID)
+	}
+
+	// Find all the maps that the attached programs refer to and remove them from consideration.
+	progsJSON, err := exec.Command("bpftool", "prog", "list", "--json").Output()
+	if err != nil {
+		log.WithError(err).Info("Failed to list BPF programs, assuming there's nothing to clean up.")
+		return
+	}
+	var progs []struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Maps []int  `json:"map_ids"`
+	}
+	err = json.Unmarshal(progsJSON, &progs)
+	if err != nil {
+		log.WithError(err).Info("Failed to parse bpftool output.  Assuming nothing to clean up.")
+		return
+	}
+	for _, p := range progs {
+		if !attachedProgs.Contains(p.ID) {
+			log.WithField("prog", p).Debug("Prog is not in the attached set, skipping")
+			continue
+		}
+		for _, id := range p.Maps {
+			log.WithField("mapID", id).WithField("prog", p).Debugf("Map is still in use: %v", mapIDToPath[id])
+			delete(mapIDToPath, id)
+		}
+	}
+
+	// Remove the pins.
+	for id, p := range mapIDToPath {
+		log.WithFields(log.Fields{"id": id, "path": p}).Debug("Removing stale BPF map pin.")
+		err := os.Remove(p)
+		if err != nil {
+			log.WithError(err).Warn("Removed stale BPF map pin.")
+		}
+		log.WithFields(log.Fields{"id": id, "path": p}).Info("Removed stale BPF map pin.")
+	}
+
+	// Look for empty dirs.
+	emptyAutoDirs := set.New[string]()
+	err = filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && pinDirRegex.MatchString(info.Name()) {
+			p := path.Clean(p)
+			log.WithField("path", p).Debug("Found tc auto-created dir.")
+			emptyAutoDirs.Add(p)
+		} else {
+			dirPath := path.Clean(path.Dir(p))
+			if emptyAutoDirs.Contains(dirPath) {
+				log.WithField("path", dirPath).Debug("tc dir is not empty.")
+				emptyAutoDirs.Discard(dirPath)
+			}
+		}
+		return nil
+	})
+	if os.IsNotExist(err) {
+		log.WithError(err).Warn("tc directory missing from BPF file system?")
+		return
+	}
+	if err != nil {
+		log.WithError(err).Error("Error while looking for maps.")
+	}
+
+	emptyAutoDirs.Iter(func(p string) error {
+		log.WithField("path", p).Debug("Removing empty dir.")
+		err := os.Remove(p)
+		if err != nil {
+			log.WithError(err).Error("Error while removing empty dir.")
+		}
+		return nil
+	})
 }

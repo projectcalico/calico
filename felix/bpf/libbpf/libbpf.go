@@ -136,16 +136,12 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 		isIngress = 1
 	}
 
-	opts, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.int(isIngress))
+	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.int(isIngress))
 	if err != nil {
 		return -1, fmt.Errorf("error attaching tc program %w", err)
 	}
 
-	progId, err := C.bpf_tc_query_iface(C.int(ifIndex), opts, C.int(isIngress))
-	if err != nil {
-		return -1, fmt.Errorf("error querying interface %s: %w", ifName, err)
-	}
-	return int(progId), nil
+	return int(ret.prog_id), nil
 }
 
 func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, error) {
