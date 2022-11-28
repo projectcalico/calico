@@ -58,7 +58,7 @@ func (ap *AttachPoint) Config() string {
 }
 
 func (ap *AttachPoint) JumpMapFDMapKey() string {
-	return string(bpf.HookXDP)
+	return bpf.HookXDP.String()
 }
 
 func (ap *AttachPoint) FileName() string {
@@ -81,32 +81,21 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
-	progID, err := ap.ProgramID()
-	if err != nil {
-		ap.Log().Debugf("Couldn't get the attached XDP program ID. err=%v", err)
-		return -1, false
+func (ap *AttachPoint) AlreadyAttached(currentID int, object string) bool {
+	if currentID == -1 {
+		return false
 	}
 
-	somethingAttached, err := ap.IsAttached()
-	if err != nil {
-		ap.Log().Debugf("Failed to verify if any program is attached to interface. err=%v", err)
-		return -1, false
-	}
-
-	isAttached, err := bpf.AlreadyAttachedProg(ap, object, progID)
+	isAttached, err := bpf.AlreadyAttachedProg(ap, object, currentID)
 	if err != nil {
 		ap.Log().Debugf("Failed to check if BPF program was already attached. err=%v", err)
-		return -1, false
+		return false
 	}
 
-	if isAttached && somethingAttached {
-		return progID, true
-	}
-	return -1, false
+	return isAttached
 }
 
-func (ap *AttachPoint) AttachProgram() (int, error) {
+func (ap *AttachPoint) AttachProgram(currentID int) (int, error) {
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
 		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
@@ -141,10 +130,9 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 
 	// Check if the bpf object is already attached, and we should skip re-attaching it
-	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
-	if isAttached {
+	if ap.AlreadyAttached(currentID, preCompiledBinary) {
 		ap.Log().Infof("Programs already attached, skip reattaching %s", filename)
-		return progID, nil
+		return currentID, nil
 	}
 	ap.Log().Infof("Continue with attaching BPF program %s", filename)
 
@@ -160,18 +148,15 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		return -1, fmt.Errorf("error updating jump map %v", err)
 	}
 
-	oldID, err := ap.ProgramID()
-	if err != nil {
-		return -1, fmt.Errorf("failed to get the attached XDP program ID: %w", err)
-	}
+	progID := -1
 
 	attachmentSucceeded := false
 	for _, mode := range ap.Modes {
-		ap.Log().Debugf("Trying to attach XDP program in mode %v - old id: %v", mode, oldID)
+		ap.Log().Debugf("Trying to attach XDP program in mode %v - old id: %v", mode, currentID)
 		// Force attach the program. If there is already a program attached, the replacement only
 		// succeed in the same mode of the current program.
-		progID, err = obj.AttachXDP(ap.Iface, ap.ProgramName(), oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
-		if err != nil || progID == DetachedID || progID == oldID {
+		progID, err = obj.AttachXDP(ap.Iface, ap.ProgramName(), currentID, unix.XDP_FLAGS_REPLACE|uint(mode))
+		if err != nil || progID == DetachedID || progID == currentID {
 			ap.Log().WithError(err).Warnf("Failed to attach to XDP program %s mode %v", ap.ProgramName(), mode)
 		} else {
 			ap.Log().Debugf("Successfully attached XDP program in mode %v. ID: %v", mode, progID)
@@ -236,7 +221,7 @@ func (ap *AttachPoint) DetachProgram() error {
 	ap.Log().Infof("XDP program detached. program ID: %v", progID)
 
 	// Program is detached, now remove the json file we saved for it
-	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {
+	if err = bpf.ForgetAttachedProg(ap.IfaceName(), bpf.HookXDP); err != nil {
 		return fmt.Errorf("failed to delete hash of BPF program from disk: %w", err)
 	}
 	return nil
@@ -256,11 +241,6 @@ func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
 	}
 
 	return nil
-}
-
-func (ap *AttachPoint) IsAttached() (bool, error) {
-	_, err := ap.ProgramID()
-	return err == nil, err
 }
 
 func (ap *AttachPoint) ProgramID() (int, error) {
