@@ -45,6 +45,7 @@ func TestReattachPrograms(t *testing.T) {
 		LogLevel: "DEBUG",
 	}
 	vethName1, veth1 := createVeth()
+	ap1.IfIndex = veth1.Attrs().Index
 	defer deleteLink(veth1)
 	ap1.Iface = vethName1
 	log.Debugf("Testing %v in %v", ap1.ProgramName(), ap1.FileName())
@@ -58,6 +59,7 @@ func TestReattachPrograms(t *testing.T) {
 		LogLevel: "DEBUG",
 	}
 	vethName2, veth2 := createVeth()
+	ap2.IfIndex = veth2.Attrs().Index
 	defer deleteLink(veth2)
 	ap2.Iface = vethName2
 	log.Debugf("Testing %v in %v", ap2.ProgramName(), ap2.FileName())
