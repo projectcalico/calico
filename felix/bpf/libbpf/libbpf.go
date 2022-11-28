@@ -121,8 +121,13 @@ func (m *Map) NextMap() (*Map, error) {
 	return &Map{bpfMap: bpfMap, bpfObj: m.bpfObj}, nil
 }
 
-func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
-	isIngress := 0
+func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
+	_, err := C.bpf_tc_program_detach(C.int(ifindex), C.int(handle), C.int(pref), C.bool(ingress))
+
+	return err
+}
+
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
@@ -132,11 +137,7 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 		return -1, err
 	}
 
-	if hook == string(QdiskIngress) {
-		isIngress = 1
-	}
-
-	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.int(isIngress))
+	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress))
 	if err != nil {
 		return -1, fmt.Errorf("error attaching tc program %w", err)
 	}
