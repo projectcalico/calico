@@ -63,6 +63,7 @@ func init() {
 
 type BinarySnapshotCache struct {
 	snapValidityTimeout time.Duration
+	logCtx              *logrus.Entry
 
 	cache BreadcrumbProvider
 
@@ -84,7 +85,10 @@ func NewBinarySnapCache(
 	s := &BinarySnapshotCache{
 		snapValidityTimeout: snapValidityTimeout,
 		cache:               cache,
-
+		logCtx: logrus.WithFields(logrus.Fields{
+			"thread": "snapshotter",
+			"syncer": syncerName,
+		}),
 		counterBinSnapsGenerated: counterVecSnapshotsGenerated.WithLabelValues(syncerName),
 		counterBinSnapsReused:    counterVecSnapshotsReused.WithLabelValues(syncerName),
 		gaugeSnapBytesRaw:        gaugeVecSnapRawBytes.WithLabelValues(syncerName),
@@ -98,7 +102,7 @@ func NewBinarySnapCache(
 // on the given connection.  Since the stream is cached, it starts with fresh snappy/gob headers.  Hence, the
 // decoder at the client side must also be reset before sending such a snapshot.  The snapshot ends with
 // a MsgDecoderRestart, so the caller should wait for an ACK and then reset their encoder.
-func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*snapcache.Breadcrumb, error) {
+func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w io.Writer, conn net.Conn) (*snapcache.Breadcrumb, error) {
 	snap := s.getOrCreateSnap()
 
 	s.lock.Lock()
@@ -106,7 +110,7 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*sn
 	var bytesSent int
 	var currentWriteDeadline time.Time
 	for bytesSent < len(snap.buf) || !snap.complete {
-		for len(snap.buf) == bytesSent {
+		for len(snap.buf) == bytesSent && ctx.Err() == nil {
 			snap.cond.Wait()
 		}
 		buf := snap.buf[bytesSent:]
@@ -116,9 +120,13 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*sn
 		s.lock.Unlock()
 
 		for len(buf) > 0 {
+			if ctx.Err() != nil {
+				s.logCtx.Info("Context finished, aborting send of snapshot.")
+				return nil, ctx.Err()
+			}
 			if time.Until(currentWriteDeadline) < 60*time.Second {
 				newDeadline := time.Now().Add(90 * time.Second)
-				err := w.SetWriteDeadline(newDeadline)
+				err := conn.SetWriteDeadline(newDeadline)
 				if err != nil {
 					return nil, err
 				}
@@ -146,7 +154,7 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w net.Conn) (*sn
 
 	// Unset the timeout; under normal operation, we rely on a regular round tripped ping/pong message instead.
 	var zeroTime time.Time
-	err := w.SetWriteDeadline(zeroTime)
+	err := conn.SetWriteDeadline(zeroTime)
 	if err != nil {
 		return nil, err
 	}
@@ -249,14 +257,14 @@ func (s *BinarySnapshotCache) writeSnapshot(snap *snapshot) {
 	}
 	err := writeSnapshotMessages(
 		context.Background(),
-		logrus.WithField("thread", "snapshotter"),
+		s.logCtx.WithField("destination", "compressed in-memory cache"),
 		snap.crumb,
 		writeMsg,
-		10000, // Allow bigger messages in the snapshot.
+		1000, // Allow bigger messages in the snapshot.
 	)
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
-		logrus.WithError(err).Panic("Failed to serialise datastore snapshot.")
+		s.logCtx.WithError(err).Panic("Failed to serialise datastore snapshot.")
 	}
 
 	err = writeMsg(syncproto.MsgDecoderRestart{
@@ -265,13 +273,13 @@ func (s *BinarySnapshotCache) writeSnapshot(snap *snapshot) {
 	})
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
-		logrus.WithError(err).Panic("Failed to serialise datastore snapshot end message.")
+		s.logCtx.WithError(err).Panic("Failed to serialise datastore snapshot end message.")
 	}
 
 	err = snappyW.Close() // Does Flush() for us.
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
-		logrus.WithError(err).Panic("Failed to close datastore snapshot.")
+		s.logCtx.WithError(err).Panic("Failed to close datastore snapshot.")
 	}
 
 	// One final flush/broadcast to wake up all our waiters.
@@ -348,5 +356,6 @@ func writeSnapshotMessages(
 	if err != nil {
 		return
 	}
+	logCxt.Info("Finished writing snapshot.")
 	return
 }

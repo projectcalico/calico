@@ -252,6 +252,8 @@ type MsgClientHello struct {
 
 	SupportsDecoderRestart         bool
 	SupportedCompressionAlgorithms []CompressionAlgorithm
+
+	ClientConnID uint64
 }
 
 // MsgServerHello is the server's response to MsgClientHello.
@@ -264,6 +266,8 @@ type MsgServerHello struct {
 
 	// SupportsNodeResourceUpdates provides to the client whether this Typha supports node resource updates.
 	SupportsNodeResourceUpdates bool
+
+	ServerConnID uint64
 }
 
 // MsgDecoderRestart is sent (currently only from server to client) to tell it to restart its decoder with new

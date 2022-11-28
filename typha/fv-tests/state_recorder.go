@@ -28,9 +28,13 @@ import (
 )
 
 func NewRecorder() *StateRecorder {
+	return NewRecorderChanSize(1000)
+}
+
+func NewRecorderChanSize(n int) *StateRecorder {
 	return &StateRecorder{
 		kvs: map[string]api.Update{},
-		c:   make(chan any, 1000),
+		c:   make(chan any, n),
 	}
 }
 
@@ -116,11 +120,11 @@ func (r *StateRecorder) handleUpdates(updates []api.Update) {
 		if r.blockAfter > 0 {
 			r.blockAfter--
 			if r.blockAfter == 0 {
-				logrus.WithField("duration", r.blockDuration).Info("Recorder about to block")
+				logrus.WithField("duration", r.blockDuration).Info("----- Recorder about to block")
 				r.L.Unlock()
 				time.Sleep(r.blockDuration)
 				r.L.Lock()
-				logrus.Info("Recorder woke up")
+				logrus.Info("----- Recorder woke up")
 			}
 		}
 	}

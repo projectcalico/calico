@@ -21,6 +21,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"net"
@@ -29,6 +30,7 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -143,6 +145,8 @@ type Config struct {
 	CAFile                         string
 	ClientCN                       string
 	ClientURISAN                   string
+	WriteBufferSize                int
+	DebugLogWrites                 bool
 }
 
 const (
@@ -253,6 +257,7 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 		binSnapCaches:        map[syncproto.CompressionAlgorithm]map[syncproto.SyncerType]*BinarySnapshotCache{},
 		maxConnsC:            make(chan int),
 		shutdownC:            make(chan struct{}),
+		nextConnID:           1,
 		connIDToConn:         map[uint64]*connection{},
 		listeningC:           make(chan struct{}),
 		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
@@ -393,6 +398,7 @@ func (s *Server) serve(cxt context.Context) {
 		}
 
 		logCxt.Infof("Accepted from %s", conn.RemoteAddr())
+		var tcpConn *net.TCPConn
 		if s.config.requiringTLS() {
 			// Doing TLS, we must do the handshake...
 			tlsConn := conn.(*tls.Conn)
@@ -413,6 +419,17 @@ func (s *Server) serve(cxt context.Context) {
 				logCxt.Debugf("%#v", v.Subject)
 				logCxt.Debugf("%#v", v.URIs)
 			}
+			tcpConn, _ = tlsConn.NetConn().(*net.TCPConn)
+		} else {
+			tcpConn, _ = conn.(*net.TCPConn)
+		}
+
+		if s.config.WriteBufferSize != 0 {
+			if err := tcpConn.SetWriteBuffer(s.config.WriteBufferSize); err != nil { // Covers the nil case.
+				logCxt.WithError(err).Warn("Failed to set write buffer size.")
+			} else {
+				logCxt.WithField("size", s.config.WriteBufferSize).Info("Set connection write buffer size.")
+			}
 		}
 
 		connID := s.nextConnID
@@ -423,6 +440,10 @@ func (s *Server) serve(cxt context.Context) {
 		// Create a new connection-scoped context, which we'll use for signaling to our child
 		// goroutines to halt.
 		connCxt, cancel := context.WithCancel(cxt)
+		var connW io.Writer = conn
+		if s.config.DebugLogWrites {
+			connW = writelogger.New(conn)
+		}
 		connection := &connection{
 			ID:              connID,
 			config:          &s.config,
@@ -431,6 +452,7 @@ func (s *Server) serve(cxt context.Context) {
 			cxt:             connCxt,
 			cancelCxt:       cancel,
 			conn:            conn,
+			connW:           connW,
 			logCxt: log.WithFields(log.Fields{
 				"client": conn.RemoteAddr(),
 				"connID": connID,
@@ -642,6 +664,7 @@ type connection struct {
 	cache           BreadcrumbProvider
 	syncerType      syncproto.SyncerType
 	conn            net.Conn
+	connW           io.Writer
 
 	encoder     *gob.Encoder
 	flushWriter func() error
@@ -702,7 +725,7 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 			return
 		}
 
-		breadcrumb, err = h.allSnapshotters[h.chosenCompression][h.syncerType].SendSnapshot(h.cxt, h.conn)
+		breadcrumb, err = h.allSnapshotters[h.chosenCompression][h.syncerType].SendSnapshot(h.cxt, h.connW, h.conn)
 		if err != nil {
 			log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
 			return
@@ -793,7 +816,11 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 		var envelope syncproto.Envelope
 		err := r.Decode(&envelope)
 		if err != nil {
-			logCxt.WithError(err).Info("Failed to read from client")
+			if errors.Is(err, io.EOF) {
+				logCxt.Info("Client closed the connection.")
+			} else {
+				logCxt.WithError(err).Info("Failed to read from client")
+			}
 			break
 		}
 		if envelope.Message == nil {
@@ -879,6 +906,7 @@ func (h *connection) doHandshake() error {
 		// clients will ignore.
 		SyncerType:                  syncerType,
 		SupportsNodeResourceUpdates: true,
+		ServerConnID:                h.ID,
 	})
 	if err != nil {
 		log.WithError(err).Warning("Failed to send hello to client")
@@ -925,11 +953,11 @@ func (h *connection) waitForAckAndRestartEncoder() error {
 	// Upgrade to compressed connection if required.
 	switch h.chosenCompression {
 	case syncproto.CompressionSnappy:
-		w := snappy.NewBufferedWriter(h.conn)
+		w := snappy.NewBufferedWriter(h.connW)
 		h.encoder = gob.NewEncoder(w) // Need a new Encoder, there's no way to change out the Writer.
 		h.flushWriter = w.Flush
 	default:
-		h.encoder = gob.NewEncoder(h.conn) // Need a new Encoder, there's no way to change out the Writer.
+		h.encoder = gob.NewEncoder(h.connW) // Need a new Encoder, there's no way to change out the Writer.
 		h.flushWriter = func() error {
 			return nil
 		}
@@ -943,7 +971,7 @@ func (h *connection) sendMsg(msg interface{}) error {
 		// Optimisation, don't bother to send if we're being torn down.
 		return h.cxt.Err()
 	}
-	h.logCxt.WithField("msg", msg).Debug("Sending message to client")
+	h.logCxt.WithField("msg", msg).Trace("Sending message to client")
 	envelope := syncproto.Envelope{
 		Message: msg,
 	}
@@ -989,6 +1017,7 @@ func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *sna
 
 	// Finished sending the snapshot, calculate the grace time for the client to catch up to a recent breadcrumb.
 	gracePeriodEndTime := time.Now().Add(h.config.NewClientFallBehindGracePeriod)
+	log.WithField("graceEnd", gracePeriodEndTime).Info("Calculated end of client's grace period.")
 
 	// Track the sync status reported in each Breadcrumb so we can send an update if it changes.
 	var lastSentStatus api.SyncStatus
@@ -1038,7 +1067,7 @@ func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *sna
 				"timestamp": breadcrumb.Timestamp,
 				"state":     breadcrumb.SyncStatus,
 				"age":       crumbAge,
-			}).Debug("New Breadcrumb")
+			}).Debug("Next breadcrumb for this client.")
 
 			// Check if we're too far behind the latest Breadcrumb.
 			if crumbAge > h.config.MaxFallBehind {
@@ -1122,7 +1151,7 @@ func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *sna
 // streamSnapshotToClient takes the snapshot contained in the Breadcrumb and streams it to the client in chunks.
 func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) error {
 	startTime := time.Now()
-	err := writeSnapshotMessages(h.cxt, h.logCxt, breadcrumb, h.sendMsg, h.config.MaxMessageSize)
+	err := writeSnapshotMessages(h.cxt, h.logCxt.WithField("destination", "direct to client"), breadcrumb, h.sendMsg, h.config.MaxMessageSize)
 	if err != nil {
 		return err
 	}

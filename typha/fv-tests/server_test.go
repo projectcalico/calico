@@ -1048,6 +1048,10 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				DropInterval:                   1 * time.Second,
 				MaxFallBehind:                  1 * time.Second,
 				NewClientFallBehindGracePeriod: 1 * time.Second,
+				// The snapshot is >10MB; set the write buffer to something much less than that since these
+				// tests need to cause backpressure on Typha.
+				WriteBufferSize: 1024 * 256,
+				DebugLogWrites:  true,
 			})
 		cacheCxt, cacheCancel = context.WithCancel(context.Background())
 		cache.Start(cacheCxt)
@@ -1105,9 +1109,25 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			sendNUpdatesThenInSync(initialSnapshotSize)
 		})
 
+		AfterEach(func() {
+			for _, stat := range []string{
+				"typha_snapshot_generated",
+			} {
+				value, _ := getPerSyncerCounter(syncproto.SyncerTypeFelix, stat)
+				log.Infof("Counter: %s =  %v", stat, int(value))
+			}
+			for _, stat := range []string{
+				"typha_snapshot_raw_bytes",
+				"typha_snapshot_compressed_bytes",
+			} {
+				value, _ := getPerSyncerGauge(syncproto.SyncerTypeFelix, stat)
+				log.Infof("Gauge: %s =  %v", stat, int(value))
+			}
+		})
+
 		It("client should get a grace period after reading the snapshot", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
-			recorder := NewRecorder()
+			recorder := NewRecorderChanSize(0) // Need a small channel so we can give back pressure.
 
 			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
@@ -1124,8 +1144,15 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				"test-host",
 				"test-info",
 				recorder,
-				nil,
+				&syncclient.Options{
+					// The snapshot is >10MB; set the read buffer to something much less than that since these
+					// tests need to cause backpressure on Typha.
+					ReadBufferSize: 1024 * 256,
+					// Enable logging of every read since these tests depend on read and write timings.
+					DebugLogReads: true,
+				},
 			)
+
 			err = client.Start(clientCxt)
 			go recorder.Loop(clientCxt)
 			Expect(err).NotTo(HaveOccurred())
@@ -1138,18 +1165,29 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			// first breadcrumb before we create a new one...
 			Eventually(recorder.Len, time.Second).Should(BeNumerically(">", 0))
 
+			log.SetLevel(log.DebugLevel)
+
 			// Make a breadcrumb 1s later.
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
+			log.Info("Sending 1 update")
 			sendNUpdates(1)
+			log.Info("Sent 1 update")
 			// Make a breadcrumb 1s later.
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
+			log.Info("Sending 1 update")
 			sendNUpdates(1)
+			log.Info("Sent 1 update")
 
 			// Client should wake up around now and start catching up.
 
 			// Make a breadcrumb 1s later.
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
+			log.Info("Sending 1 update")
 			sendNUpdates(1)
+			log.Info("Sent 1 update")
 
 			Eventually(recorder.Len, 2*time.Second).Should(BeNumerically("==", initialSnapshotSize+3))
 			Expect(getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue+1))
@@ -1157,15 +1195,14 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 
 		It("client should get disconnected if it falls behind after the grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
-			recorder := NewRecorder()
+			recorder := NewRecorderChanSize(0)
 
 			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
 
-			// Make the client block after it reads the first update.  This means the server will have started
-			// streaming the snapshot but it shouldn't be able to finish streaming the snapshot.  Blocking for
-			// >1s wastes the MaxFallBehind timeout so this client will need to rely on the
-			// NewClientFallBehindGracePeriod, which should kick in only once we've finished reading the snapshot.
+			// Make the client block after it reads the first update _after_ the snapshot.  This means it will
+			// Quickly read hte snapshot, then catch up to the latest breadcrumb and _then_ start to fall behind.
+			// This invalidates the grace period so it will only get the normal "max fall behind" timeout.
 			recorder.BlockAfterNUpdates(initialSnapshotSize+1, 2500*time.Millisecond)
 
 			client := syncclient.New(
@@ -1187,6 +1224,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			// Wait until the snapshot is read.
 			Eventually(recorder.Len, time.Second).Should(BeNumerically("==", initialSnapshotSize))
 
+			log.SetLevel(log.DebugLevel)
 			// Make a breadcrumb.
 			time.Sleep(time.Second)
 			sendNUpdates(initialSnapshotSize)
