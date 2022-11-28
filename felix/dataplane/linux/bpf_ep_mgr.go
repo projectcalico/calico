@@ -574,9 +574,15 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 		}
 	}
 	if ai.TCId != 0 {
+		link, err := netlink.LinkByName(iface)
+		if err != nil {
+			return fmt.Errorf("tc: failed to get ifindex: %w", err)
+		}
+
 		ap := tc.AttachPoint{
-			Iface: iface,
-			Hook:  bpf.HookEgress,
+			Iface:   iface,
+			IfIndex: link.Attrs().Index,
+			Hook:    bpf.HookEgress,
 		}
 
 		if err := m.dp.ensureNoProgram(&ap); err != nil {
@@ -866,16 +872,36 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 }
 
 func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
-	var mutex sync.Mutex
+	var (
+		mutex sync.Mutex
+		wg    sync.WaitGroup
+	)
+
 	errs := map[string]error{}
-	var wg sync.WaitGroup
+
 	m.dirtyIfaceNames.Iter(func(iface string) error {
 		if !m.isDataIface(iface) && !m.isL3Iface(iface) {
 			log.WithField("iface", iface).Debug(
 				"Ignoring interface that doesn't match the host data/l3 interface regex")
 			return nil
 		}
-		if !m.ifaceIsUp(iface) {
+
+		var (
+			up      bool
+			ifindex int
+		)
+
+		m.ifacesLock.Lock()
+
+		m.withIface(iface, func(iface *bpfInterface) bool {
+			up = iface.info.ifaceIsUp()
+			ifindex = iface.info.ifIndex
+			return false
+		})
+
+		m.ifacesLock.Unlock()
+
+		if !up {
 			log.WithField("iface", iface).Debug("Ignoring interface that is down")
 			return set.RemoveItem
 		}
@@ -900,19 +926,22 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				hepPtr = &hep
 			}
 
-			var parallelWG sync.WaitGroup
-			var ingressErr, xdpErr error
+			var (
+				parallelWG         sync.WaitGroup
+				ingressErr, xdpErr error
+			)
+
 			parallelWG.Add(1)
 			go func() {
 				defer parallelWG.Done()
-				ingressErr = m.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress)
+				ingressErr = m.attachDataIfaceProgram(iface, ifindex, hepPtr, PolDirnIngress)
 			}()
 			parallelWG.Add(1)
 			go func() {
 				defer parallelWG.Done()
 				xdpErr = m.attachXDPProgram(iface, hepPtr)
 			}()
-			err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress)
+			err = m.attachDataIfaceProgram(iface, ifindex, hepPtr, PolDirnEgress)
 			parallelWG.Wait()
 			if err == nil {
 				err = ingressErr
@@ -1057,11 +1086,16 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string, isReady *bool) erro
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
-	var endpointID *proto.WorkloadEndpointID
-	var ifaceUp bool
+	var (
+		endpointID *proto.WorkloadEndpointID
+		ifaceUp    bool
+		ifindex    int
+	)
+
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceUp = iface.info.ifaceIsUp()
 		endpointID = iface.info.endpointID
+		ifindex = iface.info.ifIndex
 		if !ifaceUp {
 			log.WithField("iface", ifaceName).Debug("Interface is down/gone, closing jump maps.")
 			for i, fd := range iface.dpState.jumpMapFDs {
@@ -1111,11 +1145,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string, isReady *bool) erro
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressErr = m.attachWorkloadProgram(ifaceName, wep, PolDirnIngress)
+		ingressErr = m.attachWorkloadProgram(ifaceName, ifindex, wep, PolDirnIngress)
 	}()
 	go func() {
 		defer wg.Done()
-		egressErr = m.attachWorkloadProgram(ifaceName, wep, PolDirnEgress)
+		egressErr = m.attachWorkloadProgram(ifaceName, ifindex, wep, PolDirnEgress)
 	}()
 	wg.Wait()
 
@@ -1163,7 +1197,7 @@ func isLinkNotFoundError(err error) bool {
 
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
-func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
+func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, ifindex int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 
 	if m.hostIP == nil {
 		// Do not bother and wait
@@ -1171,6 +1205,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	}
 
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
+	ap.IfIndex = ifindex
 	ap.HostIP = m.hostIP
 	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
 	// * Hence it is safe to set the tunnel mtu same as veth mtu
@@ -1240,17 +1275,7 @@ func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *p
 	rules.HostProfiles = m.extractProfiles(hostEndpoint.ProfileIds, polDirection)
 }
 
-func (m *bpfEndpointManager) ifaceIsUp(ifaceName string) (up bool) {
-	m.ifacesLock.Lock()
-	defer m.ifacesLock.Unlock()
-	m.withIface(ifaceName, func(iface *bpfInterface) bool {
-		up = iface.info.ifaceIsUp()
-		return false
-	})
-	return
-}
-
-func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.HostEndpoint, polDirection PolDirection) error {
+func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ifindex int, ep *proto.HostEndpoint, polDirection PolDirection) error {
 
 	if m.hostIP == nil {
 		// Do not bother and wait
@@ -1258,6 +1283,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	}
 
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
+	ap.IfIndex = ifindex
 	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)

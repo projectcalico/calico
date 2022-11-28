@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -39,6 +40,7 @@ type AttachPoint struct {
 	ToOrFrom             ToOrFromEp
 	Hook                 bpf.Hook
 	Iface                string
+	IfIndex              int
 	LogLevel             string
 	HostIP               net.IP
 	HostTunnelIP         net.IP
@@ -289,8 +291,8 @@ func isDumpInterrupted(err error) bool {
 }
 
 type attachedProg struct {
-	pref   string
-	handle string
+	pref   int
+	handle int
 }
 
 func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
@@ -307,9 +309,19 @@ func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 		}
 		// find the pref and the handle
 		if sm := prefHandleRe.FindStringSubmatch(line); len(sm) > 0 {
+			pref, err := strconv.Atoi(sm[1])
+			if err != nil {
+				log.WithError(err).Warnf("tc output '%s' has non-numerical pref", line)
+				continue
+			}
+			handle, err := strconv.ParseInt(sm[2], 0, 0)
+			if err != nil {
+				log.WithError(err).Warnf("tc output '%s' has non-numerical handle", line)
+				continue
+			}
 			p := attachedProg{
-				pref:   sm[1],
-				handle: sm[2],
+				pref:   pref,
+				handle: int(handle),
 			}
 			log.WithField("prog", p).Debug("Found old calico program")
 			progsToClean = append(progsToClean, p)
@@ -319,8 +331,7 @@ func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 }
 
 func (ap *AttachPoint) attemptCleanup(p attachedProg) error {
-	_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", p.pref, "handle", p.handle, "bpf")
-	return err
+	return libbpf.DetachClassifier(ap.IfIndex, p.handle, p.pref, ap.Hook == bpf.HookIngress)
 }
 
 // ProgramName returns the name of the program associated with this AttachPoint
