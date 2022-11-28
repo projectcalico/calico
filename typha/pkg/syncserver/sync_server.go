@@ -15,6 +15,7 @@
 package syncserver
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -951,16 +952,21 @@ func (h *connection) waitForAckAndRestartEncoder() error {
 	h.logCxt.WithField("msg", ack).Info("Received ACK message from client.")
 
 	// Upgrade to compressed connection if required.
+	bw := bufio.NewWriter(h.connW)
 	switch h.chosenCompression {
 	case syncproto.CompressionSnappy:
-		w := snappy.NewBufferedWriter(h.connW)
+		w := snappy.NewBufferedWriter(bw)
 		h.encoder = gob.NewEncoder(w) // Need a new Encoder, there's no way to change out the Writer.
-		h.flushWriter = w.Flush
-	default:
-		h.encoder = gob.NewEncoder(h.connW) // Need a new Encoder, there's no way to change out the Writer.
 		h.flushWriter = func() error {
-			return nil
+			err := w.Flush()
+			if err != nil {
+				return err
+			}
+			return bw.Flush()
 		}
+	default:
+		h.encoder = gob.NewEncoder(bw) // Need a new Encoder, there's no way to change out the Writer.
+		h.flushWriter = bw.Flush
 	}
 	return nil
 }
