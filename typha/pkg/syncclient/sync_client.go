@@ -372,6 +372,11 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	if ourSyncerType == "" {
 		ourSyncerType = syncproto.SyncerTypeFelix
 	}
+	compAlgs := []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy}
+	if s.options.DisableDecoderRestart {
+		// Compression requires decoder restart.
+		compAlgs = nil
+	}
 	err := s.sendMessageToServer(cxt, logCxt, "send hello to server",
 		syncproto.MsgClientHello{
 			Hostname:                       s.myHostname,
@@ -379,7 +384,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			Info:                           s.myInfo,
 			SyncerType:                     ourSyncerType,
 			SupportsDecoderRestart:         !s.options.DisableDecoderRestart,
-			SupportedCompressionAlgorithms: []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy},
+			SupportedCompressionAlgorithms: compAlgs,
 			ClientConnID:                   s.ID,
 		},
 	)
