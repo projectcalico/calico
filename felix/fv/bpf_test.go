@@ -2349,7 +2349,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cmd, err := bpf.MapDeleteKeyCmd(m, mkey.AsBytes())
 								Expect(err).NotTo(HaveOccurred())
 								err = felixes[0].ExecMayFail(cmd...)
-								Expect(err).NotTo(HaveOccurred())
+								if err != nil {
+									Expect(err.Error()).To(ContainSubstring("No such file or directory"))
+								}
 
 								aff := dumpAffMap(felixes[0])
 								Expect(aff).To(HaveLen(0))
