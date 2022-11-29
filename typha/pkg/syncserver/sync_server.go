@@ -31,9 +31,10 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
 
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 
@@ -147,7 +148,10 @@ type Config struct {
 	ClientCN                       string
 	ClientURISAN                   string
 	WriteBufferSize                int
-	DebugLogWrites                 bool
+
+	// DebugLogWrites tells the server to wrap each connection with a Writer that
+	// logs every write.  Intended only for use in tests!
+	DebugLogWrites bool
 }
 
 const (

@@ -28,8 +28,9 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
@@ -55,6 +56,8 @@ type Options struct {
 	ServerURISAN   string
 	SyncerType     syncproto.SyncerType
 
+	// DebugLogReads tells the client to wrap each connection with a Reader that
+	// logs every read.  Intended only for use in tests!
 	DebugLogReads bool
 }
 
