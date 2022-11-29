@@ -28,8 +28,9 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/typha/pkg/discovery"

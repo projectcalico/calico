@@ -31,9 +31,10 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
 
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 
