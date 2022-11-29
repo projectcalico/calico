@@ -1168,8 +1168,7 @@ var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
 func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
-	// Host side of the veth is always configured as 169.254.1.1.
-	ap.HostIP = calicoRouterIP
+	ap.HostIP = m.hostIP
 	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
 	// * Hence it is safe to set the tunnel mtu same as veth mtu
 	ap.TunnelMTU = uint16(m.vxlanMTU)
