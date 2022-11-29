@@ -34,5 +34,4 @@ calico-upgrade dry-run --output-dir=temp --apiconfigv1 etcdv2.yaml --apiconfigv3
      
    - **Other errors**: if you receive any other errors, especially if they pertain to a 
      workload endpoint, contact Tigera for assistance. 
-   
 

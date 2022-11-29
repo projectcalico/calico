@@ -16,12 +16,9 @@ To view logs, use the following command:
 
 `kubectl logs -n calico-system <pod_name>`
 
-
 To view debug logs on some Calico components, set the `LogSeverityScreen` through the associated environment variable. 
 
-
 To report a problem, please [open an issue in GitHub](https://github.com/projectcalico/calico/issues){:target="_blank"}.
-
 
 #### Check BGP peer status
 

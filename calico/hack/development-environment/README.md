@@ -43,8 +43,6 @@ echo "play with your cluster for a while"
 kind delete cluster calico-test
 ```
 
-
-
 =======
 Example:
 

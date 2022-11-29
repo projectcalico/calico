@@ -56,7 +56,6 @@ Label the default namespace, which you will use for the tutorial.
 kubectl label namespace default istio-injection=enabled
 ```
 
-
 ## Test application layer policy
 
 You can test application layer policy by following the [Application Layer Policy tutorial](/security/tutorials/app-layer-policy/enforce-policy-istio).

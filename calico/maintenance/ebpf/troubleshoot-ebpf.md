@@ -187,7 +187,6 @@ The parts of the log are explained below:
 * `Final result=ALLOW (-1). Program execution time: 7366ns` is the message.  In this case, logging the final result of 
   the program.  Note that the timestamp is massively distorted by the time spent logging.
 
-
 ### Poor performance
 
 A number of problems can reduce the performance of the eBPF dataplane.

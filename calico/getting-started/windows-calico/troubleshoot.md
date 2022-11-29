@@ -106,7 +106,7 @@ items:
 #### Felix log error: "Failed to create datastore client"
 
 If the error includes 'loading config file "<path-to-kubeconfig>"', follow the instructions in
-[Set environment variables]({{site.baseurl}}/getting-started/windows-calico/standard#install-calico-and-kubernetes-on-windows-nodes) to update the `KUBECONFIG` environment variable to the path of your kubeconfig file.
+[Set environment variables]({{site.baseurl}}/getting-started/windows-calico/kubernetes/standard#install-calico-and-kubernetes-on-windows-nodes) to update the `KUBECONFIG` environment variable to the path of your kubeconfig file.
 
 #### Felix starts, but does not output logs
 
@@ -122,7 +122,6 @@ kubectl describe pod -n calico-system <calico-node-pod>
 
 >**Note**: Use namespace `kube-system` instead of `calico-system` if your Calico installation is non operator-managed.
 {: .alert .alert-info}
-
 
 If the health check reports a BGP peer failure, check the IP address of the peer is either an
 expected IP of a node or an external BGP peer. If the IP of the failed peering is a Windows node:

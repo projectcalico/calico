@@ -9,8 +9,8 @@ Enable custom workflows for issuing and signing certificates used to secure comm
 
 ### Value
 
-Some deployments have security requirements that strictly minimize or eliminate the access to private keys and/or 
-requirements to control the trusted certificates throughout clusters. Using the Kubernetes Certificates API that automates 
+Some deployments have security requirements that strictly minimize or eliminate the access to private keys and/or
+requirements to control the trusted certificates throughout clusters. Using the Kubernetes Certificates API that automates
 certificate issuance, {{site.prodname}} provides a simple configuration option that you add to your installation.
 
 ### Before you begin
@@ -26,7 +26,7 @@ certificate issuance, {{site.prodname}} provides a simple configuration option t
 
 #### Enable certificate management
 1. Modify your [the installation resource]({{site.baseurl}}/reference/installation/api#operator.tigera.io/v1.Installation)
-resource and add the `certificateManagement` section. Apply the following change to your cluster.
+   resource and add the `certificateManagement` section. Apply the following change to your cluster.
 ```
 apiVersion: operator.tigera.io/v1
 kind: Installation
@@ -57,7 +57,7 @@ calico-system              calico-typha-688c9957f5-h9c5w              0/1     Po
 calico-system              calico-node-5ckvq                          1/1     Running            0          3s
 calico-system              calico-typha-688c9957f5-h9c5w              1/1     Running            0          3s
 ```
-During the `Init` phase a certificate signing request (CSR) is created by an init container of the pod. It will be stuck in the 
+During the `Init` phase a certificate signing request (CSR) is created by an init container of the pod. It will be stuck in the
 `Init` phase. Once the CSR has been approved and signed by the certificate authority, the pod continues with `PodInitializing`
 and eventually `Running`.
 
@@ -81,12 +81,12 @@ $ kubectl get tigerastatus
 NAME     AVAILABLE   PROGRESSING   DEGRADED   SINCE
 calico   True        False         False      2m40s
 ```
- 
+
 #### Implement your own signing and approval process
 
 **Required steps**
 
-This feature uses api version `certificates.k8s.io/v1beta1` for [certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/). 
+This feature uses api version `certificates.k8s.io/v1beta1` for [certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/).
 To automate the signing and approval process, run a server that performs the following actions:
 1. Watch `CertificateSigningRequests` resources with status `Pending` and `spec.signerName=<your-signer-name>`.
 
