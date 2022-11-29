@@ -930,27 +930,20 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
-	m.dirtyIfaceNames.Iter(func(iface string) error {
-		if !m.isDataIface(iface) && !m.isL3Iface(iface) {
-			log.WithField("iface", iface).Debug(
-				"Ignoring interface that doesn't match the host data/l3 interface regex")
-			return nil
-		}
-		err := errs[iface]
+	for iface, err := range errs {
 		isReady := true
-		ret := set.RemoveItem
 		if err == nil {
 			log.WithField("id", iface).Info("Applied program to host interface")
+			m.dirtyIfaceNames.Discard(iface)
 		} else {
 			isReady = false
 			if isLinkNotFoundError(err) {
 				log.WithField("iface", iface).Debug(
 					"Tried to apply BPF program to interface but the interface wasn't present.  " +
 						"Will retry if it shows up.")
-				return set.RemoveItem
+				m.dirtyIfaceNames.Discard(iface)
 			} else {
 				log.WithField("iface", iface).WithError(err).Warn("Failed to apply policy to interface, will retry")
-				ret = nil
 			}
 		}
 
@@ -959,9 +952,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			m.updateIfaceStateMap(iface, i)
 			return false // no need to enforce dirty
 		})
-
-		return ret
-	})
+	}
 }
 
 func (m *bpfEndpointManager) updateWEPsInDataplane() {
@@ -1008,12 +999,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		m.mapCleanupRunner.Trigger()
 	}
 
-	m.dirtyIfaceNames.Iter(func(ifaceName string) error {
-		if !m.isWorkloadIface(ifaceName) {
-			return nil
-		}
-
-		err := errs[ifaceName]
+	for ifaceName, err := range errs {
 		iface := m.nameToIface[ifaceName]
 		wlID := iface.info.endpointID
 
@@ -1031,7 +1017,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 				m.happyWEPs[*wlID] = m.allWEPs[*wlID]
 				m.happyWEPsDirty = true
 			}
-			return set.RemoveItem
+			m.dirtyIfaceNames.Discard(ifaceName)
 		} else {
 			if wlID != nil && m.happyWEPs[*wlID] != nil {
 				if !isLinkNotFoundError(err) {
@@ -1041,20 +1027,20 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 				delete(m.happyWEPs, *wlID)
 				m.happyWEPsDirty = true
 			}
-		}
 
-		if isLinkNotFoundError(err) {
-			log.WithField("wep", wlID).Debug(
-				"Tried to apply BPF program to interface but the interface wasn't present.  " +
-					"Will retry if it shows up.")
-			return set.RemoveItem
+			if isLinkNotFoundError(err) {
+				log.WithField("wep", wlID).Debug(
+					"Tried to apply BPF program to interface but the interface wasn't present.  " +
+						"Will retry if it shows up.")
+				m.dirtyIfaceNames.Discard(ifaceName)
+			} else {
+				log.WithError(err).WithFields(log.Fields{
+					"wepID": wlID,
+					"name":  ifaceName,
+				}).Warn("Failed to apply policy to endpoint, leaving it dirty")
+			}
 		}
-		log.WithError(err).WithFields(log.Fields{
-			"wepID": wlID,
-			"name":  ifaceName,
-		}).Warn("Failed to apply policy to endpoint, leaving it dirty")
-		return nil
-	})
+	}
 }
 
 func (m *bpfEndpointManager) doApplyPolicy(ifaceName string, isReady *bool) error {
