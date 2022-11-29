@@ -914,7 +914,7 @@ func (h *connection) doHandshake() error {
 		}
 	}
 	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
-	if !hello.SupportsDecoderRestart {
+	if h.chosenCompression != "" && !hello.SupportsDecoderRestart {
 		log.WithError(err).Warning("Client signalled compression but no support for decoder restart")
 		h.chosenCompression = ""
 	}

@@ -420,10 +420,12 @@ var _ = Describe("With an in-process Server", func() {
 		})
 	})
 
-	Describe("with big starting snapshot and ~10 clients", func() {
+	Describe("with big starting snapshot and ~10 clients DecoderRestart", func() {
 		var expectedEndState map[string]api.Update
 		BeforeEach(func() {
 			log.SetLevel(log.InfoLevel)
+			// Using simulated Pods to give more realistic picture of JSON encoding/decoding overheads
+			// (this test is a good one to profile).
 			expectedEndState = h.SendInitialSnapshotPods(500000)
 			// The snapshot is huge, so we only create one real client (which records the
 			// keys/values that it sees) and a bunch of no-op clients, which run the protocol
