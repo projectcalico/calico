@@ -23,8 +23,10 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -186,7 +188,7 @@ func CleanAttachedProgDir() {
 // attached program. The filename is [iface name]_[hook].json, for
 // example, eth0_egress.json
 func RuntimeJSONFilename(iface string, hook Hook) string {
-	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, string(hook)))
+	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, hook))
 }
 
 func sha256OfFile(name string) (string, error) {
@@ -270,4 +272,61 @@ func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 	}
 
 	return ai, nil
+}
+
+type HookDevKey struct {
+	Dev  string
+	Hook Hook
+}
+
+func ListHooksIDs() map[HookDevKey]int {
+	// Find all the programs that are attached to interfaces.
+	out, err := exec.Command("bpftool", "-j", "net").Output()
+	if err != nil {
+		log.WithError(err).Panic("Failed to list attached bpf programs")
+	}
+	log.WithField("dump", string(out)).Debug("Attached BPF programs")
+
+	var attached []struct {
+		TC []struct {
+			DevName string `json:"devname"`
+			ID      int    `json:"id"`
+			Kind    string `json:"kind"`
+			Name    string `json:"name"`
+		} `json:"tc"`
+		XDP []struct {
+			DevName string `json:"devname"`
+			IfIndex int    `json:"ifindex"`
+			Mode    string `json:"mode"`
+			ID      int    `json:"id"`
+		} `json:"xdp"`
+	}
+	err = json.Unmarshal(out, &attached)
+	if err != nil {
+		log.WithError(err).WithField("dump", string(out)).Error("Failed to parse list of attached BPF programs")
+	}
+
+	list := make(map[HookDevKey]int)
+
+	for _, prog := range attached[0].TC {
+		if !strings.HasPrefix(prog.Name, "calico") {
+			continue
+		}
+
+		k := HookDevKey{Dev: prog.DevName}
+		switch prog.Kind {
+		case "clsact/ingress":
+			k.Hook = HookIngress
+		case "clsact/egress":
+			k.Hook = HookEgress
+		}
+
+		list[k] = prog.ID
+	}
+
+	for _, prog := range attached[0].XDP {
+		list[HookDevKey{Dev: prog.DevName, Hook: HookXDP}] = prog.ID
+	}
+
+	return list
 }
