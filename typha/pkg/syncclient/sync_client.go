@@ -26,8 +26,9 @@ import (
 	"sync"
 	"time"
 
-	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	log "github.com/sirupsen/logrus"
+
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
