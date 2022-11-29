@@ -26,7 +26,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPDaemonStatus":                    schema_pkg_apis_projectcalico_v3_BGPDaemonStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilter":                          schema_pkg_apis_projectcalico_v3_BGPFilter(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterList":                      schema_pkg_apis_projectcalico_v3_BGPFilterList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRule":                      schema_pkg_apis_projectcalico_v3_BGPFilterRule(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSpec":                      schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword":                        schema_pkg_apis_projectcalico_v3_BGPPassword(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeer":                            schema_pkg_apis_projectcalico_v3_BGPPeer(ref),
@@ -791,11 +792,38 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "BGPFilterRule defines BGP filter rule consisting a single IP CIDR block and an filter action on this CIDR.",
+				Description: "BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"cidr": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"action": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"action"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"cidr": {
@@ -822,32 +850,60 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "BGPFilterSpec contains the filter rules of the BGP Filter.",
+				Description: "BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"export": {
+					"export_v4": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of BGPFilter rules acting on exporting routes to a peer.",
+							Description: "The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRule"),
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4"),
 									},
 								},
 							},
 						},
 					},
-					"import": {
+					"import_v4": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of BGPFilter rules acting on importing routes from a peer.",
+							Description: "The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRule"),
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4"),
+									},
+								},
+							},
+						},
+					},
+					"export_v6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6"),
+									},
+								},
+							},
+						},
+					},
+					"import_v6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6"),
 									},
 								},
 							},
@@ -857,7 +913,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRule"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6"},
 	}
 }
 

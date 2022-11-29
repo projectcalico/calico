@@ -45,18 +45,31 @@ type BGPFilter struct {
 	Spec BGPFilterSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
-// BGPFilterSpec contains the filter rules of the BGP Filter.
+// BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.
 type BGPFilterSpec struct {
-	// The ordered set of BGPFilter rules acting on exporting routes to a peer.
-	Export []BGPFilterRule `json:"export,omitempty" validate:"omitempty"`
+	// The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.
+	ExportV4 []BGPFilterRuleV4 `json:"export_v4,omitempty" validate:"omitempty"`
 
-	// The ordered set of BGPFilter rules acting on importing routes from a peer.
-	Import []BGPFilterRule `json:"import,omitempty" validate:"omitempty"`
+	// The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
+	ImportV4 []BGPFilterRuleV4 `json:"import_v4,omitempty" validate:"omitempty"`
+
+	// The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
+	ExportV6 []BGPFilterRuleV6 `json:"export_v6,omitempty" validate:"omitempty"`
+
+	// The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
+	ImportV6 []BGPFilterRuleV6 `json:"import_v6,omitempty" validate:"omitempty"`
 }
 
-// BGPFilterRule defines BGP filter rule consisting a single IP CIDR block and an filter action on this CIDR.
-type BGPFilterRule struct {
-	CIDR string `json:"cidr,omitempty" validate:"required,net"`
+// BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.
+type BGPFilterRuleV4 struct {
+	CIDR string `json:"cidr,omitempty" validate:"required,netv4"`
+
+	Action BGPFilterAction `json:"action" validate:"required"`
+}
+
+// BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.
+type BGPFilterRuleV6 struct {
+	CIDR string `json:"cidr,omitempty" validate:"required,netv6"`
 
 	Action BGPFilterAction `json:"action" validate:"required"`
 }

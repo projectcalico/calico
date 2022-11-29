@@ -31,12 +31,14 @@ func init() {
 		newBGPFilterList(),
 		false,
 		[]string{"bgpfilter", "bgpfilter", "bgpf", "bgpfs", "bf", "bfs"},
-		[]string{"NAME", "NUMEXPORT", "NUMIMPORT"},
-		[]string{"NAME", "NUMEXPORT", "NUMIMPORT"},
+		[]string{"NAME", "NUMEXPORTV4", "NUMIMPORTV4", "NUMEXPORTV6", "NUMIMPORTV6"},
+		[]string{"NAME", "NUMEXPORTV4", "NUMIMPORTV4", "NUMEXPORTV6", "NUMIMPORTV6"},
 		map[string]string{
-			"NAME":      "{{.ObjectMeta.Name}}",
-			"NUMEXPORT": "{{ len .Spec.Export}}",
-			"NUMIMPORT": "{{ len .Spec.Import}}",
+			"NAME":        "{{.ObjectMeta.Name}}",
+			"NUMEXPORTV4": "{{ len .Spec.ExportV4}}",
+			"NUMIMPORTV4": "{{ len .Spec.ImportV4}}",
+			"NUMEXPORTV6": "{{ len .Spec.ExportV6}}",
+			"NUMIMPORTV6": "{{ len .Spec.ImportV6}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.BGPFilter)
