@@ -3328,26 +3328,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
 
-						flx := felixes[1]
-						if testOpts.connTimeEnabled {
-							flx = felixes[0] // Because the ctlb uses the table created at 0 across all nodes.
-						}
-
-						// sync with NAT table being applied
-						natFtKey := nat.NewNATKey(net.ParseIP(flx.IP), npPort, numericProto)
-
+						// Sync with all felixes because some fwd tests with "none"
+						// connectivity need this to be set on all sides as they will not
+						// retry when there is no connectivity.
 						Eventually(func() bool {
-							m := dumpNATMap(flx)
-							v, ok := m[natFtKey]
-							if !ok || v.Count() == 0 {
-								return false
+							for _, flx := range felixes {
+								natFtKey := nat.NewNATKey(net.ParseIP(flx.IP), npPort, numericProto)
+
+								m := dumpNATMap(flx)
+								v, ok := m[natFtKey]
+								if !ok || v.Count() == 0 {
+									return false
+								}
+
+								beKey := nat.NewNATBackendKey(v.ID(), 0)
+
+								be := dumpEPMap(flx)
+								if _, ok := be[beKey]; !ok {
+									return false
+								}
 							}
-
-							beKey := nat.NewNATBackendKey(v.ID(), 0)
-
-							be := dumpEPMap(flx)
-							_, ok = be[beKey]
-							return ok
+							return true
 						}, 5*time.Second).Should(BeTrue())
 
 						// Sync with policy
