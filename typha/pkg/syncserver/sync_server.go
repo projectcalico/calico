@@ -910,11 +910,10 @@ func (h *connection) doHandshake() error {
 		switch alg {
 		case syncproto.CompressionSnappy:
 			h.chosenCompression = syncproto.CompressionSnappy
-			break
 		}
 	}
 	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
-	if !hello.SupportsDecoderRestart {
+	if h.chosenCompression != "" && !hello.SupportsDecoderRestart {
 		log.WithError(err).Warning("Client signalled compression but no support for decoder restart")
 		h.chosenCompression = ""
 	}

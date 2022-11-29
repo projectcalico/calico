@@ -165,6 +165,12 @@ func (h *ServerHarness) CreateClientNoDecodeRestart(id interface{}, syncType syn
 	return c
 }
 
+func (h *ServerHarness) CreateNoOpClientNoDecodeRestart(id interface{}, syncType syncproto.SyncerType) *ClientState {
+	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DisableDecoderRestart: true}, NoOpCallbacks{})
+	h.NoOpClientStates = append(h.ClientStates, c)
+	return c
+}
+
 func (h *ServerHarness) ExpectAllClientsToReachState(status api.SyncStatus, kvs map[string]api.Update) {
 	var wg sync.WaitGroup
 	for _, s := range h.ClientStates {
