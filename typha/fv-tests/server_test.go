@@ -420,11 +420,13 @@ var _ = Describe("With an in-process Server", func() {
 		})
 	})
 
-	Describe("with big starting snapshot and ~10 clients", func() {
+	Describe("with big starting snapshot and ~10 clients DecoderRestart", func() {
 		var expectedEndState map[string]api.Update
 		BeforeEach(func() {
 			log.SetLevel(log.InfoLevel)
-			expectedEndState = h.SendInitialSnapshotPods(500000)
+			// Using simulated Pods to give more realistic picture of JSON encoding/decoding overheads
+			// (this test is a good one to profile).
+			expectedEndState = h.SendInitialSnapshotPods(200000)
 			// The snapshot is huge, so we only create one real client (which records the
 			// keys/values that it sees) and a bunch of no-op clients, which run the protocol
 			// but don't record anything.
@@ -929,8 +931,6 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 	)
 
 	BeforeEach(func() {
-		// Default to debug but some more aggressive tests override this below.
-		log.SetLevel(log.DebugLevel)
 		h = NewHarness()
 
 		// Effectively disable pings, so we can hit the grace period timers.
@@ -975,6 +975,8 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 		}
 
 		BeforeEach(func() {
+			// These tests use a lot of KVs so debug is too aggressive.
+			log.SetLevel(log.InfoLevel)
 			logStats("Start of test")
 			h.SendInitialSnapshotConfigs(initialSnapshotSize)
 		})

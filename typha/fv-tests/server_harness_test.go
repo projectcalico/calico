@@ -142,7 +142,7 @@ func (h *ServerHarness) Stop() {
 }
 
 func (h *ServerHarness) CreateNoOpClient(id interface{}, syncType syncproto.SyncerType) *ClientState {
-	c := h.createClient(id, syncclient.Options{SyncerType: syncType}, NoOpCallbacks{})
+	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DebugDiscardKVUpdates: true}, NoOpCallbacks{})
 	h.NoOpClientStates = append(h.ClientStates, c)
 	return c
 }
@@ -162,6 +162,12 @@ func (h *ServerHarness) CreateClientNoDecodeRestart(id interface{}, syncType syn
 	c.recorder = recorder
 	go recorder.Loop(c.clientCxt)
 	h.ClientStates = append(h.ClientStates, c)
+	return c
+}
+
+func (h *ServerHarness) CreateNoOpClientNoDecodeRestart(id interface{}, syncType syncproto.SyncerType) *ClientState {
+	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DisableDecoderRestart: true, DebugDiscardKVUpdates: true}, NoOpCallbacks{})
+	h.NoOpClientStates = append(h.ClientStates, c)
 	return c
 }
 
@@ -207,6 +213,12 @@ func (h *ServerHarness) createClient(id interface{}, options syncclient.Options,
 func (h *ServerHarness) CreateNoOpClients(n int) {
 	for i := 0; i < n; i++ {
 		h.CreateNoOpClient(i, syncproto.SyncerTypeFelix)
+	}
+}
+
+func (h *ServerHarness) CreateNoOpClientsNoDecodeRestart(n int) {
+	for i := 0; i < n; i++ {
+		h.CreateNoOpClientNoDecodeRestart(i, syncproto.SyncerTypeFelix)
 	}
 }
 
@@ -304,7 +316,6 @@ func generatePod(n int) *corev1.Pod {
 				"cni.projectcalico.org/containerID": randomHex(64),
 				"cni.projectcalico.org/podIP":       fmt.Sprintf("%s,/32", ip.String()),
 				"cni.projectcalico.org/podIPs":      fmt.Sprintf("%s,/32", ip.String()),
-				"junk":                              randomHex(10000),
 			},
 			Labels: map[string]string{
 				"kubernetes-topology-label": "zone-A",

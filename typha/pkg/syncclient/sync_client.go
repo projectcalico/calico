@@ -56,11 +56,16 @@ type Options struct {
 	ServerURISAN   string
 	SyncerType     syncproto.SyncerType
 
+	// DisableDecoderRestart disables decoder restart and the features that depend on
+	// it (such as compression).  Useful for simulating an older client in UT.
 	DisableDecoderRestart bool
 
 	// DebugLogReads tells the client to wrap each connection with a Reader that
 	// logs every read.  Intended only for use in tests!
 	DebugLogReads bool
+	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
+	// Useful for load testing Typha without having to run a "full" client.
+	DebugDiscardKVUpdates bool
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -372,6 +377,11 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	if ourSyncerType == "" {
 		ourSyncerType = syncproto.SyncerTypeFelix
 	}
+	compAlgs := []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy}
+	if s.options.DisableDecoderRestart {
+		// Compression requires decoder restart.
+		compAlgs = nil
+	}
 	err := s.sendMessageToServer(cxt, logCxt, "send hello to server",
 		syncproto.MsgClientHello{
 			Hostname:                       s.myHostname,
@@ -379,7 +389,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			Info:                           s.myInfo,
 			SyncerType:                     ourSyncerType,
 			SupportsDecoderRestart:         !s.options.DisableDecoderRestart,
-			SupportedCompressionAlgorithms: []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy},
+			SupportedCompressionAlgorithms: compAlgs,
 			ClientConnID:                   s.ID,
 		},
 	)
@@ -446,6 +456,10 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			logCxt.Debug("Pong sent to Typha")
 		case syncproto.MsgKVs:
 			updates := make([]api.Update, 0, len(msg.KVs))
+			if s.options.DebugDiscardKVUpdates {
+				// For simulating lots of clients in tests, just throw away the data.
+				continue
+			}
 			for _, kv := range msg.KVs {
 				update, err := kv.ToUpdate()
 				if err != nil {
