@@ -24,11 +24,12 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 )
 
 var (
