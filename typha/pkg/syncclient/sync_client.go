@@ -21,11 +21,14 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/golang/snappy"
+	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -34,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
 
-var nextID uint64
+var nextID uint64 = 1 // Non-zero so we can tell whether it's set at all.
 
 const (
 	defaultReadtimeout  = 30 * time.Second
@@ -42,14 +45,17 @@ const (
 )
 
 type Options struct {
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	KeyFile      string
-	CertFile     string
-	CAFile       string
-	ServerCN     string
-	ServerURISAN string
-	SyncerType   syncproto.SyncerType
+	ReadTimeout    time.Duration
+	ReadBufferSize int
+	WriteTimeout   time.Duration
+	KeyFile        string
+	CertFile       string
+	CAFile         string
+	ServerCN       string
+	ServerURISAN   string
+	SyncerType     syncproto.SyncerType
+
+	DebugLogReads bool
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -107,8 +113,8 @@ func New(
 	return &SyncerClient{
 		ID: id,
 		logCxt: log.WithFields(log.Fields{
-			"connID": id,
-			"type":   options.SyncerType,
+			"myID": id,
+			"type": options.SyncerType,
 		}),
 		callbacks: cbs,
 		addrs:     addrs,
@@ -133,6 +139,7 @@ type SyncerClient struct {
 	options                       *Options
 
 	connection                  net.Conn
+	connR                       io.Reader
 	encoder                     *gob.Encoder
 	decoder                     *gob.Decoder
 	handshakeStatus             *handshakeStatus
@@ -174,6 +181,9 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 
 	s.Finished.Add(1)
 	go func() {
+		// Broadcast that we're finished.
+		defer s.Finished.Done()
+
 		// Wait for the context to finish, either due to external cancel or our own loop
 		// exiting.
 		<-cxt.Done()
@@ -184,8 +194,6 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 		if err != nil {
 			log.WithError(err).Warn("Ignoring error from Close during shut-down of client.")
 		}
-		// Broadcast that we're finished.
-		s.Finished.Done()
 	}()
 	return nil
 }
@@ -215,7 +223,7 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 	var err error
 	logCxt := s.logCxt.WithField("address", typhaAddr)
 
-	var connFunc func(string) (net.Conn, error)
+	var connFunc func(string) (net.Conn, *net.TCPConn, error)
 	if s.options.requiringTLS() {
 		cert, err := tls.LoadX509KeyPair(s.options.CertFile, s.options.KeyFile)
 		if err != nil {
@@ -250,23 +258,45 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 			s.options.ServerURISAN,
 		)
 
-		connFunc = func(addr string) (net.Conn, error) {
-			return tls.DialWithDialer(
+		connFunc = func(addr string) (net.Conn, *net.TCPConn, error) {
+			conn, err := tls.DialWithDialer(
 				&net.Dialer{Timeout: 10 * time.Second},
 				"tcp",
 				addr,
 				&tlsConfig)
+			if err != nil {
+				return nil, nil, err
+			}
+			tcpConn, ok := conn.NetConn().(*net.TCPConn)
+			if !ok {
+				log.Warn("Failed to extract TCP connection form TLS connection.")
+			}
+			return conn, tcpConn, err
 		}
 	} else {
-		connFunc = func(addr string) (net.Conn, error) {
-			return net.DialTimeout("tcp", addr, 10*time.Second)
+		connFunc = func(addr string) (net.Conn, *net.TCPConn, error) {
+			conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+			if err != nil {
+				return nil, nil, err
+			}
+			tcpConn, ok := conn.(*net.TCPConn)
+			if !ok {
+				log.Warn("Failed to extract TCP connection form TLS connection.")
+			}
+
+			return conn, tcpConn, err
 		}
 	}
+	var tcpConn *net.TCPConn
 	if cxt.Err() == nil {
 		logCxt.Info("Connecting to Typha.")
-		s.connection, err = connFunc(typhaAddr.Addr)
+		s.connection, tcpConn, err = connFunc(typhaAddr.Addr)
 		if err != nil {
 			return err
+		}
+		s.connR = s.connection
+		if s.options.DebugLogReads {
+			s.connR = readlogger.New(s.connection)
 		}
 	}
 	if cxt.Err() != nil {
@@ -278,8 +308,22 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 		}
 		return cxt.Err()
 	}
+
+	if s.options.ReadBufferSize != 0 {
+		if tcpConn == nil {
+			log.Warn("Cannot set read buffer size, not a TCP connection?")
+		} else {
+			err := tcpConn.SetReadBuffer(s.options.ReadBufferSize)
+			if err != nil {
+				log.WithError(err).Warn("Failed to set read buffer size, ignoring")
+			} else {
+				log.WithField("size", s.options.ReadBufferSize).Warn("Set read buffer size")
+			}
+		}
+	}
+
 	logCxt.Info("Connected to Typha.")
-	s.connInfo = &discovery.Typha{}
+	s.connInfo = &typhaAddr
 
 	// Log TLS connection details.
 	tlsConn, ok := s.connection.(*tls.Conn)
@@ -315,8 +359,9 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
 	logCxt.Info("Started Typha client main loop")
 
+	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
 	s.encoder = gob.NewEncoder(s.connection)
-	s.decoder = gob.NewDecoder(s.connection)
+	s.decoder = gob.NewDecoder(s.connR)
 
 	ourSyncerType := s.options.SyncerType
 	if ourSyncerType == "" {
@@ -324,21 +369,61 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	}
 	err := s.sendMessageToServer(cxt, logCxt, "send hello to server",
 		syncproto.MsgClientHello{
-			Hostname:   s.myHostname,
-			Version:    s.myVersion,
-			Info:       s.myInfo,
-			SyncerType: ourSyncerType,
+			Hostname:                       s.myHostname,
+			Version:                        s.myVersion,
+			Info:                           s.myInfo,
+			SyncerType:                     ourSyncerType,
+			SupportsDecoderRestart:         true,
+			SupportedCompressionAlgorithms: []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy},
+			ClientConnID:                   s.ID,
 		},
 	)
 	if err != nil {
 		return // (Failure already logged.)
 	}
 
+	msg, err := s.readMessageFromServer(cxt, logCxt)
+	if err != nil {
+		return
+	}
+	serverHello, ok := msg.(syncproto.MsgServerHello)
+	if !ok {
+		logCxt.WithField("msg", msg).Error("Unexpected first message from server.")
+		return
+	}
+	if serverHello.ServerConnID != 0 {
+		logCxt = logCxt.WithField("serverConnID", serverHello.ServerConnID)
+	}
+	logCxt.WithField("serverMsg", serverHello).Info("ServerHello message received")
+
+	// Check whether Typha supports node resource updates.
+	if !serverHello.SupportsNodeResourceUpdates {
+		logCxt.Info("Server responded without support for node resource updates, assuming older Typha")
+	}
+	s.supportsNodeResourceUpdates = serverHello.SupportsNodeResourceUpdates
+	s.handshakeStatus.helloReceivedChan <- struct{}{}
+
+	// Check the SyncerType reported by the server.  If the server is too old to support SyncerType then
+	// the message will have an empty string in place of the SyncerType.  In that case we only proceed if
+	// the client wants the felix syncer.
+	serverSyncerType := serverHello.SyncerType
+	if serverSyncerType == "" {
+		logCxt.Info("Server responded without SyncerType, assuming an old Typha version that only " +
+			"supports SyncerTypeFelix.")
+		serverSyncerType = syncproto.SyncerTypeFelix
+	}
+	if ourSyncerType != serverSyncerType {
+		logCxt.Errorf("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
+		return
+	}
+
+	// Handshake done, start processing messages from the server.
 	for cxt.Err() == nil {
 		msg, err := s.readMessageFromServer(cxt, logCxt)
 		if err != nil {
 			return
 		}
+		debug := log.GetLevel() >= log.DebugLevel
 		switch msg := msg.(type) {
 		case syncproto.MsgSyncStatus:
 			logCxt.WithField("newStatus", msg.SyncStatus).Info("Status update from Typha.")
@@ -362,38 +447,44 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 					logCxt.WithError(err).Error("Failed to deserialize update, skipping.")
 					continue
 				}
-				logCxt.WithFields(log.Fields{
-					"serialized":   kv,
-					"deserialized": update,
-				}).Debug("Decoded update from Typha")
+				if debug {
+					logCxt.WithFields(log.Fields{
+						"serialized":   kv,
+						"deserialized": update,
+					}).Trace("Decoded update from Typha")
+				}
 				updates = append(updates, update)
 			}
 			s.callbacks.OnUpdates(updates)
-		case syncproto.MsgServerHello:
-			logCxt.WithField("serverVersion", msg.Version).Info("Server hello message received")
-
-			// Check whether Typha supports node resource updates.
-			if !msg.SupportsNodeResourceUpdates {
-				logCxt.Info("Server responded without support for node resource updates, assuming older Typha")
-			}
-			s.supportsNodeResourceUpdates = msg.SupportsNodeResourceUpdates
-			s.handshakeStatus.helloReceivedChan <- struct{}{}
-
-			// Check the SyncerType reported by the server.  If the server is too old to support SyncerType then
-			// the message will have an empty string in place of the SyncerType.  In that case we only proceed if
-			// the client wants the felix syncer.
-			serverSyncerType := msg.SyncerType
-			if serverSyncerType == "" {
-				logCxt.Info("Server responded without SyncerType, assuming an old Typha version that only " +
-					"supports SyncerTypeFelix.")
-				serverSyncerType = syncproto.SyncerTypeFelix
-			}
-			if ourSyncerType != serverSyncerType {
-				logCxt.Errorf("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
+		case syncproto.MsgDecoderRestart:
+			err = s.restartDecoder(cxt, logCxt, msg)
+			if err != nil {
 				return
 			}
+		case syncproto.MsgServerHello:
+			logCxt.WithField("serverVersion", msg.Version).Error("Unexpected extra server hello message received")
+			return
 		}
 	}
+}
+
+func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, msg syncproto.MsgDecoderRestart) error {
+	logCxt.WithField("msg", msg).Info("Server asked us to restart our decoder")
+	// Check if we should enable compression.
+	switch msg.CompressionAlgorithm {
+	case syncproto.CompressionSnappy:
+		logCxt.Info("Server selected snappy compression.")
+		r := snappy.NewReader(s.connR)
+		s.decoder = gob.NewDecoder(r)
+	case "":
+		logCxt.Info("Server selected no compression.")
+		s.decoder = gob.NewDecoder(s.connR)
+	}
+	// Server requires an ack of the MsgDecoderRestart before it can send data in the new format.
+	err := s.sendMessageToServer(cxt, logCxt, "send ACK to server",
+		syncproto.MsgACK{},
+	)
+	return err
 }
 
 // sendMessageToServer sends a single value-type MsgXYZ object to the server.  It updates the connection's
@@ -431,6 +522,6 @@ func (s *SyncerClient) readMessageFromServer(cxt context.Context, logCxt *log.En
 		s.logConnectionFailure(cxt, logCxt, err, "read from server")
 		return nil, err
 	}
-	logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
+	logCxt.WithField("envelope", envelope).Trace("New message from Typha.")
 	return envelope.Message, nil
 }
