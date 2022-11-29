@@ -56,6 +56,8 @@ type Options struct {
 	ServerURISAN   string
 	SyncerType     syncproto.SyncerType
 
+	DisableDecoderRestart bool
+
 	// DebugLogReads tells the client to wrap each connection with a Reader that
 	// logs every read.  Intended only for use in tests!
 	DebugLogReads bool
@@ -190,7 +192,7 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 		// Wait for the context to finish, either due to external cancel or our own loop
 		// exiting.
 		<-cxt.Done()
-		s.logCxt.Info("Typha client Context asked us to exit")
+		s.logCxt.Info("Typha client Context asked us to exit, closing connection...")
 		// Close the connection.  This will trigger the main loop to exit if it hasn't
 		// already.
 		err := s.connection.Close()
@@ -376,7 +378,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			Version:                        s.myVersion,
 			Info:                           s.myInfo,
 			SyncerType:                     ourSyncerType,
-			SupportsDecoderRestart:         true,
+			SupportsDecoderRestart:         !s.options.DisableDecoderRestart,
 			SupportedCompressionAlgorithms: []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy},
 			ClientConnID:                   s.ID,
 		},
@@ -460,8 +462,13 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			}
 			s.callbacks.OnUpdates(updates)
 		case syncproto.MsgDecoderRestart:
+			if s.options.DisableDecoderRestart {
+				log.Error("Server sent MsgDecoderRestart but we signalled no support.")
+				return
+			}
 			err = s.restartDecoder(cxt, logCxt, msg)
 			if err != nil {
+				log.WithError(err).Error("Failed to restart decoder")
 				return
 			}
 		case syncproto.MsgServerHello:

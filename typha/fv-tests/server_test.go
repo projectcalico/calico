@@ -403,7 +403,24 @@ var _ = Describe("With an in-process Server", func() {
 		})
 	})
 
-	Describe("with big starting snapshot and 10 clients", func() {
+	// Simulate an old client.
+	Describe("with a client that doesn't support connection restart", func() {
+		BeforeEach(func() {
+			h.CreateClientNoDecodeRestart("no decoder restart", syncproto.SyncerTypeFelix)
+		})
+
+		It("should handle the initial snapshot", func() {
+			expState := h.SendInitialSnapshotPods(10)
+			h.ExpectAllClientsToReachState(api.InSync, expState)
+			expState2 := h.SendPodUpdates(10)
+			for k, v := range expState2 {
+				expState[k] = v
+			}
+			h.ExpectAllClientsToReachState(api.InSync, expState)
+		})
+	})
+
+	Describe("with big starting snapshot and ~10 clients", func() {
 		var expectedEndState map[string]api.Update
 		BeforeEach(func() {
 			log.SetLevel(log.InfoLevel)
@@ -732,6 +749,22 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 						Version:    "test",
 						Info:       "test info",
 						SyncerType: syncproto.SyncerType("garbage"),
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should disconnect the client", func() {
+				expectDisconnection(100 * time.Millisecond)
+				expectGlobalGaugeValue("typha_connections_active", 0.0)
+			})
+		})
+
+		Describe("After sending unexpected message", func() {
+			BeforeEach(func() {
+				err := w.Encode(syncproto.Envelope{
+					Message: syncproto.MsgSyncStatus{
+						SyncStatus: api.InSync,
 					},
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -1081,6 +1114,120 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			// Should not use the grace period at all.
 			Expect(getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue))
 		})
+	})
+})
+
+var _ = Describe("With an in-process Server with short write timeout", func() {
+	var (
+		h *ServerHarness
+	)
+
+	BeforeEach(func() {
+		// Default to debug but some more aggressive tests override this below.
+		log.SetLevel(log.InfoLevel)
+		h = NewHarness()
+
+		// Effectively disable pings, so we can hit the other timeouts reliably.
+		h.Config.PingInterval = 10000 * time.Second
+		h.Config.PongTimeout = 50000 * time.Second
+
+		// Short timeouts so we can hit them quickly.
+		h.Config.WriteTimeout = 250 * time.Millisecond
+
+		// The snapshot is >10MB; set the write buffer to something much less than that since these
+		// tests need to cause backpressure on Typha.
+		h.Config.WriteBufferSize = 1024 * 256
+		// Since we rely on back-pressure, it's really handy to have a log of exactly what writes
+		// happen and when.
+		h.Config.DebugLogWrites = true
+
+		h.Start()
+	})
+
+	AfterEach(func() {
+		h.Stop()
+	})
+
+	Describe("with lots of KVs", func() {
+		const initialSnapshotSize = 10000
+
+		logStats := func(note string) {
+			for _, stat := range []string{
+				"typha_snapshot_generated",
+			} {
+				value, _ := getPerSyncerCounter(syncproto.SyncerTypeFelix, stat)
+				log.Infof("%s: counter: %s =  %v", note, stat, int(value))
+			}
+			for _, stat := range []string{
+				"typha_snapshot_raw_bytes",
+				"typha_snapshot_compressed_bytes",
+			} {
+				value, _ := getPerSyncerGauge(syncproto.SyncerTypeFelix, stat)
+				log.Infof("%s: gauge: %s =  %v", note, stat, int(value))
+			}
+		}
+
+		BeforeEach(func() {
+			logStats("Start of test")
+			h.SendInitialSnapshotConfigs(initialSnapshotSize)
+		})
+
+		AfterEach(func() {
+			logStats("End of test")
+		})
+
+		for _, disabledDecoderRestart := range []bool{true, false} {
+			disabledDecoderRestart := disabledDecoderRestart
+			It(fmt.Sprintf("client (DisabledDecoderRestart=%v) that blocks while reading snapshot should get disconnected", disabledDecoderRestart),
+				func() {
+					clientCxt, clientCancel := context.WithCancel(context.Background())
+					defer clientCancel()
+					recorder := NewRecorderChanSize(0) // Need a small channel so we can give back pressure.
+
+					// Make the client block after it reads the first update.
+					recorder.BlockAfterNUpdates(1, 1*time.Second)
+
+					client := syncclient.New(
+						[]discovery.Typha{{Addr: h.Addr()}},
+						"test-version",
+						"test-host",
+						"test-info",
+						recorder,
+						&syncclient.Options{
+							// The snapshot is >10MB; set the read buffer to something much less than that since these
+							// tests need to cause backpressure on Typha.
+							ReadBufferSize: 1024 * 256,
+							// Enable logging of every read since these tests depend on read and write timings.
+							DebugLogReads:         true,
+							DisableDecoderRestart: disabledDecoderRestart,
+						},
+					)
+
+					err := client.Start(clientCxt)
+					go recorder.Loop(clientCxt)
+					Expect(err).NotTo(HaveOccurred())
+					defer func() {
+						clientCancel()
+						log.Info("Waiting for client to stop...")
+						client.Finished.Wait()
+						log.Info("Client stopped.")
+					}()
+
+					// We should get at least the first KV...
+					Eventually(recorder.Len, time.Second).Should(BeNumerically(">", 0))
+
+					// But then get disconnected.
+					finishedC := make(chan struct{})
+					go func() {
+						client.Finished.Wait()
+						close(finishedC)
+					}()
+
+					Eventually(finishedC, 5*time.Second).Should(BeClosed())
+					expectGlobalGaugeValue("typha_connections_active", 0.0)
+				},
+			)
+		}
 	})
 })
 

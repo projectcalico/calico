@@ -76,15 +76,19 @@ type BinarySnapshotCache struct {
 	counterBinSnapsReused    prometheus.Counter
 	gaugeSnapBytesRaw        prometheus.Gauge
 	gaugeSnapBytesComp       prometheus.Gauge
+
+	writeTimeout time.Duration
 }
 
 func NewBinarySnapCache(
 	syncerName string,
 	cache BreadcrumbProvider,
 	snapValidityTimeout time.Duration,
+	writeTimeout time.Duration,
 ) *BinarySnapshotCache {
 	s := &BinarySnapshotCache{
 		snapValidityTimeout: snapValidityTimeout,
+		writeTimeout:        writeTimeout,
 		cache:               cache,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"thread": "snapshotter",
@@ -125,8 +129,11 @@ func (s *BinarySnapshotCache) SendSnapshot(ctx context.Context, w io.Writer, con
 				s.logCtx.Info("Context finished, aborting send of snapshot.")
 				return nil, ctx.Err()
 			}
-			if time.Until(currentWriteDeadline) < 60*time.Second {
-				newDeadline := time.Now().Add(90 * time.Second)
+
+			// Optimisation: only reset the deadline if we've used a significant portion of it.
+			// Setting it seems to be fairly expensive.
+			if time.Until(currentWriteDeadline) < s.writeTimeout*80/100 {
+				newDeadline := time.Now().Add(s.writeTimeout)
 				err := conn.SetWriteDeadline(newDeadline)
 				if err != nil {
 					return nil, err

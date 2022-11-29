@@ -142,14 +142,23 @@ func (h *ServerHarness) Stop() {
 }
 
 func (h *ServerHarness) CreateNoOpClient(id interface{}, syncType syncproto.SyncerType) *ClientState {
-	c := h.createClient(id, syncType, NoOpCallbacks{})
+	c := h.createClient(id, syncclient.Options{SyncerType: syncType}, NoOpCallbacks{})
 	h.NoOpClientStates = append(h.ClientStates, c)
 	return c
 }
 
 func (h *ServerHarness) CreateClient(id interface{}, syncType syncproto.SyncerType) *ClientState {
 	recorder := NewRecorder()
-	c := h.createClient(id, syncType, recorder)
+	c := h.createClient(id, syncclient.Options{SyncerType: syncType}, recorder)
+	c.recorder = recorder
+	go recorder.Loop(c.clientCxt)
+	h.ClientStates = append(h.ClientStates, c)
+	return c
+}
+
+func (h *ServerHarness) CreateClientNoDecodeRestart(id interface{}, syncType syncproto.SyncerType) *ClientState {
+	recorder := NewRecorder()
+	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DisableDecoderRestart: true}, recorder)
 	c.recorder = recorder
 	go recorder.Loop(c.clientCxt)
 	h.ClientStates = append(h.ClientStates, c)
@@ -171,7 +180,7 @@ func (h *ServerHarness) ExpectAllClientsToReachState(status api.SyncStatus, kvs 
 	wg.Wait()
 }
 
-func (h *ServerHarness) createClient(id interface{}, syncType syncproto.SyncerType, callbacks api.SyncerCallbacks) *ClientState {
+func (h *ServerHarness) createClient(id interface{}, options syncclient.Options, callbacks api.SyncerCallbacks) *ClientState {
 	clientCxt, clientCancel := context.WithCancel(context.Background())
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", h.Server.Port())
 	client := syncclient.New(
@@ -180,9 +189,7 @@ func (h *ServerHarness) createClient(id interface{}, syncType syncproto.SyncerTy
 		fmt.Sprintf("test-host-%v", id),
 		"test-info",
 		callbacks,
-		&syncclient.Options{
-			SyncerType: syncType,
-		},
+		&options,
 	)
 
 	err := client.Start(clientCxt)
@@ -192,7 +199,7 @@ func (h *ServerHarness) createClient(id interface{}, syncType syncproto.SyncerTy
 		clientCxt:    clientCxt,
 		client:       client,
 		clientCancel: clientCancel,
-		syncerType:   syncType,
+		syncerType:   options.SyncerType,
 	}
 	return cs
 }

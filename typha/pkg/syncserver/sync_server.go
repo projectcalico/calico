@@ -94,11 +94,13 @@ func init() {
 }
 
 const (
+	defaultBinarySnapshotTimeout          = 1 * time.Second
 	defaultMaxMessageSize                 = 100
 	defaultMaxFallBehind                  = 300 * time.Second
 	defaultNewClientFallBehindGracePeriod = 300 * time.Second
 	defaultBatchingAgeThreshold           = 100 * time.Millisecond
 	defaultPingInterval                   = 10 * time.Second
+	defaultWriteTimeout                   = 120 * time.Second
 	defaultDropInterval                   = 1 * time.Second
 	defaultShutdownTimeout                = 300 * time.Second
 	defaultMaxConns                       = math.MaxInt32
@@ -132,11 +134,13 @@ type BreadcrumbProvider interface {
 type Config struct {
 	Port                           int
 	MaxMessageSize                 int
+	BinarySnapshotTimeout          time.Duration
 	MaxFallBehind                  time.Duration
 	NewClientFallBehindGracePeriod time.Duration
 	MinBatchingAgeThreshold        time.Duration
 	PingInterval                   time.Duration
 	PongTimeout                    time.Duration
+	WriteTimeout                   time.Duration
 	DropInterval                   time.Duration
 	ShutdownTimeout                time.Duration
 	ShutdownMaxDropInterval        time.Duration
@@ -160,6 +164,13 @@ const (
 )
 
 func (c *Config) ApplyDefaults() {
+	if c.BinarySnapshotTimeout <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.BinarySnapshotTimeout,
+			"default": defaultBinarySnapshotTimeout,
+		}).Info("Defaulting BinarySnapshotTimeout.")
+		c.BinarySnapshotTimeout = defaultBinarySnapshotTimeout
+	}
 	if c.MaxMessageSize < 1 {
 		log.WithFields(log.Fields{
 			"value":   c.MaxMessageSize,
@@ -202,6 +213,10 @@ func (c *Config) ApplyDefaults() {
 			"default": defaultTimeout,
 		}).Info("PongTimeout < PingInterval * 2; Defaulting PongTimeout.")
 		c.PongTimeout = defaultTimeout
+	}
+	if c.WriteTimeout <= 0 {
+		log.WithField("default", defaultWriteTimeout).Info("Defaulting write timeout.")
+		c.WriteTimeout = defaultWriteTimeout
 	}
 	if c.DropInterval <= 0 {
 		log.WithFields(log.Fields{
@@ -271,7 +286,7 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 	s.binSnapCaches[syncproto.CompressionSnappy] = map[syncproto.SyncerType]*BinarySnapshotCache{}
 	for st, cache := range caches {
 		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
-		s.binSnapCaches[syncproto.CompressionSnappy][st] = NewBinarySnapCache(string(st), cache, time.Second) // FIXME use own timeout
+		s.binSnapCaches[syncproto.CompressionSnappy][st] = NewBinarySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
 	}
 
 	// Register that we will report liveness.
@@ -989,7 +1004,7 @@ func (h *connection) sendMsg(msg interface{}) error {
 	// We need some timeout here to ensure that we can't get wedged when trying to send the initial snapshot.
 	// After the snapshot is sent, we then have regular ping/pongs so this timeout should never fire (the pong will
 	// time out first).
-	err := h.conn.SetWriteDeadline(startTime.Add(h.config.PongTimeout * 2))
+	err := h.conn.SetWriteDeadline(startTime.Add(h.config.WriteTimeout))
 	if err != nil {
 		h.logCxt.WithError(err).Info("Failed to set client write timeout")
 		return err
