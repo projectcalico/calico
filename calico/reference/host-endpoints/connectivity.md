@@ -4,7 +4,6 @@ description: Customize the Calico failsafe policy to protect host endpoints.
 canonical_url: '/reference/host-endpoints/connectivity'
 ---
 
-
 When a host endpoint is added, if there is no security policy for that
 endpoint, {{site.prodname}} will default to denying traffic to/from that endpoint,
 except for traffic that is allowed by the [failsafe rules](failsafe).
@@ -86,5 +85,4 @@ Once you have such a policy in place, you may want to disable the
 > inbound and outbound rules to allow BGP:  add an ingress and egress rule
 > to allow TCP traffic to destination port 179.
 {: .alert .alert-info}
-
 

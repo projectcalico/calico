@@ -43,7 +43,6 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
 ### Prerequisites
 
 This procedure requires etcdctl v3. The etcdctl tool is installed along with etcd. To install just etcdctl, [download the etcd release binary](https://github.com/coreos/etcd/releases){:target="_blank"}, untar it, and extract the etcdctl binary.
-  
 
 ### Deleting Calico data from etcdv3
 

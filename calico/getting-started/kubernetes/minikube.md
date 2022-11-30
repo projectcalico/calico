@@ -126,7 +126,6 @@ Issuing a delete command will destroy the cluster that you created in this tutor
 minikube delete
 ```
 
-
 ### Next steps
 
 **Required**

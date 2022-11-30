@@ -131,8 +131,6 @@ Install {{site.prodname}} by creating the necessary custom resource. For more in
    %>
    {% endtabs %}
 
-
-   
 #### Check the installation
    
 1. Confirm that all of the pods are running using the following command.

@@ -1,5 +1,6 @@
 ---
-description: Install Calico for OpenStack.
+title: Install Calico on OpenStack
+description: Install Calico on OpenStack
 show_read_time: false
 show_toc: false
 ---

@@ -34,7 +34,6 @@ with a cluster greater than 50 nodes.
 
 Typha is generally not required for Calico deployments using an etcdv3 datastore directly.
 
-
 ## How can I start using Typha?
 
 Follow the "more than 50 nodes" section in the
