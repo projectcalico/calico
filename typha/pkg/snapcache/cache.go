@@ -132,6 +132,8 @@ type Cache struct {
 	kvs *btree.BTreeG[syncproto.SerializedUpdate]
 	// breadcrumbCond is the condition variable used to signal when a new breadcrumb is available.
 	breadcrumbCond *sync.Cond
+	// lastBroadcast is the last time we did a broadcast to wake up breadcrumb followers.
+	lastBroadcast time.Time
 	// currentBreadcrumb points to the most recent Breadcrumb, which contains the most recent snapshot of kvs.
 	// As described above, we use an unsafe.Pointer so we can do opportunistic atomic reads of the value to avoid
 	// blocking.
@@ -279,8 +281,10 @@ func (c *Cache) loop(ctx context.Context) {
 // pulls as much as possible from the channel.  Input is stored in the pendingXXX fields for
 // the next stage of processing.
 func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
+	somethingToSend := false
 	batchSize := 0
 	storePendingUpdate := func(obj interface{}) {
+		somethingToSend = true
 		switch obj := obj.(type) {
 		case api.SyncStatus:
 			log.WithField("status", obj).Info("Received status update message from datastore.")
@@ -298,32 +302,39 @@ func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 	}
 
 	log.Debug("Waiting for next input...")
-	select {
-	case obj := <-c.inputC:
-		log.WithField("update", obj).Debug("Got first update, peeking...")
-		storePendingUpdate(obj)
-	batchLoop:
-		for batchSize < c.config.MaxBatchSize {
-			select {
-			case obj = <-c.inputC:
-				storePendingUpdate(obj)
-			case <-ctx.Done():
-				log.WithError(ctx.Err()).Info("Context is done. Stopping.")
-				return ctx.Err()
-			default:
-				break batchLoop
+	for ctx.Err() == nil && !somethingToSend {
+		select {
+		case obj := <-c.inputC:
+			log.WithField("update", obj).Debug("Got first update, peeking...")
+			storePendingUpdate(obj)
+		batchLoop:
+			for batchSize < c.config.MaxBatchSize {
+				select {
+				case obj = <-c.inputC:
+					storePendingUpdate(obj)
+				case <-ctx.Done():
+					log.WithError(ctx.Err()).Info("Context is done. Stopping.")
+					return ctx.Err()
+				default:
+					break batchLoop
+				}
 			}
+			log.WithField("numUpdates", batchSize).Debug("Finished reading batch.")
+		case <-ctx.Done():
+			log.WithError(ctx.Err()).Info("Context is done. Stopping.")
+		case <-c.wakeUpTicker.C:
+			// Workaround the fact that go doesn't have a timeout on Cond.Wait().  Periodically
+			// wake all the clients, so they can check if their Context is done.
+			if time.Since(c.lastBroadcast) < c.config.WakeUpInterval {
+				// Already did a broadcast recently due to minting a real breadcrumb.
+				continue
+			}
+			log.Debug("Waking all clients.")
+			c.breadcrumbCond.Broadcast()
+			c.lastBroadcast = time.Now()
+		case <-c.healthTicks:
+			c.reportHealth()
 		}
-		log.WithField("numUpdates", batchSize).Debug("Finished reading batch.")
-	case <-ctx.Done():
-		log.WithError(ctx.Err()).Info("Context is done. Stopping.")
-	case <-c.wakeUpTicker.C:
-		// Workaround the fact that go doesn't have a timeout on Cond.Wait().  Periodically
-		// wake all the clients so they can check if their Context is done.
-		log.Debug("Waking all clients.")
-		c.breadcrumbCond.Broadcast()
-	case <-c.healthTicks:
-		c.reportHealth()
 	}
 	return ctx.Err()
 }
@@ -339,11 +350,12 @@ func (c *Cache) reportHealth() {
 
 // publishBreadcrumbs sends a series of Breadcrumbs, draining the pending updates list.
 func (c *Cache) publishBreadcrumbs() {
-	for {
+	// Always force one call in case we need to send a breadcrumb just to update the sync status.
+	c.publishBreadcrumb()
+
+	// Then send anything else we have left.
+	for len(c.pendingUpdates) > 0 {
 		c.publishBreadcrumb()
-		if len(c.pendingUpdates) == 0 {
-			break
-		}
 	}
 }
 
@@ -445,6 +457,7 @@ func (c *Cache) publishBreadcrumb() {
 	// while calling Broadcast.
 	log.WithField("seqNo", newCrumb.SequenceNumber).Debug("Broadcasting new Breadcrumb")
 	c.breadcrumbCond.Broadcast()
+	c.lastBroadcast = time.Now()
 	c.gaugeCurrentSequenceNumber.Set(float64(newCrumb.SequenceNumber))
 }
 

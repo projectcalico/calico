@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The syncproto package defines the structs used in the Felix/Typha protocol.
+// Package syncproto defines the structs used in the Felix/Typha protocol.
 //
 // Overview
 //
@@ -49,6 +49,17 @@
 //	|                        |
 //	|            ServerHello |
 //	|<-----------------------|
+//	|                        |
+//	|                        | -------------------------------------------------------\
+//	|--------------------------| if compression enabled, restart client's gob decoder |
+//	|                        | | send ACK when ready to receive compressed data       |
+//	| ACK                    | |------------------------------------------------------|
+//	|----------------------->|
+//	|                        | -------------------------------------------------------\
+//	|                        |-| if compression enabled, restart server's gob encoder |
+//	|                        | | with compressed stream                               |
+//	|                        | |------------------------------------------------------|
+//	|                        |
 //	|                        | ------------------------------------\
 //	|                        |-| start KV send & pinger goroutines |
 //	|                        | |-----------------------------------|
@@ -143,18 +154,23 @@
 //
 // Upgrading the Typha protocol
 //
-// Currently, the Typha protocol is unversioned.  It is important that an uplevel Typha
-// doesn't send a new uplevel message to a downlevel Felix or vice-versa since the gob
-// decoder would fail to parse the message, resulting in closing the connection.
+// In general, even fairly large changes to the protocol can be managed by suitable
+// signalling in the handshake.  The most important limitation to be aware of is that
+// neither server nor client should send a new message _type_ to the other without
+// verifying that the other supports that message type.  In concrete terms, that
+// means adding fields to the handshake to advertise support for particular features
+// and then for the other side to check that the new field is set before sending the
+// new message types.  This works because gob defaults unknown fields to their zero
+// value on read, so, if the peer doesn't say "SupportsFeatureX: true" in their
+// Hello message, then you'll see "SupportsFeatureX: false" at the other side.
+// If you send a message that the peer doesn't understand, decoding will return an
+// error.
 //
-// If we need to add new unsolicited messages in either direction, we could add a
-// ProtocolVersion field to the handshake messages.  Since gob defaults fields to
-// their zero value if they're not present on the wire, a Typha with a ProtocolVersion
-// field that receives a connection from an old Felix with no field would see 0 as the
-// value of the field and could act accordingly.
-//
-// If a more serious upgrade is needed (such as replacing gob), we could use a second
-// port for the new protocol.
+// It's also possible to switch from one protocol to another mid-stream.  We do this
+// to enable compression.  The main gotcha is to ensure that no new format data is
+// sent until after the other side has acknowledged that it has drained the old
+// format data and prepared the new format decoder.  Otherwise the old format decoder
+// may eagerly read data in the new format into its buffer and get confused.
 package syncproto
 
 import (
@@ -217,6 +233,14 @@ var (
 	}
 )
 
+type CompressionAlgorithm string
+
+const (
+	CompressionSnappy CompressionAlgorithm = "snappy"
+)
+
+// MsgClientHello is the first message sent by the client after it opens the connection.  It begins the handshake.
+// It includes a request to use a particular kind of syncer and tells the server what features are supported.
 type MsgClientHello struct {
 	Hostname string
 	Info     string
@@ -225,7 +249,14 @@ type MsgClientHello struct {
 	// SyncerType the requested syncer type.  Added in v3.3; if client doesn't provide a value, assumed to be
 	// SyncerTypeFelix.
 	SyncerType SyncerType
+
+	SupportsDecoderRestart         bool
+	SupportedCompressionAlgorithms []CompressionAlgorithm
+
+	ClientConnID uint64
 }
+
+// MsgServerHello is the server's response to MsgClientHello.
 type MsgServerHello struct {
 	Version string
 
@@ -235,6 +266,20 @@ type MsgServerHello struct {
 
 	// SupportsNodeResourceUpdates provides to the client whether this Typha supports node resource updates.
 	SupportsNodeResourceUpdates bool
+
+	ServerConnID uint64
+}
+
+// MsgDecoderRestart is sent (currently only from server to client) to tell it to restart its decoder with new
+// parameters.
+type MsgDecoderRestart struct {
+	Message              string
+	CompressionAlgorithm CompressionAlgorithm
+}
+
+// MsgACK is a general-purpose ACK message, currently used during the initial handshake to acknowledge the
+// switch to compressed mode.
+type MsgACK struct {
 }
 type MsgSyncStatus struct {
 	SyncStatus api.SyncStatus
@@ -254,6 +299,8 @@ func init() {
 	// For forwards/backwards compatibility, we need to use RegisterName here to force consistent names even as
 	// code gets refactored/moved/vendored/etc. In particular, this uses the pre-monorepo paths for this package.
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgClientHello", MsgClientHello{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgDecoderRestart", MsgDecoderRestart{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgACK", MsgACK{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgServerHello", MsgServerHello{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgSyncStatus", MsgSyncStatus{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPing", MsgPing{})
