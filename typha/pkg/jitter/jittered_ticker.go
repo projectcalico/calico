@@ -54,7 +54,7 @@ tickLoop:
 	for {
 		select {
 		case <-t.stop:
-			log.Info("Stopping jittered ticker")
+			log.Debug("Stopping jittered ticker")
 			close(c)
 			timer.Stop()
 			break tickLoop
