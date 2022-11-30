@@ -33,6 +33,7 @@ require (
 	github.com/howeyc/fsnotify v0.9.0
 	github.com/ishidawataru/sctp v0.0.0-20191218070446-00ab2ac2db07
 	github.com/joho/godotenv v1.4.0
+	github.com/json-iterator/go v1.1.12
 	github.com/juju/clock v0.0.0-20190205081909-9c5c9712527c
 	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f
 	github.com/juju/mutex v0.0.0-20180619145857-d21b13acf4bf
@@ -67,10 +68,10 @@ require (
 	github.com/tchap/go-patricia/v2 v2.3.1
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 	github.com/vishvananda/netlink v1.2.1-beta.2.0.20220630165224-c591ada0fb2b
-	go.etcd.io/etcd/api/v3 v3.5.5
-	go.etcd.io/etcd/client/pkg/v3 v3.5.5
-	go.etcd.io/etcd/client/v2 v2.305.5
-	go.etcd.io/etcd/client/v3 v3.5.5
+	go.etcd.io/etcd/api/v3 v3.5.6
+	go.etcd.io/etcd/client/pkg/v3 v3.5.6
+	go.etcd.io/etcd/client/v2 v2.305.6
+	go.etcd.io/etcd/client/v3 v3.5.6
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
@@ -180,7 +181,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/testing v0.0.0-20200608005635-e4eedbc6f7aa // indirect
 	github.com/karrick/godirwalk v1.16.1 // indirect
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af // indirect
