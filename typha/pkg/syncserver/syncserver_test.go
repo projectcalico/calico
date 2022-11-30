@@ -33,6 +33,7 @@ var _ = Describe("With zero config", func() {
 	It("it should apply correct defaults", func() {
 		config.ApplyDefaults()
 		Expect(config).To(Equal(Config{
+			WriteTimeout:                   120 * time.Second,
 			MaxMessageSize:                 100,
 			MaxFallBehind:                  300 * time.Second,
 			NewClientFallBehindGracePeriod: 300 * time.Second,
