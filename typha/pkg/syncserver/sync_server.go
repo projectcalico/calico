@@ -27,6 +27,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,6 +95,7 @@ func init() {
 }
 
 const (
+	defaultBinarySnapshotTimeout          = 1 * time.Second
 	defaultMaxMessageSize                 = 100
 	defaultMaxFallBehind                  = 300 * time.Second
 	defaultNewClientFallBehindGracePeriod = 300 * time.Second
@@ -107,12 +109,13 @@ const (
 )
 
 type Server struct {
-	config     Config
-	caches     map[syncproto.SyncerType]BreadcrumbProvider
-	nextConnID uint64
-	maxConnsC  chan int
-	chosenPort int
-	listeningC chan struct{}
+	config        Config
+	caches        map[syncproto.SyncerType]BreadcrumbProvider
+	binSnapCaches map[syncproto.CompressionAlgorithm]map[syncproto.SyncerType]snapshotCache
+	nextConnID    uint64
+	maxConnsC     chan int
+	chosenPort    int
+	listeningC    chan struct{}
 
 	lock sync.Mutex
 
@@ -132,6 +135,7 @@ type BreadcrumbProvider interface {
 type Config struct {
 	Port                           int
 	MaxMessageSize                 int
+	BinarySnapshotTimeout          time.Duration
 	MaxFallBehind                  time.Duration
 	NewClientFallBehindGracePeriod time.Duration
 	MinBatchingAgeThreshold        time.Duration
@@ -161,6 +165,13 @@ const (
 )
 
 func (c *Config) ApplyDefaults() {
+	if c.BinarySnapshotTimeout <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.BinarySnapshotTimeout,
+			"default": defaultBinarySnapshotTimeout,
+		}).Info("Defaulting BinarySnapshotTimeout.")
+		c.BinarySnapshotTimeout = defaultBinarySnapshotTimeout
+	}
 	if c.MaxMessageSize < 1 {
 		log.WithFields(log.Fields{
 			"value":   c.MaxMessageSize,
@@ -264,6 +275,7 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 	s := &Server{
 		config:               config,
 		caches:               caches,
+		binSnapCaches:        map[syncproto.CompressionAlgorithm]map[syncproto.SyncerType]snapshotCache{},
 		maxConnsC:            make(chan int),
 		shutdownC:            make(chan struct{}),
 		nextConnID:           1,
@@ -272,8 +284,10 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
 	}
 
-	for st := range caches {
+	s.binSnapCaches[syncproto.CompressionSnappy] = map[syncproto.SyncerType]snapshotCache{}
+	for st, cache := range caches {
 		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
+		s.binSnapCaches[syncproto.CompressionSnappy][st] = NewSnappySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
 	}
 
 	// Register that we will report liveness.
@@ -453,13 +467,14 @@ func (s *Server) serve(cxt context.Context) {
 			connW = writelogger.New(conn)
 		}
 		connection := &connection{
-			ID:        connID,
-			config:    &s.config,
-			allCaches: s.caches,
-			cxt:       connCxt,
-			cancelCxt: cancel,
-			conn:      conn,
-			connW:     connW,
+			ID:              connID,
+			config:          &s.config,
+			allCaches:       s.caches,
+			allSnapshotters: s.binSnapCaches,
+			cxt:             connCxt,
+			cancelCxt:       cancel,
+			conn:            conn,
+			connW:           connW,
 			logCxt: log.WithFields(log.Fields{
 				"client": conn.RemoteAddr(),
 				"connID": connID,
@@ -666,10 +681,11 @@ type connection struct {
 	// allCaches contains a mapping from syncer type (felix/BGP) to the right cache to use.  We don't know
 	// which cache to use until we do the handshake.  Once the handshake is complete, we store the correct
 	// cache in the "cache" field.
-	allCaches  map[syncproto.SyncerType]BreadcrumbProvider
-	cache      BreadcrumbProvider
-	syncerType syncproto.SyncerType
-	conn       net.Conn
+	allCaches       map[syncproto.SyncerType]BreadcrumbProvider
+	allSnapshotters map[syncproto.CompressionAlgorithm]map[syncproto.SyncerType]snapshotCache
+	cache           BreadcrumbProvider
+	syncerType      syncproto.SyncerType
+	conn            net.Conn
 	// connW is the writer to use to send things to the client.  It may be the net.Conn itself or a wrapper
 	// around it.
 	connW                io.Writer
@@ -687,6 +703,10 @@ type connection struct {
 	// of them to the unnamed field after the handshake.
 	allMetrics map[syncproto.SyncerType]perSyncerConnMetrics
 	perSyncerConnMetrics
+}
+
+type snapshotCache interface {
+	SendSnapshot(ctx context.Context, w io.Writer, conn WriteDeadlineSetter) (*snapcache.Breadcrumb, error)
 }
 
 func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
@@ -722,19 +742,60 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	h.gaugeNumConnectionsStreaming.Inc()
 	defer h.gaugeNumConnectionsStreaming.Dec()
 
-	if h.clientSupportsDecoderRestart && h.chosenCompression == syncproto.CompressionSnappy {
-		// New client that supports compression, restart the decoder with compression enabled.
-		h.logCxt.Info("Restarting decoder with compression.")
-		err = h.restartEncodingIfSupported("Upgrade to compressed connection.")
+	// Figure out if we should restart the decoder with new settings.
+	var binSnapCache snapshotCache
+	if h.clientSupportsDecoderRestart {
+		binSnapCache = h.allSnapshotters[h.chosenCompression][h.syncerType]
+		var reasonsToRestart []string
+		if h.chosenCompression != "" {
+			reasonsToRestart = append(reasonsToRestart, fmt.Sprintf("enable compression: %v", h.chosenCompression))
+		}
+		if binSnapCache != nil {
+			reasonsToRestart = append(reasonsToRestart, "send binary snapshot")
+		}
+		if len(reasonsToRestart) > 0 {
+			// We have a reason to restart the encoding...
+			h.logCxt.WithField("reasons", reasonsToRestart).Info("Restarting encoding.")
+			err = h.restartEncodingIfSupported(strings.Join(reasonsToRestart, ";"))
+			if err != nil {
+				log.WithError(err).Info("Failed to restart encoding after handshake, tearing down connection.")
+				return
+			}
+		}
+	}
+
+	var breadcrumb *snapcache.Breadcrumb
+	if binSnapCache != nil {
+		// We have a binary snapshot cache that supports this compression mode; send the compressed
+		// binary snapshot instead of a streamed snapshot.
+		breadcrumb, err = binSnapCache.SendSnapshot(h.cxt, h.connW, h.conn)
 		if err != nil {
-			log.WithError(err).Info("Failed to restart encoding before snapshot, tearing down connection.")
+			log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
+			return
+		}
+
+		// The canned snapshot ends with a MsgDecoderRestart, so we just need to wait for the ACK.
+		err = h.waitForAckAndRestartEncoder()
+		if err != nil {
+			log.WithError(err).Info("Failed to restart encoding after snapshot, tearing down connection.")
+			return
+		}
+		h.logCxt.Info("Sent compressed binary snapshot and received ACK from client.")
+	} else {
+		// Either client is old or we don't have support for sending a compressed snapshot of this type.
+		// Stream the snapshot instead.
+		h.logCxt.Info("Sending streamed snapshot.")
+		breadcrumb = h.cache.CurrentBreadcrumb()
+		err = h.streamSnapshotToClient(h.logCxt, breadcrumb)
+		if err != nil {
+			log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
 			return
 		}
 	}
 
-	// Start a goroutine to stream the snapshot and then the deltas to the client.
+	// Start a goroutine to stream deltas to the client.
 	h.shutDownWG.Add(1)
-	go h.sendSnapshotAndUpdatesToClient(h.logCxt.WithField("thread", "kv-sender"))
+	go h.sendDeltaUpdatesToClient(h.logCxt.WithField("thread", "kv-sender"), breadcrumb)
 
 	// Start a goroutine to send periodic pings.  We send pings from their own goroutine so that, if the Encoder
 	// blocks, we don't prevent the main goroutine from checking the pongs.
@@ -997,9 +1058,9 @@ func (h *connection) maybeResetWriteTimeout() error {
 	return nil
 }
 
-// sendSnapshotAndUpdatesToClient sends the snapshot from the current Breadcrumb and then follows the Breadcrumbs
+// sendDeltaUpdatesToClient sends the snapshot from the current Breadcrumb and then follows the Breadcrumbs
 // sending deltas to the client.
-func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
+func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) {
 	defer func() {
 		logCxt.Info("KV-sender goroutine shutting down")
 		h.cancelCxt()
@@ -1007,15 +1068,9 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 		logCxt.Info("KV-sender goroutine finished")
 	}()
 
-	// Get the current snapshot and stream it to the client...
-	breadcrumb := h.cache.CurrentBreadcrumb()
-	err := h.streamSnapshotToClient(logCxt, breadcrumb)
-	if err != nil {
-		log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
-		return
-	}
 	// Finished sending the snapshot, calculate the grace time for the client to catch up to a recent breadcrumb.
 	gracePeriodEndTime := time.Now().Add(h.config.NewClientFallBehindGracePeriod)
+	log.WithField("graceEnd", gracePeriodEndTime).Info("Calculated end of client's grace period.")
 
 	// Track the sync status reported in each Breadcrumb so we can send an update if it changes.
 	var lastSentStatus api.SyncStatus
