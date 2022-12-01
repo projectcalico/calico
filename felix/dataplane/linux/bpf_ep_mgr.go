@@ -573,7 +573,7 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 			return fmt.Errorf("xdp: %w", err)
 		}
 	}
-	if ai.TCId != 0 {
+	if ai.TCEgressId != -1 || ai.TCIngressId != -1 {
 		link, err := netlink.LinkByName(iface)
 		if err != nil {
 			return fmt.Errorf("tc: failed to get ifindex: %w", err)

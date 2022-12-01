@@ -2351,6 +2351,8 @@ func MapPinPath(typ int, name, iface string, hook Hook) string {
 type TcList []struct {
 	DevName string `json:"devname"`
 	ID      int    `json:"id"`
+	Kind    string `json:"kind"`
+	Name    string `json:"name"`
 }
 
 type XDPList []struct {
