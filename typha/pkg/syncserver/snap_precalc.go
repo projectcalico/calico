@@ -26,6 +26,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/multireadbuf"
+
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
@@ -70,6 +72,7 @@ type SnappySnapshotCache struct {
 	lock           sync.Mutex
 	cond           sync.Cond
 	activeSnapshot *snapshot
+	lastSnapSize   int
 
 	counterBinSnapsGenerated prometheus.Counter
 	counterBinSnapsReused    prometheus.Counter
@@ -128,10 +131,14 @@ func (s *SnappySnapshotCache) activeBinarySnapshot() *snapshot {
 
 	if s.activeSnapshot == nil {
 		breadcrumb := s.cache.CurrentBreadcrumb()
+		bufSize := s.lastSnapSize * 110 / 100
+		const defaultBufSize = 128 * 1024
+		if bufSize == 0 {
+			bufSize = defaultBufSize
+		}
 		s.activeSnapshot = &snapshot{
-			cond:  sync.NewCond(&s.lock),
-			lock:  &s.lock,
 			crumb: breadcrumb,
+			buf:   multireadbuf.New(bufSize),
 		}
 		go s.populateSnapshot(s.activeSnapshot)
 	} else {
@@ -166,29 +173,11 @@ func (p2 *progressWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-type appendOnlyByteBuffer struct {
-	Buf []byte
-}
-
-func (a *appendOnlyByteBuffer) Write(p []byte) (n int, err error) {
-	a.Buf = append(a.Buf, p...)
-	return len(p), nil
-}
-
-func (a *appendOnlyByteBuffer) Len() int {
-	return len(a.Buf)
-}
-
-var _ io.Writer = (*appendOnlyByteBuffer)(nil)
-
 func (s *SnappySnapshotCache) writeDataToSnapshot(snap *snapshot) {
 	s.counterBinSnapsGenerated.Inc()
-	var buf appendOnlyByteBuffer
-
-	snappyW := snappy.NewBufferedWriter(&buf)
+	snappyW := snappy.NewBufferedWriter(snap.buf)
 	progressW := progressWriter{W: snappyW}
 	encoder := gob.NewEncoder(&progressW)
-	lastFlushTime := time.Now()
 	writeMsg := func(msg any) error {
 		envelope := syncproto.Envelope{
 			Message: msg,
@@ -196,22 +185,6 @@ func (s *SnappySnapshotCache) writeDataToSnapshot(snap *snapshot) {
 		err := encoder.Encode(&envelope)
 		if err != nil {
 			return err
-		}
-
-		if time.Since(lastFlushTime) > 20*time.Millisecond {
-			lastFlushTime = time.Now()
-			err = snappyW.Flush()
-			if err != nil {
-				return err
-			}
-			s.lock.Lock()
-			snap.buf = buf.Buf
-			// Using Signal() instead of Broadcast() so that we only wake up one waiter at a time.  That avoids
-			// having a thundering herd of wake-ups, which then starve out this goroutine so that they all block
-			// again, then we wake them all up again. Doing it this way we'll wake them up less frequently but
-			// they'll get to write more data in one shot.
-			snap.cond.Signal()
-			s.lock.Unlock()
 		}
 		return nil
 	}
@@ -242,65 +215,59 @@ func (s *SnappySnapshotCache) writeDataToSnapshot(snap *snapshot) {
 		s.logCtx.WithError(err).Panic("Failed to close datastore snapshot.")
 	}
 
-	// One final flush/broadcast to wake up all our waiters.
-	s.lock.Lock()
-	snap.buf = buf.Buf
-	snap.complete = true
-	snap.cond.Broadcast()
-	s.lock.Unlock()
+	// Closing the multi-reader buffer signals all the waiting readers.
+	err = snap.buf.Close()
+	if err != nil {
+		// Shouldn't happen because we're serialising to an in-memory buffer.
+		s.logCtx.WithError(err).Panic("Failed to close datastore snapshot.")
+	}
 
 	s.gaugeSnapBytesRaw.Set(float64(progressW.BytesWritten))
-	s.gaugeSnapBytesComp.Set(float64(buf.Len()))
+	snapSize := snap.buf.Len()
+	s.gaugeSnapBytesComp.Set(float64(snapSize))
+
+	// Record snapshot size so that we have a good guess for next time.
+	s.setLastSnapSize(snapSize)
+}
+
+func (s *SnappySnapshotCache) setLastSnapSize(snapSize int) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.lastSnapSize = snapSize
 }
 
 type snapshot struct {
 	crumb *snapcache.Breadcrumb
-
-	cond *sync.Cond
-	lock *sync.Mutex
-
-	buf      []byte
-	complete bool
+	buf   *multireadbuf.MultiReaderSingleWriterBuffer
 }
 
 func (s *snapshot) sendToClient(ctx context.Context, logCtx *logrus.Entry, w io.Writer, conn WriteDeadlineSetter, writeTimeout time.Duration) error {
-	var bytesSent int
 	var currentWriteDeadline time.Time
+	reader := s.buf.Reader()
 
-	complete := false
-	for ctx.Err() == nil && !complete {
-		var buf []byte
-		buf, complete = s.waitForData(ctx, bytesSent)
-
-		for len(buf) > 0 {
-			if ctx.Err() != nil {
-				logCtx.Info("Context finished, aborting send of snapshot.")
-				return ctx.Err()
-			}
-
-			// Optimisation: only reset the deadline if we've used a significant portion of it.
-			// Setting it seems to be fairly expensive.
-			if time.Until(currentWriteDeadline) < writeTimeout {
-				newDeadline := time.Now().Add(writeTimeout * 110 / 100)
-				err := conn.SetWriteDeadline(newDeadline)
-				if err != nil {
-					return err
-				}
-				currentWriteDeadline = newDeadline
-			}
-			n, err := w.Write(buf)
-			buf = buf[n:]
-			bytesSent += n
+	for ctx.Err() == nil {
+		// Optimisation: only reset the deadline if we've used a significant portion of it.
+		// Setting it seems to be fairly expensive.
+		if time.Until(currentWriteDeadline) < writeTimeout {
+			newDeadline := time.Now().Add(writeTimeout * 110 / 100)
+			err := conn.SetWriteDeadline(newDeadline)
 			if err != nil {
-				if n > 0 && os.IsTimeout(err) {
-					// Managed to write _some_ bytes, loop again to reset the timeout.  If the snapshot was
-					// very large then we might have written a big chunk of it but simply not had enough time to
-					// complete.  Only give up if we see no progress at all.
-					continue
-				}
 				return err
 			}
+			currentWriteDeadline = newDeadline
 		}
+
+		n, err := reader.WriteTo(w)
+		if err != nil {
+			if n > 0 && os.IsTimeout(err) {
+				// Managed to write _some_ bytes, loop again to reset the timeout.  If the snapshot was
+				// very large then we might have written a big chunk of it but simply not had enough time to
+				// complete.  Only give up if we see no progress at all.
+				continue
+			}
+			return err
+		}
+		break // WriteTo returns nil not EOF.
 	}
 
 	// Unset the timeout; under normal operation, we rely on a regular round tripped ping/pong message instead.
@@ -311,15 +278,4 @@ func (s *snapshot) sendToClient(ctx context.Context, logCtx *logrus.Entry, w io.
 	}
 
 	return nil
-}
-
-func (s *snapshot) waitForData(ctx context.Context, bytesAlreadySent int) (buf []byte, complete bool) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	for len(s.buf) == bytesAlreadySent && ctx.Err() == nil {
-		s.cond.Wait()
-	}
-	buf = s.buf[bytesAlreadySent:]
-	complete = s.complete
-	return
 }
