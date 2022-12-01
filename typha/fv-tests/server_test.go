@@ -420,6 +420,25 @@ var _ = Describe("With an in-process Server", func() {
 		})
 	})
 
+	Describe("with big starting snapshot and ~10 clients", func() {
+		var expectedEndState map[string]api.Update
+		BeforeEach(func() {
+			log.SetLevel(log.InfoLevel)
+			// Using simulated Pods to give more realistic picture of JSON encoding/decoding overheads
+			// (this test is a good one to profile).
+			expectedEndState = h.SendInitialSnapshotPods(200000)
+			// The snapshot is huge, so we only create one real client (which records the
+			// keys/values that it sees) and a bunch of no-op clients, which run the protocol
+			// but don't record anything.
+			h.CreateNoOpClients(10)
+			h.CreateClients(1)
+		})
+
+		It("should pass through many KVs", func() {
+			h.ExpectAllClientsToReachState(api.InSync, expectedEndState)
+		})
+	})
+
 	Describe("with 100 client connections", func() {
 		BeforeEach(func() {
 			log.SetLevel(log.InfoLevel) // Debug too verbose with 100 clients.
@@ -939,10 +958,31 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 	Describe("with lots of KVs", func() {
 		const initialSnapshotSize = 10000
 
+		logStats := func(note string) {
+			for _, stat := range []string{
+				"typha_snapshot_generated",
+			} {
+				value, _ := getPerSyncerCounter(syncproto.SyncerTypeFelix, stat)
+				log.Infof("%s: counter: %s =  %v", note, stat, int(value))
+			}
+			for _, stat := range []string{
+				"typha_snapshot_raw_bytes",
+				"typha_snapshot_compressed_bytes",
+			} {
+				value, _ := getPerSyncerGauge(syncproto.SyncerTypeFelix, stat)
+				log.Infof("%s: gauge: %s =  %v", note, stat, int(value))
+			}
+		}
+
 		BeforeEach(func() {
 			// These tests use a lot of KVs so debug is too aggressive.
 			log.SetLevel(log.InfoLevel)
+			logStats("Start of test")
 			h.SendInitialSnapshotConfigs(initialSnapshotSize)
+		})
+
+		AfterEach(func() {
+			logStats("End of test")
 		})
 
 		It("client should get a grace period after reading the snapshot", func() {
@@ -965,7 +1005,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				"test-info",
 				recorder,
 				&syncclient.Options{
-					// The snapshot is a few MB; set the read buffer to something much less than that since these
+					// The snapshot is >10MB; set the read buffer to something much less than that since these
 					// tests need to cause backpressure on Typha.
 					ReadBufferSize: 1024 * 256,
 					// Enable logging of every read since these tests depend on read and write timings.
@@ -1113,8 +1153,29 @@ var _ = Describe("With an in-process Server with short write timeout", func() {
 	Describe("with lots of KVs", func() {
 		const initialSnapshotSize = 10000
 
+		logStats := func(note string) {
+			for _, stat := range []string{
+				"typha_snapshot_generated",
+			} {
+				value, _ := getPerSyncerCounter(syncproto.SyncerTypeFelix, stat)
+				log.Infof("%s: counter: %s =  %v", note, stat, int(value))
+			}
+			for _, stat := range []string{
+				"typha_snapshot_raw_bytes",
+				"typha_snapshot_compressed_bytes",
+			} {
+				value, _ := getPerSyncerGauge(syncproto.SyncerTypeFelix, stat)
+				log.Infof("%s: gauge: %s =  %v", note, stat, int(value))
+			}
+		}
+
 		BeforeEach(func() {
+			logStats("Start of test")
 			h.SendInitialSnapshotConfigs(initialSnapshotSize)
+		})
+
+		AfterEach(func() {
+			logStats("End of test")
 		})
 
 		for _, disabledDecoderRestart := range []bool{true, false} {
