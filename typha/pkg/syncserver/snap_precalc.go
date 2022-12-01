@@ -107,62 +107,10 @@ func NewSnappySnapCache(
 // decoder at the client side must also be reset before sending such a snapshot.  The snapshot ends with
 // a MsgDecoderRestart, so the caller should wait for an ACK and then reset their encoder.
 func (s *SnappySnapshotCache) SendSnapshot(ctx context.Context, w io.Writer, conn WriteDeadlineSetter) (*snapcache.Breadcrumb, error) {
-	snap := s.getOrCreateSnapshot()
-
-	s.lock.Lock()
-
-	var bytesSent int
-	var currentWriteDeadline time.Time
-	for bytesSent < len(snap.buf) || !snap.complete {
-		for len(snap.buf) == bytesSent && ctx.Err() == nil {
-			snap.cond.Wait()
-		}
-		buf := snap.buf[bytesSent:]
-		complete := snap.complete
-
-		// Drop the lock while we send the data.
-		s.lock.Unlock()
-
-		for len(buf) > 0 {
-			if ctx.Err() != nil {
-				s.logCtx.Info("Context finished, aborting send of snapshot.")
-				return nil, ctx.Err()
-			}
-
-			// Optimisation: only reset the deadline if we've used a significant portion of it.
-			// Setting it seems to be fairly expensive.
-			if time.Until(currentWriteDeadline) < s.writeTimeout {
-				newDeadline := time.Now().Add(s.writeTimeout * 110 / 100)
-				err := conn.SetWriteDeadline(newDeadline)
-				if err != nil {
-					return nil, err
-				}
-				currentWriteDeadline = newDeadline
-			}
-			n, err := w.Write(buf)
-			buf = buf[n:]
-			bytesSent += n
-			if err != nil {
-				if n > 0 && os.IsTimeout(err) {
-					// Managed to write _some_ bytes, loop again to reset the timeout.  If the snapshot was
-					// very large then we might have written a big chunk of it but simply not had enough time to
-					// complete.  Only give up if we see no progress at all.
-					continue
-				}
-				return nil, err
-			}
-		}
-
-		if complete {
-			break
-		}
-		s.lock.Lock()
-	}
-
-	// Unset the timeout; under normal operation, we rely on a regular round tripped ping/pong message instead.
-	var zeroTime time.Time
-	err := conn.SetWriteDeadline(zeroTime)
-	if err != nil {
+	// activeBinarySnapshot ensures there is an active snapshot and returns it.  The snapshot may or may not
+	// be complete yet.
+	snap := s.activeBinarySnapshot()
+	if err := snap.sendToClient(ctx, s.logCtx, w, conn, s.writeTimeout); err != nil {
 		return nil, err
 	}
 	return snap.crumb, nil
@@ -172,17 +120,18 @@ type WriteDeadlineSetter interface {
 	SetWriteDeadline(newDeadline time.Time) error
 }
 
-// getOrCreateSnapshot either returns the current active snapshot (which may still be being created on a background
-// goroutine), or it starts a new snapshot.  The returned snapshot's done channel will be closed once it is ready
-// and it is guaranteed to become ready at some point.
-func (s *SnappySnapshotCache) getOrCreateSnapshot() *snapshot {
+// activeBinarySnapshot either returns the current active snapshot (which may still be being created on a background
+// goroutine), or it starts a new snapshot.  The returned snapshot's complete flag will be set once it is finished.
+func (s *SnappySnapshotCache) activeBinarySnapshot() *snapshot {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	if s.activeSnapshot == nil {
+		breadcrumb := s.cache.CurrentBreadcrumb()
 		s.activeSnapshot = &snapshot{
 			cond:  sync.NewCond(&s.lock),
-			crumb: s.cache.CurrentBreadcrumb(),
+			lock:  &s.lock,
+			crumb: breadcrumb,
 		}
 		go s.populateSnapshot(s.activeSnapshot)
 	} else {
@@ -192,7 +141,7 @@ func (s *SnappySnapshotCache) getOrCreateSnapshot() *snapshot {
 }
 
 func (s *SnappySnapshotCache) populateSnapshot(snap *snapshot) {
-	s.writeSnapshot(snap)
+	s.writeDataToSnapshot(snap)
 	// Wait until the snapshot expires...
 	time.Sleep(s.snapValidityTimeout)
 	// No point in expiring the snapshot until there's a new one...
@@ -232,7 +181,7 @@ func (a *appendOnlyByteBuffer) Len() int {
 
 var _ io.Writer = (*appendOnlyByteBuffer)(nil)
 
-func (s *SnappySnapshotCache) writeSnapshot(snap *snapshot) {
+func (s *SnappySnapshotCache) writeDataToSnapshot(snap *snapshot) {
 	s.counterBinSnapsGenerated.Inc()
 	var buf appendOnlyByteBuffer
 
@@ -305,8 +254,72 @@ func (s *SnappySnapshotCache) writeSnapshot(snap *snapshot) {
 }
 
 type snapshot struct {
-	crumb    *snapcache.Breadcrumb
+	crumb *snapcache.Breadcrumb
+
+	cond *sync.Cond
+	lock *sync.Mutex
+
 	buf      []byte
-	cond     *sync.Cond
 	complete bool
+}
+
+func (s *snapshot) sendToClient(ctx context.Context, logCtx *logrus.Entry, w io.Writer, conn WriteDeadlineSetter, writeTimeout time.Duration) error {
+	var bytesSent int
+	var currentWriteDeadline time.Time
+
+	complete := false
+	for ctx.Err() == nil && !complete {
+		var buf []byte
+		buf, complete = s.waitForData(ctx, bytesSent)
+
+		for len(buf) > 0 {
+			if ctx.Err() != nil {
+				logCtx.Info("Context finished, aborting send of snapshot.")
+				return ctx.Err()
+			}
+
+			// Optimisation: only reset the deadline if we've used a significant portion of it.
+			// Setting it seems to be fairly expensive.
+			if time.Until(currentWriteDeadline) < writeTimeout {
+				newDeadline := time.Now().Add(writeTimeout * 110 / 100)
+				err := conn.SetWriteDeadline(newDeadline)
+				if err != nil {
+					return err
+				}
+				currentWriteDeadline = newDeadline
+			}
+			n, err := w.Write(buf)
+			buf = buf[n:]
+			bytesSent += n
+			if err != nil {
+				if n > 0 && os.IsTimeout(err) {
+					// Managed to write _some_ bytes, loop again to reset the timeout.  If the snapshot was
+					// very large then we might have written a big chunk of it but simply not had enough time to
+					// complete.  Only give up if we see no progress at all.
+					continue
+				}
+				return err
+			}
+		}
+	}
+
+	// Unset the timeout; under normal operation, we rely on a regular round tripped ping/pong message instead.
+	var zeroTime time.Time
+	err := conn.SetWriteDeadline(zeroTime)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *snapshot) waitForData(ctx context.Context, bytesAlreadySent int) (buf []byte, complete bool) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	for len(s.buf) == bytesAlreadySent && ctx.Err() == nil {
+		s.cond.Wait()
+	}
+	buf = s.buf[bytesAlreadySent:]
+	complete = s.complete
+	return
 }
