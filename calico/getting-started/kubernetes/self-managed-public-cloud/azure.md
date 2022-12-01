@@ -42,7 +42,7 @@ Before deploying, customize your cluster definition to use {{site.prodname}} for
  
 Or, start with this {% include open-new-window.html text='example cluster definition' url='https://github.com/Azure/aks-engine/blob/master/examples/networkpolicy/kubernetes-calico-azure.json' %} with these value already set, and customize to meet your needs. 
 
-Then, {% include open-new-window.html text='follow the ask-engine documentation to deploy your cluster' url='https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md#deploy' %}, passing your cluster definition to `aks-engine deploy` via the `-m` flag. 
+Then, {% include open-new-window.html text='follow the aks-engine documentation to deploy your cluster' url='https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md#deploy' %}, passing your cluster definition to `aks-engine deploy` via the `-m` flag. 
 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}  
