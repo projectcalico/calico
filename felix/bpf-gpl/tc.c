@@ -1108,9 +1108,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				&& !CALI_F_DSR) {
 			if (dnat_return_should_encap()) {
 				CALI_DEBUG("Returning related ICMP from workload to tunnel\n");
-				state->ip_dst = state->ct_result.tun_ip;
-				seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
-				goto nat_encap;
 			} else if (CALI_F_TO_HEP) {
 				/* Special case for ICMP error being returned by the host with the
 				 * backing workload into the tunnel back to the original host. It is
@@ -1122,10 +1119,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				 * to reinject it to fix the routing?
 				 */
 				CALI_DEBUG("Returning related ICMP from host to tunnel\n");
-				state->ip_src = HOST_IP;
-				state->ip_dst = state->ct_result.tun_ip;
-				goto nat_encap;
 			}
+
+			state->ip_src = HOST_IP;
+			state->ip_dst = state->ct_result.tun_ip;
+			goto nat_encap;
 		}
 
 		state->dport = state->post_nat_dport;
@@ -1208,9 +1206,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		 */
 		if ((dnat_return_should_encap() || (CALI_F_TO_HEP && !CALI_F_DSR)) &&
 									state->ct_result.tun_ip) {
+			state->ip_src = HOST_IP;
 			state->ip_dst = state->ct_result.tun_ip;
-			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
-			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP\n");
 			goto nat_encap;
 		}
 
