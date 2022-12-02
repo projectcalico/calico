@@ -48,31 +48,44 @@ type BGPFilter struct {
 // BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.
 type BGPFilterSpec struct {
 	// The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.
-	ExportV4 []BGPFilterRuleV4 `json:"export_v4,omitempty" validate:"omitempty"`
+	ExportV4 []BGPFilterRuleV4 `json:"exportV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
-	ImportV4 []BGPFilterRuleV4 `json:"import_v4,omitempty" validate:"omitempty"`
+	ImportV4 []BGPFilterRuleV4 `json:"importV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
-	ExportV6 []BGPFilterRuleV6 `json:"export_v6,omitempty" validate:"omitempty"`
+	ExportV6 []BGPFilterRuleV6 `json:"exportV6,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
-	ImportV6 []BGPFilterRuleV6 `json:"import_v6,omitempty" validate:"omitempty"`
+	ImportV6 []BGPFilterRuleV6 `json:"importV6,omitempty" validate:"omitempty,dive"`
 }
 
 // BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.
 type BGPFilterRuleV4 struct {
-	CIDR string `json:"cidr,omitempty" validate:"required,netv4"`
+	CIDR string `json:"cidr" validate:"required,netv4"`
 
-	Action BGPFilterAction `json:"action" validate:"required"`
+	MatchOperator BGPFilterMatchOperator `json:"matchOperator" validate:"required,matchOperator"`
+
+	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
 }
 
 // BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.
 type BGPFilterRuleV6 struct {
-	CIDR string `json:"cidr,omitempty" validate:"required,netv6"`
+	CIDR string `json:"cidr" validate:"required,netv6"`
 
-	Action BGPFilterAction `json:"action" validate:"required"`
+	MatchOperator BGPFilterMatchOperator `json:"matchOperator" validate:"required,matchOperator"`
+
+	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
 }
+
+type BGPFilterMatchOperator string
+
+const (
+	Equal    BGPFilterMatchOperator = "Equal"
+	NotEqual                        = "NotEqual"
+	In                              = "In"
+	NotIn                           = "NotIn"
+)
 
 type BGPFilterAction string
 

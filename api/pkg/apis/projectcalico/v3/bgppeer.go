@@ -113,7 +113,7 @@ type BGPPeerSpec struct {
 
 	// The ordered set of BGPFilters applied on this BGP peer.
 	// +optional
-	Filters []string `json:"filters,omitempty" validate:"omitempty,name"`
+	Filters []string `json:"filters,omitempty" validate:"omitempty,dive,name"`
 }
 
 type SourceAddress string

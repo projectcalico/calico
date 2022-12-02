@@ -30,7 +30,7 @@ func init() {
 		api.NewBGPFilter(),
 		newBGPFilterList(),
 		false,
-		[]string{"bgpfilter", "bgpfilter", "bgpf", "bgpfs", "bf", "bfs"},
+		[]string{"bgpfilter", "bgpfilters", "bgpf", "bgpfs", "bf", "bfs"},
 		[]string{"NAME", "NUMEXPORTV4", "NUMIMPORTV4", "NUMEXPORTV6", "NUMIMPORTV6"},
 		[]string{"NAME", "NUMEXPORTV4", "NUMIMPORTV4", "NUMEXPORTV6", "NUMIMPORTV6"},
 		map[string]string{

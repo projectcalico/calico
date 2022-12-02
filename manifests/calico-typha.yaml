@@ -323,7 +323,7 @@ spec:
             description: BGPFilterSpec contains the IPv4 and IPv6 filter rules of
               the BGP Filter.
             properties:
-              export_v4:
+              exportV4:
                 description: The ordered set of IPv4 BGPFilter rules acting on exporting
                   routes to a peer.
                 items:
@@ -334,11 +334,15 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    matchOperator:
+                      type: string
                   required:
                   - action
+                  - cidr
+                  - matchOperator
                   type: object
                 type: array
-              export_v6:
+              exportV6:
                 description: The ordered set of IPv6 BGPFilter rules acting on exporting
                   routes to a peer.
                 items:
@@ -349,11 +353,15 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    matchOperator:
+                      type: string
                   required:
                   - action
+                  - cidr
+                  - matchOperator
                   type: object
                 type: array
-              import_v4:
+              importV4:
                 description: The ordered set of IPv4 BGPFilter rules acting on importing
                   routes from a peer.
                 items:
@@ -364,11 +372,15 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    matchOperator:
+                      type: string
                   required:
                   - action
+                  - cidr
+                  - matchOperator
                   type: object
                 type: array
-              import_v6:
+              importV6:
                 description: The ordered set of IPv6 BGPFilter rules acting on importing
                   routes from a peer.
                 items:
@@ -379,8 +391,12 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    matchOperator:
+                      type: string
                   required:
                   - action
+                  - cidr
+                  - matchOperator
                   type: object
                 type: array
             type: object

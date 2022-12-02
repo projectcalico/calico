@@ -53,20 +53,24 @@ var _ = testutils.E2eDatastoreDescribe("BGPFilter tests", testutils.DatastoreAll
 			name1 := "filter-1"
 			name2 := "filter-2"
 			acceptRuleV4 := apiv3.BGPFilterRuleV4{
-				CIDR:   "10.10.10.0/24",
-				Action: apiv3.Accept,
+				CIDR:          "10.10.10.0/24",
+				MatchOperator: apiv3.In,
+				Action:        apiv3.Accept,
 			}
 			rejectRuleV4 := apiv3.BGPFilterRuleV4{
-				CIDR:   "11.11.11.0/24",
-				Action: apiv3.Reject,
+				CIDR:          "11.11.11.0/24",
+				MatchOperator: apiv3.NotEqual,
+				Action:        apiv3.Reject,
 			}
 			acceptRuleV6 := apiv3.BGPFilterRuleV6{
-				CIDR:   "dead:beef::/64",
-				Action: apiv3.Accept,
+				CIDR:          "dead:beef:1::/64",
+				MatchOperator: apiv3.Equal,
+				Action:        apiv3.Accept,
 			}
 			rejectRuleV6 := apiv3.BGPFilterRuleV6{
-				CIDR:   "dead:meat::/64",
-				Action: apiv3.Reject,
+				CIDR:          "dead:beef:2::/64",
+				MatchOperator: apiv3.NotIn,
+				Action:        apiv3.Reject,
 			}
 			spec1 := apiv3.BGPFilterSpec{}
 			if ipv4 {

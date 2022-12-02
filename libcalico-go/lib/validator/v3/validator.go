@@ -110,6 +110,9 @@ var (
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
 
+	filterActionRegex  = regexp.MustCompile("^(Accept|Reject)$")
+	matchOperatorRegex = regexp.MustCompile("^(Equal|In|NotEqual|NotIn)$")
+
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
 		Mask: net.CIDRMask(16, 32),
@@ -186,6 +189,10 @@ func init() {
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
 	registerFieldValidator("IP:port", validateIPPort)
 	registerFieldValidator("reachableBy", validateReachableByField)
+
+	// Register filter action and match operator validators (used in BGPFilter)
+	registerFieldValidator("filterAction", RegexValidator("FilterAction", filterActionRegex))
+	registerFieldValidator("matchOperator", RegexValidator("MatchOperator", matchOperatorRegex))
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).

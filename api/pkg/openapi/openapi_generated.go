@@ -801,8 +801,16 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"matchOperator": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
 						},
 					},
 					"action": {
@@ -813,7 +821,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"action"},
+				Required: []string{"cidr", "matchOperator", "action"},
 			},
 		},
 	}
@@ -828,8 +836,16 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"matchOperator": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
 						},
 					},
 					"action": {
@@ -840,7 +856,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"action"},
+				Required: []string{"cidr", "matchOperator", "action"},
 			},
 		},
 	}
@@ -853,7 +869,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 				Description: "BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"export_v4": {
+					"exportV4": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -867,7 +883,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 							},
 						},
 					},
-					"import_v4": {
+					"importV4": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -881,7 +897,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 							},
 						},
 					},
-					"export_v6": {
+					"exportV6": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -895,7 +911,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 							},
 						},
 					},
-					"import_v6": {
+					"importV6": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
