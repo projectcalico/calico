@@ -156,7 +156,7 @@ type Config struct {
 }
 
 const (
-	healthName     = "sync_server"
+	healthName     = "sync-server"
 	healthInterval = 10 * time.Second
 )
 
