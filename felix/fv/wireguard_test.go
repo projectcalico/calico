@@ -1813,7 +1813,7 @@ func createWorkloadWithAssignedIP(
 		mtu = wireguardMTUV6Default
 	}
 
-	wl := workload.RunWithMTU(felix, wlName, "default", wlIP, defaultWorkloadPort, "tcp", mtu)
+	wl := workload.Run(felix, wlName, "default", wlIP, defaultWorkloadPort, "tcp", workload.WithMTU(mtu))
 	wl.ConfigureInInfra(*infra)
 
 	if infraOpts.UseIPPools {
@@ -1839,5 +1839,5 @@ func createHostNetworkedWorkload(wlName string, felix *infrastructure.Felix, ipV
 		ip = felix.IPv6
 		mtu = wireguardMTUV6Default
 	}
-	return workload.RunWithMTU(felix, wlName, "default", ip, defaultWorkloadPort, "tcp", mtu)
+	return workload.Run(felix, wlName, "default", ip, defaultWorkloadPort, "tcp", workload.WithMTU(mtu))
 }
