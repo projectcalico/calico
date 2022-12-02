@@ -60,6 +60,7 @@ type Workload struct {
 	MTU                   int
 	isRunning             bool
 	isSpoofing            bool
+	listenAnyIP           bool
 }
 
 func (w *Workload) GetIP() string {
@@ -122,6 +123,12 @@ type Opt func(*Workload)
 func WithMTU(mtu int) Opt {
 	return func(w *Workload) {
 		w.MTU = mtu
+	}
+}
+
+func WithListenAnyIP() Opt {
+	return func(w *Workload) {
+		w.listenAnyIP = true
 	}
 }
 
@@ -188,21 +195,23 @@ func (w *Workload) Start() error {
 		protoArg = "--protocol=" + w.Protocol
 	}
 
-	var mtuArg string
-	if w.MTU != 0 {
-		mtuArg = fmt.Sprintf("--mtu=%d", w.MTU)
-	}
-	w.runCmd = utils.Command("docker", "exec", w.C.Name,
-		"sh", "-c",
-		fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v' %v",
-			w.Name,
-			protoArg,
-			w.InterfaceName,
-			w.IP,
-			w.Ports,
-			mtuArg,
-		),
+	command := fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v'",
+		w.Name,
+		protoArg,
+		w.InterfaceName,
+		w.IP,
+		w.Ports,
 	)
+
+	if w.MTU != 0 {
+		command += fmt.Sprintf(" --mtu=%d", w.MTU)
+	}
+
+	if w.listenAnyIP {
+		command += " --listen-any-ip"
+	}
+
+	w.runCmd = utils.Command("docker", "exec", w.C.Name, "sh", "-c", command)
 	w.outPipe, err = w.runCmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("Getting StdoutPipe failed: %v", err)
