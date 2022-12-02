@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"net"
 	"regexp"
 	"strconv"
 	"sync"
@@ -256,6 +257,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logutils.NewSummarizer("test"),
 		)
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
+		bpfEpMgr.hostIP = net.ParseIP("1.2.3.4")
 	}
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
