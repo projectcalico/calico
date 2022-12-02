@@ -383,36 +383,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		BeforeEach(func() {
 			externalClient = infrastructure.RunExtClient("ext-client")
 
-			updateConfig := func(addr string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
-				if err != nil {
-					// Create the default config if it doesn't already exist.
-					if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-						c = api.NewFelixConfiguration()
-						c.Name = "default"
-						c, err = client.FelixConfigurations().Create(ctx, c, options.SetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-					} else {
-						Expect(err).NotTo(HaveOccurred())
-					}
-				}
-				c.Spec.ExternalNodesCIDRList = &[]string{addr}
-				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
-				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-			}
-
-			updateConfig(externalClient.IP)
-
-			// Wait for the config to take
-			for _, f := range felixes {
-				Eventually(func() int {
-					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-				}, "5s", "200ms").Should(Equal(3))
-			}
-
 			Eventually(func() error {
 				err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
 				if err != nil && strings.Contains(err.Error(), "SIOCADDTUNNEL: File exists") {
@@ -443,6 +413,54 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		})
 
 		It("should have all-hosts-net ipset configured with the external hosts and workloads connect", func() {
+
+			By("testing that ext client ipip does not work if not part of ExternalNodesCIDRList")
+
+			// Make sure that only the internal nodes are present in the ipset
+			for _, f := range felixes {
+				Eventually(func() int {
+					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+				}, "5s", "200ms").Should(Equal(2))
+			}
+
+			cc.ExpectNone(externalClient, w[0])
+			cc.CheckConnectivity()
+
+			By("chding configuration to include the external client")
+
+			updateConfig := func(addr string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+				if err != nil {
+					// Create the default config if it doesn't already exist.
+					if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+						c = api.NewFelixConfiguration()
+						c.Name = "default"
+						c, err = client.FelixConfigurations().Create(ctx, c, options.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+					} else {
+						Expect(err).NotTo(HaveOccurred())
+					}
+				}
+				c.Spec.ExternalNodesCIDRList = &[]string{addr}
+				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
+				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			updateConfig(externalClient.IP)
+
+			// Wait for the config to take
+			for _, f := range felixes {
+				Eventually(func() int {
+					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+				}, "5s", "200ms").Should(Equal(3))
+			}
+
+			By("testing that the ext client can connect via ipip")
+
+			cc.ResetExpectations()
 			cc.ExpectSome(externalClient, w[0])
 			cc.CheckConnectivity()
 		})
