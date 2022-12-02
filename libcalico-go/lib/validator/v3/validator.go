@@ -194,6 +194,10 @@ func init() {
 	registerFieldValidator("filterAction", RegexValidator("FilterAction", filterActionRegex))
 	registerFieldValidator("matchOperator", RegexValidator("MatchOperator", matchOperatorRegex))
 
+	// Register filter action and match operator validators (used in BGPFilter)
+	registerFieldValidator("filterAction", RegexValidator("FilterAction", filterActionRegex))
+	registerFieldValidator("matchOperator", RegexValidator("MatchOperator", matchOperatorRegex))
+
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
 	registerFieldValidator("netv4", validateIPv4Network)

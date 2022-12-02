@@ -2,10 +2,12 @@ package model
 
 import (
 	"fmt"
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	log "github.com/sirupsen/logrus"
 	"reflect"
 	"regexp"
+
+	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 var (
