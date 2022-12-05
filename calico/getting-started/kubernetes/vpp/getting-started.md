@@ -88,8 +88,11 @@ Before you get started, make sure you have downloaded and configured the {% incl
 1. Now that you have an empty cluster configured, you can install the Tigera operator. 
 
    ```bash
-   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
+
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 1. Then, you need to configure the {{site.prodname}} installation for the VPP dataplane. The yaml in the link below contains a minimal viable configuration for EKS. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
@@ -98,13 +101,13 @@ Before you get started, make sure you have downloaded and configured the {% incl
    {: .alert .alert-info}
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
    ```
 
 1. Now is time to install the VPP dataplane components.
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks.yaml
    ```
 
 1. Finally, add nodes to the cluster.
@@ -146,8 +149,11 @@ DPDK provides better performance compared to the standard install but it require
 1. Now that you have an empty cluster configured, you can install the Tigera operator. 
 
    ```bash
-   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
+
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 2. Then, you need to configure the {{site.prodname}} installation for the VPP dataplane. The yaml in the link below contains a minimal viable configuration for EKS. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
@@ -156,13 +162,13 @@ DPDK provides better performance compared to the standard install but it require
    {: .alert .alert-info}
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
    ```
 
 3. Now is time to install the VPP dataplane components.
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks-dpdk.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks-dpdk.yaml
    ```
 
 4. Finally, time to add nodes to the cluster. Since we need to customize the nodes for DPDK, we will use an `eksctl` config file with the `preBootstrapCommands` property to create the worker nodes. The following command will create a managed nodegroup with 2 t3.large worker nodes in the cluster:
@@ -233,8 +239,11 @@ For some hardware, the following hugepages configuration may enable VPP to use m
 1. Start by installing the Tigera operator on your cluster. 
 
    ```bash
-   kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
+
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 1. Then, you need to configure the {{site.prodname}} installation for the VPP dataplane. The yaml in the link below contains a minimal viable configuration for VPP. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
@@ -243,7 +252,7 @@ For some hardware, the following hugepages configuration may enable VPP to use m
    {: .alert .alert-info}
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-default.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-default.yaml
    ```
 
 #### Install the VPP dataplane components
@@ -301,7 +310,7 @@ data:
 
 To apply the configuration, run:
 ````bash
-kubectl apply -f calico-vpp.yaml
+kubectl create -f calico-vpp.yaml
 ````
 
 This will install all the resources required by the VPP dataplane in your cluster.
