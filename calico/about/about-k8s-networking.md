@@ -59,14 +59,11 @@ guide.
 
 ### Kubernetes Services
 
-Kubernetes {% include open-new-window.html text='Services'
-url='https://kubernetes.io/docs/concepts/services-networking/service/' %} provide a way of abstracting access to a group
-of pods as a network service. The group of pods is usually defined using a {% include open-new-window.html text='label
-selector' url='https://kubernetes.io/docs/concepts/overview/working-with-objects/labels' %}. Within the cluster the
-network service is usually represented as virtual IP address, and kube-proxy load balances connections to the virtual IP
-across the group of pods backing the service. The virtual IP is discoverable through Kubernetes DNS.  The DNS name and
-virtual IP address remain constant for the life time of the service, even though the pods backing the service may be
-created or destroyed, and the number of pods backing the service may change over time.
+Kubernetes {% include open-new-window.html text='Services' url='https://kubernetes.io/docs/concepts/services-networking/service/' %} provide a way of abstracting access to a group of pods as a network service.
+The group of pods is usually defined using a {% include open-new-window.html text='label selector' url='https://kubernetes.io/docs/concepts/overview/working-with-objects/labels' %}.
+Within the cluster the network service is usually represented as virtual IP address, and kube-proxy load balances connections to the virtual IP across the group of pods backing the service.
+The virtual IP is discoverable through Kubernetes DNS.
+The DNS name and virtual IP address remain constant for the life time of the service, even though the pods backing the service may be created or destroyed, and the number of pods backing the service may change over time.
 
 Kubernetes Services can also define how a service is accessed from outside of the cluster, for example using
 - a node port, where the service can be accessed via a specific port on every node
