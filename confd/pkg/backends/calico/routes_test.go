@@ -12,6 +12,10 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (
@@ -624,5 +628,23 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.programmedRouteRefCount).NotTo(HaveKey(key))
 			})
 		})
+	})
+})
+
+var _ = Describe("Update BGP Config Cache", func() {
+	c := &client{cache: make(map[string]string)}
+
+	It("should update cache value when IgnoredInterfaces is set in BGPConfiguration", func() {
+		By("No value cached")
+		Expect(c.cache["/calico/bgp/v1/global/ignored_interfaces"]).To(BeEmpty())
+
+		By("After updating")
+		res := &apiv3.BGPConfiguration{
+			Spec: apiv3.BGPConfigurationSpec{
+				IgnoredInterfaces: []string{"iface-1", "iface-2"},
+			},
+		}
+		c.getIgnoredInterfacesKVPair(res, model.GlobalBGPConfigKey{})
+		Expect(c.cache["/calico/bgp/v1/global/ignored_interfaces"]).To(Equal("iface-1,iface-2"))
 	})
 })

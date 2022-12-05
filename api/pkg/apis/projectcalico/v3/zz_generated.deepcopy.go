@@ -145,6 +145,11 @@ func (in *BGPConfigurationSpec) DeepCopyInto(out *BGPConfigurationSpec) {
 		*out = new(BindMode)
 		**out = **in
 	}
+	if in.IgnoredInterfaces != nil {
+		in, out := &in.IgnoredInterfaces, &out.IgnoredInterfaces
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

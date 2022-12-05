@@ -1081,6 +1081,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getLogSeverityKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
+		c.getIgnoredInterfacesKVPair(v3res, model.GlobalBGPConfigKey{})
 
 		// Cache the updated BGP configuration
 		c.globalBGPConfig = v3res
@@ -1346,6 +1347,15 @@ func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key in
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(meshPasswordKey, password))
 	} else {
 		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(meshPasswordKey))
+	}
+}
+
+func (c *client) getIgnoredInterfacesKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+	ignoredIfacesKey := getBGPConfigKey("ignored_interfaces", key)
+	if v3res != nil && v3res.Spec.IgnoredInterfaces != nil {
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ignoredIfacesKey, strings.Join(v3res.Spec.IgnoredInterfaces, ",")))
+	} else {
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ignoredIfacesKey))
 	}
 }
 

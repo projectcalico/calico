@@ -104,6 +104,10 @@ type BGPConfigurationSpec struct {
 	// Default behaviour is to listen for BGP connections on all addresses.
 	// +optional
 	BindMode *BindMode `json:"bindMode,omitempty"`
+
+	// IgnoredInterfaces indicates the network interfaces that needs to be excluded when reading device routes.
+	// +optional
+	IgnoredInterfaces []string `json:"ignoredInterfaces,omitempty" validate:"omitempty,dive,ignoredInterface"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.
