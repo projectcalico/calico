@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/projectcalico/calico/felix/stringutils"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/go-playground/validator.v9"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -175,6 +176,7 @@ func init() {
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("keyValueList", validateKeyValueList)
+	registerFieldValidator("keyDurationList", validateKeyDurationList)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
 	registerFieldValidator("ipType", validateIPType)
 
@@ -566,6 +568,8 @@ func validateCIDRs(fl validator.FieldLevel) bool {
 }
 
 // validateKeyValueList validates the field is a comma separated list of key=value pairs.
+var kvRegex = regexp.MustCompile("^\\s*(\\w+)=(.*)$")
+
 func validateKeyValueList(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
 	log.Debugf("Validate KeyValueList: %s", n)
@@ -574,16 +578,32 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 		return true
 	}
 
-	rex := regexp.MustCompile("\\s*(\\w+)=(.*)")
 	for _, item := range strings.Split(n, ",") {
 		if item == "" {
 			// Accept empty items (e.g tailing ",")
 			continue
 		}
-		kv := rex.FindStringSubmatch(item)
+		kv := kvRegex.FindStringSubmatch(item)
 		if kv == nil {
 			return false
 		}
+	}
+
+	return true
+}
+
+// validateKeyDurationList validates the field is a comma separated list of key=duration pairs.
+func validateKeyDurationList(fl validator.FieldLevel) bool {
+	n := fl.Field().String()
+	log.Debugf("Validate KeyDurationList: %s", n)
+
+	if len(strings.TrimSpace(n)) == 0 {
+		return true
+	}
+
+	_, err := stringutils.ParseKeyDurationList(n)
+	if err != nil {
+		return false
 	}
 
 	return true
