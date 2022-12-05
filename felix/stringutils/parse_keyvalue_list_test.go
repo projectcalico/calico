@@ -15,6 +15,8 @@
 package stringutils_test
 
 import (
+	"time"
+
 	. "github.com/projectcalico/calico/felix/stringutils"
 
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -52,5 +54,32 @@ var _ = DescribeTable("ParseKeyValueList tests",
 	}),
 	Entry("Empty item, tailing ','", ",  key=value,", map[string]string{
 		"key": "value",
+	}),
+)
+
+var _ = DescribeTable("ParseKeyDurationList tests",
+	func(input string, expected map[string]time.Duration) {
+		values, err := ParseKeyDurationList(input)
+		if expected == nil {
+			// An error is expected
+			Expect(err).NotTo(BeNil())
+			Expect(values).To(BeNil())
+		} else {
+			Expect(err).To(BeNil())
+			Expect(values).To(Equal(expected))
+		}
+	},
+	Entry("Empty", "   ", map[string]time.Duration{}),
+	Entry("Single value", "key=1s", map[string]time.Duration{
+		"key": time.Second,
+	}),
+	Entry("A faulty entry", "key=value, none", nil),
+	Entry("An empty entry", "key=1s, none=", nil),
+	Entry("Values with spaces", "key=  1s ,  v2= 2s ", map[string]time.Duration{
+		"key": time.Second,
+		"v2":  2 * time.Second,
+	}),
+	Entry("Trailing ','", ",  key=1s,", map[string]time.Duration{
+		"key": time.Second,
 	}),
 )

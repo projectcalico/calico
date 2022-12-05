@@ -165,6 +165,12 @@ message FromDataplane {
 
 message ConfigUpdate {
   map<string, string> config = 1;
+  map<string, string> internal_overrides = 2;
+  map<uint32, RawConfig> source_to_raw_config = 3;
+}
+
+message RawConfig {
+  map<string,string> config = 1;
 }
 
 message InSync {

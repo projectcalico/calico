@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-func TestSet(t *testing.T) {
+func TestHealth(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../report/health_suite.xml")
