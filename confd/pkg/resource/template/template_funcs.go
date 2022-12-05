@@ -37,6 +37,7 @@ func newFuncMap() map[string]interface{} {
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
 	m["hashToIPv4"] = hashToIPv4
+	m["truncateAndHashName"] = TruncateAndHashName
 	return m
 }
 
@@ -44,6 +45,27 @@ func addFuncs(out, in map[string]interface{}) {
 	for name, fn := range in {
 		out[name] = fn
 	}
+}
+
+// The maximum length of a k8s resource (253 bytes) is longer than the maximum length of BIRD symbols (64 chars).
+// This function provides a way to map the k8s resource name to a BIRD symbol name that accounts
+// for the length difference in a way that minimizes the chance of collisions
+func TruncateAndHashName(name string, maxLen int) string {
+	if len(name) <= maxLen {
+		return name
+	}
+	hash := sha256.New()
+	_, err := hash.Write([]byte(name))
+	if err != nil {
+		return ""
+	}
+	// SHA256 outputs a hash 64 chars long but we'll use only the first 16
+	hashCharsToUse := 16
+	// Account for underscore we insert between truncated name and hash string
+	truncationLen := maxLen - hashCharsToUse - 1
+	hashStr := fmt.Sprintf("%X", hash.Sum(nil))
+	truncatedName := fmt.Sprintf("%s_%s", name[:truncationLen], hashStr[:hashCharsToUse])
+	return truncatedName
 }
 
 // hashToIPv4 hashes the given string and
