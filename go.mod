@@ -298,7 +298,9 @@ replace (
 	k8s.io/api => k8s.io/api v0.24.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.0
 	k8s.io/apimachinery => k8s.io/apimachinery v0.24.0
-	k8s.io/apiserver => k8s.io/apiserver v0.24.0
+
+	// Our fork is identical to k8s.io with the exception of an added tls-max-version flag.
+	k8s.io/apiserver => github.com/projectcalico/kubernetes-apiserver v0.24.0-calico
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.24.0
 	k8s.io/client-go => k8s.io/client-go v0.24.0
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.24.0

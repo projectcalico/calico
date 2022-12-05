@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
@@ -45,6 +44,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 
+	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -61,6 +61,9 @@ var (
 	VERSION    string
 	version    bool
 	statusFile string
+
+	// fipsModeEnabled enables FIPS 140-2 validated crypto mode.
+	fipsModeEnabled bool
 )
 
 func init() {
@@ -80,6 +83,7 @@ func init() {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to set klog logging configuration")
 	}
+	fipsModeEnabled = os.Getenv("FIPS_MODE_ENABLED") == "true"
 }
 
 func main() {
@@ -412,8 +416,12 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 		return nil, err
 	}
 
-	// go 1.13 defaults to TLS 1.3, which we don't support just yet
-	tlsClient.MaxVersion = tls.VersionTLS13
+	baseTLSConfig := tls.NewTLSConfig(fipsModeEnabled)
+	tlsClient.MaxVersion = baseTLSConfig.MaxVersion
+	tlsClient.MinVersion = baseTLSConfig.MinVersion
+	tlsClient.CipherSuites = baseTLSConfig.CipherSuites
+	tlsClient.CurvePreferences = baseTLSConfig.CurvePreferences
+	tlsClient.Renegotiation = baseTLSConfig.Renegotiation
 
 	cfg := clientv3.Config{
 		Endpoints:   etcdLocation,
