@@ -404,6 +404,14 @@ var _ = DescribeTable(
 		nil,
 		true,
 	),
+	Entry(
+		"BGP Filter",
+		"/calico/bgp/v1/filters/my-bgp-filter",
+		BGPFilterKey{
+			Name: "my-bgp-filter",
+		},
+		false,
+	),
 )
 
 var _ = DescribeTable(
@@ -468,6 +476,58 @@ var _ = DescribeTable(
 		&apiv3.BGPPeer{
 			Spec: apiv3.BGPPeerSpec{
 				Node: "node",
+			},
+		},
+	),
+	Entry(
+		"BGPFilter",
+		ResourceKey{
+			Kind: apiv3.KindBGPFilter,
+			Name: "my-bgp-filter",
+		},
+		`{"spec":{"export_v4": [{"action": "Accept", "cidr": "77.7.1.0/24"}, {"action": "Reject", "cidr": "77.7.2.0/24"}], "import_v4": [{"action": "Accept", "cidr": "77.7.3.0/24"}, {"action": "Reject", "cidr": "77.7.4.0/24"}], "export_v6": [{"action": "Accept", "cidr": "7000:1::0/64"}, {"action": "Reject", "cidr": "7000:2::0/64"}], "import_v6": [{"action": "Accept", "cidr": "7000:3::0/64"}, {"action": "Reject", "cidr": "7000:4::0/64"}]}}`,
+		&apiv3.BGPFilter{
+			Spec: apiv3.BGPFilterSpec{
+				ExportV4: []apiv3.BGPFilterRuleV4{
+					{
+						Action: apiv3.Accept,
+						CIDR:   "77.7.1.0/24",
+					},
+					{
+						Action: apiv3.Reject,
+						CIDR:   "77.7.2.0/24",
+					},
+				},
+				ImportV4: []apiv3.BGPFilterRuleV4{
+					{
+						Action: apiv3.Accept,
+						CIDR:   "77.7.3.0/24",
+					},
+					{
+						Action: apiv3.Reject,
+						CIDR:   "77.7.4.0/24",
+					},
+				},
+				ExportV6: []apiv3.BGPFilterRuleV6{
+					{
+						Action: apiv3.Accept,
+						CIDR:   "7000:1::0/64",
+					},
+					{
+						Action: apiv3.Reject,
+						CIDR:   "7000:2::0/64",
+					},
+				},
+				ImportV6: []apiv3.BGPFilterRuleV6{
+					{
+						Action: apiv3.Accept,
+						CIDR:   "7000:3::0/64",
+					},
+					{
+						Action: apiv3.Reject,
+						CIDR:   "7000:4::0/64",
+					},
+				},
 			},
 		},
 	),
