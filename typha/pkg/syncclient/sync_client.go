@@ -27,12 +27,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/snappy"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
+	"github.com/golang/snappy"
 
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
@@ -66,6 +67,9 @@ type Options struct {
 	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
 	// Useful for load testing Typha without having to run a "full" client.
 	DebugDiscardKVUpdates bool
+
+	// FIPSModeEnabled Enables FIPS 140-2 verified crypto mode.
+	FIPSModeEnabled bool
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -240,7 +244,8 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 			log.WithError(err).Error("Failed to load certificate and key")
 			return err
 		}
-		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
+		tlsConfig := calicotls.NewTLSConfig(s.options.FIPSModeEnabled)
+		tlsConfig.Certificates = []tls.Certificate{cert}
 		// Typha API is a private binary API so we can enforce a recent TLS variant without
 		// worrying about back-compatibility with old browsers (for example).
 		tlsConfig.MinVersion = tls.VersionTLS12
@@ -273,7 +278,7 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 				&net.Dialer{Timeout: 10 * time.Second},
 				"tcp",
 				addr,
-				&tlsConfig)
+				tlsConfig)
 		}
 	} else {
 		connFunc = func(addr string) (net.Conn, error) {
