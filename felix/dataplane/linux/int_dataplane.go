@@ -323,7 +323,7 @@ type InternalDataplane struct {
 }
 
 const (
-	healthName     = "int_dataplane"
+	healthName     = "internal-dataplane-main-loop"
 	healthInterval = 10 * time.Second
 
 	ipipMTUOverhead        = 20

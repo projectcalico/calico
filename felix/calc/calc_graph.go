@@ -113,7 +113,7 @@ type CalcGraph struct {
 	activeRulesCalculator *ActiveRulesCalculator
 }
 
-func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *CalcGraph {
+func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveCallback func()) *CalcGraph {
 	hostname := conf.FelixHostname
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
 
@@ -223,6 +223,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 		}
 		callbacks.OnIPSetMemberRemoved(ipSetID, member)
 	}
+	serviceIndex.OnAlive = liveCallback
 
 	// The rule scanner only goes as far as figuring out which selectors/named ports are
 	// active. Next we need to figure out which endpoints (and hence which IP addresses/ports) are
@@ -250,6 +251,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//               <dataplane>
 	//
 	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex()
+	ipsetMemberIndex.OnAlive = liveCallback
 	// Wire up the inputs to the IP set member index.
 	ipsetMemberIndex.RegisterWith(allUpdDispatcher)
 	ruleScanner.OnIPSetActive = func(ipSet *IPSetData) {
@@ -351,6 +353,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 		//
 		l3RR := NewL3RouteResolver(hostname, callbacks, conf.UseNodeResourceUpdates(), conf.RouteSource)
 		l3RR.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
+		l3RR.OnAlive = liveCallback
 	}
 
 	// Calculate VXLAN routes.
