@@ -163,11 +163,15 @@ template bgp bgp_template {
  */
 -}}
 {{- $maxBGPFilterNameLen := 45 }}
-{{- if ls "/filters" }}
+{{- $v6FiltersConfigured := false }}
 {{- range gets "/filters/*"}}{{$data := json .Value}}
 {{- $filterName := base .Key }}
 {{- $filterFuncName := truncateAndHashName $filterName $maxBGPFilterNameLen }}
-# BGPFilter {{ $filterName }}
+{{- if or ($data.importV6) ($data.exportV6) }}
+{{- $v6FiltersConfigured = true }}
+# v6 BGPFilter {{ $filterName }}
+{{- end }}
+{{- if $data.importV6 }}
 function 'bgp_{{ $filterFuncName }}_importFilterV6'()
 {
 {{- range $importFilter := $data.importV6}}
@@ -184,6 +188,8 @@ function 'bgp_{{ $filterFuncName }}_importFilterV6'()
   if ( net {{ $op }} {{ $importFilter.cidr }} ) then { {{ toLower $importFilter.action }}; }
 {{- end }}
 }
+{{- end }}
+{{- if $data.exportV6 }}
 function 'bgp_{{ $filterFuncName }}_exportFilterV6'()
 {
 {{- range $exportFilter := $data.exportV6 }}
@@ -201,8 +207,9 @@ function 'bgp_{{ $filterFuncName }}_exportFilterV6'()
 {{- end }}
 }
 {{- end }}
-{{ else }}
-# No BGPFilters configured
+{{- end }}
+{{- if not $v6FiltersConfigured }}
+# No v6 BGPFilters configured
 {{- end }}
 
 # ------------- Node-to-node mesh -------------
@@ -292,8 +299,11 @@ protocol bgp Global_{{$id}} from bgp_template {
     {{- range $filter := $data.filters }}
     {{- $filterKey := printf "/filters/%s" $filter }}
     {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.importV6 }}
     {{- $filterFuncName := truncateAndHashName $filter $maxBGPFilterNameLen }}
     'bgp_{{ $filterFuncName }}_importFilterV6'();
+    {{- end }}
     {{- end }}
     {{- end }}
     accept; # Prior to introduction of BGP Filters we used "import all" so use default accept behaviour on import
@@ -302,8 +312,11 @@ protocol bgp Global_{{$id}} from bgp_template {
     {{- range $filter := $data.filters }}
     {{- $filterKey := printf "/filters/%s" $filter }}
     {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.exportV6 }}
     {{- $filterFuncName := truncateAndHashName $filter $maxBGPFilterNameLen }}
     'bgp_{{ $filterFuncName }}_exportFilterV6'();
+    {{- end }}
     {{- end }}
     {{- end }}
     calico_export_to_bgp_peers();
@@ -363,8 +376,11 @@ protocol bgp Node_{{$id}} from bgp_template {
     {{- range $filter := $data.filters }}
     {{- $filterKey := printf "/filters/%s" $filter }}
     {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.importV6 }}
     {{- $filterFuncName := truncateAndHashName $filter $maxBGPFilterNameLen }}
     'bgp_{{ $filterFuncName }}_importFilterV6'();
+    {{- end }}
     {{- end }}
     {{- end }}
     accept; # Prior to introduction of BGP Filters we used "import all" so use default accept behaviour on import
@@ -373,8 +389,11 @@ protocol bgp Node_{{$id}} from bgp_template {
     {{- range $filter := $data.filters }}
     {{- $filterKey := printf "/filters/%s" $filter }}
     {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.exportV6 }}
     {{- $filterFuncName := truncateAndHashName $filter $maxBGPFilterNameLen }}
     'bgp_{{ $filterFuncName }}_exportFilterV6'();
+    {{- end }}
     {{- end }}
     {{- end }}
     calico_export_to_bgp_peers();
