@@ -37,7 +37,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -378,34 +377,56 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 	})
 
 	Context("external nodes configured", func() {
+
+		var externalClient *containers.Container
+
 		BeforeEach(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			// Remove the node addresses
-			infra.RemoveNodeAddresses(felixes[0])
-			l, err := client.Nodes().List(ctx, options.ListOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			// Now remove the BGP configuration for felixes[0]
-			var prevBGPSpec libapi.NodeBGPSpec
-			for _, node := range l.Items {
-				log.Infof("node: %v", node)
-				if node.Name == felixes[0].Name {
-					// save the old spec
-					prevBGPSpec = *node.Spec.BGP
-					node.Spec.BGP = nil
-					_, err = client.Nodes().Update(ctx, &node, options.SetOptions{})
-					Expect(err).NotTo(HaveOccurred())
+			externalClient = infrastructure.RunExtClient("ext-client")
+
+			Eventually(func() error {
+				err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
+				if err != nil && strings.Contains(err.Error(), "SIOCADDTUNNEL: File exists") {
+					return nil
 				}
+				return err
+			}).Should(Succeed())
+
+			externalClient.Exec("ip", "link", "set", "tunl0", "up")
+			externalClient.Exec("ip", "addr", "add", "dev", "tunl0", "10.65.222.1")
+			externalClient.Exec("ip", "route", "add", "10.65.0.0/24", "via",
+				felixes[0].IP, "dev", "tunl0", "onlink")
+
+			felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
+				externalClient.IP, "dev", "tunl0", "onlink")
+		})
+
+		JustAfterEach(func() {
+			if CurrentGinkgoTestDescription().Failed {
+				externalClient.Exec("ip", "r")
+				externalClient.Exec("ip", "l")
+				externalClient.Exec("ip", "a")
 			}
-			// Removing the BGP config triggers a Felix restart. Wait for the ipset to be updated as a signal that Felix
-			// has restarted.
-			if !bpfEnabled {
-				for _, f := range felixes {
-					Eventually(func() int {
-						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-					}, "5s", "200ms").Should(Equal(1))
-				}
+
+		})
+		AfterEach(func() {
+			externalClient.Stop()
+		})
+
+		It("should have all-hosts-net ipset configured with the external hosts and workloads connect", func() {
+
+			By("testing that ext client ipip does not work if not part of ExternalNodesCIDRList")
+
+			// Make sure that only the internal nodes are present in the ipset
+			for _, f := range felixes {
+				Eventually(func() int {
+					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+				}, "5s", "200ms").Should(Equal(2))
 			}
+
+			cc.ExpectNone(externalClient, w[0])
+			cc.CheckConnectivity()
+
+			By("changing configuration to include the external client")
 
 			updateConfig := func(addr string) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -422,31 +443,25 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 						Expect(err).NotTo(HaveOccurred())
 					}
 				}
-				c.Spec.ExternalNodesCIDRList = &[]string{addr, "1.1.1.1"}
+				c.Spec.ExternalNodesCIDRList = &[]string{addr}
 				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
 				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
-			updateConfig(prevBGPSpec.IPv4Address)
+
+			updateConfig(externalClient.IP)
 
 			// Wait for the config to take
 			for _, f := range felixes {
-				if bpfEnabled {
-					Eventually(f.BPFRoutes, "5s", "200ms").Should(ContainSubstring("1.1.1.1/32"))
-				} else {
-					Eventually(func() int {
-						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-					}, "5s", "200ms").Should(Equal(3))
-				}
+				Eventually(func() int {
+					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+				}, "5s", "200ms").Should(Equal(3))
 			}
 
-		})
+			By("testing that the ext client can connect via ipip")
 
-		It("should have all-hosts-net ipset configured with the external hosts and workloads connect", func() {
-			f := felixes[0]
-			// Add the ip route via tunnel back on the Felix for which we nuked when we removed its BGP spec.
-			f.Exec("ip", "route", "add", w[1].IP, "via", felixes[1].IP, "dev", "tunl0", "onlink")
-			cc.ExpectSome(w[0], w[1])
+			cc.ResetExpectations()
+			cc.ExpectSome(externalClient, w[0])
 			cc.CheckConnectivity()
 		})
 	})
