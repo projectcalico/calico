@@ -211,9 +211,29 @@ calicoctl patch node node-1 -p '{"spec": {"bgp": {"asNumber": "64514"}}}'
 
 BGP filters control which routes are imported and exported between BGP peers.
 
-The following example creates a BGPFilter that 
+The following example creates a BGPFilter
 ```
-
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: my-first-bgp-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: NotIn
+      cidr: 44.0.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: Equal
+      cidr: 9000::0/64
+  importV6:
+    - action: Accept
+      matchOperator: NotEqual
+      cidr: 5000::0/64
 ```
 
 #### Configure a BGP peer with a BGP filter
@@ -223,7 +243,36 @@ BGP peers can use BGP filters to control which routes are imported or exported b
 The following example creates a BGPFilter and associates it with a BGPPeer
 
 ```
-
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: my-first-bgp-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: NotIn
+      cidr: 44.0.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: Equal
+      cidr: 9000::0/64
+  importV6:
+    - action: Accept
+      matchOperator: NotEqual
+      cidr: 5000::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: peer-with-filter
+spec:
+  peerSelector: has(filter-bgp)
+  filters:
+    - my-first-bgp-filter
 ```
 
 ### Above and beyond
