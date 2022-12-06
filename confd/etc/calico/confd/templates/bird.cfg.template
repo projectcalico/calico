@@ -152,22 +152,51 @@ template bgp bgp_template {
 }
 
 # -------------- BGP Filters ------------------
-{{- $maxBGPFilterNameLen := 43 }}
+{{-
+/* Max BIRD symbol length is 64 characters so maxBGPFilterNameLen is the
+* number of remaining characters once we subtract the length of the filter
+* function boilerplate eg. "bgp_" and "_importFilterV4" for instance. Since
+* len("import") == len("export") we can use the same length for both import
+* and export filters but if that were ever to change we would need to provide
+* different length arguments to the call to truncateAndHashName
+*/
+-}}
+{{- $maxBGPFilterNameLen := 45 }}
 {{- if ls "/filters" }}
 {{- range gets "/filters/*"}}{{$data := json .Value}}
 {{- $filterName := base .Key }}
 {{- $filterFuncName := truncateAndHashName $filterName $maxBGPFilterNameLen }}
 # BGPFilter {{ $filterName }}
-function 'bgp_{{ $filterFuncName }}_import_filter_v4'()
+function 'bgp_{{ $filterFuncName }}_importFilterV4'()
 {
-{{- range $importFilter := $data.import_v4}}
-  if ( net ~ {{ $importFilter.cidr }} ) then { {{ $importFilter.action }}; }
+{{- range $importFilter := $data.importV4}}
+  {{- $op := "INVALID_OPERATOR" }}
+  {{- if eq $importFilter.matchOperator "In" }}
+  {{- $op = "~" }}
+  {{- else if eq $importFilter.matchOperator "NotIn" }}
+  {{- $op = "!~" }}
+  {{- else if eq $importFilter.matchOperator "Equal" }}
+  {{- $op = "=" }}
+  {{- else if eq $importFilter.matchOperator "NotEqual" }}
+  {{- $op = "!=" }}
+  {{- end }}
+  if ( net {{ $op }} {{ $importFilter.cidr }} ) then { {{ toLower $importFilter.action }}; }
 {{- end }}
 }
-function 'bgp_{{ $filterFuncName }}_export_filter_v4'()
+function 'bgp_{{ $filterFuncName }}_exportFilterV4'()
 {
-{{- range $exportFilter := $data.export_v4 }}
-  if ( net ~ {{ $exportFilter.cidr }} ) then { {{ $exportFilter.action }}; }
+{{- range $exportFilter := $data.exportV4 }}
+  {{- $op := "INVALID_OPERATOR" }}
+  {{- if eq $exportFilter.matchOperator "In" }}
+  {{- $op = "~" }}
+  {{- else if eq $exportFilter.matchOperator "NotIn" }}
+  {{- $op = "!~" }}
+  {{- else if eq $exportFilter.matchOperator "Equal" }}
+  {{- $op = "=" }}
+  {{- else if eq $exportFilter.matchOperator "NotEqual" }}
+  {{- $op = "!=" }}
+  {{- end }}
+  if ( net {{ $op }} {{ $exportFilter.cidr }} ) then { {{ toLower $exportFilter.action }}; }
 {{- end }}
 }
 {{- end }}
@@ -262,7 +291,7 @@ protocol bgp Global_{{$id}} from bgp_template {
     {{- $filterKey := printf "/filters/%s" $filter }}
     {{- if exists $filterKey }}
     {{- $filterFuncName := truncateAndHashName $filter $maxBGPFilterNameLen }}
-    'bgp_{{ $filterFuncName }}_import_filter_v4'();
+    'bgp_{{ $filterFuncName }}_importFilterV4'();
     {{- end }}
     {{- end }}
     accept; # Prior to introduction of BGP Filters we used "import all" so use default accept behaviour on import
@@ -272,7 +301,7 @@ protocol bgp Global_{{$id}} from bgp_template {
     {{- $filterKey := printf "/filters/%s" $filter }}
     {{- if exists $filterKey }}
     {{- $filterFuncName := truncateAndHashName $filter $maxBGPFilterNameLen }}
-    'bgp_{{ $filterFuncName }}_export_filter_v4'();
+    'bgp_{{ $filterFuncName }}_exportFilterV4'();
     {{- end }}
     {{- end }}
     calico_export_to_bgp_peers();
@@ -333,7 +362,7 @@ protocol bgp Node_{{$id}} from bgp_template {
     {{- $filterKey := printf "/filters/%s" $filter }}
     {{- if exists $filterKey }}
     {{- $filterFuncName := truncateAndHashName $filter $maxBGPFilterNameLen }}
-    'bgp_{{ $filterFuncName }}_import_filter_v4'();
+    'bgp_{{ $filterFuncName }}_importFilterV4'();
     {{- end }}
     {{- end }}
     accept; # Prior to introduction of BGP Filters we used "import all" so use default accept behaviour on import
@@ -343,7 +372,7 @@ protocol bgp Node_{{$id}} from bgp_template {
     {{- $filterKey := printf "/filters/%s" $filter }}
     {{- if exists $filterKey }}
     {{- $filterFuncName := truncateAndHashName $filter $maxBGPFilterNameLen }}
-    'bgp_{{ $filterFuncName }}_export_filter_v4'();
+    'bgp_{{ $filterFuncName }}_exportFilterV4'();
     {{- end }}
     {{- end }}
     calico_export_to_bgp_peers();
