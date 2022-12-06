@@ -1927,7 +1927,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"dataplaneWatchdogTimeout": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver. Increase this value if you experience spurious non-ready or non-live events when Felix is under heavy load. Decrease the value to get felix to report non-live or non-ready more quickly. [Default: 90s]",
+							Description: "DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver. Increase this value if you experience spurious non-ready or non-live events when Felix is under heavy load. Decrease the value to get felix to report non-live or non-ready more quickly. [Default: 90s]\n\nDeprecated: replaced by the generic HealthTimeoutOverrides.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
@@ -2241,6 +2241,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"integer"},
 							Format: "int32",
+						},
+					},
+					"healthTimeoutOverrides": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overriden; example: \"internal-dataplane-main-loop=30s,calculation-graph=2m\".  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"prometheusMetricsEnabled": {

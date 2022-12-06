@@ -22,11 +22,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/projectcalico/calico/felix/stringutils"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/go-playground/validator.v9"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
+
+	"github.com/projectcalico/calico/felix/stringutils"
 
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
