@@ -87,6 +87,11 @@ message ToDataplane {
     // HostIPRemove is sent when a host IP is removed.
     HostMetadataRemove host_metadata_remove = 18;
 
+    // HostMetadataV4V6Update is sent when a host is added or updated.
+    HostMetadataV4V6Update host_metadata_v4v6_update = 37;
+    // HostIPRemove is sent when a host is removed.
+    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38; 
+
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
     IPAMPoolUpdate ipam_pool_update = 16;
     // IPAMPoolRemove is sent when an IPAM pool is removed.
@@ -460,6 +465,19 @@ message WireguardStatusUpdate {
 
   // The IP version of this update
   IPVersion ip_version = 2;
+}
+
+message HostMetadataV4V6Update {
+  string hostname = 1;
+  string ipv4_addr = 2;
+  string ipv6_addr = 3;
+  string asnumber = 4;
+  map<string, string> labels = 5;
+}
+
+message HostMetadataV4V6Remove {
+  string hostname = 1;
+  string ipv4_addr = 2;
 }
 
 message HostMetadataUpdate {
