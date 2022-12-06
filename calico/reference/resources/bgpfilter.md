@@ -19,26 +19,22 @@ kind: BGPFilter
 metadata:
   name: my-filter
 spec:
-  export_v4:
+  exportV4:
     - action: accept
+      matchOperator: In
       cidr: 77.0.0.0/16
-    - action: reject
-      cidr: 77.1.0.0/16
-  import_v4:
+  importV4:
     - action: accept
+      matchOperator: NotIn
       cidr: 44.0.0.0/16
-    - action: reject
-      cidr: 44.1.0.0/16
-  export_v6:
+  exportV6:
     - action: accept
+      matchOperator: Equal
       cidr: 9000::0/64
-    - action: reject
-      cidr: 9000:1::0/64
-  import_v6:
+  importV6:
     - action: accept
+      matchOperator: NotEqual
       cidr: 5000::0/64
-    - action: reject
-      cidr: 5000:1::0/64
 ```
 
 ### BGP filter definition
@@ -51,28 +47,30 @@ spec:
 
 #### Spec
 
-| Field     | Description                                        | Accepted Values                                                                             | Schema                                 | Default    |
-|-----------|----------------------------------------------------|---------------------------------------------------------------------------------------------|----------------------------------------|------------|
-| export_v4 | List of v4 CIDRs and export action (accept/reject) |                                                            | [BGP Filter Rule v4](#bgpfilterrulev4) | |
-| import_v4 | List of v4 CIDRs and import action (accept/reject) |  | [BGP Filter Rule v4](#bgpfilterrulev4) | |
-| export_v6 | List of v6 CIDRs and export action (accept/reject) |                                                            | [BGP Filter Rule v6](#bgpfilterrulev6) | |
-| import_v6 | List of v6 CIDRs and import action (accept/reject) |  | [BGP Filter Rule v6](#bgpfilterrulev6) | |
+| Field    | Description                                        | Accepted Values                                                                             | Schema                                 | Default    |
+|----------|----------------------------------------------------|---------------------------------------------------------------------------------------------|----------------------------------------|------------|
+| exportV4 | List of v4 CIDRs and export action (accept/reject) |                                                            | [BGP Filter Rule v4](#bgpfilterrulev4) | |
+| importV4 | List of v4 CIDRs and import action (accept/reject) |  | [BGP Filter Rule v4](#bgpfilterrulev4) | |
+| exportV6 | List of v6 CIDRs and export action (accept/reject) |                                                            | [BGP Filter Rule v6](#bgpfilterrulev6) | |
+| importV6 | List of v6 CIDRs and import action (accept/reject) |  | [BGP Filter Rule v6](#bgpfilterrulev6) | |
 
 #### BGP Filter Rule v4
 
 
-| Field  | Description                      | Accepted Values   | Schema                                  | Default    |
-|--------|----------------------------------|-------------------|-----------------------------------------|------------|
-| CIDR   | IPv4 range                       | A valid IPv4 CIDR | string                                  | |
-| Action | Action to be taken for this CIDR | `accept` or `reject` | string | |
+| Field         | Description                               | Accepted Values                   | Schema                                  | Default    |
+|---------------|-------------------------------------------|-----------------------------------|-----------------------------------------|------------|
+| cidr          | IPv4 range                                | A valid IPv4 CIDR                 | string                                  | |
+| matchOperator | Method by which to match candidate routes | `In`, `NotIn`, `Equal`, `NotEqual` | string                                  | |
+| action        | Action to be taken for this CIDR          | `Accept` or `Reject`              | string | |
 
 #### BGP Filter Rule v6
 
 
-| Field  | Description                      | Accepted Values      | Schema                                  | Default    |
-|--------|----------------------------------|----------------------|-----------------------------------------|------------|
-| CIDR   | IPv6 range                       | A valid IPv6 CIDR    | string                                  | |
-| Action | Action to be taken for this CIDR | `accept` or `reject` | string | |
+| Field         | Description                      | Accepted Values      | Schema                                  | Default    |
+|---------------|----------------------------------|----------------------|-----------------------------------------|------------|
+| cidr          | IPv6 range                       | A valid IPv6 CIDR    | string                                  | |
+| matchOperator | Method by which to match candidate routes | `In`, `NotIn`, `Equal`, `NotEqual` | string                                  | |
+| cction        | Action to be taken for this CIDR | `Accept` or `Reject` | string | |
 
 ### Supported operations
 
