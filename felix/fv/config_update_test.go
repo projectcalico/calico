@@ -94,6 +94,12 @@ var _ = Context("Config update tests, after starting felix", func() {
 		defer cancel()
 		err := client.EnsureInitialized(ctx, "a-new-version", "updated-type")
 		Expect(err).NotTo(HaveOccurred())
+
+		config := api.NewFelixConfiguration()
+		config.Name = "default"
+		config.Spec.HealthTimeoutOverrides = "internal-dataplane-main-loop=20s"
+		config, err = client.FelixConfigurations().Create(ctx, config, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
 	}
 
 	Context("after updating config that felix can handle", func() {

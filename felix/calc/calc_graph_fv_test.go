@@ -757,7 +757,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-		calcGraph = NewCalculationGraph(eventBuf, conf)
+		calcGraph = NewCalculationGraph(eventBuf, conf, func() {})
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			lastStats = stats

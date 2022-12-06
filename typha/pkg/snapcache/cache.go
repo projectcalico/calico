@@ -16,6 +16,7 @@ package snapcache
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -152,7 +153,6 @@ type Cache struct {
 }
 
 const (
-	nameDefault    = "cache"
 	healthInterval = 10 * time.Second
 )
 
@@ -166,6 +166,7 @@ type Config struct {
 	WakeUpInterval   time.Duration
 	HealthAggregator healthAggregator
 	Name             string
+	HealthName       string
 }
 
 func (config *Config) ApplyDefaults() {
@@ -183,8 +184,17 @@ func (config *Config) ApplyDefaults() {
 		}).Info("Defaulting WakeUpInterval.")
 		config.WakeUpInterval = defaultWakeUpInterval
 	}
+	if config.HealthName == "" {
+		if config.Name == "" {
+			config.HealthName = "cache"
+		} else if strings.HasSuffix(config.Name, "cache") {
+			config.HealthName = config.Name
+		} else {
+			config.HealthName = config.Name + "-cache"
+		}
+	}
 	if config.Name == "" {
-		config.Name = nameDefault
+		config.Name = "cache"
 	}
 }
 
@@ -232,7 +242,7 @@ func New(config Config) *Cache {
 	c.currentBreadcrumb = (unsafe.Pointer)(snap)
 
 	if config.HealthAggregator != nil {
-		config.HealthAggregator.RegisterReporter(config.Name, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
+		config.HealthAggregator.RegisterReporter(config.HealthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
 	}
 	c.reportHealth()
 	return c
@@ -341,7 +351,7 @@ func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 
 func (c *Cache) reportHealth() {
 	if c.config.HealthAggregator != nil {
-		c.config.HealthAggregator.Report(c.config.Name, &health.HealthReport{
+		c.config.HealthAggregator.Report(c.config.HealthName, &health.HealthReport{
 			Live:  true,
 			Ready: c.pendingStatus == api.InSync,
 		})
