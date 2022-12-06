@@ -91,9 +91,7 @@ type AsyncCalcGraph struct {
 const (
 	healthName     = "calculation-graph"
 	healthInterval = 10 * time.Second
-	// In *very* large clusters, processing the initial snapshot can take a long time and the liveness
-	// check then becomes a liabilty.
-	healthTimeout = 120 * time.Second
+	healthTimeout  = 30 * time.Second
 )
 
 func NewAsyncCalcGraph(
@@ -102,14 +100,13 @@ func NewAsyncCalcGraph(
 	healthAggregator *health.HealthAggregator,
 ) *AsyncCalcGraph {
 	eventSequencer := NewEventSequencer(conf)
-	calcGraph := NewCalculationGraph(eventSequencer, conf)
 	g := &AsyncCalcGraph{
-		CalcGraph:        calcGraph,
 		inputEvents:      make(chan interface{}, 10),
 		outputChannels:   outputChannels,
 		eventSequencer:   eventSequencer,
 		healthAggregator: healthAggregator,
 	}
+	g.CalcGraph = NewCalculationGraph(eventSequencer, conf, g.reportHealth)
 	if conf.DebugSimulateCalcGraphHangAfter != 0 {
 		log.WithField("delay", conf.DebugSimulateCalcGraphHangAfter).Warn(
 			"Simulating a calculation graph hang.")

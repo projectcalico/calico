@@ -84,6 +84,7 @@ type ActiveRulesCalculator struct {
 	RuleScanner           ruleScanner
 	PolicyMatchListener   PolicyMatchListener
 	OnPolicyCountsChanged func(numPolicies, numProfiles, numALPPolicies int)
+	OnAlive               func()
 }
 
 func NewActiveRulesCalculator() *ActiveRulesCalculator {
