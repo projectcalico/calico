@@ -15,6 +15,7 @@
 package config_test
 
 import (
+	"fmt"
 	"net"
 	"reflect"
 	"regexp"
@@ -24,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -194,7 +196,7 @@ var _ = Describe("Config override empty", func() {
 
 	It("should allow IptablesBackend value 'Auto' read from FelixConfiguration resource", func() {
 		changed, err := cp.UpdateFrom(map[string]string{"IptablesBackend": "Auto"}, config.DatastorePerHost)
-		Expect(changed).To(BeTrue())
+		Expect(changed).To(BeFalse()) // auto is the default.
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cp.IptablesBackend).To(Equal("auto"))
 	})
@@ -205,19 +207,18 @@ var t bool = true
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
 		cfg := config.New()
-		_, err := cfg.UpdateFrom(map[string]string{key: value},
-			config.EnvironmentVariable)
+		_, err := cfg.UpdateFrom(map[string]string{key: value}, config.EnvironmentVariable)
 		configPtr := reflect.ValueOf(cfg)
 		configElem := configPtr.Elem()
 		fieldRef := configElem.FieldByName(key)
 		newVal := fieldRef.Interface()
-		Expect(newVal).To(Equal(expected))
+		Expect(newVal).To(Equal(expected), fmt.Sprintf("Expected %s=%q to parse as %v but got %v", key, value, expected, newVal))
 		if len(errorExpected) > 0 && errorExpected[0] {
-			Expect(err).To(HaveOccurred())
-			Expect(cfg.Err).To(HaveOccurred())
+			Expect(err).To(HaveOccurred(), fmt.Sprintf("Expected an error when setting %s=%q", key, value))
+			Expect(cfg.Err).To(HaveOccurred(), fmt.Sprintf("Expected an error to be stored when setting %s=%q", key, value))
 		} else {
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.Err).NotTo(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Expected no error when setting %s=%q", key, value))
+			Expect(cfg.Err).NotTo(HaveOccurred(), fmt.Sprintf("Expected no error to be stored when setting %s=%q", key, value))
 		}
 	},
 
@@ -491,6 +492,15 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("IptablesNATOutgoingInterfaceFilter", "IptablesNATOutgoingInterfaceFilter", "cali-123", "cali-123"),
 	Entry("IptablesNATOutgoingInterfaceFilter", "IptablesNATOutgoingInterfaceFilter", "cali@123", "", false),
+
+	Entry("HealthTimeoutOverrides", "HealthTimeoutOverrides", "", map[string]time.Duration(nil), false),
+	Entry("HealthTimeoutOverrides good", "HealthTimeoutOverrides", "a=90s", map[string]time.Duration{"a": 90 * time.Second}, false),
+	Entry("HealthTimeoutOverrides good x 2", "HealthTimeoutOverrides", "a=90s, b=10ms",
+		map[string]time.Duration{"a": 90 * time.Second, "b": 10 * time.Millisecond}, false),
+	Entry("HealthTimeoutOverrides good zero", "HealthTimeoutOverrides", "a=0",
+		map[string]time.Duration{"a": 0}, false),
+	// Not a required parameter so a bad value is translated to nil:
+	Entry("HealthTimeoutOverrides non-duration", "HealthTimeoutOverrides", "foo=bar", map[string]time.Duration(nil), false),
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
@@ -783,4 +793,92 @@ var _ = DescribeTable("Config InterfaceExclude",
 	Entry("invalid regexp value", `/^kube\K/`, []*regexp.Regexp{
 		regexp.MustCompile("^kube-ipvs0$"),
 	}),
+)
+
+var _ = Describe("Config copy tests", func() {
+	var conf *config.Config
+
+	BeforeEach(func() {
+		conf = config.New()
+		changed, err := conf.UpdateFrom(map[string]string{
+			"LogSeverityScreen":            "Debug",
+			"HealthTimeoutOverrides":       "a=10s, b=0,c=50ms",
+			"DisableConntrackInvalidCheck": "true",
+		}, config.DatastoreGlobal)
+		Expect(err).To(Succeed())
+		Expect(changed).To(BeTrue())
+		changed, err = conf.UpdateFrom(map[string]string{
+			"LogSeverityScreen":      "Info",
+			"HealthTimeoutOverrides": "a=6s",
+		}, config.EnvironmentVariable)
+		Expect(err).To(Succeed())
+		Expect(changed).To(BeTrue())
+	})
+
+	It("should copy correctly", func() {
+		Expect(conf.RawValues()).To(Equal(conf.Copy().RawValues()))
+	})
+
+	It("should copy via protobuf correctly", func() {
+		pb := conf.ToConfigUpdate()
+		confCp := config.New()
+		changedFields, err := confCp.UpdateFromConfigUpdate(pb)
+		Expect(err).To(Succeed())
+		Expect(changedFields).To(Equal(set.From(
+			"HealthTimeoutOverrides",
+			"DisableConntrackInvalidCheck",
+		)))
+		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
+
+		changedFields, err = confCp.UpdateFromConfigUpdate(pb)
+		Expect(err).To(Succeed())
+		Expect(changedFields).To(BeEmpty())
+		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
+	})
+})
+
+var _ = DescribeTable("SafeParamsEqual",
+	func(a, b any, expected bool) {
+		Expect(config.SafeParamsEqual(a, b)).To(Equal(expected), fmt.Sprintf("SafeParamsEqual(%v, %v) != expected (%v)", a, b, expected))
+		Expect(config.SafeParamsEqual(b, a)).To(Equal(expected), fmt.Sprintf("SafeParamsEqual(%v, %v) != expected (%v)", b, a, expected))
+	},
+	Entry("empty", "", "", true),
+	Entry("different strings", "foo", "", false),
+	Entry("same regexps", regexp.MustCompile("[123]"), regexp.MustCompile("[123]"), true),
+	Entry("different regexps", regexp.MustCompile("[123]"), regexp.MustCompile("[1234]"), false),
+	Entry("same []regexps",
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[1234]")},
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[1234]")},
+		true,
+	),
+	Entry("different []regexps",
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[1234]")},
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[124]")},
+		false,
+	),
+	Entry("different length []regexps",
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[1234]")},
+		[]*regexp.Regexp{regexp.MustCompile("[123]")},
+		false,
+	),
+	Entry("nil IPs",
+		net.IP(nil),
+		net.IP(nil),
+		true,
+	),
+	Entry("same IPs",
+		net.ParseIP("10.0.0.1"),
+		net.ParseIP("10.0.0.1"),
+		true,
+	),
+	Entry("equivalent IPs",
+		net.ParseIP("10.0.0.1").To4(),
+		net.ParseIP("10.0.0.1").To16(),
+		true,
+	),
+	Entry("different IPs",
+		net.ParseIP("10.0.0.2"),
+		net.ParseIP("10.0.0.1"),
+		false,
+	),
 )

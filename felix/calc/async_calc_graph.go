@@ -89,8 +89,11 @@ type AsyncCalcGraph struct {
 }
 
 const (
-	healthName     = "async_calc_graph"
+	healthName     = "calculation-graph"
 	healthInterval = 10 * time.Second
+	// In *very* large clusters, processing the initial snapshot can take a long time and the liveness
+	// check then becomes a liabilty.
+	healthTimeout = 120 * time.Second
 )
 
 func NewAsyncCalcGraph(
@@ -114,7 +117,7 @@ func NewAsyncCalcGraph(
 	}
 	eventSequencer.Callback = g.onEvent
 	if healthAggregator != nil {
-		healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
+		healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, healthTimeout)
 	}
 	return g
 }
