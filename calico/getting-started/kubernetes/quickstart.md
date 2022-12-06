@@ -16,8 +16,6 @@ Use this quickstart to quickly and easily try {{site.prodname}} features. To dep
 
 **Required**
 
-- A Kubernetes cluster with a [supported version](({{site.baseurl}}/getting-started/kubernetes/requirements)
-
 - A Linux host that meets the following requirements:
   - x86-64, arm64, ppc64le, or s390x processor
   - 2CPU
