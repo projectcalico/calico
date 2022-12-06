@@ -721,14 +721,6 @@ func SafeParamsEqual(a any, b any) bool {
 	return reflect.DeepEqual(a, b)
 }
 
-func paramDefaultString(name string) string {
-	param, ok := knownParams[strings.ToLower(name)]
-	if !ok {
-		return ""
-	}
-	return param.GetMetadata().DefaultString
-}
-
 func (config *Config) setBy(name string, source Source) bool {
 	_, set := config.sourceToRawConfig[source][name]
 	return set

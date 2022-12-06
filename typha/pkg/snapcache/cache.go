@@ -16,6 +16,7 @@ package snapcache
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -186,6 +187,8 @@ func (config *Config) ApplyDefaults() {
 	if config.HealthName == "" {
 		if config.Name == "" {
 			config.HealthName = "cache"
+		} else if strings.HasSuffix(config.Name, "cache") {
+			config.HealthName = config.Name
 		} else {
 			config.HealthName = config.Name + "-cache"
 		}
