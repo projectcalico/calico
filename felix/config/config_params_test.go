@@ -196,7 +196,7 @@ var _ = Describe("Config override empty", func() {
 
 	It("should allow IptablesBackend value 'Auto' read from FelixConfiguration resource", func() {
 		changed, err := cp.UpdateFrom(map[string]string{"IptablesBackend": "Auto"}, config.DatastorePerHost)
-		Expect(changed).To(BeTrue())
+		Expect(changed).To(BeFalse()) // auto is the default.
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cp.IptablesBackend).To(Equal("auto"))
 	})
@@ -825,7 +825,6 @@ var _ = Describe("Config copy tests", func() {
 		changedFields, err := confCp.UpdateFromConfigUpdate(pb)
 		Expect(err).To(Succeed())
 		Expect(changedFields).To(Equal(set.From(
-			"LogSeverityScreen",
 			"HealthTimeoutOverrides",
 			"DisableConntrackInvalidCheck",
 		)))
@@ -837,3 +836,49 @@ var _ = Describe("Config copy tests", func() {
 		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
 	})
 })
+
+var _ = DescribeTable("SafeParamsEqual",
+	func(a, b any, expected bool) {
+		Expect(config.SafeParamsEqual(a, b)).To(Equal(expected), fmt.Sprintf("SafeParamsEqual(%v, %v) != expected (%v)", a, b, expected))
+		Expect(config.SafeParamsEqual(b, a)).To(Equal(expected), fmt.Sprintf("SafeParamsEqual(%v, %v) != expected (%v)", b, a, expected))
+	},
+	Entry("empty", "", "", true),
+	Entry("different strings", "foo", "", false),
+	Entry("same regexps", regexp.MustCompile("[123]"), regexp.MustCompile("[123]"), true),
+	Entry("different regexps", regexp.MustCompile("[123]"), regexp.MustCompile("[1234]"), false),
+	Entry("same []regexps",
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[1234]")},
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[1234]")},
+		true,
+	),
+	Entry("different []regexps",
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[1234]")},
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[124]")},
+		false,
+	),
+	Entry("different length []regexps",
+		[]*regexp.Regexp{regexp.MustCompile("[123]"), regexp.MustCompile("[1234]")},
+		[]*regexp.Regexp{regexp.MustCompile("[123]")},
+		false,
+	),
+	Entry("nil IPs",
+		net.IP(nil),
+		net.IP(nil),
+		true,
+	),
+	Entry("same IPs",
+		net.ParseIP("10.0.0.1"),
+		net.ParseIP("10.0.0.1"),
+		true,
+	),
+	Entry("equivalent IPs",
+		net.ParseIP("10.0.0.1").To4(),
+		net.ParseIP("10.0.0.1").To16(),
+		true,
+	),
+	Entry("different IPs",
+		net.ParseIP("10.0.0.2"),
+		net.ParseIP("10.0.0.1"),
+		false,
+	),
+)

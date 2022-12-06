@@ -653,9 +653,7 @@ configRetry:
 
 	// Send the opening message to the dataplane driver, giving it its
 	// config.
-	dpConnector.ToDataplane <- &proto.ConfigUpdate{
-		Config: configParams.RawValues(),
-	}
+	dpConnector.ToDataplane <- configParams.ToConfigUpdate()
 
 	if configParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.  Starting server.")
@@ -1233,6 +1231,15 @@ func (fc *DataplaneConnector) Start() {
 }
 
 func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
+	sourceToRaw := map[string]map[string]string{}
+	for _, kvs := range msg.SourceToRawConfig {
+		sourceToRaw[kvs.Source] = kvs.Config
+	}
+
+	log.WithField("configUpdate", msg).WithFields(log.Fields{
+		"configBySource": sourceToRaw,
+	}).Info("Configuration update from calculation graph.")
+
 	var oldConfigCopy, newConfigCopy *config.Config
 	var changedFields set.Set[string]
 	err := func() error {
@@ -1254,10 +1261,11 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 	}
 
 	oldRawConfig := oldConfigCopy.RawValues()
-	newRawConfig := fc.config.RawValues()
+	newRawConfig := newConfigCopy.RawValues()
 	restartNeeded := false
 	changedFields.Iter(func(fieldName string) error {
 		logCtx := log.WithFields(log.Fields{
+			"key":      fieldName,
 			"oldValue": oldRawConfig[fieldName],
 			"newValue": newRawConfig[fieldName],
 		})

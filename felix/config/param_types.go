@@ -47,6 +47,7 @@ const (
 
 type Metadata struct {
 	Name              string
+	DefaultString     string
 	Default           interface{}
 	ZeroValue         interface{}
 	NonZero           bool
