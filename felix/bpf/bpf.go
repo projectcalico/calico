@@ -85,7 +85,8 @@ const (
 	HookXDP
 	HookCount
 
-	HookBad Hook = -1
+	HookTCCount      = HookEgress + 1
+	HookBad     Hook = -1
 )
 
 var Hooks = []Hook{HookIngress, HookEgress, HookXDP}
