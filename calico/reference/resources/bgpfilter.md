@@ -49,10 +49,10 @@ spec:
 
 | Field    | Description                                        | Accepted Values                                                                             | Schema                                 | Default    |
 |----------|----------------------------------------------------|---------------------------------------------------------------------------------------------|----------------------------------------|------------|
-| exportV4 | List of v4 CIDRs and export action (accept/reject) |                                                            | [BGP Filter Rule v4](#bgpfilterrulev4) | |
-| importV4 | List of v4 CIDRs and import action (accept/reject) |  | [BGP Filter Rule v4](#bgpfilterrulev4) | |
-| exportV6 | List of v6 CIDRs and export action (accept/reject) |                                                            | [BGP Filter Rule v6](#bgpfilterrulev6) | |
-| importV6 | List of v6 CIDRs and import action (accept/reject) |  | [BGP Filter Rule v6](#bgpfilterrulev6) | |
+| exportV4 | List of v4 CIDRs and export action (accept/reject) |                                                            | [BGP Filter Rule v4](#bgp-filter-rule-v4) | |
+| importV4 | List of v4 CIDRs and import action (accept/reject) |  | [BGP Filter Rule v4](#bgp-filter-rule-v4) | |
+| exportV6 | List of v6 CIDRs and export action (accept/reject) |                                                            | [BGP Filter Rule v6](#bgp-filter-rule-v6) | |
+| importV6 | List of v6 CIDRs and import action (accept/reject) |  | [BGP Filter Rule v6](#bgp-filter-rule-v6) | |
 
 #### BGP Filter Rule v4
 
