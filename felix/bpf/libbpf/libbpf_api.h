@@ -70,17 +70,20 @@ void bpf_tc_program_detach(int ifindex, int handle, int pref, bool ingress)
 	set_errno(bpf_tc_detach(&hook, &opts));
 }
 
-int bpf_tc_query_iface(int ifindex, struct bpf_tc_opts opts, bool ingress)
+struct bpf_tc_opts bpf_tc_program_query(int ifindex, int handle, int pref, bool ingress)
 {
-
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
 			.ifindex = ifindex,
 			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
 			);
-	opts.prog_fd = opts.prog_id = opts.flags = 0;
+	DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
+			.handle = handle,
+			.priority = pref,
+			);
+
 	set_errno(bpf_tc_query(&hook, &opts));
 
-	return opts.prog_id;
+	return opts;
 }
 
 void bpf_tc_create_qdisc(int ifIndex)
