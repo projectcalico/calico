@@ -35,11 +35,11 @@ import (
 
 var (
 	counterVecSnapshotsGenerated = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "typha_snapshot_generated",
+		Name: "typha_snapshots_generated",
 		Help: "Number of binary snapshots generated.",
 	}, []string{"syncer"})
 	counterVecSnapshotsReused = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "typha_snapshot_reused",
+		Name: "typha_snapshots_reused",
 		Help: "Number of binary snapshots that were cached and reused.",
 	}, []string{"syncer"})
 	gaugeVecSnapRawBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -244,7 +244,7 @@ type snapshot struct {
 func (s *snapshot) sendToClient(ctx context.Context, logCtx *logrus.Entry, w io.Writer, conn WriteDeadlineSetter, writeTimeout time.Duration) error {
 	var currentWriteDeadline time.Time
 	reader := s.buf.Reader()
-
+	var totalBytesSent int64
 	for ctx.Err() == nil {
 		// Optimisation: only reset the deadline if we've used a significant portion of it.
 		// Setting it seems to be fairly expensive.
@@ -258,16 +258,24 @@ func (s *snapshot) sendToClient(ctx context.Context, logCtx *logrus.Entry, w io.
 		}
 
 		n, err := reader.WriteTo(w)
+		totalBytesSent += n
 		if err != nil {
 			if n > 0 && os.IsTimeout(err) {
 				// Managed to write _some_ bytes, loop again to reset the timeout.  If the snapshot was
 				// very large then we might have written a big chunk of it but simply not had enough time to
 				// complete.  Only give up if we see no progress at all.
+				logCtx.WithFields(
+					logrus.Fields{
+						"sentThisWrite": n,
+						"sentTotal":     totalBytesSent,
+					}).Info("Transferred part of snapshot to client before write timed out.  Trying next write before giving up...")
 				continue
+			} else if os.IsTimeout(err) {
+				logCtx.WithError(err).Info("Writes of snapshot to client persistently timed out while making no progress, giving up.")
 			}
 			return err
 		}
-		break // WriteTo returns nil not EOF.
+		break // WriteTo returns nil if all data was written, not EOF.
 	}
 
 	// Unset the timeout; under normal operation, we rely on a regular round tripped ping/pong message instead.
@@ -277,5 +285,5 @@ func (s *snapshot) sendToClient(ctx context.Context, logCtx *logrus.Entry, w io.
 		return err
 	}
 
-	return nil
+	return ctx.Err()
 }

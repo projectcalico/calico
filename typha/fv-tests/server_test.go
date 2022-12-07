@@ -960,7 +960,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 
 		logStats := func(note string) {
 			for _, stat := range []string{
-				"typha_snapshot_generated",
+				"typha_snapshots_generated",
 			} {
 				value, _ := getPerSyncerCounter(syncproto.SyncerTypeFelix, stat)
 				log.Infof("%s: counter: %s =  %v", note, stat, int(value))
@@ -1155,7 +1155,7 @@ var _ = Describe("With an in-process Server with short write timeout", func() {
 
 		logStats := func(note string) {
 			for _, stat := range []string{
-				"typha_snapshot_generated",
+				"typha_snapshots_generated",
 			} {
 				value, _ := getPerSyncerCounter(syncproto.SyncerTypeFelix, stat)
 				log.Infof("%s: counter: %s =  %v", note, stat, int(value))

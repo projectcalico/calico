@@ -768,6 +768,7 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	if binSnapCache != nil {
 		// We have a binary snapshot cache that supports this compression mode; send the compressed
 		// binary snapshot instead of a streamed snapshot.
+		snapStart := time.Now()
 		breadcrumb, err = binSnapCache.SendSnapshot(h.cxt, h.connW, h.conn)
 		if err != nil {
 			log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
@@ -781,6 +782,7 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 			return
 		}
 		h.logCxt.Info("Sent compressed binary snapshot and received ACK from client.")
+		h.summarySnapshotSendTime.Observe(time.Since(snapStart).Seconds())
 	} else {
 		// Either client is old or we don't have support for sending a compressed snapshot of this type.
 		// Stream the snapshot instead.
