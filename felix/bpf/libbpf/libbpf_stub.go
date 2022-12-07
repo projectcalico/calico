@@ -58,6 +58,10 @@ func (m *Map) NextMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func QueryClassifier(ifindex, handle, pref int, ingress bool) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	panic("LIBBPF syscall stub")
 }

@@ -95,7 +95,7 @@ func (ap *AttachPoint) AlreadyAttached(currentID int, object string) bool {
 	return isAttached
 }
 
-func (ap *AttachPoint) AttachProgram(currentID int) (int, error) {
+func (ap *AttachPoint) AttachProgram() (int, error) {
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
 		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
@@ -127,6 +127,11 @@ func (ap *AttachPoint) AttachProgram(currentID int) (int, error) {
 		if err := m.SetPinPath(pinPath); err != nil {
 			return -1, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
+	}
+
+	currentID, err := ap.ProgramID()
+	if err != nil {
+		return -1, err
 	}
 
 	// Check if the bpf object is already attached, and we should skip re-attaching it
@@ -241,6 +246,11 @@ func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
 	}
 
 	return nil
+}
+
+func (ap *AttachPoint) Attached() (bool, error) {
+	_, err := ap.ProgramID()
+	return err == nil, err
 }
 
 func (ap *AttachPoint) ProgramID() (int, error) {
