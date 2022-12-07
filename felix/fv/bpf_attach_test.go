@@ -23,8 +23,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
@@ -35,8 +39,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 	}
 
 	var (
-		infra infrastructure.DatastoreInfra
-		felix *infrastructure.Felix
+		infra        infrastructure.DatastoreInfra
+		felix        *infrastructure.Felix
+		calicoClient client.Interface
 	)
 
 	BeforeEach(func() {
@@ -51,8 +56,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 			},
 		}
 
-		felixes, _ := infrastructure.StartNNodeTopology(1, opts, infra)
+		felixes, cc := infrastructure.StartNNodeTopology(1, opts, infra)
 		felix = felixes[0]
+		calicoClient = cc
 
 		err := infra.AddAllowToDatastore("host-endpoint=='true'")
 		Expect(err).NotTo(HaveOccurred())
@@ -67,7 +73,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		infra.Stop()
 	})
 
-	It("should not reattach bpf programs", func() {
+	It("should not reattach bpf programs after restart", func() {
 
 		// This should not happen at initial execution of felix, since there is no program attached
 		firstRunBase := felix.WatchStdoutFor(regexp.MustCompile("Program already attached, skip reattaching"))
@@ -90,6 +96,43 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		Eventually(secondRunProg1, "10s", "100ms").Should(BeClosed())
 		Eventually(secondRunProg2, "10s", "100ms").Should(BeClosed())
 		Expect(secondRunBase).NotTo(BeClosed())
+	})
+
+	It("should not reattach bpf programs when policy changes", func() {
+		By("Starting Felix")
+		felix.TriggerDelayedStart()
+
+		By("Adding pod")
+		wIP := "10.65.0.11"
+		w := workload.Run(felix, "pod", "default", wIP, "8055", "tcp")
+		w.WorkloadEndpoint.Labels = map[string]string{"name": w.Name}
+		w.ConfigureInInfra(infra)
+
+		By("Waiting for all programs ready")
+		ensureBPFProgramsAttached(felix)
+
+		progs1, err := felix.ExecOutput("bpftool", "-jp", "net")
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Changing policy")
+		pol := api.NewGlobalNetworkPolicy()
+		pol.Namespace = "fv"
+		pol.Name = "policy-1"
+		pol.Spec.Ingress = []api.Rule{{Action: "Deny"}}
+		pol.Spec.Egress = []api.Rule{{Action: "Deny"}}
+		pol.Spec.Selector = "name=='" + w.Name + "'"
+
+		_, err = calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, pol, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying that policy is programmed")
+		bpfWaitForPolicy(felix, w.GetInterfaceName(), "ingress", "default.policy-1")
+		bpfWaitForPolicy(felix, w.GetInterfaceName(), "egress", "default.policy-1")
+
+		progs2, err := felix.ExecOutput("bpftool", "-jp", "net")
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(progs1).To(Equal(progs2))
 	})
 
 	It("should clean up programs when BPFDataIfacePattern changes", func() {

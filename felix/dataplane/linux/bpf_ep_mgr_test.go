@@ -173,7 +173,6 @@ func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) po
 }
 
 var _ = Describe("BPF Endpoint Manager", func() {
-
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
@@ -437,7 +436,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				dp.ensureStartedFn = func() {
 					bpfEpMgr.initAttaches = map[string]bpf.EPAttachInfo{
-						"eth0": {TCId: 12345},
+						"eth0": {TCIngressId: 12345},
 					}
 				}
 
