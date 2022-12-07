@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -186,7 +187,7 @@ func CleanAttachedProgDir() {
 // attached program. The filename is [iface name]_[hook].json, for
 // example, eth0_egress.json
 func RuntimeJSONFilename(iface string, hook Hook) string {
-	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, string(hook)))
+	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, hook))
 }
 
 func sha256OfFile(name string) (string, error) {
@@ -204,9 +205,10 @@ func sha256OfFile(name string) (string, error) {
 
 // EPAttachInfo tells what programs are attached to an endpoint.
 type EPAttachInfo struct {
-	TCId    int
-	XDPId   int
-	XDPMode string
+	TCEgressId  int
+	TCIngressId int
+	XDPId       int
+	XDPMode     string
 }
 
 // ListCalicoAttached list all programs that are attached to TC or XDP and are
@@ -218,10 +220,6 @@ func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 	}
 
 	attachedProgIDs := set.New[int]()
-
-	for _, p := range aTC {
-		attachedProgIDs.Add(p.ID)
-	}
 
 	for _, p := range aXDP {
 		attachedProgIDs.Add(p.ID)
@@ -237,7 +235,7 @@ func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 		return nil, err
 	}
 
-	caliProgs := set.New[int]()
+	caliProgsXdp := set.New[int]()
 
 	for _, p := range allProgs {
 		if !attachedProgIDs.Contains(p.Id) {
@@ -246,7 +244,7 @@ func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 
 		for _, m := range p.MapIds {
 			if _, ok := maps[m]; ok {
-				caliProgs.Add(p.Id)
+				caliProgsXdp.Add(p.Id)
 				break
 			}
 		}
@@ -255,14 +253,31 @@ func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 	ai := make(map[string]EPAttachInfo)
 
 	for _, p := range aTC {
-		if caliProgs.Contains(p.ID) {
-			ai[p.DevName] = EPAttachInfo{TCId: p.ID}
+		if !strings.HasPrefix(p.Name, "calico") {
+			continue
+		}
+
+		info, ok := ai[p.DevName]
+		if !ok {
+			info = EPAttachInfo{TCEgressId: -1, TCIngressId: -1, XDPId: -1}
+		}
+
+		switch p.Kind {
+		case "clsact/ingress":
+			info.TCIngressId = p.ID
+			ai[p.DevName] = info
+		case "clsact/egress":
+			info.TCEgressId = p.ID
+			ai[p.DevName] = info
 		}
 	}
 
 	for _, p := range aXDP {
-		if caliProgs.Contains(p.ID) {
-			info := ai[p.DevName]
+		if caliProgsXdp.Contains(p.ID) {
+			info, ok := ai[p.DevName]
+			if !ok {
+				info = EPAttachInfo{TCEgressId: -1, TCIngressId: -1, XDPId: -1}
+			}
 			info.XDPId = p.ID
 			info.XDPMode = p.Mode
 			ai[p.DevName] = info
