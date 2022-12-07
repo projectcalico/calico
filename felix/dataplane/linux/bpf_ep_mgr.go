@@ -111,7 +111,8 @@ type attachPoint interface {
 	IfaceName() string
 	JumpMapFDMapKey() string
 	HookName() bpf.Hook
-	AttachProgram(int) (int, error)
+	Attached() (bool, error)
+	AttachProgram() (int, error)
 	DetachProgram() error
 	Log() *log.Entry
 }
@@ -147,6 +148,12 @@ type bpfInterfaceInfo struct {
 	endpointID *proto.WorkloadEndpointID
 }
 
+var voidIface bpfInterface = bpfInterface{
+	dpState: bpfInterfaceState{
+		tcState: [bpf.HookTCCount]tc.ProgInfo{{Id: -1}, {Id: -1}},
+	},
+}
+
 func (i bpfInterfaceInfo) ifaceIsUp() bool {
 	return i.isUP
 }
@@ -154,7 +161,9 @@ func (i bpfInterfaceInfo) ifaceIsUp() bool {
 type bpfInterfaceState struct {
 	jumpMapFDs [bpf.HookCount]bpf.MapFD
 	progIDs    [bpf.HookCount]int
-	isReady    bool
+	tcState    [bpf.HookTCCount]tc.ProgInfo
+
+	isReady bool
 }
 
 type ctlbWorkaroundMode int
@@ -260,8 +269,6 @@ type bpfEndpointManager struct {
 	natOutIdx int
 
 	arpMap bpf.Map
-
-	attachedProgs map[bpf.HookDevKey]int
 }
 
 type serviceKey struct {
@@ -420,13 +427,16 @@ func newBPFEndpointManager(
 // * if the bpfInterface's info field changes, it marks it as dirty
 // * if the bpfInterface is now empty (no info or state), it cleans it up.
 func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInterface) (forceDirty bool)) {
-	iface := m.nameToIface[ifaceName]
+	iface, ok := m.nameToIface[ifaceName]
+	if !ok {
+		iface = voidIface
+	}
+
 	ifaceCopy := iface
 	dirty := fn(&iface)
 	logCtx := log.WithField("name", ifaceName)
 
-	var zeroIface bpfInterface
-	if reflect.DeepEqual(iface, zeroIface) {
+	if reflect.DeepEqual(iface, voidIface) {
 		logCtx.Debug("Interface info is now empty.")
 		delete(m.nameToIface, ifaceName)
 	} else {
@@ -826,12 +836,6 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 		m.initUnknownIfaces = nil
 	})
-
-	if m.dirtyIfaceNames.Len() > 0 {
-		m.attachedProgs = bpf.ListHooksIDs()
-		log.WithField("attachedProgs", m.attachedProgs).Debug("CompleteDeferredWork")
-		defer func() { m.attachedProgs = nil }()
-	}
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
@@ -1886,10 +1890,15 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) error {
 
 // Ensure TC/XDP program is attached to the specified interface and return its jump map FD.
 func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error) {
-	progID, jumpMapFD := m.getHookState(ap)
+	jumpMapFD := m.getHookState(ap)
 	if jumpMapFD != 0 {
 		ap.Log().Debugf("Known jump map fd=%v", jumpMapFD)
-		if progID == -1 {
+		attached, err := ap.Attached()
+		if err != nil {
+			return jumpMapFD, fmt.Errorf("failed to check if interface %s had BPF program; %w", ap.IfaceName(), err)
+		}
+
+		if !attached {
 			// BPF program is missing; maybe we missed a notification of the interface being recreated?
 			// Close the now-defunct jump map.
 			log.WithField("iface", ap.IfaceName()).Info(
@@ -1914,7 +1923,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, e
 		m.cleanupLock.RLock()
 		ap.Log().Debug("AttachProgram got lock.")
 
-		progID, err := ap.AttachProgram(progID)
+		progID, err := ap.AttachProgram()
 		m.cleanupLock.RUnlock()
 
 		if err != nil {
@@ -1925,7 +1934,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, e
 		if err != nil {
 			return 0, fmt.Errorf("failed to look up jump map: %w", err)
 		}
-		m.setHookState(ap, progID, jumpMapFD)
+		m.setHookState(ap, jumpMapFD)
 	}
 
 	return jumpMapFD, nil
@@ -1935,7 +1944,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, e
 func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 
 	// Clean up jump map FD if there is one.
-	_, jumpMapFD := m.getHookState(ap)
+	jumpMapFD := m.getHookState(ap)
 	if jumpMapFD != 0 {
 		// Close the jump map FD.
 		if err := jumpMapFD.Close(); err == nil {
@@ -1955,30 +1964,21 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	return err
 }
 
-func (m *bpfEndpointManager) getHookState(ap attachPoint) (id int, fd bpf.MapFD) {
+func (m *bpfEndpointManager) getHookState(ap attachPoint) (fd bpf.MapFD) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 	m.withIface(ap.IfaceName(), func(iface *bpfInterface) bool {
 		hook := ap.HookName()
-		check, ok := m.attachedProgs[bpf.HookDevKey{Dev: ap.IfaceName(), Hook: hook}]
-		if !ok {
-			// No program attached to this hook
-			id = -1
-			return false
-		}
-		id = iface.dpState.progIDs[hook]
-		if check != id {
-			id = check
-			// Different program attached to this hook
-			return false
-		}
 		fd = iface.dpState.jumpMapFDs[hook]
+		if aptc, ok := ap.(*tc.AttachPoint); ok {
+			aptc.SetProgInfo(iface.dpState.tcState[hook])
+		}
 		return false
 	})
 	return
 }
 
-func (m *bpfEndpointManager) setHookState(ap attachPoint, progID int, fd bpf.MapFD) {
+func (m *bpfEndpointManager) setHookState(ap attachPoint, fd bpf.MapFD) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
@@ -1986,9 +1986,10 @@ func (m *bpfEndpointManager) setHookState(ap attachPoint, progID int, fd bpf.Map
 		hook := ap.HookName()
 
 		iface.dpState.jumpMapFDs[hook] = fd
-		iface.dpState.progIDs[hook] = progID
-		ap.Log().Debugf("ProgIds %v Jump maps %v progID=%d fd=%v",
-			iface.dpState.progIDs, iface.dpState.jumpMapFDs, progID, fd)
+		if aptc, ok := ap.(*tc.AttachPoint); ok {
+			iface.dpState.tcState[hook] = aptc.ProgInfo()
+		}
+		ap.Log().Debugf("Jump maps %v fd=%v", iface.dpState.jumpMapFDs, fd)
 		return false
 	})
 }
@@ -2001,9 +2002,10 @@ func (m *bpfEndpointManager) clearHookState(ap attachPoint) {
 		hook := ap.HookName()
 
 		iface.dpState.jumpMapFDs[hook] = 0
-		iface.dpState.progIDs[hook] = -1
-		ap.Log().Debugf("ProgIds %v Jump maps %v cleared hook %s",
-			iface.dpState.progIDs, iface.dpState.jumpMapFDs, hook)
+		if _, ok := ap.(*tc.AttachPoint); ok {
+			iface.dpState.tcState[hook] = tc.ProgInfo{Id: -1}
+		}
+		ap.Log().Debugf("Jump maps %v cleared hook %s", iface.dpState.jumpMapFDs, hook)
 		return false
 	})
 }
