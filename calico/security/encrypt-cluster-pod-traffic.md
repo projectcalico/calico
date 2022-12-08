@@ -14,7 +14,7 @@ When this feature is enabled, {{ site.prodname }} automatically creates and mana
 ## Concepts
 ### About WireGuard
 
-WireGuard supports both host-to-host encryption for pod traffic, and direct node-to-node communication. Because {{site.prodname}} is not implemented using a sidecar, traffic is not encrypted for the full journey from one pod to another; traffic is only encrypted on the host-to-host portion of the journey.
+WireGuard supports both host-to-host encryption for pod traffic and direct node-to-node communication. Because {{site.prodname}} is not implemented using a sidecar, traffic is not encrypted for the full journey from one pod to another; traffic is only encrypted on the host-to-host portion of the journey.
 
 {{site.prodname}} supports WireGuard encryption for both IPv4 and IPv6 traffic. You can enable traffic independently using parameters in the FelixConfiguration resource:
  - `wireguardEnabled` -  enables encrypting IPv4 traffic over an IPv4 underlay network
@@ -42,7 +42,7 @@ This how-to guide uses the following {{site.prodname}} features:
 **Supported encryption**
 
 - Pod-to-pod traffic
-- Encryption for direct node-to-node communication is only supported on managed clusters deployed on EKS (AWS CNI) and AKS (Azure CNI)
+- Encryption for direct node-to-node communication is supported only on managed clusters deployed on EKS (AWS CNI) and AKS (Azure CNI)
 
 **Required**
 
