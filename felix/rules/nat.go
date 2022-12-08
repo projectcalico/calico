@@ -151,6 +151,38 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 	}}
 }
 
+func (r *DefaultRuleRenderer) getEgressSNATMatch(intIp string, ipVersion uint8) iptables.MatchCriteria {
+	ipConf := r.ipSetConfig(ipVersion)
+	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
+	match := iptables.Match().NotDestIPSet(allIPsSetName).SourceNet(intIp)
+	if r.Config.BPFEnabled {
+		match = iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask)
+	}
+	return match
+}
+
+func (r *DefaultRuleRenderer) EgressSNATsToIptablesChains(snats map[string]string, ipVersion uint8) []*iptables.Chain {
+	// Extract and sort map keys so we can program rules in a determined order.
+	sortedIntIps := make([]string, 0, len(snats))
+	for intIp := range snats {
+		sortedIntIps = append(sortedIntIps, intIp)
+	}
+	sort.Strings(sortedIntIps)
+
+	rules := []iptables.Rule{}
+	for _, intIp := range sortedIntIps {
+		extIp := snats[intIp]
+		rules = append(rules, iptables.Rule{
+			Match:  r.getEgressSNATMatch(intIp, ipVersion),
+			Action: iptables.SNATAction{ToAddr: extIp},
+		})
+	}
+	return []*iptables.Chain{{
+		Name:  ChainNATEgress,
+		Rules: rules,
+	}}
+}
+
 func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*iptables.Chain {
 	rules := []iptables.Rule{}
 	if r.blockCIDRAction != nil {

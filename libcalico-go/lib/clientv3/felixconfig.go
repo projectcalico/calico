@@ -113,4 +113,8 @@ func setDefaults(fc *apiv3.FelixConfiguration) {
 		disabled := apiv3.FloatingIPsDisabled
 		fc.Spec.FloatingIPs = &disabled
 	}
+	if fc.Spec.EgressSNAT == nil {
+		disabled := apiv3.EgressSNATDisabled
+		fc.Spec.EgressSNAT = &disabled
+	}
 }

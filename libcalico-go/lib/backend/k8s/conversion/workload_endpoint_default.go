@@ -181,6 +181,52 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		}
 	}
 
+	// Pull out egress SNAT IP annotation
+	var egressSNAT libapiv3.IPNAT
+	if annotation, ok := pod.Annotations["cni.projectcalico.org/egressSNAT"]; ok && len(podIPNets) > 0 {
+
+		// Parse Annotation data
+		var ip string
+		err := json.Unmarshal([]byte(annotation), &ip)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", annotation, err)
+		}
+
+		// Get IPv4 and IPv6 targets for Egress SNAT
+		var podnetV4, podnetV6 *cnet.IPNet
+		for _, ipNet := range podIPNets {
+			if ipNet.IP.To4() != nil {
+				podnetV4 = ipNet
+				netmask, _ := podnetV4.Mask.Size()
+				if netmask != 32 {
+					return nil, fmt.Errorf("PodIP %v is not a valid IPv4: Mask size is %d, not 32", ipNet, netmask)
+				}
+			} else {
+				podnetV6 = ipNet
+				netmask, _ := podnetV6.Mask.Size()
+				if netmask != 128 {
+					return nil, fmt.Errorf("PodIP %v is not a valid IPv6: Mask size is %d, not 128", ipNet, netmask)
+				}
+			}
+		}
+
+		if strings.Contains(ip, ":") {
+			if podnetV6 != nil {
+				egressSNAT = libapiv3.IPNAT{
+					InternalIP: podnetV6.IP.String(),
+					ExternalIP: ip,
+				}
+			}
+		} else {
+			if podnetV4 != nil {
+				egressSNAT = libapiv3.IPNAT{
+					InternalIP: podnetV4.IP.String(),
+					ExternalIP: ip,
+				}
+			}
+		}
+	}
+
 	// Handle source IP spoofing annotation
 	var requestedSourcePrefixes []string
 	if annotation, ok := pod.Annotations["cni.projectcalico.org/allowedSourcePrefixes"]; ok && annotation != "" {
@@ -249,6 +295,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		IPNetworks:                 ipNets,
 		Ports:                      endpointPorts,
 		IPNATs:                     floatingIPs,
+		EgressSNAT:                 egressSNAT,
 		ServiceAccountName:         pod.Spec.ServiceAccountName,
 		AllowSpoofedSourcePrefixes: requestedSourcePrefixes,
 	}

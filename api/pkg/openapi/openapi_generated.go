@@ -2770,6 +2770,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"egressSNAT": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressSNAT configures whether or not Felix will program Egress SNAT rules.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

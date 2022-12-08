@@ -48,7 +48,6 @@ func convertWorkloadEndpointV2ToV1Key(v3key model.ResourceKey) (model.Key, error
 		WorkloadID:     v3key.Namespace + "/" + parts[2],
 		EndpointID:     parts[3],
 	}, nil
-
 }
 
 func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
@@ -91,6 +90,17 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 			} else {
 				ipv6NAT = append(ipv6NAT, *nat)
 			}
+		}
+	}
+
+	snat := ConvertV2ToV1IPNAT(v3res.Spec.EgressSNAT)
+	var ipv4SNAT []model.IPNAT
+	var ipv6SNAT []model.IPNAT
+	if snat != nil {
+		if snat.IntIP.Version() == 4 {
+			ipv4SNAT = append(ipv4SNAT, *snat)
+		} else {
+			ipv6SNAT = append(ipv6SNAT, *snat)
 		}
 	}
 
@@ -176,6 +186,8 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 		IPv6Nets:                   ipv6Nets,
 		IPv4NAT:                    ipv4NAT,
 		IPv6NAT:                    ipv6NAT,
+		Ipv4SNAT:                   ipv4SNAT,
+		Ipv6SNAT:                   ipv6SNAT,
 		Labels:                     labels,
 		IPv4Gateway:                ipv4Gateway,
 		IPv6Gateway:                ipv6Gateway,

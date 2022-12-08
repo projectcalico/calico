@@ -156,6 +156,7 @@ type Config struct {
 	XDPRefreshInterval             time.Duration
 
 	FloatingIPsEnabled bool
+	EgressSNATEnabled  bool
 
 	Wireguard wireguard.Config
 
@@ -237,7 +238,7 @@ type UpdateBatchResolver interface {
 // and ipsets.  It communicates with the datastore-facing part of Felix via the
 // Send/RecvMessage methods, which operate on the protobuf-defined API objects.
 //
-// Architecture
+// # Architecture
 //
 // The internal dataplane driver is organised around a main event loop, which handles
 // update events from the datastore and dataplane.
@@ -254,7 +255,7 @@ type UpdateBatchResolver interface {
 // In addition, it allows for different managers to make updates without having to
 // coordinate on their sequencing.
 //
-// Requirements on the API
+// # Requirements on the API
 //
 // The internal dataplane does not do consistency checks on the incoming data (as the
 // old Python-based driver used to do).  It expects to be told about dependent resources
@@ -759,6 +760,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
+	dp.RegisterManager(newEgressSNATManager(natTableV4, ruleRenderer, 4, config.EgressSNATEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
 		// Add a manager to keep the all-hosts IP set up to date.
@@ -898,6 +900,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.FloatingIPsEnabled,
 		))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
+		dp.RegisterManager(newEgressSNATManager(natTableV6, ruleRenderer, 6, config.EgressSNATEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
 

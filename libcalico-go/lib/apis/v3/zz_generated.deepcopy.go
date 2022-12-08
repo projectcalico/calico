@@ -691,6 +691,7 @@ func (in *WorkloadEndpointSpec) DeepCopyInto(out *WorkloadEndpointSpec) {
 		*out = make([]IPNAT, len(*in))
 		copy(*out, *in)
 	}
+	out.EgressSNAT = in.EgressSNAT
 	if in.Profiles != nil {
 		in, out := &in.Profiles, &out.Profiles
 		*out = make([]string, len(*in))

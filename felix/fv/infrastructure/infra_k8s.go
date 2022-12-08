@@ -697,6 +697,10 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 		// Our WEP will have a /32 rather than an IP, strip it off.
 		podIP = strings.Split(podIP, "/")[0]
 	}
+	annotations := make(map[string]string)
+	if wep.Spec.EgressSNAT.ExternalIP != "" && wep.Spec.EgressSNAT.InternalIP != "" {
+		annotations["cni.projectcalico.org/egressSNAT"] = "\"" + wep.Spec.EgressSNAT.ExternalIP + "\""
+	}
 	desiredStatus := v1.PodStatus{
 		Phase: v1.PodRunning,
 		Conditions: []v1.PodCondition{
@@ -712,7 +716,7 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 		PodIP: podIP,
 	}
 	podIn := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace, Annotations: annotations},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{{
 				Name:  wep.Spec.Endpoint,
