@@ -121,27 +121,35 @@ func (m *Map) NextMap() (*Map, error) {
 	return &Map{bpfMap: bpfMap, bpfObj: m.bpfObj}, nil
 }
 
-func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
-	isIngress := 0
+func QueryClassifier(ifindex, handle, pref int, ingress bool) (int, error) {
+	opts, err := C.bpf_tc_program_query(C.int(ifindex), C.int(handle), C.int(pref), C.bool(ingress))
+
+	return int(opts.prog_id), err
+}
+
+func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
+	_, err := C.bpf_tc_program_detach(C.int(ifindex), C.int(handle), C.int(pref), C.bool(ingress))
+
+	return err
+}
+
+// AttachClassifier return the program id and pref and handle of the qdisc
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, int, int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
 	defer C.free(unsafe.Pointer(cIfName))
 	ifIndex, err := C.if_nametoindex(cIfName)
 	if err != nil {
-		return -1, err
+		return -1, -1, -1, err
 	}
 
-	if hook == string(QdiskIngress) {
-		isIngress = 1
-	}
-
-	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.int(isIngress))
+	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress))
 	if err != nil {
-		return -1, fmt.Errorf("error attaching tc program %w", err)
+		return -1, -1, -1, fmt.Errorf("error attaching tc program %w", err)
 	}
 
-	return int(ret.prog_id), nil
+	return int(ret.prog_id), int(ret.priority), int(ret.handle), nil
 }
 
 func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, error) {
