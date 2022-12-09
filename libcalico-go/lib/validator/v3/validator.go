@@ -79,6 +79,7 @@ var (
 	globalSelectorRegex = regexp.MustCompile(fmt.Sprintf(`%v global\(\)|global\(\) %v`, andOr, andOr))
 
 	interfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	ignoredInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
 	ifaceFilterRegex      = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
 	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
 	protocolRegex         = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
@@ -154,6 +155,7 @@ func init() {
 	// Register field validators.
 	registerFieldValidator("action", validateAction)
 	registerFieldValidator("interface", validateInterface)
+	registerFieldValidator("ignoredInterface", validateIgnoredInterface)
 	registerFieldValidator("datastoreType", validateDatastoreType)
 	registerFieldValidator("name", validateName)
 	registerFieldValidator("containerID", validateContainerID)
@@ -268,6 +270,12 @@ func validateInterface(fl validator.FieldLevel) bool {
 	return s == "*" || interfaceRegex.MatchString(s)
 }
 
+func validateIgnoredInterface(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate ignored interface name: %s", s)
+	return s != "*" && ignoredInterfaceRegex.MatchString(s)
+}
+
 func validateIfaceFilter(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Interface Filter : %s", s)
@@ -380,7 +388,7 @@ func validateMAC(fl validator.FieldLevel) bool {
 func validateIptablesBackend(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Iptables Backend: %s", s)
-	return s == "" || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
+	return s == "" || s == api.IptablesBackendAuto || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
 }
 
 func validateLogLevel(fl validator.FieldLevel) bool {

@@ -63,7 +63,7 @@ spec:
 | prefixAdvertisements | List of per-prefix advertisement properties, like BGP communities.|| List of [prefixAdvertisements](#prefixadvertisements) |
 | nodeMeshPassword   | BGP password for the all the peerings in a full mesh configuration. |  | [BGPPassword](bgppeer#bgppassword) | `nil` (no password) |
 | nodeMeshMaxRestartTime  | Restart time that is announced by BIRD in the BGP graceful restart capability and that specifies how long the neighbor would wait for the BGP session to re-establish after a restart before deleting stale routes in full mesh configurations. Note: extra care should be taken when changing this configuration, as it may break networking in your cluster. When not specified, BIRD uses the default value of 120 seconds. | `10s`, `120s`, `2m` etc.  | [Duration string][parse-duration] | `nil` (empty config, BIRD will use the default value of `120s`) |
-
+| ignoredInterfaces | List of network interfaces to be excluded when reading device routes. | A list of network interface names. The names can contain the wildcard character asterisk `*` to specify groups of interface names. | List of string | `nil` (no extra interfaces to be ignored) |
 #### communities
 
 | Field       | Description                 | Accepted Values   | Schema |

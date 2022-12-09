@@ -25,7 +25,7 @@ section.
 
 The `{{page.imageNames["calico/kube-controllers"]}}` container includes the following controllers:
 
-1. policy controller: watches network policies and programs {{site.prodname}} policies.
+1. policy controller: watches Kubernetes network policies in the Kubernetes API, and syncs the policies to the datastore (etcd) as {{site.prodname}} network policies. Felix implements network policies in the dataplane.
 1. namespace controller: watches namespaces and programs {{site.prodname}} profiles.
 1. serviceaccount controller: watches service accounts and programs {{site.prodname}} profiles.
 1. workloadendpoint controller: watches for changes to pod labels and updates {{site.prodname}} workload endpoints.

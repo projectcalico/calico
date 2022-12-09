@@ -626,6 +626,21 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							Format:      "",
 						},
 					},
+					"ignoredInterfaces": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IgnoredInterfaces indicates the network interfaces that needs to be excluded when reading device routes.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -2009,7 +2024,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"iptablesBackend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IptablesBackend specifies which backend of iptables will be used. The default is legacy.",
+							Description: "IptablesBackend specifies which backend of iptables will be used. The default is Auto.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

@@ -64,7 +64,7 @@ Ensure that your hosts and firewalls allow the necessary traffic based on your c
 | {{site.prodname}} networking with VXLAN enabled              | All                  | Bidirectional   | UDP 4789 |
 | Typha access                                                 | Typha agent hosts    | Incoming        | TCP 5473 (default) |
 | All                                                          | kube-apiserver host  | Incoming        | Often TCP 443 or 8443\* |
-{%- else if include.orch == "Kubernetes" %}
+{%- elsif include.orch == "Kubernetes" %}
 | {{site.prodname}} networking with VXLAN enabled              | All                  | Bidirectional   | UDP 4789 |
 | {{site.prodname}} networking with Typha enabled              | Typha agent hosts    | Incoming        | TCP 5473 (default) |
 | {{site.prodname}} networking with IPv4 Wireguard enabled     | All                  | Bidirectional   | UDP 51820 (default) |

@@ -66,11 +66,13 @@ const (
 	FlagSameSubnet  Flags = 0x20
 	FlagTunneled    Flags = 0x40
 
-	FlagsUnknown        Flags = 0
-	FlagsRemoteWorkload       = FlagWorkload
-	FlagsRemoteHost           = FlagHost
-	FlagsLocalHost            = FlagLocal | FlagHost
-	FlagsLocalWorkload        = FlagLocal | FlagWorkload
+	FlagsUnknown            Flags = 0
+	FlagsRemoteWorkload           = FlagWorkload
+	FlagsRemoteHost               = FlagHost
+	FlagsLocalHost                = FlagLocal | FlagHost
+	FlagsLocalWorkload            = FlagLocal | FlagWorkload
+	FlagsRemoteTunneledHost       = FlagsRemoteHost | FlagTunneled
+	FlagsLocalTunneledHost        = FlagsLocalHost | FlagTunneled
 
 	_ = FlagsUnknown
 )

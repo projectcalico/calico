@@ -19,6 +19,3 @@ Read [Get started with Calico policy]({{ site.baseurl }}/security/calico-network
 
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
 - [Network policy]({{ site.baseurl }}/reference/resources/networkpolicy)
-- {% include enterprise_icon.html %}[Advanced egress access controls with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/egress-access-controls)
-- {% include enterprise_icon.html %}[Federation]({{ site.baseurl }}/security/calico-enterprise/federation)
-- {% include enterprise_icon.html %}[Calico Enterprise user console]({{ site.baseurl }}/security/calico-enterprise/user-console)

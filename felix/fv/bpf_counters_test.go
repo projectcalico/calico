@@ -37,7 +37,7 @@ import (
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy counters", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 
 	if !BPFMode() {
 		return
@@ -89,6 +89,43 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy count
 		Expect(err).NotTo(HaveOccurred())
 		return policy
 	}
+
+	It("should update generic counters", func() {
+		By("installing a deny policy between workloads")
+		pol := api.NewGlobalNetworkPolicy()
+		pol.Namespace = "default"
+		pol.Name = "drop-workload0-to-workload1"
+		pol.Spec.Selector = "all()"
+		pol.Spec.Ingress = []api.Rule{{
+			Action: "Deny",
+			Source: api.EntityRule{
+				Nets: []string{fmt.Sprintf("%s/32", w[0].IP)},
+			},
+			Destination: api.EntityRule{
+				Nets: []string{fmt.Sprintf("%s/32", w[1].IP)},
+			}},
+			{
+				Action: api.Allow,
+			}}
+		pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		pol = createPolicy(pol)
+
+		By("flushing counters")
+		out, err := felixes[0].ExecOutput("calico-bpf", "counters", "flush")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out).Should(BeZero())
+		checkDroppedByPolicyCounters(felixes[0], w[1].InterfaceName, 0, 0)
+
+		By("generating packets and checking the counter")
+		numberOfpackets := 10
+		for i := 0; i < numberOfpackets; i++ {
+			_, err := w[0].RunCmd("pktgen", w[0].IP, w[1].IP, "udp", "--port-dst", "8055")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = w[0].RunCmd("pktgen", w[0].IP, felixes[0].IP, "udp", "--port-dst", "8055")
+			Expect(err).NotTo(HaveOccurred())
+		}
+		checkDroppedByPolicyCounters(felixes[0], w[1].InterfaceName, 0, numberOfpackets)
+	})
 
 	It("should update rule counters", func() {
 
@@ -211,5 +248,35 @@ func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string
 	}
 	Expect(startOfPol).NotTo(Equal(-1))
 	Expect(strings.Contains(strOut[startOfPol+2], fmt.Sprintf("count = %d", count))).To(BeTrue())
+}
 
+func checkDroppedByPolicyCounters(felix *infrastructure.Felix, ifName string, iCount, eCount int) {
+	out, err := felix.ExecOutput("calico-bpf", "counters", "dump", fmt.Sprintf("--iface=%s", ifName))
+	Expect(err).NotTo(HaveOccurred())
+	strOut := strings.Split(out, "\n")
+
+	f := func(c rune) bool {
+		return c == '|'
+	}
+
+	var iCounter, eCounter, xCounter string
+	for _, line := range strOut {
+		fields := strings.FieldsFunc(line, f)
+		if len(fields) < 5 {
+			continue
+		}
+
+		// "Dropped by policy" is the desciption of DroppedByPolicy counter
+		// defined in felix/bpf/counters/counters.go.
+		if strings.TrimSpace(strings.ToLower(fields[0])) == "dropped" &&
+			strings.TrimSpace(strings.ToLower(fields[1])) == "by policy" {
+			iCounter = strings.TrimSpace(strings.ToLower(fields[2]))
+			eCounter = strings.TrimSpace(strings.ToLower(fields[3]))
+			xCounter = strings.TrimSpace(strings.ToLower(fields[4]))
+			break
+		}
+	}
+	Expect(xCounter).To(Equal("n/a"))
+	Expect(eCounter).To(Equal(fmt.Sprintf("%d", eCount)))
+	Expect(iCounter).To(Equal(fmt.Sprintf("%d", iCount)))
 }

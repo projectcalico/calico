@@ -238,14 +238,14 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 					SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
 					DestAddrType(AddrTypeLocal),
 				Action:  r.filterAllowAction,
-				Comment: []string{"Allow IPv4 VXLAN packets from whitelisted hosts"},
+				Comment: []string{"Allow IPv4 VXLAN packets from allowed hosts"},
 			},
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(AddrTypeLocal),
 				Action:  DropAction{},
-				Comment: []string{"Drop IPv4 VXLAN packets from non-whitelisted hosts"},
+				Comment: []string{"Drop IPv4 VXLAN packets from non-allowed hosts"},
 			},
 		)
 	}
@@ -260,14 +260,14 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 					SourceIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
 					DestAddrType(AddrTypeLocal),
 				Action:  r.filterAllowAction,
-				Comment: []string{"Allow IPv6 VXLAN packets from whitelisted hosts"},
+				Comment: []string{"Allow IPv6 VXLAN packets from allowed hosts"},
 			},
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(AddrTypeLocal),
 				Action:  DropAction{},
-				Comment: []string{"Drop IPv6 VXLAN packets from non-whitelisted hosts"},
+				Comment: []string{"Drop IPv6 VXLAN packets from non-allowed hosts"},
 			},
 		)
 	}
@@ -362,7 +362,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
 	var rules []Rule
 
-	// For IPv6, we need to white-list certain ICMP traffic from workloads in order to to act
+	// For IPv6, we need to allow certain ICMP traffic from workloads in order to act
 	// as a router.  Note: we do this before the policy chains, so we're bypassing the egress
 	// rules for this traffic.  While that might be unexpected, it makes sure that the user
 	// doesn't cut off their own connectivity in subtle ways that they shouldn't have to worry
@@ -395,7 +395,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 			// TODO(smc) Long-term, it'd be nice if the OpenStack plugin programmed a policy to
 			// do this instead.
 			log.WithField("ip", r.OpenStackMetadataIP).Info(
-				"OpenStack metadata IP specified, installing whitelist rule.")
+				"OpenStack metadata IP specified, installing special-case rule.")
 			rules = append(rules, Rule{
 				Match: Match().
 					Protocol("tcp").
@@ -405,7 +405,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 			})
 		}
 
-		// Again, for OpenStack compatibility, white-list certain protocols.
+		// Again, for OpenStack compatibility, allow certain protocols.
 		// TODO(smc) Long-term, it'd be nice if the OpenStack plugin programmed a policy to
 		// do this instead.
 		dhcpSrcPort := uint16(68)
@@ -482,7 +482,7 @@ func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *Ch
 	}
 
 	if table == "raw" {
-		// We're in the raw table, before conntrack, so we need to whitelist response traffic.
+		// We're in the raw table, before conntrack, so we need to allow response traffic.
 		// Otherwise, it could fall through to some doNotTrack policy and half of the connection
 		// would get untracked.  If we ACCEPT here then the traffic falls through to the filter
 		// table, where it'll only be accepted if there's a conntrack entry.
@@ -545,7 +545,7 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *C
 	}
 
 	if table == "raw" {
-		// We're in the raw table, before conntrack, so we need to whitelist response traffic.
+		// We're in the raw table, before conntrack, so we need to allow response traffic.
 		// Otherwise, it could fall through to some doNotTrack policy and half of the connection
 		// would get untracked.  If we ACCEPT here then the traffic falls through to the filter
 		// table, where it'll only be accepted if there's a conntrack entry.
@@ -746,7 +746,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 					SrcAddrType(AddrTypeLocal, false).
 					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
 				Action:  r.filterAllowAction,
-				Comment: []string{"Allow IPv4 VXLAN packets to other whitelisted hosts"},
+				Comment: []string{"Allow IPv4 VXLAN packets to other allowed hosts"},
 			},
 		)
 	}
@@ -762,7 +762,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 					SrcAddrType(AddrTypeLocal, false).
 					DestIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
 				Action:  r.filterAllowAction,
-				Comment: []string{"Allow IPv6 VXLAN packets to other whitelisted hosts"},
+				Comment: []string{"Allow IPv6 VXLAN packets to other allowed hosts"},
 			},
 		)
 	}

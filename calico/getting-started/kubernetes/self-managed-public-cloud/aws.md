@@ -20,6 +20,14 @@ Kubernetes Operations (kops) is a cluster management tool that handles provision
 - Install {% include open-new-window.html text='kubectl' url='https://kubernetes.io/docs/tasks/tools/install-kubectl/' %}
 - Install {% include open-new-window.html text='AWS CLI tools' url='https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html' %}
 
+
+> **Note**: {{site.prodname}} makes use of the Kubernetes Container Storage Interface (CSI) to support various types of volumes. The necessary drivers required for CSI
+> to function correctly in AWS clusters using EBS volumes may no longer be present by default in clusters running Kubernetes 1.23. Please check the documentation for the installer
+> being used to ensure the necessary CSI drivers are installed.
+> 
+> If using Kubernetes Operations (kops) as further down on this page please use the relevant linked kops documentation to ensure your cluster has the necessary configuration.
+{: .alert .alert-warning }
+
 ### How to
 
 There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Operations (kops) is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
@@ -38,6 +46,7 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
      ```
      export KOPS_STATE_STORE=s3://name-of-your-state-store-bucket
      ```
+1. {% include open-new-window.html text='Verify CSI driver installation configuration as per your particular cluster and volumes' url='https://kops.sigs.k8s.io/addons/#self-managed-aws-ebs-csi-driver' %}
 1. Configure kops to use {{site.prodname}} for networking.  
    The easiest way to do this is to pass `--networking calico` to kops when creating the cluster. For example:
 

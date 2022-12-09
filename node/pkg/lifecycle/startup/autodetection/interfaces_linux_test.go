@@ -43,16 +43,51 @@ var _ = DescribeTable("GetInterfaces",
 		getInterfaces: net.Interfaces,
 		expectFound:   true,
 	}),
-	Entry("ibmveth", getInterfacesTestCase{
+	Entry("should not skip ibmveth", getInterfacesTestCase{
 		getInterfaces: func() ([]net.Interface, error) {
 			return []net.Interface{{Index: 0, Name: "lo"}, {Index: 1, Name: "ibmvetha"}}, nil
 		},
 		expectFound:         true,
 		expectInterfaceName: "ibmvetha",
 	}),
-	Entry("veth", getInterfacesTestCase{
+	Entry("should skip veth", getInterfacesTestCase{
 		getInterfaces: func() ([]net.Interface, error) {
 			return []net.Interface{{Index: 0, Name: "veth123126312783"}}, nil
+		},
+	}),
+	Entry("should skip vxlan.calico", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "vxlan.calico"}}, nil
+		},
+		expectFound: false,
+	}),
+	Entry("should skip vxlan-v6.calico", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "vxlan-v6.calico"}}, nil
+		},
+		expectFound: false,
+	}),
+	Entry("should skip wireguard.cali", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "wireguard.cali"}}, nil
+		},
+		expectFound: false,
+	}),
+	Entry("should skip wg-v6.cali", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "wg-v6.cali"}}, nil
+		},
+		expectFound: false,
+	}),
+	Entry("should skip nodelocaldns", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "nodelocaldns"}}, nil
+		},
+		expectFound: false,
+	}),
+	Entry("should skip podman", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "podman"}}, nil
 		},
 	}),
 )

@@ -1,10 +1,9 @@
-//  Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 package install
 
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -114,7 +113,7 @@ func createKubernetesClient() *kubernetes.Clientset {
 		Fail("CERTS_PATH env variable not set")
 	}
 	kubeconfigPath := certsPath + "/kubeconfig"
-	kubeconfigData, err := ioutil.ReadFile(kubeconfigPath)
+	kubeconfigData, err := os.ReadFile(kubeconfigPath)
 	if err != nil {
 		Fail(fmt.Sprintf("Failed to read kubeconfig file: %v", err))
 	}
@@ -123,11 +122,11 @@ func createKubernetesClient() *kubernetes.Clientset {
 	if err != nil {
 		Fail(fmt.Sprintf("Failed to load kubeconfig: %v", err))
 	}
-	certificate, err := ioutil.ReadFile(certsPath + "/admin.pem")
+	certificate, err := os.ReadFile(certsPath + "/admin.pem")
 	if err != nil {
 		Fail(fmt.Sprintf("Failed to read admin client certificate: %v", err))
 	}
-	key, err := ioutil.ReadFile(certsPath + "/admin-key.pem")
+	key, err := os.ReadFile(certsPath + "/admin-key.pem")
 	if err != nil {
 		Fail(fmt.Sprintf("Failed to read admin client key: %v", err))
 	}
@@ -159,11 +158,12 @@ func createKubernetesClient() *kubernetes.Clientset {
 var _ = Describe("CNI installation tests", func() {
 	var tempDir string
 	BeforeEach(func() {
+		var err error
+
 		// Make a temporary directory for this test and build arguments to pass
 		// to the CNI container, configuring it to use the temp directory.
-		name, err := ioutil.TempDir("/tmp", "")
+		tempDir, err = os.MkdirTemp("", "cni-install-ut-*")
 		Expect(err).NotTo(HaveOccurred())
-		tempDir = fmt.Sprintf("/tmp/%s", name)
 
 		// Make subdirectories for where we expect binaries and config to be installed.
 		err = os.MkdirAll(tempDir+"/bin", 0755)
@@ -182,7 +182,7 @@ var _ = Describe("CNI installation tests", func() {
 		// Create token file for the Kubernetes client.
 		k8sSecret := []byte("my-secret-key")
 		tokenFile := fmt.Sprintf("%s/serviceaccount/token", tempDir)
-		err = ioutil.WriteFile(tokenFile, k8sSecret, 0755)
+		err = os.WriteFile(tokenFile, k8sSecret, 0755)
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s secret file: %v", err))
 		}
@@ -211,7 +211,7 @@ yvQ/7I8lUKV1hMeCWc2k/x146B/gEgyDl1zUNnJZ/hrKmXqjQy3dkj4HzBePHYND
 PuB/TL+u2y+iQUyXxLy3
 -----END CERTIFICATE-----`)
 		caFile := fmt.Sprintf("%s/serviceaccount/ca.crt", tempDir)
-		err = ioutil.WriteFile(caFile, k8sCA, 0755)
+		err = os.WriteFile(caFile, k8sCA, 0755)
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s CA file for test: %v", err))
 		}
@@ -219,7 +219,7 @@ PuB/TL+u2y+iQUyXxLy3
 		// Create namespace file for token refresh
 		k8sNamespace := []byte("kube-system")
 		var namespaceFile = fmt.Sprintf("%s/serviceaccount/namespace", tempDir)
-		err = ioutil.WriteFile(namespaceFile, k8sNamespace, 0755)
+		err = os.WriteFile(namespaceFile, k8sNamespace, 0755)
 		if err != nil {
 			Fail(fmt.Sprintf("Failed to write k8s namespace file: %v", err))
 		}
@@ -235,6 +235,8 @@ PuB/TL+u2y+iQUyXxLy3
 	})
 
 	AfterEach(func() {
+		// Cleanup temp directory
+		os.RemoveAll(tempDir)
 		// Cleanup calico-node service account
 		err := createKubernetesClient().CoreV1().ServiceAccounts("kube-system").Delete(context.Background(), "calico-node", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -246,7 +248,7 @@ PuB/TL+u2y+iQUyXxLy3
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get a list of files in the default CNI bin location.
-			files, err := ioutil.ReadDir(tempDir + "/bin")
+			files, err := os.ReadDir(tempDir + "/bin")
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Could not list the files in %s/bin", tempDir))
 			names := []string{}
 			for _, file := range files {
@@ -254,7 +256,7 @@ PuB/TL+u2y+iQUyXxLy3
 			}
 
 			// Get a list of files in the default location for CNI config.
-			files, err = ioutil.ReadDir(tempDir + "/net.d")
+			files, err = os.ReadDir(tempDir + "/net.d")
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Could not list the files in %s/net.d", tempDir))
 			for _, file := range files {
 				names = append(names, file.Name())
@@ -281,7 +283,7 @@ PuB/TL+u2y+iQUyXxLy3
 		err := runCniContainer(tempDir, false, "-v", tempDir+"/secondary-bin-dir:/host/secondary-bin-dir")
 		Expect(err).NotTo(HaveOccurred())
 
-		files, err := ioutil.ReadDir(tempDir + "/secondary-bin-dir")
+		files, err := os.ReadDir(tempDir + "/secondary-bin-dir")
 		Expect(err).NotTo(HaveOccurred())
 
 		names := []string{}
@@ -306,7 +308,7 @@ PuB/TL+u2y+iQUyXxLy3
 	It("should support a custom CNI_NETWORK_CONFIG", func() {
 		err := runCniContainer(tempDir, true, "-e", "CNI_NETWORK_CONFIG={}")
 		Expect(err).NotTo(HaveOccurred())
-		actual, err := ioutil.ReadFile(tempDir + "/net.d/10-calico.conflist")
+		actual, err := os.ReadFile(tempDir + "/net.d/10-calico.conflist")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(actual)).To(Equal("{}"))
 	})
@@ -320,7 +322,7 @@ PuB/TL+u2y+iQUyXxLy3
 		// Write the alternate configuration to disk so it can be picked up by
 		// the CNI container.
 		altConfigFile := tempDir + "/net.d/alternate-config"
-		err := ioutil.WriteFile(altConfigFile, []byte(expectedAlternateConfig), 0755)
+		err := os.WriteFile(altConfigFile, []byte(expectedAlternateConfig), 0755)
 		Expect(err).NotTo(HaveOccurred())
 		err = runCniContainer(
 			tempDir, true,
@@ -365,7 +367,7 @@ PuB/TL+u2y+iQUyXxLy3
 		})
 
 		It("Should not crash or copy when having a hidden file", func() {
-			err = ioutil.WriteFile(tempDir+"/certs/.hidden", []byte("doesn't matter"), 0644)
+			err = os.WriteFile(tempDir+"/certs/.hidden", []byte("doesn't matter"), 0644)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
 			err = runCniContainer(tempDir, true, "-v", tempDir+"/certs:/calico-secrets")
 			Expect(err).NotTo(HaveOccurred())
@@ -373,7 +375,7 @@ PuB/TL+u2y+iQUyXxLy3
 			Expect(err).To(HaveOccurred())
 		})
 		It("Should copy a non-hidden file", func() {
-			err = ioutil.WriteFile(tempDir+"/certs/etcd-cert", []byte("doesn't matter"), 0644)
+			err = os.WriteFile(tempDir+"/certs/etcd-cert", []byte("doesn't matter"), 0644)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 			err = runCniContainer(tempDir, true, "-v", tempDir+"/certs:/calico-secrets", "-e", "CNI_NETWORK_CONFIG={\"etcd_cert\": \"__ETCD_CERT_FILE__\"}")
 			Expect(err).NotTo(HaveOccurred())
@@ -390,13 +392,14 @@ PuB/TL+u2y+iQUyXxLy3
 })
 
 var _ = Describe("file comparison tests", func() {
-	var err error
 	var tempDir string
 
 	// The comparison code reads 64000 bytes at a time, so use something 4 times that size.
 	bigFile := make([]byte, 256000)
 	bigFileInitizlied := false
 	BeforeEach(func() {
+		var err error
+
 		if !bigFileInitizlied {
 			letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 			for i := range bigFile {
@@ -407,15 +410,20 @@ var _ = Describe("file comparison tests", func() {
 
 		// Make a temporary directory for this test and build arguments to pass
 		// to the CNI container, configuring it to use the temp directory.
-		tempDir, err = ioutil.TempDir("/tmp", "")
+		tempDir, err = os.MkdirTemp("", "cni-file-comparison-ut-*")
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		// Cleanup temp directory
+		os.RemoveAll(tempDir)
 	})
 
 	It("should compare two equal files", func() {
 		// Write two identical files.
-		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+		err = os.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are equal.
@@ -426,9 +434,9 @@ var _ = Describe("file comparison tests", func() {
 
 	It("should compare two unequal files", func() {
 		// Write two files with different contents.
-		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("it does matter"), 0644)
+		err = os.WriteFile(tempDir+"/dstFile", []byte("it does matter"), 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -439,9 +447,9 @@ var _ = Describe("file comparison tests", func() {
 
 	It("should compare two unequal files of the same size", func() {
 		// Write two files with different contents, but same total size.
-		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("foobar"), 0644)
+		err := os.WriteFile(tempDir+"/srcFile", []byte("foobar"), 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("barfoo"), 0644)
+		err = os.WriteFile(tempDir+"/dstFile", []byte("barfoo"), 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -452,9 +460,9 @@ var _ = Describe("file comparison tests", func() {
 
 	It("should compare two files with differing file modes", func() {
 		// Write two identical files.
-		err := ioutil.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
+		err := os.WriteFile(tempDir+"/srcFile", []byte("doesn't matter"), 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = ioutil.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
+		err = os.WriteFile(tempDir+"/dstFile", []byte("doesn't matter"), 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// For whatever reason, we need to explicitly chmod the file to get the permissions to change.
@@ -467,12 +475,12 @@ var _ = Describe("file comparison tests", func() {
 	})
 
 	It("should compare a big file with a small file", func() {
-		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile, 0644)
+		err := os.WriteFile(tempDir+"/srcFile", bigFile, 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Here we use the first 10 bytes from "bigFile" to be extra tricky, to make sure
 		// we spot if the files partially match.
-		err = ioutil.WriteFile(tempDir+"/dstFile", bigFile[:10], 0644)
+		err = os.WriteFile(tempDir+"/dstFile", bigFile[:10], 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -484,9 +492,9 @@ var _ = Describe("file comparison tests", func() {
 	It("should compare a small file with a big file", func() {
 		// Here we use the first 10 bytes from "bigFile" to be extra tricky, to make sure
 		// we spot if the files partially match.
-		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile[:10], 0644)
+		err := os.WriteFile(tempDir+"/srcFile", bigFile[:10], 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = ioutil.WriteFile(tempDir+"/dstFile", bigFile, 0644)
+		err = os.WriteFile(tempDir+"/dstFile", bigFile, 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -498,9 +506,9 @@ var _ = Describe("file comparison tests", func() {
 	It("should compare two files larger than the buffer size, that differ slightly", func() {
 		// Grab a slightly different number of bytes, ensuring that both are large enough
 		// to require a second loop iteration.
-		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile[:128002], 0644)
+		err := os.WriteFile(tempDir+"/srcFile", bigFile[:128002], 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = ioutil.WriteFile(tempDir+"/dstFile", bigFile[:128003], 0644)
+		err = os.WriteFile(tempDir+"/dstFile", bigFile[:128003], 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are not equal.
@@ -510,9 +518,9 @@ var _ = Describe("file comparison tests", func() {
 	})
 
 	It("should compare two identical files larger than the buffer size", func() {
-		err := ioutil.WriteFile(tempDir+"/srcFile", bigFile, 0644)
+		err := os.WriteFile(tempDir+"/srcFile", bigFile, 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-		err = ioutil.WriteFile(tempDir+"/dstFile", bigFile, 0644)
+		err = os.WriteFile(tempDir+"/dstFile", bigFile, 0644)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
 
 		// Assert that they are equal.
@@ -523,7 +531,7 @@ var _ = Describe("file comparison tests", func() {
 })
 
 func expectFileContents(filename, expected string) {
-	actual, err := ioutil.ReadFile(filename)
+	actual, err := os.ReadFile(filename)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to read file "+filename)
 	ExpectWithOffset(0, string(actual)).To(Equal(expected), fmt.Sprintf(
 		"actual file (%s) differed from expected contents.\nActual: (%s)\nExpected: (%s)",

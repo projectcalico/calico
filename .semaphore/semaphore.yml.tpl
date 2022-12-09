@@ -94,10 +94,9 @@ blocks:
   dependencies: []
   task:
     jobs:
-    - name: "Check generated files"
+    - name: "Pre-flight checks"
       commands:
-      - make generate
-      - make check-dirty
+      - make ci-preflight-checks
 
 - name: "API"
   run:
@@ -269,7 +268,7 @@ blocks:
 
 - name: "Felix: Windows FV"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:

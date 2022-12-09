@@ -58,6 +58,7 @@ type Checker struct {
 	OnFail func(msg string)
 
 	description string
+	init        func()       // called before testing starts
 	beforeRetry func()       // called when a test fails and before it is retried
 	finalTest   func() error // called after connectivity test, if it is successful, may fail the test.
 }
@@ -69,6 +70,13 @@ type CheckerOpt func(*Checker)
 func CheckWithDescription(desc string) CheckerOpt {
 	return func(c *Checker) {
 		c.description = desc
+	}
+}
+
+func CheckWithInit(f func()) CheckerOpt {
+	return func(c *Checker) {
+		log.Debug("CheckWithInit set")
+		c.init = f
 	}
 }
 
@@ -300,6 +308,10 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 	var actualConn []*Result
 	var actualConnPretty []string
 	var finalErr error
+
+	if c.init != nil {
+		c.init()
+	}
 
 	for {
 		checkStartTime := time.Now()
@@ -681,7 +693,8 @@ type CheckCmd struct {
 	ipSource   string
 	portSource string
 
-	duration time.Duration
+	duration time.Duration // Duration for long running stream tests
+	timeout  time.Duration // Timeout for one-off pings.
 
 	sendLen int
 	recvLen int
@@ -702,6 +715,7 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 		fmt.Sprintf("--duration=%d", int(cmd.duration.Seconds())),
 		fmt.Sprintf("--sendlen=%d", cmd.sendLen),
 		fmt.Sprintf("--recvlen=%d", cmd.recvLen),
+		fmt.Sprintf("--timeout=%f", cmd.timeout.Seconds()),
 		cmd.nsPath, cmd.ip, cmd.port,
 	}
 
@@ -799,14 +813,22 @@ func WithRecvLen(l int) CheckOption {
 	}
 }
 
+func WithTimeout(t time.Duration) CheckOption {
+	return func(c *CheckCmd) {
+		c.timeout = t
+	}
+}
+
 // Check executes the connectivity check
 func Check(cName, logMsg, ip, port, protocol string, opts ...CheckOption) *Result {
 
+	const defaultPingTimeout = 2 * time.Second
 	cmd := CheckCmd{
 		nsPath:   "-",
 		ip:       ip,
 		port:     port,
 		protocol: protocol,
+		timeout:  defaultPingTimeout,
 	}
 
 	for _, opt := range opts {
@@ -935,7 +957,7 @@ func (pc *PersistentConnection) Start() error {
 		"docker",
 		args...,
 	)
-	logName := fmt.Sprintf("permanent connection %s", n)
+	logName := fmt.Sprintf("persistent connection %s", n)
 	stdout, err := runCmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to start output logging for %s", logName)

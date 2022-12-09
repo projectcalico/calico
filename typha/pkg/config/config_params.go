@@ -136,14 +136,19 @@ type Config struct {
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`
 
-	ConnectionRebalancingMode  string        `config:"oneof(none,kubernetes);none"`
-	ConnectionDropIntervalSecs time.Duration `config:"seconds;1"`
-	MaxConnectionsUpperLimit   int           `config:"int(1,);10000"`
-	MaxConnectionsLowerLimit   int           `config:"int(1,);400"`
-	K8sServicePollIntervalSecs time.Duration `config:"seconds;30"`
-	K8sNamespace               string        `config:"string;kube-system"`
-	K8sServiceName             string        `config:"string;calico-typha"`
-	K8sPortName                string        `config:"string;calico-typha"`
+	ConnectionRebalancingMode             string        `config:"oneof(none,kubernetes);none"`
+	ConnectionDropIntervalSecs            time.Duration `config:"seconds;1"`
+	ShutdownTimeoutSecs                   time.Duration `config:"seconds;300"`
+	ShutdownConnectionDropIntervalMaxSecs time.Duration `config:"seconds;1"`
+	MaxConnectionsUpperLimit              int           `config:"int(1,);10000"`
+	MaxConnectionsLowerLimit              int           `config:"int(1,);400"`
+	K8sServicePollIntervalSecs            time.Duration `config:"seconds;30"`
+	K8sNamespace                          string        `config:"string;kube-system"`
+	K8sServiceName                        string        `config:"string;calico-typha"`
+	K8sPortName                           string        `config:"string;calico-typha"`
+
+	// FIPSModeEnabled Enables FIPS 140-2 verified crypto mode.
+	FIPSModeEnabled bool `config:"bool;false"`
 
 	// State tracking.
 

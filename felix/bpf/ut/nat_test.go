@@ -170,6 +170,14 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	skbMark = 0
 
+	// Insert the reverse route for backend for RPF check.
+	resetRTMap(rtMap)
+	beV4CIDR := ip.CIDRFromNetIP(natIP).(ip.V4CIDR)
+	bertKey := routes.NewKey(beV4CIDR).AsBytes()
+	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMap.Update(bertKey, bertVal)
+	Expect(err).NotTo(HaveOccurred())
+
 	bpfIfaceName = "NAT2"
 	// Arriving at node 2
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -190,14 +198,6 @@ func TestNATPodPodXNode(t *testing.T) {
 	// No NATing, service already resolved
 	Expect(v.Type()).To(Equal(conntrack.TypeNormal))
 	Expect(v.Flags()).To(Equal(uint16(0)))
-
-	// Insert the reverse route for backend for RPF check.
-	resetRTMap(rtMap)
-	beV4CIDR := ip.CIDRFromNetIP(natIP).(ip.V4CIDR)
-	bertKey := routes.NewKey(beV4CIDR).AsBytes()
-	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
-	err = rtMap.Update(bertKey, bertVal)
-	Expect(err).NotTo(HaveOccurred())
 
 	// Arriving at workload at node 2
 	expectMark(tcdefs.MarkSeen)
@@ -422,9 +422,9 @@ func TestNATNodePort(t *testing.T) {
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
 
-		// Whitelisted for both sides due to forwarding through the tunnel
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved for both sides due to forwarding through the tunnel
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 
 	dumpCTMap(ctMap)
@@ -530,10 +530,10 @@ func TestNATNodePort(t *testing.T) {
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
 
-		// Whitlisted source side
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		// Dest not whitelisted yet
-		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
+		// Approved source side
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		// Dest not approved yet
+		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 
 		recvPkt = res.dataOut
 	})
@@ -567,8 +567,6 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
 	})
-
-	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
 	skbMark = tcdefs.MarkSeen
 
@@ -607,10 +605,10 @@ func TestNATNodePort(t *testing.T) {
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse),
 			fmt.Sprintf("Expected reverse conntrack entry but got %v", ctr))
 
-		// Whitelisted source side
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		// Whitelisted destination side as well
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved source side
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		// Approved destination side as well
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 
 	skbMark = 0
@@ -641,7 +639,7 @@ func TestNATNodePort(t *testing.T) {
 		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 		Expect(ipv4L).NotTo(BeNil())
 		ipv4R := ipv4L.(*layers.IPv4)
-		Expect(ipv4R.SrcIP.String()).To(Equal(natIP.String()))
+		Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
 		Expect(ipv4R.DstIP.String()).To(Equal(node1ip.String()))
 
 		checkVxlan(pktR)
@@ -651,7 +649,7 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	expectMark(tcdefs.MarkSeenBypassForwardSourceFixup)
+	expectMark(tcdefs.MarkSeen)
 
 	hostIP = node2ip
 
@@ -759,9 +757,9 @@ func TestNATNodePort(t *testing.T) {
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
 
-		// Whitelisted for both sides due to forwarding through the tunnel
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved for both sides due to forwarding through the tunnel
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 
 	dumpCTMap(ctMap)
@@ -867,10 +865,10 @@ func TestNATNodePort(t *testing.T) {
 			ctr = ct[ctKey]
 			Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
 
-			// Whitlisted source side
-			Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-			// Dest not whitelisted yet
-			Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
+			// Approved source side
+			Expect(ctr.Data().A2B.Approved).To(BeTrue())
+			// Dest not approved yet
+			Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 
 			recvPkt = res.dataOut
 		})
@@ -1180,9 +1178,9 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
 
-		// Whitelisted for both sides due to forwarding through the tunnel
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved for both sides due to forwarding through the tunnel
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 
 	dumpCTMap(ctMap)
@@ -1288,9 +1286,9 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
 
-		// Whitelisted for both sides due to forwarding through the tunnel
-		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
-		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+		// Approved for both sides due to forwarding through the tunnel
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		Expect(ctr.Data().B2A.Approved).To(BeTrue())
 	})
 
 	dumpCTMap(ctMap)
@@ -1711,7 +1709,7 @@ func TestNATAffinity(t *testing.T) {
 	natKey := nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol))
 	err = natMap.Update(
 		natKey.AsBytes(),
-		nat.NewNATValue(0, 1, 0, 1 /* second */).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 60 /* seconds */).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1747,7 +1745,7 @@ func TestNATAffinity(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 2, 0, 1 /* second */).AsBytes(),
+		nat.NewNATValue(0, 2, 0, 60 /* seconds */).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1779,7 +1777,7 @@ func TestNATAffinity(t *testing.T) {
 	// sure that a new selection in made
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1, 0, 1 /* second */).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 60 /* seconds */).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -1970,16 +1968,16 @@ func TestNATSourceCollision(t *testing.T) {
 	ctVal := conntrack.NewValueNATForward(0, 0, 0, revKey)
 	revVal := conntrack.NewValueNATReverse(0, 0, 0,
 		conntrack.Leg{
-			Seqno:       12345,
-			SynSeen:     true,
-			AckSeen:     true,
-			Whitelisted: true,
+			Seqno:    12345,
+			SynSeen:  true,
+			AckSeen:  true,
+			Approved: true,
 		},
 		conntrack.Leg{
-			Seqno:       7890,
-			SynSeen:     true,
-			AckSeen:     true,
-			Whitelisted: true,
+			Seqno:    7890,
+			SynSeen:  true,
+			AckSeen:  true,
+			Approved: true,
 		},
 		node1ip, node1ip, nodeportPort)
 

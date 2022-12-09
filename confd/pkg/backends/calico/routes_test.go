@@ -12,6 +12,10 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (
@@ -317,7 +321,7 @@ var _ = Describe("RouteGenerator", func() {
 		})
 
 		Context("onSvc[Add|Delete]", func() {
-			It("should add the service's cluster IP and whitelisted external IPs into the svcRouteMap", func() {
+			It("should add the service's cluster IP and approved external IPs into the svcRouteMap", func() {
 				// add
 				initRevision := rg.client.cacheRevision
 				rg.onSvcAdd(svc)
@@ -397,7 +401,7 @@ var _ = Describe("RouteGenerator", func() {
 		})
 
 		Context("onSvcUpdate", func() {
-			It("should add the service's cluster IP and whitelisted external IPs into the svcRouteMap and then remove them for unsupported service type", func() {
+			It("should add the service's cluster IP and approved external IPs into the svcRouteMap and then remove them for unsupported service type", func() {
 				initRevision := rg.client.cacheRevision
 				rg.onSvcUpdate(nil, svc)
 				Expect(rg.client.cacheRevision).To(Equal(initRevision + 2))
@@ -421,7 +425,7 @@ var _ = Describe("RouteGenerator", func() {
 		})
 
 		Context("onEp[Add|Delete]", func() {
-			It("should add the service's cluster IP and whitelisted external IPs into the svcRouteMap", func() {
+			It("should add the service's cluster IP and approved external IPs into the svcRouteMap", func() {
 				// add
 				initRevision := rg.client.cacheRevision
 				rg.onEPAdd(ep)
@@ -444,7 +448,7 @@ var _ = Describe("RouteGenerator", func() {
 		})
 
 		Context("onEpDelete", func() {
-			It("should add the service's cluster IP and whitelisted external IPs into the svcRouteMap and then remove it for unsupported service type", func() {
+			It("should add the service's cluster IP and approved external IPs into the svcRouteMap and then remove it for unsupported service type", func() {
 				initRevision := rg.client.cacheRevision
 				rg.onEPUpdate(nil, ep)
 				Expect(rg.client.cacheRevision).To(Equal(initRevision + 2))
@@ -624,5 +628,23 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.programmedRouteRefCount).NotTo(HaveKey(key))
 			})
 		})
+	})
+})
+
+var _ = Describe("Update BGP Config Cache", func() {
+	c := &client{cache: make(map[string]string)}
+
+	It("should update cache value when IgnoredInterfaces is set in BGPConfiguration", func() {
+		By("No value cached")
+		Expect(c.cache["/calico/bgp/v1/global/ignored_interfaces"]).To(BeEmpty())
+
+		By("After updating")
+		res := &apiv3.BGPConfiguration{
+			Spec: apiv3.BGPConfigurationSpec{
+				IgnoredInterfaces: []string{"iface-1", "iface-2"},
+			},
+		}
+		c.getIgnoredInterfacesKVPair(res, model.GlobalBGPConfigKey{})
+		Expect(c.cache["/calico/bgp/v1/global/ignored_interfaces"]).To(Equal("iface-1,iface-2"))
 	})
 })

@@ -28,16 +28,13 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	io_prometheus_client "github.com/prometheus/client_model/go"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
-
 	. "github.com/onsi/ginkgo/extensions/table"
-
+	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/prometheus/client_golang/prometheus"
+	io_prometheus_client "github.com/prometheus/client_model/go"
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -156,8 +153,6 @@ var (
 	}
 )
 
-// Tests that rely on starting a real Typha syncserver.Server (on a real TCP port) in this process.
-// We drive the server via a real snapshot cache using the snapshot cache's function API.
 var _ = Describe("With an in-process Server", func() {
 	// We'll create this pipeline for updates to flow through:
 	//
@@ -165,164 +160,37 @@ var _ = Describe("With an in-process Server", func() {
 	//                      decoupler        filter        cache
 	//
 	var (
-		decoupler, bgpDecoupler *calc.SyncerCallbacksDecoupler
-		valFilter               *calc.ValidationFilter
-		cacheCxt                context.Context
-		cacheCancel             context.CancelFunc
-		felixCache, bgpCache    *snapcache.Cache
-		server                  *syncserver.Server
-		serverCxt               context.Context
-		serverCancel            context.CancelFunc
+		h *ServerHarness
 	)
 
-	// Each client we create gets recorded here for cleanup.
-	type clientState struct {
-		clientCxt    context.Context
-		clientCancel context.CancelFunc
-		client       *syncclient.SyncerClient
-		recorder     *StateRecorder
-		syncerType   syncproto.SyncerType
-	}
-	var clientStates []clientState
-
-	createClient := func(id interface{}, syncType syncproto.SyncerType) clientState {
-		clientCxt, clientCancel := context.WithCancel(context.Background())
-		recorder := NewRecorder()
-		serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
-		client := syncclient.New(
-			[]discovery.Typha{{Addr: serverAddr}},
-			"test-version",
-			fmt.Sprintf("test-host-%v", id),
-			"test-info",
-			recorder,
-			&syncclient.Options{
-				SyncerType: syncType,
-			},
-		)
-
-		err := client.Start(clientCxt)
-		Expect(err).NotTo(HaveOccurred())
-
-		cs := clientState{
-			clientCxt:    clientCxt,
-			client:       client,
-			clientCancel: clientCancel,
-			recorder:     recorder,
-			syncerType:   syncType,
-		}
-		return cs
-	}
-
-	createClients := func(n int) {
-		clientStates = nil
-		for i := 0; i < n; i++ {
-			cs := createClient(i, syncproto.SyncerTypeFelix)
-			clientStates = append(clientStates, cs)
-		}
-	}
-
 	BeforeEach(func() {
-		// Set up a pipeline:
-		//
-		//    This goroutine -> callback -chan-> validation -> snapshot -> server
-		//                      decoupler        filter        cache
-		//
-		decoupler = calc.NewSyncerCallbacksDecoupler()
-		felixCache = snapcache.New(snapcache.Config{
-			// Set the batch size small so we can force new Breadcrumbs easily.
-			MaxBatchSize: 10,
-			// Reduce the wake up interval from the default to give us faster tear down.
-			WakeUpInterval: 50 * time.Millisecond,
-		})
-		bgpDecoupler = calc.NewSyncerCallbacksDecoupler()
-		bgpCache = snapcache.New(snapcache.Config{
-			// Set the batch size small so we can force new Breadcrumbs easily.
-			MaxBatchSize: 10,
-			// Reduce the wake up interval from the default to give us faster tear down.
-			WakeUpInterval: 50 * time.Millisecond,
-		})
-		cacheCxt, cacheCancel = context.WithCancel(context.Background())
-		valFilter = calc.NewValidationFilter(felixCache)
-		go decoupler.SendToContext(cacheCxt, valFilter)
-		go bgpDecoupler.SendToContext(cacheCxt, bgpCache)
-		server = syncserver.New(
-			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{
-				syncproto.SyncerTypeFelix: felixCache,
-				syncproto.SyncerTypeBGP:   bgpCache,
-			},
-			syncserver.Config{
-				PingInterval: 10 * time.Second,
-				Port:         syncserver.PortRandom,
-				DropInterval: 50 * time.Millisecond,
-			})
-		felixCache.Start(cacheCxt)
-		bgpCache.Start(cacheCxt)
-		serverCxt, serverCancel = context.WithCancel(context.Background())
-		server.Start(serverCxt)
+		// Default to debug but some more aggressive tests override this below.
+		log.SetLevel(log.DebugLevel)
+		h = NewHarness()
+		h.Start()
 	})
 
 	AfterEach(func() {
-		for _, c := range clientStates {
-			c.clientCancel()
-			if c.client != nil {
-				log.Info("Waiting for client to shut down.")
-				c.client.Finished.Wait()
-				log.Info("Done waiting for client to shut down.")
-			}
-		}
-
-		serverCancel()
-		log.Info("Waiting for server to shut down")
-		server.Finished.Wait()
-		log.Info("Done waiting for server to shut down")
-		cacheCancel()
+		h.Stop()
 	})
 
 	It("should choose a port", func() {
-		Expect(server.Port()).ToNot(BeZero())
+		Expect(h.Server.Port()).ToNot(BeZero())
 	})
-
-	sendNUpdates := func(n int) map[string]api.Update {
-		expectedEndState := map[string]api.Update{}
-		decoupler.OnStatusUpdated(api.ResyncInProgress)
-		for i := 0; i < n; i++ {
-			update := api.Update{
-				KVPair: model.KVPair{
-					Key: model.GlobalConfigKey{
-						Name: fmt.Sprintf("foo%v", i),
-					},
-					Value:    fmt.Sprintf("baz%v", i),
-					Revision: fmt.Sprintf("%v", i),
-				},
-				UpdateType: api.UpdateTypeKVNew,
-			}
-			path, err := model.KeyToDefaultPath(update.Key)
-			Expect(err).NotTo(HaveOccurred())
-			expectedEndState[path] = update
-			decoupler.OnUpdates([]api.Update{update})
-		}
-		return expectedEndState
-	}
-
-	sendNUpdatesThenInSync := func(n int) map[string]api.Update {
-		expectedEndState := sendNUpdates(n)
-		decoupler.OnStatusUpdated(api.InSync)
-		return expectedEndState
-	}
 
 	Describe("with a client connection", func() {
 		var clientCancel context.CancelFunc
 		var recorder *StateRecorder
 
 		BeforeEach(func() {
-			createClients(1)
-			clientCancel = clientStates[0].clientCancel
-			recorder = clientStates[0].recorder
+			h.CreateClients(1)
+			clientCancel = h.ClientStates[0].clientCancel
+			recorder = h.ClientStates[0].recorder
 		})
 
 		// expectFelixClientState asserts that the client eventually reaches the given state.  Then, it
 		// simulates a second connection and check that that also converges to the given state.
-		expectClientState := func(c clientState, status api.SyncStatus, kvs map[string]api.Update) {
+		expectClientState := func(c *ClientState, status api.SyncStatus, kvs map[string]api.Update) {
 			// Wait until we reach that state.
 			Eventually(c.recorder.Status).Should(Equal(status))
 			Eventually(c.recorder.KVs).Should(Equal(kvs))
@@ -330,7 +198,7 @@ var _ = Describe("With an in-process Server", func() {
 			// Now, a newly-connecting client should also reach the same state.
 			log.Info("Starting transient client to read snapshot.")
 
-			transientClient := createClient("transient", c.syncerType)
+			transientClient := h.CreateClient("transient", c.syncerType)
 			defer func() {
 				log.Info("Stopping transient client.")
 				transientClient.clientCancel()
@@ -342,13 +210,13 @@ var _ = Describe("With an in-process Server", func() {
 		}
 
 		expectFelixClientState := func(status api.SyncStatus, kvs map[string]api.Update) {
-			expectClientState(clientStates[0], status, kvs)
+			expectClientState(h.ClientStates[0], status, kvs)
 		}
 
 		It("should drop a bad KV", func() {
 			// Bypass the validation filter (which also converts Nodes to HostIPs).
-			felixCache.OnStatusUpdated(api.ResyncInProgress)
-			felixCache.OnUpdates([]api.Update{{
+			h.FelixCache.OnStatusUpdated(api.ResyncInProgress)
+			h.FelixCache.OnUpdates([]api.Update{{
 				KVPair: model.KVPair{
 					// NodeKeys can't be serialized right now.
 					Key:      model.NodeKey{Hostname: "foobar"},
@@ -358,13 +226,13 @@ var _ = Describe("With an in-process Server", func() {
 				},
 				UpdateType: api.UpdateTypeKVNew,
 			}})
-			felixCache.OnStatusUpdated(api.InSync)
+			h.FelixCache.OnStatusUpdated(api.InSync)
 			expectFelixClientState(api.InSync, map[string]api.Update{})
 		})
 
 		It("validation should drop a bad Node", func() {
-			valFilter.OnStatusUpdated(api.ResyncInProgress)
-			valFilter.OnUpdates([]api.Update{{
+			h.ValFilter.OnStatusUpdated(api.ResyncInProgress)
+			h.ValFilter.OnUpdates([]api.Update{{
 				KVPair: model.KVPair{
 					Key:      model.NodeKey{Hostname: "foobar"},
 					Value:    "bazzbiff",
@@ -373,13 +241,13 @@ var _ = Describe("With an in-process Server", func() {
 				},
 				UpdateType: api.UpdateTypeKVNew,
 			}})
-			valFilter.OnStatusUpdated(api.InSync)
+			h.ValFilter.OnStatusUpdated(api.InSync)
 			expectFelixClientState(api.InSync, map[string]api.Update{})
 		})
 
 		It("validation should convert a valid Node", func() {
-			valFilter.OnStatusUpdated(api.ResyncInProgress)
-			valFilter.OnUpdates([]api.Update{{
+			h.ValFilter.OnStatusUpdated(api.ResyncInProgress)
+			h.ValFilter.OnUpdates([]api.Update{{
 				KVPair: model.KVPair{
 					Key: model.NodeKey{Hostname: "foobar"},
 					Value: &model.Node{
@@ -389,7 +257,7 @@ var _ = Describe("With an in-process Server", func() {
 				},
 				UpdateType: api.UpdateTypeKVNew,
 			}})
-			valFilter.OnStatusUpdated(api.InSync)
+			h.ValFilter.OnStatusUpdated(api.InSync)
 			expectFelixClientState(api.InSync, map[string]api.Update{
 				"/calico/v1/host/foobar/bird_ip": {
 					KVPair: model.KVPair{
@@ -402,9 +270,9 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should pass through a KV and status", func() {
-			decoupler.OnStatusUpdated(api.ResyncInProgress)
-			decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
-			decoupler.OnStatusUpdated(api.InSync)
+			h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
+			h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+			h.Decoupler.OnStatusUpdated(api.InSync)
 			Eventually(recorder.Status).Should(Equal(api.InSync))
 			expectFelixClientState(
 				api.InSync,
@@ -415,17 +283,17 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		Describe("with a BGP client", func() {
-			var bgpClient clientState
+			var bgpClient *ClientState
 
 			BeforeEach(func() {
-				bgpClient = createClient("bgp", syncproto.SyncerTypeBGP)
+				bgpClient = h.CreateClient("bgp", syncproto.SyncerTypeBGP)
 			})
 
 			DescribeTable("should pass through BGP KV pairs",
 				func(update api.Update, v1key string) {
-					bgpDecoupler.OnStatusUpdated(api.ResyncInProgress)
-					bgpDecoupler.OnUpdates([]api.Update{update})
-					bgpDecoupler.OnStatusUpdated(api.InSync)
+					h.BGPDecoupler.OnStatusUpdated(api.ResyncInProgress)
+					h.BGPDecoupler.OnUpdates([]api.Update{update})
+					h.BGPDecoupler.OnStatusUpdated(api.InSync)
 					Eventually(bgpClient.recorder.Status).Should(Equal(api.InSync))
 					expectClientState(
 						bgpClient,
@@ -446,12 +314,12 @@ var _ = Describe("With an in-process Server", func() {
 			)
 
 			It("should handle a felix and BGP client at same time", func() {
-				bgpDecoupler.OnStatusUpdated(api.ResyncInProgress)
-				decoupler.OnStatusUpdated(api.ResyncInProgress)
-				bgpDecoupler.OnUpdates([]api.Update{ipPool1})
-				decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
-				decoupler.OnStatusUpdated(api.InSync)
-				bgpDecoupler.OnStatusUpdated(api.InSync)
+				h.BGPDecoupler.OnStatusUpdated(api.ResyncInProgress)
+				h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
+				h.BGPDecoupler.OnUpdates([]api.Update{ipPool1})
+				h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+				h.Decoupler.OnStatusUpdated(api.InSync)
+				h.BGPDecoupler.OnStatusUpdated(api.InSync)
 
 				expectClientState(bgpClient, api.InSync, map[string]api.Update{
 					"/calico/v1/ipam/v4/pool/10.0.1.0-24": ipPool1,
@@ -466,18 +334,18 @@ var _ = Describe("With an in-process Server", func() {
 			// Create two keys, then delete them.  One of the keys happens to have a
 			// default path that is the prefix of the other, just to make sure the Ctrie
 			// doesn't accidentally delete the whole prefix.
-			decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
-			decoupler.OnUpdates([]api.Update{configFoobar2BazzBiff})
-			decoupler.OnStatusUpdated(api.InSync)
+			h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+			h.Decoupler.OnUpdates([]api.Update{configFoobar2BazzBiff})
+			h.Decoupler.OnStatusUpdated(api.InSync)
 			expectFelixClientState(api.InSync, map[string]api.Update{
 				"/calico/v1/config/foobar":  configFoobarBazzBiff,
 				"/calico/v1/config/foobar2": configFoobar2BazzBiff,
 			})
-			decoupler.OnUpdates([]api.Update{configFoobarDeleted})
+			h.Decoupler.OnUpdates([]api.Update{configFoobarDeleted})
 			expectFelixClientState(api.InSync, map[string]api.Update{
 				"/calico/v1/config/foobar2": configFoobar2BazzBiff,
 			})
-			decoupler.OnUpdates([]api.Update{configFoobar2Invalid})
+			h.Decoupler.OnUpdates([]api.Update{configFoobar2Invalid})
 			expectFelixClientState(api.InSync, map[string]api.Update{})
 		})
 
@@ -500,14 +368,14 @@ var _ = Describe("With an in-process Server", func() {
 					},
 					UpdateType: api.UpdateTypeKVNew,
 				}
-				decoupler.OnUpdates([]api.Update{upd})
+				h.Decoupler.OnUpdates([]api.Update{upd})
 				rev++
 				if i >= halfNumKeys {
 					expectedState[fmt.Sprintf("/calico/v1/config/foobar%d", i)] = upd
 				}
 			}
 			for i := 0; i < halfNumKeys; i++ {
-				decoupler.OnUpdates([]api.Update{{
+				h.Decoupler.OnUpdates([]api.Update{{
 					KVPair: model.KVPair{
 						Key:      model.GlobalConfigKey{Name: fmt.Sprintf("foobar%d", i)},
 						Revision: fmt.Sprintf("%d", rev),
@@ -516,12 +384,12 @@ var _ = Describe("With an in-process Server", func() {
 				}})
 				rev++
 			}
-			decoupler.OnStatusUpdated(api.InSync)
+			h.Decoupler.OnStatusUpdated(api.InSync)
 			expectFelixClientState(api.InSync, expectedState)
 		})
 
 		It("should pass through many KVs", func() {
-			expectedEndState := sendNUpdatesThenInSync(1000)
+			expectedEndState := h.SendInitialSnapshotPods(1000)
 			expectFelixClientState(api.InSync, expectedEndState)
 		})
 
@@ -535,32 +403,41 @@ var _ = Describe("With an in-process Server", func() {
 		})
 	})
 
-	Describe("with 100 client connections", func() {
+	// Simulate an old client.
+	Describe("with a client that doesn't support connection restart", func() {
 		BeforeEach(func() {
-			createClients(100)
+			h.CreateClientNoDecodeRestart("no decoder restart", syncproto.SyncerTypeFelix)
 		})
 
-		// expectClientState asserts that every client eventually reaches the given state.
-		expectClientStates := func(status api.SyncStatus, kvs map[string]api.Update) {
-			for _, s := range clientStates {
-				// Wait until we reach that state.
-				Eventually(s.recorder.Status, 10*time.Second, 200*time.Millisecond).Should(Equal(status))
-				Eventually(s.recorder.KVs, 10*time.Second).Should(Equal(kvs))
+		It("should handle the initial snapshot", func() {
+			expState := h.SendInitialSnapshotPods(10)
+			h.ExpectAllClientsToReachState(api.InSync, expState)
+			expState2 := h.SendPodUpdates(10)
+			for k, v := range expState2 {
+				expState[k] = v
 			}
-		}
+			h.ExpectAllClientsToReachState(api.InSync, expState)
+		})
+	})
+
+	Describe("with 100 client connections", func() {
+		BeforeEach(func() {
+			log.SetLevel(log.InfoLevel) // Debug too verbose with 100 clients.
+			h.CreateClients(100)
+		})
 
 		It("should drop expected number of connections", func() {
 			// Start a goroutine to watch each client and send us a message on the channel when it stops.
 			finishedC := make(chan int)
-			for _, s := range clientStates {
-				go func(s clientState) {
+			for _, s := range h.ClientStates {
+				go func(s *ClientState) {
 					s.client.Finished.Wait()
 					finishedC <- 1
 				}(s)
 			}
 
 			// We start with 100 connections, set the max to 60 so we kill 40 connections.
-			server.SetMaxConns(60)
+			h.Server.SetMaxConns(60)
 
 			// We set the drop interval to 50ms so it should take 2-2.2 seconds (due to jitter) to drop the
 			// connections.  Wait 3 seconds so that we verify that the server doesn't go on to kill any
@@ -588,10 +465,10 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should pass through a KV and status", func() {
-			decoupler.OnStatusUpdated(api.ResyncInProgress)
-			decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
-			decoupler.OnStatusUpdated(api.InSync)
-			expectClientStates(
+			h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
+			h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+			h.Decoupler.OnStatusUpdated(api.InSync)
+			h.ExpectAllClientsToReachState(
 				api.InSync,
 				map[string]api.Update{
 					"/calico/v1/config/foobar": configFoobarBazzBiff,
@@ -600,8 +477,8 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should pass through many KVs", func() {
-			expectedEndState := sendNUpdatesThenInSync(1000)
-			expectClientStates(api.InSync, expectedEndState)
+			expectedEndState := h.SendInitialSnapshotPods(1000)
+			h.ExpectAllClientsToReachState(api.InSync, expectedEndState)
 		})
 
 		It("should report the correct number of connections", func() {
@@ -610,7 +487,7 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should report the correct number of connections after killing the clients", func() {
-			for _, c := range clientStates {
+			for _, c := range h.ClientStates {
 				c.clientCancel()
 			}
 			expectGlobalGaugeValue("typha_connections_active", 0.0)
@@ -622,11 +499,11 @@ var _ = Describe("With an in-process Server", func() {
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go func() {
-				sendNUpdatesThenInSync(1000)
+				h.SendInitialSnapshotPods(1000)
 				wg.Done()
 			}()
 			defer wg.Wait()
-			for _, c := range clientStates {
+			for _, c := range h.ClientStates {
 				c.clientCancel()
 				time.Sleep(100 * time.Microsecond)
 			}
@@ -635,59 +512,101 @@ var _ = Describe("With an in-process Server", func() {
 	})
 })
 
-var _ = Describe("With an in-process Server with short ping timeout", func() {
-	var (
-		cacheCxt        context.Context
-		cacheCancel     context.CancelFunc
-		cache, bgpCache *snapcache.Cache
-		server          *syncserver.Server
-		serverCxt       context.Context
-		serverCancel    context.CancelFunc
-		serverAddr      string
-	)
+var _ = Describe("with 5 client connections", func() {
+	const numClients = 5
+
+	var h *ServerHarness
 
 	BeforeEach(func() {
-		cache = snapcache.New(snapcache.Config{
-			// Set the batch size small so we can force new Breadcrumbs easily.
-			MaxBatchSize: 10,
-			// Reduce the wake up interval from the default to give us faster tear down.
-			WakeUpInterval: 50 * time.Millisecond,
-		})
-		bgpCache = snapcache.New(snapcache.Config{
-			// Set the batch size small so we can force new Breadcrumbs easily.
-			MaxBatchSize: 10,
-			// Reduce the wake up interval from the default to give us faster tear down.
-			WakeUpInterval: 50 * time.Millisecond,
-		})
-		server = syncserver.New(
-			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{
-				syncproto.SyncerTypeFelix: cache,
-				syncproto.SyncerTypeBGP:   bgpCache,
-			},
-			syncserver.Config{
-				PingInterval: 100 * time.Millisecond,
-				PongTimeout:  500 * time.Millisecond,
-				Port:         syncserver.PortRandom,
-				DropInterval: 50 * time.Millisecond,
-			})
-		cacheCxt, cacheCancel = context.WithCancel(context.Background())
-		cache.Start(cacheCxt)
-		bgpCache.Start(cacheCxt)
-		serverCxt, serverCancel = context.WithCancel(context.Background())
-		server.Start(serverCxt)
-		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
+		log.SetLevel(log.InfoLevel) // Debug too verbose for tests with a few clients.
+		h = NewHarness()
 	})
 
 	AfterEach(func() {
-		if server != nil {
-			serverCancel()
-			log.Info("Waiting for server to shut down")
-			server.Finished.Wait()
-			log.Info("Done waiting for server to shut down")
+		h.Stop()
+	})
+
+	JustBeforeEach(func() {
+		h.Start()
+		h.CreateClients(numClients)
+	})
+
+	Describe("300s shutdown timer and 1s max drop interval", func() {
+		It("should shut drop 1 client per second", func() {
+			Eventually(h.Server.NumActiveConnections).Should(Equal(numClients))
+
+			h.Server.ShutDownGracefully()
+			finishedC := make(chan struct{})
+			go func() {
+				defer close(finishedC)
+				h.Server.Finished.Wait()
+			}()
+
+			for n := numClients - 1; n >= 0; n-- {
+				if n > 0 {
+					Expect(finishedC).ToNot(BeClosed())
+				}
+				Eventually(h.Server.NumActiveConnections, "1500ms", "10ms").Should(BeNumerically("==", n))
+				Consistently(h.Server.NumActiveConnections, "500ms", "10ms").Should(BeNumerically("==", n))
+			}
+
+			Eventually(finishedC).Should(BeClosed())
+		})
+	})
+
+	Describe("2.5s shutdown timer and 1s max drop interval", func() {
+		BeforeEach(func() {
+			h.Config.ShutdownTimeout = 2500 * time.Millisecond
+		})
+
+		It("should shut drop 1 client every half second", func() {
+			Eventually(h.Server.NumActiveConnections).Should(Equal(numClients))
+
+			h.Server.ShutDownGracefully()
+			finishedC := make(chan struct{})
+			go func() {
+				defer close(finishedC)
+				h.Server.Finished.Wait()
+			}()
+
+			for n := numClients - 1; n >= 0; n-- {
+				if n > 0 {
+					Expect(finishedC).ToNot(BeClosed())
+				}
+				Eventually(h.Server.NumActiveConnections, "750ms", "10ms").Should(BeNumerically("==", n))
+				Consistently(h.Server.NumActiveConnections, "250ms", "10ms").Should(BeNumerically("==", n))
+			}
+
+			Eventually(finishedC).Should(BeClosed())
+		})
+	})
+})
+
+var _ = Describe("With an in-process Server with short ping timeout", func() {
+	// We'll create this pipeline for updates to flow through:
+	//
+	//    This goroutine -> callback -chan-> validation -> snapshot -> server
+	//                      decoupler        filter        cache
+	//
+	var (
+		h *ServerHarness
+	)
+
+	BeforeEach(func() {
+		// Default to debug but some more aggressive tests override this below.
+		log.SetLevel(log.DebugLevel)
+		h = NewHarness()
+		h.Config = syncserver.Config{
+			PingInterval: 100 * time.Millisecond,
+			PongTimeout:  500 * time.Millisecond,
+			Port:         syncserver.PortRandom,
+			DropInterval: 50 * time.Millisecond,
 		}
-		if cache != nil {
-			cacheCancel()
-		}
+		h.Start()
+	})
+
+	AfterEach(func() {
+		h.Stop()
 	})
 
 	It("should not disconnect a responsive client", func() {
@@ -695,7 +614,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
 		recorder := NewRecorder()
 		client := syncclient.New(
-			[]discovery.Typha{{Addr: serverAddr}},
+			[]discovery.Typha{{Addr: h.Addr()}},
 			"test-version",
 			"test-host",
 			"test-info",
@@ -704,6 +623,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		)
 		err := client.Start(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
+		go recorder.Loop(clientCxt)
 		defer func() {
 			clientCancel()
 			client.Finished.Wait()
@@ -719,7 +639,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		Expect(err).To(BeNil())
 
 		// Then send an update.
-		cache.OnStatusUpdated(api.InSync)
+		h.FelixCache.OnStatusUpdated(api.InSync)
 		Eventually(recorder.Status).Should(Equal(api.InSync))
 	})
 
@@ -729,7 +649,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		recorder := NewRecorder()
 
 		client := syncclient.New(
-			[]discovery.Typha{{Addr: serverAddr}},
+			[]discovery.Typha{{Addr: h.Addr()}},
 			"test-version",
 			"test-host",
 			"test-info",
@@ -737,6 +657,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			nil,
 		)
 		err := client.Start(clientCxt)
+		go recorder.Loop(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			clientCancel()
@@ -744,8 +665,8 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		}()
 
 		// Kill the server
-		serverCancel()
-		server.Finished.Wait()
+		h.ServerCancel()
+		h.Server.Finished.Wait()
 
 		// Check that the client knows it can use node resource updates since the server supports it.
 		supportsNodeResourceUpdates, err := client.SupportsNodeResourceUpdates(0 * time.Second)
@@ -760,7 +681,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 
 		BeforeEach(func() {
 			var err error
-			rawConn, err = net.DialTimeout("tcp", serverAddr, 10*time.Second)
+			rawConn, err = net.DialTimeout("tcp", h.Addr(), 10*time.Second)
 			Expect(err).NotTo(HaveOccurred())
 
 			w = gob.NewEncoder(rawConn)
@@ -811,6 +732,22 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 						Version:    "test",
 						Info:       "test info",
 						SyncerType: syncproto.SyncerType("garbage"),
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should disconnect the client", func() {
+				expectDisconnection(100 * time.Millisecond)
+				expectGlobalGaugeValue("typha_connections_active", 0.0)
+			})
+		})
+
+		Describe("After sending unexpected message", func() {
+			BeforeEach(func() {
+				err := w.Encode(syncproto.Envelope{
+					Message: syncproto.MsgSyncStatus{
+						SyncStatus: api.InSync,
 					},
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -903,55 +840,38 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 })
 
 var _ = Describe("With an in-process Server with long ping interval", func() {
+	// We'll create this pipeline for updates to flow through:
+	//
+	//    This goroutine -> callback -chan-> validation -> snapshot -> server
+	//                      decoupler        filter        cache
+	//
 	var (
-		cacheCxt     context.Context
-		cacheCancel  context.CancelFunc
-		cache        *snapcache.Cache
-		server       *syncserver.Server
-		serverCxt    context.Context
-		serverCancel context.CancelFunc
-		serverAddr   string
+		h *ServerHarness
 	)
 
 	BeforeEach(func() {
-		cache = snapcache.New(snapcache.Config{
-			// Set the batch size small so we can force new Breadcrumbs easily.
-			MaxBatchSize: 10,
-			// Reduce the wake up interval from the default to give us faster tear down.
-			WakeUpInterval: 50 * time.Millisecond,
-		})
-		server = syncserver.New(
-			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
-			syncserver.Config{
-				PingInterval: 10000 * time.Second,
-				PongTimeout:  50000 * time.Second,
-				Port:         syncserver.PortRandom,
-				DropInterval: 1 * time.Second,
-			})
-		cacheCxt, cacheCancel = context.WithCancel(context.Background())
-		cache.Start(cacheCxt)
-		serverCxt, serverCancel = context.WithCancel(context.Background())
-		server.Start(serverCxt)
-		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
+		// Default to debug but some more aggressive tests override this below.
+		log.SetLevel(log.DebugLevel)
+		h = NewHarness()
+		h.Config = syncserver.Config{
+			// Effectively disable pings so that we can test the non-ping timeouts.
+			PingInterval: 10000 * time.Second,
+			PongTimeout:  50000 * time.Second,
+			Port:         syncserver.PortRandom,
+			DropInterval: 1 * time.Second,
+		}
+		h.Start()
 	})
 
 	AfterEach(func() {
-		if server != nil {
-			serverCancel()
-			log.Info("Waiting for server to shut down")
-			server.Finished.Wait()
-			log.Info("Done waiting for server to shut down")
-		}
-		if cache != nil {
-			cacheCancel()
-		}
+		h.Stop()
 	})
 
 	It("client should disconnect after read timeout", func() {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
 		recorder := NewRecorder()
 		client := syncclient.New(
-			[]discovery.Typha{{Addr: serverAddr}},
+			[]discovery.Typha{{Addr: h.Addr()}},
 			"test-version",
 			"test-host",
 			"test-info",
@@ -962,6 +882,7 @@ var _ = Describe("With an in-process Server with long ping interval", func() {
 			},
 		)
 		err := client.Start(clientCxt)
+		go recorder.Loop(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			clientCancel()
@@ -987,104 +908,46 @@ var _ = Describe("With an in-process Server with long ping interval", func() {
 
 var _ = Describe("With an in-process Server with short grace period", func() {
 	var (
-		cacheCxt     context.Context
-		cacheCancel  context.CancelFunc
-		cache        *snapcache.Cache
-		server       *syncserver.Server
-		serverCxt    context.Context
-		serverCancel context.CancelFunc
-		serverAddr   string
-		updIdx       int
+		h *ServerHarness
 	)
 
 	BeforeEach(func() {
-		cache = snapcache.New(snapcache.Config{
-			// Set the batch size small so we can force new Breadcrumbs easily.
-			MaxBatchSize: 10,
-			// Reduce the wake up interval from the default to give us faster tear down.
-			WakeUpInterval: 50 * time.Millisecond,
-		})
-		server = syncserver.New(
-			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
-			syncserver.Config{
-				PingInterval:                   10000 * time.Second,
-				PongTimeout:                    50000 * time.Second,
-				Port:                           syncserver.PortRandom,
-				DropInterval:                   1 * time.Second,
-				MaxFallBehind:                  1 * time.Second,
-				NewClientFallBehindGracePeriod: 1 * time.Second,
-			})
-		cacheCxt, cacheCancel = context.WithCancel(context.Background())
-		cache.Start(cacheCxt)
-		serverCxt, serverCancel = context.WithCancel(context.Background())
-		server.Start(serverCxt)
-		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
-		updIdx = 0
+		h = NewHarness()
+
+		// Effectively disable pings, so we can hit the grace period timers.
+		h.Config.PingInterval = 10000 * time.Second
+		h.Config.PongTimeout = 50000 * time.Second
+
+		// Short timeouts so we can hit them quickly.
+		h.Config.MaxFallBehind = time.Second
+		h.Config.NewClientFallBehindGracePeriod = time.Second
+
+		// The snapshot is >10MB; set the write buffer to something much less than that since these
+		// tests need to cause backpressure on Typha.
+		h.Config.WriteBufferSize = 1024 * 256
+		// Since we rely on back-pressure, it's really handy to have a log of exactly what writes
+		// happen and when.
+		h.Config.DebugLogWrites = true
+
+		h.Start()
 	})
 
 	AfterEach(func() {
-		if server != nil {
-			serverCancel()
-			log.Info("Waiting for server to shut down")
-			server.Finished.Wait()
-			log.Info("Done waiting for server to shut down")
-		}
-		if cache != nil {
-			cacheCancel()
-		}
+		h.Stop()
 	})
-
-	sendNUpdates := func(n int) map[string]api.Update {
-		expectedEndState := map[string]api.Update{}
-		cache.OnStatusUpdated(api.ResyncInProgress)
-		for i := 0; i < n; i++ {
-			update := api.Update{
-				KVPair: model.KVPair{
-					Key: model.GlobalConfigKey{
-						Name: fmt.Sprintf("foo%v", i+updIdx),
-					},
-					// Nice big value so that we can fill up the send queue.
-					Value: fmt.Sprintf("baz%vxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
-						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", i),
-					Revision: fmt.Sprintf("%v", i+updIdx),
-				},
-				UpdateType: api.UpdateTypeKVNew,
-			}
-			path, err := model.KeyToDefaultPath(update.Key)
-			Expect(err).NotTo(HaveOccurred())
-			expectedEndState[path] = update
-			cache.OnUpdates([]api.Update{update})
-			updIdx += n
-		}
-		return expectedEndState
-	}
-
-	sendNUpdatesThenInSync := func(n int) map[string]api.Update {
-		expectedEndState := sendNUpdates(n)
-		cache.OnStatusUpdated(api.InSync)
-		return expectedEndState
-	}
 
 	Describe("with lots of KVs", func() {
 		const initialSnapshotSize = 10000
+
 		BeforeEach(func() {
-			sendNUpdatesThenInSync(initialSnapshotSize)
+			// These tests use a lot of KVs so debug is too aggressive.
+			log.SetLevel(log.InfoLevel)
+			h.SendInitialSnapshotConfigs(initialSnapshotSize)
 		})
 
 		It("client should get a grace period after reading the snapshot", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
-			recorder := NewRecorder()
+			recorder := NewRecorderChanSize(0) // Need a small channel so we can give back pressure.
 
 			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
@@ -1096,14 +959,22 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			recorder.BlockAfterNUpdates(1, 2500*time.Millisecond)
 
 			client := syncclient.New(
-				[]discovery.Typha{{Addr: serverAddr}},
+				[]discovery.Typha{{Addr: h.Addr()}},
 				"test-version",
 				"test-host",
 				"test-info",
 				recorder,
-				nil,
+				&syncclient.Options{
+					// The snapshot is a few MB; set the read buffer to something much less than that since these
+					// tests need to cause backpressure on Typha.
+					ReadBufferSize: 1024 * 256,
+					// Enable logging of every read since these tests depend on read and write timings.
+					DebugLogReads: true,
+				},
 			)
+
 			err = client.Start(clientCxt)
+			go recorder.Loop(clientCxt)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				clientCancel()
@@ -1114,18 +985,29 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			// first breadcrumb before we create a new one...
 			Eventually(recorder.Len, time.Second).Should(BeNumerically(">", 0))
 
+			log.SetLevel(log.DebugLevel)
+
 			// Make a breadcrumb 1s later.
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
-			sendNUpdates(1)
+			log.Info("Sending 1 update")
+			h.SendConfigUpdates(1)
+			log.Info("Sent 1 update")
 			// Make a breadcrumb 1s later.
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
-			sendNUpdates(1)
+			log.Info("Sending 1 update")
+			h.SendConfigUpdates(1)
+			log.Info("Sent 1 update")
 
 			// Client should wake up around now and start catching up.
 
 			// Make a breadcrumb 1s later.
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
-			sendNUpdates(1)
+			log.Info("Sending 1 update")
+			h.SendConfigUpdates(1)
+			log.Info("Sent 1 update")
 
 			Eventually(recorder.Len, 2*time.Second).Should(BeNumerically("==", initialSnapshotSize+3))
 			Expect(getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue+1))
@@ -1133,19 +1015,18 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 
 		It("client should get disconnected if it falls behind after the grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
-			recorder := NewRecorder()
+			recorder := NewRecorderChanSize(0)
 
 			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
 
-			// Make the client block after it reads the first update.  This means the server will have started
-			// streaming the snapshot but it shouldn't be able to finish streaming the snapshot.  Blocking for
-			// >1s wastes the MaxFallBehind timeout so this client will need to rely on the
-			// NewClientFallBehindGracePeriod, which should kick in only once we've finished reading the snapshot.
+			// Make the client block after it reads the first update _after_ the snapshot.  This means it will
+			// Quickly read hte snapshot, then catch up to the latest breadcrumb and _then_ start to fall behind.
+			// This invalidates the grace period so it will only get the normal "max fall behind" timeout.
 			recorder.BlockAfterNUpdates(initialSnapshotSize+1, 2500*time.Millisecond)
 
 			client := syncclient.New(
-				[]discovery.Typha{{Addr: serverAddr}},
+				[]discovery.Typha{{Addr: h.Addr()}},
 				"test-version",
 				"test-host",
 				"test-info",
@@ -1153,6 +1034,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				nil,
 			)
 			err = client.Start(clientCxt)
+			go recorder.Loop(clientCxt)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				clientCancel()
@@ -1162,19 +1044,20 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			// Wait until the snapshot is read.
 			Eventually(recorder.Len, time.Second).Should(BeNumerically("==", initialSnapshotSize))
 
+			log.SetLevel(log.DebugLevel)
 			// Make a breadcrumb.
 			time.Sleep(time.Second)
-			sendNUpdates(initialSnapshotSize)
+			h.SendConfigUpdates(initialSnapshotSize)
 
 			// Client should read the first update from the above and then block.
 
 			// Make a breadcrumb 1s later.
 			time.Sleep(time.Second)
-			sendNUpdates(1)
+			h.SendConfigUpdates(1)
 
 			// Make a breadcrumb 1s later.
 			time.Sleep(time.Second)
-			sendNUpdates(1)
+			h.SendConfigUpdates(1)
 
 			// Client should wake up around now but be too far behind and get disconnected.
 
@@ -1193,6 +1076,99 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			// Should not use the grace period at all.
 			Expect(getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue))
 		})
+	})
+})
+
+var _ = Describe("With an in-process Server with short write timeout", func() {
+	var (
+		h *ServerHarness
+	)
+
+	BeforeEach(func() {
+		// Default to debug but some more aggressive tests override this below.
+		log.SetLevel(log.InfoLevel)
+		h = NewHarness()
+
+		// Effectively disable pings, so we can hit the other timeouts reliably.
+		h.Config.PingInterval = 10000 * time.Second
+		h.Config.PongTimeout = 50000 * time.Second
+
+		// Short timeouts so we can hit them quickly.
+		h.Config.WriteTimeout = 250 * time.Millisecond
+
+		// The snapshot is >10MB; set the write buffer to something much less than that since these
+		// tests need to cause backpressure on Typha.
+		h.Config.WriteBufferSize = 1024 * 256
+		// Since we rely on back-pressure, it's really handy to have a log of exactly what writes
+		// happen and when.
+		h.Config.DebugLogWrites = true
+
+		h.Start()
+	})
+
+	AfterEach(func() {
+		h.Stop()
+	})
+
+	Describe("with lots of KVs", func() {
+		const initialSnapshotSize = 10000
+
+		BeforeEach(func() {
+			h.SendInitialSnapshotConfigs(initialSnapshotSize)
+		})
+
+		for _, disabledDecoderRestart := range []bool{true, false} {
+			disabledDecoderRestart := disabledDecoderRestart
+			It(fmt.Sprintf("client (DisabledDecoderRestart=%v) that blocks while reading snapshot should get disconnected", disabledDecoderRestart),
+				func() {
+					clientCxt, clientCancel := context.WithCancel(context.Background())
+					defer clientCancel()
+					recorder := NewRecorderChanSize(0) // Need a small channel so we can give back pressure.
+
+					// Make the client block after it reads the first update.
+					recorder.BlockAfterNUpdates(1, 1*time.Second)
+
+					client := syncclient.New(
+						[]discovery.Typha{{Addr: h.Addr()}},
+						"test-version",
+						"test-host",
+						"test-info",
+						recorder,
+						&syncclient.Options{
+							// The snapshot is >10MB; set the read buffer to something much less than that since these
+							// tests need to cause backpressure on Typha.
+							ReadBufferSize: 1024 * 256,
+							// Enable logging of every read since these tests depend on read and write timings.
+							DebugLogReads:         true,
+							DisableDecoderRestart: disabledDecoderRestart,
+						},
+					)
+
+					err := client.Start(clientCxt)
+					go recorder.Loop(clientCxt)
+					Expect(err).NotTo(HaveOccurred())
+					defer func() {
+						clientCancel()
+						log.Info("Waiting for client to stop...")
+						client.Finished.Wait()
+						log.Info("Client stopped.")
+					}()
+
+					// We should get at least the first KV...
+					Eventually(recorder.Len, time.Second).Should(BeNumerically(">", 0))
+
+					// But then get disconnected.
+					finishedC := make(chan struct{})
+					go func() {
+						client.Finished.Wait()
+						close(finishedC)
+					}()
+
+					Eventually(finishedC, 5*time.Second).Should(BeClosed())
+					expectGlobalGaugeValue("typha_connections_active", 0.0)
+				},
+			)
+		}
 	})
 })
 
@@ -1384,6 +1360,7 @@ var _ = Describe("with server requiring TLS", func() {
 		)
 
 		err := client.Start(clientCxt)
+		go recorder.Loop(clientCxt)
 
 		cs := clientState{
 			clientCxt:    clientCxt,

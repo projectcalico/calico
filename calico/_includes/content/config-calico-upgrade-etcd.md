@@ -41,7 +41,6 @@ The full list of possible configuration file options and environment variables f
 >   useful if the non-prefixed names clash with existing environment variables.
 {: .alert .alert-info}
 
-
 ### Configuring calico-upgrade to connect to the etcdv3 cluster
 
 You can use either configuration files or environment variables to configure

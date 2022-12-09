@@ -15,12 +15,14 @@
 package syncserver
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"net"
@@ -31,11 +33,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/typha/pkg/promutils"
+	"github.com/golang/snappy"
 
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
+	"github.com/projectcalico/calico/typha/pkg/promutils"
 
 	"github.com/projectcalico/calico/typha/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
@@ -94,7 +99,9 @@ const (
 	defaultNewClientFallBehindGracePeriod = 300 * time.Second
 	defaultBatchingAgeThreshold           = 100 * time.Millisecond
 	defaultPingInterval                   = 10 * time.Second
+	defaultWriteTimeout                   = 120 * time.Second
 	defaultDropInterval                   = 1 * time.Second
+	defaultShutdownTimeout                = 300 * time.Second
 	defaultMaxConns                       = math.MaxInt32
 	PortRandom                            = -1
 )
@@ -107,10 +114,11 @@ type Server struct {
 	chosenPort int
 	listeningC chan struct{}
 
-	dropInterval     time.Duration
-	connTrackingLock sync.Mutex
-	maxConns         int
-	connIDToConn     map[uint64]*connection
+	lock sync.Mutex
+
+	shuttingDown bool
+	shutdownC    chan struct{}
+	connIDToConn map[uint64]*connection
 
 	perSyncerConnMetrics map[syncproto.SyncerType]perSyncerConnMetrics
 
@@ -129,7 +137,10 @@ type Config struct {
 	MinBatchingAgeThreshold        time.Duration
 	PingInterval                   time.Duration
 	PongTimeout                    time.Duration
+	WriteTimeout                   time.Duration
 	DropInterval                   time.Duration
+	ShutdownTimeout                time.Duration
+	ShutdownMaxDropInterval        time.Duration
 	MaxConns                       int
 	HealthAggregator               *health.HealthAggregator
 	KeyFile                        string
@@ -137,6 +148,14 @@ type Config struct {
 	CAFile                         string
 	ClientCN                       string
 	ClientURISAN                   string
+	WriteBufferSize                int
+
+	// DebugLogWrites tells the server to wrap each connection with a Writer that
+	// logs every write.  Intended only for use in tests!
+	DebugLogWrites bool
+
+	// FIPSModeEnabled Enables FIPS 140-2 verified crypto mode.
+	FIPSModeEnabled bool
 }
 
 const (
@@ -188,12 +207,30 @@ func (c *Config) ApplyDefaults() {
 		}).Info("PongTimeout < PingInterval * 2; Defaulting PongTimeout.")
 		c.PongTimeout = defaultTimeout
 	}
+	if c.WriteTimeout <= 0 {
+		log.WithField("default", defaultWriteTimeout).Info("Defaulting write timeout.")
+		c.WriteTimeout = defaultWriteTimeout
+	}
 	if c.DropInterval <= 0 {
 		log.WithFields(log.Fields{
 			"value":   c.DropInterval,
 			"default": defaultDropInterval,
 		}).Info("Defaulting DropInterval.")
 		c.DropInterval = defaultDropInterval
+	}
+	if c.ShutdownMaxDropInterval <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.ShutdownMaxDropInterval,
+			"default": defaultDropInterval,
+		}).Info("Defaulting ShutdownMaxDropInterval.")
+		c.ShutdownMaxDropInterval = defaultDropInterval
+	}
+	if c.ShutdownTimeout <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.ShutdownTimeout,
+			"default": defaultShutdownTimeout,
+		}).Info("Defaulting ShutdownTimeout.")
+		c.ShutdownTimeout = defaultShutdownTimeout
 	}
 	if c.MaxConns <= 0 {
 		log.WithFields(log.Fields{
@@ -231,8 +268,8 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 		config:               config,
 		caches:               caches,
 		maxConnsC:            make(chan int),
-		dropInterval:         config.DropInterval,
-		maxConns:             config.MaxConns,
+		shutdownC:            make(chan struct{}),
+		nextConnID:           1,
 		connIDToConn:         map[uint64]*connection{},
 		listeningC:           make(chan struct{}),
 		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
@@ -255,9 +292,11 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 }
 
 func (s *Server) Start(cxt context.Context) {
-	s.Finished.Add(2)
+	s.Finished.Add(3)
+	cxt, cancelFn := context.WithCancel(cxt)
 	go s.serve(cxt)
 	go s.governNumberOfConnections(cxt)
+	go s.handleGracefulShutDown(cxt, cancelFn)
 }
 
 func (s *Server) SetMaxConns(numConns int) {
@@ -282,7 +321,10 @@ func (s *Server) serve(cxt context.Context) {
 	)
 	if s.config.requiringTLS() {
 		pwd, _ := os.Getwd()
-		logCxt.WithField("pwd", pwd).Info("Opening TLS listen socket")
+		logCxt.WithFields(log.Fields{
+			"pwd":             pwd,
+			"fipsModeEnabled": s.config.FIPSModeEnabled,
+		}).Info("Opening TLS listen socket")
 		cert, tlsErr := tls.LoadX509KeyPair(s.config.CertFile, s.config.KeyFile)
 		if tlsErr != nil {
 			logCxt.WithFields(log.Fields{
@@ -290,13 +332,8 @@ func (s *Server) serve(cxt context.Context) {
 				"keyFile":  s.config.KeyFile,
 			}).WithError(tlsErr).Panic("Failed to load certificate and key")
 		}
-		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
-		// Typha API is a private binary API so we can enforce a recent TLS variant without
-		// worrying about back-compatibility with old browsers (for example).
-		tlsConfig.MinVersion = tls.VersionTLS12
-
-		// Set allowed cipher suites.
-		tlsConfig.CipherSuites = s.allowedCiphers()
+		tlsConfig := calicotls.NewTLSConfig(s.config.FIPSModeEnabled)
+		tlsConfig.Certificates = []tls.Certificate{cert}
 
 		// Arrange for server to verify the clients' certificates.
 		logCxt.Info("Will verify client certificates")
@@ -318,7 +355,7 @@ func (s *Server) serve(cxt context.Context) {
 		)
 
 		laddr := fmt.Sprintf("0.0.0.0:%v", s.config.ListenPort())
-		l, err = tls.Listen("tcp", laddr, &tlsConfig)
+		l, err = tls.Listen("tcp", laddr, tlsConfig)
 	} else {
 		logCxt.Info("Opening listen socket")
 		l, err = net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.ListenPort()})
@@ -330,14 +367,25 @@ func (s *Server) serve(cxt context.Context) {
 
 	s.Finished.Add(1)
 	go func() {
-		<-cxt.Done()
+		select {
+		case <-cxt.Done():
+			log.Info("Context finished, closing listen socket.")
+		case <-s.shutdownC:
+			log.Info("Graceful shutdown triggered, closing listen socket.")
+		}
 		err := l.Close()
 		if err != nil {
 			log.WithError(err).Warn("Ignoring error from socket Close during shut-down.")
 		}
 		s.Finished.Done()
 	}()
-	s.chosenPort = l.Addr().(*net.TCPAddr).Port
+
+	chosenPort := l.Addr().(*net.TCPAddr).Port
+
+	s.lock.Lock()
+	s.chosenPort = chosenPort
+	s.lock.Unlock()
+
 	logCxt = log.WithField("port", s.chosenPort)
 	close(s.listeningC)
 	for {
@@ -348,11 +396,17 @@ func (s *Server) serve(cxt context.Context) {
 				logCxt.WithError(cxt.Err()).Info("Shutting down...")
 				return
 			}
+			if s.ShuttingDown() {
+				logCxt.Info("Listen socket closed, waiting for shut down to complete.")
+				<-cxt.Done()
+				return
+			}
 			logCxt.WithError(err).Panic("Failed to accept connection")
 			return
 		}
 
 		logCxt.Infof("Accepted from %s", conn.RemoteAddr())
+		var tcpConn *net.TCPConn
 		if s.config.requiringTLS() {
 			// Doing TLS, we must do the handshake...
 			tlsConn := conn.(*tls.Conn)
@@ -373,6 +427,18 @@ func (s *Server) serve(cxt context.Context) {
 				logCxt.Debugf("%#v", v.Subject)
 				logCxt.Debugf("%#v", v.URIs)
 			}
+			tcpConn, _ = tlsConn.NetConn().(*net.TCPConn)
+		} else {
+			tcpConn, _ = conn.(*net.TCPConn)
+		}
+
+		if s.config.WriteBufferSize != 0 {
+			if err := tcpConn.SetWriteBuffer(s.config.WriteBufferSize); err != nil { // Covers the nil case.
+				// Only logging for now, we only use this option in tests.
+				logCxt.WithError(err).Warn("Failed to set write buffer size.")
+			} else {
+				logCxt.WithField("size", s.config.WriteBufferSize).Info("Set connection write buffer size.")
+			}
 		}
 
 		connID := s.nextConnID
@@ -383,6 +449,10 @@ func (s *Server) serve(cxt context.Context) {
 		// Create a new connection-scoped context, which we'll use for signaling to our child
 		// goroutines to halt.
 		connCxt, cancel := context.WithCancel(cxt)
+		var connW io.Writer = conn
+		if s.config.DebugLogWrites {
+			connW = writelogger.New(conn)
+		}
 		connection := &connection{
 			ID:        connID,
 			config:    &s.config,
@@ -390,13 +460,15 @@ func (s *Server) serve(cxt context.Context) {
 			cxt:       connCxt,
 			cancelCxt: cancel,
 			conn:      conn,
+			connW:     connW,
 			logCxt: log.WithFields(log.Fields{
 				"client": conn.RemoteAddr(),
 				"connID": connID,
 			}),
 
-			encoder: gob.NewEncoder(conn),
-			readC:   make(chan interface{}),
+			encoder:     gob.NewEncoder(connW),
+			flushWriter: func() error { return nil },
+			readC:       make(chan interface{}),
 
 			allMetrics: s.perSyncerConnMetrics,
 		}
@@ -420,22 +492,23 @@ func (s *Server) serve(cxt context.Context) {
 }
 
 func (s *Server) recordConnection(conn *connection) {
-	s.connTrackingLock.Lock()
+	s.lock.Lock()
 	s.connIDToConn[conn.ID] = conn
-	s.connTrackingLock.Unlock()
+	s.lock.Unlock()
 }
 
 func (s *Server) discardConnection(conn *connection) {
-	s.connTrackingLock.Lock()
+	s.lock.Lock()
 	delete(s.connIDToConn, conn.ID)
-	s.connTrackingLock.Unlock()
+	s.lock.Unlock()
 }
 
 func (s *Server) governNumberOfConnections(cxt context.Context) {
 	defer s.Finished.Done()
 	logCxt := log.WithField("thread", "numConnsGov")
-	maxConns := s.maxConns
-	ticker := jitter.NewTicker(s.dropInterval, s.dropInterval/10)
+	maxConns := s.config.MaxConns
+	dropInterval := s.config.DropInterval
+	ticker := jitter.NewTicker(dropInterval, dropInterval/10)
 	healthTicks := time.NewTicker(healthInterval).C
 	s.reportHealth()
 	for {
@@ -444,34 +517,25 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 			if newMax == maxConns {
 				continue
 			}
-			s.connTrackingLock.Lock()
-			currentNum := len(s.connIDToConn)
-			s.connTrackingLock.Unlock()
 			logCxt.WithFields(log.Fields{
 				"oldMax":     maxConns,
 				"newMax":     newMax,
-				"currentNum": currentNum,
+				"currentNum": s.NumActiveConnections(),
 			}).Info("New target number of connections")
 			maxConns = newMax
-			s.connTrackingLock.Lock()
-			s.maxConns = maxConns
-			s.connTrackingLock.Unlock()
 		case <-ticker.C:
-			s.connTrackingLock.Lock()
-			numConns := len(s.connIDToConn)
+			numConns := s.NumActiveConnections()
 			if numConns > maxConns {
-				for connID, conn := range s.connIDToConn {
-					logCxt.WithFields(log.Fields{
-						"max":     maxConns,
-						"current": numConns,
-						"connID":  connID,
-					}).Warn("Currently have too many connections, terminating one at random.")
-					conn.cancelCxt()
+				logCxt := logCxt.WithFields(log.Fields{
+					"max":     maxConns,
+					"current": numConns,
+				})
+				dropped := s.TerminateRandomConnection(logCxt, "re-balance load with other Typha instances")
+				if dropped {
+					// Only increment the counter if we dropped a connection.
 					counterNumConnectionsDropped.Inc()
-					break
 				}
 			}
-			s.connTrackingLock.Unlock()
 		case <-cxt.Done():
 			logCxt.Info("Context asked us to stop")
 			return
@@ -481,23 +545,98 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 	}
 }
 
-// allowedCiphers returns the set of allowed cipher suites for the server.
-// The list is taken from https://github.com/golang/go/blob/dev.boringcrypto.go1.13/src/crypto/tls/boring.go#L54
-func (s *Server) allowedCiphers() []uint16 {
-	return []uint16{
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+func (s *Server) handleGracefulShutDown(cxt context.Context, serverCancelFn context.CancelFunc) {
+	defer s.Finished.Done()
+	logCxt := log.WithField("thread", "gracefulShutdown")
+
+	select {
+	case <-s.shutdownC:
+		logCxt.Info("Graceful shutdown triggered, starting to close connections...")
+	case <-cxt.Done():
+		logCxt.Info("Context asked us to stop")
+		return
 	}
+
+	numConns := s.NumActiveConnections()
+	// Aim to close connections within 95% of the allotted time.
+	dropInterval := s.config.ShutdownTimeout * 95 / 100 / time.Duration(numConns)
+	logCtx := log.WithFields(log.Fields{
+		"activeConnections":   numConns,
+		"shutdownTimeout":     s.config.ShutdownTimeout,
+		"maximumDropInterval": s.config.ShutdownMaxDropInterval,
+	})
+	if dropInterval > s.config.ShutdownMaxDropInterval {
+		// We have a long time to shut down (say 5 minutes) but only a few connections.  Cap the delay between
+		// dropping connections.
+		dropInterval = s.config.ShutdownMaxDropInterval
+		logCtx.Info("Using maximum shutdown drop interval.")
+	} else {
+		logCxt.WithField("dropInterval", dropInterval).Info("Calculated drop interval from shutdown timeout.")
+	}
+	ticker := jitter.NewTicker(dropInterval*95/100, dropInterval*10/100)
+	for {
+		select {
+		case <-ticker.C:
+			numConns := s.NumActiveConnections()
+			logCxt := logCxt.WithField("remainingConns", numConns)
+			dropped := s.TerminateRandomConnection(logCxt, "graceful shutdown in progress")
+			if numConns <= 1 || !dropped {
+				logCxt.Info("Finished closing connections, completing shut down...")
+				// Note: we release the lock between NumActiveConnections and TerminateRandomConnection so,
+				// in theory, if we haven't yet closed the listen socket, a new connection could just have been added.
+				// We don't need to worry about that because serverCancelFn will shut down all remaining connections
+				// by canceling their parent context.
+				serverCancelFn()
+				break
+			}
+		case <-cxt.Done():
+			logCxt.Info("Context asked us to stop")
+			return
+		}
+	}
+}
+
+func (s *Server) NumActiveConnections() int {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return len(s.connIDToConn)
+}
+
+func (s *Server) ShuttingDown() bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.shuttingDown
+}
+
+// TerminateRandomConnection tries to drop a connection at random.  On success, returns true.  If there are no
+// connections returns false.
+func (s *Server) TerminateRandomConnection(logCtx *log.Entry, reason string) bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	for connID, conn := range s.connIDToConn {
+		logCtx.WithField("connID", connID).Infof("Closing connection; reason: %s.", reason)
+		conn.cancelCxt()
+		return true
+	}
+	return false
 }
 
 func (s *Server) reportHealth() {
 	if s.config.HealthAggregator != nil {
 		s.config.HealthAggregator.Report(healthName, &health.HealthReport{Live: true})
 	}
+}
+
+func (s *Server) ShutDownGracefully() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if s.shuttingDown {
+		log.Info("Asked to shut down but shutdown already in progress.")
+		return
+	}
+	log.Info("Starting graceful shutdown...")
+	s.shuttingDown = true
+	close(s.shutdownC)
 }
 
 type connection struct {
@@ -515,14 +654,22 @@ type connection struct {
 	// allCaches contains a mapping from syncer type (felix/BGP) to the right cache to use.  We don't know
 	// which cache to use until we do the handshake.  Once the handshake is complete, we store the correct
 	// cache in the "cache" field.
-	allCaches map[syncproto.SyncerType]BreadcrumbProvider
-	cache     BreadcrumbProvider
-	conn      net.Conn
+	allCaches  map[syncproto.SyncerType]BreadcrumbProvider
+	cache      BreadcrumbProvider
+	syncerType syncproto.SyncerType
+	conn       net.Conn
+	// connW is the writer to use to send things to the client.  It may be the net.Conn itself or a wrapper
+	// around it.
+	connW                io.Writer
+	currentWriteDeadline time.Time
 
-	encoder *gob.Encoder
-	readC   chan interface{}
+	encoder     *gob.Encoder
+	flushWriter func() error
+	readC       chan interface{}
 
-	logCxt *log.Entry
+	logCxt                       *log.Entry
+	chosenCompression            syncproto.CompressionAlgorithm
+	clientSupportsDecoderRestart bool
 
 	// Similarly to allCaches, allMetrics contains all the metrics relevant to a particular syncer.  We copy one
 	// of them to the unnamed field after the handshake.
@@ -556,12 +703,22 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	h.shutDownWG.Add(1)
 	go h.readFromClient(h.logCxt.WithField("thread", "read"))
 
-	// Now do the (synchronous) handshake before we start our update-writing thread.
+	// Now do the (synchronous) handshake.
 	if err = h.doHandshake(); err != nil {
 		return // Error already logged.
 	}
 	h.gaugeNumConnectionsStreaming.Inc()
 	defer h.gaugeNumConnectionsStreaming.Dec()
+
+	if h.clientSupportsDecoderRestart && h.chosenCompression == syncproto.CompressionSnappy {
+		// New client that supports compression, restart the decoder with compression enabled.
+		h.logCxt.Info("Restarting decoder with compression.")
+		err = h.restartEncodingIfSupported("Upgrade to compressed connection.")
+		if err != nil {
+			log.WithError(err).Info("Failed to restart encoding before snapshot, tearing down connection.")
+			return
+		}
+	}
 
 	// Start a goroutine to stream the snapshot and then the deltas to the client.
 	h.shutDownWG.Add(1)
@@ -629,7 +786,11 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 		var envelope syncproto.Envelope
 		err := r.Decode(&envelope)
 		if err != nil {
-			logCxt.WithError(err).Info("Failed to read from client")
+			if errors.Is(err, io.EOF) {
+				logCxt.Info("Client closed the connection.")
+			} else {
+				logCxt.WithError(err).Info("Failed to read from client")
+			}
 			break
 		}
 		if envelope.Message == nil {
@@ -684,6 +845,7 @@ func (h *connection) doHandshake() error {
 		h.logCxt.Info("Client didn't provide a SyncerType, assuming SyncerTypeFelix for back-compatibility.")
 		syncerType = syncproto.SyncerTypeFelix
 	}
+	h.syncerType = syncerType
 	h.logCxt = h.logCxt.WithField("type", syncerType)
 	h.perSyncerConnMetrics = h.allMetrics[syncerType]
 	desiredSyncerCache := h.allCaches[syncerType]
@@ -693,6 +855,18 @@ func (h *connection) doHandshake() error {
 	}
 	h.cache = desiredSyncerCache
 
+	for _, alg := range hello.SupportedCompressionAlgorithms {
+		switch alg {
+		case syncproto.CompressionSnappy:
+			h.chosenCompression = syncproto.CompressionSnappy
+		}
+	}
+	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
+	if h.chosenCompression != "" && !hello.SupportsDecoderRestart {
+		log.WithError(err).Warning("Client signalled compression but no support for decoder restart")
+		h.chosenCompression = ""
+	}
+
 	// Respond to client's hello.
 	err = h.sendMsg(syncproto.MsgServerHello{
 		Version: buildinfo.GitVersion,
@@ -700,10 +874,66 @@ func (h *connection) doHandshake() error {
 		// clients will ignore.
 		SyncerType:                  syncerType,
 		SupportsNodeResourceUpdates: true,
+		ServerConnID:                h.ID,
 	})
 	if err != nil {
 		log.WithError(err).Warning("Failed to send hello to client")
 		return err
+	}
+	return nil
+}
+
+func (h *connection) restartEncodingIfSupported(message string) error {
+	if !h.clientSupportsDecoderRestart {
+		log.Debug("Can't restart decoder, client doesn't support it.")
+		return nil
+	}
+
+	// Signal for the client to restart its decoder (possibly) with compression enabled.
+	err := h.sendMsg(syncproto.MsgDecoderRestart{
+		Message:              message,
+		CompressionAlgorithm: h.chosenCompression,
+	})
+	if err != nil {
+		log.WithError(err).Warning("Failed to send DecoderRestart to client")
+		return err
+	}
+
+	err = h.waitForAckAndRestartEncoder()
+	return err
+}
+
+func (h *connection) waitForAckAndRestartEncoder() error {
+	// Wait until the client ACKs.  This avoids sending compressed data that might get misinterpreted
+	// by the gob decoder.
+	msg, err := h.waitForMessage(h.logCxt)
+	if err != nil {
+		h.logCxt.WithError(err).Warn("Failed to read client ACK.")
+		return err
+	}
+	ack, ok := msg.(syncproto.MsgACK)
+	if !ok {
+		h.logCxt.WithField("msg", msg).Error("Unexpected message from client.")
+		return ErrUnexpectedClientMsg
+	}
+	h.logCxt.WithField("msg", ack).Info("Received ACK message from client.")
+
+	// Upgrade to compressed connection if required.
+	bw := bufio.NewWriter(h.connW)
+	switch h.chosenCompression {
+	case syncproto.CompressionSnappy:
+		w := snappy.NewBufferedWriter(bw)
+		h.encoder = gob.NewEncoder(w) // Need a new Encoder, there's no way to change out the Writer.
+		h.flushWriter = func() error {
+			err := w.Flush()
+			if err != nil {
+				return err
+			}
+			return bw.Flush()
+		}
+	default:
+		h.encoder = gob.NewEncoder(bw) // Need a new Encoder, there's no way to change out the Writer.
+		h.flushWriter = bw.Flush
 	}
 	return nil
 }
@@ -714,16 +944,44 @@ func (h *connection) sendMsg(msg interface{}) error {
 		// Optimisation, don't bother to send if we're being torn down.
 		return h.cxt.Err()
 	}
+	h.logCxt.WithField("msg", msg).Trace("Sending message to client")
 	envelope := syncproto.Envelope{
 		Message: msg,
 	}
 	startTime := time.Now()
-	err := h.encoder.Encode(&envelope)
-	if err != nil {
+
+	// Make sure we have a timeout on the connection so that we can't block forever in the synchronous
+	// part of the protocol.  After we send the snapshot we rely more on the layer 7 ping/pong.
+	if err := h.maybeResetWriteTimeout(); err != nil {
+		h.logCxt.WithError(err).Info("Failed to set write timeout when sending to client.")
+		return err
+	}
+
+	if err := h.encoder.Encode(&envelope); err != nil {
 		h.logCxt.WithError(err).Info("Failed to write to client")
 		return err
 	}
+	if err := h.flushWriter(); err != nil {
+		h.logCxt.WithError(err).Info("Failed to flush write to client")
+		return err
+	}
 	h.summaryWriteLatency.Observe(time.Since(startTime).Seconds())
+	return nil
+}
+
+func (h *connection) maybeResetWriteTimeout() error {
+	now := time.Now()
+	// Under heavy load, updating the timeout for every message seemed to cause noticible overhead,
+	// so we add a 10% buffer and then only reset it when it drops too low.
+	if h.currentWriteDeadline.Before(now.Add(h.config.WriteTimeout)) {
+		newWriteDeadline := now.Add(h.config.WriteTimeout * 110 / 100)
+		err := h.conn.SetWriteDeadline(newWriteDeadline)
+		if err != nil {
+			h.logCxt.WithError(err).Info("Failed to set client write timeout")
+			return err
+		}
+		h.currentWriteDeadline = newWriteDeadline
+	}
 	return nil
 }
 
@@ -795,7 +1053,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 				"timestamp": breadcrumb.Timestamp,
 				"state":     breadcrumb.SyncStatus,
 				"age":       crumbAge,
-			}).Debug("New Breadcrumb")
+			}).Debug("Got next breadcrumb for this client.")
 
 			// Check if we're too far behind the latest Breadcrumb.
 			if crumbAge > h.config.MaxFallBehind {
@@ -877,43 +1135,65 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 }
 
 // streamSnapshotToClient takes the snapshot contained in the Breadcrumb and streams it to the client in chunks.
-func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) (err error) {
+func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) error {
+	startTime := time.Now()
+	err := writeSnapshotMessages(
+		h.cxt,
+		h.logCxt.WithField("destination", "direct to client"),
+		breadcrumb,
+		h.sendMsg,
+		h.config.MaxMessageSize,
+	)
+	if err != nil {
+		return err
+	}
+	logCxt.WithField("numKeys", breadcrumb.KVs.Len()).Info("Finished sending snapshot to client")
+	h.summarySnapshotSendTime.Observe(time.Since(startTime).Seconds())
+	return nil
+}
+
+// writeSnapshotMessages chunks the given breadcrumb up into syncproto.MsgKVs objects and calls writeMsg for each one.
+func writeSnapshotMessages(
+	ctx context.Context,
+	logCxt *log.Entry,
+	breadcrumb *snapcache.Breadcrumb,
+	writeMsg func(any) error,
+	maxMsgSize int,
+) (err error) {
 	logCxt = logCxt.WithFields(log.Fields{
 		"seqNo":  breadcrumb.SequenceNumber,
 		"status": breadcrumb.SyncStatus,
 	})
-	logCxt.Info("Starting to send snapshot to client")
-	startTime := time.Now()
+	logCxt.Info("Starting to write snapshot")
 
-	// sendKVs is a utility function that sends the kvs buffer to the client and clears the buffer.
+	// writeKVs is a utility function that sends the kvs buffer to the client (if non-empty) and clears the buffer.
 	var kvs []syncproto.SerializedUpdate
 	var numKeys int
-	sendKVs := func() error {
+	writeKVs := func() error {
 		if len(kvs) == 0 {
 			return nil
 		}
-		logCxt.WithField("numKVs", len(kvs)).Debug("Sending snapshot KVs to client.")
+		logCxt.WithField("numKVs", len(kvs)).Debug("Writing snapshot KVs.")
 		numKeys += len(kvs)
-		h.summaryNumKVsPerMsg.Observe(float64(len(kvs)))
-		err := h.sendMsg(syncproto.MsgKVs{
+		err := writeMsg(syncproto.MsgKVs{
 			KVs: kvs,
 		})
 		if err != nil {
-			logCxt.WithError(err).Info("Failed to send to client")
+			logCxt.WithError(err).Info("Failed to write snapshot KVs")
 		}
 		kvs = kvs[:0]
 		return err
 	}
 
 	breadcrumb.KVs.Ascend(func(entry syncproto.SerializedUpdate) bool {
-		if h.cxt.Err() != nil {
-			err = h.cxt.Err()
+		if ctx.Err() != nil {
+			err = ctx.Err()
 			return false
 		}
 		kvs = append(kvs, entry)
-		if len(kvs) >= h.config.MaxMessageSize {
+		if len(kvs) >= maxMsgSize {
 			// Buffer is full, send the next batch.
-			err = sendKVs()
+			err = writeKVs()
 			if err != nil {
 				return false
 			}
@@ -924,12 +1204,11 @@ func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapc
 		return
 	}
 
-	err = sendKVs()
+	err = writeKVs()
 	if err != nil {
 		return
 	}
-	logCxt.WithField("numKeys", numKeys).Info("Finished sending snapshot to client")
-	h.summarySnapshotSendTime.Observe(time.Since(startTime).Seconds())
+	logCxt.Info("Finished writing snapshot.")
 	return
 }
 

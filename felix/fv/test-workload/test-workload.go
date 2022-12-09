@@ -43,7 +43,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] [--mtu=<mtu>] <interface-name> <ip-address> <ports>
+  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] [--mtu=<mtu>] [--listen-any-ip] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -73,6 +73,11 @@ func main() {
 		panicIfError(err)
 	}
 	panicIfError(err)
+
+	listenAnyIP := false
+	if _, ok := arguments["--listen-any-ip"]; ok {
+		listenAnyIP = true
+	}
 
 	ports := strings.Split(portsStr, ",")
 
@@ -352,10 +357,19 @@ func main() {
 					}
 				}
 
+				seenSrc := "<unknown>"
+				seenLocal := "<unknown>"
+				if conn.RemoteAddr() != nil {
+					seenSrc = conn.RemoteAddr().String()
+				}
+				if conn.LocalAddr() != nil {
+					seenLocal = conn.LocalAddr().String()
+				}
+
 				response := connectivity.Response{
 					Timestamp:  time.Now(),
-					SourceAddr: conn.RemoteAddr().String(),
-					ServerAddr: conn.LocalAddr().String(),
+					SourceAddr: seenSrc,
+					ServerAddr: seenLocal,
 					Request:    request,
 				}
 
@@ -397,7 +411,9 @@ func main() {
 		// Listen on each port.
 		for _, port := range ports {
 			var myAddr string
-			if strings.Contains(ipAddress, ":") {
+			if listenAnyIP {
+				myAddr = "0.0.0.0"
+			} else if strings.Contains(ipAddress, ":") {
 				myAddr = "[" + ipAddress + "]"
 			} else {
 				myAddr = ipAddress

@@ -23,13 +23,15 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump2 = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
 	.value_size = 4,
-	.max_entries = 16,
+	.max_entries = 32,
 };
 
 #define CALI_JUMP_TO(ctx, index) bpf_tail_call(ctx, &map_symbol(cali_jump, 2), index)
 
 /* Add new values to the end as these are program indices */
 enum cali_jump_index {
+	PROG_INDEX_NO_DEBUG,
+	PROG_INDEX_DEBUG,
 	PROG_INDEX_POLICY,
 	PROG_INDEX_ALLOWED,
 	PROG_INDEX_ICMP,

@@ -133,6 +133,12 @@ func (b *Binary) PatchVXLANPort(port uint16) {
 	b.patchU32Placeholder("VXPR", uint32(port))
 }
 
+// PatchFlags replaces the FLGS placeholder with the actual flags
+func (b *Binary) PatchFlags(flags uint32) {
+	logrus.WithField("flags", flags).Debug("Patching Flags")
+	b.patchU32Placeholder("FLGS", flags)
+}
+
 // PatchExtToServiceConnmark replaces the MARK placeholder with the actual mark.
 func (b *Binary) PatchExtToServiceConnmark(mark uint32) {
 	logrus.WithField("mark", mark).Debug("Patching to-host mark")

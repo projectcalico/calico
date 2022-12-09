@@ -42,6 +42,8 @@ while true; do
     done
   fi
 
+  source /extra-env.sh
+
   echo "calico-felix-wrapper: Starting calico-felix"
   calico-felix &
   pid=$!

@@ -13,6 +13,13 @@ EKS has built-in support for {{site.prodname}}, providing a robust implementatio
 
 You can also use {{site.prodname}} for networking on EKS in place of the default AWS VPC networking without the need to use IP addresses from the underlying VPC. This allows you to take advantage of the full set of {{site.prodname}} networking features, including {{site.prodname}}'s flexible IP address management capabilities.
 
+### Before you begin...
+
+> **Note**: {{site.prodname}} makes use of the Kubernetes Container Storage Interface (CSI) to support various types of volumes. The necessary drivers required for CSI
+> to function correctly in EKS clusters will no longer be present by default in clusters running Kubernetes 1.23. Please see the following link to ensure your cluster
+> is configured correctly based on the version of Kubernetes being used in your cluster: {% include open-new-window.html text='AWS EBS CSI driver' url='https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html' %}
+{: .alert .alert-warning }
+
 ### How to
 
 #### Install EKS with Amazon VPC networking
