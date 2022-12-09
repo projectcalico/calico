@@ -56,6 +56,10 @@ func (m *Map) Type() int {
 	return int(mapType)
 }
 
+func (m *Map) ValueSize() int {
+	return int(C.bpf_map__value_size(m.bpfMap))
+}
+
 func (m *Map) SetPinPath(path string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
@@ -291,26 +295,16 @@ const (
 	GlobalsRPFStrictEnabled uint32 = C.CALI_GLOBALS_RPF_STRICT_ENABLED
 )
 
-type TcGlobalData struct {
-	HostIP       uint32
-	IntfIP       uint32
-	ExtToSvcMark uint32
-	Tmtu         uint16
-	VxlanPort    uint16
-	PSNatStart   uint16
-	PSNatLen     uint16
-	HostTunnelIP uint32
-	Flags        uint32
-	WgPort       uint16
-	NatIn        uint32
-	NatOut       uint32
-}
-
 func TcSetGlobals(
 	m *Map,
 	globalData *TcGlobalData,
 ) error {
+
+	cName := C.CString(globalData.IfaceName)
+	defer C.free(unsafe.Pointer(cName))
+
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
+		cName,
 		C.uint(globalData.HostIP),
 		C.uint(globalData.IntfIP),
 		C.uint(globalData.ExtToSvcMark),
