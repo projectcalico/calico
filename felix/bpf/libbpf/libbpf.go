@@ -56,6 +56,10 @@ func (m *Map) Type() int {
 	return int(mapType)
 }
 
+func (m *Map) ValueSize() int {
+	return int(C.bpf_map__value_size(m.bpfMap))
+}
+
 func (m *Map) SetPinPath(path string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
@@ -292,6 +296,7 @@ const (
 )
 
 type TcGlobalData struct {
+	IfaceName    string
 	HostIP       uint32
 	IntfIP       uint32
 	ExtToSvcMark uint32
@@ -310,7 +315,12 @@ func TcSetGlobals(
 	m *Map,
 	globalData *TcGlobalData,
 ) error {
+
+	cName := C.CString(globalData.IfaceName)
+	defer C.free(unsafe.Pointer(cName))
+
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
+		cName,
 		C.uint(globalData.HostIP),
 		C.uint(globalData.IntfIP),
 		C.uint(globalData.ExtToSvcMark),
