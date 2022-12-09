@@ -549,9 +549,9 @@ syn_force_policy:
 	}
 
 	if (CALI_F_TO_HEP && ctx->nat_dest && !skb_seen(ctx->skb) && !(ctx->state->flags & CALI_ST_HOST_PSNAT)) {
-		CALI_DEBUG("Host accesses nodeport backend %x:%d state->flags 0x%x\n",
-			   bpf_htonl(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport,
-			   ctx->state->flags);
+		CALI_DEBUG("Host accesses nodeport backend %x:%d\n",
+			   bpf_htonl(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
+		CALI_DEBUG("Host accesses nodeport state->flags 0x%x\n", ctx->state->flags);
 		if (cali_rt_flags_local_workload(dest_rt->flags)) {
 			CALI_DEBUG("NP redir on HEP - skip policy\n");
 			ctx->state->flags |= CALI_ST_CT_NP_LOOP;

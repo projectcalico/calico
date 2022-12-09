@@ -350,7 +350,7 @@ static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 }
 
 #define CALI_CT_LOG(level, fmt, ...) \
-	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT-%d "fmt, proto_orig, ## __VA_ARGS__)
+	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT: "fmt, ## __VA_ARGS__)
 #define CALI_CT_DEBUG(fmt, ...) \
 	CALI_CT_LOG(CALI_LOG_LEVEL_DEBUG, fmt, ## __VA_ARGS__)
 #define CALI_CT_VERB(fmt, ...) \
@@ -362,8 +362,6 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 						struct calico_ct_leg *src_to_dst,
 						struct calico_ct_leg *dst_to_src)
 {
-	__u8 proto_orig = IPPROTO_TCP; /* used by logging */
-
 	if (tcp_header->rst) {
 		CALI_CT_DEBUG("RST seen, marking CT entry.\n");
 		// TODO: We should only take account of RST packets that are in
