@@ -18,9 +18,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"os"
 	"os/exec"
 	"path"
 	"regexp"
@@ -72,10 +70,6 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) loadLogging() bool {
-	return strings.ToLower(ap.LogLevel) != "off"
-}
-
 func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	logCxt := log.WithField("attachPoint", ap)
 	progID, err := ap.ProgramID()
@@ -107,28 +101,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	logCxt := log.WithField("attachPoint", ap)
 
 	filename := ap.FileName()
-	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
-	binaryToLoad := preCompiledBinary
-
-	if ap.loadLogging() {
-		tempDir, err := ioutil.TempDir("", "calico-tc")
-		if err != nil {
-			return -1, fmt.Errorf("failed to create temporary directory: %w", err)
-		}
-		defer func() {
-			_ = os.RemoveAll(tempDir)
-		}()
-
-		tempBinary := path.Join(tempDir, filename)
-
-		err = ap.patchLogPrefix(logCxt, preCompiledBinary, tempBinary)
-		if err != nil {
-			logCxt.WithError(err).Error("Failed to patch binary")
-			return -1, err
-		}
-
-		binaryToLoad = tempBinary
-	}
+	binaryToLoad := path.Join(bpf.ObjectDir, filename)
 
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
@@ -162,7 +135,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 
 	// Check if the bpf object is already attached, and we should skip
 	// re-attaching it if the binary and its configuration are the same.
-	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
+	progID, isAttached := ap.AlreadyAttached(binaryToLoad)
 	if isAttached {
 		logCxt.Infof("Program already attached to TC, skip reattaching %s", filename)
 		return progID, nil
@@ -195,26 +168,11 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	// If the process fails, the json file with the correct name and program details
 	// is not stored on disk, and during Felix restarts the same program will be reattached
 	// which leads to an unnecessary load time
-	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, progId); err != nil {
+	if err = bpf.RememberAttachedProg(ap, binaryToLoad, progId); err != nil {
 		logCxt.WithError(err).Error("Failed to record hash of BPF program on disk; ignoring.")
 	}
 
 	return progId, nil
-}
-
-func (ap *AttachPoint) patchLogPrefix(logCtx *log.Entry, ifile, ofile string) error {
-	b, err := bpf.BinaryFromFile(ifile)
-	if err != nil {
-		return fmt.Errorf("failed to read pre-compiled BPF binary: %w", err)
-	}
-
-	b.PatchLogPrefix(ap.Iface)
-
-	err = b.WriteToFile(ofile)
-	if err != nil {
-		return fmt.Errorf("failed to write pre-compiled BPF binary: %w", err)
-	}
-	return nil
 }
 
 func (ap *AttachPoint) DetachProgram() error {
@@ -487,6 +445,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 			return err
 		}
 	}
+
+	in := []byte("---------------")
+	copy(in, ap.Iface)
+	globalData.IfaceName = string(in)
 
 	return libbpf.TcSetGlobals(m, &globalData)
 }

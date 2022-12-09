@@ -349,41 +349,32 @@ static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 	CALI_DEBUG("CT-TCP delete result: %d\n", rc);
 }
 
-#define CALI_CT_LOG(level, fmt, ...) \
-	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT-%d "fmt, proto_orig, ## __VA_ARGS__)
-#define CALI_CT_DEBUG(fmt, ...) \
-	CALI_CT_LOG(CALI_LOG_LEVEL_DEBUG, fmt, ## __VA_ARGS__)
-#define CALI_CT_VERB(fmt, ...) \
-	CALI_CT_LOG(CALI_LOG_LEVEL_VERB, fmt, ## __VA_ARGS__)
-
 #define seqno_add(seq, add) (bpf_htonl((bpf_ntohl(seq) + add)))
 
 static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 						struct calico_ct_leg *src_to_dst,
 						struct calico_ct_leg *dst_to_src)
 {
-	__u8 proto_orig = IPPROTO_TCP; /* used by logging */
-
 	if (tcp_header->rst) {
-		CALI_CT_DEBUG("RST seen, marking CT entry.\n");
+		CALI_DEBUG("RST seen, marking CT entry.\n");
 		// TODO: We should only take account of RST packets that are in
 		// the right window.
 		// TODO if we trust the RST, could just drop the CT entries.
 		src_to_dst->rst_seen = 1;
 	}
 	if (tcp_header->fin) {
-		CALI_CT_VERB("FIN seen, marking CT entry.\n");
+		CALI_VERB("FIN seen, marking CT entry.\n");
 		src_to_dst->fin_seen = 1;
 	}
 
 	if (tcp_header->syn && tcp_header->ack) {
 		if (dst_to_src->syn_seen && seqno_add(dst_to_src->seqno, 1) == tcp_header->ack_seq) {
-			CALI_CT_VERB("SYN+ACK seen, marking CT entry.\n");
+			CALI_VERB("SYN+ACK seen, marking CT entry.\n");
 			src_to_dst->syn_seen = 1;
 			src_to_dst->ack_seen = 1;
 			src_to_dst->seqno = tcp_header->seq;
 		} else {
-			CALI_CT_VERB("SYN+ACK seen but packet's ACK (%u) "
+			CALI_VERB("SYN+ACK seen but packet's ACK (%u) "
 					"doesn't match other side's SYN (%u).\n",
 					bpf_ntohl(tcp_header->ack_seq),
 					bpf_ntohl(dst_to_src->seqno));
@@ -391,10 +382,10 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 		}
 	} else if (tcp_header->ack && !src_to_dst->ack_seen && src_to_dst->syn_seen) {
 		if (dst_to_src->syn_seen && seqno_add(dst_to_src->seqno, 1) == tcp_header->ack_seq) {
-			CALI_CT_VERB("ACK seen, marking CT entry.\n");
+			CALI_VERB("ACK seen, marking CT entry.\n");
 			src_to_dst->ack_seen = 1;
 		} else {
-			CALI_CT_VERB("ACK seen but packet's ACK (%u) doesn't "
+			CALI_VERB("ACK seen but packet's ACK (%u) doesn't "
 					"match other side's SYN (%u).\n",
 					bpf_ntohl(tcp_header->ack_seq),
 					bpf_ntohl(dst_to_src->seqno));
@@ -403,10 +394,10 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 	} else {
 		/* Normal packet, check that the handshake is complete. */
 		if (!dst_to_src->ack_seen) {
-			CALI_CT_VERB("Non-flagged packet but other side has never ACKed.\n");
+			CALI_VERB("Non-flagged packet but other side has never ACKed.\n");
 			/* XXX Have to let this through so source can reset? */
 		} else {
-			CALI_CT_VERB("Non-flagged packet and other side has ACKed.\n");
+			CALI_VERB("Non-flagged packet and other side has ACKed.\n");
 		}
 	}
 }
@@ -463,15 +454,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	struct tcphdr *tcp_header = ct_ctx->tcp;
 	bool related = false;
 
-	CALI_CT_DEBUG("lookup from %x:%d\n", bpf_ntohl(ip_src), sport);
-	CALI_CT_DEBUG("lookup to   %x:%d\n", bpf_ntohl(ip_dst), dport);
+	CALI_DEBUG("lookup from %x:%d\n", bpf_ntohl(ip_src), sport);
+	CALI_DEBUG("lookup to   %x:%d\n", bpf_ntohl(ip_dst), dport);
 	if (tcp_header) {
-		CALI_CT_VERB("packet seq = %u\n", bpf_ntohl(tcp_header->seq));
-		CALI_CT_VERB("packet ack_seq = %u\n", bpf_ntohl(tcp_header->ack_seq));
-		CALI_CT_VERB("packet syn = %d\n", tcp_header->syn);
-		CALI_CT_VERB("packet ack = %d\n", tcp_header->ack);
-		CALI_CT_VERB("packet fin = %d\n", tcp_header->fin);
-		CALI_CT_VERB("packet rst = %d\n", tcp_header->rst);
+		CALI_VERB("packet seq = %u\n", bpf_ntohl(tcp_header->seq));
+		CALI_VERB("packet ack_seq = %u\n", bpf_ntohl(tcp_header->ack_seq));
+		CALI_VERB("packet syn = %d\n", tcp_header->syn);
+		CALI_VERB("packet ack = %d\n", tcp_header->ack);
+		CALI_VERB("packet fin = %d\n", tcp_header->fin);
+		CALI_VERB("packet rst = %d\n", tcp_header->rst);
 	}
 
 	struct calico_ct_result result = {
@@ -487,7 +478,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	if (!v) {
 		if (syn) {
 			// SYN packet (new flow); send it to policy.
-			CALI_CT_DEBUG("Miss for TCP SYN, NEW flow.\n");
+			CALI_DEBUG("Miss for TCP SYN, NEW flow.\n");
 			goto out_lookup_fail;
 		}
 		if (CALI_F_FROM_HOST && proto_orig == IPPROTO_TCP) {
@@ -514,7 +505,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		}
 		if (ct_ctx->proto != IPPROTO_ICMP) {
 			// Not ICMP so can't be a "related" packet.
-			CALI_CT_DEBUG("Miss.\n");
+			CALI_DEBUG("Miss.\n");
 			goto out_lookup_fail;
 		}
 
@@ -528,14 +519,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		// ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
 		// details of the inner packet.
 		if (!skb_icmp_err_unpack(tc_ctx, ct_ctx)) {
-			CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
+			CALI_DEBUG("Failed to parse ICMP error packet.\n");
 			goto out_invalid;
 		}
 
 		// skb_icmp_err_unpack updates the ct_ctx with the details of the inner packet;
 		// look for a conntrack entry for the inner packet...
-		CALI_CT_DEBUG("related lookup from %x:%d\n", bpf_ntohl(ct_ctx->src), ct_ctx->sport);
-		CALI_CT_DEBUG("related lookup to   %x:%d\n", bpf_ntohl(ct_ctx->dst), ct_ctx->dport);
+		CALI_DEBUG("related lookup from %x:%d\n", bpf_ntohl(ct_ctx->src), ct_ctx->sport);
+		CALI_DEBUG("related lookup to   %x:%d\n", bpf_ntohl(ct_ctx->dst), ct_ctx->dport);
 
 		srcLTDest = src_lt_dest(ct_ctx->src, ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
 		k = ct_make_key(srcLTDest, ct_ctx->proto, ct_ctx->src, ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
@@ -560,7 +551,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				return result;
 			}
 
-			CALI_CT_DEBUG("Miss on ICMP related\n");
+			CALI_DEBUG("Miss on ICMP related\n");
 			goto out_lookup_fail;
 		}
 
@@ -596,14 +587,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	case CALI_CT_TYPE_NAT_FWD:
 		// This is a forward NAT entry; since we do the bookkeeping on the
 		// reverse entry, we need to do a second lookup.
-		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.\n");
+		CALI_DEBUG("Hit! NAT FWD entry, doing secondary lookup.\n");
 		tracking_v = cali_v4_ct_lookup_elem(&v->nat_rev_key);
 		if (!tracking_v) {
-			CALI_CT_DEBUG("Miss when looking for secondary entry.\n");
+			CALI_DEBUG("Miss when looking for secondary entry.\n");
 			goto out_lookup_fail;
 		}
 		if (tcp_recycled(syn, tracking_v)) {
-			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			CALI_DEBUG("TCP SYN recycles entry, NEW flow.\n");
 			cali_v4_ct_delete_elem(&k);
 			cali_v4_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
@@ -639,10 +630,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		}
 
 		result.tun_ip = tracking_v->tun_ip;
-		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
+		CALI_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
 		result.flags = ct_value_get_flags(tracking_v);
-		CALI_CT_DEBUG("result.flags 0x%x\n", result.flags);
+		CALI_DEBUG("result.flags 0x%x\n", result.flags);
 
 		if (ct_ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -662,7 +653,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		 * arrived through a tunnel, check if the src IP of the packet is expected.
 		 */
 		if (CALI_F_FROM_HEP && tc_ctx->state->tun_ip && result.tun_ip && result.tun_ip != tc_ctx->state->tun_ip) {
-			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
+			CALI_DEBUG("tunnel src changed from %x to %x\n",
 					bpf_ntohl(result.tun_ip), bpf_ntohl(tc_ctx->state->tun_ip));
 			ct_result_set_flag(result.rc, CT_RES_TUN_SRC_CHANGED);
 		}
@@ -686,7 +677,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		}
 
 		result.tun_ip = v->tun_ip;
-		CALI_CT_DEBUG("tun_ip:%x\n", bpf_ntohl(v->tun_ip));
+		CALI_DEBUG("tun_ip:%x\n", bpf_ntohl(v->tun_ip));
 
 		result.flags = ct_value_get_flags(v);
 
@@ -721,14 +712,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
-			CALI_CT_DEBUG("Hit! NAT REV entry at ingress to connection opener: SNAT.\n");
+			CALI_DEBUG("Hit! NAT REV entry at ingress to connection opener: SNAT.\n");
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
 			result.nat_sip = v->orig_sip;
 			result.nat_port = v->orig_port;
 			result.nat_sport = v->orig_sport;
 		} else {
-			CALI_CT_DEBUG("Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
+			CALI_DEBUG("Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
 
@@ -739,30 +730,30 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		break;
 
 	case CALI_CT_TYPE_NORMAL:
-		CALI_CT_DEBUG("Hit! NORMAL entry.\n");
+		CALI_DEBUG("Hit! NORMAL entry.\n");
 		if (tcp_recycled(syn, v)) {
-			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.\n");
+			CALI_DEBUG("TCP SYN recycles entry, NEW flow.\n");
 			cali_v4_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
-		CALI_CT_VERB("Created: %llu.\n", v->created);
+		CALI_VERB("Created: %llu.\n", v->created);
 		if (tcp_header) {
-			CALI_CT_VERB("Last seen: %llu.\n", v->last_seen);
-			CALI_CT_VERB("A-to-B: seqno %u.\n", bpf_ntohl(v->a_to_b.seqno));
-			CALI_CT_VERB("A-to-B: syn_seen %d.\n", v->a_to_b.syn_seen);
-			CALI_CT_VERB("A-to-B: ack_seen %d.\n", v->a_to_b.ack_seen);
-			CALI_CT_VERB("A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
-			CALI_CT_VERB("A-to-B: rst_seen %d.\n", v->a_to_b.rst_seen);
+			CALI_VERB("Last seen: %llu.\n", v->last_seen);
+			CALI_VERB("A-to-B: seqno %u.\n", bpf_ntohl(v->a_to_b.seqno));
+			CALI_VERB("A-to-B: syn_seen %d.\n", v->a_to_b.syn_seen);
+			CALI_VERB("A-to-B: ack_seen %d.\n", v->a_to_b.ack_seen);
+			CALI_VERB("A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
+			CALI_VERB("A-to-B: rst_seen %d.\n", v->a_to_b.rst_seen);
 		}
-		CALI_CT_VERB("A: approved %d.\n", v->a_to_b.approved);
+		CALI_VERB("A: approved %d.\n", v->a_to_b.approved);
 		if (tcp_header) {
-			CALI_CT_VERB("B-to-A: seqno %u.\n", bpf_ntohl(v->b_to_a.seqno));
-			CALI_CT_VERB("B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
-			CALI_CT_VERB("B-to-A: ack_seen %d.\n", v->b_to_a.ack_seen);
-			CALI_CT_VERB("B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
-			CALI_CT_VERB("B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
+			CALI_VERB("B-to-A: seqno %u.\n", bpf_ntohl(v->b_to_a.seqno));
+			CALI_VERB("B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
+			CALI_VERB("B-to-A: ack_seen %d.\n", v->b_to_a.ack_seen);
+			CALI_VERB("B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
+			CALI_VERB("B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
 		}
-		CALI_CT_VERB("B: approved %d.\n", v->b_to_a.approved);
+		CALI_VERB("B: approved %d.\n", v->b_to_a.approved);
 
 		if (v->a_to_b.approved && v->b_to_a.approved) {
 			result.rc = CALI_CT_ESTABLISHED_BYPASS;
@@ -781,7 +772,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 		break;
 	default:
-		CALI_CT_DEBUG("Hit! UNKNOWN entry type.\n");
+		CALI_DEBUG("Hit! UNKNOWN entry type.\n");
 		goto out_lookup_fail;
 	}
 
@@ -809,28 +800,28 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	} else if (CALI_F_TO_HOST || (skb_from_host(tc_ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
 		/* Source of the packet is the endpoint, so check the src approval flag. */
 		if (src_to_dst->approved) {
-			CALI_CT_VERB("Packet approved by this workload's policy.\n");
+			CALI_VERB("Packet approved by this workload's policy.\n");
 		} else {
 			/* Only approved by the other side (so far)?  Unlike
 			 * TCP we have no way to distinguish packets that open a
 			 * new connection so we have to return NEW here in order
 			 * to invoke policy.
 			 */
-			CALI_CT_DEBUG("Packet not allowed by ingress/egress approval flags (TH).\n");
+			CALI_DEBUG("Packet not allowed by ingress/egress approval flags (TH).\n");
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	} else if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
 		if (dst_to_src->approved) {
 			// Packet was approved by the policy attached to this endpoint.
-			CALI_CT_VERB("Packet approved by this workload's policy.\n");
+			CALI_VERB("Packet approved by this workload's policy.\n");
 		} else {
 			/* Only approved by the other side (so far)?  Unlike
 			 * TCP we have no way to distinguish packets that open a
 			 * new connection so we have to return NEW here in order
 			 * to invoke policy.
 			 */
-			CALI_CT_DEBUG("Packet not allowed by ingress/egress approval flags (FH).\n");
+			CALI_DEBUG("Packet not allowed by ingress/egress approval flags (FH).\n");
 			result.rc = (tcp_header && !syn) ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	}
@@ -860,13 +851,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			if (src_to_dst->ifindex == CT_INVALID_IFINDEX) {
 				// Conntrack entry has no record of the ingress interface, this should
 				// be a response packet but we can't be 100% sure.
-				CALI_CT_DEBUG("First response packet? ifindex=%d\n", ifindex);
+				CALI_DEBUG("First response packet? ifindex=%d\n", ifindex);
 				/* Check if the return packet follow the same path as the request. */
 				same_if = dst_to_src->ifindex == ifindex;
 			} else {
 				// The interface has changed; either a change to routing or someone's doing
 				// something nasty.
-				CALI_CT_DEBUG("CT RPF failed ifindex %d != %d\n",
+				CALI_DEBUG("CT RPF failed ifindex %d != %d\n",
 						src_to_dst->ifindex, ifindex);
 			}
 			/* Do not worry about packets returning from the same direction as
@@ -883,7 +874,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			/* if the devices do not match, we got here without bypassing the
 			 * host IP stack and RPF check allowed it, so update our records.
 			 */
-			CALI_CT_DEBUG("Updating ifindex from %d to %d\n",
+			CALI_DEBUG("Updating ifindex from %d to %d\n",
 					src_to_dst->ifindex, ifindex);
 			src_to_dst->ifindex = ifindex;
 		}
@@ -898,27 +889,27 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	}
 
 	if (syn) {
-		CALI_CT_DEBUG("packet is SYN\n");
+		CALI_DEBUG("packet is SYN\n");
 		ct_result_set_flag(result.rc, CT_RES_SYN);
 	}
 
 
-	CALI_CT_DEBUG("result: 0x%x\n", result.rc);
+	CALI_DEBUG("result: 0x%x\n", result.rc);
 
 	if (related) {
 		ct_result_set_flag(result.rc, CT_RES_RELATED);
-		CALI_CT_DEBUG("result: related\n");
+		CALI_DEBUG("result: related\n");
 	}
 
 	return result;
 
 out_lookup_fail:
 	result.rc = CALI_CT_NEW;
-	CALI_CT_DEBUG("result: NEW.\n");
+	CALI_DEBUG("result: NEW.\n");
 	return result;
 out_invalid:
 	result.rc = CALI_CT_INVALID;
-	CALI_CT_DEBUG("result: INVALID.\n");
+	CALI_DEBUG("result: INVALID.\n");
 	return result;
 }
 

@@ -37,9 +37,21 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 	__u64 now = 0;
 
 	nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
-	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",
-		(int)bpf_ntohl(nat_key.addr), (int)dport,
-		(int)(nat_key.protocol));
+
+	switch (nat_key.protocol) {
+	case IPPROTO_UDP:
+		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d udp\n", (int)bpf_ntohl(nat_key.addr), (int)dport);
+		break;
+	case IPPROTO_TCP:
+		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d tcp\n", (int)bpf_ntohl(nat_key.addr), (int)dport);
+		break;
+	case IPPROTO_ICMP:
+		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d icmp\n", (int)bpf_ntohl(nat_key.addr), (int)dport);
+		break;
+	default:
+		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d other\n", (int)bpf_ntohl(nat_key.addr), (int)dport);
+		break;
+	}
 
 	if (!nat_lv1_val) {
 		struct cali_rt *rt;
@@ -114,7 +126,8 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		if ((local_traffic && (nat_lv1_val->flags & NAT_FLG_INTERNAL_LOCAL)) ||
 				(!local_traffic && (nat_lv1_val->flags & NAT_FLG_EXTERNAL_LOCAL))) {
 			count = nat_lv1_val->local;
-			CALI_DEBUG("local_traffic %d count %d flags 0x%x\n", local_traffic, count, nat_lv1_val->flags);
+			CALI_DEBUG("local_traffic %d\n", local_traffic);
+			CALI_DEBUG("count %d flags 0x%x\n", count, nat_lv1_val->flags);
 		}
 	}
 
