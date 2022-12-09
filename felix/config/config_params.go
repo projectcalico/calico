@@ -25,14 +25,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
 	"github.com/projectcalico/calico/felix/idalloc"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 )
 
@@ -65,7 +66,7 @@ const (
 type Source uint8
 
 const (
-	Default = iota
+	Default Source = iota
 	DatastoreGlobal
 	DatastorePerHost
 	ConfigFile
@@ -323,9 +324,11 @@ type Config struct {
 
 	DisableConntrackInvalidCheck bool `config:"bool;false"`
 
-	HealthEnabled                     bool   `config:"bool;false"`
-	HealthPort                        int    `config:"int(0,65535);9099"`
-	HealthHost                        string `config:"host-address;localhost"`
+	HealthEnabled          bool                     `config:"bool;false"`
+	HealthPort             int                      `config:"int(0,65535);9099"`
+	HealthHost             string                   `config:"host-address;localhost"`
+	HealthTimeoutOverrides map[string]time.Duration `config:"keydurationlist;;"`
+
 	PrometheusMetricsEnabled          bool   `config:"bool;false"`
 	PrometheusMetricsHost             string `config:"host-address;"`
 	PrometheusMetricsPort             int    `config:"int(0,65535);9091"`
@@ -432,7 +435,45 @@ type ProtoPort struct {
 	Port     uint16
 }
 
-// Load parses and merges the rawData from one particular source into this config object.
+func (config *Config) ToConfigUpdate() *proto.ConfigUpdate {
+	var buf proto.ConfigUpdate
+
+	buf.SourceToRawConfig = map[uint32]*proto.RawConfig{}
+	for source, c := range config.sourceToRawConfig {
+		kvs := map[string]string{}
+		for k, v := range c {
+			kvs[k] = v
+		}
+		buf.SourceToRawConfig[uint32(source)] = &proto.RawConfig{
+			Source: source.String(),
+			Config: kvs,
+		}
+	}
+
+	buf.Config = map[string]string{}
+	for k, v := range config.rawValues {
+		buf.Config[k] = v
+	}
+
+	return &buf
+}
+
+func (config *Config) UpdateFromConfigUpdate(configUpdate *proto.ConfigUpdate) (changedFields set.Set[string], err error) {
+	log.Debug("Updating configuration from calculation graph message.")
+	config.sourceToRawConfig = map[Source]map[string]string{}
+	for sourceInt, c := range configUpdate.GetSourceToRawConfig() {
+		source := Source(sourceInt)
+		config.sourceToRawConfig[source] = map[string]string{}
+		for k, v := range c.GetConfig() {
+			config.sourceToRawConfig[source][k] = v
+		}
+	}
+	// Note: the ConfigUpdate also carries the rawValues, but we recalculate those by calling resolve(),
+	// which tells us if anything changed as a result.
+	return config.resolve()
+}
+
+// UpdateFrom parses and merges the rawData from one particular source into this config object.
 // If there is a config value already loaded from a higher-priority source, then
 // the new value will be ignored (after validation).
 func (config *Config) UpdateFrom(rawData map[string]string, source Source) (changed bool, err error) {
@@ -453,8 +494,11 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 	}
 	config.sourceToRawConfig[source] = rawDataCopy
 
-	changed, err = config.resolve()
-	return
+	changedFields, err := config.resolve()
+	if err != nil {
+		return
+	}
+	return changedFields.Len() > 0, nil
 }
 
 func (config *Config) IsLeader() bool {
@@ -511,7 +555,28 @@ func (config *Config) KubernetesProvider() Provider {
 	return ProviderNone
 }
 
-func (config *Config) resolve() (changed bool, err error) {
+func (config *Config) applyDefaults() {
+	for _, param := range knownParams {
+		param.setDefault(config)
+	}
+	hostname, err := names.Hostname()
+	if err != nil {
+		log.Warningf("Failed to get hostname from kernel, "+
+			"trying HOSTNAME variable: %v", err)
+		hostname = strings.ToLower(os.Getenv("HOSTNAME"))
+	}
+	config.FelixHostname = hostname
+}
+
+func (config *Config) resolve() (changedFields set.Set[string], err error) {
+	log.Debug("Resolving configuration from different sources...")
+
+	// Take a copy, so we can compare the final post-parsing results at the end.
+	oldConfigCopy := config.Copy()
+
+	// Start with fresh defaults.
+	config.applyDefaults()
+
 	newRawValues := make(map[string]string)
 	// Map from lower-case version of name to the highest-priority source found so far.
 	// We use the lower-case version of the name since we can calculate it both for
@@ -593,9 +658,67 @@ func (config *Config) resolve() (changed bool, err error) {
 			nameToSource[lowerCaseName] = source
 		}
 	}
-	changed = !reflect.DeepEqual(newRawValues, config.rawValues)
+
+	log.WithField("changedFields", changedFields).Debug("Calculated changed fields.")
+	changedFields = set.New[string]()
+	kind := reflect.TypeOf(Config{})
+	for ii := 0; ii < kind.NumField(); ii++ {
+		field := kind.Field(ii)
+		tag := field.Tag.Get("config")
+		if tag == "" {
+			continue
+		}
+
+		oldV := reflect.ValueOf(oldConfigCopy).Elem().Field(ii).Interface()
+		newV := reflect.ValueOf(config).Elem().Field(ii).Interface()
+
+		if SafeParamsEqual(oldV, newV) {
+			continue
+		}
+		changedFields.Add(field.Name)
+	}
+
 	config.rawValues = newRawValues
 	return
+}
+
+// SafeParamsEqual compares two values drawn from the types of our config fields.  For the most part
+// it uses reflect.DeepEquals() but some types (such as regexps and IPs) are handled inline to avoid pitfalls.
+func SafeParamsEqual(a any, b any) bool {
+	if (a == nil) != (b == nil) {
+		return false
+	}
+	switch a := a.(type) {
+	case *regexp.Regexp:
+		b := b.(*regexp.Regexp)
+		if (a == nil) || (b == nil) {
+			return a == b
+		}
+		return a.String() == b.String()
+	case []*regexp.Regexp:
+		b := b.([]*regexp.Regexp)
+		if len(a) != len(b) {
+			return false
+		}
+		for i := 0; i < len(a); i++ {
+			if (a[i] == nil) || (b[i] == nil) {
+				if a[i] == b[i] {
+					continue
+				}
+				return false
+			}
+			if a[i].String() != b[i].String() {
+				return false
+			}
+		}
+		return true
+	case net.IP:
+		// IP has its own Equal method.
+		b := b.(net.IP)
+		return a.Equal(b)
+	}
+
+	return reflect.DeepEqual(a, b)
 }
 
 func (config *Config) setBy(name string, source Source) bool {
@@ -844,6 +967,8 @@ func loadParams() {
 			param = &RouteTableRangesParam{}
 		case "keyvaluelist":
 			param = &KeyValueListParam{}
+		case "keydurationlist":
+			param = &KeyDurationListParam{}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
 		}
@@ -862,6 +987,7 @@ func loadParams() {
 		}
 
 		if defaultStr != "" {
+			metadata.DefaultString = defaultStr
 			if strings.Contains(flags, "skip-default-validation") {
 				metadata.Default = defaultStr
 			} else {
@@ -889,7 +1015,11 @@ func (config *Config) UseNodeResourceUpdates() bool {
 }
 
 func (config *Config) RawValues() map[string]string {
-	return config.rawValues
+	cp := map[string]string{}
+	for k, v := range config.rawValues {
+		cp[k] = v
+	}
+	return cp
 }
 
 func (config *Config) SetLoadClientConfigFromEnvironmentFunction(fnc func() (*apiconfig.CalicoAPIConfig, error)) {
@@ -941,17 +1071,8 @@ func New() *Config {
 		sourceToRawConfig: map[Source]map[string]string{},
 		internalOverrides: map[string]string{},
 	}
-	for _, param := range knownParams {
-		param.setDefault(p)
-	}
-	hostname, err := names.Hostname()
-	if err != nil {
-		log.Warningf("Failed to get hostname from kernel, "+
-			"trying HOSTNAME variable: %v", err)
-		hostname = strings.ToLower(os.Getenv("HOSTNAME"))
-	}
-	p.FelixHostname = hostname
 	p.loadClientConfigFromEnvironment = apiconfig.LoadClientConfigFromEnvironment
+	p.applyDefaults()
 
 	return p
 }

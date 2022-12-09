@@ -56,6 +56,7 @@ func (r *healthRecorder) RegisterReporter(name string, reports *health.HealthRep
 func (r *healthRecorder) Report(name string, report *health.HealthReport) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
+	log.WithField("name", name).WithField("report", report).Info("Health report")
 	if name != r.expectedName {
 		return
 	}

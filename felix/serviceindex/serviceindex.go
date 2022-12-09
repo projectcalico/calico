@@ -17,6 +17,7 @@ package serviceindex
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -45,6 +46,9 @@ type ServiceIndex struct {
 	// Callback functions
 	OnMemberAdded   ServiceMatchCallback
 	OnMemberRemoved ServiceMatchCallback
+
+	OnAlive        func()
+	lastLiveReport time.Time
 }
 
 func NewServiceIndex() *ServiceIndex {
@@ -57,6 +61,8 @@ func NewServiceIndex() *ServiceIndex {
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member labelindex.IPSetMember) {},
 		OnMemberRemoved: func(ipSetID string, member labelindex.IPSetMember) {},
+
+		OnAlive: func() {},
 	}
 	return &idx
 }
@@ -99,6 +105,7 @@ func (idx *ServiceIndex) UpdateEndpointSlice(es *discovery.EndpointSlice) {
 		// Service contributing these endpoints is active. We need to determine
 		// if any endpoints have changed, and if so send through membership updates.
 		for _, ipSet := range ipSets {
+			idx.maybeReportLive()
 			newIPSetContribution := idx.membersFromEndpointSlice(es, ipSet.IncludePorts())
 			oldIPSetContributions := idx.membersFromEndpointSlice(cached, ipSet.IncludePorts())
 
@@ -152,6 +159,7 @@ func (idx *ServiceIndex) DeleteEndpointSlice(key model.ResourceKey) {
 	svc := serviceName(es)
 	if ipSets, ok := idx.activeIPSetsByService[svc]; ok {
 		for _, ipSet := range ipSets {
+			idx.maybeReportLive()
 			// Active service has had an EndpointSlice deleted. Iterate all the ip set members
 			// contributed by this endpoint slice and decref them. For those which go from 1 to 0,
 			// we should send a membership removal from the data plane.
@@ -281,6 +289,7 @@ func (idx *ServiceIndex) UpdateIPSet(id string, serviceName string) {
 		members := idx.membersFromEndpointSlice(eps, as.IncludePorts())
 		log.Debugf("New active service IP set, EndpointSlices contributed members: %+v", members)
 		for _, m := range members {
+			idx.maybeReportLive()
 			refCount := as.memberToRefCount[m]
 			if refCount == 0 {
 				// This member hasn't been sent to the data plane yet. Send it.
@@ -309,6 +318,15 @@ func (idx *ServiceIndex) DeleteIPSet(id string) {
 
 	delete(idx.activeIPSetsByID, id)
 	delete(idx.activeIPSetsByService, as.ServiceName)
+}
+
+func (idx *ServiceIndex) maybeReportLive() {
+	// We report from some tight loops so rate limit our reports.
+	if time.Since(idx.lastLiveReport) < 100*time.Millisecond {
+		return
+	}
+	idx.OnAlive()
+	idx.lastLiveReport = time.Now()
 }
 
 // ipSetData represents an active service and state regarding its

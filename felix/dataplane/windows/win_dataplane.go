@@ -130,8 +130,9 @@ type WindowsDataplane struct {
 }
 
 const (
-	healthName     = "win_dataplane"
+	healthName     = "WindowsDataplaneMainLoop"
 	healthInterval = 10 * time.Second
+	healthTimeout  = 90 * time.Second
 )
 
 // Interface for Managers. Each Manager is responsible for processing updates from felix and
@@ -205,7 +206,7 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 		config.HealthAggregator.RegisterReporter(
 			healthName,
 			&health.HealthReport{Live: true, Ready: true},
-			healthInterval*2,
+			healthTimeout,
 		)
 	}
 

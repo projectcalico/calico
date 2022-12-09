@@ -19,11 +19,11 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	k8sv1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	k8sv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -766,6 +766,11 @@ func init() {
 
 		Entry("should reject an invalid MTUIfacePattern value '*'", api.FelixConfigurationSpec{MTUIfacePattern: "*"}, false),
 		Entry("should accept a valid MTUIfacePattern value 'eth.*'", api.FelixConfigurationSpec{MTUIfacePattern: "eth.*"}, true),
+
+		Entry("should allow HealthTimeoutOverride 0", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: metav1.Duration{Duration: 0}}}}, true),
+		Entry("should reject HealthTimeoutOverride -1", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: metav1.Duration{Duration: -1}}}}, false),
+		Entry("should reject HealthTimeoutOverride with bad name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "%", Timeout: metav1.Duration{Duration: 10}}}}, false),
+		Entry("should reject HealthTimeoutOverride with no name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "", Timeout: metav1.Duration{Duration: 10}}}}, false),
 
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),
