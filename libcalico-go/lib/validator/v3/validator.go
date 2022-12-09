@@ -27,8 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
-	"github.com/projectcalico/calico/felix/stringutils"
-
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -179,7 +177,6 @@ func init() {
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("keyValueList", validateKeyValueList)
-	registerFieldValidator("keyDurationList", validateKeyDurationList)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
 	registerFieldValidator("ipType", validateIPType)
 
@@ -597,23 +594,6 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 		if kv == nil {
 			return false
 		}
-	}
-
-	return true
-}
-
-// validateKeyDurationList validates the field is a comma separated list of key=duration pairs.
-func validateKeyDurationList(fl validator.FieldLevel) bool {
-	n := fl.Field().String()
-	log.Debugf("Validate KeyDurationList: %s", n)
-
-	if len(strings.TrimSpace(n)) == 0 {
-		return true
-	}
-
-	_, err := stringutils.ParseKeyDurationList(n)
-	if err != nil {
-		return false
 	}
 
 	return true

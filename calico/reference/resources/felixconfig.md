@@ -178,7 +178,7 @@ spec:
   ...
 ```
 
-A timeout value of 0 disbales the timeout.
+A timeout value of 0 disables the timeout.
 
 #### ProtoPort
 
