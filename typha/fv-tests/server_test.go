@@ -20,7 +20,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -1261,7 +1260,7 @@ var _ = Describe("with server requiring TLS", func() {
 
 		// Create a temporary directory for certificates.
 		var err error
-		certDir, err = ioutil.TempDir("", "typhafv")
+		certDir, err = os.MkdirTemp("", "typhafv")
 		tlsutils.PanicIfErr(err)
 
 		// Trusted CA.

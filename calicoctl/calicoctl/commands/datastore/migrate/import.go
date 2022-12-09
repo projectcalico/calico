@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -188,7 +187,7 @@ func splitImportFile(filename string) ([]byte, []byte, []byte, error) {
 		fname = os.Stdin.Name()
 	}
 
-	b, err := ioutil.ReadFile(fname)
+	b, err := os.ReadFile(fname)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -305,7 +304,7 @@ func updateClusterInfo(ctx context.Context, c client.Interface, clusterInfoJson 
 
 func updateV3Resources(cfg *apiconfig.CalicoAPIConfig, data []byte) error {
 	// Create tempfile so the v3 resources can be created using Apply
-	tempfile, err := ioutil.TempFile("", "v3migration")
+	tempfile, err := os.CreateTemp("", "v3migration")
 	if err != nil {
 		return fmt.Errorf("Error while creating temporary v3 migration file: %s\n", err)
 	}
@@ -316,7 +315,7 @@ func updateV3Resources(cfg *apiconfig.CalicoAPIConfig, data []byte) error {
 	}
 
 	// Create a tempfile for the config so QPS will be overwritten
-	tempConfigFile, err := ioutil.TempFile("", "qpsconfig")
+	tempConfigFile, err := os.CreateTemp("", "qpsconfig")
 	if err != nil {
 		return fmt.Errorf("Error while creating temporary v3 migration config file: %s\n", err)
 	}
