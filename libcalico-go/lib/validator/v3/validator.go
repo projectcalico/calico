@@ -1200,6 +1200,10 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
 			reason("ASNumber field must be empty when PeerSelector is specified"), "")
 	}
+	if ps.ReachablyBy != "" && ps.PeerIP == "" {
+		structLevel.ReportError(reflect.ValueOf(ps.ReachablyBy), "ReachablyBy", "",
+			reason("ReachablyBy field must be empty when PeerIP is empty"), "")
+	}
 }
 
 func validateEndpointPort(structLevel validator.StructLevel) {

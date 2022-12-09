@@ -252,6 +252,11 @@ protocol bgp Global_{{$id}} from bgp_template {
   allow local as {{$data.num_allow_local_as}};
 {{- end}}
 }
+{{- if and $data.ip $data.reachable_by}}
+protocol static {
+  route {{$data.ip}} via {{$data.reachable_by}};
+}
+{{- end}}
 {{- end}}
 {{end}}
 {{else}}# No global peers configured.{{end}}
@@ -298,6 +303,11 @@ protocol bgp Node_{{$id}} from bgp_template {
   allow local as {{$data.num_allow_local_as}};
 {{- end}}
 }
+{{- if and $data.ip $data.reachable_by}}
+protocol static {
+  route {{$data.ip}} via {{$data.reachable_by}};
+}
+{{- end}}
 {{- end}}
 {{end}}
 {{else}}# No node-specific peers configured.{{end}}

@@ -1541,6 +1541,20 @@ func init() {
 			NodeSelector: "has(mylabel)",
 			PeerSelector: "has(mylabel)",
 		}, true),
+		Entry("should reject BGPPeer with ReachablyBy but without PeerIP", api.BGPPeerSpec{
+			ReachableBy: ipv4_2,
+		}, false),
+		Entry("should reject BGPPeer with ReachablyBy (IPv6) but without PeerIP", api.BGPPeerSpec{
+			ReachableBy: ipv6_2,
+		}, false),
+		Entry("should accept BGPPeer with ReachablyBy and PeerIP", api.BGPPeerSpec{
+			PeerIP:      ipv4_1,
+			ReachableBy: ipv4_2,
+		}, true),
+		Entry("should accept BGPPeer with ReachablyBy (IPv6) and PeerIP (IPv6)", api.BGPPeerSpec{
+			PeerIP:      ipv6_1,
+			ReachableBy: ipv6_2,
+		}, true),
 		Entry("should accept BGPPeerSpec with Password", api.BGPPeerSpec{
 			PeerIP: ipv4_1,
 			Password: &api.BGPPassword{
