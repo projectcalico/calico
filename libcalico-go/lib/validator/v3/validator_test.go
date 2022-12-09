@@ -503,6 +503,12 @@ func init() {
 				NodeMeshMaxRestartTime: &v1.Duration{Duration: 200 * time.Second},
 			}, false,
 		),
+		Entry("should accept valid interface names",
+			api.BGPConfigurationSpec{
+				IgnoredInterfaces: []string{"valid_iface*", "interface_name"},
+			}, true,
+		),
+		Entry("should reject invalid interface name", api.BGPConfigurationSpec{IgnoredInterfaces: []string{"*"}}, false),
 
 		// (API) IP version.
 		Entry("should accept IP version 4", api.Rule{Action: "Allow", IPVersion: &V4}, true),

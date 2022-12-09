@@ -154,6 +154,12 @@ spec:
                       type: string
                   type: object
                 type: array
+              ignoredInterfaces:
+                description: IgnoredInterfaces indicates the network interfaces that
+                  needs to be excluded when reading device routes.
+                items:
+                  type: string
+                type: array
               listenPort:
                 description: ListenPort is the port where BGP protocol should listen.
                   Defaults to 179

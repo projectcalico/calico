@@ -60,6 +60,7 @@ type Workload struct {
 	MTU                   int
 	isRunning             bool
 	isSpoofing            bool
+	listenAnyIP           bool
 }
 
 func (w *Workload) GetIP() string {
@@ -106,22 +107,32 @@ func (w *Workload) Stop() {
 	}
 }
 
-func RunWithMTU(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu int) (w *Workload) {
-	w, err := run(c, name, profile, ip, ports, protocol, mtu)
+func Run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) (w *Workload) {
+	w, err := run(c, name, profile, ip, ports, protocol, opts...)
 	if err != nil {
 		log.WithError(err).Info("Starting workload failed, retrying")
-		w, err = run(c, name, profile, ip, ports, protocol, mtu)
+		w, err = run(c, name, profile, ip, ports, protocol, opts...)
 	}
 	Expect(err).NotTo(HaveOccurred())
 
 	return w
 }
 
-func Run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w *Workload) {
-	return RunWithMTU(c, name, profile, ip, ports, protocol, defaultMTU)
+type Opt func(*Workload)
+
+func WithMTU(mtu int) Opt {
+	return func(w *Workload) {
+		w.MTU = mtu
+	}
 }
 
-func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu ...int) *Workload {
+func WithListenAnyIP() Opt {
+	return func(w *Workload) {
+		w.listenAnyIP = true
+	}
+}
+
+func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) *Workload {
 	workloadIdx++
 	n := fmt.Sprintf("%s-idx%v", name, workloadIdx)
 	interfaceName := conversion.NewConverter().VethNameForWorkload(profile, n)
@@ -148,11 +159,6 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu
 	wep.Spec.InterfaceName = interfaceName
 	wep.Spec.Profiles = []string{profile}
 
-	specifiedMTU := defaultMTU
-	if len(mtu) == 1 && mtu[0] > 0 {
-		specifiedMTU = mtu[0]
-	}
-
 	workload := &Workload{
 		C:                  c.Container,
 		Name:               n,
@@ -163,14 +169,19 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu
 		Ports:              ports,
 		Protocol:           protocol,
 		WorkloadEndpoint:   wep,
-		MTU:                specifiedMTU,
+		MTU:                defaultMTU,
 	}
+
+	for _, o := range opts {
+		o(workload)
+	}
+
 	c.Workloads = append(c.Workloads, workload)
 	return workload
 }
 
-func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, mtu int) (w *Workload, err error) {
-	w = New(c, name, profile, ip, ports, protocol, mtu)
+func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) (w *Workload, err error) {
+	w = New(c, name, profile, ip, ports, protocol, opts...)
 	return w, w.Start()
 }
 
@@ -184,21 +195,23 @@ func (w *Workload) Start() error {
 		protoArg = "--protocol=" + w.Protocol
 	}
 
-	var mtuArg string
-	if w.MTU != 0 {
-		mtuArg = fmt.Sprintf("--mtu=%d", w.MTU)
-	}
-	w.runCmd = utils.Command("docker", "exec", w.C.Name,
-		"sh", "-c",
-		fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v' %v",
-			w.Name,
-			protoArg,
-			w.InterfaceName,
-			w.IP,
-			w.Ports,
-			mtuArg,
-		),
+	command := fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v'",
+		w.Name,
+		protoArg,
+		w.InterfaceName,
+		w.IP,
+		w.Ports,
 	)
+
+	if w.MTU != 0 {
+		command += fmt.Sprintf(" --mtu=%d", w.MTU)
+	}
+
+	if w.listenAnyIP {
+		command += " --listen-any-ip"
+	}
+
+	w.runCmd = utils.Command("docker", "exec", w.C.Name, "sh", "-c", command)
 	w.outPipe, err = w.runCmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("Getting StdoutPipe failed: %v", err)

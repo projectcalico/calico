@@ -10,20 +10,22 @@ This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}}
 
 ### Value
 
-Use this quickstart to quickly and easily try {{site.prodname}} features. To deploy a cluster suitable for production, refer to [{{site.prodname}} on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
+Use this quickstart to quickly and easily try {{site.prodname}} features. To deploy a cluster suitable for production, refer to [{{site.prodname}} on Kubernetes]({{site.baseurl}}/getting-started/kubernetes/).
 
 ### Before you begin
 
-- Make sure you have a linux host that meets the following requirements:
+**Required**
+
+- A Linux host that meets the following requirements:
   - x86-64, arm64, ppc64le, or s390x processor
   - 2CPU
   - 2GB RAM
   - 10GB free disk space
   - RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 9.x+
 
-- Ensure that {{site.prodname}} can manage `cali` and `tunl` interfaces on the host.
-  If NetworkManager is present on the host, refer to
-  [Configure NetworkManager](../../maintenance/troubleshoot/troubleshooting#configure-networkmanager).
+- {{site.prodname}} can manage `cali` and `tunl` interfaces on the host
+  
+    If NetworkManager is present on the host, see [Configure NetworkManager](../../maintenance/troubleshoot/troubleshooting#configure-networkmanager).
 
 ### Concepts
 

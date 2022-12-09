@@ -1153,9 +1153,14 @@ func isLinkNotFoundError(err error) bool {
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
 func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
+
+	if m.hostIP == nil {
+		// Do not bother and wait
+		return fmt.Errorf("unknown host IP")
+	}
+
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
-	// Host side of the veth is always configured as 169.254.1.1.
-	ap.HostIP = calicoRouterIP
+	ap.HostIP = m.hostIP
 	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
 	// * Hence it is safe to set the tunnel mtu same as veth mtu
 	ap.TunnelMTU = uint16(m.vxlanMTU)
@@ -1235,6 +1240,12 @@ func (m *bpfEndpointManager) ifaceIsUp(ifaceName string) (up bool) {
 }
 
 func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.HostEndpoint, polDirection PolDirection) error {
+
+	if m.hostIP == nil {
+		// Do not bother and wait
+		return fmt.Errorf("unknown host IP")
+	}
+
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
