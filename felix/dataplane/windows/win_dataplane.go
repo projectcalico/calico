@@ -130,7 +130,7 @@ type WindowsDataplane struct {
 }
 
 const (
-	healthName     = "windows-dataplane-main-loop"
+	healthName     = "WindowsDataplaneMainLoop"
 	healthInterval = 10 * time.Second
 	healthTimeout  = 90 * time.Second
 )

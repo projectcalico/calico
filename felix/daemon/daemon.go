@@ -155,7 +155,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	// config that indicates that.
 	healthAggregator := health.NewHealthAggregator()
 
-	const healthName = "felix-startup"
+	const healthName = "FelixStartup"
 
 	// Register this function as a reporter of liveness and readiness, with no timeout.
 	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)

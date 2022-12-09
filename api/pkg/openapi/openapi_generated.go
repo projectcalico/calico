@@ -59,6 +59,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSetSpec":               schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPMatch":                          schema_pkg_apis_projectcalico_v3_HTTPMatch(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPPath":                           schema_pkg_apis_projectcalico_v3_HTTPPath(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride":              schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpoint":                       schema_pkg_apis_projectcalico_v3_HostEndpoint(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointList":                   schema_pkg_apis_projectcalico_v3_HostEndpointList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointSpec":                   schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref),
@@ -2245,9 +2246,16 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"healthTimeoutOverrides": {
 						SchemaProps: spec.SchemaProps{
-							Description: "HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overriden; example: \"internal-dataplane-main-loop=30s,calculation-graph=2m\".  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
-							Type:        []string{"string"},
-							Format:      "",
+							Description: "HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overriden.  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride"),
+									},
+								},
+							},
 						},
 					},
 					"prometheusMetricsEnabled": {
@@ -2766,7 +2774,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -3148,6 +3156,34 @@ func schema_pkg_apis_projectcalico_v3_HTTPPath(ref common.ReferenceCallback) com
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"timeout": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+				Required: []string{"name", "timeout"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 

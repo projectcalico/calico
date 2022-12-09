@@ -246,6 +246,36 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		)
 	})
 
+	It("should handle HealthTimeoutOVerrides", func() {
+		cc := updateprocessors.NewFelixConfigUpdateProcessor()
+		By("converting a per-node felix KVPair with certain values and checking for the correct number of fields")
+		res := apiv3.NewFelixConfiguration()
+		res.Spec.HealthTimeoutOverrides = []apiv3.HealthTimeoutOverride{
+			{
+				Name:    "Foo",
+				Timeout: metav1.Duration{Duration: 20 * time.Second},
+			},
+			{
+				Name:    "Bar",
+				Timeout: metav1.Duration{Duration: 25 * time.Second},
+			},
+		}
+		expected := map[string]interface{}{
+			"HealthTimeoutOverrides": "Foo=20s,Bar=25s",
+		}
+		kvps, err := cc.Process(&model.KVPair{
+			Key:   perNodeFelixKey,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
+	})
+
 	It("should handle cluster config string slice field", func() {
 		cc := updateprocessors.NewClusterInfoUpdateProcessor()
 		By("converting a global cluster info KVPair with values assigned")

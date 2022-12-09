@@ -252,10 +252,10 @@ type FelixConfigurationSpec struct {
 	HealthHost    *string `json:"healthHost,omitempty"`
 	HealthPort    *int    `json:"healthPort,omitempty"`
 	// HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be
-	// overriden; example: "internal-dataplane-main-loop=30s,calculation-graph=2m".  This is useful for
-	// working around "false positive" liveness timeouts that can occur in particularly stressful workloads
-	// or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.
-	HealthTimeoutOverrides string `json:"healthTimeoutOverrides,omitempty" validate:"omitempty,keyDurationList"`
+	// overriden.  This is useful for working around "false positive" liveness timeouts that can occur
+	// in particularly stressful workloads or if CPU is constrained.  For a list of active
+	// subcomponents, see Felix's logs.
+	HealthTimeoutOverrides []HealthTimeoutOverride `json:"healthTimeoutOverrides,omitempty" validate:"omitempty,dive"`
 
 	// PrometheusMetricsEnabled enables the Prometheus metrics server in Felix if set to true. [Default: false]
 	PrometheusMetricsEnabled *bool `json:"prometheusMetricsEnabled,omitempty"`
@@ -502,6 +502,11 @@ type FelixConfigurationSpec struct {
 	//
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
+}
+
+type HealthTimeoutOverride struct {
+	Name    string          `json:"name"`
+	Timeout metav1.Duration `json:"timeout"`
 }
 
 type RouteTableRange struct {

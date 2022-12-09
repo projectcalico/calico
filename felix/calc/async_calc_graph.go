@@ -89,7 +89,7 @@ type AsyncCalcGraph struct {
 }
 
 const (
-	healthName     = "calculation-graph"
+	healthName     = "CalculationGraph"
 	healthInterval = 10 * time.Second
 	healthTimeout  = 30 * time.Second
 )

@@ -1144,12 +1144,22 @@ spec:
               healthPort:
                 type: integer
               healthTimeoutOverrides:
-                description: 'HealthTimeoutOverrides allows the internal watchdog
-                  timeouts of individual subcomponents to be overriden; example: "internal-dataplane-main-loop=30s,calculation-graph=2m".  This
-                  is useful for working around "false positive" liveness timeouts
-                  that can occur in particularly stressful workloads or if CPU is
-                  constrained.  For a list of active subcomponents, see Felix''s logs.'
-                type: string
+                description: HealthTimeoutOverrides allows the internal watchdog timeouts
+                  of individual subcomponents to be overriden.  This is useful for
+                  working around "false positive" liveness timeouts that can occur
+                  in particularly stressful workloads or if CPU is constrained.  For
+                  a list of active subcomponents, see Felix's logs.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    timeout:
+                      type: string
+                  required:
+                  - name
+                  - timeout
+                  type: object
+                type: array
               interfaceExclude:
                 description: 'InterfaceExclude is a comma-separated list of interfaces
                   that Felix should exclude when monitoring for host endpoints. The
