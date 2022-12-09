@@ -217,7 +217,6 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		It("should run healthchecks on localhost by default", func() {
 			startFelix("", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20s"})
 			Eventually(checkHealthInternally, "10s", "100ms").ShouldNot(HaveOccurred())
-			Fail("Foo")
 		})
 
 		It("should run support running healthchecks on '127.0.0.1'", func() {
