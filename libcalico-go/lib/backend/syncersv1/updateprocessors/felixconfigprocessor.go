@@ -41,12 +41,13 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 			"FailsafeOutboundHostPorts": protoPortSliceToString,
 			"RouteTableRange":           routeTableRangeToString,
 			"RouteTableRanges":          routeTableRangeListToString,
+			"HealthTimeoutOverrides":    healthTimeoutOverridesToString,
 		},
 	)
 }
 
 // Convert a slice of ProtoPorts to the string representation required by Felix.
-var protoPortSliceToString = func(value interface{}) interface{} {
+func protoPortSliceToString(value interface{}) interface{} {
 	pps := value.([]apiv3.ProtoPort)
 	if len(pps) == 0 {
 		return "none"
@@ -72,7 +73,7 @@ var protoPortSliceToString = func(value interface{}) interface{} {
 
 // Converts multiple route table ranges to its string config representation.
 // e.g. RouteTableRanges{{Min: 0, Max: 250}, {Min: 255, Max: 3000}} => "0-250,255-3000"
-var routeTableRangeListToString = func(value interface{}) interface{} {
+func routeTableRangeListToString(value interface{}) interface{} {
 	ranges := value.(apiv3.RouteTableRanges)
 	rangesStr := make([]string, 0)
 	for _, r := range ranges {
@@ -83,7 +84,19 @@ var routeTableRangeListToString = func(value interface{}) interface{} {
 
 // Converts a route table range to its string config representation.
 // e.g. RouteTableRange{Min: 0, Max: 250} => "0-250"
-var routeTableRangeToString = func(value interface{}) interface{} {
+func routeTableRangeToString(value interface{}) interface{} {
 	r := value.(apiv3.RouteTableRange)
 	return fmt.Sprintf("%d-%d", r.Min, r.Max)
+}
+
+func healthTimeoutOverridesToString(value interface{}) interface{} {
+	htos := value.([]apiv3.HealthTimeoutOverride)
+	if len(htos) == 0 {
+		return nil
+	}
+	var parts []string
+	for _, hto := range htos {
+		parts = append(parts, hto.Name+"="+hto.Timeout.Duration.String())
+	}
+	return strings.Join(parts, ",")
 }

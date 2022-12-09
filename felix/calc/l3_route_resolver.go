@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -67,6 +68,9 @@ type L3RouteResolver struct {
 	workloadIDToCIDRs      map[model.WorkloadEndpointKey][]cnet.IPNet
 	useNodeResourceUpdates bool
 	routeSource            string
+
+	OnAlive        func()
+	lastLiveReport time.Time
 }
 
 type l3rrNodeInfo struct {
@@ -161,7 +165,7 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 
 func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeResourceUpdates bool, routeSource string) *L3RouteResolver {
 	logrus.Info("Creating L3 route resolver")
-	return &L3RouteResolver{
+	l3rr := &L3RouteResolver{
 		myNodeName: hostname,
 		callbacks:  callbacks,
 
@@ -175,6 +179,8 @@ func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeRes
 		routeSource:            routeSource,
 		nodeRoutes:             newNodeRoutes(),
 	}
+	l3rr.trie.OnAlive = l3rr.maybeReportLive
+	return l3rr
 }
 
 func (c *L3RouteResolver) RegisterWith(allUpdDispatcher, localDispatcher *dispatcher.Dispatcher) {
@@ -272,6 +278,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		// Now scan the old routes, looking for any that are no-longer associated with the block.
 		// Remove no longer active routes from the cache and queue up deletions.
 		cachedRoutes.Iter(func(r nodenameRoute) error {
+			c.maybeReportLive()
 			// For each existing route which is no longer present, we need to delete it.
 			// Note: since r.Key() only contains the destination, we need to check equality too in case
 			// the gateway has changed.
@@ -290,6 +297,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		// Now scan the new routes, looking for additions.  Cache them and queue up adds.
 		for _, r := range newRoutes {
 			logCxt := logrus.WithField("newRoute", r)
+			c.maybeReportLive()
 			if cachedRoutes.Contains(r) {
 				logCxt.Debug("Desired route already exists, skip")
 				continue
@@ -576,6 +584,8 @@ func (c *L3RouteResolver) markAllNodeRoutesDirty(nodeName string) {
 
 func (c *L3RouteResolver) visitAllRoutes(trie *ip.CIDRTrie, v func(route nodenameRoute)) {
 	trie.Visit(func(cidr ip.CIDR, data interface{}) bool {
+		c.maybeReportLive()
+
 		// Construct a nodenameRoute to pass to the visiting function.
 		ri := trie.Get(cidr).(RouteInfo)
 		nnr := nodenameRoute{dst: cidr}
@@ -841,6 +851,15 @@ func (c *L3RouteResolver) nodeInOurSubnet(name string) bool {
 	return sameV4 || sameV6
 }
 
+func (c *L3RouteResolver) maybeReportLive() {
+	// We report from some tight loops so rate limit our reports.
+	if time.Since(c.lastLiveReport) < 100*time.Millisecond {
+		return
+	}
+	c.OnAlive()
+	c.lastLiveReport = time.Now()
+}
+
 // nodenameRoute is the L3RouteResolver's internal representation of a route.
 type nodenameRoute struct {
 	nodeName string
@@ -883,6 +902,8 @@ type RouteTrie struct {
 	v4T        *ip.CIDRTrie
 	v6T        *ip.CIDRTrie
 	dirtyCIDRs set.Set[ip.CIDR]
+
+	OnAlive func()
 }
 
 func NewRouteTrie() *RouteTrie {
@@ -890,6 +911,8 @@ func NewRouteTrie() *RouteTrie {
 		v4T:        &ip.CIDRTrie{},
 		v6T:        &ip.CIDRTrie{},
 		dirtyCIDRs: set.NewBoxed[ip.CIDR](),
+
+		OnAlive: func() {},
 	}
 }
 
@@ -915,6 +938,7 @@ func (r *RouteTrie) markChildrenDirty(cidr ip.CIDR) {
 	// TODO: avoid full scan to mark children dirty
 	trie := r.trieForCIDR(cidr)
 	trie.Visit(func(c ip.CIDR, data interface{}) bool {
+		r.OnAlive()
 		if cidr.Contains(c.Addr()) {
 			r.MarkCIDRDirty(c)
 		}
@@ -1025,7 +1049,7 @@ func (r *RouteTrie) SetRouteSent(cidr ip.CIDR, sent bool) {
 	})
 }
 
-func (r RouteTrie) updateCIDR(cidr ip.CIDR, updateFn func(info *RouteInfo)) bool {
+func (r *RouteTrie) updateCIDR(cidr ip.CIDR, updateFn func(info *RouteInfo)) bool {
 	if cidr == nil {
 		logrus.WithField("cidr", cidr).Debug("Ignoring nil CIDR update")
 		return false
@@ -1060,7 +1084,7 @@ func (r RouteTrie) updateCIDR(cidr ip.CIDR, updateFn func(info *RouteInfo)) bool
 	return true
 }
 
-func (r RouteTrie) Get(cidr ip.CIDR) RouteInfo {
+func (r *RouteTrie) Get(cidr ip.CIDR) RouteInfo {
 	trie := r.trieForCIDR(cidr)
 	ri := trie.Get(cidr)
 
@@ -1071,7 +1095,7 @@ func (r RouteTrie) Get(cidr ip.CIDR) RouteInfo {
 	return ri.(RouteInfo)
 }
 
-func (r RouteTrie) trieForCIDR(cidr ip.CIDR) *ip.CIDRTrie {
+func (r *RouteTrie) trieForCIDR(cidr ip.CIDR) *ip.CIDRTrie {
 	var trie *ip.CIDRTrie
 	switch cidr.(type) {
 	case ip.V4CIDR:
