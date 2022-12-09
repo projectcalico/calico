@@ -1200,10 +1200,33 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
 			reason("ASNumber field must be empty when PeerSelector is specified"), "")
 	}
-	if ps.ReachablyBy != "" && ps.PeerIP == "" {
-		structLevel.ReportError(reflect.ValueOf(ps.ReachablyBy), "ReachablyBy", "",
-			reason("ReachablyBy field must be empty when PeerIP is empty"), "")
+	ok, msg := validateReachablyBy(ps.ReachableBy, ps.PeerIP)
+	if !ok {
+		structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
+			reason(msg), "")
 	}
+}
+
+func validateReachablyBy(reachableBy, peerIP string) (bool, string) {
+	if reachableBy != "" && peerIP == "" {
+		return false, "ReachablyBy field must be empty when PeerIP is empty"
+	}
+	reachableByAddr := cnet.ParseIP(reachableBy)
+	if reachableByAddr == nil {
+		return false, "ReachableBy is invalid address"
+	}
+	peerAddrStr, _, err := net.SplitHostPort(peerIP)
+	if err != nil {
+		return false, "PeerIP is invalid address"
+	}
+	peerAddr := cnet.ParseIP(peerAddrStr)
+	if peerAddr != nil {
+		return false, "PeerIP is invalid IP address"
+	}
+	if reachableByAddr.Version() != peerAddr.Version() {
+		return false, "ReachableBy and PeerIP address family mismatched"
+	}
+	return true, ""
 }
 
 func validateEndpointPort(structLevel validator.StructLevel) {

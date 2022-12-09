@@ -462,6 +462,7 @@ type bgpPeer struct {
 	CalicoNode      bool                 `json:"calico_node"`
 	NumAllowLocalAS int32                `json:"num_allow_local_as"`
 	TTLSecurity     uint8                `json:"ttl_security"`
+	ReachableBy     string               `json:"reachable_by"`
 }
 
 type bgpPrefix struct {
@@ -591,6 +592,21 @@ func (c *client) updatePeersV1() {
 					ttlSecurityHopCount = *v3res.Spec.TTLSecurity
 				}
 
+				var reachableBy string
+				if v3res.Spec.ReachableBy != "" {
+					reachableByAddr := cnet.ParseIP(v3res.Spec.ReachableBy)
+					if reachableByAddr == nil {
+						log.Warning("ReachableBy address is malformed")
+						continue
+					}
+
+					if reachableByAddr.Version != ip.Version {
+						log.Warning("ReachableBy address family does not match PeerIP")
+						continue
+					}
+					reachableBy = v3res.Spec.ReachableBy
+				}
+
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
@@ -600,6 +616,7 @@ func (c *client) updatePeersV1() {
 					CalicoNode:      isCalicoNode,
 					TTLSecurity:     ttlSecurityHopCount,
 					NumAllowLocalAS: numLocalAS,
+					ReachableBy:     reachableBy,
 				})
 			}
 			log.Debugf("Peers %#v", peers)
@@ -1816,8 +1833,7 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 }
 
 func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv3.BGPPeer) {
-
-	// Get the password, if one is configured.
+	// Get the password, if one is configured
 	password := c.getPassword(v3res)
 
 	for _, peer := range peers {

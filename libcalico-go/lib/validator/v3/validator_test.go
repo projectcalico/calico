@@ -1555,6 +1555,22 @@ func init() {
 			PeerIP:      ipv6_1,
 			ReachableBy: ipv6_2,
 		}, true),
+		Entry("should reject BGPPeer with invalid ReachablyBy", api.BGPPeerSpec{
+			PeerIP:      ipv4_1,
+			ReachableBy: bad_ipv4_1,
+		}, false),
+		Entry("should reject BGPPeer with invalid ReachablyBy (IPv6)", api.BGPPeerSpec{
+			PeerIP:      ipv6_1,
+			ReachableBy: bad_ipv6_1,
+		}, false),
+		Entry("should reject BGPPeer with mismatched family address of ReachablyBy and PeerIP", api.BGPPeerSpec{
+			PeerIP:      ipv4_1,
+			ReachableBy: ipv6_1,
+		}, false),
+		Entry("should reject BGPPeer with mismatched family address of ReachablyBy and PeerIP (IPv6)", api.BGPPeerSpec{
+			PeerIP:      ipv6_1,
+			ReachableBy: ipv4_1,
+		}, false),
 		Entry("should accept BGPPeerSpec with Password", api.BGPPeerSpec{
 			PeerIP: ipv4_1,
 			Password: &api.BGPPassword{
