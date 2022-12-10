@@ -109,7 +109,7 @@ type BGPPeerSpec struct {
 	// Add an exact, i.e. /32, static route toward peer IP in order to prevent route flapping.
 	// ReachableBy contains the address of the gateway which peer can be reached by.
 	// +optional
-	ReachableBy string `json:"reachableBy,omitempty" validate:"omitempty,IP"`
+	ReachableBy string `json:"reachableBy,omitempty" validate:"omitempty"`
 }
 
 type SourceAddress string

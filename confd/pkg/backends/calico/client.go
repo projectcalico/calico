@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -600,7 +600,7 @@ func (c *client) updatePeersV1() {
 						continue
 					}
 
-					if reachableByAddr.Version != ip.Version {
+					if reachableByAddr.Version() != ip.Version() {
 						log.Warning("ReachableBy address family does not match PeerIP")
 						continue
 					}

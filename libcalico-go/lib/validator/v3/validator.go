@@ -602,6 +602,13 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 // validateIPPort validates the IP and Port given in either <IPv4>:<port> or [<IPv6>]:<port> or <IP> format
 func validateIPPort(fl validator.FieldLevel) bool {
 	ipPort := fl.Field().String()
+	_, ok := processIPPort(ipPort)
+	return ok
+}
+
+// processIPPort processes the IP and Port given in either <IPv4>:<port> or [<IPv6>]:<port> or <IP> format
+// and return the IP part and a bool if the format is as expected
+func processIPPort(ipPort string) (string, bool) {
 	if ipPort != "" {
 		var ipStr, portStr string
 		var err error
@@ -611,29 +618,29 @@ func validateIPPort(fl validator.FieldLevel) bool {
 			ipStr, portStr, err = net.SplitHostPort(ipPort)
 			if err != nil {
 				log.Debugf("PeerIP value is invalid, it should either be \"<IP>\" or \"<IPv4>:<port>\" or \"[<IPv6>]:<port>\".")
-				return false
+				return "", false
 			}
 			var port uint64
 			port, err = strconv.ParseUint(portStr, 10, 16)
 			if err != nil {
 				log.Debugf("PeerIP value has invalid port.")
-				return false
+				return "", false
 			}
 			if port < 1 {
 				log.Debugf("PeerIP value has invalid port.")
-				return false
+				return "", false
 			}
 		}
 
 		parsedIP := net.ParseIP(ipStr)
 		if parsedIP == nil {
 			log.Debugf("PeerIP value is invalid.")
-			return false
+			return "", false
 		}
 
-		return true
+		return ipStr, true
 	}
-	return false
+	return "", false
 }
 
 // validateHTTPMethods checks if the HTTP method match clauses are valid.
@@ -1208,6 +1215,9 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 }
 
 func validateReachablyBy(reachableBy, peerIP string) (bool, string) {
+	if reachableBy == "" {
+		return true, ""
+	}
 	if reachableBy != "" && peerIP == "" {
 		return false, "ReachablyBy field must be empty when PeerIP is empty"
 	}
@@ -1215,12 +1225,12 @@ func validateReachablyBy(reachableBy, peerIP string) (bool, string) {
 	if reachableByAddr == nil {
 		return false, "ReachableBy is invalid address"
 	}
-	peerAddrStr, _, err := net.SplitHostPort(peerIP)
-	if err != nil {
+	peerAddrStr, ok := processIPPort(peerIP)
+	if !ok {
 		return false, "PeerIP is invalid address"
 	}
 	peerAddr := cnet.ParseIP(peerAddrStr)
-	if peerAddr != nil {
+	if peerAddr == nil {
 		return false, "PeerIP is invalid IP address"
 	}
 	if reachableByAddr.Version() != peerAddr.Version() {
