@@ -17,7 +17,7 @@ package autodetection
 // auto detect IP method
 var DEFAULT_INTERFACES_TO_EXCLUDE []string = []string{
 	"^docker.*", "^cbr.*", "^dummy.*", "^podman.*",
-	"^virbr.*", "^lxcbr.*", "^veth.*", "^lo",
+	"^virbr.*", "^lxcbr.*", "^veth.*", "^lo", "^br-.*",
 	"^cali.*", "^tunl.*", "^flannel.*", "^kube-ipvs.*", "^cni.*",
 	"^vxlan\\.calico.*", "^vxlan-v6\\.calico.*", "^wireguard\\.cali.*", "^wg-v6\\.cali.*",
 	"^nodelocaldns.*",
