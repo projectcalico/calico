@@ -41,8 +41,8 @@ spec:
 
 #### Metadata
 
-| Field       | Description                 | Accepted Values   | Schema |
-|-------------|-----------------------------|-------------------|--------|
+| Field       | Description                 | Accepted Values                                     | Schema |
+|-------------|-----------------------------|-----------------------------------------------------|--------|
 | name     | Unique name to describe this resource instance. Must be specified.| Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 #### Spec
@@ -70,7 +70,7 @@ spec:
 |---------------|----------------------------------|----------------------|-----------------------------------------|------------|
 | cidr          | IPv6 range                       | A valid IPv6 CIDR    | string                                  | |
 | matchOperator | Method by which to match candidate routes | `In`, `NotIn`, `Equal`, `NotEqual` | string                                  | |
-| cction        | Action to be taken for this CIDR | `Accept` or `Reject` | string | |
+| action        | Action to be taken for this CIDR | `Accept` or `Reject` | string | |
 
 ### Supported operations
 

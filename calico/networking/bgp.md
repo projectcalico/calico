@@ -241,12 +241,14 @@ spec:
 BGP peers can use BGP filters to control which routes are imported or exported between them.
 
 The following example creates a BGPFilter and associates it with a BGPPeer
+>**Note**: BGPFilters are applied in the order listed on a BGPPeer
+{: .alert .alert-info}
 
 ```
 kind: BGPFilter
 apiVersion: projectcalico.org/v3
 metadata:
-  name: my-first-bgp-filter
+  name: first-bgp-filter
 spec:
   exportV4:
     - action: Accept
@@ -265,6 +267,28 @@ spec:
       matchOperator: NotEqual
       cidr: 5000::0/64
 ---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: second-bgp-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 99.0.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: NotIn
+      cidr: 55.0.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: Equal
+      cidr: 7000::0/64
+  importV6:
+    - action: Accept
+      matchOperator: NotEqual
+      cidr: 4000::0/64
+---
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
@@ -272,9 +296,9 @@ metadata:
 spec:
   peerSelector: has(filter-bgp)
   filters:
-    - my-first-bgp-filter
+    - first-bgp-filter
+    - second-bgp-filter
 ```
-
 ### Above and beyond
 
 - [Node resource]({{ site.baseurl }}/reference/resources/node)
