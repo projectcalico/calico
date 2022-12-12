@@ -45,7 +45,6 @@ func podToWorkloadEndpoint(c Converter, pod *kapiv1.Pod) (*model.KVPair, error) 
 }
 
 var _ = Describe("Test parsing strings", func() {
-
 	// Use a single instance of the Converter for these tests.
 	c := NewConverter()
 
@@ -171,7 +170,6 @@ var _ = Describe("Test selector conversion", func() {
 })
 
 var _ = Describe("Test Pod conversion", func() {
-
 	// Use a single instance of the Converter for these tests.
 	c := NewConverter()
 
@@ -520,7 +518,6 @@ var _ = Describe("Test Pod conversion", func() {
 
 		// Assert that the endpoint contains the appropriate DNAT
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNATs).To(ConsistOf(libapiv3.IPNAT{InternalIP: "192.168.0.1", ExternalIP: "1.1.1.1"}))
-
 	})
 
 	It("should find the right address family target for dual stack floating IPs", func() {
@@ -556,10 +553,9 @@ var _ = Describe("Test Pod conversion", func() {
 			libapiv3.IPNAT{InternalIP: "192.168.0.1", ExternalIP: "1.1.1.1"},
 			libapiv3.IPNAT{InternalIP: "fd5f:8067::1", ExternalIP: "fd80:100:100::10"},
 		))
-
 	})
 
-	It("should look the source spoofing disabling annotation", func() {
+	It("should look at the source spoofing disabling annotation", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
@@ -580,6 +576,73 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.HasIPAddress(&pod)).To(BeTrue())
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.AllowSpoofedSourcePrefixes).To(ConsistOf([]string{"1.1.1.0/24", "8.8.8.8/32"}))
+	})
+
+	It("should error on empty string in the source spoofing disabling annotation", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"cni.projectcalico.org/podIP":                 "192.168.0.1",
+					"cni.projectcalico.org/allowedSourcePrefixes": "[\"\"]",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).To(HaveOccurred())
+		Expect(wep).To(BeNil())
+	})
+
+	It("should error on invalid CIDR in the source spoofing disabling annotation", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"cni.projectcalico.org/podIP":                 "192.168.0.1",
+					"cni.projectcalico.org/allowedSourcePrefixes": "[\"gumbo\"]",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).To(HaveOccurred())
+		Expect(wep).To(BeNil())
+	})
+
+	It("should normalize CIDRs in the source spoofing disabling annotation", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"cni.projectcalico.org/podIP":                 "192.168.0.1",
+					"cni.projectcalico.org/allowedSourcePrefixes": "[\"1.1.1.1/16\"]",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.AllowSpoofedSourcePrefixes).To(ConsistOf([]string{"1.1.0.0/16"}))
 	})
 
 	It("should return an error for a bad pod IP", func() {
@@ -1113,7 +1176,6 @@ var _ = Describe("Test Pod conversion", func() {
 })
 
 var _ = Describe("Test NetworkPolicy conversion", func() {
-
 	// Use a single instance of the Converter for these tests.
 	c := NewConverter()
 
@@ -2567,7 +2629,6 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		// As this is an IPBlock rule, podSel and nsSel should be empty (not nil!)
 		Expect(podSel).To(BeEmpty())
 		Expect(nsSel).To(BeEmpty())
-
 	})
 
 	It("should have empty and Nil NetworkPolicyPeerfields when an IPBlock is invalid", func() {
@@ -2587,7 +2648,6 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		// As this is an IPBlock rule, podSel and nsSel should be empty (not nil!)
 		Expect(podSel).To(BeEmpty())
 		Expect(nsSel).To(BeEmpty())
-
 	})
 
 	It("should parse a NetworkPolicyPeer with an CIDR and Except field", func() {
@@ -2610,7 +2670,6 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		// As this is an IPBlock rule, podSel and nsSel should be empty (not nil!)
 		Expect(podSel).To(BeEmpty())
 		Expect(nsSel).To(BeEmpty())
-
 	})
 
 	It("should parse a NetworkPolicy with both an Egress and an Ingress rule", func() {
@@ -2677,13 +2736,11 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Types[1]).To(Equal(apiv3.PolicyTypeEgress))
 	})
-
 })
 
 // This suite of tests is useful for ensuring we continue to support kubernetes apiserver
 // versions <= 1.7.x, and can be removed when that is no longer required.
 var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", func() {
-
 	// Use a single instance of the Converter for these tests.
 	c := NewConverter()
 
@@ -3061,7 +3118,6 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 })
 
 var _ = Describe("Test Namespace conversion", func() {
-
 	// Use a single instance of the Converter for these tests.
 	c := NewConverter()
 
@@ -3152,7 +3208,6 @@ var _ = Describe("Test Namespace conversion", func() {
 		// Ensure both inbound and outbound rules are set to allow.
 		Expect(Ingress[0]).To(Equal(apiv3.Rule{Action: apiv3.Allow}))
 		Expect(Egress[0]).To(Equal(apiv3.Rule{Action: apiv3.Allow}))
-
 	})
 
 	It("should not fail for malformed annotation", func() {
@@ -3205,7 +3260,6 @@ var _ = Describe("Test Namespace conversion", func() {
 })
 
 var _ = Describe("Test ServiceAccount conversion", func() {
-
 	// Use a single instance of the Converter for these tests.
 	c := NewConverter()
 
