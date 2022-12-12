@@ -182,19 +182,26 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		typhaLiveness = getHealthStatus(typhaContainer.IP, "9098", "liveness")
 	}
 
-	startFelix := func(typhaAddr string, getDockerArgs func() []string, watchdogTimeout, calcGraphHangTime, dataplaneHangTime, healthHost string) {
+	type felixParams struct {
+		dataplaneTimeout, calcGraphTimeout, calcGraphHangTime, dataplaneHangTime, healthHost string
+	}
+	startFelix := func(typhaAddr string, getDockerArgs func() []string, params felixParams) {
+		envVars := map[string]string{
+			"FELIX_HEALTHENABLED":                   "true",
+			"FELIX_HEALTHHOST":                      params.healthHost,
+			"FELIX_DEBUGMEMORYPROFILEPATH":          "heap-<timestamp>",
+			"FELIX_DataplaneWatchdogTimeout":        params.dataplaneTimeout,
+			"FELIX_DebugSimulateCalcGraphHangAfter": params.calcGraphHangTime,
+			"FELIX_DebugSimulateDataplaneHangAfter": params.dataplaneHangTime,
+			"FELIX_TYPHAADDR":                       typhaAddr,
+		}
+		if params.calcGraphTimeout != "" {
+			envVars["FELIX_HealthTimeoutOverrides"] = "CalculationGraph=" + params.calcGraphTimeout
+		}
 		felix = infrastructure.RunFelix(
 			k8sInfra, 0, infrastructure.TopologyOptions{
-				EnableIPv6: false,
-				ExtraEnvVars: map[string]string{
-					"FELIX_HEALTHENABLED":                   "true",
-					"FELIX_HEALTHHOST":                      healthHost,
-					"FELIX_DEBUGMEMORYPROFILEPATH":          "heap-<timestamp>",
-					"FELIX_DataplaneWatchdogTimeout":        watchdogTimeout,
-					"FELIX_DebugSimulateCalcGraphHangAfter": calcGraphHangTime,
-					"FELIX_DebugSimulateDataplaneHangAfter": dataplaneHangTime,
-					"FELIX_TYPHAADDR":                       typhaAddr,
-				},
+				EnableIPv6:   false,
+				ExtraEnvVars: envVars,
 			},
 		)
 		felixReady = getHealthStatus(felix.IP, "9099", "readiness")
@@ -208,17 +215,17 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		}
 
 		It("should run healthchecks on localhost by default", func() {
-			startFelix("", k8sInfra.GetDockerArgs, "20", "", "", "")
+			startFelix("", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20s"})
 			Eventually(checkHealthInternally, "10s", "100ms").ShouldNot(HaveOccurred())
 		})
 
 		It("should run support running healthchecks on '127.0.0.1'", func() {
-			startFelix("", k8sInfra.GetDockerArgs, "20", "", "", "127.0.0.1")
+			startFelix("", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "127.0.0.1"})
 			Eventually(checkHealthInternally, "10s", "100ms").ShouldNot(HaveOccurred())
 		})
 
 		It("should support running healthchecks on 'localhost'", func() {
-			startFelix("", k8sInfra.GetDockerArgs, "20", "", "", "localhost")
+			startFelix("", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "localhost"})
 			Eventually(checkHealthInternally, "10s", "100ms").ShouldNot(HaveOccurred())
 		})
 
@@ -229,7 +236,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 
 	Describe("with Felix running (no Typha)", func() {
 		BeforeEach(func() {
-			startFelix("", k8sInfra.GetDockerArgs, "20", "", "", "0.0.0.0")
+			startFelix("", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "0.0.0.0"})
 		})
 
 		AfterEach(func() {
@@ -239,9 +246,9 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		describeCommonFelixTests()
 	})
 
-	Describe("with Felix (no Typha) and Felix calc graph set to hang (20s timeout)", func() {
+	Describe("with Felix (no Typha) and Felix calc graph set to hang (10s calc graph timeout)", func() {
 		BeforeEach(func() {
-			startFelix("", k8sInfra.GetDockerArgs, "20", "5", "", "0.0.0.0")
+			startFelix("", k8sInfra.GetDockerArgs, felixParams{calcGraphTimeout: "10s", calcGraphHangTime: "5", healthHost: "0.0.0.0"})
 		})
 
 		AfterEach(func() {
@@ -257,7 +264,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 
 	Describe("with Felix (no Typha) and Felix dataplane set to hang (default 90s timeout)", func() {
 		BeforeEach(func() {
-			startFelix("", k8sInfra.GetDockerArgs, "", "", "5", "0.0.0.0")
+			startFelix("", k8sInfra.GetDockerArgs, felixParams{dataplaneHangTime: "5", healthHost: "0.0.0.0"})
 		})
 
 		AfterEach(func() {
@@ -274,7 +281,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 
 	Describe("with Felix (no Typha) and Felix dataplane set to hang (20s timeout)", func() {
 		BeforeEach(func() {
-			startFelix("", k8sInfra.GetDockerArgs, "20", "", "5", "0.0.0.0")
+			startFelix("", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", dataplaneHangTime: "5", healthHost: "0.0.0.0"})
 		})
 
 		AfterEach(func() {
@@ -291,7 +298,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 	Describe("with Felix and Typha running", func() {
 		BeforeEach(func() {
 			startTypha(k8sInfra.GetDockerArgs)
-			startFelix(typhaContainer.IP+":5473", k8sInfra.GetDockerArgs, "20", "", "", "0.0.0.0")
+			startFelix(typhaContainer.IP+":5473", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "0.0.0.0"})
 		})
 
 		AfterEach(func() {
@@ -318,7 +325,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 			startTypha(k8sInfra.GetDockerArgs)
 			// Start felix with the wrong Typha port so it won't be able to connect initially.  Then, we'll add a
 			// NAT rule to steer the traffic to the right port below.
-			startFelix(typhaContainer.IP+":5474" /*wrong port!*/, k8sInfra.GetDockerArgs, "20", "", "", "0.0.0.0")
+			startFelix(typhaContainer.IP+":5474" /*wrong port!*/, k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "0.0.0.0"})
 		})
 
 		AfterEach(func() {
@@ -378,7 +385,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			startFelix("", k8sInfra.GetDockerArgs, "20", "", "", "0.0.0.0")
+			startFelix("", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "0.0.0.0"})
 		})
 
 		AfterEach(func() {
@@ -413,7 +420,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 	Describe("with Felix connected to bad typha port", func() {
 		BeforeEach(func() {
 			startTypha(k8sInfra.GetDockerArgs)
-			startFelix(typhaContainer.IP+":5474", k8sInfra.GetDockerArgs, "20", "", "", "0.0.0.0")
+			startFelix(typhaContainer.IP+":5474", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "0.0.0.0"})
 		})
 		It("should become unready, then die", func() {
 			Eventually(felixReady, "5s", "1s").ShouldNot(BeGood())

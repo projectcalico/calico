@@ -88,7 +88,7 @@ func WaitForEC2SrcDstCheckUpdate(check string, healthAgg *health.HealthAggregato
 	backoffMgr := wait.NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration, backoffFactor, jitter, c)
 	defer backoffMgr.Backoff().Stop()
 
-	const healthName = "aws-source-destination-check"
+	const healthName = "AWSSourceDestinationCheck"
 	healthAgg.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
 
 	// set not-ready.

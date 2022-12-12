@@ -226,6 +226,7 @@ func init() {
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
 	registerStructValidator(validate, validateBlockAffinitySpec, libapi.BlockAffinitySpec{})
+	registerStructValidator(validate, validateHealthTimeoutOverride, api.HealthTimeoutOverride{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -574,6 +575,8 @@ func validateCIDRs(fl validator.FieldLevel) bool {
 }
 
 // validateKeyValueList validates the field is a comma separated list of key=value pairs.
+var kvRegex = regexp.MustCompile("^\\s*(\\w+)=(.*)$")
+
 func validateKeyValueList(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
 	log.Debugf("Validate KeyValueList: %s", n)
@@ -582,13 +585,12 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 		return true
 	}
 
-	rex := regexp.MustCompile("\\s*(\\w+)=(.*)")
 	for _, item := range strings.Split(n, ",") {
 		if item == "" {
 			// Accept empty items (e.g tailing ",")
 			continue
 		}
-		kv := rex.FindStringSubmatch(item)
+		kv := kvRegex.FindStringSubmatch(item)
 		if kv == nil {
 			return false
 		}
@@ -1715,6 +1717,18 @@ func validateBlockAffinitySpec(structLevel validator.StructLevel) {
 	spec := structLevel.Current().Interface().(libapi.BlockAffinitySpec)
 	if spec.Deleted == fmt.Sprintf("%t", true) {
 		structLevel.ReportError(reflect.ValueOf(spec), "Spec.Deleted", "", reason("spec.Deleted cannot be set to \"true\""), "")
+	}
+}
+
+var htoNameRegex = regexp.MustCompile("^[a-zA-Z0-9_ -]+$")
+
+func validateHealthTimeoutOverride(structLevel validator.StructLevel) {
+	hto := structLevel.Current().Interface().(api.HealthTimeoutOverride)
+	if !htoNameRegex.MatchString(hto.Name) {
+		structLevel.ReportError(reflect.ValueOf(hto), "HealthTimeoutOverride.Name", "", reason("name should match regex "+htoNameRegex.String()), "")
+	}
+	if hto.Timeout.Duration < 0 {
+		structLevel.ReportError(reflect.ValueOf(hto), "HealthTimeoutOverride.Timeout", "", reason("Timeout should not be negative"), "")
 	}
 }
 

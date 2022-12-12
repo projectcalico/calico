@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var rex = regexp.MustCompile(`\s*(\w+)=(.*)`)
@@ -36,7 +37,7 @@ func ParseKeyValueList(param string) (map[string]string, error) {
 	var invalidItems []string
 	for _, item := range strings.Split(param, ",") {
 		if item == "" {
-			// Accept empty items (e.g tailing ",")
+			// Accept empty items (e.g trailing ",")
 			continue
 		}
 		kv := rex.FindStringSubmatch(item)
@@ -50,4 +51,22 @@ func ParseKeyValueList(param string) (map[string]string, error) {
 		return nil, fmt.Errorf("Invalid items %v", invalidItems)
 	}
 	return res, nil
+}
+
+// ParseKeyDurationList parses a comma-separated key=value list to a map where the
+// values are parsed as time.Duration.
+func ParseKeyDurationList(param string) (map[string]time.Duration, error) {
+	kvStrs, err := ParseKeyValueList(param)
+	if err != nil {
+		return nil, err
+	}
+	keyDurs := map[string]time.Duration{}
+	for k, v := range kvStrs {
+		d, err := time.ParseDuration(strings.TrimSpace(v))
+		if err != nil {
+			return nil, err
+		}
+		keyDurs[k] = d
+	}
+	return keyDurs, nil
 }

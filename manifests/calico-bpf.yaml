@@ -999,11 +999,12 @@ spec:
                   to use.  Only used if UseInternalDataplaneDriver is set to false.
                 type: string
               dataplaneWatchdogTimeout:
-                description: 'DataplaneWatchdogTimeout is the readiness/liveness timeout
-                  used for Felix''s (internal) dataplane driver. Increase this value
+                description: "DataplaneWatchdogTimeout is the readiness/liveness timeout
+                  used for Felix's (internal) dataplane driver. Increase this value
                   if you experience spurious non-ready or non-live events when Felix
                   is under heavy load. Decrease the value to get felix to report non-live
-                  or non-ready more quickly. [Default: 90s]'
+                  or non-ready more quickly. [Default: 90s] \n Deprecated: replaced
+                  by the generic HealthTimeoutOverrides."
                 type: string
               debugDisableLogDropping:
                 type: boolean
@@ -1138,6 +1139,23 @@ spec:
                 type: string
               healthPort:
                 type: integer
+              healthTimeoutOverrides:
+                description: HealthTimeoutOverrides allows the internal watchdog timeouts
+                  of individual subcomponents to be overriden.  This is useful for
+                  working around "false positive" liveness timeouts that can occur
+                  in particularly stressful workloads or if CPU is constrained.  For
+                  a list of active subcomponents, see Felix's logs.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    timeout:
+                      type: string
+                  required:
+                  - name
+                  - timeout
+                  type: object
+                type: array
               interfaceExclude:
                 description: 'InterfaceExclude is a comma-separated list of interfaces
                   that Felix should exclude when monitoring for host endpoints. The
