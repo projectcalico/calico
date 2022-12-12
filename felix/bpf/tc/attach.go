@@ -64,9 +64,12 @@ type AttachPoint struct {
 	attachedProgs []ProgInfo
 }
 
-var ErrDeviceNotFound = errors.New("device not found")
-var ErrInterrupted = errors.New("dump interrupted")
-var prefHandleRe = regexp.MustCompile(`pref (\d+) .* handle (0x[\da-fA-F]+|\d+).* id (\d+)`)
+var (
+	ErrDeviceNotFound = errors.New("device not found")
+	ErrInterrupted    = errors.New("dump interrupted")
+
+	prefHandleRe = regexp.MustCompile(`pref (\d+) .* handle (0x[\da-fA-F]+|\d+).* id (\d+)`)
+)
 
 func (ap *AttachPoint) Log() *log.Entry {
 	return log.WithFields(log.Fields{
