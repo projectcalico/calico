@@ -106,6 +106,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 									logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
 
 									vethName, veth := createVeth()
+									ap.IfIndex = veth.Attrs().Index
 									defer deleteLink(veth)
 									ap.Iface = vethName
 									err := tc.EnsureQdisc(ap.Iface)
@@ -158,7 +159,11 @@ func createVeth() (string, netlink.Link) {
 	}
 	err := netlink.LinkAdd(veth)
 	Expect(err).NotTo(HaveOccurred(), "failed to create test veth")
-	return vethName, veth
+	// Query ack to get ifindex
+	link, err := netlink.LinkByName(vethName)
+	Expect(err).NotTo(HaveOccurred(), "failed to query test veth")
+
+	return vethName, link
 }
 
 func deleteLink(veth netlink.Link) {
