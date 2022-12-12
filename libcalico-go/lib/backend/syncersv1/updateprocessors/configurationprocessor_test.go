@@ -45,7 +45,7 @@ const (
 )
 
 const (
-	numBaseFelixConfigs = 121
+	numBaseFelixConfigs = 122
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
@@ -232,6 +232,36 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			"ExternalNodesCIDRList":              "1.1.1.1,2.2.2.2",
 			"IptablesNATOutgoingInterfaceFilter": "cali-123",
 			"RouteTableRanges":                   "43-211",
+		}
+		kvps, err := cc.Process(&model.KVPair{
+			Key:   perNodeFelixKey,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
+	})
+
+	It("should handle HealthTimeoutOVerrides", func() {
+		cc := updateprocessors.NewFelixConfigUpdateProcessor()
+		By("converting a per-node felix KVPair with certain values and checking for the correct number of fields")
+		res := apiv3.NewFelixConfiguration()
+		res.Spec.HealthTimeoutOverrides = []apiv3.HealthTimeoutOverride{
+			{
+				Name:    "Foo",
+				Timeout: metav1.Duration{Duration: 20 * time.Second},
+			},
+			{
+				Name:    "Bar",
+				Timeout: metav1.Duration{Duration: 25 * time.Second},
+			},
+		}
+		expected := map[string]interface{}{
+			"HealthTimeoutOverrides": "Foo=20s,Bar=25s",
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,

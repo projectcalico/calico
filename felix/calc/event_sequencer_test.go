@@ -378,6 +378,11 @@ func (d *dataplaneRecorder) record(message interface{}) {
 
 type dummyConfigInterface struct{}
 
+func (i *dummyConfigInterface) ToConfigUpdate() *proto.ConfigUpdate {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (i *dummyConfigInterface) UpdateFrom(map[string]string, config.Source) (changed bool, err error) {
 	return false, nil
 }

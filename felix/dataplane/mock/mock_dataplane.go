@@ -54,6 +54,11 @@ type MockDataplane struct {
 	encapsulation                  proto.Encapsulation
 }
 
+func (d *MockDataplane) ToConfigUpdate() *proto.ConfigUpdate {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (d *MockDataplane) InSync() bool {
 	d.Lock()
 	defer d.Unlock()

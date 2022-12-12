@@ -81,6 +81,8 @@ type FelixConfigurationSpec struct {
 	// DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver.
 	// Increase this value if you experience spurious non-ready or non-live events when Felix is under heavy load.
 	// Decrease the value to get felix to report non-live or non-ready more quickly. [Default: 90s]
+	//
+	// Deprecated: replaced by the generic HealthTimeoutOverrides.
 	DataplaneWatchdogTimeout *metav1.Duration `json:"dataplaneWatchdogTimeout,omitempty" configv1timescale:"seconds"`
 
 	// IPv6Support controls whether Felix enables support for IPv6 (if supported by the in-use dataplane).
@@ -249,6 +251,11 @@ type FelixConfigurationSpec struct {
 	HealthEnabled *bool   `json:"healthEnabled,omitempty"`
 	HealthHost    *string `json:"healthHost,omitempty"`
 	HealthPort    *int    `json:"healthPort,omitempty"`
+	// HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be
+	// overriden.  This is useful for working around "false positive" liveness timeouts that can occur
+	// in particularly stressful workloads or if CPU is constrained.  For a list of active
+	// subcomponents, see Felix's logs.
+	HealthTimeoutOverrides []HealthTimeoutOverride `json:"healthTimeoutOverrides,omitempty" validate:"omitempty,dive"`
 
 	// PrometheusMetricsEnabled enables the Prometheus metrics server in Felix if set to true. [Default: false]
 	PrometheusMetricsEnabled *bool `json:"prometheusMetricsEnabled,omitempty"`
@@ -495,6 +502,11 @@ type FelixConfigurationSpec struct {
 	//
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
+}
+
+type HealthTimeoutOverride struct {
+	Name    string          `json:"name"`
+	Timeout metav1.Duration `json:"timeout"`
 }
 
 type RouteTableRange struct {

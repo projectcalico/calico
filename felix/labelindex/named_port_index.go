@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -238,6 +239,9 @@ type SelectorAndNamedPortIndex struct {
 	// Callback functions
 	OnMemberAdded   NamedPortMatchCallback
 	OnMemberRemoved NamedPortMatchCallback
+
+	OnAlive        func()
+	lastLiveReport time.Time
 }
 
 func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
@@ -249,6 +253,7 @@ func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
 		OnMemberRemoved: func(ipSetID string, member IPSetMember) {},
+		OnAlive:         func() {},
 	}
 	return &inheritIdx
 }
@@ -431,6 +436,9 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 
 	// Then scan all endpoints.
 	for epID, epData := range idx.endpointDataByID {
+		// Make sure we don't appear non-live if there are a lot of endpoints to get through.
+		idx.maybeReportLive()
+
 		if !sel.EvaluateLabels(epData) {
 			// Endpoint doesn't match.
 			continue
@@ -476,6 +484,8 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 
 	// Then scan all endpoints and fix up their indexes to remove the match.
 	for _, epData := range idx.endpointDataByID {
+		// Make sure we don't appear non-live if there are a lot of endpoints to get through.
+		idx.maybeReportLive()
 		epData.RemoveMatchingIPSetID(id)
 	}
 
@@ -565,6 +575,9 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 	oldIPSetContributions map[string][]IPSetMember,
 ) {
 	for ipSetID, ipSetData := range idx.ipSetDataByID {
+		// Make sure we don't appear non-live if there are a lot of IP sets to get through.
+		idx.maybeReportLive()
+
 		// Remove any previous match from the endpoint's cache.  We'll re-add it below if the match
 		// is still correct.  (This is a no-op when we're called from UpdateEndpointOrSet(), which always
 		// creates a new endpointData struct.)
@@ -752,4 +765,13 @@ func (idx *SelectorAndNamedPortIndex) discardParentIfEmpty(id string) {
 	if parent.endpointIDs == nil && parent.labels == nil {
 		delete(idx.parentDataByParentID, id)
 	}
+}
+
+func (idx *SelectorAndNamedPortIndex) maybeReportLive() {
+	// We report from some tight loops so rate limit our reports.
+	if time.Since(idx.lastLiveReport) < 100*time.Millisecond {
+		return
+	}
+	idx.OnAlive()
+	idx.lastLiveReport = time.Now()
 }

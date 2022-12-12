@@ -169,7 +169,14 @@ message FromDataplane {
 }
 
 message ConfigUpdate {
+  string message = 3;
   map<string, string> config = 1;
+  map<uint32, RawConfig> source_to_raw_config = 2;
+}
+
+message RawConfig {
+  string source = 1;
+  map<string,string> config = 2;
 }
 
 message InSync {
