@@ -323,8 +323,6 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					return nil
 				}
 				return NodeBGPConfigListOptions{}.KeyFromDefaultPath(path)
-			case "filters":
-				return BGPFilterListOptions{}.KeyFromDefaultPath(path)
 			}
 		}
 	case "ipam":

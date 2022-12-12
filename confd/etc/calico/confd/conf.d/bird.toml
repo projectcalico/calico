@@ -1,11 +1,11 @@
 [template]
 src = "bird.cfg.template"
 dest = "/etc/calico/confd/config/bird.cfg"
-prefix = "/calico/bgp/v1"
+prefix = "/calico/"
 keys = [
-    "/host",
-    "/global",
-    "/filters",
+    "/bgp/v1/host",
+    "/bgp/v1/global",
+    "/resources/v3/projectcalico.org/bgpfilters",
 ]
 check_cmd = "bird -p -c {{.src}}"
 reload_cmd = "sv hup bird || true"

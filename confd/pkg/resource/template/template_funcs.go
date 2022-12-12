@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/kelseyhightower/memkv"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"net"
 	"os"
 	"path"
@@ -37,7 +39,8 @@ func newFuncMap() map[string]interface{} {
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
 	m["hashToIPv4"] = hashToIPv4
-	m["truncateAndHashName"] = TruncateAndHashName
+	m["emitFunctionName"] = EmitFunctionName
+	m["emitBIRDBGPFilterFuncs"] = EmitBIRDBGPFilterFuncs
 	return m
 }
 
@@ -47,25 +50,193 @@ func addFuncs(out, in map[string]interface{}) {
 	}
 }
 
+func emitFilterStatement(matchOperator, cidr, action string) (string, error) {
+	var op string
+	switch matchOperator {
+	case string(v3.Equal):
+		op = "="
+	case v3.NotEqual:
+		op = "!="
+	case v3.In:
+		op = "~"
+	case v3.NotIn:
+		op = "!~"
+	default:
+		err := fmt.Errorf("Unexpected operator found in BGPFilter: %s", matchOperator)
+		return "", err
+	}
+
+	return fmt.Sprintf("if ( net %s %s ) then { %s; }", op, cidr, strings.ToLower(action)), nil
+}
+
+func EmitFunctionName(filterName, direction, version string) (string, error) {
+	var normalizedDirection string
+	normalizedDirection = strings.ToLower(direction)
+	switch normalizedDirection {
+	case "import":
+	case "export":
+	default:
+		return "", fmt.Errorf("Provided direction '%s' does not map to either 'import' or 'export'", direction)
+	}
+	pieces := []string{"bgp_", "", "_", normalizedDirection, "FilterV", version}
+	maxBIRDSymLen := 64
+	resizedName, err := truncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
+	if err != nil {
+		return "", err
+	}
+	pieces[1] = resizedName
+	fullName := strings.Join(pieces, "")
+	return fmt.Sprintf("'%s'", fullName), nil
+}
+
+func EmitBIRDBGPFilterFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
+	lines := []string{}
+	var line string
+	var versionStr string
+
+	switch version {
+	case 4:
+		fallthrough
+	case 6:
+		versionStr = fmt.Sprintf("%d", version)
+	default:
+		return []string{}, fmt.Errorf("Version must be either 4 or 6")
+	}
+
+	for _, kvp := range pairs {
+		var filter v3.BGPFilter
+		err := json.Unmarshal([]byte(kvp.Value), &filter)
+		if err != nil {
+			return []string{}, fmt.Errorf("Error unmarshalling JSON: %s", err)
+		}
+
+		importFiltersV4 := filter.Spec.ImportV4
+		exportFiltersV4 := filter.Spec.ExportV4
+		importFiltersV6 := filter.Spec.ImportV6
+		exportFiltersV6 := filter.Spec.ExportV6
+
+		var filterName string
+		var emitImports bool
+		var emitExports bool
+		v4Selected := version == 4
+
+		if v4Selected {
+			emitImports = len(importFiltersV4) > 0
+			emitExports = len(exportFiltersV4) > 0
+		} else {
+			emitImports = len(importFiltersV6) > 0
+			emitExports = len(exportFiltersV6) > 0
+		}
+
+		if emitImports || emitExports {
+			filterName = path.Base(kvp.Key)
+			line = fmt.Sprintf("# v%s BGPFilter %s", versionStr, filterName)
+			lines = append(lines, line)
+		}
+
+		var filterFuncName string
+		var filterRule string
+		if emitImports {
+			filterFuncName, err = EmitFunctionName(filterName, "import", versionStr)
+			if err != nil {
+				return []string{}, err
+			}
+			line = fmt.Sprintf("function %s() {", filterFuncName)
+			lines = append(lines, line)
+
+			var ruleFields [][]string
+
+			if v4Selected {
+				for _, importV4 := range importFiltersV4 {
+					ruleFields = append(ruleFields, []string{string(importV4.MatchOperator), importV4.CIDR,
+						string(importV4.Action)})
+				}
+			} else {
+				for _, importV6 := range importFiltersV6 {
+					ruleFields = append(ruleFields, []string{string(importV6.MatchOperator), importV6.CIDR,
+						string(importV6.Action)})
+				}
+			}
+
+			for _, fields := range ruleFields {
+				filterRule, err = emitFilterStatement(fields[0], fields[1], fields[2])
+				if err != nil {
+					return []string{}, err
+				}
+				line = fmt.Sprintf("  %s", filterRule)
+				lines = append(lines, line)
+			}
+
+			line = "}"
+			lines = append(lines, line)
+		}
+
+		if emitExports {
+			filterFuncName, err = EmitFunctionName(filterName, "export", versionStr)
+			if err != nil {
+				return []string{}, err
+			}
+			line = fmt.Sprintf("function %s() {", filterFuncName)
+			lines = append(lines, line)
+
+			var ruleFields [][]string
+
+			if v4Selected {
+				for _, exportV4 := range exportFiltersV4 {
+					ruleFields = append(ruleFields, []string{string(exportV4.MatchOperator), exportV4.CIDR,
+						string(exportV4.Action)})
+				}
+			} else {
+				for _, exportV6 := range exportFiltersV6 {
+					ruleFields = append(ruleFields, []string{string(exportV6.MatchOperator), exportV6.CIDR,
+						string(exportV6.Action)})
+				}
+			}
+
+			for _, fields := range ruleFields {
+				filterRule, err = emitFilterStatement(fields[0], fields[1], fields[2])
+				if err != nil {
+					return []string{}, err
+				}
+				line = fmt.Sprintf("  %s", filterRule)
+				lines = append(lines, line)
+			}
+
+			line = "}"
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		line = fmt.Sprintf("# No v%s BGPFilters configured", versionStr)
+		lines = append(lines, line)
+	}
+	return lines, nil
+}
+
 // The maximum length of a k8s resource (253 bytes) is longer than the maximum length of BIRD symbols (64 chars).
 // This function provides a way to map the k8s resource name to a BIRD symbol name that accounts
 // for the length difference in a way that minimizes the chance of collisions
-func TruncateAndHashName(name string, maxLen int) string {
+func truncateAndHashName(name string, maxLen int) (string, error) {
 	if len(name) <= maxLen {
-		return name
-	}
-	hash := sha256.New()
-	_, err := hash.Write([]byte(name))
-	if err != nil {
-		return ""
+		return name, nil
 	}
 	// SHA256 outputs a hash 64 chars long but we'll use only the first 16
 	hashCharsToUse := 16
 	// Account for underscore we insert between truncated name and hash string
-	truncationLen := maxLen - hashCharsToUse - 1
+	hashStrSize := hashCharsToUse + 1
+	if maxLen <= hashStrSize {
+		return "", fmt.Errorf("Max truncated string length must be greater than the mininum size of %d",
+			hashStrSize)
+	}
+	hash := sha256.New()
+	_, err := hash.Write([]byte(name))
+	if err != nil {
+		return "", err
+	}
+	truncationLen := maxLen - hashStrSize
 	hashStr := fmt.Sprintf("%X", hash.Sum(nil))
 	truncatedName := fmt.Sprintf("%s_%s", name[:truncationLen], hashStr[:hashCharsToUse])
-	return truncatedName
+	return truncatedName, nil
 }
 
 // hashToIPv4 hashes the given string and

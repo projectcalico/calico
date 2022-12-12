@@ -1008,14 +1008,6 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 		}
 
 		if v3key.Kind == apiv3.KindBGPFilter {
-			if u.Value == nil || u.UpdateType == api.UpdateTypeKVDeleted {
-				c.updateBGPFilterCache(v3key, nil)
-			} else if v3res, ok := u.Value.(*apiv3.BGPFilter); ok {
-				c.updateBGPFilterCache(v3key, &v3res.Spec)
-			} else {
-				log.Warning("Bad value for BGPFilter resource")
-				continue
-			}
 			needUpdatePeersV1 = true
 			needUpdatePeersReasons = append(needUpdatePeersReasons, "BGPFilter updated or deleted")
 		}
@@ -1104,22 +1096,6 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 	// Notify watcher thread that we've received new updates.
 	log.WithField("cacheRevision", c.cacheRevision).Debug("Done processing OnUpdates from syncer, notify watchers")
 	c.onNewUpdates()
-}
-
-func (c *client) updateBGPFilterCache(key model.ResourceKey, filter *apiv3.BGPFilterSpec) {
-	bgpFilterKey := model.BGPFilterKey{
-		Name: key.Name,
-	}
-	if filter != nil {
-		if val, err := json.Marshal(filter); err == nil {
-			c.updateCache(api.UpdateTypeKVUpdated, getKVPair(bgpFilterKey, string(val)))
-		} else {
-			log.Errorf("Error serializing value %v: %v", filter, err)
-			return
-		}
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(bgpFilterKey))
-	}
 }
 
 func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfiguration, svcAdvertisement *bool, updatePeersV1 *bool, updateReasons *[]string) {
