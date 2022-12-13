@@ -277,7 +277,44 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(HaveLen(1))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
-			Key: v1WorkloadEndpointKey1,
+			Key:   v1WorkloadEndpointKey1,
+			Value: nil,
+		}))
+	})
+
+	It("should filter out a WEP with bad AllowSpoofedSourcePrefixes", func() {
+		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
+
+		By("converting a WorkloadEndpoint with bad AllowSpoofedSourcePrefixes")
+		res := libapiv3.NewWorkloadEndpoint()
+		res.Namespace = ns1
+		res.Labels = map[string]string{
+			"projectcalico.org/namespace":    ns1,
+			"projectcalico.org/orchestrator": oid1,
+		}
+		res.Spec.Node = hn1
+		res.Spec.Orchestrator = oid1
+		res.Spec.Workload = wid1
+		res.Spec.Endpoint = eid1
+		res.Spec.InterfaceName = iface1
+		res.Spec.IPNetworks = []string{"10.100.10.1"}
+
+		// Include an invalid prefix - an empty string, in this case.
+		res.Spec.AllowSpoofedSourcePrefixes = []string{""}
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v3WorkloadEndpointKey1,
+			Value:    res,
+			Revision: "abcde",
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The update processor treats invalid values as a delete, so
+		// we should expect a single update with a nil value.
+		Expect(kvps).To(HaveLen(1))
+		Expect(kvps[0]).To(Equal(&model.KVPair{
+			Key:   v1WorkloadEndpointKey1,
+			Value: nil,
 		}))
 	})
 
