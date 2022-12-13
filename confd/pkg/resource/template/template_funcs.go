@@ -51,17 +51,15 @@ func addFuncs(out, in map[string]interface{}) {
 }
 
 func emitFilterStatement(matchOperator, cidr, action string) (string, error) {
-	var op string
-	switch matchOperator {
-	case string(v3.Equal):
-		op = "="
-	case v3.NotEqual:
-		op = "!="
-	case v3.In:
-		op = "~"
-	case v3.NotIn:
-		op = "!~"
-	default:
+	matchOperatorLUT := map[string]string{
+		string(v3.Equal): "=",
+		v3.NotEqual:      "!=",
+		v3.In:            "~",
+		v3.NotIn:         "!~",
+	}
+
+	op, ok := matchOperatorLUT[matchOperator]
+	if !ok {
 		err := fmt.Errorf("Unexpected operator found in BGPFilter: %s", matchOperator)
 		return "", err
 	}
@@ -69,9 +67,11 @@ func emitFilterStatement(matchOperator, cidr, action string) (string, error) {
 	return fmt.Sprintf("if ( net %s %s ) then { %s; }", op, cidr, strings.ToLower(action)), nil
 }
 
+// EmitFunctionName returns a formatted name for use as a BIRD function, truncating and hashing if the provided
+// name would result in a function name longer than the max allowable length of 64 chars.
+// e.g. input of ("my-bgp-filter", "import", "4") would result in output of "'bgp_my-bpg-filter_importFilterV4'"
 func EmitFunctionName(filterName, direction, version string) (string, error) {
-	var normalizedDirection string
-	normalizedDirection = strings.ToLower(direction)
+	normalizedDirection := strings.ToLower(direction)
 	switch normalizedDirection {
 	case "import":
 	case "export":
@@ -89,6 +89,45 @@ func EmitFunctionName(filterName, direction, version string) (string, error) {
 	return fmt.Sprintf("'%s'", fullName), nil
 }
 
+// EmitBIRDBGPFilterFuncs generates a set of BIRD functions for BGPFilter resources that have been packaged into KVPairs.
+// By doing the formatting inside of this function we eliminate the need to copy and paste repeated blocks of golang
+// template code into our BIRD config templates that is both difficult to read and prone to errors
+//
+// e.g. for a BGPFilter resource specified as follows:
+//
+// kind: BGPFilter
+// apiVersion: projectcalico.org/v3
+// metadata:
+//   name: test-bgpfilter
+// spec:
+//   exportV4:
+//     - action: Accept
+//       matchOperator: In
+//       cidr: 77.0.0.0/16
+//     - action: Reject
+//       matchOperator: In
+//       cidr: 77.1.0.0/16
+//   importV4:
+//     - action: Accept
+//       matchOperator: In
+//       cidr: 44.0.0.0/16
+//     - action: Reject
+//       matchOperator: In
+//       cidr: 44.1.0.0/16
+//
+// Would produce the following string array that can be easily output via BIRD config template:
+//
+// []string{
+//   "# v4 BGPFilter test-bgpfilter",
+//   "function 'bgp_test-bgpfilter_importFilterV4'() {",
+//   "  if ( net ~ 44.0.0.0/16 ) then { accept; }",
+//   "  if ( net ~ 44.1.0.0/16 ) then { reject; }",
+//   "}",
+//   "function 'bgp_test-bgpfilter_exportFilterV4'() {",
+//   "  if ( net ~ 77.0.0.0/16 ) then { accept; }",
+//   "  if ( net ~ 77.1.0.0/16 ) then { reject; }",
+//   "}",
+//  }
 func EmitBIRDBGPFilterFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 	lines := []string{}
 	var line string

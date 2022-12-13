@@ -74,6 +74,6 @@ spec:
 
 ### Supported operations
 
-| Datastore type        | Create/Delete | Update | Get/List | Notes
-|-----------------------|---------------|--------|----------|------
-| Kubernetes API server | Yes           | Yes    | Yes      |
+| Datastore type        | Create/Delete | Update | Get/List | Notes |
+|-----------------------|---------------|--------|----------|------ |
+| Kubernetes API server | Yes           | Yes    | Yes      |       |
