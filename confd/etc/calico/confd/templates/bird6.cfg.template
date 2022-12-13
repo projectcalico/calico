@@ -254,7 +254,7 @@ protocol bgp Global_{{$id}} from bgp_template {
 }
 {{- if and $data.ip $data.reachable_by}}
 protocol static {
-  route {{$data.ip}} via {{$data.reachable_by}};
+  route {{$data.ip}}/128 via {{$data.reachable_by}};
 }
 {{- end}}
 {{- end}}
@@ -305,7 +305,7 @@ protocol bgp Node_{{$id}} from bgp_template {
 }
 {{- if and $data.ip $data.reachable_by}}
 protocol static {
-  route {{$data.ip}} via {{$data.reachable_by}};
+  route {{$data.ip}}/128 via {{$data.reachable_by}};
 }
 {{- end}}
 {{- end}}
