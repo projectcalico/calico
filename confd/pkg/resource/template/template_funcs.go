@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/kelseyhightower/memkv"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"net"
 	"os"
 	"path"
