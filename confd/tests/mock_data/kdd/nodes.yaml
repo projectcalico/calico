@@ -5,8 +5,8 @@ metadata:
     node.alpha.kubernetes.io/ttl: "0"
     volumes.kubernetes.io/controller-managed-attach-detach: "true"
   labels:
-    beta.kubernetes.io/arch: amd64
-    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/os: linux
     kubernetes.io/hostname: kube-master
     node-role.kubernetes.io/master: ""
   name: kube-master
@@ -24,8 +24,8 @@ metadata:
     node.alpha.kubernetes.io/ttl: "0"
     volumes.kubernetes.io/controller-managed-attach-detach: "true"
   labels:
-    beta.kubernetes.io/arch: amd64
-    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/os: linux
     kubernetes.io/hostname: kube-node-1
   name: kube-node-1
   namespace: ""
@@ -42,8 +42,8 @@ metadata:
     node.alpha.kubernetes.io/ttl: "0"
     volumes.kubernetes.io/controller-managed-attach-detach: "true"
   labels:
-    beta.kubernetes.io/arch: amd64
-    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/os: linux
     kubernetes.io/hostname: kube-node-2
   name: kube-node-2
   namespace: ""
