@@ -53,7 +53,6 @@ COPY --from=ubi /lib64/libnss_files.so.2 /lib64/libnss_files.so.2
 # Copy hostname configuration files from UBI so glibc hostname lookups work.
 COPY --from=ubi /etc/host.conf /etc/host.conf
 COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
-COPY --from=ubi /etc/networks /etc/networks
 
 ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
 ADD bin/check-status-linux-amd64 /usr/bin/check-status
