@@ -94,7 +94,7 @@ The full list of parameters which can be set is as follows.
 | `TyphaK8sServiceName`             | `FELIX_TYPHAK8SSERVICENAME`             | Name of the Typha Kubernetes service | string |
 | `Ipv6Support`                     | `FELIX_IPV6SUPPORT`                     | Enable {{site.prodname}} networking and security for IPv6 traffic as well as for IPv4. | boolean |
 | `RouteSource`                     | `FELIX_ROUTESOURCE`                     | Where Felix gets is routing information from for VXLAN and the BPF dataplane. The CalicoIPAM setting is more efficient because it supports route aggregation, but it only works when Calico's IPAM or host-local IPAM is in use. Use the WorkloadIPs setting if you are using Calico's VXLAN or BPF dataplane and not using Calico IPAM or host-local IPAM. [Default: "CalicoIPAM"] | 'CalicoIPAM', or 'WorkloadIPs' |
-| `mtuIfacePattern`                 | `FELIX_MTUIFACEPATTERN`                 | Pattern used to discover the host's interface for MTU auto-detection. [Default: `^((en|wl|ww|sl|ib)[copsx].*|(eth|wlan|wwan).*)` | regex |
+| `mtuIfacePattern`                 | `FELIX_MTUIFACEPATTERN`                 | Pattern used to discover the host's interface for MTU auto-detection. [Default: `^((en|wl|ww|sl|ib)[Pcopsx].*|(eth|wlan|wwan).*)` | regex |
 | `FeatureDetectOverride`           | `FELIX_FEATUREDETECTOVERRIDE`           | Is used to override the feature detection. Values are specified in a comma separated list with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=true,IPIPDeviceIsL3=true. "true" or "false" will force the feature, empty or omitted values are auto-detected. [Default: `""`] | string |
 
 #### etcd datastore configuration
