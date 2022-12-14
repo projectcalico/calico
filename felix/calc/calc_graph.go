@@ -73,7 +73,7 @@ type passthruCallbacks interface {
 	OnHostIPRemove(hostname string)
 	OnHostIPv6Update(hostname string, ip *net.IP)
 	OnHostIPv6Remove(hostname string)
-	OnHostUpdate(hostname string, ip4 *net.IP, ip6 *net.IP, asnumber string, labels map[string]string)
+	OnHostUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string)
 	OnHostRemove(hostname string)
 	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
 	OnIPPoolRemove(model.IPPoolKey)
