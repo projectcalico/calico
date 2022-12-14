@@ -593,7 +593,6 @@ func (c *client) updatePeersV1() {
 				}
 
 				var reachableBy string
-				log.Infof("Mazdak %#v", v3res.Spec.ReachableBy)
 				if v3res.Spec.ReachableBy != "" {
 					reachableByAddr := cnet.ParseIP(v3res.Spec.ReachableBy)
 					if reachableByAddr == nil {
