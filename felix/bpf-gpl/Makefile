@@ -50,7 +50,7 @@ UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 
 OBJS:=$(shell ./list-objs)
-C_FILES:=tc.c connect_balancer.c xdp.c
+C_FILES:=tc.c connect_balancer.c connect_balancer_v6.c xdp.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
