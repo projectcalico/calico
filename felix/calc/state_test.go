@@ -46,6 +46,7 @@ type State struct {
 	ExpectedEndpointPolicyOrder          map[string][]mock.TierInfo
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
+	ExpectedHostMetadataV4V6             map[string]proto.HostMetadataV4V6Update
 	ExpectedNumberOfALPPolicies          int
 	ExpectedEncapsulation                proto.Encapsulation
 }
@@ -72,6 +73,7 @@ func NewState() State {
 		ExpectedEndpointPolicyOrder:          make(map[string][]mock.TierInfo),
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
+		ExpectedHostMetadataV4V6:             make(map[string]proto.HostMetadataV4V6Update),
 	}
 }
 
