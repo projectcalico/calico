@@ -441,6 +441,12 @@ func (s TargetIP) ToMatcher(explicitPort ...uint16) *Matcher {
 	}
 }
 
+type TargetIPv4AsIPv6 string
+
+func (s TargetIPv4AsIPv6) ToMatcher(explicitPort ...uint16) *Matcher {
+	return TargetIP("::ffff:" + s).ToMatcher(explicitPort...)
+}
+
 func HaveConnectivityTo(target ConnectionTarget, explicitPort ...uint16) types.GomegaMatcher {
 	return target.ToMatcher(explicitPort...)
 }
@@ -729,6 +735,7 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 
 	// Run 'test-connection' to the target.
 	connectionCmd := utils.Command("docker", args...)
+	connectionCmd.Env = []string{"GODEBUG=netdns=1"}
 
 	outPipe, err := connectionCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
