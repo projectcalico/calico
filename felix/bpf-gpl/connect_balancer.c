@@ -200,5 +200,3 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 out:
 	return 1;
 }
-
-char ____license[] __attribute__((section("license"), used)) = "GPL";
