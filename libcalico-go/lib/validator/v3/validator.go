@@ -1207,14 +1207,14 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
 			reason("ASNumber field must be empty when PeerSelector is specified"), "")
 	}
-	ok, msg := validateReachablyBy(ps.ReachableBy, ps.PeerIP)
+	ok, msg := validateReachableBy(ps.ReachableBy, ps.PeerIP)
 	if !ok {
 		structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
 			reason(msg), "")
 	}
 }
 
-func validateReachablyBy(reachableBy, peerIP string) (bool, string) {
+func validateReachableBy(reachableBy, peerIP string) (bool, string) {
 	if reachableBy == "" {
 		return true, ""
 	}
