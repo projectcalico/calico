@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1543,41 +1543,41 @@ func init() {
 			NodeSelector: "has(mylabel)",
 			PeerSelector: "has(mylabel)",
 		}, true),
-		Entry("should reject BGPPeer with ReachablyBy but without PeerIP", api.BGPPeerSpec{
+		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv4_2,
 		}, false),
-		Entry("should reject BGPPeer with ReachablyBy (IPv6) but without PeerIP", api.BGPPeerSpec{
+		Entry("should reject BGPPeer with ReachableBy (IPv6) but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv6_2,
 		}, false),
-		Entry("should accept BGPPeer with ReachablyBy and PeerIP", api.BGPPeerSpec{
+		Entry("should accept BGPPeer with ReachableBy and PeerIP", api.BGPPeerSpec{
 			PeerIP:      peerv4_1,
 			ReachableBy: ipv4_1,
 		}, true),
-		Entry("should accept BGPPeer with ReachablyBy (IPv6) and PeerIP (IPv6)", api.BGPPeerSpec{
+		Entry("should accept BGPPeer with ReachableBy (IPv6) and PeerIP (IPv6)", api.BGPPeerSpec{
 			PeerIP:      peerv6_1,
 			ReachableBy: ipv6_1,
 		}, true),
-		Entry("should reject BGPPeer with invalid ReachablyBy", api.BGPPeerSpec{
+		Entry("should reject BGPPeer with invalid ReachableBy", api.BGPPeerSpec{
 			PeerIP:      peerv4_1,
 			ReachableBy: bad_ipv4_1,
 		}, false),
-		Entry("should reject BGPPeer with invalid ReachablyBy (IPv6)", api.BGPPeerSpec{
+		Entry("should reject BGPPeer with invalid ReachableBy (IPv6)", api.BGPPeerSpec{
 			PeerIP:      peerv6_1,
 			ReachableBy: bad_ipv6_1,
 		}, false),
-		Entry("should reject BGPPeer with mismatched family address of ReachablyBy and PeerIP", api.BGPPeerSpec{
+		Entry("should reject BGPPeer with mismatched family address of ReachableBy and PeerIP", api.BGPPeerSpec{
 			PeerIP:      ipv4_1,
 			ReachableBy: ipv6_1,
 		}, false),
-		Entry("should reject BGPPeer with mismatched family address of ReachablyBy and PeerIP:Port", api.BGPPeerSpec{
+		Entry("should reject BGPPeer with mismatched family address of ReachableBy and PeerIP:Port", api.BGPPeerSpec{
 			PeerIP:      peerv4_1,
 			ReachableBy: ipv6_1,
 		}, false),
-		Entry("should reject BGPPeer with mismatched family address of ReachablyBy and PeerIP (IPv6)", api.BGPPeerSpec{
+		Entry("should reject BGPPeer with mismatched family address of ReachableBy and PeerIP (IPv6)", api.BGPPeerSpec{
 			PeerIP:      ipv6_1,
 			ReachableBy: ipv4_1,
 		}, false),
-		Entry("should reject BGPPeer with mismatched family address of ReachablyBy and PeerIP:Port (IPv6)", api.BGPPeerSpec{
+		Entry("should reject BGPPeer with mismatched family address of ReachableBy and PeerIP:Port (IPv6)", api.BGPPeerSpec{
 			PeerIP:      peerv6_1,
 			ReachableBy: ipv4_1,
 		}, false),
