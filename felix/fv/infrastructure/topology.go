@@ -315,19 +315,22 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		}
 
 		var w chan struct{}
+		enableBGP := n > 1 || opts.NeedNodeIP
+		infra.AddNode(felix, i, enableBGP) // Sets felix.ExpectedIPIPTunnelAddr and friends.
 		if !opts.DelayFelixStart && felix.ExpectedIPIPTunnelAddr != "" {
 			// If felix has an IPIP tunnel address defined, Felix may restart after loading its config.
 			// Handle that here by monitoring the log and waiting for the correct tunnel IP to show up
 			// before we return.
+			log.Info("Waiting for felix to restart after setting tunnel IP.")
 			w = felix.WatchStdoutFor(regexp.MustCompile(
-				`"IpInIpTunnelAddr":"` + regexp.QuoteMeta(felix.ExpectedIPIPTunnelAddr) + `"`))
+				`Successfully loaded configuration.*"IpInIpTunnelAddr":"` + regexp.QuoteMeta(felix.ExpectedIPIPTunnelAddr) + `"`))
 		} else if opts.NeedNodeIP {
+			log.Info("Waiting for felix to log its host IP.")
 			w = felix.WatchStdoutFor(regexp.MustCompile(
 				`Host config update for this host|Host IP changed`))
 		}
-		infra.AddNode(felix, i, bool(n > 1 || opts.NeedNodeIP))
 		if w != nil {
-			// Wait for any Felix restart...
+			// Wait for any expected Felix restart...
 			log.Info("Wait for Felix to restart")
 			Eventually(w, "10s").Should(BeClosed(),
 				fmt.Sprintf("Timed out waiting for %s to restart", felix.Name))
