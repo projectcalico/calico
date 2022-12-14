@@ -185,6 +185,7 @@ func init() {
 	registerFieldValidator("routeSource", validateRouteSource)
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
 	registerFieldValidator("IP:port", validateIPPort)
+	registerFieldValidator("reachableBy", validateReachableByField)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -1237,6 +1238,21 @@ func validateReachableBy(reachableBy, peerIP string) (bool, string) {
 		return false, "ReachableBy and PeerIP address family mismatched"
 	}
 	return true, ""
+}
+
+// validateReachableByField validates that reachableBy value, the address of the
+// gateway the BGP peer is connected to, is a correct address
+func validateReachableByField(fl validator.FieldLevel) bool {
+	reachableBy := fl.Field().String()
+
+	if reachableBy != "" {
+		reachableByAddr := cnet.ParseIP(reachableBy)
+		if reachableByAddr == nil {
+			log.Debugf("ReachableBy value is invalid address")
+			return false
+		}
+	}
+	return true
 }
 
 func validateEndpointPort(structLevel validator.StructLevel) {
