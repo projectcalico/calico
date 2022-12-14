@@ -104,8 +104,8 @@ type EventSequencer struct {
 }
 
 type hostInfo struct {
-	ip4Addr  *net.IP
-	ip6Addr  *net.IP
+	ip4Addr  *net.IPNet
+	ip6Addr  *net.IPNet
 	labels   map[string]string
 	asnumber string
 }
@@ -593,7 +593,7 @@ func (buf *EventSequencer) flushHostIPv6Deletes() {
 	})
 }
 
-func (buf *EventSequencer) OnHostUpdate(hostname string, ip4 *net.IP, ip6 *net.IP, asnumber string, labels map[string]string) {
+func (buf *EventSequencer) OnHostUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string) {
 	log.WithFields(log.Fields{
 		"hostname": hostname,
 		"ip4":      ip4,
@@ -607,10 +607,17 @@ func (buf *EventSequencer) OnHostUpdate(hostname string, ip4 *net.IP, ip6 *net.I
 
 func (buf *EventSequencer) flushHostUpdates() {
 	for hostname, hostInfo := range buf.pendingHostUpdates {
+		var ip4str, ip6str string
+		if hostInfo.ip4Addr.IP != nil {
+			ip4str = hostInfo.ip4Addr.String()
+		}
+		if hostInfo.ip6Addr.IP != nil {
+			ip6str = hostInfo.ip6Addr.String()
+		}
 		buf.Callback(&proto.HostMetadataV4V6Update{
 			Hostname: hostname,
-			Ipv4Addr: hostInfo.ip4Addr.String(),
-			Ipv6Addr: hostInfo.ip6Addr.String(),
+			Ipv4Addr: ip4str,
+			Ipv6Addr: ip6str,
 			Asnumber: hostInfo.asnumber,
 			Labels:   hostInfo.labels,
 		})
