@@ -165,6 +165,11 @@ func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen
 		return err
 	}
 
+	err = installProgram("connect", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes)
+	if err != nil {
+		return err
+	}
+
 	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, bpfMc.MapSizes)
 	if err != nil {
 		return err
