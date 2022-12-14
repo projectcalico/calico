@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -36,6 +37,7 @@ import (
 	"github.com/ishidawataru/sctp"
 	reuse "github.com/libp2p/go-reuseport"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/fv/cgroup"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -1060,6 +1062,96 @@ func (d *connectedSCTP) SetReadDeadline(t time.Time) error {
 	return d.conn.SetReadDeadline(t)
 }
 
+type tcpConn6 struct {
+	s int
+}
+
+func (c *tcpConn6) Read(b []byte) (n int, err error) {
+	return unix.Read(c.s, b)
+}
+
+func (c *tcpConn6) Write(b []byte) (n int, err error) {
+	return unix.Write(c.s, b)
+}
+
+func (c *tcpConn6) Close() error {
+	return unix.Close(c.s)
+}
+
+func (c *tcpConn6) LocalAddr() net.Addr {
+	return nil
+}
+
+func (c *tcpConn6) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (c *tcpConn6) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *tcpConn6) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *tcpConn6) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *tcpConn6) SyscallConn() (syscall.RawConn, error) {
+	return &tcpConn6Raw{s: c.s}, nil
+}
+
+type tcpConn6Raw struct {
+	s int
+}
+
+func (c *tcpConn6Raw) Control(f func(fd uintptr)) error {
+	f(uintptr(c.s))
+	return nil
+}
+
+func (c *tcpConn6Raw) Read(f func(fd uintptr) (done bool)) error {
+	panic("not implemeneted")
+}
+
+func (c *tcpConn6Raw) Write(f func(fd uintptr) (done bool)) error {
+	panic("not implemeneted")
+}
+
+func tcpForceV6(ip net.IP, port int) (net.Conn, error) {
+	s, err := unix.Socket(unix.AF_INET6, unix.SOCK_STREAM, unix.IPPROTO_TCP)
+	if err != nil {
+		return nil, err
+	}
+
+	err = unix.SetsockoptInt(s, unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	err = unix.SetsockoptInt(s, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	saddr := unix.SockaddrInet6{
+		Port: port,
+	}
+
+	copy(saddr.Addr[:], ip.To16())
+
+	saddr.Addr[10] = 0xff
+	saddr.Addr[11] = 0xff
+
+	err = unix.Connect(s, &saddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tcpConn6{s: s}, nil
+}
+
 // connectedTCP abstracts an SCTP stream.
 type connectedTCP struct {
 	localAddr  string
@@ -1076,10 +1168,34 @@ func (d *connectedTCP) Connect() error {
 	// another call to this program, the original port is in post-close wait
 	// state and bind fails.  The reuse library implements a Dial() that sets
 	// these options.
-	conn, err := reuse.Dial("tcp", d.localAddr, d.remoteAddr)
-	if err != nil {
-		return err
+
+	var conn net.Conn
+
+	if strings.Contains(d.remoteAddr, "[") {
+		addr, port, _ := net.SplitHostPort(d.remoteAddr)
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			return fmt.Errorf("ip %s is invalid", addr)
+		}
+		if ip.To4() != nil {
+			// We want to force ipv6 on ipv4 address
+			var err error
+
+			p, _ := strconv.Atoi(port)
+			if conn, err = tcpForceV6(ip, p); err != nil {
+				return fmt.Errorf("failed creating v6 connection for ip %s", d.remoteAddr)
+			}
+		}
 	}
+
+	if conn == nil {
+		var err error
+		conn, err = reuse.Dial("tcp", d.localAddr, d.remoteAddr)
+		if err != nil {
+			return err
+		}
+	}
+
 	d.conn = conn
 
 	d.r = bufio.NewReader(d.conn)
