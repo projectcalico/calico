@@ -36,6 +36,7 @@ Options:
 // main is the entry point to the calico-felix binary.
 //
 func main() {
+	log.Info("test commit")
 	// Parse command-line args.
 	version := "Version:            " + buildinfo.GitVersion + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
