@@ -1400,6 +1400,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
 
+<<<<<<< HEAD
 	switch m.rpfEnforceOption {
 	case "Strict":
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionStrict
@@ -1407,6 +1408,14 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionLoose
 	default:
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
+=======
+	// Default RPF enforce option is Strict.
+	ap.RPFEnforceOption = tcdefs.RPFEnforceOptionStrict
+	if m.rpfEnforceOption == "Disabled" {
+		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
+	} else if m.rpfEnforceOption == "Loose" {
+		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionLoose
+>>>>>>> Implement Loose option to BPFEnforceRPF
 	}
 
 	return ap

@@ -34,12 +34,20 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 	bool ret = false;
     bool strict;
 
+<<<<<<< HEAD
 	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_ENABLED)) {
+=======
+	if (GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_DISABLED) {
+>>>>>>> Implement Loose option to BPFEnforceRPF
 		CALI_DEBUG("Host RPF check disabled\n");
 		return true;
 	}
 
+<<<<<<< HEAD
 	strict = GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_STRICT;
+=======
+    strict = GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_STRICT;
+>>>>>>> Implement Loose option to BPFEnforceRPF
 	struct bpf_fib_lookup fib_params = {
 		.family = 2, /* AF_INET */
 		.tot_len = 0,

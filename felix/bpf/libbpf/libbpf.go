@@ -349,9 +349,15 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 
 const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
+<<<<<<< HEAD
 	GlobalsIPv6Enabled      uint32 = C.CALI_GLOBALS_IPV6_ENABLED
 	GlobalsRPFOptionEnabled uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
 	GlobalsRPFOptionStrict  uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
+=======
+	GlobalsIPv6Enabled       uint32 = C.CALI_GLOBALS_IPV6_ENABLED
+	GlobalsRPFOptionDisabled uint32 = C.CALI_GLOBALS_RPF_OPTION_DISABLED
+	GlobalsRPFOptionStrict   uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
+>>>>>>> Implement Loose option to BPFEnforceRPF
 )
 
 func TcSetGlobals(

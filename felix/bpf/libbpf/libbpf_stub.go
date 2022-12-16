@@ -99,9 +99,15 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
+<<<<<<< HEAD
 	GlobalsIPv6Enabled      uint32 = 1
 	GlobalsRPFOptionEnabled uint32 = 16
 	GlobalsRPFOptionStrict  uint32 = 32
+=======
+	GlobalsIPv6Enabled       uint32 = 1
+	GlobalsRPFOptionDisabled uint32 = 16
+	GlobalsRPFOptionStrict   uint32 = 32
+>>>>>>> Implement Loose option to BPFEnforceRPF
 )
 
 func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {

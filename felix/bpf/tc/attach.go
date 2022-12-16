@@ -452,6 +452,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	if ap.IPv6Enabled {
 		globalData.Flags |= libbpf.GlobalsIPv6Enabled
 	}
+<<<<<<< HEAD
 
 	switch ap.RPFEnforceOption {
 	case tcdefs.RPFEnforceOptionStrict:
@@ -459,6 +460,13 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
 	case tcdefs.RPFEnforceOptionLoose:
 		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
+=======
+	// Default RPF enforce option is Strict.
+	if ap.RPFEnforceOption == tcdefs.RPFEnforceOptionStrict {
+		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
+	} else if ap.RPFEnforceOption == tcdefs.RPFEnforceOptionDisabled {
+		globalData.Flags |= libbpf.GlobalsRPFOptionDisabled
+>>>>>>> Implement Loose option to BPFEnforceRPF
 	}
 
 	globalData.HostTunnelIP = globalData.HostIP
