@@ -175,12 +175,14 @@ var _ = Describe("Daemon", func() {
 					nil,
 				)
 				clientCxt, clientCancelFn := context.WithCancel(context.Background())
+				recorderCtx, recorderCancelFn := context.WithCancel(context.Background())
 				defer func() {
 					clientCancelFn()
 					client.Finished.Wait()
+					recorderCancelFn()
 				}()
 				err := client.Start(clientCxt)
-				go cbs.Loop(clientCxt)
+				go cbs.Loop(recorderCtx)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Send in an update at the top of the processing pipeline.
