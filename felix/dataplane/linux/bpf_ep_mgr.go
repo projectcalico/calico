@@ -241,7 +241,7 @@ type bpfEndpointManager struct {
 	Features *environment.Features
 
 	// RPF mode
-	rpfStrictModeEnabled string
+	rpfEnforceOption string
 
 	// Service routes
 	ctlbWorkaroundMode ctlbWorkaroundMode
@@ -327,7 +327,7 @@ func newBPFEndpointManager(
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
 		ipv6Enabled:           config.BPFIpv6Enabled,
-		rpfStrictModeEnabled:  config.BPFEnforceRPF,
+		rpfEnforceOption:      config.BPFEnforceRPF,
 		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
 		polNameToMatchIDs:     map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:            set.New[polprog.RuleMatchID](),
@@ -1399,9 +1399,13 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
-	ap.RPFStrictEnabled = false
-	if m.rpfStrictModeEnabled == "Strict" {
-		ap.RPFStrictEnabled = true
+
+	// Default RPF enforce option is Strict.
+	ap.RPFEnforceOption = tcdefs.RPFEnforceOptionStrict
+	if m.rpfEnforceOption == "Disabled" {
+		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
+	} else if m.rpfEnforceOption == "Loose" {
+		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionLoose
 	}
 
 	return ap
