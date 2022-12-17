@@ -38,7 +38,6 @@
 #include "parsing.h"
 #include "ipv6.h"
 #include "tc.h"
-#include "tcv6.h"
 #include "policy_program.h"
 #include "failsafe.h"
 #include "metadata.h"
@@ -1573,5 +1572,3 @@ deny:
 // because the name is exposed by bpftool et al.
 
 ENTRY_FUNC(CALI_ENTRYPOINT_NAME)
-
-char ____license[] __attribute__((section("license"), used)) = "GPL";
