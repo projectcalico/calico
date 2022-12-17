@@ -603,45 +603,45 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 // validateIPPort validates the IP and Port given in either <IPv4>:<port> or [<IPv6>]:<port> or <IP> format
 func validateIPPort(fl validator.FieldLevel) bool {
 	ipPort := fl.Field().String()
-	_, ok := processIPPort(ipPort)
+	_, _, ok := processIPPort(ipPort)
 	return ok
 }
 
 // processIPPort processes the IP and Port given in either <IPv4>:<port> or [<IPv6>]:<port> or <IP> format
-// and return the IP part and a bool if the format is as expected
-func processIPPort(ipPort string) (string, bool) {
+// and return the IP, port and a bool if the format is as expected
+func processIPPort(ipPort string) (string, int, bool) {
 	if ipPort != "" {
 		var ipStr, portStr string
 		var err error
+		var port uint64
 		ipStr = ipPort
 		// If PeerIP has both IP and port, validate both
 		if IPv4PortFormat.MatchString(ipPort) || IPv6PortFormat.MatchString(ipPort) {
 			ipStr, portStr, err = net.SplitHostPort(ipPort)
 			if err != nil {
 				log.Debugf("PeerIP value is invalid, it should either be \"<IP>\" or \"<IPv4>:<port>\" or \"[<IPv6>]:<port>\".")
-				return "", false
+				return "", 0, false
 			}
-			var port uint64
 			port, err = strconv.ParseUint(portStr, 10, 16)
 			if err != nil {
 				log.Debugf("PeerIP value has invalid port.")
-				return "", false
+				return "", 0, false
 			}
 			if port < 1 {
 				log.Debugf("PeerIP value has invalid port.")
-				return "", false
+				return "", 0, false
 			}
 		}
 
 		parsedIP := net.ParseIP(ipStr)
 		if parsedIP == nil {
 			log.Debugf("PeerIP value is invalid.")
-			return "", false
+			return "", 0, false
 		}
 
-		return ipStr, true
+		return ipStr, int(port), true
 	}
-	return "", false
+	return "", 0, false
 }
 
 // validateHTTPMethods checks if the HTTP method match clauses are valid.
@@ -1226,7 +1226,7 @@ func validateReachableBy(reachableBy, peerIP string) (bool, string) {
 	if reachableByAddr == nil {
 		return false, "ReachableBy is invalid address"
 	}
-	peerAddrStr, ok := processIPPort(peerIP)
+	peerAddrStr, _, ok := processIPPort(peerIP)
 	if !ok {
 		return false, "PeerIP is invalid address"
 	}

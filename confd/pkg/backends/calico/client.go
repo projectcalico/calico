@@ -560,7 +560,7 @@ func (c *client) updatePeersV1() {
 				host, port := parseIPPort(v3res.Spec.PeerIP)
 				ip := cnet.ParseIP(host)
 				if ip == nil {
-					log.Warning("PeerIP is not assigned or is malformed")
+					log.Error("PeerIP is not assigned or is malformed")
 					continue
 				}
 
@@ -596,12 +596,12 @@ func (c *client) updatePeersV1() {
 				if v3res.Spec.ReachableBy != "" {
 					reachableByAddr := cnet.ParseIP(v3res.Spec.ReachableBy)
 					if reachableByAddr == nil {
-						log.Warning("ReachableBy address is malformed")
+						log.Error("ReachableBy address is malformed")
 						continue
 					}
 
 					if reachableByAddr.Version() != ip.Version() {
-						log.Warning("ReachableBy address family does not match PeerIP")
+						log.Error("ReachableBy address family does not match PeerIP")
 						continue
 					}
 					reachableBy = v3res.Spec.ReachableBy
