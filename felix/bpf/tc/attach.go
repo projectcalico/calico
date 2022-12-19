@@ -452,11 +452,13 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	if ap.IPv6Enabled {
 		globalData.Flags |= libbpf.GlobalsIPv6Enabled
 	}
-	// Default RPF enforce option is Strict.
-	if ap.RPFEnforceOption == tcdefs.RPFEnforceOptionStrict {
+
+	switch ap.RPFEnforceOption {
+	case tcdefs.RPFEnforceOptionStrict:
+		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
 		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
-	} else if ap.RPFEnforceOption == tcdefs.RPFEnforceOptionDisabled {
-		globalData.Flags |= libbpf.GlobalsRPFOptionDisabled
+	case tcdefs.RPFEnforceOptionLoose:
+		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
 	}
 
 	globalData.HostTunnelIP = globalData.HostIP
