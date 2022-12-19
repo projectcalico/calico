@@ -440,7 +440,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 		if err != nil {
 			return
 		}
-		debug := log.GetLevel() >= log.DebugLevel
+		debug := log.IsLevelEnabled(log.DebugLevel)
 		switch msg := msg.(type) {
 		case syncproto.MsgSyncStatus:
 			logCxt.WithField("newStatus", msg.SyncStatus).Info("Status update from Typha.")
@@ -548,6 +548,8 @@ func (s *SyncerClient) readMessageFromServer(cxt context.Context, logCxt *log.En
 		s.logConnectionFailure(cxt, logCxt, err, "read from server")
 		return nil, err
 	}
-	logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
+	if log.IsLevelEnabled(log.DebugLevel) {
+		logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
+	}
 	return envelope.Message, nil
 }
