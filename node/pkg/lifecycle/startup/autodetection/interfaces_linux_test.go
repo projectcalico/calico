@@ -79,4 +79,10 @@ var _ = DescribeTable("GetInterfaces",
 		},
 		expectFound: false,
 	}),
+	Entry("should skip nodelocaldns", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "nodelocaldns"}}, nil
+		},
+		expectFound: false,
+	}),
 )
