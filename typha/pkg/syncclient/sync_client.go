@@ -548,6 +548,8 @@ func (s *SyncerClient) readMessageFromServer(cxt context.Context, logCxt *log.En
 		s.logConnectionFailure(cxt, logCxt, err, "read from server")
 		return nil, err
 	}
-	logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
+	if log.GetLevel() >= log.DebugLevel {
+		logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
+	}
 	return envelope.Message, nil
 }
