@@ -29,6 +29,13 @@ metadata:
   name: calico-node
   namespace: kube-system
 ---
+# Source: calico/templates/calico-node.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-cni-plugin
+  namespace: kube-system
+---
 # Source: calico/templates/calico-config.yaml
 # This ConfigMap is used to configure a self-hosted Calico installation.
 kind: ConfigMap
