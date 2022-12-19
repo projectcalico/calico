@@ -48,6 +48,9 @@ var rulesAllowUDP = &polprog.Rules{
 func TestICMPRelatedPlain(t *testing.T) {
 	RegisterTestingT(t)
 
+	bpfIfaceName = "PLAN"
+	defer func() { bpfIfaceName = "" }()
+
 	defer resetBPFMaps()
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()

@@ -503,18 +503,23 @@ func (ap *AttachPoint) updateJumpMap(ipVer int, obj *libbpf.Obj) error {
 		ipVersion = "IPv6"
 	}
 
+	return UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipVersion], ap.hasPolicyProg(), ap.hasHostConflictProg())
+}
+
+func UpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
 	mapName := bpf.JumpMapName()
 
-	for _, idx := range tcdefs.JumpMapIndexes[ipVersion] {
-		if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !ap.hasPolicyProg() {
+	for _, idx := range progs {
+		if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !hasPolicyProg {
 			continue
 		}
-		if idx == tcdefs.ProgIndexHostCtConflict && !ap.hasHostConflictProg() {
+		if idx == tcdefs.ProgIndexHostCtConflict && !hasHostConflictProg {
 			continue
 		}
+		log.WithField("prog", tcdefs.ProgramNames[idx]).Debug("UpdateJumpMap")
 		err := obj.UpdateJumpMap(mapName, tcdefs.ProgramNames[idx], idx)
 		if err != nil {
-			return fmt.Errorf("error updating %v %s program: %w", ipVersion, tcdefs.ProgramNames[idx], err)
+			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
 		}
 	}
 

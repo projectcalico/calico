@@ -275,14 +275,21 @@ func updateJumpMap(obj *libbpf.Obj) error {
 	ipVersions := []string{"IPv4"}
 
 	for _, ipFamily := range ipVersions {
-		progs := JumpMapIndexes[ipFamily]
-		mapName := bpf.JumpMapName()
+		if err := UpdateJumpMap(obj, JumpMapIndexes[ipFamily]); err != nil {
+			return fmt.Errorf("proto %s: %w", ipFamily)
+		}
+	}
 
-		for idx, name := range progs {
-			err := obj.UpdateJumpMap(mapName, name, idx)
-			if err != nil {
-				return fmt.Errorf("failed to update %s program '%s' at index %d: %w", ipFamily, name, idx, err)
-			}
+	return nil
+}
+
+func UpdateJumpMap(obj *libbpf.Obj, progs map[int]string) error {
+	mapName := bpf.JumpMapName()
+
+	for idx, name := range progs {
+		err := obj.UpdateJumpMap(mapName, name, idx)
+		if err != nil {
+			return fmt.Errorf("failed to update program '%s' at index %d: %w", name, idx, err)
 		}
 	}
 

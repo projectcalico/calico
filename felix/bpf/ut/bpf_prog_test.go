@@ -44,13 +44,17 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
@@ -223,19 +227,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		o(&topts)
 	}
 
-	maps := make([]bpf.Map, len(progMaps))
-	copy(maps, progMaps)
-
-outer:
-	for _, m := range topts.extraMaps {
-		for i := range maps {
-			if maps[i].Path() == m.Path() {
-				continue outer
-			}
-		}
-		maps = append(maps, m)
-	}
-
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(tempDir)
@@ -307,18 +298,15 @@ outer:
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = bpftoolProgLoadAll(tempObj, bpfFsDir, topts.xdp, rules != nil, maps...)
+	o, err := objLoad(tempObj, bpfFsDir, topts.xdp, rules != nil, true)
 	Expect(err).NotTo(HaveOccurred())
+	defer o.Unpin(bpfFsDir)
+	defer o.Close()
 
 	if err != nil {
 		logger.Log("Error:", string(err.(*exec.ExitError).Stderr))
 	}
 	Expect(err).NotTo(HaveOccurred())
-
-	jumpMap := tcJumpMap
-	if topts.xdp {
-		jumpMap = xdpJumpMap
-	}
 
 	if rules != nil {
 		alloc := &forceAllocator{alloc: idalloc.New()}
@@ -339,6 +327,7 @@ outer:
 		defer func() { _ = polProgFD.Close() }()
 		err = jumpMapUpdate(jumpMap, tcdefs.ProgIndexPolicy, int(polProgFD))
 		Expect(err).NotTo(HaveOccurred())
+		log.WithField("rules", rules).Debug("set policy")
 	}
 
 	runFn(bpfFsDir + "/" + section)
@@ -436,8 +425,8 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, tcJumpMap, xdpJumpMap, affinityMap, arpMap, fsafeMap, countersMap bpf.Map
-	allMaps, progMaps                                                                                                                 []bpf.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap, fsafeMap, countersMap, ifstateMap bpf.Map
+	allMaps                                                                                                                         []bpf.Map
 )
 
 func initMapsOnce() {
@@ -451,36 +440,20 @@ func initMapsOnce() {
 		ipsMap = ipsets.Map(mc)
 		stateMap = state.Map(mc)
 		testStateMap = state.MapForTest(mc)
-		tcJumpMap = jump.MapForTest(mc)
-		xdpJumpMap = MapForTest(mc)
 		affinityMap = nat.AffinityMap(mc)
 		arpMap = arp.Map(mc)
 		fsafeMap = failsafes.Map(mc)
 		countersMap = counters.MapForTest(mc)
+		ifstateMap = ifstate.Map(mc)
 
 		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap,
-			tcJumpMap, xdpJumpMap, affinityMap, arpMap, fsafeMap, countersMap}
+			affinityMap, arpMap, fsafeMap, countersMap, ifstateMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
 				log.WithError(err).Panic("Failed to initialise maps")
 			}
 		}
-
-		progMaps = []bpf.Map{
-			natMap,
-			natBEMap,
-			ctMap,
-			rtMap,
-			tcJumpMap,
-			xdpJumpMap,
-			stateMap,
-			affinityMap,
-			arpMap,
-			fsafeMap,
-			countersMap,
-		}
-
 	})
 }
 
@@ -492,7 +465,7 @@ func cleanUpMaps() {
 	defer log.SetLevel(logLevel)
 
 	for _, m := range allMaps {
-		if m == stateMap || m == testStateMap || m == tcJumpMap || m == xdpJumpMap || m == countersMap {
+		if m == stateMap || m == testStateMap || m == jumpMap || m == countersMap {
 			continue // Can't clean up array maps
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
@@ -534,34 +507,44 @@ func jumpMapDelete(jm bpf.Map, idx int) error {
 	return jm.Delete(k[:])
 }
 
-func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps ...bpf.Map) error {
-	args := []string{"prog", "loadall", fname, bpfFsDir, "type", "classifier"}
-	if forXDP {
-		args = []string{"prog", "loadall", fname, bpfFsDir, "type", "xdp"}
-	}
-
-	for _, m := range maps {
-		if forXDP && m == tcJumpMap {
-			log.Info("XDP program, skipping TC jump map")
-			continue
-		}
-		if !forXDP && m == xdpJumpMap {
-			log.Info("TC program, skipping XDP jump map")
-			continue
-		}
-
-		args = append(args, "map", "name", m.GetName(), "pinned", m.Path())
-	}
-
+func objLoad(fname, bpfFsDir string, forXDP bool, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
 	log.WithField("program", fname).Debug("Loading BPF program")
-	_, err := bpftool(args...)
+
+	jumpMap = jump.MapForTest(&bpf.MapContext{})
+	_ = unix.Unlink(jumpMap.Path())
+	err := jumpMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	obj, err := libbpf.OpenObject(fname)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("open object: %w", err)
 	}
 
-	jumpMap := tcJumpMap
-	if forXDP {
-		jumpMap = xdpJumpMap
+	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		if m.IsMapInternal() {
+			continue
+		}
+		pin := "/sys/fs/bpf/tc/globals/" + m.Name()
+		log.WithField("pin", pin).Debug("Pinning map")
+		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
+		log.WithField("cmd", cmd.String()).Debugf("executing")
+		out, _ := cmd.Output()
+		log.WithField("output", string(out)).Debug("map")
+		log.WithField("size", m.MaxEntries()).Debug("libbpf map")
+		if err := m.SetPinPath(pin); err != nil {
+			obj.Close()
+			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+		}
+	}
+
+	if err := obj.Load(); err != nil {
+		return nil, fmt.Errorf("load object: %w", err)
+	}
+
+	err = obj.PinPrograms(bpfFsDir)
+	if err != nil {
+		obj.Close()
+		return nil, fmt.Errorf("pin programs: %w", err)
 	}
 
 	if polProg {
@@ -574,51 +557,33 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		if err == nil {
 			err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexPolicy, polProgPath)
 			if err != nil {
-				return errors.Wrap(err, "failed to update jump map (policy program)")
+				err = errors.Wrap(err, "failed to update jump map (policy program)")
+				goto out
 			}
+			log.Debug("set default policy")
 		}
+	}
+
+	if !forXDP {
+		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes["IPv4"], false, hasHostConflictProg)
+		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
+			goto out
+		}
+		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes["IPv4"], false, false)
 	} else {
-		err = jumpMapDelete(jumpMap, tcdefs.ProgIndexPolicy)
-		if err != nil {
-			log.WithError(err).Info("failed to update jump map (deleting policy program)")
+		if err := xdp.UpdateJumpMap(obj, xdp.JumpMapIndexes["IPv4"]); err != nil {
+			goto out
 		}
 	}
 
-	acceptedProgPath := "xdp_accept"
-	if !forXDP {
-		acceptedProgPath = "classifier_tc_accept"
-	}
-
-	err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexAllowed, path.Join(bpfFsDir, acceptedProgPath))
+out:
 	if err != nil {
-		return errors.Wrap(err, "failed to update jump map (allowed program)")
+		obj.UnpinPrograms(bpfFsDir)
+		obj.Close()
+		return nil, err
 	}
 
-	dropProgPath := "xdp_drop"
-	if !forXDP {
-		dropProgPath = "classifier_tc_drop"
-	}
-
-	err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexDrop, path.Join(bpfFsDir, dropProgPath))
-	if err != nil {
-		return errors.Wrap(err, "failed to update jump map (drop program)")
-	}
-
-	if !forXDP {
-		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexIcmp, path.Join(bpfFsDir, "classifier_tc_icmp"))
-		if err != nil {
-			return errors.Wrap(err, "failed to update jump map (icmp program)")
-		}
-	}
-
-	if !forXDP {
-		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexHostCtConflict, path.Join(bpfFsDir, "classifier_tc_host_ct_conflict"))
-		if err != nil && !strings.Contains(err.Error(), "classifier_tc_host_ct_conflict): No such file or directory") {
-			return errors.Wrap(err, "failed to update jump map (icmp program)")
-		}
-	}
-
-	return nil
+	return obj, nil
 }
 
 type bpfRunResult struct {
@@ -726,19 +691,6 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 		log.SetLevel(topts.logLevel)
 	}
 
-	maps := make([]bpf.Map, len(progMaps))
-	copy(maps, progMaps)
-
-outer:
-	for _, m := range topts.extraMaps {
-		for i := range maps {
-			if maps[i].Path() == m.Path() {
-				continue outer
-			}
-		}
-		maps = append(maps, m)
-	}
-
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(tempDir)
@@ -766,14 +718,16 @@ outer:
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = bpftoolProgLoadAll(tempObj, bpfFsDir, false, true, maps...)
+	obj, err := objLoad(tempObj, bpfFsDir, false, true, false)
 	Expect(err).NotTo(HaveOccurred())
+	defer obj.UnpinPrograms(bpfFsDir)
+	defer obj.Close()
 
 	ctxIn := make([]byte, 18*4)
 
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
-			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn, ctxIn)
+			res, err := bpftoolProgRun(bpfFsDir+"/classifier_calico_unittest", dataIn, ctxIn)
 			log.Debugf("dataIn  = %+v", dataIn)
 			if err == nil {
 				log.Debugf("dataOut = %+v", res.dataOut)
@@ -794,7 +748,6 @@ outer:
 type testOpts struct {
 	subtests      bool
 	logLevel      log.Level
-	extraMaps     []bpf.Map
 	xdp           bool
 	psnaStart     uint32
 	psnatEnd      uint32
@@ -819,12 +772,6 @@ func withLogLevel(l log.Level) testOption {
 
 var _ = withLogLevel
 
-func withExtraMap(m bpf.Map) testOption {
-	return func(o *testOpts) {
-		o.extraMaps = append(o.extraMaps, m)
-	}
-}
-
 func withXDP() testOption {
 	return func(o *testOpts) {
 		o.xdp = true
@@ -843,8 +790,6 @@ func withHostNetworked() testOption {
 		o.hostNetworked = true
 	}
 }
-
-var _ = withExtraMap
 
 // layersMatchFields matches all Exported fields and ignore the ones explicitly
 // listed. It always ignores BaseLayer as that is not set by the tests.
@@ -1333,7 +1278,7 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
-	jumpMapFD := tcJumpMap.MapFD()
+	jumpMapFD := jumpMap.MapFD()
 	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, false)
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)

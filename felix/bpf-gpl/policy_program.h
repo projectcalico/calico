@@ -72,6 +72,7 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 	state->pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src,
 					    state->ip_dst, state->sport, state->dport);
 
+	CALI_DEBUG("jumping to allowed\n");
 	CALI_JUMP_TO(skb, PROG_INDEX_ALLOWED);
 #else
 	CALI_JUMP_TO(skb, PROG_INDEX_V6_ALLOWED);
