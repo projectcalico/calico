@@ -178,6 +178,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -207,6 +208,11 @@ const DefaultPort = 5473
 
 type Envelope struct {
 	Message interface{}
+}
+
+// logrus only looks for a String() method on the top-level object, make sure we call through to the wrapped object.
+func (e Envelope) String() string {
+	return fmt.Sprint("syncproto.Envelope{Message:", e.Message, "}")
 }
 
 type SyncerType string
@@ -293,6 +299,26 @@ type MsgPong struct {
 }
 type MsgKVs struct {
 	KVs []SerializedUpdate
+}
+
+func (m MsgKVs) String() string {
+	var b strings.Builder
+	const limit = 10
+	b.WriteString("syncproto.MsgKVs{Num:")
+	b.WriteString(fmt.Sprint(len(m.KVs)))
+	b.WriteString(",KVs:[]{")
+	for i, kv := range m.KVs {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		if i >= limit {
+			b.WriteString("...truncated...")
+			break
+		}
+		b.WriteString(kv.String())
+	}
+	b.WriteString("}}")
+	return b.String()
 }
 
 func init() {
