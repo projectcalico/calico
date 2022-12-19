@@ -17,14 +17,6 @@ rules:
 {{- end }}
     verbs:
       - create
-  # The CNI plugin needs to get pods, nodes, and namespaces.
-  - apiGroups: [""]
-    resources:
-      - pods
-      - nodes
-      - namespaces
-    verbs:
-      - get
   # EndpointSlices are used for Service-based network policy rule
   # enforcement.
   - apiGroups: ["discovery.k8s.io"]
@@ -76,13 +68,6 @@ rules:
     verbs:
       - list
       - watch
-  # The CNI plugin patches pods/status.
-  - apiGroups: [""]
-    resources:
-      - pods/status
-    verbs:
-      - patch
-  # Calico monitors various CRDs for config.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - globalfelixconfigs
@@ -138,26 +123,6 @@ rules:
       - create
       - update
 {{- if eq .Values.network "calico" }}
-  # These permissions are required for Calico CNI to perform IPAM allocations.
-  - apiGroups: ["crd.projectcalico.org"]
-    resources:
-      - blockaffinities
-      - ipamblocks
-      - ipamhandles
-    verbs:
-      - get
-      - list
-      - create
-      - update
-      - delete
-  # The CNI plugin and calico/node need to be able to create a default
-  # IPAMConfiguration
-  - apiGroups: ["crd.projectcalico.org"]
-    resources:
-      - ipamconfigs
-    verbs:
-      - get
-      - create
   # Block affinities must also be watchable by confd for route aggregation.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
@@ -173,6 +138,61 @@ rules:
       - get
 {{- end }}
 {{- end }}
+
+---
+
+metadata:
+  name: calico-cni-plugin
+rules:
+  # Used for creating service account tokens to be used by the CNI plugin
+  - apiGroups: [""]
+    resources:
+      - serviceaccounts/token
+    resourceNames:
+  {{- if eq .Values.network "flannel" }}
+- canal-cni
+  {{- else }}
+- calico-cni-plugin
+  {{- end }}
+verbs:
+  - create
+# The CNI plugin needs to get pods, nodes, and namespaces.
+- apiGroups: [""]
+  resources:
+    - pods
+    - nodes
+    - namespaces
+  verbs:
+    - get
+  {{- if eq .Values.datastore "kubernetes" }}
+- apiGroups: [""]
+  resources:
+    - pods/status
+  verbs:
+    - patch
+  {{- if eq .Values.network "calico" }}
+# These permissions are required for Calico CNI to perform IPAM allocations.
+- apiGroups: ["crd.projectcalico.org"]
+  resources:
+    - blockaffinities
+    - ipamblocks
+    - ipamhandles
+  verbs:
+    - get
+    - list
+    - create
+    - update
+    - delete
+# The CNI plugin and calico/node need to be able to create a default
+# IPAMConfiguration
+- apiGroups: ["crd.projectcalico.org"]
+  resources:
+    - ipamconfigs
+  verbs:
+    - get
+    - create
+  {{- end }}
+  {{- end }}
 
 ---
 
@@ -227,6 +247,19 @@ subjects:
 - kind: ServiceAccount
   name: canal
   namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: canal-calico-cni
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-cni-plugin
+subjects:
+  - kind: ServiceAccount
+    name: canal-cni-plugin
+    namespace: kube-system
 {{- else }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -240,4 +273,17 @@ subjects:
 - kind: ServiceAccount
   name: calico-node
   namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-cni-plugin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-cni-plugin
+subjects:
+  - kind: ServiceAccount
+    name: calico-cni-plugin
+    namespace: kube-system
 {{- end }}
