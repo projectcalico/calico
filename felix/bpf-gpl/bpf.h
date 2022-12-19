@@ -351,5 +351,6 @@ struct {										\
 #define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags, pin)		\
 		CALI_MAP(name,, map_type, key_type, val_type, size, flags, pin)
 
+char ____license[] __attribute__((section("license"), used)) = "GPL";
 
 #endif /* __CALI_BPF_H__ */

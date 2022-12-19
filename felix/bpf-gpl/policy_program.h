@@ -62,6 +62,7 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering normal policy program\n");
 
+#ifndef IPVER6
 	struct cali_tc_state *state = state_get();
 	if (!state) {
 	        CALI_DEBUG("State map lookup failed: DROP\n");
@@ -72,18 +73,12 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 					    state->ip_dst, state->sport, state->dport);
 
 	CALI_JUMP_TO(skb, PROG_INDEX_ALLOWED);
+#else
+	CALI_JUMP_TO(skb, PROG_INDEX_V6_ALLOWED);
+#endif
 	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
 
 deny:
-	return TC_ACT_SHOT;
-}
-
-SEC("classifier/tc/policy_v6")
-int calico_tc_v6_norm_pol_tail(struct __sk_buff *skb)
-{
-	CALI_DEBUG("Entering IPv6 normal policy program\n");
-	CALI_JUMP_TO(skb, PROG_INDEX_V6_ALLOWED);
-	CALI_DEBUG("Tail call to IPv6 post-policy program failed: DROP\n");
 	return TC_ACT_SHOT;
 }
 

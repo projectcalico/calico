@@ -577,24 +577,10 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 				return errors.Wrap(err, "failed to update jump map (policy program)")
 			}
 		}
-		if !forXDP {
-			polProgPathv6 := path.Join(bpfFsDir, "classifier_tc_policy_v6")
-			_, err = os.Stat(polProgPathv6)
-			if err == nil {
-				err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Policy, polProgPathv6)
-				if err != nil {
-					return errors.Wrap(err, "failed to update jump map (policy_v6 program)")
-				}
-			}
-		}
 	} else {
 		err = jumpMapDelete(jumpMap, tcdefs.ProgIndexPolicy)
 		if err != nil {
 			log.WithError(err).Info("failed to update jump map (deleting policy program)")
-		}
-		err = jumpMapDelete(jumpMap, tcdefs.ProgIndexV6Policy)
-		if err != nil {
-			log.WithError(err).Info("failed to update jump map (deleting policy_v6 program)")
 		}
 	}
 
@@ -622,26 +608,6 @@ func bpftoolProgLoadAll(fname, bpfFsDir string, forXDP bool, polProg bool, maps 
 		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexIcmp, path.Join(bpfFsDir, "classifier_tc_icmp"))
 		if err != nil {
 			return errors.Wrap(err, "failed to update jump map (icmp program)")
-		}
-
-		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Prologue, path.Join(bpfFsDir, "classifier_tc_prologue_v6"))
-		if err != nil {
-			return errors.Wrap(err, "failed to update jump map (prologue_v6)")
-		}
-
-		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Policy, path.Join(bpfFsDir, "classifier_tc_accept_v6"))
-		if err != nil {
-			return errors.Wrap(err, "failed to update jump map (accept_v6 program)")
-		}
-
-		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Icmp, path.Join(bpfFsDir, "classifier_tc_icmp_v6"))
-		if err != nil {
-			return errors.Wrap(err, "failed to update jump map (icmp_v6 program)")
-		}
-
-		err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexV6Drop, path.Join(bpfFsDir, "classifier_tc_drop_v6"))
-		if err != nil {
-			return errors.Wrap(err, "failed to update jump map (drop_v6 program)")
 		}
 	}
 

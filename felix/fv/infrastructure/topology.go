@@ -74,7 +74,7 @@ func DefaultTopologyOptions() TopologyOptions {
 	return TopologyOptions{
 		FelixLogSeverity:  felixLogLevel,
 		EnableIPv6:        true,
-		BPFEnableIPv6:     true,
+		BPFEnableIPv6:     false,
 		ExtraEnvVars:      map[string]string{},
 		ExtraVolumes:      map[string]string{},
 		WithTypha:         false,
@@ -173,7 +173,7 @@ func StartSingleNodeTopology(options TopologyOptions, infra DatastoreInfra) (fel
 //   index in the returned array.  When creating workloads, use IPs from the relevant block.
 // - Configures the Tunnel IP for each host as 10.65.x.1.
 func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (felixes []*Felix, client client.Interface) {
-	log.Infof("Starting a %d-node topology.", n)
+	log.WithField("options", opts).Infof("Starting a %d-node topology", n)
 	success := false
 	var err error
 	startTime := time.Now()
@@ -192,6 +192,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 	if opts.VXLANMode == "" {
 		opts.VXLANMode = api.VXLANModeNever
 	}
+
 	// Get client.
 	client = infra.GetCalicoClient()
 	mustInitDatastore(client)
@@ -292,25 +293,26 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			kdd.SetExternalIP(felix, i)
 			expectedIPs = append(expectedIPs, felix.ExternalIP)
 		}
+		setUpBGPNodeIPAndIPIPTunnelIP := n > 1 || opts.NeedNodeIP
 		if opts.IPIPEnabled {
-			infra.SetExpectedIPIPTunnelAddr(felix, i, bool(n > 1))
+			infra.SetExpectedIPIPTunnelAddr(felix, i, setUpBGPNodeIPAndIPIPTunnelIP)
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}
 		if opts.VXLANMode != api.VXLANModeNever {
-			infra.SetExpectedVXLANTunnelAddr(felix, i, bool(n > 1))
+			infra.SetExpectedVXLANTunnelAddr(felix, i, n > 1)
 			expectedIPs = append(expectedIPs, felix.ExpectedVXLANTunnelAddr)
 			if opts.EnableIPv6 {
 				expectedIPs = append(expectedIPs, felix.IPv6)
-				infra.SetExpectedVXLANV6TunnelAddr(felix, i, bool(n > 1))
+				infra.SetExpectedVXLANV6TunnelAddr(felix, i, n > 1)
 				expectedIPs = append(expectedIPs, felix.ExpectedVXLANV6TunnelAddr)
 			}
 		}
 		if opts.WireguardEnabled {
-			infra.SetExpectedWireguardTunnelAddr(felix, i, bool(n > 1))
+			infra.SetExpectedWireguardTunnelAddr(felix, i, n > 1)
 			expectedIPs = append(expectedIPs, felix.ExpectedWireguardTunnelAddr)
 		}
 		if opts.WireguardEnabledV6 {
-			infra.SetExpectedWireguardV6TunnelAddr(felix, i, bool(n > 1))
+			infra.SetExpectedWireguardV6TunnelAddr(felix, i, n > 1)
 			expectedIPs = append(expectedIPs, felix.ExpectedWireguardV6TunnelAddr)
 		}
 
@@ -319,15 +321,18 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			// If felix has an IPIP tunnel address defined, Felix may restart after loading its config.
 			// Handle that here by monitoring the log and waiting for the correct tunnel IP to show up
 			// before we return.
+			log.Info("Waiting for felix to restart after setting tunnel IP.")
 			w = felix.WatchStdoutFor(regexp.MustCompile(
-				`"IpInIpTunnelAddr":"` + regexp.QuoteMeta(felix.ExpectedIPIPTunnelAddr) + `"`))
+				`Successfully loaded configuration.*"IpInIpTunnelAddr":"` + regexp.QuoteMeta(felix.ExpectedIPIPTunnelAddr) + `"`))
 		} else if opts.NeedNodeIP {
-			w = felix.WatchStdoutFor(regexp.MustCompile(
-				`Host config update for this host|Host IP changed`))
+			// opts.NeedNodeIP is implicitly handled by the previous branch.  We rely on the infra to
+			// set the (formerly BGP) node IP and tunnel IP together so if we hit this branch then the
+			// infra isn't doing what we expect.
+			log.Panic("NeedNodeIP set but infra didn't set ExpectedIPIPTunnelAddr.")
 		}
-		infra.AddNode(felix, i, bool(n > 1 || opts.NeedNodeIP))
+		infra.AddNode(felix, i, setUpBGPNodeIPAndIPIPTunnelIP)
 		if w != nil {
-			// Wait for any Felix restart...
+			// Wait for any expected Felix restart...
 			log.Info("Wait for Felix to restart")
 			Eventually(w, "10s").Should(BeClosed(),
 				fmt.Sprintf("Timed out waiting for %s to restart", felix.Name))
