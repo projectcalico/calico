@@ -50,6 +50,7 @@ generate:
 	$(MAKE) -C calicoctl gen-crds
 	$(MAKE) -C app-policy protobuf
 	$(MAKE) gen-manifests
+	$(MAKE) go-fmt
 
 gen-manifests: bin/helm
 	cd ./manifests && \
