@@ -323,7 +323,7 @@ type InternalDataplane struct {
 }
 
 const (
-	healthName     = "int_dataplane"
+	healthName     = "InternalDataplaneMainLoop"
 	healthInterval = 10 * time.Second
 
 	ipipMTUOverhead        = 20
@@ -704,9 +704,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		if config.BPFConnTimeLBEnabled {
+			excludeUDP := false
+			if config.FeatureGates != nil {
+				switch config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] {
+				case "udp":
+					excludeUDP = true
+				}
+			}
 			// Activate the connect-time load balancer.
 			err = nat.InstallConnectTimeLoadBalancer(
-				config.BPFCgroupV2, config.BPFLogLevel, config.BPFConntrackTimeouts.UDPLastSeen, bpfMapContext)
+				config.BPFCgroupV2, config.BPFLogLevel, config.BPFConntrackTimeouts.UDPLastSeen, bpfMapContext, excludeUDP)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}

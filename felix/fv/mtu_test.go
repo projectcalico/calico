@@ -115,6 +115,14 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					fc.Spec.VXLANEnabled = &f
 					_, err := client.FelixConfigurations().Create(context.Background(), fc, options.SetOptions{})
 					Expect(err).NotTo(HaveOccurred())
+					// To disable vxlan for ipv6, set VXLANModeNever on the IPv6 pool
+					if enableIPv6 {
+						poolV6, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPv6PoolName, options.GetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						poolV6.Spec.VXLANMode = api.VXLANModeNever
+						_, err = client.IPPools().Update(context.Background(), poolV6, options.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+					}
 
 					// It should now have an MTU of 1460 since there is no encap.
 					for _, felix := range felixes {

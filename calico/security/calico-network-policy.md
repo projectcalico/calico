@@ -80,14 +80,12 @@ Each network policy rule applies to either **ingress** or **egress** traffic. Fr
 
 You can specify whether policy applies to ingress, egress, or both using the **types** field. If you do not use the types field, Calico defaults to the following values.
 
-
 | Ingress rule present? | Egress rule present?  |      Value      |
 | :-------------------: | :-------------------: | :-------------: |
 |          No           |          No           |     Ingress     |
 |          Yes          |          No           |     Ingress     |
 |          No           |          Yes          |     Egress      |
 |          Yes          |          Yes          | Ingress, Egress |
-
 
 #### Network traffic behaviors: deny and allow
 
@@ -112,7 +110,6 @@ For compatibility with Kubernetes, **Calico network policy** follows the same be
 - [Control traffic to/from endpoints using IP addresses or CIDR ranges](#control-traffic-tofrom-endpoints-using-ip-addresses-or-cidr-ranges)
 - [Apply network policies in specific order](#apply-network-policies-in-specific-order)
 - [Generate logs for specific traffic](#generate-logs-for-specific-traffic)
-
 
 #### Control traffic to/from endpoints in a namespace
 
@@ -275,6 +272,3 @@ Spec:
 - For additional Calico network policy features, see [Calico network policy]({{ site.baseurl }}/reference/resources/networkpolicy) and [Calico global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
 - For an alternative to using IP addresses or CIDRs in policy, see [Network sets]({{ site.baseurl }}/reference/resources/networkset) 
 - For details on the calicoctl command line tool, see [calicoctl user reference]({{ site.baseurl }}/reference/calicoctl/overview)
-- {% include enterprise_icon.html %}[Network visibility with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/network-visibility)
-- {% include enterprise_icon.html %}[Advanced compliance controls with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/compliance)
-

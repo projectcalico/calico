@@ -15,13 +15,15 @@
 package resources
 
 import (
+	"errors"
 	"reflect"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 const (
@@ -43,5 +45,20 @@ func NewKubeControllersConfigClient(c *kubernetes.Clientset, r *rest.RESTClient)
 		},
 		k8sListType:  reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
 		resourceKind: apiv3.KindKubeControllersConfiguration,
+		validator:    kubeControllersConfigValidator{},
 	}
+}
+
+type kubeControllersConfigValidator struct{}
+
+func (v kubeControllersConfigValidator) Validate(res Resource) error {
+	config := res.(*apiv3.KubeControllersConfiguration)
+	if node := config.Spec.Controllers.Node; node != nil {
+		log.Debugf("Validate SyncLabels for Kubernetes datastore type: %s", node.SyncLabels)
+		if node.SyncLabels == apiv3.Disabled {
+			log.Debugf("SyncLabels value cannot be set to disabled with Kubernetes datastore driver.")
+			return errors.New("invalid SyncLabels value")
+		}
+	}
+	return nil
 }

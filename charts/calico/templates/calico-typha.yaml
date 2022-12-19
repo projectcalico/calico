@@ -41,6 +41,19 @@ spec:
   selector:
     matchLabels:
       k8s-app: calico-typha
+  strategy:
+    rollingUpdate:
+      # 100% surge allows a complete up-level set of typha instances to start and become ready,
+      # which in turn allows all the back-level typha instances to start shutting down. This
+      # means that connections tend to bounce directly from a back-level instance to an up-level
+      # instance.
+      maxSurge: 100%
+      # In case the cluster is unable to schedule extra surge instances, allow at most one instance
+      # to shut down to make room. You can set this to 0 if you're sure there'll always be enough room to
+      # schedule extra typha instances during an upgrade (because setting it to 0 blocks shutdown until
+      # up-level typha instances are online and ready).
+      maxUnavailable: 1
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -51,6 +64,9 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
       hostNetwork: true
+      # Typha supports graceful shut down, disconnecting clients slowly during the grace period.
+      # The TYPHA_SHUTDOWNTIMEOUTSECS env var should be kept in sync with this value.
+      terminationGracePeriodSeconds: 300
       tolerations:
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
@@ -105,6 +121,10 @@ spec:
             value: "kubernetes"
           - name: TYPHA_HEALTHENABLED
             value: "true"
+          # Set this to the same value as terminationGracePeriodSeconds; it tells Typha how much time
+          # it has to shut down.
+          - name: TYPHA_SHUTDOWNTIMEOUTSECS
+            value: "300"
 {{- if eq .Values.ipam "host-local" }}
           # Configure route aggregation based on pod CIDR.
           - name: USE_POD_CIDR

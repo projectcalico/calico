@@ -835,10 +835,44 @@ var localIPAMBlockWithBorrows = AllocationBlock{
 var p = int32(80)
 var tcp = v1.ProtocolTCP
 var endpointSliceKey1 = model.ResourceKey{Name: "eps", Namespace: "default", Kind: "KubernetesEndpointSlice"}
+var endpointSliceKey2 = model.ResourceKey{Name: "eps-2", Namespace: "default", Kind: "KubernetesEndpointSlice"}
 var endpointSlice1 = discovery.EndpointSlice{
 	ObjectMeta: metav1.ObjectMeta{Name: "eps", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "svc"}},
 	Endpoints: []discovery.Endpoint{
 		{Addresses: []string{"10.0.0.1"}},
+	},
+	Ports: []discovery.EndpointPort{
+		{Port: &p, Protocol: &tcp},
+	},
+}
+var endpointSlice1NewIPs = discovery.EndpointSlice{
+	ObjectMeta: metav1.ObjectMeta{Name: "eps", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "svc"}},
+	Endpoints: []discovery.Endpoint{
+		{Addresses: []string{"10.0.0.1"}},
+		{Addresses: []string{"10.0.0.2"}},
+		{Addresses: []string{"10.0.0.3"}},
+	},
+	Ports: []discovery.EndpointPort{
+		{Port: &p, Protocol: &tcp},
+	},
+}
+var endpointSlice1NewIPs2 = discovery.EndpointSlice{
+	ObjectMeta: metav1.ObjectMeta{Name: "eps", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "svc"}},
+	Endpoints: []discovery.Endpoint{
+		{Addresses: []string{"10.0.0.2"}},
+		{Addresses: []string{"10.0.0.3"}},
+		{Addresses: []string{"10.0.0.4"}},
+	},
+	Ports: []discovery.EndpointPort{
+		{Port: &p, Protocol: &tcp},
+	},
+}
+var endpointSlice2NewIPs2 = discovery.EndpointSlice{
+	ObjectMeta: metav1.ObjectMeta{Name: "eps-2", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "svc"}},
+	Endpoints: []discovery.Endpoint{
+		{Addresses: []string{"10.0.0.2"}},
+		{Addresses: []string{"10.0.0.3"}},
+		{Addresses: []string{"10.0.0.4"}},
 	},
 	Ports: []discovery.EndpointPort{
 		{Port: &p, Protocol: &tcp},
@@ -855,6 +889,26 @@ var servicePolicy = model.Policy{
 		},
 	},
 	Types:    []string{"egress"},
+	Selector: "all()",
+}
+
+var servicePolicyNoPorts = model.Policy{
+	Namespace: "default",
+	InboundRules: []model.Rule{
+		{
+			Action:              "Allow",
+			SrcService:          "svc",
+			SrcServiceNamespace: "default",
+			Protocol:            &protoTCP,
+			SrcPorts: []numorstring.Port{
+				{
+					MinPort: 80,
+					MaxPort: 80,
+				},
+			},
+		},
+	},
+	Types:    []string{"ingress"},
 	Selector: "all()",
 }
 

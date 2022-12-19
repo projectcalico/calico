@@ -110,11 +110,14 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			// Handle node resource to pass-through HostMetadataV6Update/HostMetadataV6Remove messages
 			// with IPv6 node address updates. IPv4 updates are handled above my model.HostIPKey updates.
 			log.WithField("update", update).Debug("Passing-through a Node IPv6 address update")
+			log.WithField("update", update).Debug("Passing-through a Node update")
 			hostname := key.Name
 			if update.Value == nil {
 				log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
 				delete(h.hostIPv6s, hostname)
 				h.callbacks.OnHostIPv6Remove(hostname)
+				log.WithField("update", update).Debug("Passing-through Node remove")
+				h.callbacks.OnHostRemove(hostname)
 			} else {
 				node, _ := update.Value.(*libv3.Node)
 				if node.Spec.BGP != nil && node.Spec.BGP.IPv6Address != "" {
@@ -132,6 +135,25 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 					delete(h.hostIPv6s, hostname)
 					h.callbacks.OnHostIPv6Remove(hostname)
 				}
+				if node.Spec.BGP != nil {
+					log.WithField("update", update).Debug("Passing-through Node update")
+					ip4, _, _ := net.ParseCIDR(node.Spec.BGP.IPv4Address)
+					ip6, _, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
+					if ip4 == nil {
+						ip4 = &net.IP{}
+					}
+					if ip6 == nil {
+						ip6 = &net.IP{}
+					}
+					asnumber := ""
+					if node.Spec.BGP.ASNumber != nil {
+						asnumber = node.Spec.BGP.ASNumber.String()
+					}
+					h.callbacks.OnHostUpdate(hostname, ip4, ip6, asnumber, node.Labels)
+				} else {
+					log.WithField("update", update).Debug("Passing-through Node remove")
+					h.callbacks.OnHostRemove(hostname)
+				}
 			}
 		} else {
 			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
@@ -141,7 +163,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 }
 
 func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
-	return &proto.ServiceUpdate{
+	up := &proto.ServiceUpdate{
 		Name:           s.Name,
 		Namespace:      s.Namespace,
 		Type:           string(s.Spec.Type),
@@ -149,4 +171,29 @@ func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 		LoadbalancerIp: s.Spec.LoadBalancerIP,
 		ExternalIps:    s.Spec.ExternalIPs,
 	}
+
+	ports := make([]*proto.ServicePort, 0, len(s.Spec.Ports))
+
+	protoGet := func(kp kapiv1.Protocol) string {
+		switch kp {
+		case kapiv1.ProtocolUDP:
+			return "UDP"
+		case kapiv1.ProtocolSCTP:
+			return "SCTP"
+		}
+
+		return "TCP"
+	}
+
+	for _, p := range s.Spec.Ports {
+		ports = append(ports, &proto.ServicePort{
+			Protocol: protoGet(p.Protocol),
+			Port:     p.Port,
+			NodePort: p.NodePort,
+		})
+	}
+
+	up.Ports = ports
+
+	return up
 }

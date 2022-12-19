@@ -42,12 +42,12 @@ See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tuto
 **Istio support**
 
 Following Istio versions have been verified to work with application layer policies:
+- Istio v1.15.2
 - Istio v1.10.2
-- Istio v1.9.6
 
-Istio v1.7.x and lower are **not** supported.
+Istio v1.9.x and lower are **not** supported.
 
-Although we expect future minor versions to work with the corresponding manifest below (for example, v1.9.7 or v1.10.3), manifest compatibility depends entirely on the upstream changes in the respective Istio release.
+Although we expect future minor versions to work with the corresponding manifest below (for example, v1.10.2 or v1.15.2), manifest compatibility depends entirely on the upstream changes in the respective Istio release.
 
 ### How to
 
@@ -63,11 +63,22 @@ Although we expect future minor versions to work with the corresponding manifest
 To enable the application layer policy, you must enable the **Policy Sync API** on Felix cluster-wide.
 
 In the default **FelixConfiguration**, set the field, `policySyncPathPrefix` to `/var/run/nodeagent`:
-
+{% tabs %}
+<label:calicoctl>
+<%
 ```bash
 calicoctl patch FelixConfiguration default --patch \
    '{"spec": {"policySyncPathPrefix": "/var/run/nodeagent"}}'
 ```
+%>
+<label:kubectl,active:true>
+<%
+```bash
+kubectl patch FelixConfiguration default --type=merge --patch \
+   '{"spec": {"policySyncPathPrefix": "/var/run/nodeagent"}}'
+```
+%>
+{% endtabs %}
 
 Additionally, if you have installed Calico via the operator, you can optionally disable flexvolumes.
 Flexvolumes were used in earlier implementations and have since been deprecated.
@@ -88,15 +99,15 @@ kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/csi-driver
 #### Install Istio
 
 1. Verify [application layer policy requirements]({{site.baseurl}}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
-1. Install Istio using {% include open-new-window.html text='installation guide in the project documentation' url='https://istio.io/v1.9/docs/setup/install/' %}.
+1. Install Istio using {% include open-new-window.html text='installation guide in the project documentation' url='https://istio.io/v1.15/docs/setup/install/' %}.
 
 ```bash
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.10.2 sh -
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.15.2 sh -
 cd $(ls -d istio-* --color=never)
 ./bin/istioctl install
 ```
 
-Next, create the following {% include open-new-window.html text='PeerAuthentication' url='https://istio.io/latest/docs/reference/config/security/peer_authentication/' %} policy.
+Next, create the following {% include open-new-window.html text='PeerAuthentication' url='https://istio.io/v1.15/docs/reference/config/security/peer_authentication/' %} policy.
 
 Replace `namespace` below by `rootNamespace` value, if it's customized in your environment.
 
@@ -117,11 +128,20 @@ EOF
 
 The sidecar injector automatically modifies pods as they are created to work with Istio. This step modifies the injector configuration to add Dikastes (a {{site.prodname}} component), as sidecar containers.
 
-1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.9/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection){:target="_blank"} to install the sidecar injector and enable it in your chosen namespace(s).
+1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.15/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection){:target="_blank"} to install the sidecar injector and enable it in your chosen namespace(s).
 1. Patch the istio-sidecar-injector `ConfigMap` to enable injection of Dikastes alongside Envoy.
 
 {% tabs %}
-<label:Istio v1.10.x,active:true>
+<label:Istio v1.15.x,active:true>
+<%
+```bash
+curl {{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.15.yaml -o istio-inject-configmap.yaml
+kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
+```
+
+[View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.15.yaml){:target="_blank"}
+%>
+<label:Istio v1.10.x>
 <%
 ```bash
 curl {{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.10.yaml -o istio-inject-configmap.yaml
@@ -130,15 +150,6 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
 
 [View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.10.yaml){:target="_blank"}
 %>
-<label:Istio v1.9.x>
-<%
-```bash
-curl {{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.9.yaml -o istio-inject-configmap.yaml
-kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
-```
-
-[View sample manifest]({{site.data.versions.first.manifests_url}}/manifests/alp/istio-inject-configmap-1.9.yaml){:target="_blank"}
-%>
 {% endtabs %}
 
 #### Add Calico authorization services to the mesh
@@ -146,7 +157,7 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
 Apply the following manifest to configure Istio to query {{site.prodname}} for application layer policy authorization decisions.
 
 {%tabs%}
-<label: Istio v1.10.x and v1.9.x,active:true>
+<label: Istio v1.15.x and v1.10.x,active:true>
 <%
 ```bash
 kubectl apply -f {{site.data.versions.first.manifests_url}}/manifests/alp/istio-app-layer-policy-envoy-v3.yaml

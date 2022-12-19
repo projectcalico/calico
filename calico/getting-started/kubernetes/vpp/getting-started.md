@@ -4,7 +4,6 @@ description: Install Calico with the VPP dataplane on a Kubernetes cluster.
 canonical_url: '/getting-started/kubernetes/vpp/getting-started'
 ---
 
-
 ### Big picture
 
 Install {{site.prodname}} and enable the beta release of the VPP dataplane.
@@ -28,7 +27,6 @@ In addition, the VPP dataplane offers some specific features for network-intensi
 
 Trying out the beta will give you a taste of these benefits and an opportunity to give feedback to the VPP dataplane team.
 
-
 ### Features
 
 This how-to guide uses the following {{site.prodname}} features:
@@ -48,7 +46,6 @@ This guide uses the Tigera operator to install {{site.prodname}}. The operator p
 exposed via the Kubernetes API defined as a custom resource definition. While it is also technically possible to install {{site.prodname}}
 and configure it for VPP using manifests directly, only operator based installations are supported at this stage.
 
-
 ### How to
 
 This guide details two ways to install {{site.prodname}} with the VPP dataplane:
@@ -59,8 +56,6 @@ This guide details two ways to install {{site.prodname}} with the VPP dataplane:
 In all cases, here are the details of what you will get:
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}
-
-
 
 {% tabs %}
 <label:Install on EKS,active:true>
@@ -88,14 +83,16 @@ Before you get started, make sure you have downloaded and configured the {% incl
    kubectl delete daemonset -n kube-system aws-node
    ```
 
-
 #### Install and configure Calico with the VPP dataplane
 
 1. Now that you have an empty cluster configured, you can install the Tigera operator. 
 
    ```bash
-   kubectl apply -f {{site.data.versions.manifests_url}}/manifests/tigera-operator.yaml
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
+
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 1. Then, you need to configure the {{site.prodname}} installation for the VPP dataplane. The yaml in the link below contains a minimal viable configuration for EKS. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
@@ -104,13 +101,13 @@ Before you get started, make sure you have downloaded and configured the {% incl
    {: .alert .alert-info}
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
    ```
 
 1. Now is time to install the VPP dataplane components.
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks.yaml
    ```
 
 1. Finally, add nodes to the cluster.
@@ -122,7 +119,6 @@ Before you get started, make sure you have downloaded and configured the {% incl
    > **Tip**: The --max-pods-per-node option above, ensures that EKS does not limit the {% include open-new-window.html text='number of pods based on node-type' url='https://github.com/awslabs/amazon-eks-ami/blob/master/files/eni-max-pods.txt' %}. For the full set of node group options, see `eksctl create nodegroup --help`.
    {: .alert .alert-success}
 
-
 %>
 
 <label:Install on EKS with DPDK>
@@ -133,7 +129,6 @@ Before you get started, make sure you have downloaded and configured the {% incl
 #### Requirements
 
 DPDK provides better performance compared to the standard install but it requires some additional customisations (hugepages, for instance) in the EKS worker instances. We have a bash script, `init_eks.sh`, which takes care of applying the required customizations and we make use of the `preBootstrapCommands` property of `eksctl` {% include open-new-window.html text='configuration file' url='https://eksctl.io/usage/schema' %} to execute the script during the worker node creation. These instructions require the latest version of `eksctl`.
-
 
 #### Provision the cluster
 
@@ -149,14 +144,16 @@ DPDK provides better performance compared to the standard install but it require
    kubectl delete daemonset -n kube-system aws-node
    ```
 
-
 #### Install and configure Calico with the VPP dataplane
 
 1. Now that you have an empty cluster configured, you can install the Tigera operator. 
 
    ```bash
-   kubectl apply -f {{site.data.versions.manifests_url}}/manifests/tigera-operator.yaml
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
+
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 2. Then, you need to configure the {{site.prodname}} installation for the VPP dataplane. The yaml in the link below contains a minimal viable configuration for EKS. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
@@ -165,17 +162,16 @@ DPDK provides better performance compared to the standard install but it require
    {: .alert .alert-info}
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-eks.yaml
    ```
 
 3. Now is time to install the VPP dataplane components.
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks-dpdk.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/generated/calico-vpp-eks-dpdk.yaml
    ```
 
 4. Finally, time to add nodes to the cluster. Since we need to customize the nodes for DPDK, we will use an `eksctl` config file with the `preBootstrapCommands` property to create the worker nodes. The following command will create a managed nodegroup with 2 t3.large worker nodes in the cluster:
-
 
    ```
    cat <<EOF | eksctl create nodegroup -f -
@@ -243,8 +239,11 @@ For some hardware, the following hugepages configuration may enable VPP to use m
 1. Start by installing the Tigera operator on your cluster. 
 
    ```bash
-   kubectl apply -f {{site.data.versions.manifests_url}}/manifests/tigera-operator.yaml
+   kubectl create -f {{site.data.versions.first.manifests_url}}/manifests/tigera-operator.yaml
    ```
+
+   > **Note**: Due to the large size of the CRD bundle, `kubectl apply` might exceed request limits. Instead, use `kubectl create` or `kubectl replace`.
+   {: .alert .alert-info}
 
 1. Then, you need to configure the {{site.prodname}} installation for the VPP dataplane. The yaml in the link below contains a minimal viable configuration for VPP. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
 
@@ -253,7 +252,7 @@ For some hardware, the following hugepages configuration may enable VPP to use m
    {: .alert .alert-info}
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-default.yaml
+   kubectl create -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/yaml/calico/installation-default.yaml
    ```
 
 #### Install the VPP dataplane components
@@ -311,16 +310,13 @@ data:
 
 To apply the configuration, run:
 ````bash
-kubectl apply -f calico-vpp.yaml
+kubectl create -f calico-vpp.yaml
 ````
 
 This will install all the resources required by the VPP dataplane in your cluster.
 
 %>
 {% endtabs %}
-
-
-
 
 ### Next steps
 

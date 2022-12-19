@@ -46,7 +46,7 @@ spec:
     imagePullPolicy: Always
     name: busybox
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 
 ---
 
@@ -64,7 +64,7 @@ spec:
     ports:
     - containerPort: 80
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 EOF
 ```
 
@@ -314,7 +314,7 @@ spec:
     imagePullPolicy: Always
     name: busybox
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 
 ---
 
@@ -332,7 +332,7 @@ spec:
     ports:
     - containerPort: 80
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 
 ```
 
@@ -465,7 +465,6 @@ Now that client and server pods are running on both Linux and Windows nodes, let
     ```powershell
     192.168.40.166 (192.168.40.166:80) open
     ```
-
 
     >**Note**: The IP addresses returned will vary depending on your environment setup.
     {: .alert .alert-info}

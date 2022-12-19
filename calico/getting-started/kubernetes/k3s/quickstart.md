@@ -157,9 +157,7 @@ kube-system   coredns-8655855d6-blzl5                    1/1     Running   0    
 %>
 {% endtabs %}
 
-
 1. Press CTRL+C to exit `watch`.
-
 
 2. Confirm that you now have a node in your cluster with the
 following command.

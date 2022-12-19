@@ -5,6 +5,8 @@ section:
 - title: Kubernetes
   path: /getting-started/kubernetes/
   section:
+  - title: System requirements
+    path: /getting-started/kubernetes/requirements  
   - title: Quickstart
     path: /getting-started/kubernetes/quickstart
   - title: Managed public cloud
@@ -121,8 +123,6 @@ section:
       path: /getting-started/kubernetes/hardway/end-user-rbac
     - title: Istio integration
       path: /getting-started/kubernetes/hardway/istio-integration
-  - title: System requirements
-    path: /getting-started/kubernetes/requirements
   - title: VPP dataplane
     path: /getting-started/kubernetes/vpp/
     section:

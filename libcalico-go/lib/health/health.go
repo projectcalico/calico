@@ -28,6 +28,31 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	globalOverridesLock    sync.Mutex
+	globalTimeoutOverrides map[string]time.Duration
+)
+
+func SetGlobalTimeoutOverrides(overrides map[string]time.Duration) {
+	overridesCopy := map[string]time.Duration{}
+	for k, v := range overrides {
+		overridesCopy[k] = v
+	}
+	globalOverridesLock.Lock()
+	defer globalOverridesLock.Unlock()
+	globalTimeoutOverrides = overrides
+}
+
+func GlobalOverride(name string) *time.Duration {
+	globalOverridesLock.Lock()
+	defer globalOverridesLock.Unlock()
+	override, ok := globalTimeoutOverrides[name]
+	if ok {
+		return &override
+	}
+	return nil
+}
+
 // The HealthReport struct has slots for the levels of health that we monitor and aggregate.
 type HealthReport struct {
 	Live   bool
@@ -77,7 +102,16 @@ func (r *reporterState) HasLivenessProblem() bool {
 // TimedOut checks whether the reporter is due for another report. This is the case when
 // the reports are configured to expire and the time since the last report exceeds the report timeout duration.
 func (r *reporterState) TimedOut() bool {
-	return r.timeout != 0 && time.Since(r.timestamp) > r.timeout
+	timeout := r.Timeout()
+	return timeout != 0 && time.Since(r.timestamp) > timeout
+}
+
+func (r *reporterState) Timeout() time.Duration {
+	o := GlobalOverride(r.name)
+	if o != nil {
+		return *o
+	}
+	return r.timeout
 }
 
 // A HealthAggregator receives health reports from individual reporters (which are typically
@@ -127,10 +161,11 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 	defer aggregator.mutex.Unlock()
 	reporter := aggregator.reporters[name]
 
+	reports := aggregator.reporters[name].reports
 	logCxt := log.WithFields(log.Fields{
-		"name":       name,
-		"newReport":  report,
-		"lastReport": reporter.latest,
+		"name":      name,
+		"newReport": formatReport(&reports, report),
+		"oldReport": formatReport(&reports, &reporter.latest),
 	})
 
 	if reporter.latest != *report {
@@ -139,6 +174,26 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 	}
 	reporter.timestamp = time.Now()
 	return
+}
+
+func formatReport(reports, report *HealthReport) string {
+	var parts []string
+
+	if reports.Live {
+		if report.Live {
+			parts = append(parts, "live")
+		} else {
+			parts = append(parts, "non-live")
+		}
+	}
+	if reports.Ready {
+		if report.Ready {
+			parts = append(parts, "ready")
+		} else {
+			parts = append(parts, "non-ready")
+		}
+	}
+	return strings.Join(parts, ",")
 }
 
 func NewHealthAggregator() *HealthAggregator {
@@ -219,9 +274,18 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 			readinessStr = "reporting ready"
 		}
 		componentNames = append(componentNames, reporter.name)
+
+		ov := GlobalOverride(reporter.name)
+		var timeout string
+		if ov != nil {
+			timeout = ov.String() + " (override)"
+		} else {
+			timeout = reporter.timeout.String()
+		}
+
 		componentData[reporter.name] = []string{
 			reporter.name,
-			reporter.timeout.String(),
+			timeout,
 			livenessStr,
 			readinessStr,
 			reporter.latest.Detail,
@@ -239,7 +303,7 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	// Summary status has changed so update previous status and log.
 	if aggregator.lastReport == nil || *summary != *aggregator.lastReport {
 		aggregator.lastReport = summary
-		log.WithField("newStatus", summary).Info("Overall health status changed")
+		log.Infof("Overall health status changed: live=%v ready=%v\n%s", summary.Live, summary.Ready, summary.Detail)
 	}
 
 	log.WithField("healthResult", summary).Debug("Calculated health summary")

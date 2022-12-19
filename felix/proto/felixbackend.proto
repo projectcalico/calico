@@ -87,6 +87,11 @@ message ToDataplane {
     // HostIPRemove is sent when a host IP is removed.
     HostMetadataRemove host_metadata_remove = 18;
 
+    // HostMetadataV4V6Update is sent when a host is added or updated.
+    HostMetadataV4V6Update host_metadata_v4v6_update = 37;
+    // HostIPRemove is sent when a host is removed.
+    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38; 
+
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
     IPAMPoolUpdate ipam_pool_update = 16;
     // IPAMPoolRemove is sent when an IPAM pool is removed.
@@ -164,7 +169,14 @@ message FromDataplane {
 }
 
 message ConfigUpdate {
+  string message = 3;
   map<string, string> config = 1;
+  map<uint32, RawConfig> source_to_raw_config = 2;
+}
+
+message RawConfig {
+  string source = 1;
+  map<string,string> config = 2;
 }
 
 message InSync {
@@ -462,6 +474,19 @@ message WireguardStatusUpdate {
   IPVersion ip_version = 2;
 }
 
+message HostMetadataV4V6Update {
+  string hostname = 1;
+  string ipv4_addr = 2;
+  string ipv6_addr = 3;
+  string asnumber = 4;
+  map<string, string> labels = 5;
+}
+
+message HostMetadataV4V6Remove {
+  string hostname = 1;
+  string ipv4_addr = 2;
+}
+
 message HostMetadataUpdate {
   string hostname = 1;
   string ipv4_addr = 2;
@@ -494,6 +519,8 @@ message IPAMPoolRemove {
 message IPAMPool {
   string cidr = 1;
   bool masquerade = 2;
+  string ipip_mode = 3;
+  string vxlan_mode = 4;
 }
 
 message Encapsulation {
@@ -624,6 +651,12 @@ message GlobalBGPConfigUpdate {
   repeated string service_loadbalancer_cidrs = 3;
 }
 
+message ServicePort {
+	string Protocol = 1;
+	int32 Port = 2;
+	int32 NodePort = 3;
+}
+
 message ServiceUpdate {
 	string name = 1;
 	string namespace = 2;
@@ -631,6 +664,7 @@ message ServiceUpdate {
 	string cluster_ip = 4;
 	string loadbalancer_ip = 5;
 	repeated string external_ips = 6;
+	repeated ServicePort ports = 7;
 }
 
 message ServiceRemove {

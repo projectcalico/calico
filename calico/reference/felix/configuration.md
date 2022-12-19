@@ -40,7 +40,7 @@ The full list of parameters which can be set is as follows.
 
 | Configuration file parameter      | Environment variable                    | Description  | Schema |
 | --------------------------------- | --------------------------------------- | -------------| ------ |
-| `DataplaneWatchdogTimeout` | `FELIX_DATAPLANEWATCHDOGTIMEOUT` | Timeout before the main dataplane goroutine is determined to have hung and Felix will report non-live and non-ready. Can be increased if the liveness check incorrectly fails (for example if Felix is running slowly on a heavily loaded system). [Default: `90`] | int |
+| `DataplaneWatchdogTimeout` | `FELIX_DATAPLANEWATCHDOGTIMEOUT` | Deprecated: superceded by `HealthTimeoutOverrides`. Timeout before the main dataplane goroutine is determined to have hung and Felix will report non-live and non-ready. Can be increased if the liveness check incorrectly fails (for example if Felix is running slowly on a heavily loaded system). [Default: `90`] | int |
 | `AwsSrcDstCheck`                  | `FELIX_AWSSRCDSTCHECK`                  | Set the {% include open-new-window.html text='source-destination-check' url='https://docs.aws.amazon.com/vpc/latest/userguide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck' %} when using AWS EC2 instances. Check [IAM role and profile configuration]({{ site.baseurl }}/reference/resources/felixconfig#aws-iam-rolepolicy-for-source-destination-check-configuration) for setting the necessary permission for this setting to work. [Default: `DoNothing`] | `DoNothing`, `Disable`, `Enable` |
 | `DatastoreType`                   | `FELIX_DATASTORETYPE`                   | The datastore that Felix should read endpoints and policy information from. [Default: `etcdv3`] | `etcdv3`, `kubernetes`|
 | `DeviceRouteSourceAddress`        | `FELIX_DEVICEROUTESOURCEADDRESS`        | IPv4 address to use as the source hint on device routes programmed by Felix [Default: No source hint is set on programmed routes and for local traffic from host to workload the source address will be chosen by the kernel.] | `<IPv4-address>` |
@@ -56,6 +56,7 @@ The full list of parameters which can be set is as follows.
 | `HealthEnabled`                   | `FELIX_HEALTHENABLED`                   | When enabled, exposes felix health information via an http endpoint. | boolean |
 | `HealthHost`                      | `FELIX_HEALTHHOST`                      | The address on which Felix will respond to health requests. [Default: `localhost`] | string |
 | `HealthPort`                      | `FELIX_HEALTHPORT`                      | The port on which Felix will respond to health requests. [Default: `9099`] | int |
+| `HealthTimeoutOverrides` | `FELIX_HEALTHTIMEOUTOVERRIDES` | Allows the internal watchdog timeouts of individual subcomponents to be overriden; example: "InternalDataplaneMainLoop=30s,CalculationGraph=2m".  This is useful for working around "false positive" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs. [Default: ``] | Comma-delimited list of key/value pairs where the values are durations: `1s`, `10s`, `5m`, etc. |
 | `IpInIpEnabled`                   | `FELIX_IPINIPENABLED`                   | Optional, you shouldn't need to change this setting as Felix calculates if IPIP should be enabled based on the existing IP Pools. When set, this overrides whether Felix should configure an IPinIP interface on the host. When explicitly disabled in FelixConfiguration, Felix will not clean up addresses from the `tunl0` interface (use this if you need to add addresses to that interface and don't want to have them removed). [Default: unset] | optional boolean |
 | `IpInIpMtu`                       | `FELIX_IPINIPMTU`                       | The MTU to set on the IPIP tunnel device. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu) [Default: `0`] | int |
 | `IPv4VXLANTunnelAddr`             |                                         | IP address of the IPv4 VXLAN tunnel. This is system configured and should not be updated manually. | string |
@@ -104,7 +105,6 @@ The full list of parameters which can be set is as follows.
 | `EtcdCertFile`          | `FELIX_ETCDCERTFILE`  | Path to the file containing the client certificate issued to Felix. Enables Felix to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/cert.pem` (optional) | string |
 | `EtcdEndpoints`         | `FELIX_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
 | `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | Path to the file containing the private key matching Felix's client certificate. Enables Felix to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/key.pem` (optional) | string |
-
 
 #### Kubernetes API datastore configuration
 
@@ -156,11 +156,12 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-ebpf) for ste
 | BPFEnabled                         / <br/> FELIX_BPFENABLED                           | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-ebpf). | true, false |  false |
 | BPFDisableUnprivileged             / <br/> FELIX_BPFDISABLEUNPRIVILEGED               | If true, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and cannot insert their own BPF programs to interfere with the ones that {{site.prodname}} installs. | true, false |  true |
 | BPFLogLevel                        / <br/> FELIX_BPFLOGLEVEL                          | The log level used by the BPF programs.  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec BPF debug`. | Off,Info,Debug | Off |
-| BPFDataIfacePattern                / <br/> FELIX_BPFDATAIFACEPATTERN                  | Controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the external network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to NodePorts and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).. | regular expression | `^(en[opsx].*|eth.*|tunl0$|wireguard.cali$)` |
+| BPFDataIfacePattern                / <br/> FELIX_BPFDATAIFACEPATTERN                  | Controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the external network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to NodePorts and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).. | regular expression | `^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$|wg-v6.cali$)` |
 | BPFL3IfacePattern                / <br/> FELIX_BPFL3IFACEPATTERN                  | Allows to list tunnel devices like wireguard or vxlan (i.e., L3 devices) in addition to BPFDataIfacePattern. That is, tunnel interfaces not created by Calico, that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster. | regular expression | "" |
 | BPFConnectTimeLoadBalancingEnabled / <br/> FELIX_BPFCONNECTTIMELOADBALANCINGENABLED   | Controls whether Felix installs the connect-time load balancer.  In the current release, the connect-time load balancer is required for the host to reach kubernetes services. | true,false |  true |
 | BPFExternalServiceMode             / <br/> FELIX_BPFEXTERNALSERVICEMODE               | Controls how traffic from outside the cluster to NodePorts and ClusterIPs is handled.  In Tunnel mode, packet is tunneled from the ingress host to the host with the backing pod and back again.  In DSR mode, traffic is tunneled to the host with the backing pod and then returned directly; this requires a network that allows direct return. | Tunnel,DSR |  Tunnel |
 | BPFExtToServiceConnmark            / <br/> FELIX_BPFEXTTOSERVICECONNMARK              | Controls a 32bit mark that is set on connections from an external client to a local service. This mark allows us to control how packets of that connection are routed within the host and how is routing interpreted by RPF check. | int | 0 |
+| BPFEnforceRPF                      / <br/> FELIX_BPFENFORCERPF                        | Enforce RPF on all interfaces with BPF programs regardless of what is the per-interfaces or global setting. | Disabled,Strict | Strict |
 | BPFKubeProxyIptablesCleanupEnabled / <br/> FELIX_BPFKUBEPROXYIPTABLESCLEANUPENABLED   | Controls whether Felix will clean up the iptables rules created by the Kubernetes `kube-proxy`; should only be enabled if `kube-proxy` is not running. | true,false| true |
 | BPFKubeProxyMinSyncPeriod          / <br/> FELIX_BPFKUBEPROXYMINSYNCPERIOD            | Controls the minimum time between dataplane updates for Felix's embedded `kube-proxy` implementation. | seconds | `1` |
 | BPFKubeProxyEndpointSlicesEnabled  / <br/> FELIX_BPFKUBEPROXYENDPOINTSLICESENABLED    | Controls whether Felix's embedded kube-proxy derives its services from Kubernetes' EndpointSlices resources. Using EndpointSlices is more efficient but it requires EndpointSlices support to be enabled at the Kubernetes API server. | true,false | false |
@@ -179,12 +180,10 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-ebpf) for ste
 | ------------------------|----------------------------| ------------ | ------ |
 | `KubeNodePortRanges`    | `FELIX_KUBENODEPORTRANGES` | A list of port ranges that Felix should treat as Kubernetes node ports.  Only when `kube-proxy` is configured to use IPVS mode:  Felix assumes that traffic arriving at the host of one of these ports will ultimately be forwarded instead of being terminated by a host process.  [Default: `30000:32767`] <a id="ipvs-portranges"></a>  | Comma-delimited list of `<min>:<max>` port ranges or single ports. |
 
-
 > **Note**: <a id="ipvs-bits"></a> When using {{site.prodname}} with Kubernetes' `kube-proxy` in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint.
 > For example, the default `IptablesMarkMask` value, `0xffff0000` gives {{site.prodname}} 16 bits, up to 6 of which are used for internal purposes, leaving 10 bits for endpoint IDs.
 > 10 bits is enough for 1024 different values and {{site.prodname}} uses 2 of those for internal purposes, leaving enough for 1022 endpoints on the host.
 {: .alert .alert-info}
-
 
 #### OpenStack-specific configuration
 
@@ -242,7 +241,6 @@ For more information on how to use and set these variables, refer to
 | wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
 | wireguardHostEncryptionEnabled     | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | boolean | false |
 | wireguardKeepAlive                 | WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0] | int | int | 25 |
-
 
 For more information on encrypting in-cluster traffic with WireGuard, refer to
 [Encrypt cluster pod traffic](../../security/encrypt-cluster-pod-traffic)

@@ -26,15 +26,15 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
-type ProgName string
-
-var programNames = []ProgName{
-	"calico_xdp_norm_pol_tail",
-	"calico_xdp_accepted_entrypoint",
-	"", // This is a placeholder for icmp program, and only defined to align indexes with TC
-	"calico_xdp_drop",
+var JumpMapIndexes = map[string]map[int]string{
+	"IPv4": map[int]string{
+		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
+		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
+		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
+	},
 }
 
 const DetachedID = 0
@@ -45,23 +45,23 @@ type AttachPoint struct {
 	Modes    []bpf.XDPMode
 }
 
-func (ap AttachPoint) IfaceName() string {
+func (ap *AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
-func (ap AttachPoint) HookName() bpf.Hook {
+func (ap *AttachPoint) HookName() bpf.Hook {
 	return bpf.HookXDP
 }
 
-func (ap AttachPoint) Config() string {
+func (ap *AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
 
-func (ap AttachPoint) JumpMapFDMapKey() string {
+func (ap *AttachPoint) JumpMapFDMapKey() string {
 	return string(bpf.HookXDP)
 }
 
-func (ap AttachPoint) FileName() string {
+func (ap *AttachPoint) FileName() string {
 	logLevel := strings.ToLower(ap.LogLevel)
 	if logLevel == "off" {
 		logLevel = "no_log"
@@ -69,11 +69,11 @@ func (ap AttachPoint) FileName() string {
 	return "xdp_" + logLevel + ".o"
 }
 
-func (ap AttachPoint) ProgramName() string {
+func (ap *AttachPoint) ProgramName() string {
 	return "xdp_calico_entry"
 }
 
-func (ap AttachPoint) Log() *log.Entry {
+func (ap *AttachPoint) Log() *log.Entry {
 	return log.WithFields(log.Fields{
 		"iface":    ap.Iface,
 		"modes":    ap.Modes,
@@ -106,7 +106,7 @@ func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	return -1, false
 }
 
-func (ap AttachPoint) AttachProgram() (int, error) {
+func (ap *AttachPoint) AttachProgram() (int, error) {
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
 		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
@@ -193,7 +193,7 @@ func (ap AttachPoint) AttachProgram() (int, error) {
 	return progID, nil
 }
 
-func (ap AttachPoint) DetachProgram() error {
+func (ap *AttachPoint) DetachProgram() error {
 	// Get the current XDP program ID, if any.
 	progID, err := ap.ProgramID()
 	if err != nil {
@@ -258,7 +258,7 @@ func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
 	return nil
 }
 
-func (ap AttachPoint) IsAttached() (bool, error) {
+func (ap *AttachPoint) IsAttached() (bool, error) {
 	_, err := ap.ProgramID()
 	return err == nil, err
 }
@@ -275,22 +275,14 @@ func updateJumpMap(obj *libbpf.Obj) error {
 	ipVersions := []string{"IPv4"}
 
 	for _, ipFamily := range ipVersions {
-		pIndex := 0
-		err := obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[pIndex]), pIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v policy program: %v", ipFamily, err)
-		}
+		progs := JumpMapIndexes[ipFamily]
+		mapName := bpf.JumpMapName()
 
-		eIndex := 1
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[eIndex]), eIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v epilogue program: %v", ipFamily, err)
-		}
-
-		dIndex := 3
-		err = obj.UpdateJumpMap(bpf.JumpMapName(), string(programNames[dIndex]), dIndex)
-		if err != nil {
-			return fmt.Errorf("error updating %v drop program: %v", ipFamily, err)
+		for idx, name := range progs {
+			err := obj.UpdateJumpMap(mapName, name, idx)
+			if err != nil {
+				return fmt.Errorf("failed to update %s program '%s' at index %d: %w", ipFamily, name, idx, err)
+			}
 		}
 	}
 

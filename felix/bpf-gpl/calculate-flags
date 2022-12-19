@@ -41,6 +41,10 @@ if [[ "${filename}" =~ test_.* ]]; then
   args+=("-DUNITTEST")
 fi
 
+if [[ "${filename}" =~ .*_v6.o ]]; then
+  args+=("-DIPVER6")
+fi
+
 flags=0
 
 # WARNING: these constants must be kept in sync with bpf.h.
@@ -52,41 +56,47 @@ flags=0
 ((CALI_TC_L3_DEV = 1 << 5))
 ((CALI_XDP_PROG = 1 << 6))
 ((CALI_TC_NAT_IF = 1 << 7))
+((CALI_TC_LO = 1 << 8))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
   ((flags |= CALI_TC_HOST_EP))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG")
   ep_type="host"
 elif [[ "${filename}" =~ .*tnl.* ]]; then
   # Tunnel.
   ((flags |= CALI_TC_TUNNEL | CALI_TC_HOST_EP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
+  args+=("-DCALI_DEBUG_ALLOW_ALL")
   ep_type="tunnel"
 elif [[ "${filename}" =~ .*l3.* ]]; then
   # Any l3 device.
   ((flags |= CALI_TC_L3_DEV | CALI_TC_HOST_EP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
+  args+=("-DCALI_DEBUG_ALLOW_ALL")
   ep_type="l3dev"
 elif [[ "${filename}" =~ .*connect.* ]]; then
   # Connect-time load balancer (CGROUP attached).
   ((flags |= CALI_CGROUP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALI")
+  args+=("-DCALI_DEBUG_ALLOW_ALL")
 elif [[ "${filename}" =~ .*wep.* ]]; then
   # Workload endpoint; recognised by CALI_TC_HOST_EP bit being 0.
   ep_type="workload"
-  args+=("-DCALI_LOG_PFX=CALICOLO")
 elif [[ "${filename}" =~ .*xdp.* ]]; then
   # XDP, so host endpoint.
   ((flags |= CALI_TC_HOST_EP))
   ((flags |= CALI_XDP_PROG))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG")
   ep_type="host"
 elif [[ "${filename}" =~ .*nat.* ]]; then
   ((flags |= CALI_TC_HOST_EP))
   ((flags |= CALI_TC_NAT_IF))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG")
   ep_type="nat"
+elif [[ "${filename}" =~ .*lo.* ]]; then
+  # loopback, so host endpoint.
+  ((flags |= CALI_TC_HOST_EP))
+  ((flags |= CALI_TC_LO))
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG")
+  ep_type="lo"
 else
   echo "Can't recognise endpoint type"
   exit 2

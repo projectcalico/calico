@@ -56,6 +56,10 @@ func (m *Map) Type() int {
 	return int(mapType)
 }
 
+func (m *Map) ValueSize() int {
+	return int(C.bpf_map__value_size(m.bpfMap))
+}
+
 func (m *Map) SetPinPath(path string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
@@ -136,16 +140,12 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 		isIngress = 1
 	}
 
-	opts, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.int(isIngress))
+	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.int(isIngress))
 	if err != nil {
 		return -1, fmt.Errorf("error attaching tc program %w", err)
 	}
 
-	progId, err := C.bpf_tc_query_iface(C.int(ifIndex), opts, C.int(isIngress))
-	if err != nil {
-		return -1, fmt.Errorf("error querying interface %s: %w", ifName, err)
-	}
-	return int(progId), nil
+	return int(ret.prog_id), nil
 }
 
 func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, error) {
@@ -297,36 +297,34 @@ const (
 
 func TcSetGlobals(
 	m *Map,
-	hostIP uint32,
-	intfIP uint32,
-	extToSvcMark uint32,
-	tmtu uint16,
-	vxlanPort uint16,
-	psNatStart uint16,
-	psNatLen uint16,
-	hostTunnelIP uint32,
-	flags uint32,
-	wgPort uint16,
+	globalData *TcGlobalData,
 ) error {
+
+	cName := C.CString(globalData.IfaceName)
+	defer C.free(unsafe.Pointer(cName))
+
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
-		C.uint(hostIP),
-		C.uint(intfIP),
-		C.uint(extToSvcMark),
-		C.ushort(tmtu),
-		C.ushort(vxlanPort),
-		C.ushort(psNatStart),
-		C.ushort(psNatLen),
-		C.uint(hostTunnelIP),
-		C.uint(flags),
-		C.ushort(wgPort),
+		cName,
+		C.uint(globalData.HostIP),
+		C.uint(globalData.IntfIP),
+		C.uint(globalData.ExtToSvcMark),
+		C.ushort(globalData.Tmtu),
+		C.ushort(globalData.VxlanPort),
+		C.ushort(globalData.PSNatStart),
+		C.ushort(globalData.PSNatLen),
+		C.uint(globalData.HostTunnelIP),
+		C.uint(globalData.Flags),
+		C.ushort(globalData.WgPort),
+		C.uint(globalData.NatIn),
+		C.uint(globalData.NatOut),
 	)
 
 	return err
 }
 
-func CTLBSetGlobals(m *Map, udpNotSeen time.Duration) error {
+func CTLBSetGlobals(m *Map, udpNotSeen time.Duration, excludeUDP bool) error {
 	udpNotSeen /= time.Second // Convert to seconds
-	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen))
+	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(excludeUDP))
 
 	return err
 }

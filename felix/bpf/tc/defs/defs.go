@@ -15,20 +15,19 @@
 package tcdefs
 
 const (
-	MarkSeen                         = 0x01000000
-	MarkSeenMask                     = MarkSeen
-	MarkSeenBypass                   = MarkSeen | 0x02000000
-	MarkSeenBypassMask               = MarkSeenMask | MarkSeenBypass
-	MarkSeenFallThrough              = MarkSeen | 0x04000000
-	MarkSeenFallThroughMask          = MarkSeenMask | MarkSeenFallThrough
-	MarkSeenBypassForward            = MarkSeenBypass | 0x00300000
-	MarkSeenBypassForwardMask        = MarkSeenBypassMask | 0x00f00000
-	MarkSeenBypassForwardSourceFixup = MarkSeenBypass | 0x00500000
-	MarkSeenNATOutgoing              = MarkSeenBypass | 0x00800000
-	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | 0x00f00000
-	MarkSeenMASQ                     = MarkSeenBypass | 0x00600000
-	MarkSeenMASQMask                 = MarkSeenBypassMask | 0x00f00000
-	MarkSeenSkipFIB                  = MarkSeen | 0x00100000
+	MarkSeen                  = 0x01000000
+	MarkSeenMask              = MarkSeen
+	MarkSeenBypass            = MarkSeen | 0x02000000
+	MarkSeenBypassMask        = MarkSeenMask | MarkSeenBypass
+	MarkSeenFallThrough       = MarkSeen | 0x04000000
+	MarkSeenFallThroughMask   = MarkSeenMask | MarkSeenFallThrough
+	MarkSeenBypassForward     = MarkSeenBypass | 0x00300000
+	MarkSeenBypassForwardMask = MarkSeenBypassMask | 0x00f00000
+	MarkSeenNATOutgoing       = MarkSeenBypass | 0x00800000
+	MarkSeenNATOutgoingMask   = MarkSeenBypassMask | 0x00f00000
+	MarkSeenMASQ              = MarkSeenBypass | 0x00600000
+	MarkSeenMASQMask          = MarkSeenBypassMask | 0x00f00000
+	MarkSeenSkipFIB           = MarkSeen | 0x00100000
 
 	MarkLinuxConntrackEstablished     = 0x08000000
 	MarkLinuxConntrackEstablishedMask = 0x08000000
@@ -38,3 +37,52 @@ const (
 
 	MarksMask uint32 = 0x1ff00000
 )
+
+const (
+	ProgIndexNoDebug = iota
+	ProgIndexDebug
+	ProgIndexPolicy
+	ProgIndexAllowed
+	ProgIndexIcmp
+	ProgIndexDrop
+	ProgIndexHostCtConflict
+	ProgIndexV6Prologue
+	ProgIndexV6Policy
+	ProgIndexV6Allowed
+	ProgIndexV6Icmp
+	ProgIndexV6Drop
+)
+
+var ProgramNames = []string{
+	"", /* reserved for filter program */
+	"", /* reserved for filter program */
+	/* ipv4 */
+	"calico_tc_norm_pol_tail",
+	"calico_tc_skb_accepted_entrypoint",
+	"calico_tc_skb_send_icmp_replies",
+	"calico_tc_skb_drop",
+	"calico_tc_host_ct_conflict",
+	/* ipv6 */
+	"calico_tc",
+	"calico_tc_norm_pol_tail",
+	"calico_tc_skb_accepted_entrypoint",
+	"calico_tc_skb_send_icmp_replies",
+	"calico_tc_skb_drop",
+}
+
+var JumpMapIndexes = map[string][]int{
+	"IPv4": []int{
+		ProgIndexPolicy,
+		ProgIndexAllowed,
+		ProgIndexIcmp,
+		ProgIndexDrop,
+		ProgIndexHostCtConflict,
+	},
+	"IPv6": []int{
+		ProgIndexV6Prologue,
+		ProgIndexV6Policy,
+		ProgIndexV6Allowed,
+		ProgIndexV6Icmp,
+		ProgIndexV6Drop,
+	},
+}

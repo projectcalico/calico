@@ -18,7 +18,6 @@ This how-to guide uses the following features:
 - **Calico IPAM**
 - **IPPool** resource
 
-
 ### Concepts
 
 #### Kubernetes pod CIDR

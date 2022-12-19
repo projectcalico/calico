@@ -749,7 +749,7 @@ func TestIPv6NotSupported(t *testing.T) {
 	t.Log("Creating an IPv6 CIDR map should fail for now")
 	_, err := bpfDP.NewCIDRMap("myiface2", IPFamilyV6)
 	if err == nil {
-		t.Fatalf("creating an IPv6 blacklist should have failed")
+		t.Fatalf("creating an IPv6 blocklist should have failed")
 	}
 }
 

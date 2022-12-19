@@ -81,7 +81,6 @@ AKS cluster nodes run Ubuntu with a kernel that has WireGuard installed already,
 <%
 To install WireGuard for OpenShift v4.8:
 
-
    1. Install requirements:
       - {% include open-new-window.html text='CoreOS Butane' url='https://coreos.github.io/butane/getting-started/' %}
       - {% include open-new-window.html text='Openshift CLI' url='https://docs.openshift.com/container-platform/4.2/cli_reference/openshift_cli/getting-started-cli.html' %}
@@ -187,6 +186,9 @@ calicoctl patch felixconfiguration default --type='merge' -p '{"spec": {"wiregua
 For OpenShift, add the Felix configuration with WireGuard enabled [under custom resources]({{site.baseurl}}/getting-started/openshift/installation#optionally-provide-additional-configuration).
 
    > **Note**: The above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{site.baseurl}}/reference/resources/felixconfig#felix-configuration-definition).
+   {: .alert .alert-info}
+
+   > **Note**:  `natOutgoing: true` is set for the default IPv4 IP pool, but not so for IPv6. Wireguard requires `natOutgoing` to be enabled in both IPv4 and IPv6, so [enable NAT outgoing for the IPv6 IP pools]({{site.baseurl}}/networking/workloads-outside-cluster) when using IPv6 Wireguard.
    {: .alert .alert-info}
 
 We recommend that you review and modify the MTU used by {{site.prodname}} networking when WireGuard is enabled to increase network performance. Follow the instructions in the [Configure MTU to maximize network performance]({{site.baseurl}}/networking/mtu) guide to set the MTU to a value appropriate for your network.

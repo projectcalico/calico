@@ -19,11 +19,11 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	k8sv1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	k8sv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -83,6 +83,11 @@ func init() {
 	awsCheckDoNothing = api.AWSSrcDstCheckOptionDoNothing
 	awsCheckbadVal = api.AWSSrcDstCheckOption("badVal")
 	awsCheckenable = api.AWSSrcDstCheckOption("enable")
+
+	iptablesBackendLegacy := api.IptablesBackend(api.IptablesBackendLegacy)
+	iptablesBackendNFTables := api.IptablesBackend(api.IptablesBackendNFTables)
+	iptablesBackendAuto := api.IptablesBackend(api.IptablesBackendAuto)
+	iptablesBackendbadVal := api.IptablesBackend("badVal")
 
 	// longLabelsValue is 63 and 64 chars long
 	maxAnnotationsLength := 256 * (1 << 10)
@@ -249,6 +254,20 @@ func init() {
 				},
 			},
 			false,
+		),
+		Entry("should reject WorkloadEndpointSpec with an invalid source spoofing config (m)",
+			libapiv3.WorkloadEndpointSpec{
+				InterfaceName:              "eth0",
+				AllowSpoofedSourcePrefixes: []string{"10.abcd"},
+			},
+			false,
+		),
+		Entry("should accept WorkloadEndpointSpec with an ip or prefix in the source spoofing config (m)",
+			libapiv3.WorkloadEndpointSpec{
+				InterfaceName:              "eth0",
+				AllowSpoofedSourcePrefixes: []string{"10.0.0.1", "192.168.0.0/16"},
+			},
+			true,
 		),
 
 		// (API) HostEndpointSpec.
@@ -484,6 +503,12 @@ func init() {
 				NodeMeshMaxRestartTime: &v1.Duration{Duration: 200 * time.Second},
 			}, false,
 		),
+		Entry("should accept valid interface names",
+			api.BGPConfigurationSpec{
+				IgnoredInterfaces: []string{"valid_iface*", "interface_name"},
+			}, true,
+		),
+		Entry("should reject invalid interface name", api.BGPConfigurationSpec{IgnoredInterfaces: []string{"*"}}, false),
 
 		// (API) IP version.
 		Entry("should accept IP version 4", api.Rule{Action: "Allow", IPVersion: &V4}, true),
@@ -651,6 +676,10 @@ func init() {
 		Entry("should reject : in an interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Invalid:Intface"}, false),
 
 		// (API) FelixConfiguration.
+		Entry("should accept a valid IptablesBackend value 'Legacy'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendLegacy}, true),
+		Entry("should accept a valid IptablesBackend value 'NFT'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendNFTables}, true),
+		Entry("should accept a valid IptablesBackend value 'Auto'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendAuto}, true),
+		Entry("should reject an invalid IptablesBackend value 'badVal'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendbadVal}, false),
 		Entry("should accept a valid DefaultEndpointToHostAction value", api.FelixConfigurationSpec{DefaultEndpointToHostAction: "Drop"}, true),
 		Entry("should reject an invalid DefaultEndpointToHostAction value 'drop' (lower case)", api.FelixConfigurationSpec{DefaultEndpointToHostAction: "drop"}, false),
 		Entry("should accept a valid IptablesFilterAllowAction value 'Accept'", api.FelixConfigurationSpec{IptablesFilterAllowAction: "Accept"}, true),
@@ -737,6 +766,11 @@ func init() {
 
 		Entry("should reject an invalid MTUIfacePattern value '*'", api.FelixConfigurationSpec{MTUIfacePattern: "*"}, false),
 		Entry("should accept a valid MTUIfacePattern value 'eth.*'", api.FelixConfigurationSpec{MTUIfacePattern: "eth.*"}, true),
+
+		Entry("should allow HealthTimeoutOverride 0", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: metav1.Duration{Duration: 0}}}}, true),
+		Entry("should reject HealthTimeoutOverride -1", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: metav1.Duration{Duration: -1}}}}, false),
+		Entry("should reject HealthTimeoutOverride with bad name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "%", Timeout: metav1.Duration{Duration: 10}}}}, false),
+		Entry("should reject HealthTimeoutOverride with no name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "", Timeout: metav1.Duration{Duration: 10}}}}, false),
 
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),

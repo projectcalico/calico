@@ -107,6 +107,7 @@ int bpf_link_destroy(struct bpf_link *link) {
 }
 
 void bpf_tc_set_globals(struct bpf_map *map,
+			char *iface_name,
 			uint host_ip,
 			uint intf_ip,
 			uint ext_to_svc_mark,
@@ -116,7 +117,9 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			ushort psnat_len,
 			uint host_tunnel_ip,
 			uint flags,
-			ushort wg_port)
+			ushort wg_port,
+			uint natin,
+			uint natout)
 {
 	struct cali_tc_globals data = {
 		.host_ip = host_ip,
@@ -129,7 +132,12 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.host_tunnel_ip = host_tunnel_ip,
 		.flags = flags,
 		.wg_port = wg_port,
+		.natin_idx = natin,
+		.natout_idx = natout,
 	};
+
+	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
+	data.iface_name[sizeof(data.iface_name)-1] = '\0';
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
@@ -219,10 +227,11 @@ out:
 	return err;
 }
 
-void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo)
+void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo, bool exclude_udp)
 {
 	struct cali_ctlb_globals data = {
 		.udp_not_seen_timeo = udp_not_seen_timeo,
+		.exclude_udp = exclude_udp,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));

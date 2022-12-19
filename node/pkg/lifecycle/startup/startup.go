@@ -259,7 +259,9 @@ func getMonitorPollInterval() time.Duration {
 
 func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface, node *libapi.Node, k8sNode *v1.Node) bool {
 	// Configure and verify the node IP addresses and subnets.
-	checkConflicts, err := configureIPsAndSubnets(node, k8sNode, autodetection.GetInterfaces)
+	checkConflicts, err := configureIPsAndSubnets(node, k8sNode, func(incl []string, excl []string, version int) ([]autodetection.Interface, error) {
+		return autodetection.GetInterfaces(net.Interfaces, incl, excl, version)
+	})
 	if err != nil {
 		// If this is auto-detection error, do a cleanup before returning
 		clearv4 := os.Getenv("IP") == "autodetect"
@@ -601,7 +603,7 @@ func validateIP(ipn string) {
 
 	// Get a complete list of interfaces with their addresses and check if
 	// the IP address can be found.
-	ifaces, err := autodetection.GetInterfaces(nil, nil, ipAddr.Version())
+	ifaces, err := autodetection.GetInterfaces(net.Interfaces, nil, nil, ipAddr.Version())
 	if err != nil {
 		log.WithError(err).Error("Unable to query host interfaces")
 		utils.Terminate()

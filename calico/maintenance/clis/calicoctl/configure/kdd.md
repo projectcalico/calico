@@ -48,7 +48,6 @@ If the default kubeconfig does not exist, or you would like to specify alternati
 | `k8sCAFile`               | `K8S_CA_FILE`        | Location of a CA for accessing the Kubernetes API, e.g., `/path/to/ca`.                                   | string
 | `k8sToken`                |                      | Token to be used for accessing the Kubernetes API.                                                        | string
 
-
 > **Note**: All environment variables may also be prefixed with `"CALICO_"`, for
 > example `"CALICO_DATASTORE_TYPE"` and `"CALICO_KUBECONFIG"` etc. may be used.
 > This is useful if the non-prefixed names clash with existing environment
@@ -110,7 +109,6 @@ A correct setup will yield a list of the nodes that have registered.  If an
 empty list is returned you are either pointed at the wrong datastore or no
 nodes have registered.  If an error is returned then attempt to correct the
 issue then try again.
-
 
 ### Next steps
 

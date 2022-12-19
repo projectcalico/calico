@@ -38,7 +38,8 @@ spec:
 |------------------------------------|-----------------------------|-------------------|--------|------------|
 | awsSrcDstCheck                     | Controls automatically setting {% include open-new-window.html text='source-destination-check' url='https://docs.aws.amazon.com/vpc/latest/userguide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck' %} on an AWS EC2 instance running Felix. Setting the value to `Enable` will set the check value in the instance description to `true`. For `Disable`, the check value will be `false`. Setting must be `Disable` if you want the EC2 instance to process traffic not matching the host interface IP address. For example, EKS cluster using Calico CNI with `VXLANMode=CrossSubnet`. Check [IAM role and profile configuration](#aws-iam-rolepolicy-for-source-destination-check-configuration) for setting the necessary permission for this setting to work.| DoNothing, Enable, Disable | string | `DoNothing` |
 | chainInsertMode                    | Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule at the top of the chain or by appending a rule at the bottom. `Insert` is the safe default since it prevents {{site.prodname}}'s rules from being bypassed.  If you switch to `Append` mode, be sure that the other rules in the chains signal acceptance by falling through to the {{site.prodname}} rules, otherwise the {{site.prodname}} policy will be bypassed. | Insert, Append | string | `Insert` |
-| dataplaneWatchdogTimeout | Timeout before the main dataplane goroutine is determined to have hung and Felix will report non-live and non-ready.  Can be increased if the liveness check incorrectly fails (for example if Felix is running slowly on a heavily loaded system). | `90s`, `120s`, `10m` etc. | duration | `90s` |
+| healthTimeoutOverrides             | A list of overrides for Felix's internal liveness/readiness timeouts. | see [below](#health-timeout-overrides) | List of `HealthTimeoutOverride` objects | `[]` |
+| dataplaneWatchdogTimeout           | Deprecated, use `healthTimeoutOverrides` instead.  Timeout before the main dataplane goroutine is determined to have hung and Felix will report non-live and non-ready.  Can be increased if the liveness check incorrectly fails (for example if Felix is running slowly on a heavily loaded system). | `90s`, `120s`, `10m` etc. | duration | `90s` |
 | defaultEndpointToHostAction        | This parameter controls what happens to traffic that goes from a workload endpoint to the host itself (after the traffic hits the endpoint egress policy).  By default {{site.prodname}} blocks traffic from workload endpoints to the host itself with an iptables "DROP" action. If you want to allow some or all traffic from endpoint to host, set this parameter to `Return` or `Accept`.  Use `Return` if you have your own rules in the iptables "INPUT" chain; {{site.prodname}} will insert its rules at the top of that chain, then `Return` packets to the "INPUT" chain once it has completed processing workload endpoint egress policy.  Use `Accept` to unconditionally accept packets from workloads after processing workload endpoint egress policy. | Drop, Return, Accept | string | `Drop` |
 | deviceRouteSourceAddress           | IPv4 address to set as the source hint for routes programmed by Felix. When not set the source address for local traffic from host to workload will be determined by the kernel. | IPv4 | string | `""` |
 | deviceRouteSourceAddressIPv6       | IPv6 address to set as the source hint for routes programmed by Felix. When not set the source address for local traffic from host to workload will be determined by the kernel. | IPv6 | string | `""` |
@@ -53,7 +54,7 @@ spec:
 | ipipMTU                            | The MTU to set on the tunnel device. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu) | int | int | `0` |
 | ipsetsRefreshInterval              | Period at which Felix re-checks the IP sets in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable IP sets refresh.  Note: the default for this value is lower than the other refresh intervals as a workaround for a [Linux kernel bug](https://github.com/projectcalico/felix/issues/1347){:target="_blank"} that was fixed in kernel version 4.11. If you are using v4.11 or greater you may want to set this to a higher value to reduce Felix CPU usage. | `5s`, `10s`, `1m` etc. | duration | `10s` |
 | iptablesFilterAllowAction          | This parameter controls what happens to traffic that is accepted by a Felix policy chain in the iptables filter table (i.e. a normal policy chain). The default will immediately `Accept` the traffic. Use `Return` to send the traffic back up to the system chains for further processing.| Accept, Return |  string | `Accept` |
-| iptablesBackend                    | This parameter controls which variant of iptables binary Felix uses.  If using Felix on a system that uses the netfilter-backed iptables binaries, set this to `NFT`. | Legacy, NFT | string | automatic detection |
+| iptablesBackend                    | This parameter controls which variant of iptables binary Felix uses.  If using Felix on a system that uses the netfilter-backed iptables binaries, set this to `NFT`. | Legacy, NFT, Auto | string | `Auto` |
 | iptablesLockFilePath               | Location of the iptables lock file.  You may need to change this if the lock file is not in its standard location (for example if you have mapped it into Felix's container at a different path). | string | string | `/run/xtables.lock` |
 | iptablesLockProbeInterval          | Time that Felix will wait between attempts to acquire the iptables lock if it is not available.  Lower values make Felix more responsive when the lock is contended, but use more CPU. | `5s`, `10s`, `1m` etc. | duration | `50ms` |
 | iptablesLockTimeout                | Time that Felix will wait for the iptables lock, or 0, to disable.  To use this feature, Felix must share the iptables lock file with all other processes that also take the lock.  When running Felix inside a container, this requires the /run directory of the host to be mounted into the {{site.nodecontainer}} or calico/felix container. | `5s`, `10s`, `1m` etc. | duration | `0` (Disabled) |
@@ -142,6 +143,43 @@ prevention policies in the iptables dataplane.
 When `bpfEnabled` is `true` the "xdp" settings all have no effect; in BPF mode the implementation of
 policy is always accelerated, using the best available BPF technology.
 
+#### Health Timeout Overrides
+
+Felix has internal liveness and readiness watchdog timers that monitor its various loops.
+If a loop fails to "check in" within the allotted timeout then Felix will report non-Ready
+or non-Live on its health port (which is monitored by Kubelet in a Kubernetes system).
+If Felix reports non-Live, this can result in the Pod being restarted.
+
+In Kubernetes, if you see the calico-node Pod readiness or liveness checks fail 
+intermittently, check the calico-node Pod log for a log from Felix that gives the 
+overall health status (the list of components will depend on which features are enabled):
+
+```
++---------------------------+---------+----------------+-----------------+--------+
+|         COMPONENT         | TIMEOUT |    LIVENESS    |    READINESS    | DETAIL |
++---------------------------+---------+----------------+-----------------+--------+
+| CalculationGraph          | 30s     | reporting live | reporting ready |        |
+| FelixStartup              | 0s      | reporting live | reporting ready |        |
+| InternalDataplaneMainLoop | 1m30s   | reporting live | reporting ready |        |
++---------------------------+---------+----------------+-----------------+--------+
+```
+
+If some health timeouts show as "timed out" it may help to apply an override
+using the `healthTimeoutOverrides` field:
+
+```
+...
+spec:
+  healthTimeoutOverrides:
+  - name: InternalDataplaneMainLoop
+    timeout: "5m"
+  - name: CalculationGraph
+    timeout: "1m30s"
+  ...
+```
+
+A timeout value of 0 disables the timeout.
+
 #### ProtoPort
 
 | Field    | Description          | Accepted Values                      | Schema |
@@ -149,7 +187,6 @@ policy is always accelerated, using the best available BPF technology.
 | port     | The exact port match | 0-65535                              | int    |
 | protocol | The protocol match   | tcp, udp, sctp                       | string |
 | net      | The CIDR match       | any valid CIDR (e.g. 192.168.0.0/16) | string |
-
 
 #### RouteTableRange
 The `RouteTableRange` option is now deprecated in favor of [RouteTableRanges](#routetableranges).

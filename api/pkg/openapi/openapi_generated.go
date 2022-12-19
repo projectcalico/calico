@@ -59,6 +59,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSetSpec":               schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPMatch":                          schema_pkg_apis_projectcalico_v3_HTTPMatch(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPPath":                           schema_pkg_apis_projectcalico_v3_HTTPPath(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride":              schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpoint":                       schema_pkg_apis_projectcalico_v3_HostEndpoint(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointList":                   schema_pkg_apis_projectcalico_v3_HostEndpointList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointSpec":                   schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref),
@@ -626,6 +627,21 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							Format:      "",
 						},
 					},
+					"ignoredInterfaces": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IgnoredInterfaces indicates the network interfaces that needs to be excluded when reading device routes.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -865,6 +881,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 							Description: "Maximum number of local AS numbers that are allowed in the AS path for received routes. This removes BGP loop prevention and should only be used if absolutely necesssary.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"ttlSecurity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TTLSecurity enables the generalized TTL security mechanism (GTSM) which protects against spoofed packets by ignoring received packets with a smaller than expected TTL value. The provided value is the number of hops (edges) between the peers.",
+							Type:        []string{"integer"},
+							Format:      "byte",
 						},
 					},
 				},
@@ -1920,7 +1943,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"dataplaneWatchdogTimeout": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver. Increase this value if you experience spurious non-ready or non-live events when Felix is under heavy load. Decrease the value to get felix to report non-live or non-ready more quickly. [Default: 90s]",
+							Description: "DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver. Increase this value if you experience spurious non-ready or non-live events when Felix is under heavy load. Decrease the value to get felix to report non-live or non-ready more quickly. [Default: 90s]\n\nDeprecated: replaced by the generic HealthTimeoutOverrides.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
@@ -2002,7 +2025,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"iptablesBackend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IptablesBackend specifies which backend of iptables will be used. The default is legacy.",
+							Description: "IptablesBackend specifies which backend of iptables will be used. The default is Auto.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2137,7 +2160,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"vxlanEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for VXLAN networking. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]",
+							Description: "VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for IPv4 VXLAN networking. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -2234,6 +2257,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"integer"},
 							Format: "int32",
+						},
+					},
+					"healthTimeoutOverrides": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overriden.  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride"),
+									},
+								},
+							},
 						},
 					},
 					"prometheusMetricsEnabled": {
@@ -2743,7 +2780,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"floatingIPs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FloatingIPs configures whether or not Felix will program floating IP addresses.",
+							Description: "FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived floating IPs are always programmed, regardless of this setting.)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2752,7 +2789,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -3134,6 +3171,34 @@ func schema_pkg_apis_projectcalico_v3_HTTPPath(ref common.ReferenceCallback) com
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"timeout": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+				Required: []string{"name", "timeout"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -3591,7 +3656,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"natOutgoing": {
 						SchemaProps: spec.SchemaProps{
-							Description: "When nat-outgoing is true, packets sent from Calico networked containers in this pool to destinations outside of this pool will be masqueraded.",
+							Description: "When natOutgoing is true, packets sent from Calico networked containers in this pool to destinations outside of this pool will be masqueraded.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},

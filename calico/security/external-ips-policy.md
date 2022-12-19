@@ -117,4 +117,3 @@ spec:
 -  To understand how to use global network sets to mitigate common threats, see [Defend against DoS attacks]({{ site.baseurl }}/security/defend-dos-attack)
 - [Global network sets]({{ site.baseurl }}/reference/resources/globalnetworkset)
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
-- {% include enterprise_icon.html %}[Advanced egress access controls with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/egress-access-controls)

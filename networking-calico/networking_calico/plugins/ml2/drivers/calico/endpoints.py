@@ -78,6 +78,10 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
 
+        # Prime the project data cache now so that we do not pay a fill
+        # penalty the first time we need to annotate a port on a cold start.
+        self.cache_port_project_data()
+
     def delete_legacy_etcd_data(self):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
             datamodel_v3.delete_legacy(self.resource_kind, '')
@@ -295,13 +299,24 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             port[PORT_KEY_PROJ_DATA] = proj_data
             return
 
+        # Not cached, so look up the port's project in the Keystone DB.
+        self.cache_port_project_data()
+        proj_data = self.proj_data_cache.get(proj_id)
+        if proj_data is None:
+            LOG.warning("Unable to find project data for port: %r", port)
+            return
+
+        port[PORT_KEY_PROJ_DATA] = proj_data
+
+    def cache_port_project_data(self):
+        """cache_port_project_data
+
+        Invoked when should populate the project cache for port annotations.
+        """
         # Flush the cache if it has reached its maximum allowed size.
         if len(self.proj_data_cache) >= cfg.CONF.calico.project_name_cache_max:
             self.proj_data_cache = {}
-
-        # Not cached, so look up the port's project in the Keystone DB.
         try:
-            wanted_data = None
             for proj in self.keystone.projects.list():
                 if proj.id not in self.proj_data_cache:
                     LOG.info("Got project name %r from Keystone", proj.name)
@@ -309,11 +324,6 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                         proj.name, PROJECT_NAME_MAX_LENGTH
                     )
                     self.proj_data_cache[proj.id] = (proj_name, proj.parent_id)
-                    if proj.id == proj_id:
-                        wanted_data = self.proj_data_cache[proj.id]
-            if wanted_data is not None:
-                port[PORT_KEY_PROJ_DATA] = wanted_data
-            return
         except Exception:
             # Probably don't have right credentials for that lookup.
             LOG.exception("Failed to query Keystone DB")

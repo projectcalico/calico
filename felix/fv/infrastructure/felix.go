@@ -15,6 +15,7 @@
 package infrastructure
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path"
@@ -38,26 +39,25 @@ type Felix struct {
 	*containers.Container
 
 	// ExpectedIPIPTunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the IPIP tunnel.  Filled in by AddNode().
+	// get assigned to the IPIP tunnel.  Filled in by SetExpectedIPIPTunnelAddr().
 	ExpectedIPIPTunnelAddr string
 	// ExpectedVXLANTunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the IPv4 VXLAN tunnel.  Filled in by AddNode().
+	// get assigned to the IPv4 VXLAN tunnel.  Filled in by SetExpectedVXLANTunnelAddr().
 	ExpectedVXLANTunnelAddr string
 	// ExpectedVXLANV6TunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the IPv6 VXLAN tunnel.  Filled in by AddNode().
+	// get assigned to the IPv6 VXLAN tunnel.  Filled in by SetExpectedVXLANV6TunnelAddr().
 	ExpectedVXLANV6TunnelAddr string
 	// ExpectedWireguardTunnelAddr contains the IPv4 address that the infrastructure expects to
-	// get assigned to the IPv4 Wireguard tunnel.  Filled in by AddNode().
+	// get assigned to the IPv4 Wireguard tunnel.  Filled in by SetExpectedWireguardTunnelAddr().
 	ExpectedWireguardTunnelAddr string
 	// ExpectedWireguardV6TunnelAddr contains the IPv6 address that the infrastructure expects to
-	// get assigned to the IPv6 Wireguard tunnel.  Filled in by AddNode().
+	// get assigned to the IPv6 Wireguard tunnel.  Filled in by SetExpectedWireguardV6TunnelAddr().
 	ExpectedWireguardV6TunnelAddr string
 
 	// IP of the Typha that this Felix is using (if any).
 	TyphaIP string
 
-	// If sets, acts like an external IP of a node. Filled in by AddNode().
-	// XXX setup routes
+	// If set, acts like an external IP of a node. Filled in by SetExternalIP().
 	ExternalIP string
 
 	startupDelayed bool
@@ -227,6 +227,25 @@ func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+}
+
+func (f *Felix) SetEvn(env map[string]string) {
+	fn := "extra-env.sh"
+
+	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	Expect(err).NotTo(HaveOccurred())
+
+	fw := bufio.NewWriter(file)
+
+	for k, v := range env {
+		fmt.Fprintf(fw, "export %s=%v\n", k, v)
+	}
+
+	fw.Flush()
+	file.Close()
+
+	err = f.CopyFileIntoContainer("./"+fn, "/"+fn)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 // AttachTCPDump returns tcpdump attached to the container

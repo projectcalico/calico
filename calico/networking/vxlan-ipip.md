@@ -35,6 +35,16 @@ Calico supports two types of encapsulation: VXLAN and IP in IP.  VXLAN is suppor
 
 Encapsulation of workload traffic is typically required only when traffic crosses a router that is unable to route workload IP addresses on its own. Calico can perform encapsulation on: all traffic, no traffic, or only on traffic that crosses a subnet boundary.
 
+### Before you begin
+
+**Not supported**
+
+- OpenStack
+
+**Limitations** 
+
+- IP in IP supports only IPv4 addresses
+
 ### How to
 
 - [Configure default IP pools at install time](#configure-default-ip-pools-at-install-time)
@@ -42,10 +52,6 @@ Encapsulation of workload traffic is typically required only when traffic crosse
 - [Configure IP in IP encapsulation for all inter workload traffic](#configure-ip-in-ip-encapsulation-for-all-inter-workload-traffic)
 - [Configure VXLAN encapsulation for only cross-subnet traffic](#configure-vxlan-encapsulation-for-only-cross-subnet-traffic)
 - [Configure VXLAN encapsulation for all inter workload traffic](#configure-vxlan-encapsulation-for-all-inter-workload-traffic)
-
-#### IPv4/6 address support
-
-IP in IP supports only IPv4 addresses.
 
 #### Best practice
 
@@ -152,4 +158,4 @@ If you use only VXLAN pools, BGP networking is not required. You can disable BGP
 
 ### Above and beyond
 
-For details on IP pool resource options, see [IP pool]({{ site.baseurl }}/reference/resources/ippool).
+For details on IP pool resource options, see [IP pool]({{site.baseurl}}/reference/resources/ippool).

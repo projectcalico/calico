@@ -151,6 +151,3 @@ custom_css: css/intro.css
   </div>
 </div>
 
-
-
-

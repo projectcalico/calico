@@ -175,7 +175,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					felixes[i].TriggerDelayedStart()
 				}
 
-				cc = &connectivity.Checker{}
+				cc = &connectivity.Checker{
+					// If two nodes send their first packet within a few milliseconds then any on-demand Wireguard
+					// handshake can fail and back off if the handshakes cross on the wire.
+					StaggerStartBy: 100 * time.Millisecond,
+				}
 
 				// Reset the set of tcp dumps between runs.
 				tcpdumps = nil
@@ -1126,7 +1130,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 	)
 
 	BeforeEach(func() {
-		//TODO: add IPv6 coverage when enabling this back
+		// TODO: add IPv6 coverage when enabling this back
 		Skip("Skipping WireGuard tests for now due to unreliability.")
 
 		// Run these tests only when the Host has Wireguard kernel module available.
@@ -1172,7 +1176,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 			felixes[i].TriggerDelayedStart()
 		}
 
-		cc = &connectivity.Checker{}
+		cc = &connectivity.Checker{
+			// If two nodes send their first packet within a few milliseconds then any on-demand Wireguard
+			// handshake can fail and back off if the handshakes cross on the wire.
+			StaggerStartBy: 100 * time.Millisecond,
+		}
 	})
 
 	AfterEach(func() {
@@ -1394,7 +1402,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 	)
 
 	BeforeEach(func() {
-		//TODO: add IPv6 coverage when enabling this back
+		// TODO: add IPv6 coverage when enabling this back
 		Skip("Skipping WireGuard tests for now due to unreliability.")
 
 		// Run these tests only when the Host has Wireguard kernel module available.
@@ -1460,7 +1468,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 			tcpdumps = append(tcpdumps, tcpdump)
 		}
 
-		cc = &connectivity.Checker{}
+		cc = &connectivity.Checker{
+			// If two nodes send their first packet within a few milliseconds then any on-demand Wireguard
+			// handshake can fail and back off if the handshakes cross on the wire.
+			StaggerStartBy: 100 * time.Millisecond,
+		}
 
 		// Ping other felix nodes from each node to trigger Wireguard handshakes.
 		for i, felix := range felixes {
@@ -1801,7 +1813,7 @@ func createWorkloadWithAssignedIP(
 		mtu = wireguardMTUV6Default
 	}
 
-	wl := workload.RunWithMTU(felix, wlName, "default", wlIP, defaultWorkloadPort, "tcp", mtu)
+	wl := workload.Run(felix, wlName, "default", wlIP, defaultWorkloadPort, "tcp", workload.WithMTU(mtu))
 	wl.ConfigureInInfra(*infra)
 
 	if infraOpts.UseIPPools {
@@ -1827,5 +1839,5 @@ func createHostNetworkedWorkload(wlName string, felix *infrastructure.Felix, ipV
 		ip = felix.IPv6
 		mtu = wireguardMTUV6Default
 	}
-	return workload.RunWithMTU(felix, wlName, "default", ip, defaultWorkloadPort, "tcp", mtu)
+	return workload.Run(felix, wlName, "default", ip, defaultWorkloadPort, "tcp", workload.WithMTU(mtu))
 }

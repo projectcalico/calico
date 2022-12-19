@@ -112,7 +112,6 @@ vpp# show buffers   # You should have non zero free buffers, otherwise traffic w
 
 ### Tracing packets
 
-
 #### Internal network layout
 
 For starters, here is a small schematic of how the network looks like:
@@ -136,7 +135,6 @@ tun3                              5      up           0/0/0/0       rx packets  
                                                                     tx packets                     5
                                                                     tx bytes                     387
                                                                     ip4                            5
-
 
 # Show the route for address 11.0.166.132
 vpp# show ip fib 11.0.166.132

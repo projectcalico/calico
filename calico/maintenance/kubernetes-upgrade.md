@@ -13,7 +13,6 @@ If you are using {{site.prodname}} in etcd mode on a Kubernetes cluster, we reco
 
 If you have installed {{site.prodname}} using the `calico.yaml` manifest, we recommend upgrading to the {{site.prodname}} operator, [as discussed here]({{site.baseurl}}/maintenance/operator-migration).
 
-
 - [Upgrading an installation that was installed using Helm](#upgrading-an-installation-that-was-installed-using-helm)
 
 - [Upgrading an installation that uses the operator](#upgrading-an-installation-that-uses-the-operator)
@@ -86,7 +85,7 @@ ownership of the helm resources to the new chart location.
 1. Use the following command to initiate an upgrade.
 
    ```bash
-   kubectl apply -f tigera-operator.yaml
+   kubectl replace -f tigera-operator.yaml
    ```
 
 ## Upgrading an installation that uses manifests and the Kubernetes API datastore
@@ -116,7 +115,7 @@ ownership of the helm resources to the new chart location.
    `<manifest-file-name>` with the file name of your {{page.version}} manifest.
 
    ```
-   kubectl apply -f <manifest-file-name>
+   kubectl replace -f <manifest-file-name>
    ```
 
 1. Watch the status of the upgrade as follows.
@@ -152,7 +151,6 @@ ownership of the helm resources to the new chart location.
    add any global network policies needed to allow traffic, and delete the temporary network policy **allow-all-upgrade**.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
-
 
 ## Upgrading an installation that uses an etcd datastore
 
@@ -198,7 +196,6 @@ ownership of the helm resources to the new chart location.
 
    > **Tip**: The {{site.noderunning}} pods will report `1/2` in the `READY` column, as shown.
    {: .alert .alert-success}
-
 
 1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../maintenance/clis/calicoctl/install)
    and [configure it to connect to your datastore](../maintenance/clis/calicoctl/configure/overview).

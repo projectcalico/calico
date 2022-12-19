@@ -165,6 +165,12 @@ spec:
                       type: string
                   type: object
                 type: array
+              ignoredInterfaces:
+                description: IgnoredInterfaces indicates the network interfaces that
+                  needs to be excluded when reading device routes.
+                items:
+                  type: string
+                type: array
               listenPort:
                 description: ListenPort is the port where BGP protocol should listen.
                   Defaults to 179
@@ -389,6 +395,12 @@ spec:
                   "UseNodeIP" means to configure the node IP as the source address.  "None"
                   means not to configure a source address.
                 type: string
+              ttlSecurity:
+                description: TTLSecurity enables the generalized TTL security mechanism
+                  (GTSM) which protects against spoofed packets by ignoring received
+                  packets with a smaller than expected TTL value. The provided value
+                  is the number of hops (edges) between the peers.
+                type: integer
             type: object
         type: object
     served: true
@@ -998,11 +1010,12 @@ spec:
                   to use.  Only used if UseInternalDataplaneDriver is set to false.
                 type: string
               dataplaneWatchdogTimeout:
-                description: 'DataplaneWatchdogTimeout is the readiness/liveness timeout
-                  used for Felix''s (internal) dataplane driver. Increase this value
+                description: "DataplaneWatchdogTimeout is the readiness/liveness timeout
+                  used for Felix's (internal) dataplane driver. Increase this value
                   if you experience spurious non-ready or non-live events when Felix
                   is under heavy load. Decrease the value to get felix to report non-live
-                  or non-ready more quickly. [Default: 90s]'
+                  or non-ready more quickly. [Default: 90s] \n Deprecated: replaced
+                  by the generic HealthTimeoutOverrides."
                 type: string
               debugDisableLogDropping:
                 type: boolean
@@ -1119,7 +1132,8 @@ spec:
                 type: string
               floatingIPs:
                 description: FloatingIPs configures whether or not Felix will program
-                  floating IP addresses.
+                  non-OpenStack floating IP addresses.  (OpenStack-derived floating
+                  IPs are always programmed, regardless of this setting.)
                 enum:
                 - Enabled
                 - Disabled
@@ -1136,6 +1150,23 @@ spec:
                 type: string
               healthPort:
                 type: integer
+              healthTimeoutOverrides:
+                description: HealthTimeoutOverrides allows the internal watchdog timeouts
+                  of individual subcomponents to be overriden.  This is useful for
+                  working around "false positive" liveness timeouts that can occur
+                  in particularly stressful workloads or if CPU is constrained.  For
+                  a list of active subcomponents, see Felix's logs.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    timeout:
+                      type: string
+                  required:
+                  - name
+                  - timeout
+                  type: object
+                type: array
               interfaceExclude:
                 description: 'InterfaceExclude is a comma-separated list of interfaces
                   that Felix should exclude when monitoring for host endpoints. The
@@ -1177,7 +1208,7 @@ spec:
                 type: string
               iptablesBackend:
                 description: IptablesBackend specifies which backend of iptables will
-                  be used. The default is legacy.
+                  be used. The default is Auto.
                 type: string
               iptablesFilterAllowAction:
                 type: string
@@ -1444,8 +1475,8 @@ spec:
                 type: boolean
               vxlanEnabled:
                 description: 'VXLANEnabled overrides whether Felix should create the
-                  VXLAN tunnel device for VXLAN networking. Optional as Felix determines
-                  this based on the existing IP pools. [Default: nil (unset)]'
+                  VXLAN tunnel device for IPv4 VXLAN networking. Optional as Felix
+                  determines this based on the existing IP pools. [Default: nil (unset)]'
                 type: boolean
               vxlanMTU:
                 description: 'VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel
@@ -2871,7 +2902,7 @@ spec:
                   for internal use only.'
                 type: boolean
               natOutgoing:
-                description: When nat-outgoing is true, packets sent from Calico networked
+                description: When natOutgoing is true, packets sent from Calico networked
                   containers in this pool to destinations outside of this pool will
                   be masqueraded.
                 type: boolean
@@ -4805,6 +4836,19 @@ spec:
   selector:
     matchLabels:
       k8s-app: calico-typha
+  strategy:
+    rollingUpdate:
+      # 100% surge allows a complete up-level set of typha instances to start and become ready,
+      # which in turn allows all the back-level typha instances to start shutting down. This
+      # means that connections tend to bounce directly from a back-level instance to an up-level
+      # instance.
+      maxSurge: 100%
+      # In case the cluster is unable to schedule extra surge instances, allow at most one instance
+      # to shut down to make room. You can set this to 0 if you're sure there'll always be enough room to
+      # schedule extra typha instances during an upgrade (because setting it to 0 blocks shutdown until
+      # up-level typha instances are online and ready).
+      maxUnavailable: 1
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -4815,6 +4859,9 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
       hostNetwork: true
+      # Typha supports graceful shut down, disconnecting clients slowly during the grace period.
+      # The TYPHA_SHUTDOWNTIMEOUTSECS env var should be kept in sync with this value.
+      terminationGracePeriodSeconds: 300
       tolerations:
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
@@ -4856,6 +4903,10 @@ spec:
             value: "kubernetes"
           - name: TYPHA_HEALTHENABLED
             value: "true"
+          # Set this to the same value as terminationGracePeriodSeconds; it tells Typha how much time
+          # it has to shut down.
+          - name: TYPHA_SHUTDOWNTIMEOUTSECS
+            value: "300"
           # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
           # this opens a port on the host, which may need to be secured.
           #- name: TYPHA_PROMETHEUSMETRICSENABLED

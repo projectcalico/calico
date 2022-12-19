@@ -18,7 +18,9 @@ package intdataplane
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash/fnv"
+	"net"
 	"regexp"
 	"strconv"
 	"sync"
@@ -52,6 +54,8 @@ type mockDataplane struct {
 	fds    map[string]uint32
 	state  map[uint32]polprog.Rules
 	routes map[ip.V4CIDR]struct{}
+
+	ensureStartedFn func()
 }
 
 func newMockDataplane() *mockDataplane {
@@ -64,6 +68,9 @@ func newMockDataplane() *mockDataplane {
 }
 
 func (m *mockDataplane) ensureStarted() {
+	if m.ensureStartedFn != nil {
+		m.ensureStartedFn()
+	}
 }
 
 func (m *mockDataplane) ensureBPFDevices() error {
@@ -139,6 +146,12 @@ func (m *mockDataplane) setAndReturn(vari **polprog.Rules, key string) func() *p
 	}
 }
 
+func (m *mockDataplane) programAttached(key string) bool {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.fds[key] != 0
+}
+
 func (m *mockDataplane) setRoute(cidr ip.V4CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -167,7 +180,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
-		l3IfacePattern       string
 		workloadIfaceRegex   string
 		ipSetIDAllocator     *idalloc.IDAllocator
 		vxlanMTU             int
@@ -182,8 +194,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	BeforeEach(func() {
 		fibLookupEnabled = true
 		endpointToHostAction = "DROP"
-		dataIfacePattern = "^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|wireguard.cali$)"
-		l3IfacePattern = "^(wireguard.cali$)"
+		dataIfacePattern = "^eth0"
 		workloadIfaceRegex = "cali"
 		ipSetIDAllocator = idalloc.New()
 		vxlanMTU = 0
@@ -224,7 +235,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
 				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),
-				BPFL3IfacePattern:     regexp.MustCompile(l3IfacePattern),
 				VXLANMTU:              vxlanMTU,
 				VXLANPort:             rrConfigNormal.VXLANPort,
 				BPFNodePortDSREnabled: nodePortDSR,
@@ -247,6 +257,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logutils.NewSummarizer("test"),
 		)
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
+		bpfEpMgr.hostIP = net.ParseIP("1.2.3.4")
 	}
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
@@ -254,8 +265,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bpfEpMgr.OnUpdate(&ifaceUpdate{Name: name, State: state, Index: index})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			if state == ifacemonitor.StateUp {
-				Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(index)).AsBytes())).To(BeTrue())
+			if state == ifacemonitor.StateUp && (bpfEpMgr.isDataIface(name) || bpfEpMgr.isWorkloadIface(name)) {
+				ExpectWithOffset(1, ifStateMap.ContainsKey(ifstate.NewKey(uint32(index)).AsBytes())).To(BeTrue())
 			}
 		}
 	}
@@ -412,6 +423,75 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		JustBeforeEach(func() {
 			genPolicy("default", "mypolicy")()
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+		})
+
+		It("should attach to eth0", func() {
+			Expect(dp.programAttached("eth0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("eth0:egress")).To(BeTrue())
+		})
+
+		Context("with dataIfacePattern changed to eth1", func() {
+			JustBeforeEach(func() {
+				dataIfacePattern = "^eth1"
+				newBpfEpMgr()
+
+				dp.ensureStartedFn = func() {
+					bpfEpMgr.initAttaches = map[string]bpf.EPAttachInfo{
+						"eth0": {TCId: 12345},
+					}
+				}
+
+			})
+
+			It("should detach from eth0 when eth0 up before first CompleteDeferredWork()", func() {
+				Expect(dp.programAttached("eth0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth0:egress")).To(BeTrue())
+
+				genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+				genIfaceUpdate("eth1", ifacemonitor.StateUp, 11)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// We inherited dp from the previous bpfEpMgr and it has eth0
+				// attached. This should clean it up.
+				Expect(dp.programAttached("eth0:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth0:egress")).To(BeFalse())
+
+				Expect(dp.programAttached("eth1:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth1:egress")).To(BeTrue())
+			})
+
+			It("should detach from eth0 when eth0 up after first CompleteDeferredWork()", func() {
+				Expect(dp.programAttached("eth0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth0:egress")).To(BeTrue())
+
+				genIfaceUpdate("eth1", ifacemonitor.StateUp, 11)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// We inherited dp from the previous bpfEpMgr and it has eth0
+				// attached. We should see it.
+				Expect(dp.programAttached("eth0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth0:egress")).To(BeTrue())
+
+				Expect(dp.programAttached("eth1:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth1:egress")).To(BeTrue())
+
+				genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// We inherited dp from the previous bpfEpMgr and it has eth0
+				// attached. This should clean it up.
+				Expect(dp.programAttached("eth0:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth0:egress")).To(BeFalse())
+
+				Expect(dp.programAttached("eth1:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth1:egress")).To(BeTrue())
+			})
 		})
 
 		Context("with eth0 host endpoint", func() {
@@ -667,11 +747,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(4))
+			Expect(dp.routes).To(HaveLen(2))
 			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
 			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("5.6.7.8")))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.0.0.1")))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.0.0.2")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:      "service",
@@ -710,6 +788,164 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
+		})
+	})
+
+	Describe("ifstate", func() {
+		checkIfState := func(idx int, name string, flags uint32) {
+			k := ifstate.NewKey(uint32(idx))
+			v := ifstate.NewValue(flags, name)
+			vb, err := ifStateMap.Get(k.AsBytes())
+			if err != nil {
+				Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
+			}
+			if string(v.AsBytes()) != string(vb) {
+				vv := ifstate.ValueFromBytes(vb)
+				Fail(fmt.Sprintf("Ifstate key %s value %s does not match expected %s", k, vv, v), 1)
+			}
+		}
+
+		It("should clean up", func() {
+			_ = ifStateMap.Update(
+				ifstate.NewKey(123).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123").AsBytes(),
+			)
+			_ = ifStateMap.Update(
+				ifstate.NewKey(124).AsBytes(),
+				ifstate.NewValue(0, "eth124").AsBytes(),
+			)
+			_ = ifStateMap.Update(
+				ifstate.NewKey(125).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125").AsBytes(),
+			)
+			_ = ifStateMap.Update(
+				ifstate.NewKey(126).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP, "eth123").AsBytes(),
+			)
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ifStateMap.IsEmpty()).To(BeTrue())
+		})
+
+		It("should clean up with update", func() {
+			_ = ifStateMap.Update(
+				ifstate.NewKey(123).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123").AsBytes(),
+			)
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("iface up -> wl", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("iface up -> defer -> wl", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+
+			genWLUpdate("cali12345")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("wl -> iface up", func() {
+			genWLUpdate("cali12345")()
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("wl -> defer -> iface up", func() {
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(15)).AsBytes())).To(BeFalse())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+
+		It("iface up -> wl -> iface down", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
+		})
+
+		It("iface up -> wl -> iface down, up, down", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
+		})
+
+		It("iface up -> wl -> iface down -> iface up", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
 		})
 	})
 })

@@ -162,7 +162,6 @@ and volume mount the keys into the started `{{site.noderunning}}` container.**
 Therefore, configuring `{{site.nodecontainer}}` for etcd is easily accomplished by running
 `calicoctl node run` with the parameters set correctly.
 
-
 #### Checking the configuration
 
 Here is a simple command to check that the installation and configuration is

@@ -73,8 +73,8 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		}
 	}
 
-	CALI_DEBUG("IP id=%d s=%x d=%x\n",
-			bpf_ntohs(ip_hdr(ctx)->id), bpf_ntohl(ip_hdr(ctx)->saddr), bpf_ntohl(ip_hdr(ctx)->daddr));
+	CALI_DEBUG("IP id=%d\n",bpf_ntohs(ip_hdr(ctx)->id)); 
+	CALI_DEBUG("IP id=%d s=%x d=%x\n", bpf_ntohl(ip_hdr(ctx)->saddr), bpf_ntohl(ip_hdr(ctx)->daddr));
 	// Drop malformed IP packets
 	if (ip_hdr(ctx)->ihl < 5) {
 		CALI_DEBUG("Drop malformed IP packets\n");

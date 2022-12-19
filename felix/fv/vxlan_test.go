@@ -59,7 +59,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		enableIPv6 := testConfig.EnableIPv6
 
 		if BPFMode() && enableIPv6 && !BPFIPv6Support() {
-			return
+			continue
 		}
 
 		Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", vxlanMode, routeSource, brokenXSum, enableIPv6), func() {
@@ -85,6 +85,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// tested but we can verify the state with ethtool.
 				topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 
+				if getDataStoreType(infra) == "etcdv3" && BPFMode() {
+					Skip("Skipping BPF tests for etcdv3 backend.")
+				}
 				felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 				// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -419,13 +422,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// existing case to pass for a different reason.
 					It("allows host0 to remote Calico-networked workload via service IP", func() {
 						// Allocate a service IP.
-						serviceIP := "10.96.10.1"
+						serviceIP := "10.101.0.11"
+						port := 8055
+						tgtPort := 8055
 
-						// Add a NAT rule for the service IP.
-						felixes[0].ProgramIptablesDNAT(serviceIP, w[1].IP, "OUTPUT")
-
+						createK8sServiceWithoutKubeProxy(infra, felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
 						// Expect to connect to the service IP.
-						cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), 8055)
+						cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
 						cc.CheckConnectivity()
 					})
 				})
@@ -452,7 +455,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
 				})
 
-				It("should have no connectivity from third felix and expected number of IPs in whitelist", func() {
+				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
 					Eventually(func() int {
 						return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
 					}, "5s", "200ms").Should(Equal(len(felixes) - 2))
@@ -467,15 +470,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				})
 			})
 
-			// Explicitly verify that the VXLAN whitelist IP set is doing its job (since Felix makes multiple dataplane
-			// changes when the BGP IP disappears and we want to make sure that its the whitelist that's causing the
+			// Explicitly verify that the VXLAN allow-list IP set is doing its job (since Felix makes multiple dataplane
+			// changes when the BGP IP disappears, and we want to make sure that it's the rule that's causing the
 			// connectivity to drop).
 			Context("after removing BGP address from third node, all felixes paused", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
-					// Check we initially have the expected number of whitelist entries.
+					// Check we initially have the expected number of entries.
 					for _, f := range felixes {
-						// Wait for Felix to set up the whitelist.
+						// Wait for Felix to set up the allow list.
 						Eventually(func() int {
 							return getNumIPSetMembers(f.Container, "cali40all-vxlan-net")
 						}, "5s", "200ms").Should(Equal(len(felixes) - 1))
@@ -496,7 +499,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				})
 
 				if vxlanMode == api.VXLANModeAlways {
-					It("after manually removing third node from whitelist should have expected connectivity", func() {
+					It("after manually removing third node from allow list should have expected connectivity", func() {
 						felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
 
 						cc.ExpectSome(w[0], w[1])
@@ -651,13 +654,31 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				// Expect the VXLAN device to be deleted.
+				// Expect the ipv4 VXLAN device to be deleted.
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "10s", "100ms").ShouldNot(ContainSubstring(mtuStr))
+					// IPv6 ignores the VXLAN enabled flag and must be disabled at the pool level. As such the ipv6
+					// interfaces should still exist at this point
 					if enableIPv6 {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring(mtuStrV6))
+					}
+				}
+
+				if enableIPv6 {
+					ip6pool, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPv6PoolName, options.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					ip6pool.Spec.VXLANMode = "Never"
+					_, err = client.IPPools().Update(context.Background(), ip6pool, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Expect the ipv6 VXLAN device to be deleted.
+					for _, felix := range felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
 							return out

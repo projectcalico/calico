@@ -402,9 +402,24 @@ var baseTests = []StateList{
 		endpointSliceActive,
 	},
 	{
+		// Service NetworkPolicy test updating endpoint slices.
+		endpointSliceActiveNewIPs,
+		endpointSliceActiveNewIPs2,
+		endpointSliceActiveNewIPs,
+	},
+	{
+		// Service NetworkPolicy test overlapping two endpoint slices with same IPs.
+		endpointSliceActiveNewIPs,
+		endpointSliceOverlap,
+		endpointSlice2OnlyActiveNewIPs2,
+	},
+	{
 		encapWithIPIPPool,
 		encapWithVXLANPool,
 		encapWithIPIPAndVXLANPool,
+	},
+	{
+		endpointSliceActiveSpecNoPorts,
 	},
 
 	// IPv6 VXLAN tests.
@@ -742,7 +757,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-		calcGraph = NewCalculationGraph(eventBuf, conf)
+		calcGraph = NewCalculationGraph(eventBuf, conf, func() {})
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			lastStats = stats

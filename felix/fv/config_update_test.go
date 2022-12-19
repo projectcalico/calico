@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -93,6 +94,17 @@ var _ = Context("Config update tests, after starting felix", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		err := client.EnsureInitialized(ctx, "a-new-version", "updated-type")
+		Expect(err).NotTo(HaveOccurred())
+
+		config := api.NewFelixConfiguration()
+		config.Name = "default"
+		config.Spec.HealthTimeoutOverrides = []api.HealthTimeoutOverride{
+			{
+				Name:    "InternalDataplaneMainLoop",
+				Timeout: metav1.Duration{Duration: 20 * time.Second},
+			},
+		}
+		config, err = client.FelixConfigurations().Create(ctx, config, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	}
 

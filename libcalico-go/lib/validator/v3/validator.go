@@ -79,6 +79,7 @@ var (
 	globalSelectorRegex = regexp.MustCompile(fmt.Sprintf(`%v global\(\)|global\(\) %v`, andOr, andOr))
 
 	interfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	ignoredInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
 	ifaceFilterRegex      = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
 	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
 	protocolRegex         = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
@@ -154,6 +155,7 @@ func init() {
 	// Register field validators.
 	registerFieldValidator("action", validateAction)
 	registerFieldValidator("interface", validateInterface)
+	registerFieldValidator("ignoredInterface", validateIgnoredInterface)
 	registerFieldValidator("datastoreType", validateDatastoreType)
 	registerFieldValidator("name", validateName)
 	registerFieldValidator("containerID", validateContainerID)
@@ -224,6 +226,7 @@ func init() {
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
 	registerStructValidator(validate, validateBlockAffinitySpec, libapi.BlockAffinitySpec{})
+	registerStructValidator(validate, validateHealthTimeoutOverride, api.HealthTimeoutOverride{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -266,6 +269,12 @@ func validateInterface(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate interface: %s", s)
 	return s == "*" || interfaceRegex.MatchString(s)
+}
+
+func validateIgnoredInterface(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate ignored interface name: %s", s)
+	return s != "*" && ignoredInterfaceRegex.MatchString(s)
 }
 
 func validateIfaceFilter(fl validator.FieldLevel) bool {
@@ -380,7 +389,7 @@ func validateMAC(fl validator.FieldLevel) bool {
 func validateIptablesBackend(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Iptables Backend: %s", s)
-	return s == "" || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
+	return s == "" || s == api.IptablesBackendAuto || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
 }
 
 func validateLogLevel(fl validator.FieldLevel) bool {
@@ -566,6 +575,8 @@ func validateCIDRs(fl validator.FieldLevel) bool {
 }
 
 // validateKeyValueList validates the field is a comma separated list of key=value pairs.
+var kvRegex = regexp.MustCompile("^\\s*(\\w+)=(.*)$")
+
 func validateKeyValueList(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
 	log.Debugf("Validate KeyValueList: %s", n)
@@ -574,13 +585,12 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 		return true
 	}
 
-	rex := regexp.MustCompile("\\s*(\\w+)=(.*)")
 	for _, item := range strings.Split(n, ",") {
 		if item == "" {
 			// Accept empty items (e.g tailing ",")
 			continue
 		}
-		kv := rex.FindStringSubmatch(item)
+		kv := kvRegex.FindStringSubmatch(item)
 		if kv == nil {
 			return false
 		}
@@ -1707,6 +1717,18 @@ func validateBlockAffinitySpec(structLevel validator.StructLevel) {
 	spec := structLevel.Current().Interface().(libapi.BlockAffinitySpec)
 	if spec.Deleted == fmt.Sprintf("%t", true) {
 		structLevel.ReportError(reflect.ValueOf(spec), "Spec.Deleted", "", reason("spec.Deleted cannot be set to \"true\""), "")
+	}
+}
+
+var htoNameRegex = regexp.MustCompile("^[a-zA-Z0-9_ -]+$")
+
+func validateHealthTimeoutOverride(structLevel validator.StructLevel) {
+	hto := structLevel.Current().Interface().(api.HealthTimeoutOverride)
+	if !htoNameRegex.MatchString(hto.Name) {
+		structLevel.ReportError(reflect.ValueOf(hto), "HealthTimeoutOverride.Name", "", reason("name should match regex "+htoNameRegex.String()), "")
+	}
+	if hto.Timeout.Duration < 0 {
+		structLevel.ReportError(reflect.ValueOf(hto), "HealthTimeoutOverride.Timeout", "", reason("Timeout should not be negative"), "")
 	}
 }
 
