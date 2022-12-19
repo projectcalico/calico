@@ -1399,11 +1399,14 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
 	ap.MapSizes = m.bpfMapContext.MapSizes
-	ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
-	if m.rpfEnforceOption == "Strict" {
+
+	switch m.rpfEnforceOption {
+	case "Strict":
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionStrict
-	} else if m.rpfEnforceOption == "Loose" {
+	case "Loose":
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionLoose
+	default:
+		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
 	}
 
 	return ap
