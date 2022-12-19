@@ -154,7 +154,7 @@ func (p *passthruCallbackRecorder) OnHostIPv6Remove(hostname string) {
 	Fail("HostIPv6Remove received")
 }
 
-func (p *passthruCallbackRecorder) OnHostUpdate(hostname string, ip4 *net.IP, ip6 *net.IP, asnumber string, labels map[string]string) {
+func (p *passthruCallbackRecorder) OnHostUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string) {
 	Fail("HostUpdate received")
 }
 

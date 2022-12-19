@@ -137,19 +137,23 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 				}
 				if node.Spec.BGP != nil {
 					log.WithField("update", update).Debug("Passing-through Node update")
-					ip4, _, _ := net.ParseCIDR(node.Spec.BGP.IPv4Address)
-					ip6, _, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
-					if ip4 == nil {
-						ip4 = &net.IP{}
+					ip4, ip4net, _ := net.ParseCIDR(node.Spec.BGP.IPv4Address)
+					ip6, ip6net, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
+					if ip4net == nil {
+						ip4net = &net.IPNet{}
+					} else {
+						ip4net.IP = ip4.IP
 					}
-					if ip6 == nil {
-						ip6 = &net.IP{}
+					if ip6net == nil {
+						ip6net = &net.IPNet{}
+					} else {
+						ip6net.IP = ip6.IP
 					}
 					asnumber := ""
 					if node.Spec.BGP.ASNumber != nil {
 						asnumber = node.Spec.BGP.ASNumber.String()
 					}
-					h.callbacks.OnHostUpdate(hostname, ip4, ip6, asnumber, node.Labels)
+					h.callbacks.OnHostUpdate(hostname, ip4net, ip6net, asnumber, node.Labels)
 				} else {
 					log.WithField("update", update).Debug("Passing-through Node remove")
 					h.callbacks.OnHostRemove(hostname)

@@ -105,8 +105,8 @@ type EventSequencer struct {
 }
 
 type hostInfo struct {
-	ip4Addr  *net.IP
-	ip6Addr  *net.IP
+	ip4Addr  *net.IPNet
+	ip6Addr  *net.IPNet
 	labels   map[string]string
 	asnumber string
 }
@@ -592,7 +592,7 @@ func (buf *EventSequencer) flushHostIPv6Deletes() {
 	})
 }
 
-func (buf *EventSequencer) OnHostUpdate(hostname string, ip4 *net.IP, ip6 *net.IP, asnumber string, labels map[string]string) {
+func (buf *EventSequencer) OnHostUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string) {
 	log.WithFields(log.Fields{
 		"hostname": hostname,
 		"ip4":      ip4,
