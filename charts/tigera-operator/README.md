@@ -146,4 +146,7 @@ tigeraOperator:
   registry: quay.io
 calicoctl:
   image: docker.io/calico/ctl
+
+# Some defaults used in the templates.
+imagePullPolicy: IfNotPresent
 ```

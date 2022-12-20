@@ -38,7 +38,7 @@ spec:
       containers:
         - name: tigera-operator
           image: {{ template "tigera-operator.image" .Values.tigeraOperator}}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           command:
             - operator
           volumeMounts:
@@ -80,6 +80,7 @@ spec:
       initContainers:
         - name: create-initial-resources
           image: {{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           env:
             - name: DATASTORE_TYPE
               value: kubernetes

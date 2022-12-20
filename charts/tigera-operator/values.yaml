@@ -46,3 +46,6 @@ tigeraOperator:
 calicoctl:
   image: docker.io/calico/ctl
   tag: master
+
+# Some defaults used in the templates.
+imagePullPolicy: IfNotPresent
