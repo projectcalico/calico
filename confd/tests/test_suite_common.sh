@@ -296,8 +296,8 @@ metadata:
     node.alpha.kubernetes.io/ttl: "0"
     volumes.kubernetes.io/controller-managed-attach-detach: "true"
   labels:
-    beta.kubernetes.io/arch: amd64
-    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/os: linux
     kubernetes.io/hostname: node$ii
   name: node$ii
   namespace: ""

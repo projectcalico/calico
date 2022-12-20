@@ -89,6 +89,3 @@ v4:
 out:
 	return 1;
 }
-
-
-char ____license[] __attribute__((section("license"), used)) = "GPL";

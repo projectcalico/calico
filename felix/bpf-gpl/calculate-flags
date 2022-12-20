@@ -41,6 +41,10 @@ if [[ "${filename}" =~ test_.* ]]; then
   args+=("-DUNITTEST")
 fi
 
+if [[ "${filename}" =~ .*_v6.o ]]; then
+  args+=("-DIPVER6")
+fi
+
 flags=0
 
 # WARNING: these constants must be kept in sync with bpf.h.

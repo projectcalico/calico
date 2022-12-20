@@ -68,7 +68,7 @@ To get around this for `kube-proxy`:
      ...
        spec:
          nodeSelector:
-           beta.kubernetes.io/os: linux
+           kubernetes.io/os: linux
          containers:
    ```
 1. Apply the updated manifest.

@@ -50,7 +50,7 @@ UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 
 OBJS:=$(shell ./list-objs)
-C_FILES:=tc.c connect_balancer.c xdp.c
+C_FILES:=tc.c tc6.c connect_balancer.c connect_balancer_v6.c xdp.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
@@ -77,6 +77,10 @@ ut/%.ll: ut/%.c ut/ut.h tc.c tc.d
 to%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
 from%.ll: tc.c tc.d calculate-flags
+	$(COMPILE)
+to%_v6.ll: tc6.c tc.d calculate-flags
+	$(COMPILE)
+from%_v6.ll: tc6.c tc.d calculate-flags
 	$(COMPILE)
 test%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)

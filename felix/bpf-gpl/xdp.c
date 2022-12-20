@@ -197,5 +197,3 @@ int xdp_calico_entry(struct xdp_md *xdp)
 {
 	return calico_xdp(xdp);
 }
-
-char ____license[] __attribute__((section("license"), used)) = "GPL";

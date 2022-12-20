@@ -16,8 +16,14 @@
 
 #define CALI_USE_LINUX_FIB true
 
+#ifdef IPVER6
+#define IPVER_PFX	"IPv6 "
+#else
+#define IPVER_PFX	""
+#endif
+
 #define CALI_LOG(__fmt, ...) do { \
-		char fmt[] = __fmt; \
+		char fmt[] = IPVER_PFX __fmt; \
 		bpf_trace_printk(fmt, sizeof(fmt), ## __VA_ARGS__); \
 } while (0)
 

@@ -12,8 +12,10 @@
 emit_filename() {
   if [ "${core_support}" = "legacy" ]; then
     echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}.o"
+    echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}_v6.o"
   else
     echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}_${core_support}.o"
+    echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}_${core_support}_v6.o"
   fi
 }
 
