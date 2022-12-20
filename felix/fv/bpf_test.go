@@ -2901,9 +2901,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								clusterIP := testSvc.Spec.ClusterIP
 								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
 
+								felixes[0].Exec("sysctl", "-w", "net.ipv6.conf.eth0.disable_ipv6=0")
+								felixes[1].Exec("sysctl", "-w", "net.ipv6.conf.eth0.disable_ipv6=0")
+
 								// Also try host networked pods, both on a local and remote node.
 								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
 								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+
+								if testOpts.protocol == "tcp" {
+									// Also excercise ipv4 as ipv6
+									cc.Expect(Some, hostW[0], TargetIPv4AsIPv6(clusterIP), ports, hostW0SrcIP)
+									cc.Expect(Some, hostW[1], TargetIPv4AsIPv6(clusterIP), ports, hostW1SrcIP)
+								}
 
 								cc.CheckConnectivity()
 							})
