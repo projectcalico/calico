@@ -239,7 +239,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	defer os.RemoveAll(bpfFsDir)
 
 	obj := "../../bpf-gpl/bin/test_xdp_debug"
-	progLog := ""
 	if !topts.xdp {
 		obj = "../../bpf-gpl/bin/test_"
 		if strings.Contains(section, "from") {
@@ -250,16 +249,16 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 		if strings.Contains(section, "host") {
 			obj += "hep_"
-			progLog = "HEP"
+			topts.progLog = "HEP"
 		} else if strings.Contains(section, "nat") {
 			obj += "nat_"
-			progLog = "NAT"
+			topts.progLog = "NAT"
 		} else if strings.Contains(section, "wireguard") {
 			obj += "wg_"
-			progLog = "WG"
+			topts.progLog = "WG"
 		} else {
 			obj += "wep_"
-			progLog = "WEP"
+			topts.progLog = "WEP"
 		}
 
 		log.WithField("hostIP", hostIP).Info("Host IP")
@@ -278,27 +277,15 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 	bin, err := bpf.BinaryFromFile(obj)
 	Expect(err).NotTo(HaveOccurred())
-	bin.PatchLogPrefix(progLog + "-" + bpfIfaceName)
-	err = bin.PatchIPv4(hostIP)
-	Expect(err).NotTo(HaveOccurred())
-	err = bin.PatchIntfAddr(intfIP)
-	Expect(err).NotTo(HaveOccurred())
-	bin.PatchTunnelMTU(natTunnelMTU)
-	bin.PatchVXLANPort(testVxlanPort)
-	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
-	bin.PatchFlags(uint32(1))
 	// XXX for now we both path the mark here and include it in the context as
 	// well. This needs to be done for as long as we want to run the tests on
 	// older kernels.
 	bin.PatchSkbMark(skbMark)
-	err = bin.PatchHostTunnelIPv4(node1tunIP)
-	Expect(err).NotTo(HaveOccurred())
-	bin.PatchExtToServiceConnmark(0)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	o, err := objLoad(tempObj, bpfFsDir, topts.xdp, rules != nil, true)
+	o, err := objLoad(tempObj, bpfFsDir, topts, rules != nil, true)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Unpin(bpfFsDir)
 	defer o.Close()
@@ -507,8 +494,15 @@ func jumpMapDelete(jm bpf.Map, idx int) error {
 	return jm.Delete(k[:])
 }
 
-func objLoad(fname, bpfFsDir string, forXDP bool, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
+func ipToU32(ip net.IP) uint32 {
+	ip = ip.To4()
+	return binary.LittleEndian.Uint32([]byte(ip[:]))
+}
+
+func objLoad(fname, bpfFsDir string, topts testOpts, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
 	log.WithField("program", fname).Debug("Loading BPF program")
+
+	forXDP := topts.xdp
 
 	jumpMap = jump.MapForTest(&bpf.MapContext{})
 	_ = unix.Unlink(jumpMap.Path())
@@ -522,6 +516,26 @@ func objLoad(fname, bpfFsDir string, forXDP bool, polProg, hasHostConflictProg b
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
+			if forXDP {
+				if err := xdp.ConfigureProgram(m, bpfIfaceName); err != nil {
+					return nil, err
+				}
+			} else {
+				ifaceLog := topts.progLog + "-" + bpfIfaceName
+				globals := libbpf.TcGlobalData{
+					HostIP:       ipToU32(hostIP),
+					IntfIP:       ipToU32(intfIP),
+					Tmtu:         natTunnelMTU,
+					VxlanPort:    testVxlanPort,
+					PSNatStart:   uint16(topts.psnaStart),
+					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:        1,
+					HostTunnelIP: ipToU32(node1tunIP),
+				}
+				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
+					return nil, fmt.Errorf("failed to configure tc program: %w", err)
+				}
+			}
 			continue
 		}
 		pin := "/sys/fs/bpf/tc/globals/" + m.Name()
@@ -704,21 +718,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 
 	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
 
-	log.Infof("Patching binary %s", objFname)
-	bin, err := bpf.BinaryFromFile(objFname)
-	Expect(err).NotTo(HaveOccurred())
-	err = bin.PatchIPv4(hostIP)
-	Expect(err).NotTo(HaveOccurred())
-	err = bin.PatchIntfAddr(intfIP)
-	Expect(err).NotTo(HaveOccurred())
-	bin.PatchTunnelMTU(natTunnelMTU)
-	bin.PatchVXLANPort(testVxlanPort)
-	bin.PatchExtToServiceConnmark(0)
-	tempObj := tempDir + "bpf.o"
-	err = bin.WriteToFile(tempObj)
-	Expect(err).NotTo(HaveOccurred())
-
-	obj, err := objLoad(tempObj, bpfFsDir, false, true, false)
+	obj, err := objLoad(objFname, bpfFsDir, topts, true, false)
 	Expect(err).NotTo(HaveOccurred())
 	defer obj.UnpinPrograms(bpfFsDir)
 	defer obj.Close()
@@ -752,6 +752,7 @@ type testOpts struct {
 	psnaStart     uint32
 	psnatEnd      uint32
 	hostNetworked bool
+	progLog       string
 }
 
 type testOption func(opts *testOpts)

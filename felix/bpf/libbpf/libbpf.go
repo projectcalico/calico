@@ -386,6 +386,19 @@ func CTLBSetGlobals(m *Map, udpNotSeen time.Duration, excludeUDP bool) error {
 	return err
 }
 
+func XDPSetGlobals(
+	m *Map,
+	globalData *XDPGlobalData,
+) error {
+
+	cName := C.CString(globalData.IfaceName)
+	defer C.free(unsafe.Pointer(cName))
+
+	_, err := C.bpf_xdp_set_globals(m.bpfMap, cName)
+
+	return err
+}
+
 func NumPossibleCPUs() (int, error) {
 	ncpus := int(C.num_possible_cpu())
 	if ncpus < 0 {

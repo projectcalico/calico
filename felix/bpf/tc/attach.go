@@ -465,11 +465,15 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		}
 	}
 
+	return ConfigureProgram(m, ap.Iface, &globalData)
+}
+
+func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalData) error {
 	in := []byte("---------------")
-	copy(in, ap.Iface)
+	copy(in, iface)
 	globalData.IfaceName = string(in)
 
-	return libbpf.TcSetGlobals(m, &globalData)
+	return libbpf.TcSetGlobals(m, globalData)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {

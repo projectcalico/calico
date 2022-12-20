@@ -242,39 +242,21 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 
 #define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->ttl <= 1)
 
-#if !defined(__BPFTOOL_LOADER__) && (!CALI_F_XDP)
+#if CALI_F_XDP
 
-#if !CALI_F_CGROUP
+extern const volatile struct cali_xdp_globals __globals;
+#define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
+
+#elif (!CALI_F_CGROUP) || defined(UNITTEST)
+
 extern const volatile struct cali_tc_globals __globals;
-#endif
-
-#define CALI_CONFIGURABLE_DEFINE(name, pattern)
 #define CALI_CONFIGURABLE(name)  __globals.name
 
-#else /* loader */
+#else
 
-#define CALI_CONFIGURABLE_DEFINE(name, pattern)							\
-static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
-{												\
-	__u32 ret;										\
-	asm("%0 = " #pattern ";" : "=r"(ret) /* output */ : /* no inputs */ : /* no clobber */);\
-	return ret;										\
-}
-#define CALI_CONFIGURABLE(name)	cali_configurable_##name()
+#define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
 
 #endif /* loader */
-
-CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* be 0x54534f48 = ASCII(HOST) */
-CALI_CONFIGURABLE_DEFINE(tunnel_mtu, 0x55544d54) /* be 0x55544d54 = ASCII(TMTU) */
-CALI_CONFIGURABLE_DEFINE(vxlan_port, 0x52505856) /* be 0x52505856 = ASCII(VXPR) */
-CALI_CONFIGURABLE_DEFINE(intf_ip, 0x46544e49) /*be 0x46544e49 = ASCII(INTF) */
-CALI_CONFIGURABLE_DEFINE(ext_to_svc_mark, 0x4b52414d) /*be 0x4b52414d = ASCII(MARK) */
-CALI_CONFIGURABLE_DEFINE(psnat_start, 0x53545250) /* be 0x53545250 = ACSII(PRTS) */
-CALI_CONFIGURABLE_DEFINE(psnat_len, 0x4c545250) /* be 0x4c545250 = ACSII(PRTL) */
-CALI_CONFIGURABLE_DEFINE(flags, 0x53474c46) /* be 0x53474c46 = ASCII(FLGS) */
-CALI_CONFIGURABLE_DEFINE(host_tunnel_ip, 0x4c4e5554) /* be 0x4c4e5554 = ACSII(TUNL) */
-CALI_CONFIGURABLE_DEFINE(wg_port, 0x54504757) /* be 0x54504757 = ASCII(WGPT) */
-CALI_CONFIGURABLE_DEFINE(natin_idx, 0xdeadbeef)
 
 #define HOST_IP		CALI_CONFIGURABLE(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
@@ -289,8 +271,17 @@ CALI_CONFIGURABLE_DEFINE(natin_idx, 0xdeadbeef)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 
 #ifdef UNITTEST
-CALI_CONFIGURABLE_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
-#define SKB_MARK	CALI_CONFIGURABLE(__skb_mark)
+#define CALI_PATCH_DEFINE(name, pattern)							\
+static CALI_BPF_INLINE __be32 cali_patch_##name()					\
+{												\
+	__u32 ret;										\
+	asm("%0 = " #pattern ";" : "=r"(ret) /* output */ : /* no inputs */ : /* no clobber */);\
+	return ret;										\
+}
+#define CALI_PATCH(name)	cali_patch_##name()
+
+CALI_PATCH_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
+#define SKB_MARK	CALI_PATCH(__skb_mark)
 #endif
 
 #define MAP_PIN_GLOBAL	2
