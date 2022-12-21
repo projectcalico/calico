@@ -132,6 +132,8 @@ After following the above steps, you should see the API server pod become ready,
    profiles                                                                          projectcalico.org              false        Profile
    ```
 
+If the above command returns `error: unable to retrieve the complete list of server APIs: projectcalico.org/v3: the server is currently unable to handle the request` you should check that the `kube-apiserver` is able to communicate with the `calico-apiserver` on TCP 5443.
+ 
 > **Note:** kubectl may continue to prefer the crd.projectcalico.org API group due to the way it caches APIs locally. You can force kubectl to update
 >           by removing its cache directory for your cluster. By default, the cache is located in `$(HOME)/.kube/cache`.
 {: .alert .alert-info}
