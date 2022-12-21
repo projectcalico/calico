@@ -27,11 +27,13 @@
 		bpf_trace_printk(fmt, sizeof(fmt), ## __VA_ARGS__); \
 } while (0)
 
-#if !defined(UNITTEST) && !defined(__BPFTOOL_LOADER__) && ! (CALI_F_XDP) && !CALI_F_CGROUP
-extern const volatile struct cali_tc_globals __globals;
-#define CALI_TC_LOG(fmt, ...) CALI_LOG("%s" fmt, __globals.iface_name, ## __VA_ARGS__)
+#if ! (CALI_F_XDP) && !CALI_F_CGROUP
+#define CALI_IFACE_LOG(fmt, ...) CALI_LOG("%s" fmt, __globals.iface_name, ## __VA_ARGS__)
+#elif CALI_F_XDP
+extern const volatile struct cali_xdp_globals __globals;
+#define CALI_IFACE_LOG(fmt, ...) CALI_LOG("%s" fmt, __globals.iface_name, ## __VA_ARGS__)
 #else
-#define CALI_TC_LOG(fmt, ...) CALI_LOG("CALICOLO" fmt, ## __VA_ARGS__)
+#define CALI_IFACE_LOG(fmt, ...) CALI_LOG("CALICOLO" fmt, ## __VA_ARGS__)
 #endif
 
 #define CALI_INFO_NO_FLAG(fmt, ...)  CALI_LOG_IF(CALI_LOG_LEVEL_INFO, fmt, ## __VA_ARGS__)
@@ -58,15 +60,15 @@ extern const volatile struct cali_tc_globals __globals;
 	if ((flags) & CALI_CGROUP) { \
 		CALI_LOG("CTLB------------: " fmt, ## __VA_ARGS__); \
 	} else if ((flags) & CALI_XDP_PROG) { \
-		CALI_LOG("CALICOLO---------X: " fmt, ## __VA_ARGS__); \
+		CALI_IFACE_LOG("-X: " fmt, ## __VA_ARGS__); \
 	} else if (((flags) & CALI_TC_HOST_EP) && ((flags) & CALI_TC_INGRESS)) { \
-		CALI_TC_LOG("-I: " fmt, ## __VA_ARGS__); \
+		CALI_IFACE_LOG("-I: " fmt, ## __VA_ARGS__); \
 	} else if ((flags) & CALI_TC_HOST_EP) { \
-		CALI_TC_LOG("-E: " fmt, ## __VA_ARGS__); \
+		CALI_IFACE_LOG("-E: " fmt, ## __VA_ARGS__); \
 	} else if ((flags) & CALI_TC_INGRESS) { \
-		CALI_TC_LOG("-I: " fmt, ## __VA_ARGS__); \
+		CALI_IFACE_LOG("-I: " fmt, ## __VA_ARGS__); \
 	} else { \
-		CALI_TC_LOG("-E: " fmt, ## __VA_ARGS__); \
+		CALI_IFACE_LOG("-E: " fmt, ## __VA_ARGS__); \
 	} \
 } while (0)
 

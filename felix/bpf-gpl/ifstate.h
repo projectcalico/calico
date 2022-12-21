@@ -13,7 +13,7 @@ struct ifstate_val {
 CALI_MAP(cali_iface, 2,
 		BPF_MAP_TYPE_HASH,
 		__u32, struct ifstate_val,
-		1000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
+		1000, BPF_F_NO_PREALLOC)
 
 #define IFACE_STATE_WEP		0x1
 #define IFACE_STATE_READY	0x2
