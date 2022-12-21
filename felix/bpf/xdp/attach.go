@@ -272,7 +272,7 @@ func updateJumpMap(obj *libbpf.Obj) error {
 
 	for _, ipFamily := range ipVersions {
 		if err := UpdateJumpMap(obj, JumpMapIndexes[ipFamily]); err != nil {
-			return fmt.Errorf("proto %s: %w", ipFamily)
+			return fmt.Errorf("proto %s: %w", ipFamily, err)
 		}
 	}
 

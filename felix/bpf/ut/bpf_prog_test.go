@@ -615,7 +615,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 out:
 	if err != nil {
-		obj.UnpinPrograms(bpfFsDir)
+		_ = obj.UnpinPrograms(bpfFsDir)
 		obj.Close()
 		return nil, fmt.Errorf("%s: %w", ipFamily, err)
 	}
@@ -743,7 +743,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 
 	obj, err := objLoad(objFname, bpfFsDir, "IPv4", topts, true, false)
 	Expect(err).NotTo(HaveOccurred())
-	defer obj.UnpinPrograms(bpfFsDir)
+	defer func() { _ = obj.UnpinPrograms(bpfFsDir) }()
 	defer obj.Close()
 
 	ctxIn := make([]byte, 18*4)
