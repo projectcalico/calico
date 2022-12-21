@@ -284,14 +284,6 @@ CALI_PATCH_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
 #define SKB_MARK	CALI_PATCH(__skb_mark)
 #endif
 
-#define MAP_PIN_GLOBAL	2
-
-#ifndef __BPFTOOL_LOADER__
-#define CALI_MAP_TC_EXT_PIN(pin)	.pinning_strategy = pin,
-#else
-#define CALI_MAP_TC_EXT_PIN(pin)
-#endif
-
 #define map_symbol(name, ver) name##ver
 
 #define MAP_LOOKUP_FN(name, ver) \
@@ -312,21 +304,7 @@ static CALI_BPF_INLINE int name##_delete_elem(const void* key)	\
 	return bpf_map_delete_elem(&map_symbol(name, ver), key);	\
 }
 
-#if defined(__BPFTOOL_LOADER__)
-#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin)		\
-struct bpf_map_def_extended __attribute__((section("maps"))) map_symbol(name, ver) = {	\
-	.type = map_type,								\
-	.key_size = sizeof(key_type),							\
-	.value_size = sizeof(val_type),							\
-	.map_flags = flags,								\
-	.max_entries = size,								\
-	CALI_MAP_TC_EXT_PIN(pin)							\
-};											\
-	MAP_LOOKUP_FN(name, ver)							\
-	MAP_UPDATE_FN(name, ver)							\
-	MAP_DELETE_FN(name, ver)
-#else
-#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin)		\
+#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags)			\
 struct {										\
 	__uint(type, map_type);								\
 	__type(key, key_type);								\
@@ -338,9 +316,8 @@ struct {										\
 	MAP_UPDATE_FN(name, ver)							\
 	MAP_DELETE_FN(name, ver)
 
-#endif
-#define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags, pin)		\
-		CALI_MAP(name,, map_type, key_type, val_type, size, flags, pin)
+#define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags)			\
+		CALI_MAP(name,, map_type, key_type, val_type, size, flags)
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";
 

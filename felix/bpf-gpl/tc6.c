@@ -20,9 +20,7 @@
 #include "jump.h"
 #include "policy_program.h"
 
-#if !defined(__BPFTOOL_LOADER__)
 const volatile struct cali_tc_globals __globals;
-#endif
 
 
 SEC("classifier/tc/prologue")
