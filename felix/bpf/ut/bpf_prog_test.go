@@ -238,6 +238,10 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(bpfFsDir)
 
+	err = os.Mkdir(bpfFsDir+"_v6", os.ModePerm)
+	Expect(err).NotTo(HaveOccurred())
+	defer os.RemoveAll(bpfFsDir + "v6")
+
 	obj := "../../bpf-gpl/bin/test_xdp_debug"
 	if !topts.xdp {
 		obj = "../../bpf-gpl/bin/test_"
@@ -272,10 +276,9 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		}
 	}
 
-	obj += ".o"
-	log.Infof("Patching binary %s", obj)
+	log.Infof("Patching binary %s", obj+".o")
 
-	bin, err := bpf.BinaryFromFile(obj)
+	bin, err := bpf.BinaryFromFile(obj + ".o")
 	Expect(err).NotTo(HaveOccurred())
 	// XXX for now we both path the mark here and include it in the context as
 	// well. This needs to be done for as long as we want to run the tests on
@@ -285,10 +288,15 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	o, err := objLoad(tempObj, bpfFsDir, topts, rules != nil, true)
+	o, err := objLoad(tempObj, bpfFsDir, "IPv4", topts, rules != nil, true)
 	Expect(err).NotTo(HaveOccurred())
-	defer o.Unpin(bpfFsDir)
 	defer o.Close()
+
+	if topts.ipv6 {
+		o, err := objLoad(obj+"_v6.o", bpfFsDir, "IPv6", topts, rules != nil, false)
+		Expect(err).NotTo(HaveOccurred())
+		defer o.Close()
+	}
 
 	if err != nil {
 		logger.Log("Error:", string(err.(*exec.ExitError).Stderr))
@@ -355,7 +363,11 @@ func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(
 	cllr := caller(2)
 
 	setupAndRun(t, "debug", section, rules, func(progName string) {
-		t.Run(section, func(_ *testing.T) {
+		label := section
+		if topts.description != "" {
+			label = topts.description + " - " + section
+		}
+		t.Run(label, func(_ *testing.T) {
 			if strings.Contains(section, "calico_from_") {
 				ExpectWithOffset(2, skbMark).To(Equal(uint32(0)),
 					fmt.Sprintf("skb mark 0x%08x should be zero at %s", skbMark, cllr))
@@ -499,19 +511,22 @@ func ipToU32(ip net.IP) uint32 {
 	return binary.LittleEndian.Uint32([]byte(ip[:]))
 }
 
-func objLoad(fname, bpfFsDir string, topts testOpts, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
+func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
 	log.WithField("program", fname).Debug("Loading BPF program")
 
 	forXDP := topts.xdp
 
 	jumpMap = jump.MapForTest(&bpf.MapContext{})
-	_ = unix.Unlink(jumpMap.Path())
+	if ipFamily == "IPv4" {
+		// don't do for v6 as that requires v4 atm
+		_ = unix.Unlink(jumpMap.Path())
+	}
 	err := jumpMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
 	obj, err := libbpf.OpenObject(fname)
 	if err != nil {
-		return nil, fmt.Errorf("open object: %w", err)
+		return nil, fmt.Errorf("open object %s: %w", fname, err)
 	}
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
@@ -555,10 +570,18 @@ func objLoad(fname, bpfFsDir string, topts testOpts, polProg, hasHostConflictPro
 		return nil, fmt.Errorf("load object: %w", err)
 	}
 
-	err = obj.PinPrograms(bpfFsDir)
+	progDir := bpfFsDir
+	policyIdx := tcdefs.ProgIndexPolicy
+
+	if ipFamily == "IPv6" {
+		progDir += "_v6"
+		policyIdx = tcdefs.ProgIndexV6Policy
+	}
+
+	err = obj.PinPrograms(progDir)
 	if err != nil {
 		obj.Close()
-		return nil, fmt.Errorf("pin programs: %w", err)
+		return nil, fmt.Errorf("pin %s programs to %s: %w", ipFamily, progDir, err)
 	}
 
 	if polProg {
@@ -569,7 +592,7 @@ func objLoad(fname, bpfFsDir string, topts testOpts, polProg, hasHostConflictPro
 		polProgPath = path.Join(bpfFsDir, polProgPath)
 		_, err = os.Stat(polProgPath)
 		if err == nil {
-			err = jumpMapUpdatePinned(jumpMap, tcdefs.ProgIndexPolicy, polProgPath)
+			err = jumpMapUpdatePinned(jumpMap, policyIdx, polProgPath)
 			if err != nil {
 				err = errors.Wrap(err, "failed to update jump map (policy program)")
 				goto out
@@ -579,13 +602,13 @@ func objLoad(fname, bpfFsDir string, topts testOpts, polProg, hasHostConflictPro
 	}
 
 	if !forXDP {
-		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes["IPv4"], false, hasHostConflictProg)
+		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, hasHostConflictProg)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
 		}
-		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes["IPv4"], false, false)
+		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, false)
 	} else {
-		if err := xdp.UpdateJumpMap(obj, xdp.JumpMapIndexes["IPv4"]); err != nil {
+		if err := xdp.UpdateJumpMap(obj, xdp.JumpMapIndexes[ipFamily]); err != nil {
 			goto out
 		}
 	}
@@ -594,7 +617,7 @@ out:
 	if err != nil {
 		obj.UnpinPrograms(bpfFsDir)
 		obj.Close()
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", ipFamily, err)
 	}
 
 	return obj, nil
@@ -718,7 +741,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 
 	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
 
-	obj, err := objLoad(objFname, bpfFsDir, topts, true, false)
+	obj, err := objLoad(objFname, bpfFsDir, "IPv4", topts, true, false)
 	Expect(err).NotTo(HaveOccurred())
 	defer obj.UnpinPrograms(bpfFsDir)
 	defer obj.Close()
@@ -746,6 +769,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
+	description   string
 	subtests      bool
 	logLevel      log.Level
 	xdp           bool
@@ -753,6 +777,7 @@ type testOpts struct {
 	psnatEnd      uint32
 	hostNetworked bool
 	progLog       string
+	ipv6          bool
 }
 
 type testOption func(opts *testOpts)
@@ -789,6 +814,18 @@ func withPSNATPorts(start, end uint16) testOption {
 func withHostNetworked() testOption {
 	return func(o *testOpts) {
 		o.hostNetworked = true
+	}
+}
+
+func withIPv6() testOption {
+	return func(o *testOpts) {
+		o.ipv6 = true
+	}
+}
+
+func withDescription(desc string) testOption {
+	return func(o *testOpts) {
+		o.description = desc
 	}
 }
 

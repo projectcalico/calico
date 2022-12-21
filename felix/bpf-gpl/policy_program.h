@@ -83,6 +83,6 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-#endif /* CALI_DEBUG_NO_PROG */
+#endif /* CALI_NO_DEFAULT_POLICY_PROG */
 
 #endif /*  __CALI_POL_PROG_H__ */

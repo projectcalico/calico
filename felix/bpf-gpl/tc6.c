@@ -87,13 +87,19 @@ int calico_tc(struct __sk_buff *skb)
 	CALI_DEBUG("IPv6 on host interface: allow\n");
 	CALI_DEBUG("About to jump to normal policy program\n");
 	CALI_JUMP_TO(skb, PROG_INDEX_V6_POLICY);
+	if (CALI_F_HEP) {
+		CALI_DEBUG("HEP with no policy, allow.\n");
+		goto allow;
+	}
 	CALI_DEBUG("Tail call to normal policy program failed: DROP\n");
+	
+deny:
+	skb->mark = CALI_SKB_MARK_SEEN;
+	return TC_ACT_SHOT;
 
 allow:
+	skb->mark = CALI_SKB_MARK_SEEN;
 	return TC_ACT_UNSPEC;
-
-deny:
-	return TC_ACT_SHOT;
 }
 
 SEC("classifier/tc/accept")
