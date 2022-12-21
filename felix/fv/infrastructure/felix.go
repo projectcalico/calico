@@ -136,6 +136,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		path.Join(wd, "..", "bin", "bpf"): "/usr/lib/calico/bpf/",
 		"/lib/modules":                    "/lib/modules",
 		"/tmp":                            "/tmp",
+		"/var/run/calico":                 "/var/run/calico",
 	}
 
 	containerName := containers.UniqueName(fmt.Sprintf("felix-%d", id))
