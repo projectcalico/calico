@@ -34,10 +34,6 @@ else
 fi
 
 if [[ "${filename}" =~ test_.* ]]; then
-  args+=("-D__BPFTOOL_LOADER__")
-fi
-
-if [[ "${filename}" =~ test_.* ]]; then
   args+=("-DUNITTEST")
 fi
 

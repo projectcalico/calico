@@ -12,7 +12,7 @@ typedef __u64 counters_t[MAX_COUNTERS_SIZE];
 CALI_MAP(cali_counters, 1,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
 		__u32, counters_t, 1,
-		0, MAP_PIN_GLOBAL)
+		0)
 
 static CALI_BPF_INLINE counters_t *counters_get(void)
 {

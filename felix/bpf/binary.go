@@ -21,10 +21,8 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"io/ioutil"
-	"net"
 	"os"
 
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -92,81 +90,10 @@ func (b *Binary) replaceAllLoadImm32(orig, replacement []byte) {
 	b.ReplaceAll(ldimm[:], rep[:])
 }
 
-// PatchIPv4 replaces a place holder with the actual IPv4
-func (b *Binary) PatchIPv4(ip net.IP) error {
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return errors.Errorf("%s is not IPv4", ip)
-	}
-	b.replaceAllLoadImm32([]byte("HOST"), []byte(ipv4))
-
-	return nil
-}
-
-// PatchIntfIPv4 replaces a place holder Intf IP with the actual IPv4
-func (b *Binary) PatchIntfAddr(ip net.IP) error {
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return errors.Errorf("%s is not IPv4", ip)
-	}
-	b.replaceAllLoadImm32([]byte("INTF"), []byte(ipv4))
-	return nil
-}
-
-// PatchLogPrefix patches in the log prefix. Is is trimmed to 8 bytes and padded
-// with '-' on the right
-func (b *Binary) PatchLogPrefix(prefix string) {
-	pfx := []byte(prefix + "--------") // Pad on the right to make sure its long enough.
-
-	b.replaceAllLoadImm32([]byte("CALI"), pfx[:4])
-	b.replaceAllLoadImm32([]byte("COLO"), pfx[4:8])
-}
-
-// PatchTunnelMTU replaces a placeholder with the actual mtu
-func (b *Binary) PatchTunnelMTU(mtu uint16) {
-	b.patchU32Placeholder("TMTU", uint32(mtu))
-}
-
-// PatchVXLANPort replaces the VXPR placeholder with the actual port.
-func (b *Binary) PatchVXLANPort(port uint16) {
-	logrus.WithField("port", port).Debug("Patching VXLAN port")
-	b.patchU32Placeholder("VXPR", uint32(port))
-}
-
-// PatchFlags replaces the FLGS placeholder with the actual flags
-func (b *Binary) PatchFlags(flags uint32) {
-	logrus.WithField("flags", flags).Debug("Patching Flags")
-	b.patchU32Placeholder("FLGS", flags)
-}
-
-// PatchExtToServiceConnmark replaces the MARK placeholder with the actual mark.
-func (b *Binary) PatchExtToServiceConnmark(mark uint32) {
-	logrus.WithField("mark", mark).Debug("Patching to-host mark")
-	b.patchU32Placeholder("MARK", uint32(mark))
-}
-
-// PatchPSNATPorts replaces PSNAT_START and PSNAT_LEN with the provided port range.
-func (b *Binary) PatchPSNATPorts(start, end uint32) {
-	logrus.WithFields(logrus.Fields{"start": start, "end": end}).Debug("Patching pSNAT ports")
-	b.patchU32Placeholder("PRTS", start)
-	b.patchU32Placeholder("PRTL", end-start+1)
-}
-
 // PatchSkbMark replaces SKBM with the expected mark - for tests.
 func (b *Binary) PatchSkbMark(mark uint32) {
 	logrus.WithField("mark", mark).Debug("Patching skb mark")
 	b.patchU32Placeholder("SKBM", uint32(mark))
-}
-
-// PatchHostTunnelIPv4 replaces TUNL with the tunnel interface IP.
-func (b *Binary) PatchHostTunnelIPv4(ip net.IP) error {
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return errors.Errorf("%s is not IPv4", ip)
-	}
-	b.replaceAllLoadImm32([]byte("TUNL"), []byte(ipv4))
-
-	return nil
 }
 
 // patchU32Placeholder replaces a placeholder with the given value.

@@ -20,7 +20,7 @@ import (
 
 func MapForTest(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/cali_v4_jump",
+		Filename:   "/sys/fs/bpf/tc/globals/cali_jump2",
 		Type:       "prog_array",
 		KeySize:    4,
 		ValueSize:  4,
