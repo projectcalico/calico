@@ -26,7 +26,7 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 CURL=curl -C - -sSf
 
 CNI_VERSION=v1.1.1
-FLANNEL_VERSION=v1.0.1
+FLANNEL_VERSION=v1.1.2
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
