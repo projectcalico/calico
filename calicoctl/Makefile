@@ -89,6 +89,7 @@ gen-crds:
 	$(DOCKER_RUN) \
 	  $(CALICO_BUILD) \
 	  sh -c 'cd /go/src/$(PACKAGE_NAME)/calicoctl/commands/crds && go generate'
+	$(MAKE) go-fmt
 
 ###############################################################################
 # Building the image
