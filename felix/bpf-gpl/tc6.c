@@ -1,12 +1,30 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALICO_TCV6_H__
-#define __CALICO_TCV6_H__
+#include <linux/bpf.h>
+#include <linux/pkt_cls.h>
+#include <linux/ipv6.h>
 
-SEC("classifier/tc/prologue_v6")
-int calico_tc_v6(struct __sk_buff *skb)
+// stdbool.h has no deps so it's OK to include; stdint.h pulls in parts
+// of the std lib that aren't compatible with BPF.
+#include <stdbool.h>
+
+#include "bpf.h"
+#include "types.h"
+#include "log.h"
+#include "skb.h"
+#include "routes.h"
+#include "parsing.h"
+#include "ipv6.h"
+#include "jump.h"
+#include "policy_program.h"
+
+const volatile struct cali_tc_globals __globals;
+
+
+SEC("classifier/tc/prologue")
+int calico_tc(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 prologue program\n");
 	struct cali_tc_ctx ctx = {
@@ -69,17 +87,23 @@ int calico_tc_v6(struct __sk_buff *skb)
 	CALI_DEBUG("IPv6 on host interface: allow\n");
 	CALI_DEBUG("About to jump to normal policy program\n");
 	CALI_JUMP_TO(skb, PROG_INDEX_V6_POLICY);
+	if (CALI_F_HEP) {
+		CALI_DEBUG("HEP with no policy, allow.\n");
+		goto allow;
+	}
 	CALI_DEBUG("Tail call to normal policy program failed: DROP\n");
+	
+deny:
+	skb->mark = CALI_SKB_MARK_SEEN;
+	return TC_ACT_SHOT;
 
 allow:
+	skb->mark = CALI_SKB_MARK_SEEN;
 	return TC_ACT_UNSPEC;
-
-deny:
-	return TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/accept_v6")
-int calico_tc_v6_skb_accepted_entrypoint(struct __sk_buff *skb)
+SEC("classifier/tc/accept")
+int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 accepted program\n");
 	// TODO: Implement the logic for accepted packets by the policy program
@@ -88,8 +112,8 @@ int calico_tc_v6_skb_accepted_entrypoint(struct __sk_buff *skb)
 	return TC_ACT_UNSPEC;
 }
 
-SEC("classifier/tc/icmp_v6")
-int calico_tc_v6_skb_send_icmp_replies(struct __sk_buff *skb)
+SEC("classifier/tc/icmp")
+int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 icmp program\n");
 	// TODO: Implement the logic for accepted icmp packets by the policy program
@@ -97,8 +121,8 @@ int calico_tc_v6_skb_send_icmp_replies(struct __sk_buff *skb)
 	return TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/drop_v6")
-int calico_tc_v6_skb_drop(struct __sk_buff *skb)
+SEC("classifier/tc/drop")
+int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering IPv6 drop program\n");
 	// TODO: Implement the logic for dropped packets by the policy program
@@ -106,4 +130,3 @@ int calico_tc_v6_skb_drop(struct __sk_buff *skb)
 	return TC_ACT_SHOT;
 }
 
-#endif /* __CALICO_TCV6_H__ */

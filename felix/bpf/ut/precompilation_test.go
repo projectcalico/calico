@@ -48,6 +48,8 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 		bpfutils.BTFEnabled = bpfutils.SupportsBTF()
 	}()
 
+	defer bpf.CleanUpMaps()
+
 	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
 		logLevel := logLevel
 		// Compile the TC endpoint programs.
@@ -90,20 +92,21 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 								}
 
 								ap := tc.AttachPoint{
-									Type:       epType,
-									ToOrFrom:   toOrFrom,
-									Hook:       bpf.HookIngress,
-									ToHostDrop: epToHostDrop,
-									FIB:        fibEnabled,
-									DSR:        dsr,
-									LogLevel:   logLevel,
-									HostIP:     net.ParseIP("10.0.0.1"),
-									IntfIP:     net.ParseIP("10.0.0.2"),
+									IPv6Enabled: true,
+									Type:        epType,
+									ToOrFrom:    toOrFrom,
+									Hook:        bpf.HookIngress,
+									ToHostDrop:  epToHostDrop,
+									FIB:         fibEnabled,
+									DSR:         dsr,
+									LogLevel:    logLevel,
+									HostIP:      net.ParseIP("10.0.0.1"),
+									IntfIP:      net.ParseIP("10.0.0.2"),
 								}
 
-								t.Run(ap.FileName(), func(t *testing.T) {
+								t.Run(ap.FileName(4), func(t *testing.T) {
 									RegisterTestingT(t)
-									logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
+									logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName(4))
 
 									vethName, veth := createVeth()
 									defer deleteLink(veth)

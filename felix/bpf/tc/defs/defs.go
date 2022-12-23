@@ -62,16 +62,18 @@ const (
 var ProgramNames = []string{
 	"", /* reserved for filter program */
 	"", /* reserved for filter program */
+	/* ipv4 */
 	"calico_tc_norm_pol_tail",
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
-	"calico_tc_v6",
-	"calico_tc_v6_norm_pol_tail",
-	"calico_tc_v6_skb_accepted_entrypoint",
-	"calico_tc_v6_skb_send_icmp_replies",
-	"calico_tc_v6_skb_drop",
+	/* ipv6 */
+	"calico_tc",
+	"calico_tc_norm_pol_tail",
+	"calico_tc_skb_accepted_entrypoint",
+	"calico_tc_skb_send_icmp_replies",
+	"calico_tc_skb_drop",
 }
 
 var JumpMapIndexes = map[string][]int{

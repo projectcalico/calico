@@ -9,7 +9,7 @@
 
 CALI_MAP(cali_rule_ctrs, 2,
 		BPF_MAP_TYPE_PERCPU_HASH,
-		__u64, __u64, 10000, 0, MAP_PIN_GLOBAL)
+		__u64, __u64, 10000, 0)
 
 static CALI_BPF_INLINE void update_rule_counters(struct cali_tc_state *state) {
 	int ret = 0;

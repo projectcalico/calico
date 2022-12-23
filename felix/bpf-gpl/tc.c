@@ -38,7 +38,6 @@
 #include "parsing.h"
 #include "ipv6.h"
 #include "tc.h"
-#include "tcv6.h"
 #include "policy_program.h"
 #include "failsafe.h"
 #include "metadata.h"
@@ -47,9 +46,7 @@
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
-#if !defined(__BPFTOOL_LOADER__)
 const volatile struct cali_tc_globals __globals;
-#endif
 
 /* calico_tc is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -1573,5 +1570,3 @@ deny:
 // because the name is exposed by bpftool et al.
 
 ENTRY_FUNC(CALI_ENTRYPOINT_NAME)
-
-char ____license[] __attribute__((section("license"), used)) = "GPL";

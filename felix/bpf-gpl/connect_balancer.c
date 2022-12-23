@@ -16,124 +16,16 @@
 #include "ctlb.h"
 #include "bpf.h"
 #include "log.h"
-#include "nat_lookup.h"
 
 #include "sendrecv.h"
-
-static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, bool connect)
-{
-	int err = 0;
-	/* We do not know what the source address is yet, we only know that it
-	 * is the localhost, so we might just use 0.0.0.0. That would not
-	 * conflict with traffic from elsewhere.
-	 *
-	 * XXX it means that all workloads that use the cgroup hook have the
-	 * XXX same affinity, which (a) is sub-optimal and (b) leaks info between
-	 * XXX workloads.
-	 */
-	nat_lookup_result res = NAT_LOOKUP_ALLOW;
-	__u16 dport_he = (__u16)(bpf_ntohl(ctx->user_port)>>16);
-	struct calico_nat_dest *nat_dest;
-	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he, false, &res,
-			proto == IPPROTO_UDP && !connect ? CTLB_UDP_NOT_SEEN_TIMEO : 0, /* enforce affinity UDP */
-			proto == IPPROTO_UDP && !connect /* update affinity timer */);
-	if (!nat_dest) {
-		CALI_INFO("NAT miss.\n");
-		if (res == NAT_NO_BACKEND) {
-			err = -1;
-		}
-		goto out;
-	}
-
-	__u32 dport_be = host_to_ctx_port(nat_dest->port);
-
-	__u64 cookie = bpf_get_socket_cookie(ctx);
-	CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
-			bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
-
-	/* For all protocols, record recent NAT operations in an LRU map; other BPF programs use this
-	 * cache to reverse our DNAT so they can do pre-DNAT policy. */
-	struct ct_nats_key natk = {
-		.cookie = cookie,
-		.ip = nat_dest->addr,
-		.port = dport_be,
-		.proto = proto,
-	};
-	struct sendrecv4_val val = {
-		.ip	= ctx->user_ip4,
-		.port	= ctx->user_port,
-	};
-	int rc = cali_v4_ct_nats_update_elem(&natk, &val, 0);
-	if (rc) {
-		/* if this happens things are really bad! report */
-		CALI_INFO("Failed to update ct_nats map rc=%d\n", rc);
-	}
-
-	if (proto != IPPROTO_TCP) {
-		/* For UDP, store a long-lived reverse mapping, which we use to reverse the DNAT for programs that
-		 * check the source on the return packets. */
-		__u64 cookie = bpf_get_socket_cookie(ctx);
-		CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
-				bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
-		struct sendrecv4_key key = {
-			.ip	= nat_dest->addr,
-			.port	= dport_be,
-			.cookie	= cookie,
-		};
-
-		if (cali_v4_srmsg_update_elem(&key, &val, 0)) {
-			/* if this happens things are really bad! report */
-			CALI_INFO("Failed to update map\n");
-			goto out;
-		}
-	}
-
-	ctx->user_ip4 = nat_dest->addr;
-	ctx->user_port = dport_be;
-
-out:
-	return err;
-}
+#include "connect.h"
 
 SEC("cgroup/connect4")
 int calico_connect_v4(struct bpf_sock_addr *ctx)
 {
-	int ret = 1; /* OK value */
-
 	CALI_DEBUG("calico_connect_v4\n");
 
-	/* do not process anything non-TCP or non-UDP, but do not block it, will be
-	 * dealt with somewhere else.
-	 */
-	if (ctx->type != SOCK_STREAM && ctx->type != SOCK_DGRAM) {
-		CALI_INFO("unexpected sock type %d\n", ctx->type);
-		goto out;
-	}
-
-	__u8 ip_proto;
-	switch (ctx->type) {
-	case SOCK_STREAM:
-		CALI_DEBUG("SOCK_STREAM -> assuming TCP\n");
-		ip_proto = IPPROTO_TCP;
-		break;
-	case SOCK_DGRAM:
-		if (CTLB_EXCLUDE_UDP) {
-			goto out;
-		}
-		CALI_DEBUG("SOCK_DGRAM -> assuming UDP\n");
-		ip_proto = IPPROTO_UDP;
-		break;
-	default:
-		CALI_DEBUG("Unknown socket type: %d\n", (int)ctx->type);
-		goto out;
-	}
-
-	if (do_nat_common(ctx, ip_proto, true) != 0) {
-		ret = 0; /* ret != 1 generates an error in pre-connect */
-	}
-
-out:
-	return ret;
+	return connect_v4(ctx, &ctx->user_ip4);
 }
 
 SEC("cgroup/sendmsg4")
@@ -151,7 +43,7 @@ int calico_sendmsg_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	do_nat_common(ctx, IPPROTO_UDP, false);
+	do_nat_common(ctx, IPPROTO_UDP, &ctx->user_ip4, false);
 
 out:
 	return 1;
@@ -200,5 +92,3 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 out:
 	return 1;
 }
-
-char ____license[] __attribute__((section("license"), used)) = "GPL";

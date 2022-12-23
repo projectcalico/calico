@@ -106,6 +106,20 @@ func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	return -1, false
 }
 
+func ConfigureProgram(m *libbpf.Map, iface string) error {
+	var globalData libbpf.XDPGlobalData
+
+	in := []byte("---------------")
+	copy(in, iface)
+	globalData.IfaceName = string(in)
+
+	if err := libbpf.XDPSetGlobals(m, &globalData); err != nil {
+		return fmt.Errorf("failed to configure xdp: %w", err)
+	}
+
+	return nil
+}
+
 func (ap *AttachPoint) AttachProgram() (int, error) {
 	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
@@ -117,22 +131,20 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 
 	filename := ap.FileName()
 	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
-	tempBinary := path.Join(tempDir, filename)
 
-	// Patch the binary so that its log prefix is like "eth0------X".
-	err = ap.patchBinary(preCompiledBinary, tempBinary)
-	if err != nil {
-		ap.Log().WithError(err).Error("Failed to patch binary")
-		return -1, err
-	}
-
-	obj, err := libbpf.OpenObject(tempBinary)
+	obj, err := libbpf.OpenObject(preCompiledBinary)
 	if err != nil {
 		return -1, err
 	}
 	defer obj.Close()
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		if m.IsMapInternal() {
+			if err := ConfigureProgram(m, ap.Iface); err != nil {
+				return -1, err
+			}
+			continue
+		}
 		// TODO: We need to set map size here like tc.
 		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, bpf.HookXDP)
 		if err := m.SetPinPath(pinPath); err != nil {
@@ -242,22 +254,6 @@ func (ap *AttachPoint) DetachProgram() error {
 	return nil
 }
 
-func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
-	b, err := bpf.BinaryFromFile(ifile)
-	if err != nil {
-		return fmt.Errorf("failed to read pre-compiled BPF binary: %w", err)
-	}
-
-	b.PatchLogPrefix(ap.Iface)
-
-	err = b.WriteToFile(ofile)
-	if err != nil {
-		return fmt.Errorf("failed to write pre-compiled BPF binary: %w", err)
-	}
-
-	return nil
-}
-
 func (ap *AttachPoint) IsAttached() (bool, error) {
 	_, err := ap.ProgramID()
 	return err == nil, err
@@ -275,14 +271,21 @@ func updateJumpMap(obj *libbpf.Obj) error {
 	ipVersions := []string{"IPv4"}
 
 	for _, ipFamily := range ipVersions {
-		progs := JumpMapIndexes[ipFamily]
-		mapName := bpf.JumpMapName()
+		if err := UpdateJumpMap(obj, JumpMapIndexes[ipFamily]); err != nil {
+			return fmt.Errorf("proto %s: %w", ipFamily, err)
+		}
+	}
 
-		for idx, name := range progs {
-			err := obj.UpdateJumpMap(mapName, name, idx)
-			if err != nil {
-				return fmt.Errorf("failed to update %s program '%s' at index %d: %w", ipFamily, name, idx, err)
-			}
+	return nil
+}
+
+func UpdateJumpMap(obj *libbpf.Obj, progs map[int]string) error {
+	mapName := bpf.JumpMapName()
+
+	for idx, name := range progs {
+		err := obj.UpdateJumpMap(mapName, name, idx)
+		if err != nil {
+			return fmt.Errorf("failed to update program '%s' at index %d: %w", name, idx, err)
 		}
 	}
 
