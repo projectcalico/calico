@@ -28,7 +28,7 @@ CURL=curl -C - -sSf
 # Use forked CNI plugin URL and corresponding tagged artifacts.
 CNI_VERSION=v1.1.1-calico+go-1.18.9
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
-FLANNEL_VERSION=v1.0.1
+FLANNEL_VERSION=v1.1.2
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
