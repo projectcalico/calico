@@ -2358,6 +2358,9 @@ func ListPerEPMaps() (map[int]string, error) {
 		if err != nil {
 			return err
 		}
+		if strings.Contains(p, "globals") {
+			return nil
+		}
 		if strings.HasPrefix(info.Name(), JumpMapName()) ||
 			strings.HasPrefix(info.Name(), CountersMapName()) {
 			log.WithField("path", p).Debug("Examining map")
