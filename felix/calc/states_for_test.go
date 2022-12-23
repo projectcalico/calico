@@ -1272,6 +1272,11 @@ var vxlanWithBlockNodeRes = vxlanWithBlock.withKVUpdates(
 			IPv4Address: remoteHostIP.String() + "/24",
 		}},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/24",
+	},
 ).withName("VXLAN with node resource (node resources)")
 
 // As vxlanWithBlock but with some superfluous IPv6 resources (VXLAN is IPv4 only).
@@ -1550,6 +1555,15 @@ var vxlanLocalBlockWithBorrowsNodeRes = vxlanLocalBlockWithBorrows.withKVUpdates
 			IPv4Address: localHostIPWithPrefix,
 		}},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIPWithPrefix,
+	},
+	proto.HostMetadataV4V6Update{
+		Hostname: localHostname,
+		Ipv4Addr: localHostIPWithPrefix,
+	},
 ).withName("VXLAN local with borrows (node resources)")
 
 // As vxlanLocalBlockWithBorrowsNodeRes using the cross-subnet version of the IP pool.
@@ -1604,6 +1618,14 @@ var vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes = vxlanLocalBlockWithBorrow
 			IPv4Address: localHostIP.String() + "/32",
 		}},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+	},
+	proto.HostMetadataV4V6Update{
+		Hostname: localHostname,
+		Ipv4Addr: localHostIP.String() + "/32",
+	},
 ).withRoutes(
 	routeUpdateIPPoolVXLANCrossSubnet,
 	routeUpdateRemoteHost,
@@ -1813,6 +1835,11 @@ var vxlanV6WithBlock = empty.withKVUpdates(
 	},
 ).withExpectedEncapsulation(
 	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: false, VxlanEnabledV6: true},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv6Addr: remoteHostIPv6.String() + "/96",
+	},
 ).withRoutes(vxlanV6WithBlockRoutes...)
 
 var vxlanV6WithBlockRoutes = []proto.RouteUpdate{
@@ -1852,7 +1879,7 @@ var vxlanV6NodeResIPDelete = vxlanV6WithBlock.withKVUpdates(
 		},
 		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{}},
 	}},
-).withName("VXLAN IPv6 Node Resource IP removed").withRoutes(
+).withHostMetadataV4V6().withName("VXLAN IPv6 Node Resource IP removed").withRoutes(
 	routeUpdateV6IPPoolVXLAN,
 	proto.RouteUpdate{
 		Type:        proto.RouteType_REMOTE_WORKLOAD,
@@ -1870,6 +1897,10 @@ var vxlanV6NodeResBGPDelete = vxlanV6WithBlock.withKVUpdates(
 		},
 		Spec: apiv3.NodeSpec{BGP: nil},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+	},
 ).withName("VXLAN IPv6 Node Resource BGP removed").withRoutes(
 	routeUpdateV6IPPoolVXLAN,
 	proto.RouteUpdate{
@@ -1883,7 +1914,7 @@ var vxlanV6NodeResBGPDelete = vxlanV6WithBlock.withKVUpdates(
 
 var vxlanV6NodeResDelete = vxlanV6WithBlock.withKVUpdates(
 	KVPair{Key: remoteNodeResKey, Value: nil},
-).withName("VXLAN IPv6 Node Resource removed").withRoutes(
+).withHostMetadataV4V6().withName("VXLAN IPv6 Node Resource removed").withRoutes(
 	routeUpdateV6IPPoolVXLAN,
 	proto.RouteUpdate{
 		Type:        proto.RouteType_REMOTE_WORKLOAD,
@@ -1927,6 +1958,12 @@ var vxlanV4V6WithBlock = empty.withKVUpdates(
 			IPv6Address: remoteHostIPv6.String() + "/96",
 		}},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/24",
+		Ipv6Addr: remoteHostIPv6.String() + "/96",
+	},
 ).withName("VXLAN IPv4+IPv6").withVTEPs(
 	// VTEP for the remote node.
 	proto.VXLANTunnelEndpointUpdate{
@@ -1990,6 +2027,11 @@ var vxlanV4V6NodeResIPv4Delete = vxlanV4V6WithBlock.withKVUpdates(
 			IPv6Address: remoteHostIPv6.String() + "/96",
 		}},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv6Addr: remoteHostIPv6.String() + "/96",
+	},
 ).withName("VXLAN IPv4+IPv6 Node Resource IPv4 removed").withRoutes(
 	append(vxlanV6WithBlockRoutes,
 		routeUpdateIPPoolVXLAN,
@@ -2021,6 +2063,11 @@ var vxlanV4V6NodeResIPv6Delete = vxlanV4V6WithBlock.withKVUpdates(
 			IPv4Address: remoteHostIP.String() + "/24",
 		}},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/24",
+	},
 ).withName("VXLAN IPv4+IPv6 Node Resource IPv6 removed").withRoutes(
 	append(vxlanWithBlockRoutes,
 		routeUpdateV6IPPoolVXLAN,
@@ -2048,6 +2095,10 @@ var vxlanV4V6NodeResBGPDelete = vxlanV4V6WithBlock.withKVUpdates(
 		},
 		Spec: apiv3.NodeSpec{BGP: nil},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+	},
 ).withName("VXLAN IPv4+IPv6 Node Resource BGP removed").withRoutes(
 	routeUpdateIPPoolVXLAN,
 	// Host removed but keep the route without the node IP.
@@ -2071,7 +2122,7 @@ var vxlanV4V6NodeResBGPDelete = vxlanV4V6WithBlock.withKVUpdates(
 
 var vxlanV4V6NodeResDelete = vxlanV4V6WithBlock.withKVUpdates(
 	KVPair{Key: remoteNodeResKey, Value: nil},
-).withName("VXLAN IPv4+IPv6 Node Resource removed").withRoutes(
+).withHostMetadataV4V6().withName("VXLAN IPv4+IPv6 Node Resource removed").withRoutes(
 	routeUpdateIPPoolVXLAN,
 	// Host removed but keep the route without the node IP.
 	proto.RouteUpdate{
@@ -2232,6 +2283,15 @@ var nodesWithMoreIPs = vxlanWithBlock.withKVUpdates(
 			},
 		},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIPWithPrefix,
+	},
+	proto.HostMetadataV4V6Update{
+		Hostname: localHostname,
+		Ipv4Addr: localHostIPWithPrefix,
+	},
 ).withRoutes(nodesWithMoreIPsRoutes...).
 	withName("routes for nodes with more IPs")
 
@@ -2286,6 +2346,15 @@ var nodesWithMoreIPsAndDuplicates = nodesWithMoreIPs.withKVUpdates(
 			},
 		},
 	},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: localHostname,
+		Ipv4Addr: localHostIPWithPrefix,
+	},
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIPWithPrefix,
+	},
 ).withName("routes for nodes with more IPs and duplicates")
 
 var nodesWithDifferentAddressTypes = nodesWithMoreIPs.withKVUpdates(
@@ -2313,6 +2382,15 @@ var nodesWithDifferentAddressTypes = nodesWithMoreIPs.withKVUpdates(
 			},
 		},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{ // from nodesWithMoreIPs
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIPWithPrefix,
+	},
+	proto.HostMetadataV4V6Update{
+		Hostname: localHostname,
+		Ipv4Addr: localHostIPWithPrefix,
+	},
 ).withRoutes(append(nodesWithMoreIPsRoutes,
 	// IPv6 route is now valid
 	proto.RouteUpdate{
@@ -2362,6 +2440,15 @@ var nodesWithMoreIPsDeleted = vxlanWithBlock.withKVUpdates(
 			},
 		},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIPWithPrefix,
+	},
+	proto.HostMetadataV4V6Update{
+		Hostname: localHostname,
+		Ipv4Addr: localHostIPWithPrefix,
+	},
 ).withRoutes(nodesWithMoreIPsRoutesDeletedExtras...).
 	withName("routes for nodes with more IPs deleted the extra IPs")
 
@@ -2510,6 +2597,11 @@ var wireguardV4 = empty.withKVUpdates(
 			TunnelType:  &proto.TunnelType{Wireguard: true},
 		},
 	}...,
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/24",
+	},
 ).withWireguardEndpoints(
 	[]proto.WireguardEndpointUpdate{
 		{
@@ -2545,6 +2637,11 @@ var wireguardV6 = empty.withKVUpdates(
 			WireguardPublicKeyV6: wgPublicKey2.String(),
 		},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteNodeResKey.Name,
+		Ipv6Addr: remoteHostIPv6.String() + "/96",
+	},
 ).withName("Wireguard IPv6").withRoutes(
 	[]proto.RouteUpdate{
 		routeUpdateRemoteHostV6,
@@ -2598,6 +2695,12 @@ var wireguardV4V6 = empty.withKVUpdates(
 			WireguardPublicKeyV6: wgPublicKey2.String(),
 		},
 	}},
+).withHostMetadataV4V6(
+	proto.HostMetadataV4V6Update{
+		Hostname: remoteNodeResKey.Name,
+		Ipv4Addr: remoteHostIP.String() + "/24",
+		Ipv6Addr: remoteHostIPv6.String() + "/96",
+	},
 ).withName("Wireguard IPv4+IPv6").withRoutes(
 	[]proto.RouteUpdate{
 		routeUpdateRemoteHost,
