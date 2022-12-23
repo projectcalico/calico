@@ -183,6 +183,26 @@ var _ = infrastructure.DatastoreDescribe(
 				// Expect to receive the packet from the .20 as it is not dropped by RPF.
 				Eventually(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
 					Should(BeNumerically("==", 1), "Wl - "+matcherWl)
+
+				// Reset TCP dump counts
+				tcpdumpHEP.ResetCount("UDP-30446")
+				tcpdumpWl.ResetCount("UDP-30446")
+
+				// Remove route from Felix and test scenario again
+				felixes[0].Exec("ip", "route", "del", w.IP+"/32", "dev", w.InterfaceName) // e.g. cali29f56ea1abf
+
+				//  Generate another packet...
+				_, err = external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
+					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Expect to see the packet from the .20 network at eth20 before RPF
+				Eventually(func() int { return tcpdumpHEP.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 1), "HEP - "+matcherHEP)
+
+				// Expect not to receive the packet from the .20 as it is dropped by RPF.
+				Consistently(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 0), "Wl - "+matcherWl)
 			})
 		})
 
