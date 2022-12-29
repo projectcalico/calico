@@ -17,7 +17,6 @@ package node
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -103,7 +102,7 @@ func runDiags(logDir string) error {
 	fmt.Println("Collecting diagnostics")
 
 	// Create a temp directory in /tmp
-	tmpDir, err := ioutil.TempDir("", "calico")
+	tmpDir, err := os.MkdirTemp("", "calico")
 	if err != nil {
 		return fmt.Errorf("Error creating temp directory to dump logs: %v", err)
 	}
@@ -133,7 +132,7 @@ func runDiags(logDir string) error {
 			}
 
 			fp := filepath.Join(diagsTmpDir, parts[0])
-			if err := ioutil.WriteFile(fp, content, 0666); err != nil {
+			if err := os.WriteFile(fp, content, 0666); err != nil {
 				log.Errorf("Error writing diags to file: %s\n", err)
 			}
 		}
@@ -203,7 +202,7 @@ func getNodeContainerLogs(logDir string) {
 	containers := re.ReplaceAllString(string(result), "")
 
 	fmt.Println("Copying logs from Calico containers")
-	err = ioutil.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0666)
+	err = os.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0666)
 	if err != nil {
 		fmt.Printf("Could not save output of `docker ps` command to container_creation_time: %s\n", err)
 	}
@@ -218,7 +217,7 @@ func getNodeContainerLogs(logDir string) {
 			fmt.Printf("Could not pull log for container %s: %s\n", name, err)
 			continue
 		}
-		err = ioutil.WriteFile(logDir+"/"+name+".log", cLog, 0666)
+		err = os.WriteFile(logDir+"/"+name+".log", cLog, 0666)
 		if err != nil {
 			fmt.Printf("Failed to write log for container %s to file: %s\n", name, err)
 		}
@@ -248,7 +247,7 @@ func writeDiags(cmds diagCmd, dir string) error {
 	}
 
 	fp := filepath.Join(dir, cmds.filename)
-	if err := ioutil.WriteFile(fp, content, 0666); err != nil {
+	if err := os.WriteFile(fp, content, 0666); err != nil {
 		log.Errorf("Error writing diags to file: %s\n", err)
 	}
 	return nil

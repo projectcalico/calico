@@ -19,7 +19,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -66,7 +66,7 @@ func init() {
 func testConnection() error {
 	// Unmarshal the network config
 	conf := types.NetConf{}
-	data, err := ioutil.ReadAll(os.Stdin)
+	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return errors.New("failed to read from stdin")
 	}
