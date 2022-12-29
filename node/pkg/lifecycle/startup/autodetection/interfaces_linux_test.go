@@ -90,4 +90,9 @@ var _ = DescribeTable("GetInterfaces",
 			return []net.Interface{{Index: 0, Name: "podman"}}, nil
 		},
 	}),
+	Entry("should skip Docker network bridge", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "br-1234deadbeaf"}}, nil
+		},
+	}),
 )
