@@ -260,6 +260,9 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpHEP.ResetCount("UDP-30446")
 				tcpdumpWl.ResetCount("UDP-30446")
 
+				// Flush conntrack table thus next packet will not be able to "re-use".
+				felixes[0].Exec("calico-bpf", "conntrack", "clean")
+
 				// Remove default route from Felix and test scenario again
 				felixes[0].Exec("ip", "route", "del", "default", "dev", "eth0")
 
