@@ -46,6 +46,7 @@ type State struct {
 	ExpectedEndpointPolicyOrder          map[string][]mock.TierInfo
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
+	ExpectedHostMetadataV4V6             map[string]proto.HostMetadataV4V6Update
 	ExpectedNumberOfALPPolicies          int
 	ExpectedEncapsulation                proto.Encapsulation
 }
@@ -72,6 +73,7 @@ func NewState() State {
 		ExpectedEndpointPolicyOrder:          make(map[string][]mock.TierInfo),
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
+		ExpectedHostMetadataV4V6:             make(map[string]proto.HostMetadataV4V6Update),
 	}
 }
 
@@ -91,7 +93,9 @@ func (s State) Copy() State {
 	for k, v := range s.ExpectedPreDNATEndpointPolicyOrder {
 		cpy.ExpectedPreDNATEndpointPolicyOrder[k] = v
 	}
-
+	for k, v := range s.ExpectedHostMetadataV4V6 {
+		cpy.ExpectedHostMetadataV4V6[k] = v
+	}
 	cpy.ExpectedPolicyIDs = s.ExpectedPolicyIDs.Copy()
 	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
 	cpy.ExpectedPreDNATPolicyIDs = s.ExpectedPreDNATPolicyIDs.Copy()
@@ -235,6 +239,15 @@ func (s State) withVTEPs(vteps ...proto.VXLANTunnelEndpointUpdate) (newState Sta
 func (s State) withRoutes(routes ...proto.RouteUpdate) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedRoutes = set.FromArray(routes)
+	return newState
+}
+
+func (s State) withHostMetadataV4V6(hostMetas ...proto.HostMetadataV4V6Update) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedHostMetadataV4V6 = make(map[string]proto.HostMetadataV4V6Update)
+	for _, v := range hostMetas {
+		newState.ExpectedHostMetadataV4V6[v.Hostname] = v
+	}
 	return newState
 }
 
