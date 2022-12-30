@@ -188,8 +188,8 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpHEP.ResetCount("UDP-30446")
 				tcpdumpWl.ResetCount("UDP-30446")
 
-				// Remove route from Felix and test scenario again
-				felixes[0].Exec("ip", "route", "del", w.IP+"/32", "dev", w.InterfaceName) // e.g. cali29f56ea1abf
+				// Remove default route from Felix and test scenario again
+				felixes[0].Exec("ip", "route", "del", "default", "dev", "eth0")
 
 				//  Generate another packet...
 				_, err = external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
