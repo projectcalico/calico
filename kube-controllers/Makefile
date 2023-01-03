@@ -102,10 +102,15 @@ check-boring-ssl: bin/kube-controllers-linux-amd64
 ###############################################################################
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
-WHAT=$(shell $(DOCKER_GO_BUILD) go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/)
+MAYBE_WHAT=$(shell $(DOCKER_GO_BUILD) go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/)
 else
 # By default, run all tests.
-WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
+MAYBE_WHAT=.
+endif
+
+# Filter the list of directories to only those that have tests.
+ifneq ("$(MAYBE_WHAT)","")
+WHAT=$(shell find $(MAYBE_WHAT) -name "*_test.go" | xargs dirname | sort -u)
 endif
 
 # The list of test binaries to build.
