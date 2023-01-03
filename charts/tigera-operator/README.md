@@ -147,6 +147,6 @@ tigeraOperator:
 calicoctl:
   image: docker.io/calico/ctl
 
-# Some defaults used in the templates.
+# Configures the image pull policy for all containers in the tigera/operator deployment.
 imagePullPolicy: IfNotPresent
 ```
