@@ -1214,7 +1214,6 @@ func TestMapIterWithDelete(t *testing.T) {
 	RegisterTestingT(t)
 
 	m := bpf.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
 		Type:       "hash",
 		KeySize:    8,
 		ValueSize:  8,
@@ -1262,7 +1261,6 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 	RegisterTestingT(t)
 
 	m := bpf.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
 		Type:       "hash",
 		KeySize:    8,
 		ValueSize:  8,

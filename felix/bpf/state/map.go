@@ -138,7 +138,6 @@ func StateFromBytes(bytes []byte) State {
 }
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_state",
 	Type:       "percpu_array",
 	KeySize:    4,
 	ValueSize:  expectedSize,
@@ -153,7 +152,6 @@ func Map() bpf.Map {
 
 func MapForTest() bpf.Map {
 	return bpf.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/test_state",
 		Type:       "array",
 		KeySize:    4,
 		ValueSize:  expectedSize,

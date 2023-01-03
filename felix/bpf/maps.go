@@ -20,7 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -109,7 +109,7 @@ type MapWithExistsCheck interface {
 }
 
 type MapParameters struct {
-	Filename     string
+	PinDir       string
 	Type         string
 	KeySize      int
 	ValueSize    int
@@ -128,12 +128,21 @@ func versionedStr(ver int, str string) string {
 	return fmt.Sprintf("%s%d", str, ver)
 }
 
+func (mp *MapParameters) pinDir() string {
+	pindir := GlobalPinDir
+	if mp.PinDir != "" {
+		pindir = mp.PinDir
+	}
+
+	return pindir
+}
+
 func (mp *MapParameters) VersionedName() string {
 	return versionedStr(mp.Version, mp.Name)
 }
 
-func (mp *MapParameters) versionedFilename() string {
-	return versionedStr(mp.Version, mp.Filename)
+func (mp *MapParameters) VersionedFilename() string {
+	return path.Join(mp.pinDir(), mp.VersionedName())
 }
 
 var (
@@ -211,7 +220,7 @@ func (b *PinnedMap) MapFD() MapFD {
 }
 
 func (b *PinnedMap) Path() string {
-	return b.versionedFilename()
+	return b.VersionedFilename()
 }
 
 func (b *PinnedMap) Close() error {
@@ -234,7 +243,7 @@ func ShowMapCmd(m Map) ([]string, error) {
 			"map",
 			"show",
 			"pinned",
-			pm.versionedFilename(),
+			pm.VersionedFilename(),
 		}, nil
 	}
 
@@ -251,7 +260,7 @@ func DumpMapCmd(m Map) ([]string, error) {
 			"map",
 			"dump",
 			"pinned",
-			pm.versionedFilename(),
+			pm.VersionedFilename(),
 		}, nil
 	}
 
@@ -271,7 +280,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 			"map",
 			"delete",
 			"pinned",
-			pm.versionedFilename(),
+			pm.VersionedFilename(),
 			"key",
 		}
 
@@ -522,14 +531,14 @@ func (b *PinnedMap) Open() error {
 		logrus.WithError(err).Error("Failed to mount bpffs")
 		return err
 	}
-	// FIXME hard-coded dir
-	err = os.MkdirAll("/sys/fs/bpf/tc/globals", 0700)
+	pindir := b.pinDir()
+	err = os.MkdirAll(pindir, 0700)
 	if err != nil {
 		logrus.WithError(err).Error("Failed create dir")
 		return err
 	}
 
-	_, err = os.Stat(b.versionedFilename())
+	_, err = os.Stat(b.VersionedFilename())
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return err
@@ -537,7 +546,7 @@ func (b *PinnedMap) Open() error {
 		logrus.WithField("name", b.Name).Debug("Map file didn't exist")
 		if repinningIsEnabled() {
 			logrus.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
-			err = RepinMap(b.VersionedName(), b.versionedFilename())
+			err = RepinMap(b.VersionedName(), b.VersionedFilename())
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
@@ -546,7 +555,7 @@ func (b *PinnedMap) Open() error {
 
 	if err == nil {
 		logrus.WithField("name", b.Name).Debug("Map file already exists, trying to open it")
-		b.fd, err = GetMapFDByPin(b.versionedFilename())
+		b.fd, err = GetMapFDByPin(b.VersionedFilename())
 		if err == nil {
 			b.fdLoaded = true
 			logrus.WithField("fd", b.fd).WithField("name", b.Name).Info("Loaded map file descriptor.")
@@ -631,7 +640,7 @@ func (b *PinnedMap) EnsureExists() error {
 	}
 
 	logrus.WithField("name", b.Name).Debug("Map didn't exist, creating it")
-	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),
+	cmd := exec.Command("bpftool", "map", "create", b.VersionedFilename(),
 		"type", b.Type,
 		"key", fmt.Sprint(b.KeySize),
 		"value", fmt.Sprint(b.ValueSize),
@@ -644,7 +653,7 @@ func (b *PinnedMap) EnsureExists() error {
 		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
 		return err
 	}
-	b.fd, err = GetMapFDByPin(b.versionedFilename())
+	b.fd, err = GetMapFDByPin(b.VersionedFilename())
 	if err == nil {
 		b.fdLoaded = true
 		if copyData {
@@ -674,7 +683,7 @@ func (b *PinnedMap) EnsureExists() error {
 			b.fdLoaded = false
 			return err
 		}
-		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
+		logrus.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).
 			Info("Loaded map file descriptor.")
 	}
 	return err
@@ -760,19 +769,23 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 
 func (b *PinnedMap) getOldMapVersion() (int, error) {
 	oldVersion := 0
-	dir, name := filepath.Split(b.Filename)
-	files, err := ioutil.ReadDir(dir)
+	name := b.Name
+	files, err := ioutil.ReadDir(b.pinDir())
 	if err != nil {
 		return 0, fmt.Errorf("error reading pin path %w", err)
 	}
 	for _, f := range files {
 		fname := f.Name()
-		fname = string(fname[0 : len(fname)-1])
-		if fname == name {
-			mapName := f.Name()
-			oldVersion, err = strconv.Atoi(string(mapName[len(mapName)-1]))
+		if len(fname) >= len(name) && fname[0:len(name)] == name {
+			oldIdx := strings.Index(fname, "_old")
+			if oldIdx == -1 {
+				oldIdx = len(fname)
+			}
+			oldVersion, err = strconv.Atoi(fname[len(name):oldIdx])
 			if err != nil {
-				return 0, fmt.Errorf("invalid version %w", err)
+				// We may have names that have the same prefix. Don't error,
+				// just continue. We eventually run out of maps.
+				continue
 			}
 			if oldVersion < b.Version {
 				return oldVersion, nil
@@ -799,6 +812,7 @@ func (b *PinnedMap) upgrade() error {
 		return fmt.Errorf("upgrade callbacks not registered %s", b.Name)
 	}
 	oldVersion, err := b.getOldMapVersion()
+	logrus.WithError(err).Debugf("Upgrading from %d", oldVersion)
 	if err != nil {
 		return err
 	}

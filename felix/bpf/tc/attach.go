@@ -115,8 +115,8 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 		if err := ap.setMapSize(m); err != nil {
 			return nil, fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
-		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
-		if err := m.SetPinPath(pinPath); err != nil {
+		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, ap.Hook)
+		if err := m.SetPinPath(path.Join(pinDir, m.Name())); err != nil {
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
