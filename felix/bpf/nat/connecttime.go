@@ -108,7 +108,6 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 	}
 	defer obj.Close()
 
-	baseDir := "/sys/fs/bpf/tc/globals/"
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
 		// The values are read only for the BPF programs, but can be set to a value from
@@ -126,8 +125,7 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 				return fmt.Errorf("error set map size %s: %w", m.Name(), err)
 			}
 		}
-		pinPath := baseDir + m.Name()
-		if err := m.SetPinPath(pinPath); err != nil {
+		if err := m.SetPinPath(path.Join(bpf.GlobalPinDir, m.Name())); err != nil {
 			return fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 		log.WithFields(log.Fields{"program": progName, "map": m.Name()}).Debug("Pinned map")

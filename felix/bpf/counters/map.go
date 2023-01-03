@@ -24,7 +24,6 @@ const PolicyMapKeySize = 8
 const PolicyMapValueSize = 8
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_counters",
 	Type:       "percpu_array",
 	KeySize:    counterMapKeySize, // __u32
 	ValueSize:  counterMapValueSize * MaxCounterNumber,
@@ -32,8 +31,8 @@ var MapParameters = bpf.MapParameters{
 	Name:       bpf.CountersMapName(),
 }
 
-func Map(pinPath string) bpf.Map {
-	MapParameters.Filename = pinPath
+func Map(pinDir string) bpf.Map {
+	MapParameters.PinDir = pinDir
 	return bpf.NewPinnedMap(MapParameters)
 }
 
@@ -42,7 +41,6 @@ func MapForTest() bpf.Map {
 }
 
 var PolicyMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_rule_ctrs",
 	Type:       "percpu_hash",
 	KeySize:    PolicyMapKeySize,
 	ValueSize:  PolicyMapValueSize,

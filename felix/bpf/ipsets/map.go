@@ -41,7 +41,6 @@ const IPSetEntrySize = 20
 type IPSetEntry [IPSetEntrySize]byte
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_ip_sets",
 	Type:       "lpm_trie",
 	KeySize:    IPSetEntrySize,
 	ValueSize:  4,

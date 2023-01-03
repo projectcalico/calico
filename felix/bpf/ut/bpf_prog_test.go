@@ -1213,8 +1213,12 @@ func resetBPFMaps() {
 func TestMapIterWithDelete(t *testing.T) {
 	RegisterTestingT(t)
 
+<<<<<<< HEAD
 	m := bpf.NewPinnedMap(bpf.MapParameters{
 		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
+=======
+	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
+>>>>>>> 477c94473c ([BPF] no explicit pin file name in maps)
 		Type:       "hash",
 		KeySize:    8,
 		ValueSize:  8,
@@ -1261,8 +1265,12 @@ func TestMapIterWithDelete(t *testing.T) {
 func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 	RegisterTestingT(t)
 
+<<<<<<< HEAD
 	m := bpf.NewPinnedMap(bpf.MapParameters{
 		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
+=======
+	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
+>>>>>>> 477c94473c ([BPF] no explicit pin file name in maps)
 		Type:       "hash",
 		KeySize:    8,
 		ValueSize:  8,

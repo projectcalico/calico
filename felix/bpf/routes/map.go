@@ -193,7 +193,6 @@ func NewValueWithIfIndex(flags Flags, ifIndex int) Value {
 }
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_routes",
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
