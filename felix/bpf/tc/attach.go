@@ -53,7 +53,7 @@ type AttachPoint struct {
 	PSNATEnd             uint16
 	IPv6Enabled          bool
 	MapSizes             map[string]uint32
-	RPFStrictEnabled     bool
+	RPFEnforceOption     uint8
 	NATin                uint32
 	NATout               uint32
 }
@@ -452,8 +452,13 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	if ap.IPv6Enabled {
 		globalData.Flags |= libbpf.GlobalsIPv6Enabled
 	}
-	if ap.RPFStrictEnabled {
-		globalData.Flags |= libbpf.GlobalsRPFStrictEnabled
+
+	switch ap.RPFEnforceOption {
+	case tcdefs.RPFEnforceOptionStrict:
+		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
+		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
+	case tcdefs.RPFEnforceOptionLoose:
+		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
 	}
 
 	globalData.HostTunnelIP = globalData.HostIP
