@@ -37,13 +37,13 @@ In order to use Kubernetes as the {{site.prodname}} datastore, we need to define
 
 Download and examine the list of {{site.prodname}} custom resource definitions, and open it in a file editor.
 
-```
+```bash
 wget {{site.data.versions.first.manifests_url}}/manifests/crds.yaml
 ```
 
 Create the custom resource definitions in Kubernetes.
 
-```
+```bash
 kubectl apply -f crds.yaml
 ```
 
@@ -56,7 +56,7 @@ To interact directly with the {{site.prodname}} datastore, use the `calicoctl` c
 1. Download the `calicoctl` binary to a Linux host with access to Kubernetes.
 
    ```bash
-   wget https://github.com/projectcalico/calicoctl/releases/download/v3.20.0/calicoctl
+   wget -O calicoctl https://github.com/projectcalico/calico/releases/latest/download/calicoctl-linux-amd64
    chmod +x calicoctl
    sudo mv calicoctl /usr/local/bin/
    ```
@@ -80,7 +80,7 @@ calicoctl get nodes
 
 You should see output similar to
 
-```
+```bash
 NAME
 ip-172-31-37-123
 ip-172-31-40-217
@@ -99,7 +99,7 @@ calicoctl get ippools
 
 You should see an empty result
 
-```
+```bash
 NAME   CIDR   SELECTOR
 
 ```
