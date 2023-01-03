@@ -29,15 +29,17 @@ static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_r
         return true;
 }
 
-static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx, bool relax)
+static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 {
 	bool ret = false;
+    bool strict;
 
-	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_STRICT_ENABLED)) {
+	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_ENABLED)) {
 		CALI_DEBUG("Host RPF check disabled\n");
 		return true;
 	}
 
+	strict = GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_STRICT;
 	struct bpf_fib_lookup fib_params = {
 		.family = 2, /* AF_INET */
 		.tot_len = 0,
@@ -57,7 +59,7 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx, bool relax)
 	switch(rc) {
 		case BPF_FIB_LKUP_RET_SUCCESS:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
-			if (!relax) {
+			if (strict) {
 				ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
 				CALI_DEBUG("Host RPF check src=%x skb strict if %d\n",
 						bpf_ntohl(ctx->state->ip_src), fib_params.ifindex);
