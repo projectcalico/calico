@@ -19,8 +19,8 @@
 {{- end}}
 {{- end}}
 
-{{- $block_key := printf "/calico/ipam/v2/host/%s/ipv4/block" (getenv "NODENAME")}}
-{{- $static_key := "/calico/staticroutes"}}
+{{- $block_key := printf "/ipam/v2/host/%s/ipv4/block" (getenv "NODENAME")}}
+{{- $static_key := "/staticroutes"}}
 {{if or (ls $block_key) (ls $static_key) $bgp_peer_global $bgp_peer_node}}
 protocol static {
 {{- if ls $block_key}}
