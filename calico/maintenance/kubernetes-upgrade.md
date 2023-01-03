@@ -68,6 +68,12 @@ ownership of the helm resources to the new chart location.
 
 ### All other upgrades
 
+1. Apply the {{page.version}} CRDs:
+
+   ```bash
+   kubectl replace -f {{site.data.versions.first.manifests_url}}/manifests/operator-crds.yaml
+   ```
+
 1. Run the helm upgrade:
 
    ```bash
