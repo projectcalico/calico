@@ -268,7 +268,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				//  Generate another packet...
 				_, err = external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
-					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
+					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "667")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Expect to see the packet from the .20 network at eth20 before RPF
