@@ -41,7 +41,6 @@ var flagsToStr = map[uint32]string{
 }
 
 var MapParams = bpf.MapParameters{
-	Filename:     "/sys/fs/bpf/tc/globals/cali_iface",
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
