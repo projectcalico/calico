@@ -41,7 +41,7 @@ protocol static {
    route {{$cidr}} blackhole;
 {{- end}}
 {{- end}}
-{{- if and (ls "/bgp/v1/global/peer_v4") $bgp_peer_global}}
+{{- if $bgp_peer_global}}
    # Static routes needed for global BGP peers
 {{range gets "/bgp/v1/global/peer_v4/*"}}{{$data := json .Value}}
 {{- if and $data.ip $data.reachable_by}}
@@ -49,8 +49,7 @@ protocol static {
 {{- end}}
 {{- end}}
 {{- end}}
-{{- $node_peers_key := printf "/bgp/v1/host/%s/peer_v4" (getenv "NODENAME")}}
-{{- if and (ls $node_peers_key) $bgp_peer_node}}
+{{- if $bgp_peer_node}}
    # Static routes needed for node specific BGP peers
 {{- range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
 {{- if and $data.ip $data.reachable_by}}
