@@ -24,7 +24,6 @@ import (
 )
 
 var MockMapParams = bpf.MapParameters{
-	Filename:     "/sys/fs/bpf/tc/globals/cali_mock",
 	Type:         "hash",
 	KeySize:      32,
 	ValueSize:    80,

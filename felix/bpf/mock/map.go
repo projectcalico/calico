@@ -61,7 +61,7 @@ func (m *Map) GetName() string {
 }
 
 func (m *Map) Path() string {
-	return m.Filename
+	return m.VersionedFilename()
 }
 
 func (m *Map) Iter(f bpf.IterCallback) error {
