@@ -150,12 +150,48 @@ var _ = infrastructure.DatastoreDescribe(
 			log.Info("AfterEach done")
 		})
 
+		Context("With BPFEnforceRPF=Disabled", func() {
+			BeforeEach(func() {
+				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Disabled"
+			})
+
+			It("should allow packets from wrong direction with disabled RPF on main device", func() {
+				fakeWorkloadIP := "10.65.15.15"
+
+				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
+				tcpdumpHEP.SetLogEnabled(true)
+				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
+				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
+				tcpdumpHEP.Start()
+				defer tcpdumpHEP.Stop()
+
+				tcpdumpWl := w.AttachTCPDump()
+				tcpdumpWl.SetLogEnabled(true)
+				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
+				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
+				tcpdumpWl.Start()
+				defer tcpdumpWl.Stop()
+
+				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
+					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Expect to see the packet from the .20 network at eth20 before RPF
+				Eventually(func() int { return tcpdumpHEP.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 1), "HEP - "+matcherHEP)
+
+				// Expect to receive the packet from the .20 as it is not dropped by RPF.
+				Eventually(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 1), "Wl - "+matcherWl)
+			})
+		})
+
 		Context("With BPFEnforceRPF=Strict", func() {
 			BeforeEach(func() {
 				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Strict"
 			})
 
-			It("should not allow packets from wrong direction with non-strict RPF on main device", func() {
+			It("should not allow packets from wrong direction with strict RPF on main device", func() {
 				fakeWorkloadIP := "10.65.15.15"
 
 				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
@@ -186,12 +222,12 @@ var _ = infrastructure.DatastoreDescribe(
 			})
 		})
 
-		Context("With BPFEnforceRPF=Disabled", func() {
+		Context("With BPFEnforceRPF=Loose", func() {
 			BeforeEach(func() {
-				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Disabled"
+				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Loose"
 			})
 
-			It("should allow packets from wrong direction with non-strict RPF on main device", func() {
+			It("should allow packets from wrong direction with loose RPF on main device", func() {
 				fakeWorkloadIP := "10.65.15.15"
 
 				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
@@ -219,6 +255,30 @@ var _ = infrastructure.DatastoreDescribe(
 				// Expect to receive the packet from the .20 as it is not dropped by RPF.
 				Eventually(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
 					Should(BeNumerically("==", 1), "Wl - "+matcherWl)
+
+				// Reset TCP dump counts
+				tcpdumpHEP.ResetCount("UDP-30446")
+				tcpdumpWl.ResetCount("UDP-30446")
+
+				// Flush conntrack table thus next packet will not be able to "re-use".
+				felixes[0].Exec("calico-bpf", "conntrack", "clean")
+
+				// Remove default route from Felix and test scenario again
+				felixes[0].Exec("ip", "route", "del", "default", "dev", "eth0")
+
+				//  Generate another packet...
+				_, err = external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
+					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "667")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Expect to see the packet from the .20 network at eth20 before RPF
+				Eventually(func() int { return tcpdumpHEP.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 1), "HEP - "+matcherHEP)
+
+				// Expect not to receive the packet from the .20 as it is dropped by RPF.
+				Consistently(func() int { return tcpdumpWl.MatchCount("UDP-30446") }, "1s", "100ms").
+					Should(BeNumerically("==", 0), "Wl - "+matcherWl)
 			})
 		})
+
 	})
