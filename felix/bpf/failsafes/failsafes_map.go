@@ -56,7 +56,6 @@ func (k Key) String() string {
 }
 
 var MapParams = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_fsafes",
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
